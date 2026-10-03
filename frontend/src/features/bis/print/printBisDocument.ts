@@ -23,9 +23,17 @@ import {
 import { openPendingPrintWindow, openPrintHtml } from './openPrintHtml'
 import { buildOslSampleRequirementsHtml, oslSampleRequirementsDataFromPrintData } from './oslSampleRequirementsHtml'
 import {
+  buildOslSampleTestRequestHtml,
+  oslSampleTestRequestDataFromPrintData,
+} from './oslSampleTestRequestHtml'
+import {
   buildProcessDescriptionHtml,
   processDescriptionDataFromPrintData,
 } from './processDescriptionHtml'
+import {
+  buildProcessFlowChartHtml,
+  processFlowChartDataFromPrintData,
+} from './processFlowChartHtml'
 import {
   buildRawMaterialDetailsHtml,
   rawMaterialDetailsDataFromPrintData,
@@ -88,6 +96,8 @@ export type BisPrintDocumentKind =
   | 'certified-reference-materials'
   | 'raw-material-details'
   | 'subcontracted-tests'
+  | 'osl-sample-test-request'
+  | 'process-flow-chart'
 
 export const BIS_PRINT_DOCUMENT_LABEL: Record<BisPrintDocumentKind, string> = {
   form1: 'BIS Form-I',
@@ -113,6 +123,8 @@ export const BIS_PRINT_DOCUMENT_LABEL: Record<BisPrintDocumentKind, string> = {
   'certified-reference-materials': 'Certified Reference Materials',
   'raw-material-details': 'Raw Material Details',
   'subcontracted-tests': 'Subcontracted Tests Declaration',
+  'osl-sample-test-request': 'OSL Sample Test Request',
+  'process-flow-chart': 'Process Flow Chart',
 }
 
 /** Documents offered in the "More prints" menu (Form-I and Authorization Letter have their own buttons). */
@@ -138,11 +150,13 @@ export const EXTRA_PRINT_KINDS: BisPrintDocumentKind[] = [
   'certified-reference-materials',
   'raw-material-details',
   'subcontracted-tests',
+  'osl-sample-test-request',
+  'process-flow-chart',
 ]
 
 /** Shared tooltip text for the "More prints" trigger. */
 export const MORE_PRINTS_TOOLTIP =
-  'Full BIS application print pack (CMPF, undertakings, staff, SEF, CRM, raw materials, subcontracted tests)'
+  'Full BIS application print pack (CMPF, undertakings, staff, SEF, CRM, OSL test request, process flow)'
 
 const HTML_BUILDERS: Record<BisPrintDocumentKind, (data: BisPrintData) => string> = {
   form1: (d) => buildBisForm1Html(bisForm1DataFromPrintData(d)),
@@ -171,6 +185,9 @@ const HTML_BUILDERS: Record<BisPrintDocumentKind, (data: BisPrintData) => string
     buildCertifiedReferenceMaterialsHtml(certifiedReferenceMaterialsDataFromPrintData(d)),
   'raw-material-details': (d) => buildRawMaterialDetailsHtml(rawMaterialDetailsDataFromPrintData(d)),
   'subcontracted-tests': (d) => buildSubcontractedTestsHtml(subcontractedTestsDataFromPrintData(d)),
+  'osl-sample-test-request': (d) =>
+    buildOslSampleTestRequestHtml(oslSampleTestRequestDataFromPrintData(d)),
+  'process-flow-chart': (d) => buildProcessFlowChartHtml(processFlowChartDataFromPrintData(d)),
 }
 
 /**
