@@ -5,11 +5,20 @@ import { buildCmpf305Html, cmpf305DataFromPrintData } from './cmpf305Html'
 import { buildCmpf306Html, cmpf306DataFromPrintData } from './cmpf306Html'
 import { buildCmpf307Html, cmpf307DataFromPrintData } from './cmpf307Html'
 import { buildCmpf310Html, cmpf310DataFromPrintData } from './cmpf310Html'
+import { buildCmpf311Html, cmpf311DataFromPrintData } from './cmpf311Html'
 import { buildFactoryTestReportHtml, factoryTestReportDataFromPrintData } from './factoryTestReportHtml'
 import { loadBisPrintData, type BisPrintData } from './loadBisPrintData'
 import { openPendingPrintWindow, openPrintHtml } from './openPrintHtml'
 import { buildOslSampleRequirementsHtml, oslSampleRequirementsDataFromPrintData } from './oslSampleRequirementsHtml'
 import { buildUndertakingGeneralHtml, undertakingGeneralDataFromPrintData } from './undertakingGeneralHtml'
+import {
+  buildUndertakingLongDurationHtml,
+  undertakingLongDurationDataFromPrintData,
+} from './undertakingLongDurationHtml'
+import {
+  buildUndertakingOption2Html,
+  undertakingOption2DataFromPrintData,
+} from './undertakingOption2Html'
 import {
   buildUpdatedSchemeOfInspectionHtml,
   updatedSchemeOfInspectionDataFromPrintData,
@@ -22,10 +31,13 @@ export type BisPrintDocumentKind =
   | 'cmpf-306'
   | 'cmpf-307'
   | 'cmpf-310'
+  | 'cmpf-311'
   | 'updated-sit'
   | 'factory-test-report'
   | 'osl-sample-requirements'
   | 'undertaking-general'
+  | 'undertaking-option-2'
+  | 'undertaking-long-duration'
 
 export const BIS_PRINT_DOCUMENT_LABEL: Record<BisPrintDocumentKind, string> = {
   form1: 'BIS Form-I',
@@ -34,10 +46,13 @@ export const BIS_PRINT_DOCUMENT_LABEL: Record<BisPrintDocumentKind, string> = {
   'cmpf-306': 'CMPF-306 (Testing Equipment)',
   'cmpf-307': 'CMPF-307 (Brand Names)',
   'cmpf-310': 'CMPF-310 (Marking Fee)',
+  'cmpf-311': 'CMPF-311 (Acceptance of SIT)',
   'updated-sit': 'Updated Scheme of Inspection',
   'factory-test-report': 'Factory Test Report',
   'osl-sample-requirements': 'OSL Sample Requirements',
   'undertaking-general': 'Undertaking (General & ISS)',
+  'undertaking-option-2': 'Undertaking (Option 2)',
+  'undertaking-long-duration': 'Undertaking (Long Duration Test)',
 }
 
 /** Documents offered in the "More prints" menu (Form-I and Authorization Letter have their own buttons). */
@@ -46,14 +61,18 @@ export const EXTRA_PRINT_KINDS: BisPrintDocumentKind[] = [
   'cmpf-306',
   'cmpf-307',
   'cmpf-310',
+  'cmpf-311',
   'updated-sit',
   'factory-test-report',
   'osl-sample-requirements',
   'undertaking-general',
+  'undertaking-option-2',
+  'undertaking-long-duration',
 ]
 
 /** Shared tooltip text for the "More prints" trigger. */
-export const MORE_PRINTS_TOOLTIP = 'CMPF-305/306/307/310, Scheme of Inspection, Factory Test Report, OSL Samples, Undertaking'
+export const MORE_PRINTS_TOOLTIP =
+  'CMPF-305/306/307/310/311, Scheme of Inspection, Factory Test Report, OSL Samples, Undertakings'
 
 const HTML_BUILDERS: Record<BisPrintDocumentKind, (data: BisPrintData) => string> = {
   form1: (d) => buildBisForm1Html(bisForm1DataFromPrintData(d)),
@@ -62,10 +81,14 @@ const HTML_BUILDERS: Record<BisPrintDocumentKind, (data: BisPrintData) => string
   'cmpf-306': (d) => buildCmpf306Html(cmpf306DataFromPrintData(d)),
   'cmpf-307': (d) => buildCmpf307Html(cmpf307DataFromPrintData(d)),
   'cmpf-310': (d) => buildCmpf310Html(cmpf310DataFromPrintData(d)),
+  'cmpf-311': (d) => buildCmpf311Html(cmpf311DataFromPrintData(d)),
   'updated-sit': (d) => buildUpdatedSchemeOfInspectionHtml(updatedSchemeOfInspectionDataFromPrintData(d)),
   'factory-test-report': (d) => buildFactoryTestReportHtml(factoryTestReportDataFromPrintData(d)),
   'osl-sample-requirements': (d) => buildOslSampleRequirementsHtml(oslSampleRequirementsDataFromPrintData(d)),
   'undertaking-general': (d) => buildUndertakingGeneralHtml(undertakingGeneralDataFromPrintData(d)),
+  'undertaking-option-2': (d) => buildUndertakingOption2Html(undertakingOption2DataFromPrintData(d)),
+  'undertaking-long-duration': (d) =>
+    buildUndertakingLongDurationHtml(undertakingLongDurationDataFromPrintData(d)),
 }
 
 /**
