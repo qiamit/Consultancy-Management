@@ -47,7 +47,8 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
   const [formError, setFormError] = useState<string | null>(null)
 
   const [printDocsBusy, setPrintDocsBusy] = useState(false)
-  const canPrintBisForms = listMode === 'applications' || listMode === 'all'
+  const canPrintBisForms =
+    listMode === 'applications' || listMode === 'all' || listMode === 'inclusion'
 
   const requestRef = useRef(0)
 

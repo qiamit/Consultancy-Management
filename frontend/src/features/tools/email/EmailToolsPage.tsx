@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Mail } from 'lucide-react'
 import { limsPageShellClass, limsPanelClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
-import { escapeHtml, sendAppEmail } from '@/lib/sendAppEmail'
+import { blobToBase64, escapeHtml, sendAppEmail } from '@/lib/sendAppEmail'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -76,6 +76,7 @@ export default function EmailToolsPage() {
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [sentLog, setSentLog] = useState<SentLogEntry[]>([])
+  const [files, setFiles] = useState<File[]>([])
 
   useEffect(() => {
     setSentLog(loadSentLog())
@@ -96,6 +97,16 @@ export default function EmailToolsPage() {
     setError(null)
     try {
       const html = `<div style="font-family:Segoe UI,Arial,sans-serif;white-space:pre-wrap;">${escapeHtml(body)}</div>`
+      const attachments =
+        files.length > 0
+          ? await Promise.all(
+              files.map(async (file) => ({
+                filename: file.name,
+                content: await blobToBase64(file),
+                contentType: file.type || undefined,
+              })),
+            )
+          : undefined
       const { id } = await sendAppEmail({
         to,
         cc: showCcBcc ? cc : undefined,
@@ -103,6 +114,7 @@ export default function EmailToolsPage() {
         subject: subject.trim(),
         html,
         text: body,
+        attachments,
       })
 
       const entry: SentLogEntry = {
@@ -118,9 +130,15 @@ export default function EmailToolsPage() {
       setSentLog(next)
       saveSentLog(next)
 
-      setMessage(id ? `Email queued via Resend (${id}).` : 'Email queued via Resend.')
+      const attachNote = files.length > 0 ? ` (${files.length} attachment${files.length === 1 ? '' : 's'})` : ''
+      setMessage(
+        id
+          ? `Email queued via Resend (${id})${attachNote}.`
+          : `Email queued via Resend${attachNote}.`,
+      )
       setSubject('')
       setBody('')
+      setFiles([])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to send email')
     } finally {
@@ -221,6 +239,45 @@ export default function EmailToolsPage() {
             placeholder="Write your message…"
           />
         </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="email-files">Attachments</Label>
+          <Input
+            id="email-files"
+            type="file"
+            multiple
+            className="rounded-none border-stone-500"
+            onChange={(e) => {
+              const list = e.target.files ? Array.from(e.target.files) : []
+              setFiles((prev) => [...prev, ...list].slice(0, 10))
+              e.target.value = ''
+            }}
+          />
+          {files.length > 0 ? (
+            <ul className="space-y-1 border border-stone-300 bg-stone-50 px-3 py-2 text-xs">
+              {files.map((f, i) => (
+                <li key={`${f.name}-${i}`} className="flex items-center justify-between gap-2">
+                  <span className="truncate">
+                    {f.name}{' '}
+                    <span className="text-muted-foreground">
+                      ({Math.max(1, Math.round(f.size / 1024))} KB)
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    className="shrink-0 text-red-700 underline-offset-2 hover:underline"
+                    onClick={() => setFiles((prev) => prev.filter((_, idx) => idx !== i))}
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-xs text-muted-foreground">Optional — PDF, Office, or images (max 10).</p>
+          )}
+        </div>
+
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
         {message ? <p className="text-sm text-emerald-700">{message}</p> : null}
         <Button

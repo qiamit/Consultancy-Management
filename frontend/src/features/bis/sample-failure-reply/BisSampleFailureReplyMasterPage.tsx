@@ -174,7 +174,10 @@ export default function BisSampleFailureReplyMasterPage() {
       setMessage('Selected reply is not on this page. Open it or change page.')
       return
     }
-    setMessage(printSampleFailureReply(row))
+    void (async () => {
+      setMessage(null)
+      setMessage(await printSampleFailureReply(row))
+    })()
   }
 
   const applyEditedRow = (row: SampleFailureReplyRow) => {
