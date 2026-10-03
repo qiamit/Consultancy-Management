@@ -275,6 +275,8 @@ export default function TestParameterMasterPage() {
   }
 
   const loadMasters = async () => {
+    const errors: string[] = []
+
     try {
       const { data: isData, error: isErr } = await supabase
         .from('is_codes')
@@ -283,7 +285,9 @@ export default function TestParameterMasterPage() {
 
       if (isErr) throw isErr
 
-      const isList = Array.isArray(isData) ? (isData as Array<{ id: string; is_number: string; title: string; revision_year: string | null }>) : []
+      const isList = Array.isArray(isData)
+        ? (isData as Array<{ id: string; is_number: string; title: string; revision_year: string | null }>)
+        : []
 
       setIsCodes(
         isList
@@ -299,7 +303,11 @@ export default function TestParameterMasterPage() {
           })
           .sort((a, b) => a.searchLabel.localeCompare(b.searchLabel)),
       )
+    } catch (err) {
+      errors.push(err instanceof Error ? err.message : 'Unable to load IS codes')
+    }
 
+    try {
       const { data: abData, error: abErr } = await supabase
         .from('accreditation_bodies')
         .select('id, name, created_at')
@@ -308,7 +316,12 @@ export default function TestParameterMasterPage() {
       if (abErr) throw abErr
       setAccreditationBodies(Array.isArray(abData) ? (abData as AccreditationBodyRow[]) : [])
     } catch (err) {
-      setSaveMessage((prev) => prev ?? (err instanceof Error ? err.message : 'Unable to load masters'))
+      setAccreditationBodies([])
+      errors.push(err instanceof Error ? err.message : 'Unable to load accreditation bodies')
+    }
+
+    if (errors.length > 0) {
+      setSaveMessage((prev) => prev ?? errors[0] ?? 'Unable to load masters')
     }
   }
 

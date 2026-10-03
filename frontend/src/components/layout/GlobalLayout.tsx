@@ -711,25 +711,25 @@ export default function GlobalLayout() {
                 {isLaboratoryDirector(designation) && (
                   <>
                     <DropdownMenuItem asChild>
-                      <NavLink to="/lab-settings" className="flex items-center gap-2">
+                      <NavLink to="/settings/lab" className="flex items-center gap-2">
                         <Settings size={14} />
-                        Lab Settings
+                        Company Settings
                       </NavLink>
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild>
-                      <NavLink to="/lab-settings/user-management" className="flex items-center gap-2">
+                      <NavLink to="/settings/users" className="flex items-center gap-2">
                         <Users size={14} />
                         User Management
                       </NavLink>
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild>
-                      <NavLink to="/lab-settings/module-access" className="flex items-center gap-2">
+                      <NavLink to="/settings/module-access" className="flex items-center gap-2">
                         <Shield size={14} />
                         Module Access
                       </NavLink>
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild>
-                      <NavLink to="/lab-settings/ai-settings" className="flex items-center gap-2">
+                      <NavLink to="/settings/ai" className="flex items-center gap-2">
                         <Bot size={14} />
                         AI Settings
                       </NavLink>
@@ -744,7 +744,7 @@ export default function GlobalLayout() {
                   </NavLink>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <NavLink to="/contact-us" className="flex items-center gap-2">
+                  <NavLink to="/contact" className="flex items-center gap-2">
                     <Mail size={14} />
                     Contact Us
                   </NavLink>
