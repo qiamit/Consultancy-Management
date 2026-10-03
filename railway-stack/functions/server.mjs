@@ -325,18 +325,39 @@ function buildMrmHtml(opts) {
 </body></html>`
 }
 
-async function sendResendEmail({ to, subject, html, text, attachments }) {
+function normalizeEmailList(raw) {
+  if (raw == null || raw === '') return []
+  const list = Array.isArray(raw)
+    ? raw
+    : String(raw)
+        .split(/[,;\s]+/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+  return list.map((s) => String(s).trim()).filter(Boolean)
+}
+
+async function sendResendEmail({ to, subject, html, text, attachments, cc, bcc }) {
   if (!RESEND_API_KEY) {
     const err = new Error('Email service not configured. Set RESEND_API_KEY on the functions service.')
     err.statusCode = 503
     throw err
   }
+  const toList = normalizeEmailList(to)
+  const ccList = normalizeEmailList(cc)
+  const bccList = normalizeEmailList(bcc)
+  if (toList.length === 0) {
+    const err = new Error('At least one recipient (to) is required')
+    err.statusCode = 400
+    throw err
+  }
   const payloadBody = {
     from: EMAIL_FROM,
-    to: Array.isArray(to) ? to : [to],
+    to: toList,
     subject,
     html,
     ...(text ? { text } : {}),
+    ...(ccList.length > 0 ? { cc: ccList } : {}),
+    ...(bccList.length > 0 ? { bcc: bccList } : {}),
     ...(Array.isArray(attachments) && attachments.length > 0 ? { attachments } : {}),
   }
   const res = await fetch('https://api.resend.com/emails', {
@@ -392,15 +413,25 @@ function normalizeAttachments(raw) {
 async function handleSendEmail(req, res) {
   await requireUser(req)
   const body = await readBody(req)
-  const to = body.to
+  const to = normalizeEmailList(body.to)
+  const cc = normalizeEmailList(body.cc)
+  const bcc = normalizeEmailList(body.bcc)
   const subject = String(body.subject ?? '').trim()
   const html = String(body.html ?? body.text ?? '').trim()
-  if (!to || !subject || !html) {
+  if (to.length === 0 || !subject || !html) {
     json(res, 400, { error: 'to, subject, and html are required' })
     return
   }
   const attachments = normalizeAttachments(body.attachments)
-  const sent = await sendResendEmail({ to, subject, html, text: body.text, attachments })
+  const sent = await sendResendEmail({
+    to,
+    cc,
+    bcc,
+    subject,
+    html,
+    text: body.text,
+    attachments,
+  })
   json(res, 200, { ok: true, id: sent.id ?? null })
 }
 
