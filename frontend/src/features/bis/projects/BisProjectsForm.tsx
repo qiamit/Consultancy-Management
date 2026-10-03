@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { ExternalLink, Search } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -23,12 +25,20 @@ import {
 import { cn } from '@/lib/utils'
 import { searchClientOptions, searchIsCodeOptions } from './bisProjectsApi'
 import {
+  fetchIsCodeViaExtension,
+  isNumberFromLabel,
+  openManakEbisAssist,
+} from './manakExtensionBridge'
+import {
   BIS_BILLING_FREQUENCIES,
   BIS_PROJECT_STATUS_OPTIONS,
   licenseValidityState,
   sanitizeCurrencyInput,
   type BisProjectForm,
 } from './types'
+
+const EXTENSION_MISSING_MSG =
+  'QE Consultancy extension is not loaded. Open this app in Chrome or Edge, then reload the extension from chrome://extensions.'
 
 export function useDebouncedValue<T>(value: T, delayMs: number): T {
   const [debounced, setDebounced] = useState(value)
@@ -129,6 +139,71 @@ export function BisProjectsForm({
 
   const set = <K extends keyof BisProjectForm>(key: K, value: BisProjectForm[K]) =>
     onChange({ ...form, [key]: value })
+
+  const [isCodeFetchBusy, setIsCodeFetchBusy] = useState(false)
+  const isCodeFetchCleanupRef = useRef<(() => void) | null>(null)
+
+  useEffect(() => {
+    return () => {
+      isCodeFetchCleanupRef.current?.()
+      isCodeFetchCleanupRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!open) {
+      isCodeFetchCleanupRef.current?.()
+      isCodeFetchCleanupRef.current = null
+      setIsCodeFetchBusy(false)
+    }
+  }, [open])
+
+  const handleManakAssist = () => {
+    void openManakEbisAssist({
+      portalUserId: form.portalUserId,
+      portalPassword: form.portalPassword,
+    }).then(({ extensionUsed }) => {
+      if (extensionUsed) {
+        toast.success('Opening Manak eBIS via extension')
+      } else {
+        toast.warning('Extension not detected — opened Manak eBIS in a new tab', {
+          description: EXTENSION_MISSING_MSG,
+        })
+      }
+    })
+  }
+
+  const handleFetchIsCode = () => {
+    const isNumber = isNumberFromLabel(form.isCodeLabel)
+    if (!isNumber) {
+      toast.error('Enter an IS Code first')
+      return
+    }
+
+    isCodeFetchCleanupRef.current?.()
+    setIsCodeFetchBusy(true)
+    toast.message('Fetching IS Code data…', { description: isNumber })
+
+    isCodeFetchCleanupRef.current = fetchIsCodeViaExtension(isNumber, {
+      onProgress: (message) => {
+        toast.message(message)
+      },
+      onDone: (payload) => {
+        setIsCodeFetchBusy(false)
+        isCodeFetchCleanupRef.current = null
+        const fieldCount = Object.keys(payload.fields ?? {}).length
+        const noteCount = payload.notes?.length ?? 0
+        toast.success('IS Code fetch complete', {
+          description: `${fieldCount} field(s) collected${noteCount ? ` · ${noteCount} note(s)` : ''}`,
+        })
+      },
+      onMissingExtension: () => {
+        setIsCodeFetchBusy(false)
+        isCodeFetchCleanupRef.current = null
+        toast.error('Extension not detected', { description: EXTENSION_MISSING_MSG })
+      },
+    })
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -353,24 +428,52 @@ export function BisProjectsForm({
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center justify-end gap-2 border-t-2 border-stone-500 bg-stone-100 px-4 py-3 sm:px-6">
-          <Button
-            type="button"
-            variant="outline"
-            className="h-8 rounded-none border-stone-500"
-            onClick={() => onOpenChange(false)}
-            disabled={saving}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            className={limsPrimaryBtnClass}
-            onClick={onSave}
-            disabled={!canSave || saving}
-          >
-            {saving ? 'Saving…' : editing ? 'Update License' : 'Save License'}
-          </Button>
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t-2 border-stone-500 bg-stone-100 px-4 py-3 sm:px-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 rounded-none border-stone-500"
+              onClick={handleManakAssist}
+              disabled={saving}
+              title="Open Manak eBIS login (User ID and password pre-filled when entered)"
+            >
+              <ExternalLink className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+              Manak Assist
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 rounded-none border-stone-500"
+              onClick={handleFetchIsCode}
+              disabled={saving || isCodeFetchBusy}
+              title="Fetch IS data from BIS portals via QE Consultancy extension"
+            >
+              <Search className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+              {isCodeFetchBusy ? 'Fetching…' : 'Fetch IS Code'}
+            </Button>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-8 rounded-none border-stone-500"
+              onClick={() => onOpenChange(false)}
+              disabled={saving}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className={limsPrimaryBtnClass}
+              onClick={onSave}
+              disabled={!canSave || saving}
+            >
+              {saving ? 'Saving…' : editing ? 'Update License' : 'Save License'}
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

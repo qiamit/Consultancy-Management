@@ -1,4 +1,5 @@
-import { Pencil } from 'lucide-react'
+import { ExternalLink, Pencil } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
@@ -14,6 +15,10 @@ import {
   type BisProjectRow,
   type LicenseValidityState,
 } from './types'
+import { openManakEbisAssist } from './manakExtensionBridge'
+
+const EXTENSION_MISSING_MSG =
+  'QE Consultancy extension is not loaded. Open this app in Chrome or Edge, then reload the extension from chrome://extensions.'
 
 const GRID_TABLE =
   'min-w-[1040px] w-full border-collapse [&_th]:border [&_td]:border [&_th]:border-border [&_td]:border-border'
@@ -109,7 +114,7 @@ export function BisProjectsTable({
                 <TableHead className={cn(headClass, 'min-w-[130px]')}>Billing</TableHead>
                 <TableHead className={cn(headClass, 'min-w-[140px]')}>Status / Stage</TableHead>
                 <TableHead className={cn(headClass, 'min-w-[110px]')}>Managed By</TableHead>
-                <TableHead className={cn(headClass, 'min-w-[80px]')}>Action</TableHead>
+                <TableHead className={cn(headClass, 'min-w-[100px]')}>Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -210,16 +215,41 @@ export function BisProjectsTable({
                       </span>
                     </TableCell>
                     <TableCell className="align-middle text-center">
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        aria-label={`Edit ${client}`}
-                        title="Edit"
-                        onClick={() => onEdit(r)}
-                      >
-                        <Pencil size={16} />
-                      </Button>
+                      <div className="inline-flex items-center gap-0.5">
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          aria-label={`Manak Assist for ${client}`}
+                          title="Manak Assist"
+                          onClick={() => {
+                            void openManakEbisAssist({
+                              portalUserId: r.portal_user_id,
+                              portalPassword: r.portal_password,
+                            }).then(({ extensionUsed }) => {
+                              if (extensionUsed) {
+                                toast.success('Opening Manak eBIS via extension')
+                              } else {
+                                toast.warning('Extension not detected — opened Manak eBIS in a new tab', {
+                                  description: EXTENSION_MISSING_MSG,
+                                })
+                              }
+                            })
+                          }}
+                        >
+                          <ExternalLink size={16} />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          aria-label={`Edit ${client}`}
+                          title="Edit"
+                          onClick={() => onEdit(r)}
+                        >
+                          <Pencil size={16} />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 )
