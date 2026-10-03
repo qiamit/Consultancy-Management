@@ -330,6 +330,11 @@ export function labDocumentTemplatesToJson(doc: LabDocumentTemplates): LabDocume
   return parseLabDocumentTemplates(doc)
 }
 
+/** True when the template title is a Payment Receipt (meta + totals differ). */
+export function isPaymentReceiptDocumentTitle(documentTitle: string): boolean {
+  return /payment\s*receipt/i.test(documentTitle.trim())
+}
+
 /** Meta-box labels derived from the centre document title (Quotation, Proforma Invoice, …). */
 export function documentMetaFieldLabels(documentTitle: string): {
   number: string
@@ -338,6 +343,14 @@ export function documentMetaFieldLabels(documentTitle: string): {
   status: string
 } {
   const title = documentTitle.trim() || 'Document'
+  if (isPaymentReceiptDocumentTitle(title)) {
+    return {
+      number: 'Receipt Number',
+      date: 'Receipt Date',
+      dueDate: 'Payment Mode',
+      status: 'Amount Received',
+    }
+  }
   return {
     number: `${title} Number`,
     date: `Date of ${title}`,

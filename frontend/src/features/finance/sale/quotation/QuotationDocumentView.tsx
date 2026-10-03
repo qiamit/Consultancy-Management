@@ -1,6 +1,9 @@
 import type { FinanceDocumentTemplate } from '@/features/settings/lab-settings/documentTemplateTypes'
 import { getCurrencySymbol } from '@/lib/appCurrency'
-import { documentMetaFieldLabels } from '@/features/settings/lab-settings/documentTemplateTypes'
+import {
+  documentMetaFieldLabels,
+  isPaymentReceiptDocumentTitle,
+} from '@/features/settings/lab-settings/documentTemplateTypes'
 import { cn } from '@/lib/utils'
 import { amountInIndianRupeesWords } from './amountInIndianRupeesWords'
 import {
@@ -175,6 +178,23 @@ export function QuotationDocumentView({
   const gstMode: 'intra' | 'inter' =
     tpl.showIgst && !tpl.showCgst && !tpl.showSgst ? 'inter' : 'intra'
   const metaLabels = documentMetaFieldLabels(tpl.documentTitle || 'Document')
+  const isPaymentReceipt = isPaymentReceiptDocumentTitle(tpl.documentTitle || '')
+  const metaRows: Array<[string, string]> = isPaymentReceipt
+    ? [
+        [metaLabels.number, row.quotation_number || '—'],
+        [metaLabels.date, formatDate(row.quotation_date)],
+        [metaLabels.dueDate, (row.reference_no || '').trim() || '—'],
+        [
+          metaLabels.status,
+          `${getCurrencySymbol()} ${formatMoney(row.grand_total)}`,
+        ],
+      ]
+    : [
+        [metaLabels.number, row.quotation_number || '—'],
+        [metaLabels.date, formatDate(row.quotation_date)],
+        [metaLabels.dueDate, formatDate(row.valid_until)],
+        [metaLabels.status, quotationStatusLabel(row.status)],
+      ]
   let cgstTotal = 0
   let sgstTotal = 0
   let igstTotal = 0
@@ -189,7 +209,7 @@ export function QuotationDocumentView({
   igstTotal = Math.round(igstTotal * 100) / 100
 
   const totalRows: Array<{ key: string; label: string; value: string; bold?: boolean }> = []
-  if (tpl.showBasicAmount) {
+  if (tpl.showBasicAmount && !isPaymentReceipt) {
     totalRows.push({
       key: 'basic',
       label: 'Basic Amount',
@@ -348,14 +368,7 @@ export function QuotationDocumentView({
               <div className="p-0">
                 <table className="w-full border-collapse text-[0.95em]">
                   <tbody>
-                    {(
-                      [
-                        [metaLabels.number, row.quotation_number || '—'],
-                        [metaLabels.date, formatDate(row.quotation_date)],
-                        [metaLabels.dueDate, formatDate(row.valid_until)],
-                        [metaLabels.status, quotationStatusLabel(row.status)],
-                      ] as const
-                    ).map(([label, value], i, arr) => (
+                    {metaRows.map(([label, value], i, arr) => (
                       <tr key={label}>
                         <td
                           className={cn(
@@ -392,6 +405,23 @@ export function QuotationDocumentView({
             ) : null}
           </div>
         )}
+
+        {isPaymentReceipt && !tpl.showLineItems ? (
+          <div className="mt-2 space-y-1 border-2 border-black px-3 py-2">
+            <div className="text-[0.95em]">
+              <span className="font-bold">Payment Mode:</span>{' '}
+              {(row.reference_no || '').trim() || '—'}
+            </div>
+            <div className="text-[1.05em] font-bold">
+              Amount Received: {getCurrencySymbol()} {formatMoney(row.grand_total)}
+            </div>
+            {row.subject?.trim() ? (
+              <div className="text-[0.9em] text-stone-700">
+                <span className="font-bold">Towards:</span> {row.subject.trim()}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
         {tpl.showLineItems ? (
           <div className="mt-2 border-2 border-black">
@@ -565,7 +595,7 @@ export function QuotationDocumentView({
                   {tpl.showGrandTotal ? (
                     <tr className="h-6">
                       <td className="border border-r-0 border-black px-2 py-0 align-middle font-bold">
-                        Grand Total
+                        {isPaymentReceipt ? 'Amount Received' : 'Grand Total'}
                       </td>
                       <td className="w-3 border-y border-black px-1 py-0 text-center align-middle font-bold">
                         :

@@ -2,6 +2,7 @@ import { resolveNamedLetterheadTemplates } from '@/features/sample-handling/repo
 import { getCurrencySymbol } from '@/lib/appCurrency'
 import {
   documentMetaFieldLabels,
+  isPaymentReceiptDocumentTitle,
   type DocumentTemplateKind,
   type FinanceDocumentTemplate,
 } from '@/features/settings/lab-settings/documentTemplateTypes'
@@ -312,6 +313,7 @@ function buildOneQuotationHtml(
 ): string {
   const tpl = opts.template
   const metaLabels = documentMetaFieldLabels(tpl.documentTitle || 'Document')
+  const isPaymentReceipt = isPaymentReceiptDocumentTitle(tpl.documentTitle || '')
   const gstMode: 'intra' | 'inter' =
     tpl.showIgst && !tpl.showCgst && !tpl.showSgst ? 'inter' : 'intra'
 
@@ -386,7 +388,7 @@ function buildOneQuotationHtml(
     : ''
 
   const totalRows: string[] = []
-  if (tpl.showBasicAmount) {
+  if (tpl.showBasicAmount && !isPaymentReceipt) {
     totalRows.push(
       `<tr><td class="k">Basic Amount</td><td class="sep">:</td><td class="v">${getCurrencySymbol()} ${esc(formatMoney(row.subtotal))}</td></tr>`,
     )
@@ -428,7 +430,7 @@ function buildOneQuotationHtml(
   }
   if (tpl.showGrandTotal) {
     totalRows.push(
-      `<tr class="grand"><td class="k">Grand Total</td><td class="sep">:</td><td class="v">${getCurrencySymbol()} ${esc(formatMoney(row.grand_total))}</td></tr>`,
+      `<tr class="grand"><td class="k">${isPaymentReceipt ? 'Amount Received' : 'Grand Total'}</td><td class="sep">:</td><td class="v">${getCurrencySymbol()} ${esc(formatMoney(row.grand_total))}</td></tr>`,
     )
   }
 
@@ -479,13 +481,34 @@ function buildOneQuotationHtml(
           <table class="kv" cellspacing="0" cellpadding="0">
             <tr><td class="k">${esc(metaLabels.number)}</td><td class="sep">:</td><td class="v">${cell(row.quotation_number)}</td></tr>
             <tr><td class="k">${esc(metaLabels.date)}</td><td class="sep">:</td><td class="v">${esc(formatDate(row.quotation_date))}</td></tr>
-            <tr><td class="k">${esc(metaLabels.dueDate)}</td><td class="sep">:</td><td class="v">${esc(formatDate(row.valid_until))}</td></tr>
-            <tr><td class="k">${esc(metaLabels.status)}</td><td class="sep">:</td><td class="v">${esc(quotationStatusLabel(row.status))}</td></tr>
+            <tr><td class="k">${esc(metaLabels.dueDate)}</td><td class="sep">:</td><td class="v">${
+              isPaymentReceipt
+                ? cell(row.reference_no)
+                : esc(formatDate(row.valid_until))
+            }</td></tr>
+            <tr><td class="k">${esc(metaLabels.status)}</td><td class="sep">:</td><td class="v">${
+              isPaymentReceipt
+                ? `${getCurrencySymbol()} ${esc(formatMoney(row.grand_total))}`
+                : esc(quotationStatusLabel(row.status))
+            }</td></tr>
           </table>
         </td>`
             : ''
         }
       </tr></table>`
+        : ''
+    }
+    ${
+      isPaymentReceipt && !tpl.showLineItems
+        ? `<div class="items-wrap" style="padding:8px 10px;border:2px solid #000;">
+        <div style="margin-bottom:4px;"><b>Payment Mode:</b> ${cell(row.reference_no)}</div>
+        <div style="font-size:1.05em;font-weight:700;margin-bottom:4px;">Amount Received: ${getCurrencySymbol()} ${esc(formatMoney(row.grand_total))}</div>
+        ${
+          row.subject?.trim()
+            ? `<div style="font-size:0.9em;color:#333;"><b>Towards:</b> ${esc(row.subject.trim())}</div>`
+            : ''
+        }
+      </div>`
         : ''
     }
     ${
