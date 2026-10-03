@@ -33,6 +33,7 @@ import { fetchDefaultQuotationNote } from './quotationNotesApi'
 import { downloadQuotationPdfWithTemplate, printQuotationsWithTemplate } from './outputQuotationDocument'
 import { fetchDefaultSignatureForKind } from './quotationSignatureStorage'
 import { convertQuotationIfNeeded } from '../shared/convertQuotationToSaleDocument'
+import { exportSaleDocumentsCsv } from '../shared/exportSaleDocumentsCsv'
 
 function isAbortOrLockError(err: unknown): boolean {
   const message =
@@ -604,6 +605,20 @@ export default function QuotationMasterPage() {
     })()
   }
 
+  const handleExport = () => {
+    const source =
+      selectedIds.size > 0 ? rows.filter((r) => selectedIds.has(r.id)) : pagedRows
+    if (source.length === 0) {
+      setSaveMessage('Nothing to export on this page.')
+      return
+    }
+    const count = exportSaleDocumentsCsv(source, {
+      filename: 'quotations.csv',
+      numberLabel: 'quotation_number',
+    })
+    setSaveMessage(`Exported ${count} row(s).`)
+  }
+
   const handleStatusChange = (row: QuotationRow, status: QuotationStatus) => {
     if (row.status === status) return
     void (async () => {
@@ -692,6 +707,7 @@ export default function QuotationMasterPage() {
         page={safePage}
         pageCount={pageCount}
         onTemplates={() => setShowTemplates(true)}
+        onExport={handleExport}
         onPrintSelected={handlePrint}
         onDeleteSelected={() => void handleDeleteSelected()}
         onPrevPage={() => setPage((p) => Math.max(1, p - 1))}

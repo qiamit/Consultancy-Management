@@ -1,8 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Mail } from 'lucide-react'
 import { limsPageShellClass, limsPanelClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { blobToBase64, escapeHtml, sendAppEmail } from '@/lib/sendAppEmail'
+import { supabase } from '@/lib/supabaseClient'
+import { RemoteLookupCombobox } from '@/features/bis/shared/RemoteLookupCombobox'
+import type { FilterComboboxOption } from '@/features/sample-handling/receiving/FilterCombobox'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -65,8 +68,34 @@ function saveSentLog(entries: SentLogEntry[]) {
  * Outbound email via Railway functions → Resend (@qengineering.in).
  * CC/BCC + local sent log; full IMAP inbox sync from Consultancy Pro can follow when credentials are ready.
  */
+async function searchClientsForEmail(term: string): Promise<FilterComboboxOption[]> {
+  const clean = term.replace(/[,()"\\*%_]/g, ' ').replace(/\s+/g, ' ').trim()
+  let query = supabase
+    .from('clients')
+    .select('id, company_name, email')
+    .order('company_name', { ascending: true })
+    .limit(40)
+  if (clean) {
+    query = query.or(`company_name.ilike.*${clean}*,email.ilike.*${clean}*`)
+  }
+  const { data, error } = await query
+  if (error) throw error
+  return (data ?? []).map((r) => {
+    const row = r as { id: string; company_name: string | null; email: string | null }
+    const name = (row.company_name ?? '').trim() || 'Unnamed'
+    const email = (row.email ?? '').trim()
+    return {
+      id: String(row.id),
+      label: email ? `${name} <${email}>` : name,
+      secondaryLabel: email || 'No email on file',
+    }
+  })
+}
+
 export default function EmailToolsPage() {
   const [to, setTo] = useState('')
+  const [clientId, setClientId] = useState('')
+  const [clientLabel, setClientLabel] = useState('')
   const [cc, setCc] = useState('')
   const [bcc, setBcc] = useState('')
   const [showCcBcc, setShowCcBcc] = useState(false)
@@ -81,6 +110,8 @@ export default function EmailToolsPage() {
   useEffect(() => {
     setSentLog(loadSentLog())
   }, [])
+
+  const searchClients = useCallback((term: string) => searchClientsForEmail(term), [])
 
   const applyTemplate = (id: string) => {
     const tpl = QUICK_TEMPLATES.find((t) => t.id === id)
@@ -177,11 +208,40 @@ export default function EmailToolsPage() {
         </div>
 
         <div className="space-y-2">
+          <Label htmlFor="email-client">Client (optional)</Label>
+          <RemoteLookupCombobox
+            inputId="email-client"
+            listId="email-client-list"
+            placeholder="Search Client Master…"
+            label={clientLabel}
+            selectedId={clientId}
+            search={searchClients}
+            onChange={({ id, label }) => {
+              setClientId(id)
+              setClientLabel(label)
+              if (!id) return
+              const match = label.match(/<([^>]+)>/)
+              const email = match?.[1]?.trim()
+              if (email) {
+                setTo(email)
+                setError(null)
+                setMessage(`To filled from ${label.replace(/<[^>]+>/, '').trim()}.`)
+              } else {
+                setError('Selected client has no email on file. Enter To manually.')
+              }
+            }}
+          />
+        </div>
+
+        <div className="space-y-2">
           <Label htmlFor="email-to">To</Label>
           <Input
             id="email-to"
             value={to}
-            onChange={(e) => setTo(e.target.value)}
+            onChange={(e) => {
+              setTo(e.target.value)
+              setClientId('')
+            }}
             placeholder="client@example.com"
             autoComplete="email"
           />

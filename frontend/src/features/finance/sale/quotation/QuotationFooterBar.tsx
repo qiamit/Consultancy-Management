@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils'
 import { limsDarkBarBtnClass, limsDarkBarFieldClass, limsDeleteBtnClass } from '@/lib/limsThemeUi'
-import { ChevronLeft, ChevronRight, LayoutTemplate, Printer, Trash2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Download, LayoutTemplate, Printer, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { LaboratoryDirectorOnly } from '@/components/lims/LaboratoryDirectorOnly'
@@ -12,6 +12,7 @@ export function QuotationFooterBar({
   page,
   pageCount,
   onTemplates,
+  onExport,
   onPrintSelected,
   onDeleteSelected,
   onPrevPage,
@@ -26,6 +27,7 @@ export function QuotationFooterBar({
   page: number
   pageCount: number
   onTemplates: () => void
+  onExport?: () => void
   onPrintSelected: () => void
   onDeleteSelected: () => void
   onPrevPage: () => void
@@ -57,6 +59,20 @@ export function QuotationFooterBar({
             <LayoutTemplate className="size-3.5 shrink-0 sm:size-4" />
             <span className="hidden lg:inline">Templates</span>
           </Button>
+          {onExport ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className={actionBtnClass}
+              onClick={onExport}
+              disabled={loading}
+              title="Export CSV (selected rows, or current page)"
+            >
+              <Download className="size-3.5 shrink-0 sm:size-4" />
+              <span className="hidden lg:inline">Export</span>
+            </Button>
+          ) : null}
           <LaboratoryDirectorOnly>
             <Button
             type="button"
@@ -95,7 +111,9 @@ export function QuotationFooterBar({
             <p
               className={cn(
                 'min-w-0 max-w-[8rem] truncate text-[10px] sm:max-w-[12rem] sm:text-xs md:max-w-[16rem]',
-                message.toLowerCase().includes('saved') || message.toLowerCase().includes('deleted')
+                message.toLowerCase().includes('saved') ||
+                  message.toLowerCase().includes('deleted') ||
+                  message.toLowerCase().includes('exported')
                   ? 'text-emerald-300'
                   : 'text-red-300',
               )}

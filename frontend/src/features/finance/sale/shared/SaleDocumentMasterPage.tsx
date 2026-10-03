@@ -37,6 +37,7 @@ import {
   convertInvoiceToCreditNoteIfNeeded,
   convertQuotationIfNeeded,
 } from './convertQuotationToSaleDocument'
+import { exportSaleDocumentsCsv } from './exportSaleDocumentsCsv'
 import { fetchDefaultQuotationTerm } from '../quotation/quotationTermsApi'
 import { fetchDefaultQuotationNote } from '../quotation/quotationNotesApi'
 import { fetchDefaultSignatureForKind } from '../quotation/quotationSignatureStorage'
@@ -559,6 +560,19 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
     )
   }
 
+  const handleExport = () => {
+    const source = selectedIds.size > 0 ? rows.filter((r) => selectedIds.has(r.id)) : pagedRows
+    if (source.length === 0) {
+      setMessage('Nothing to export on this page.')
+      return
+    }
+    const count = exportSaleDocumentsCsv(source, {
+      filename: `${config.documentKind}.csv`,
+      numberLabel: config.numberColumnLabel.replace(/\s+/g, '_').toLowerCase(),
+    })
+    setMessage(`Exported ${count} row(s).`)
+  }
+
   return (
     <div className={limsPageShellClass}>
       <QuotationHeaderBar
@@ -627,6 +641,7 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
         page={safePage}
         pageCount={pageCount}
         onTemplates={() => setShowTemplates(true)}
+        onExport={handleExport}
         onPrintSelected={handlePrintSelected}
         onDeleteSelected={() => void handleDeleteSelected()}
         onPrevPage={() => setPage((p) => Math.max(1, p - 1))}

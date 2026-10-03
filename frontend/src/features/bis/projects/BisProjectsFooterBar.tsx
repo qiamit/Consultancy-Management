@@ -61,7 +61,9 @@ export function BisProjectsFooterBar({
   const fieldClass = cn(limsDarkBarFieldClass, 'h-7 shrink-0 text-[11px] sm:h-8 sm:text-xs')
   const isSuccess =
     message != null &&
-    (message.toLowerCase().includes('saved') || message.toLowerCase().includes('deleted'))
+    (message.toLowerCase().includes('saved') ||
+      message.toLowerCase().includes('deleted') ||
+      message.toLowerCase().includes('exported'))
 
   return (
     <div className="relative overflow-hidden rounded-none border-2 border-stone-500 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-2 py-1.5 text-white shadow-sm ring-1 ring-amber-700/20 sm:px-3 sm:py-2 md:px-4">
