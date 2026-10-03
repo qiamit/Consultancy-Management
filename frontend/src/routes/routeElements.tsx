@@ -19,6 +19,7 @@ import BisProjectsMasterPage from '@/features/bis/projects/BisProjectsMasterPage
 import BisRenewalsMasterPage from '@/features/bis/renewals/BisRenewalsMasterPage'
 import BisSurveillanceMasterPage from '@/features/bis/surveillance/BisSurveillanceMasterPage'
 import BisSampleFailureReplyMasterPage from '@/features/bis/sample-failure-reply/BisSampleFailureReplyMasterPage'
+import EmailToolsPage from '@/features/tools/email/EmailToolsPage'
 import ModulePlaceholderPage from '@/features/modules/ModulePlaceholderPage'
 import { RequireAuth } from '@/components/auth/RequireAuth'
 import { RequireLaboratoryDirector } from '@/components/auth/RequireLaboratoryDirector'
@@ -111,12 +112,7 @@ export function ExpiredLicensesRoute() {
 }
 
 export function EmailToolsRoute() {
-  return (
-    <ModulePlaceholderPage
-      title="Email"
-      description="Outbound via Resend (@qengineering.in). Inbox sync will be wired after API gateway is live."
-    />
-  )
+  return <EmailToolsPage />
 }
 
 export function CmsToolsRoute() {

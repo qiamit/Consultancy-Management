@@ -1,12 +1,28 @@
 import http from 'node:http'
+import fs from 'node:fs'
+import path from 'node:path'
 
 const PORT = Number(process.env.PORT || 8080)
+const MANAK_INBOX_DIR = path.join('/tmp', 'qe-manak-pdf-inbox')
+const MANAK_TTL_MS = 45 * 60 * 1000
 const REST_URL = (process.env.REST_URL || 'http://rest.railway.internal:3000').replace(/\/$/, '')
 const AUTH_URL = (process.env.AUTH_URL || 'http://auth.railway.internal:9999').replace(/\/$/, '')
 const SERVICE_ROLE_KEY = process.env.SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 const RESEND_API_KEY = process.env.RESEND_API_KEY || ''
 const EMAIL_FROM =
   process.env.RESEND_FROM_EMAIL || process.env.MRM_EMAIL_FROM || 'Q Engineering <info@qengineering.in>'
+
+function corsJson(res, status, body) {
+  const payload = JSON.stringify(body)
+  res.writeHead(status, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Content-Length': Buffer.byteLength(payload),
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, apikey, X-User-Jwt',
+  })
+  res.end(payload)
+}
 
 function json(res, status, body) {
   const payload = JSON.stringify(body)
@@ -15,6 +31,146 @@ function json(res, status, body) {
     'Content-Length': Buffer.byteLength(payload),
   })
   res.end(payload)
+}
+
+function manakFile(token) {
+  const safe = String(token || '')
+    .replace(/[^\w.-]+/g, '_')
+    .slice(0, 80)
+  return path.join(MANAK_INBOX_DIR, `${safe}.json`)
+}
+
+function readManakEntry(token) {
+  try {
+    if (!fs.existsSync(MANAK_INBOX_DIR)) fs.mkdirSync(MANAK_INBOX_DIR, { recursive: true })
+    const raw = fs.readFileSync(manakFile(token), 'utf8')
+    const entry = JSON.parse(raw)
+    if (!entry || entry.token !== token) return null
+    if (Date.now() - Number(entry.createdAt || 0) > MANAK_TTL_MS) return null
+    return entry
+  } catch {
+    return null
+  }
+}
+
+function writeManakEntry(entry) {
+  if (!fs.existsSync(MANAK_INBOX_DIR)) fs.mkdirSync(MANAK_INBOX_DIR, { recursive: true })
+  fs.writeFileSync(manakFile(entry.token), JSON.stringify(entry))
+}
+
+async function handleManakPdf(req, res) {
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, apikey, X-User-Jwt',
+    })
+    res.end()
+    return
+  }
+
+  const url = new URL(req.url || '/', 'http://functions.local')
+
+  if (req.method === 'GET') {
+    const token = String(url.searchParams.get('token') || '').trim()
+    if (!token) return corsJson(res, 400, { ready: false, error: 'token required' })
+    const entry = readManakEntry(token)
+    if (!entry) return corsJson(res, 200, { ready: false })
+    if (!entry.ref) return corsJson(res, 200, { ready: false, sampleId: entry.sampleId })
+    return corsJson(res, 200, {
+      ready: true,
+      sampleId: entry.sampleId,
+      sample_code: entry.sample_code || '',
+      ref: entry.ref,
+      pdfName: entry.pdfName || 'Test_Request.pdf',
+    })
+  }
+
+  if (req.method !== 'POST') {
+    return corsJson(res, 405, { ok: false, error: 'Method not allowed' })
+  }
+
+  let body = {}
+  try {
+    body = await readBody(req)
+  } catch {
+    return corsJson(res, 400, { ok: false, error: 'Invalid JSON' })
+  }
+
+  const action = String(body.action || '').trim()
+  const token = String(body.token || '').trim()
+  if (!token) return corsJson(res, 400, { ok: false, error: 'token required' })
+
+  if (action === 'register') {
+    try {
+      await requireUser(req)
+    } catch (err) {
+      return corsJson(res, Number(err?.statusCode) || 401, { ok: false, error: 'Unauthorized' })
+    }
+    const sampleId = String(body.sampleId || '').trim()
+    if (!sampleId) return corsJson(res, 400, { ok: false, error: 'sampleId required' })
+    writeManakEntry({
+      token,
+      sampleId,
+      createdAt: Date.now(),
+      chunks: [],
+      chunkTotal: 0,
+    })
+    return corsJson(res, 200, { ok: true })
+  }
+
+  if (action === 'chunk') {
+    const entry = readManakEntry(token)
+    if (!entry) {
+      return corsJson(res, 404, {
+        ok: false,
+        error: 'Unknown token. Open Test Request from the app again.',
+      })
+    }
+    entry.chunkTotal = Number(body.total) || 0
+    entry.chunks[Number(body.index) || 0] = String(body.chunk || '')
+    entry.createdAt = Date.now()
+    writeManakEntry(entry)
+    return corsJson(res, 200, { ok: true })
+  }
+
+  if (action === 'finish') {
+    const entry = readManakEntry(token)
+    if (!entry) return corsJson(res, 404, { ok: false, error: 'Unknown token.' })
+    const filled = entry.chunks.filter((part) => typeof part === 'string').length
+    if (!entry.chunkTotal || filled < entry.chunkTotal) {
+      return corsJson(res, 400, { ok: false, error: 'PDF chunks are incomplete.' })
+    }
+    const pdfName = String(body.pdfName || entry.pdfName || 'Test_Request.pdf').replace(
+      /[^\w.\-]+/g,
+      '_',
+    )
+    const sampleId = String(body.sampleId || entry.sampleId || 'sample')
+      .replace(/[^\w.\-]+/g, '-')
+      .slice(0, 80)
+    const ref = `osl-sample-test-requests/${sampleId}/${Date.now()}-${pdfName.slice(0, 120)}`
+    // Persist assembled PDF bytes under /tmp until Storage upload is wired for OSL paths.
+    try {
+      const bin = Buffer.from(entry.chunks.join(''), 'base64')
+      const outDir = path.join('/tmp', 'qe-manak-pdfs', sampleId)
+      fs.mkdirSync(outDir, { recursive: true })
+      fs.writeFileSync(path.join(outDir, pdfName), bin)
+    } catch (err) {
+      return corsJson(res, 500, {
+        ok: false,
+        error: err instanceof Error ? err.message : 'PDF write failed',
+      })
+    }
+    entry.ref = ref
+    entry.pdfName = pdfName
+    entry.sample_code = String(body.sample_code || entry.sample_code || '')
+    entry.chunks = []
+    entry.createdAt = Date.now()
+    writeManakEntry(entry)
+    return corsJson(res, 200, { ok: true, ref, pdfName })
+  }
+
+  return corsJson(res, 400, { ok: false, error: 'Unknown action' })
 }
 
 function readBody(req) {
@@ -486,12 +642,24 @@ const routes = {
   'POST /send-email': handleSendEmail,
   'POST /create-user': handleCreateUser,
   'POST /delete-user': handleDeleteUser,
+  'GET /osl/manak-pdf': handleManakPdf,
+  'POST /osl/manak-pdf': handleManakPdf,
+  'OPTIONS /osl/manak-pdf': handleManakPdf,
+  'GET /api/osl/manak-pdf': handleManakPdf,
+  'POST /api/osl/manak-pdf': handleManakPdf,
+  'OPTIONS /api/osl/manak-pdf': handleManakPdf,
 }
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || '/', 'http://functions.local')
-  const key = `${req.method} ${url.pathname.replace(/\/$/, '') || '/'}`
-  const handler = routes[key] || (key === 'GET /' ? routes['GET /health'] : null)
+  const pathname = url.pathname.replace(/\/$/, '') || '/'
+  const key = `${req.method} ${pathname}`
+  const handler =
+    routes[key] ||
+    (key === 'GET /' ? routes['GET /health'] : null) ||
+    (pathname.endsWith('/osl/manak-pdf') || pathname.endsWith('/api/osl/manak-pdf')
+      ? handleManakPdf
+      : null)
   if (!handler) {
     json(res, 404, { error: 'Not Found' })
     return
