@@ -13,6 +13,7 @@ import {
   MessageSquareWarning,
   RefreshCw,
   Users,
+  Wallet,
 } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
@@ -30,48 +31,89 @@ type StatCard = {
   href: string
 }
 
+type DashCounts = {
+  clients: number
+  licenses: number
+  applications: number
+  isCodes: number
+  qeManaged: number
+  stopMarking: number
+  expiredLicenses: number
+  renewals: number
+  surveillance: number
+  sampleFailures: number
+  quotations: number
+}
+
+const EMPTY: DashCounts = {
+  clients: 0,
+  licenses: 0,
+  applications: 0,
+  isCodes: 0,
+  qeManaged: 0,
+  stopMarking: 0,
+  expiredLicenses: 0,
+  renewals: 0,
+  surveillance: 0,
+  sampleFailures: 0,
+  quotations: 0,
+}
+
 export default function DashboardPage() {
   const { profileName, user } = useAuth()
   const [loading, setLoading] = useState(true)
-  const [clients, setClients] = useState(0)
-  const [licenses, setLicenses] = useState(0)
-  const [applications, setApplications] = useState(0)
-  const [isCodes, setIsCodes] = useState(0)
-  const [qeManaged, setQeManaged] = useState(0)
-  const [stopMarking, setStopMarking] = useState(0)
-  const [expiredLicenses, setExpiredLicenses] = useState(0)
+  const [counts, setCounts] = useState<DashCounts>(EMPTY)
 
   useEffect(() => {
     let canceled = false
     const load = async () => {
       setLoading(true)
       const today = todayIsoDate()
-      const [c, b, a, i, qe, sm, exp] = await Promise.all([
+      const [
+        c,
+        b,
+        a,
+        i,
+        qe,
+        sm,
+        exp,
+        ren,
+        surv,
+        sfr,
+        qtn,
+      ] = await Promise.all([
         supabase.from('clients').select('*', { count: 'exact', head: true }),
         supabase.from('bis_projects').select('*', { count: 'exact', head: true }),
-        supabase.from('bis_new_applications').select('*', { count: 'exact', head: true }),
+        supabase
+          .from('bis_projects')
+          .select('*', { count: 'exact', head: true })
+          .or('project_kind.eq.Application,project_kind.eq.application'),
         supabase.from('is_codes').select('*', { count: 'exact', head: true }),
-        supabase
-          .from('bis_projects')
-          .select('*', { count: 'exact', head: true })
-          .eq('is_qe_managed', true),
-        supabase
-          .from('bis_projects')
-          .select('*', { count: 'exact', head: true })
-          .eq('status', 'stop_marking'),
+        supabase.from('bis_projects').select('*', { count: 'exact', head: true }).eq('is_qe_managed', true),
+        supabase.from('bis_projects').select('*', { count: 'exact', head: true }).eq('status', 'stop_marking'),
         supabase
           .from('bis_projects')
           .select('*', { count: 'exact', head: true })
           .lt('license_validity_date', today),
+        supabase.from('bis_renewal_applications').select('*', { count: 'exact', head: true }),
+        supabase.from('license_surveillance').select('*', { count: 'exact', head: true }),
+        supabase.from('bis_sample_failure_replies').select('*', { count: 'exact', head: true }),
+        supabase.from('quotations').select('*', { count: 'exact', head: true }),
       ])
       if (canceled) return
-      setClients(c.count ?? 0)
-      setLicenses(b.count ?? 0)
-      setApplications(a.count ?? 0)
-      setIsCodes(i.count ?? 0)
-      setQeManaged(qe.count ?? 0)
-      setStopMarking(sm.count ?? 0)
-      setExpiredLicenses(exp.count ?? 0)
+      setCounts({
+        clients: c.count ?? 0,
+        licenses: b.count ?? 0,
+        applications: a.count ?? 0,
+        isCodes: i.count ?? 0,
+        qeManaged: qe.count ?? 0,
+        stopMarking: sm.count ?? 0,
+        expiredLicenses: exp.count ?? 0,
+        renewals: ren.count ?? 0,
+        surveillance: surv.count ?? 0,
+        sampleFailures: sfr.count ?? 0,
+        quotations: qtn.count ?? 0,
+      })
       setLoading(false)
     }
     void load()
@@ -83,28 +125,28 @@ export default function DashboardPage() {
   const overviewCards: StatCard[] = [
     {
       title: 'Clients',
-      value: clients,
+      value: counts.clients,
       subtitle: 'Client master records',
       icon: Users,
       href: '/masters/clients',
     },
     {
       title: 'BIS Licenses',
-      value: licenses,
+      value: counts.licenses,
       subtitle: 'All registered licenses',
       icon: FolderKanban,
       href: '/bis/projects',
     },
     {
       title: 'New Applications',
-      value: applications,
-      subtitle: 'BIS new application files',
+      value: counts.applications,
+      subtitle: 'BIS application-type projects',
       icon: FilePlus2,
       href: '/bis/new-applications',
     },
     {
       title: 'IS Codes',
-      value: isCodes,
+      value: counts.isCodes,
       subtitle: 'IS Code master',
       icon: BookOpen,
       href: '/masters/is-codes',
@@ -114,24 +156,55 @@ export default function DashboardPage() {
   const licenseStatusCards: StatCard[] = [
     {
       title: 'QE Managed',
-      value: qeManaged,
+      value: counts.qeManaged,
       subtitle: 'Licenses managed by Q Engineering',
       icon: BadgeCheck,
       href: '/bis/our-licenses',
     },
     {
       title: 'Stop Marking',
-      value: stopMarking,
+      value: counts.stopMarking,
       subtitle: 'Licenses in stop marking status',
       icon: Ban,
       href: '/bis/stop-marking',
     },
     {
       title: 'Expired Licenses',
-      value: expiredLicenses,
+      value: counts.expiredLicenses,
       subtitle: 'Past license validity date',
       icon: CalendarX2,
       href: '/bis/expired-licenses',
+    },
+  ]
+
+  const opsCards: StatCard[] = [
+    {
+      title: 'Renewals',
+      value: counts.renewals,
+      subtitle: 'License renewal applications',
+      icon: RefreshCw,
+      href: '/bis/license-renewals',
+    },
+    {
+      title: 'Surveillance',
+      value: counts.surveillance,
+      subtitle: 'BIS surveillance records',
+      icon: Eye,
+      href: '/bis/surveillance',
+    },
+    {
+      title: 'Sample Failure Reply',
+      value: counts.sampleFailures,
+      subtitle: 'Sample failure replies on file',
+      icon: MessageSquareWarning,
+      href: '/bis/sample-failure-reply',
+    },
+    {
+      title: 'Quotations',
+      value: counts.quotations,
+      subtitle: 'Finance sale quotations',
+      icon: Wallet,
+      href: '/finance/sale/quotation',
     },
   ]
 
@@ -141,6 +214,7 @@ export default function DashboardPage() {
     { label: 'Surveillance', href: '/bis/surveillance', icon: Eye },
     { label: 'Sample Failure Reply', href: '/bis/sample-failure-reply', icon: MessageSquareWarning },
     { label: 'Website CMS', href: '/tools/cms', icon: Globe },
+    { label: 'Quotation', href: '/finance/sale/quotation', icon: Wallet },
   ]
 
   const renderStatCard = (card: StatCard) => {
@@ -178,14 +252,14 @@ export default function DashboardPage() {
     <div className={cn(limsPageShellClass, 'space-y-6 p-4 md:p-6')}>
       <div className={cn(limsPanelClass, 'p-6')}>
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">
-          Consultancy Pro
+          Quality Engineering
         </p>
         <h1 className="mt-2 font-jakarta text-3xl font-bold tracking-tight text-foreground">
           Welcome{profileName || user?.email ? `, ${profileName || user?.email}` : ''}
         </h1>
         <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-          Q Engineering consultancy operations on the same Railway stack as Qirlpl LIMS —
-          Auth, PostgREST, Storage, PDF, and Resend.
+          Consultancy operations on the Railway stack — Auth, PostgREST, Storage, PDF, Resend, and
+          Manak eBIS Assist.
         </p>
       </div>
 
@@ -202,9 +276,18 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      <div className="space-y-3">
+        <h2 className="font-jakarta text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          Operations &amp; finance
+        </h2>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {opsCards.map(renderStatCard)}
+        </div>
+      </div>
+
       <div className={cn(limsPanelClass, 'p-5')}>
         <h2 className="font-jakarta text-lg font-bold text-foreground">Quick actions</h2>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           {shortcuts.map((item) => {
             const Icon = item.icon
             return (

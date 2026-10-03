@@ -17,6 +17,10 @@ import {
 import { buildFactoryTestReportHtml, factoryTestReportDataFromPrintData } from './factoryTestReportHtml'
 import { loadBisPrintData, type BisPrintData } from './loadBisPrintData'
 import {
+  buildLocationMapHtml,
+  locationMapDataFromPrintData,
+} from './locationMapHtml'
+import {
   buildManufacturingScopeHtml,
   manufacturingScopeDataFromPrintData,
 } from './manufacturingScopeHtml'
@@ -108,6 +112,7 @@ export type BisPrintDocumentKind =
   | 'process-flow-chart'
   | 'plant-layout'
   | 'osl-courier-labels'
+  | 'location-map'
 
 export const BIS_PRINT_DOCUMENT_LABEL: Record<BisPrintDocumentKind, string> = {
   form1: 'BIS Form-I',
@@ -137,6 +142,7 @@ export const BIS_PRINT_DOCUMENT_LABEL: Record<BisPrintDocumentKind, string> = {
   'process-flow-chart': 'Process Flow Chart',
   'plant-layout': 'Plant Layout',
   'osl-courier-labels': 'OSL Courier Labels',
+  'location-map': 'Location Map',
 }
 
 /** Documents offered in the "More prints" menu (Form-I and Authorization Letter have their own buttons). */
@@ -166,11 +172,12 @@ export const EXTRA_PRINT_KINDS: BisPrintDocumentKind[] = [
   'process-flow-chart',
   'plant-layout',
   'osl-courier-labels',
+  'location-map',
 ]
 
 /** Shared tooltip text for the "More prints" trigger. */
 export const MORE_PRINTS_TOOLTIP =
-  'Full BIS application print pack (CMPF, undertakings, staff, SEF, OSL labels, plant layout, process flow)'
+  'Full BIS application print pack (CMPF, undertakings, staff, SEF, OSL, plant layout, location map)'
 
 const HTML_BUILDERS: Record<BisPrintDocumentKind, (data: BisPrintData) => string> = {
   form1: (d) => buildBisForm1Html(bisForm1DataFromPrintData(d)),
@@ -204,6 +211,7 @@ const HTML_BUILDERS: Record<BisPrintDocumentKind, (data: BisPrintData) => string
   'process-flow-chart': (d) => buildProcessFlowChartHtml(processFlowChartDataFromPrintData(d)),
   'plant-layout': (d) => buildPlantLayoutHtml(plantLayoutDataFromPrintData(d)),
   'osl-courier-labels': (d) => buildOslCourierLabelsHtml(oslCourierLabelsDataFromPrintData(d)),
+  'location-map': (d) => buildLocationMapHtml(locationMapDataFromPrintData(d)),
 }
 
 /**
