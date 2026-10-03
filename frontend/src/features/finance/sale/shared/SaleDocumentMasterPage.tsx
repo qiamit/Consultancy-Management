@@ -33,6 +33,10 @@ import {
   updateSaleDocumentStatus,
   type SaleDocumentKind,
 } from './saleDocumentsApi'
+import {
+  convertInvoiceToCreditNoteIfNeeded,
+  convertQuotationIfNeeded,
+} from './convertQuotationToSaleDocument'
 import { fetchDefaultQuotationTerm } from '../quotation/quotationTermsApi'
 import { fetchDefaultQuotationNote } from '../quotation/quotationNotesApi'
 import { fetchDefaultSignatureForKind } from '../quotation/quotationSignatureStorage'
@@ -408,8 +412,71 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
     setSaveLoading(true)
     setSaveMessage(null)
     try {
-      await saveSaleDocument(config.documentKind, form, editingId)
-      setMessage(`Saved ${form.quotationNumber.trim()}.`)
+      const convertAction = form.status
+      const persistStatus: QuotationStatus =
+        (convertAction === 'CreditNote' && config.documentKind === 'invoice') ||
+        (convertAction === 'Invoice' && config.documentKind === 'proformaInvoice')
+          ? 'Finalized'
+          : form.status
+      await saveSaleDocument(
+        config.documentKind,
+        persistStatus === form.status ? form : { ...form, status: persistStatus },
+        editingId,
+      )
+      const convertSource: QuotationRow = {
+        id: editingId ?? 'new',
+        quotation_number: form.quotationNumber,
+        quotation_date: form.quotationDate,
+        valid_until: form.validUntil || null,
+        client_id: form.clientId || null,
+        client_name: form.clientName,
+        contact_person: form.contactPerson || null,
+        contact_email: form.contactEmail || null,
+        contact_mobile: form.contactMobile || null,
+        client_address: form.clientAddress || null,
+        client_gst_number: form.clientGstNumber || null,
+        subject: form.subject || null,
+        reference_no: form.referenceNo || null,
+        status: persistStatus,
+        payment_terms: form.paymentTerms || null,
+        notes: form.notes || null,
+        remarks: form.remarks || null,
+        signature_text: form.signatureText || null,
+        signature_image_path: form.signatureImagePath || null,
+        discount_percent: parseMoney(form.discountPercent),
+        discount_amount: parseMoney(form.discountAmount),
+        transportation_charges: parseMoney(form.transportationCharges),
+        packaging_charges: parseMoney(form.packagingCharges),
+        gst_percent: parseMoney(form.gstPercent),
+        gst_amount: 0,
+        subtotal: 0,
+        grand_total: 0,
+        line_items: form.lines
+          .filter((l) => l.description.trim())
+          .map((l, index) => ({
+            id: `tmp-${index}`,
+            quotation_id: editingId ?? 'new',
+            line_no: index + 1,
+            description: l.description,
+            details: l.details || null,
+            make: l.make || null,
+            hsn_sac: l.hsnSac || null,
+            item_code: l.itemCode || null,
+            quantity: parseMoney(l.quantity),
+            unit: l.unit || null,
+            rate: parseMoney(l.rate),
+            amount: parseMoney(l.quantity) * parseMoney(l.rate),
+            discount_percent: parseMoney(l.discountPercent),
+            gst_percent: parseMoney(l.gstPercent),
+          })),
+      }
+      let convertMsg: string | null = null
+      if (config.documentKind === 'invoice') {
+        convertMsg = await convertInvoiceToCreditNoteIfNeeded(convertSource, convertAction)
+      } else if (config.documentKind === 'proformaInvoice') {
+        convertMsg = await convertQuotationIfNeeded(convertSource, convertAction)
+      }
+      setMessage(convertMsg ?? `Saved ${form.quotationNumber.trim()}.`)
       setShowForm(false)
       setEditingId(null)
       reload()
@@ -453,12 +520,27 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
   }
 
   const handleStatusChange = async (row: QuotationRow, status: QuotationStatus) => {
+    if (row.status === status) return
     setStatusUpdatingId(row.id)
+    const previous = row.status
     try {
-      await updateSaleDocumentStatus(config.documentKind, row, status)
-      setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, status } : r)))
-      setMessage(`Status updated to ${status}.`)
+      let convertMsg: string | null = null
+      if (config.documentKind === 'invoice') {
+        convertMsg = await convertInvoiceToCreditNoteIfNeeded(row, status)
+      } else if (config.documentKind === 'proformaInvoice') {
+        convertMsg = await convertQuotationIfNeeded(row, status)
+      }
+      const persistStatus: QuotationStatus =
+        (status === 'CreditNote' && config.documentKind === 'invoice') ||
+        (status === 'Invoice' && config.documentKind === 'proformaInvoice')
+          ? 'Finalized'
+          : status
+      await updateSaleDocumentStatus(config.documentKind, row, persistStatus)
+      setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, status: persistStatus } : r)))
+      setMessage(convertMsg ?? `Status updated to ${persistStatus}.`)
+      if (convertMsg) reload()
     } catch (err) {
+      setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, status: previous } : r)))
       setMessage(formatSaleApiError(err))
     } finally {
       setStatusUpdatingId(null)
@@ -525,6 +607,7 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
         emptySecondary={emptySecondary}
         hideValidUntil={isPaymentReceipt}
         paymentLedger={isPaymentReceipt}
+        documentKind={config.documentKind}
         paymentOpeningByClientId={
           isPaymentReceipt
             ? Object.fromEntries(

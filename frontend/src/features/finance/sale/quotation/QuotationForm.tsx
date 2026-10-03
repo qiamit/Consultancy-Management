@@ -69,6 +69,7 @@ import {
   parseMoney,
   QUOTATION_STATUS_LABELS,
   QUOTATION_STATUS_OPTIONS,
+  statusOptionsForDocumentKind,
   PAYMENT_METHOD_OPTIONS,
   type QuotationForm as QuotationFormType,
   type QuotationLineForm,
@@ -356,6 +357,7 @@ export function QuotationFormView({
   excludeReceiptId?: string | null
 }) {
   const isPaymentReceipt = formMode === 'paymentReceipt'
+  const statusOptions = statusOptionsForDocumentKind(documentKind)
   const [clientQuery, setClientQuery] = useState(form.clientName)
   const [clientOpen, setClientOpen] = useState(false)
   const [addClientOpen, setAddClientOpen] = useState(false)
@@ -791,12 +793,12 @@ export function QuotationFormView({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {QUOTATION_STATUS_OPTIONS.map((s) => (
+                  {statusOptions.map((s) => (
                     <SelectItem key={s.value} value={s.value}>
                       {s.label}
                     </SelectItem>
                   ))}
-                  {!QUOTATION_STATUS_OPTIONS.some((o) => o.value === form.status) ? (
+                  {!statusOptions.some((o) => o.value === form.status) ? (
                     <SelectItem value={form.status}>
                       {QUOTATION_STATUS_LABELS[form.status] ?? form.status}
                     </SelectItem>

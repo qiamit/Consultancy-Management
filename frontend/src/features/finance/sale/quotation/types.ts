@@ -6,13 +6,14 @@ export type QuotationStatus =
   | 'Finalized'
   | 'Proforma'
   | 'Invoice'
+  | 'CreditNote'
   /** Legacy values still readable from older rows */
   | 'Accepted'
   | 'Rejected'
   | 'Expired'
   | 'Converted'
 
-/** Primary status choices shown in UI dropdowns. */
+/** Primary status choices shown in UI dropdowns (quotation module). */
 export const QUOTATION_STATUS_OPTIONS: Array<{ value: QuotationStatus; label: string }> = [
   { value: 'Draft', label: 'Draft' },
   { value: 'Sent', label: 'Sent' },
@@ -20,6 +21,29 @@ export const QUOTATION_STATUS_OPTIONS: Array<{ value: QuotationStatus; label: st
   { value: 'Proforma', label: 'Convert to Proforma Invoice' },
   { value: 'Invoice', label: 'Convert to Invoice' },
 ]
+
+const BASE_STATUS_OPTIONS: Array<{ value: QuotationStatus; label: string }> = [
+  { value: 'Draft', label: 'Draft' },
+  { value: 'Sent', label: 'Sent' },
+  { value: 'Finalized', label: 'Finalized' },
+]
+
+/** Status dropdown options per finance document kind. */
+export function statusOptionsForDocumentKind(
+  kind: string | null | undefined,
+): Array<{ value: QuotationStatus; label: string }> {
+  switch (kind) {
+    case 'proformaInvoice':
+      return [...BASE_STATUS_OPTIONS, { value: 'Invoice', label: 'Convert to Invoice' }]
+    case 'invoice':
+      return [...BASE_STATUS_OPTIONS, { value: 'CreditNote', label: 'Convert to Credit Note' }]
+    case 'creditNote':
+    case 'paymentReceipt':
+      return BASE_STATUS_OPTIONS
+    default:
+      return QUOTATION_STATUS_OPTIONS
+  }
+}
 
 export const QUOTATION_STATUSES: QuotationStatus[] = QUOTATION_STATUS_OPTIONS.map((o) => o.value)
 
@@ -29,6 +53,7 @@ export const QUOTATION_STATUS_LABELS: Record<QuotationStatus, string> = {
   Finalized: 'Finalized',
   Proforma: 'Convert to Proforma Invoice',
   Invoice: 'Convert to Invoice',
+  CreditNote: 'Convert to Credit Note',
   Accepted: 'Finalized',
   Rejected: 'Rejected',
   Expired: 'Expired',

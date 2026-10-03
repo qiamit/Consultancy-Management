@@ -16,6 +16,7 @@ import {
   formatMoney,
   QUOTATION_STATUS_LABELS,
   QUOTATION_STATUS_OPTIONS,
+  statusOptionsForDocumentKind,
   quotationStatusLabel,
   type QuotationRow,
   type QuotationStatus,
@@ -67,6 +68,7 @@ export function QuotationTable({
   hideValidUntil = false,
   paymentLedger = false,
   paymentOpeningByClientId,
+  documentKind,
 }: {
   rows: QuotationRow[]
   loading: boolean
@@ -88,7 +90,10 @@ export function QuotationTable({
   /** Payment Receipt list: Opening / Received / Balance instead of Status / Grand Total. */
   paymentLedger?: boolean
   paymentOpeningByClientId?: Record<string, { amount: number; type: 'Dr' | 'Cr' }>
+  /** Filters status convert actions (e.g. Invoice → Credit Note). */
+  documentKind?: string
 }) {
+  const statusOptions = statusOptionsForDocumentKind(documentKind)
   const allChecked = rows.length > 0 && rows.every((r) => selectedIds.has(r.id))
   const someChecked = rows.some((r) => selectedIds.has(r.id))
 
@@ -173,7 +178,7 @@ export function QuotationTable({
             {rows.map((r) => {
               const selected = selectedIds.has(r.id)
               const busy = statusUpdatingId === r.id
-              const inOptions = QUOTATION_STATUS_OPTIONS.some((o) => o.value === r.status)
+              const inOptions = statusOptions.some((o) => o.value === r.status)
               const ledger = paymentLedger
                 ? receiptLedgerSnapshot(
                     r,
@@ -289,7 +294,7 @@ export function QuotationTable({
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent className="rounded-none border-stone-500">
-                        {QUOTATION_STATUS_OPTIONS.map((opt) => (
+                        {statusOptions.map((opt) => (
                           <SelectItem key={opt.value} value={opt.value} className="text-sm">
                             {opt.label}
                           </SelectItem>
