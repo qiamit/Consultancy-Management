@@ -22,6 +22,18 @@ import {
   buildProcessDescriptionHtml,
   processDescriptionDataFromPrintData,
 } from './processDescriptionHtml'
+import {
+  buildSelfEvaluationFormHtml,
+  selfEvaluationFormDataFromPrintData,
+} from './selfEvaluationFormHtml'
+import {
+  buildTechnicalStaffHtml,
+  technicalStaffDataFromPrintData,
+} from './technicalStaffHtml'
+import {
+  buildTopManagementHtml,
+  topManagementDataFromPrintData,
+} from './topManagementHtml'
 import { buildUndertakingGeneralHtml, undertakingGeneralDataFromPrintData } from './undertakingGeneralHtml'
 import {
   buildUndertakingLongDurationHtml,
@@ -58,6 +70,9 @@ export type BisPrintDocumentKind =
   | 'appointment-letter'
   | 'manufacturing-scope'
   | 'process-description'
+  | 'top-management'
+  | 'technical-staff'
+  | 'self-evaluation-form'
 
 export const BIS_PRINT_DOCUMENT_LABEL: Record<BisPrintDocumentKind, string> = {
   form1: 'BIS Form-I',
@@ -77,6 +92,9 @@ export const BIS_PRINT_DOCUMENT_LABEL: Record<BisPrintDocumentKind, string> = {
   'appointment-letter': 'Appointment Letter',
   'manufacturing-scope': 'Manufacturing Scope Declaration',
   'process-description': 'Process Description',
+  'top-management': 'Top Management Details',
+  'technical-staff': 'Technical Staff Details',
+  'self-evaluation-form': 'Self Evaluation Form',
 }
 
 /** Documents offered in the "More prints" menu (Form-I and Authorization Letter have their own buttons). */
@@ -96,11 +114,14 @@ export const EXTRA_PRINT_KINDS: BisPrintDocumentKind[] = [
   'appointment-letter',
   'manufacturing-scope',
   'process-description',
+  'top-management',
+  'technical-staff',
+  'self-evaluation-form',
 ]
 
 /** Shared tooltip text for the "More prints" trigger. */
 export const MORE_PRINTS_TOOLTIP =
-  'CMPF pack, undertakings, Annex-1 MMF, Appointment Letter, Manufacturing Scope, Process Description'
+  'CMPF pack, undertakings, Annex-1, Appointment, Manufacturing Scope, Process Description, Top Management, Technical Staff, SEF'
 
 const HTML_BUILDERS: Record<BisPrintDocumentKind, (data: BisPrintData) => string> = {
   form1: (d) => buildBisForm1Html(bisForm1DataFromPrintData(d)),
@@ -122,6 +143,9 @@ const HTML_BUILDERS: Record<BisPrintDocumentKind, (data: BisPrintData) => string
   'appointment-letter': (d) => buildAppointmentLetterHtml(appointmentLetterDataFromPrintData(d)),
   'manufacturing-scope': (d) => buildManufacturingScopeHtml(manufacturingScopeDataFromPrintData(d)),
   'process-description': (d) => buildProcessDescriptionHtml(processDescriptionDataFromPrintData(d)),
+  'top-management': (d) => buildTopManagementHtml(topManagementDataFromPrintData(d)),
+  'technical-staff': (d) => buildTechnicalStaffHtml(technicalStaffDataFromPrintData(d)),
+  'self-evaluation-form': (d) => buildSelfEvaluationFormHtml(selfEvaluationFormDataFromPrintData(d)),
 }
 
 /**
