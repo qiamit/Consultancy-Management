@@ -32,6 +32,7 @@ import { fetchDefaultQuotationTerm } from './quotationTermsApi'
 import { fetchDefaultQuotationNote } from './quotationNotesApi'
 import { downloadQuotationPdfWithTemplate, printQuotationsWithTemplate } from './outputQuotationDocument'
 import { fetchDefaultSignatureForKind } from './quotationSignatureStorage'
+import { convertQuotationIfNeeded } from '../shared/convertQuotationToSaleDocument'
 
 function isAbortOrLockError(err: unknown): boolean {
   const message =
@@ -498,7 +499,56 @@ export default function QuotationMasterPage() {
         if (lineErr) throw lineErr
       }
 
-      setSaveMessage(`Saved ${form.quotationNumber}.`)
+      const savedRow: QuotationRow = {
+        id: quotationId,
+        quotation_number: form.quotationNumber.trim(),
+        quotation_date: form.quotationDate,
+        valid_until: form.validUntil || null,
+        client_id: form.clientId || null,
+        client_name: form.clientName.trim(),
+        contact_person: form.contactPerson.trim() || null,
+        contact_email: form.contactEmail.trim() || null,
+        contact_mobile: form.contactMobile.trim() || null,
+        client_address: form.clientAddress.trim() || null,
+        client_gst_number: form.clientGstNumber.trim() || null,
+        subject: form.subject.trim() || null,
+        reference_no: form.referenceNo.trim() || null,
+        status: form.status,
+        payment_terms: form.paymentTerms.trim() || null,
+        notes: form.notes.trim() || null,
+        remarks: form.remarks.trim() || null,
+        signature_text: form.signatureText.trim() || null,
+        signature_image_path: form.signatureImagePath.trim() || null,
+        discount_percent: 0,
+        discount_amount: totals.discountAmount,
+        transportation_charges: totals.transportationCharges,
+        packaging_charges: totals.packagingCharges,
+        gst_percent: totals.effectiveGstPercent,
+        gst_amount: totals.gstAmount,
+        subtotal: totals.subtotal,
+        grand_total: totals.grandTotal,
+        line_items: linePayloads.map((l, index) => ({
+          id: `tmp-${index}`,
+          quotation_id: quotationId!,
+          line_no: l.line_no,
+          description: l.description,
+          details: l.details,
+          make: l.make,
+          hsn_sac: l.hsn_sac,
+          item_code: l.item_code,
+          quantity: l.quantity,
+          unit: l.unit,
+          rate: l.rate,
+          amount: l.amount,
+          discount_percent: l.discount_percent,
+          gst_percent: l.gst_percent,
+          line_remarks: l.line_remarks,
+          delivery_period: l.delivery_period,
+        })),
+      }
+
+      const convertMsg = await convertQuotationIfNeeded(savedRow, form.status)
+      setSaveMessage(convertMsg ?? `Saved ${form.quotationNumber}.`)
       setShowForm(false)
       setEditingId(null)
       await loadRows()
@@ -562,9 +612,10 @@ export default function QuotationMasterPage() {
       const previous = row.status
       setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, status } : r)))
       try {
+        const convertMsg = await convertQuotationIfNeeded(row, status)
         const { error } = await supabase.from('quotations').update({ status }).eq('id', row.id)
         if (error) throw error
-        setSaveMessage(`Status updated to ${quotationStatusLabel(status)}.`)
+        setSaveMessage(convertMsg ?? `Status updated to ${quotationStatusLabel(status)}.`)
       } catch (err) {
         setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, status: previous } : r)))
         setSaveMessage(formatSupabaseError(err))
