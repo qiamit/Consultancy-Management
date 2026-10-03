@@ -1,4 +1,8 @@
 import type { BisProjectRow } from '../projects/types'
+import {
+  appointmentLetterDataFromPrintData,
+  buildAppointmentLetterHtml,
+} from './appointmentLetterHtml'
 import { authorizationLetterDataFromPrintData, buildAuthorizationLetterHtml } from './authorizationLetterHtml'
 import { bisForm1DataFromPrintData, buildBisForm1Html } from './bisForm1Html'
 import { buildCmpf305Html, cmpf305DataFromPrintData } from './cmpf305Html'
@@ -8,13 +12,25 @@ import { buildCmpf310Html, cmpf310DataFromPrintData } from './cmpf310Html'
 import { buildCmpf311Html, cmpf311DataFromPrintData } from './cmpf311Html'
 import { buildFactoryTestReportHtml, factoryTestReportDataFromPrintData } from './factoryTestReportHtml'
 import { loadBisPrintData, type BisPrintData } from './loadBisPrintData'
+import {
+  buildManufacturingScopeHtml,
+  manufacturingScopeDataFromPrintData,
+} from './manufacturingScopeHtml'
 import { openPendingPrintWindow, openPrintHtml } from './openPrintHtml'
 import { buildOslSampleRequirementsHtml, oslSampleRequirementsDataFromPrintData } from './oslSampleRequirementsHtml'
+import {
+  buildProcessDescriptionHtml,
+  processDescriptionDataFromPrintData,
+} from './processDescriptionHtml'
 import { buildUndertakingGeneralHtml, undertakingGeneralDataFromPrintData } from './undertakingGeneralHtml'
 import {
   buildUndertakingLongDurationHtml,
   undertakingLongDurationDataFromPrintData,
 } from './undertakingLongDurationHtml'
+import {
+  buildUndertakingMinimumMarkingFeeHtml,
+  undertakingMinimumMarkingFeeDataFromPrintData,
+} from './undertakingMinimumMarkingFeeHtml'
 import {
   buildUndertakingOption2Html,
   undertakingOption2DataFromPrintData,
@@ -38,6 +54,10 @@ export type BisPrintDocumentKind =
   | 'undertaking-general'
   | 'undertaking-option-2'
   | 'undertaking-long-duration'
+  | 'undertaking-mmf'
+  | 'appointment-letter'
+  | 'manufacturing-scope'
+  | 'process-description'
 
 export const BIS_PRINT_DOCUMENT_LABEL: Record<BisPrintDocumentKind, string> = {
   form1: 'BIS Form-I',
@@ -53,6 +73,10 @@ export const BIS_PRINT_DOCUMENT_LABEL: Record<BisPrintDocumentKind, string> = {
   'undertaking-general': 'Undertaking (General & ISS)',
   'undertaking-option-2': 'Undertaking (Option 2)',
   'undertaking-long-duration': 'Undertaking (Long Duration Test)',
+  'undertaking-mmf': 'Annex-1 Marking Fee Calculation',
+  'appointment-letter': 'Appointment Letter',
+  'manufacturing-scope': 'Manufacturing Scope Declaration',
+  'process-description': 'Process Description',
 }
 
 /** Documents offered in the "More prints" menu (Form-I and Authorization Letter have their own buttons). */
@@ -68,11 +92,15 @@ export const EXTRA_PRINT_KINDS: BisPrintDocumentKind[] = [
   'undertaking-general',
   'undertaking-option-2',
   'undertaking-long-duration',
+  'undertaking-mmf',
+  'appointment-letter',
+  'manufacturing-scope',
+  'process-description',
 ]
 
 /** Shared tooltip text for the "More prints" trigger. */
 export const MORE_PRINTS_TOOLTIP =
-  'CMPF-305/306/307/310/311, Scheme of Inspection, Factory Test Report, OSL Samples, Undertakings'
+  'CMPF pack, undertakings, Annex-1 MMF, Appointment Letter, Manufacturing Scope, Process Description'
 
 const HTML_BUILDERS: Record<BisPrintDocumentKind, (data: BisPrintData) => string> = {
   form1: (d) => buildBisForm1Html(bisForm1DataFromPrintData(d)),
@@ -89,6 +117,11 @@ const HTML_BUILDERS: Record<BisPrintDocumentKind, (data: BisPrintData) => string
   'undertaking-option-2': (d) => buildUndertakingOption2Html(undertakingOption2DataFromPrintData(d)),
   'undertaking-long-duration': (d) =>
     buildUndertakingLongDurationHtml(undertakingLongDurationDataFromPrintData(d)),
+  'undertaking-mmf': (d) =>
+    buildUndertakingMinimumMarkingFeeHtml(undertakingMinimumMarkingFeeDataFromPrintData(d)),
+  'appointment-letter': (d) => buildAppointmentLetterHtml(appointmentLetterDataFromPrintData(d)),
+  'manufacturing-scope': (d) => buildManufacturingScopeHtml(manufacturingScopeDataFromPrintData(d)),
+  'process-description': (d) => buildProcessDescriptionHtml(processDescriptionDataFromPrintData(d)),
 }
 
 /**
