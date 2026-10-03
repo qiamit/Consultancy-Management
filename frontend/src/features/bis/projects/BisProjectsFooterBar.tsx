@@ -1,9 +1,11 @@
-import { ChevronLeft, ChevronRight, Printer, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronLeft, ChevronRight, Printer, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { limsDarkBarBtnClass, limsDarkBarFieldClass, limsDeleteBtnClass } from '@/lib/limsThemeUi'
 import { Button } from '@/components/ui/button'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { LaboratoryDirectorOnly } from '@/components/lims/LaboratoryDirectorOnly'
+import { BIS_PRINT_DOCUMENT_LABEL, EXTRA_PRINT_KINDS, type BisPrintDocumentKind } from '../print/printBisDocument'
 
 export function BisProjectsFooterBar({
   message,
@@ -16,6 +18,7 @@ export function BisProjectsFooterBar({
   onPrintList,
   onPrintForm1,
   onPrintAuthLetter,
+  onPrintDocument,
   printDocsBusy = false,
   onPrevPage,
   onNextPage,
@@ -33,6 +36,7 @@ export function BisProjectsFooterBar({
   onPrintList?: () => void
   onPrintForm1?: () => void
   onPrintAuthLetter?: () => void
+  onPrintDocument?: (kind: BisPrintDocumentKind) => void
   printDocsBusy?: boolean
   onPrevPage: () => void
   onNextPage: () => void
@@ -115,6 +119,35 @@ export function BisProjectsFooterBar({
               <Printer className="size-3.5 shrink-0 sm:size-4" />
               <span className="hidden lg:inline">Print Authorization Letter</span>
             </Button>
+          ) : null}
+          {onPrintDocument ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className={actionBtnClass}
+                  disabled={loading || printDocsBusy || selectedCount !== 1}
+                  title={
+                    selectedCount === 1
+                      ? 'More BIS documents (CMPF-305, OSL Samples, Undertaking)'
+                      : 'Select exactly one row to print more documents'
+                  }
+                >
+                  <Printer className="size-3.5 shrink-0 sm:size-4" />
+                  <span className="hidden lg:inline">More prints</span>
+                  <ChevronDown className="size-3 shrink-0" aria-hidden />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                {EXTRA_PRINT_KINDS.map((kind) => (
+                  <DropdownMenuItem key={kind} onSelect={() => onPrintDocument(kind)}>
+                    {BIS_PRINT_DOCUMENT_LABEL[kind]}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           ) : null}
           {selectedCount > 0 ? (
             <span className="hidden shrink-0 whitespace-nowrap text-[10px] text-stone-300 sm:inline sm:text-xs">

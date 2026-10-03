@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { ExternalLink, Printer, Search } from 'lucide-react'
+import { ChevronDown, ExternalLink, Printer, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { BIS_PRINT_DOCUMENT_LABEL, EXTRA_PRINT_KINDS, type BisPrintDocumentKind } from '../print/printBisDocument'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -118,6 +120,7 @@ export function BisProjectsForm({
   onSave,
   onPrintForm1,
   onPrintAuthLetter,
+  onPrintDocument,
   printBusy = false,
 }: {
   open: boolean
@@ -131,6 +134,7 @@ export function BisProjectsForm({
   onSave: () => void
   onPrintForm1?: () => void
   onPrintAuthLetter?: () => void
+  onPrintDocument?: (kind: BisPrintDocumentKind) => void
   printBusy?: boolean
 }) {
   const validity = licenseValidityState(form.licenseValidityDate)
@@ -487,6 +491,31 @@ export function BisProjectsForm({
                 <Printer className="mr-1.5 h-3.5 w-3.5" aria-hidden />
                 Print Authorization Letter
               </Button>
+            ) : null}
+            {editing && onPrintDocument ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 rounded-none border-stone-500"
+                    disabled={saving || printBusy}
+                    title="Print CMPF-305, OSL Sample Requirements or Undertaking from the saved record"
+                  >
+                    <Printer className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+                    More prints
+                    <ChevronDown className="ml-1 h-3 w-3" aria-hidden />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  {EXTRA_PRINT_KINDS.map((kind) => (
+                    <DropdownMenuItem key={kind} onSelect={() => onPrintDocument(kind)}>
+                      {BIS_PRINT_DOCUMENT_LABEL[kind]}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
             ) : null}
           </div>
           <div className="flex items-center gap-2">

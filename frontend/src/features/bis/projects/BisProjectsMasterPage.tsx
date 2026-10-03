@@ -229,6 +229,9 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
             ? () => void handlePrintDocument(selectedRow, 'authorization-letter')
             : undefined
         }
+        onPrintDocument={
+          canPrintBisForms ? (kind) => void handlePrintDocument(selectedRow, kind) : undefined
+        }
         printDocsBusy={printDocsBusy}
         onPrevPage={() => setPage((p) => Math.max(1, p - 1))}
         onNextPage={() => setPage((p) => Math.min(pageCount, p + 1))}
@@ -256,6 +259,9 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
           canPrintBisForms
             ? () => void handlePrintDocument(editingRow, 'authorization-letter')
             : undefined
+        }
+        onPrintDocument={
+          canPrintBisForms ? (kind) => void handlePrintDocument(editingRow, kind) : undefined
         }
         printBusy={printDocsBusy}
       />

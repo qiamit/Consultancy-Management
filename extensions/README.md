@@ -23,6 +23,15 @@ Manak / BIS portal content scripts are unchanged: `manakonline.in`, `lims.bis.go
 
 The app passes `returnUrl` at runtime for PDF upload; no API secrets live in the extension.
 
+## Manak PDF API
+
+Browser extensions upload Manak test-request PDFs to the Railway functions service:
+
+- **Production:** `https://api-production-a87f8.up.railway.app/api/osl/manak-pdf`
+- **Local / app config:** `${VITE_SUPABASE_URL}/functions/v1/osl/manak-pdf` (same gateway path the Consultancy frontend uses)
+
+Poll with `GET ?token=…` until `{ ready: true }`, then fetch the PDF from the returned `ref`.
+
 ## Chrome — load unpacked
 
 1. Open `chrome://extensions` (or Edge `edge://extensions`).

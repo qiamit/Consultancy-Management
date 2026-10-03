@@ -12,6 +12,20 @@ const RESEND_API_KEY = process.env.RESEND_API_KEY || ''
 const EMAIL_FROM =
   process.env.RESEND_FROM_EMAIL || process.env.MRM_EMAIL_FROM || 'Q Engineering <info@qengineering.in>'
 
+/** Full-access roles (matches frontend isLaboratoryDirector + list_team_users RPC). */
+const FULL_ACCESS_DESIGNATIONS = new Set([
+  'laboratory director',
+  'admin',
+  'administrator',
+  'director',
+  'super admin',
+  'managing director',
+])
+
+function hasFullAccessDesignation(designation) {
+  return FULL_ACCESS_DESIGNATIONS.has(String(designation ?? '').trim().toLowerCase())
+}
+
 function corsJson(res, status, body) {
   const payload = JSON.stringify(body)
   res.writeHead(status, {
@@ -608,7 +622,7 @@ async function handleDeleteUser(req, res) {
   if (!callerDesignation) {
     callerDesignation = String(caller?.user_metadata?.designation ?? '').trim()
   }
-  if (callerDesignation.toLowerCase() !== 'laboratory director') {
+  if (!hasFullAccessDesignation(callerDesignation)) {
     json(res, 403, { error: 'Forbidden' })
     return
   }
