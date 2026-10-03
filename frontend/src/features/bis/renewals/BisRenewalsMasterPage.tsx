@@ -168,8 +168,11 @@ export default function BisRenewalsMasterPage() {
       setMessage('Selected renewal is not on this page. Open it or change page.')
       return
     }
-    const err = printRenewalForm(row)
-    setMessage(err)
+    void (async () => {
+      setMessage(null)
+      const err = await printRenewalForm(row)
+      setMessage(err)
+    })()
   }
 
   return (

@@ -1,4 +1,5 @@
 import { formatIsCodeLabelFromParts } from '@/features/masters/is-codes/formatIsCodeLabel'
+import { loadCompanyPrintContext } from '../print/loadCompanyPrintContext'
 import { escapeHtml as esc, openPendingPrintWindow, openPrintHtml } from '../print/openPrintHtml'
 import { formatCmL, formatDisplayDate, formatInr, type BisRenewalRow } from './types'
 
@@ -16,7 +17,8 @@ function dateVal(raw: string | null | undefined): string {
   return v ? formatDisplayDate(v) : '—'
 }
 
-export function buildRenewalFormHtml(row: BisRenewalRow): string {
+export async function buildRenewalFormHtml(row: BisRenewalRow): Promise<string> {
+  const company = await loadCompanyPrintContext()
   const client = (row.client?.company_name ?? '').trim() || 'Applicant'
   const project = row.project
   const isCode = project?.is_code
@@ -33,16 +35,27 @@ export function buildRenewalFormHtml(row: BisRenewalRow): string {
     hour: '2-digit',
     minute: '2-digit',
   })
+  const consultancyContact = [
+    company.phone ? `Tel: ${company.phone}` : '',
+    company.email ? `Email: ${company.email}` : '',
+    company.gstNumber ? `GSTIN: ${company.gstNumber}` : '',
+  ]
+    .filter(Boolean)
+    .join(' &nbsp;|&nbsp; ')
 
   const body = `
 <div class="sheet">
+  <div class="letterhead">
+    <div class="firm">${esc(client)}</div>
+    <div class="sub">CM/L ${esc(cmL)} · ${esc(isLabel)}${isTitle !== '—' ? ` — ${esc(isTitle)}` : ''}</div>
+  </div>
+
   <div class="doc-header">
     <div><h1>Apply for Renewal</h1></div>
     <div class="meta">
-      <div><strong>${esc(client)}</strong></div>
-      <div>${esc(cmL)} · ${esc(isLabel)}</div>
       <div>Status: ${esc(row.renewal_status || '—')}</div>
       <div>Generated ${esc(generatedAt)}</div>
+      <div>Prepared via ${esc(company.companyName || 'Quality Engineering')}</div>
     </div>
   </div>
 
@@ -106,8 +119,15 @@ export function buildRenewalFormHtml(row: BisRenewalRow): string {
   }
 
   <div class="footer-note">
-    <span>Quality Engineering — BIS License Renewal</span>
-    <span>${esc(client)}</span>
+    <div>
+      <div><strong>${esc(company.companyName || 'Quality Engineering')}</strong></div>
+      ${company.address ? `<div>${esc(company.address)}</div>` : ''}
+      ${consultancyContact ? `<div>${consultancyContact}</div>` : ''}
+    </div>
+    <div class="footer-right">
+      <div>BIS License Renewal</div>
+      <div>${esc(client)}</div>
+    </div>
   </div>
 </div>`
 
@@ -118,7 +138,10 @@ export function buildRenewalFormHtml(row: BisRenewalRow): string {
   html, body { margin: 0; padding: 0; background: #fff; }
   body { font-family: "Segoe UI", Arial, Helvetica, sans-serif; color: #0f172a; font-size: 8.5pt; line-height: 1.25; }
   .sheet { width: 100%; padding: 2mm; }
-  .doc-header { display: flex; justify-content: space-between; gap: 12px; border-bottom: 2.5px solid #b45309; padding-bottom: 6px; margin-bottom: 8px; }
+  .letterhead { text-align: center; border-bottom: 2.5px solid #b45309; padding-bottom: 6px; margin-bottom: 8px; }
+  .letterhead .firm { font-size: 13pt; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; color: #292524; }
+  .letterhead .sub { font-size: 8pt; color: #57534e; margin-top: 2px; }
+  .doc-header { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
   .doc-header h1 { font-size: 14pt; margin: 0; color: #78350f; }
   .doc-header .meta { font-size: 8pt; color: #57534e; text-align: right; line-height: 1.35; }
   .section-title { font-size: 8.5pt; font-weight: 700; color: #78350f; background: linear-gradient(90deg, #fef3c7 0%, #fafaf9 100%); border-left: 3.5px solid #d97706; padding: 3px 8px; margin: 8px 0 5px; }
@@ -130,14 +153,25 @@ export function buildRenewalFormHtml(row: BisRenewalRow): string {
   .info-value { font-size: 8pt; font-weight: 600; word-break: break-word; }
   .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .notes { margin: 0; white-space: pre-wrap; font-size: 8pt; }
-  .footer-note { margin-top: 10px; font-size: 6.5pt; color: #78716c; border-top: 1px solid #e7e5e4; padding-top: 4px; display: flex; justify-content: space-between; }
+  .footer-note { margin-top: 10px; font-size: 6.5pt; color: #78716c; border-top: 1px solid #e7e5e4; padding-top: 4px; display: flex; justify-content: space-between; gap: 12px; }
+  .footer-right { text-align: right; }
   @media print { .sheet { page-break-inside: avoid; } }
 </style></head><body>${body}</body></html>`
 }
 
 /** Opens the renewal form print for one row. Call from a user click. */
-export function printRenewalForm(row: BisRenewalRow): string | null {
+export async function printRenewalForm(row: BisRenewalRow): Promise<string | null> {
   const target = openPendingPrintWindow('Preparing Renewal Form…')
   if (!target) return 'Popup blocked. Allow popups to print.'
-  return openPrintHtml(buildRenewalFormHtml(row), { target })
+  try {
+    const html = await buildRenewalFormHtml(row)
+    return openPrintHtml(html, { target })
+  } catch (err) {
+    try {
+      target.close()
+    } catch {
+      /* ignore */
+    }
+    return err instanceof Error ? err.message : 'Unable to prepare renewal print.'
+  }
 }

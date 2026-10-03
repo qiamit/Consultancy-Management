@@ -11,6 +11,7 @@ import {
   formatBisApiError,
   saveSurveillance,
 } from './surveillanceApi'
+import { printSurveillanceForm } from './printSurveillanceForm'
 import {
   emptySurveillanceForm,
   rowToSurveillanceForm,
@@ -157,6 +158,23 @@ export default function BisSurveillanceMasterPage() {
     }
   }
 
+  const handlePrintSurveillance = () => {
+    if (selectedIds.size !== 1) {
+      setMessage('Select exactly one surveillance record to print.')
+      return
+    }
+    const id = [...selectedIds][0]
+    const row = rows.find((r) => r.id === id)
+    if (!row) {
+      setMessage('Selected surveillance is not on this page. Open it or change page.')
+      return
+    }
+    void (async () => {
+      setMessage(null)
+      setMessage(await printSurveillanceForm(row))
+    })()
+  }
+
   return (
     <div className={limsPageShellClass}>
       <BisProjectsHeaderBar
@@ -192,6 +210,8 @@ export default function BisSurveillanceMasterPage() {
         page={Math.min(page, pageCount)}
         pageCount={pageCount}
         onDeleteSelected={() => void handleDeleteSelected()}
+        onPrintList={handlePrintSurveillance}
+        printListLabel="Print Surveillance"
         onPrevPage={() => setPage((p) => Math.max(1, p - 1))}
         onNextPage={() => setPage((p) => Math.min(pageCount, p + 1))}
         jumpTo={jumpTo}
