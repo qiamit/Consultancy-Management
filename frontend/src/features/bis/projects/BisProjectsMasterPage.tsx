@@ -12,6 +12,7 @@ import {
   saveBisProject,
 } from './bisProjectsApi'
 import { printBisProjectsList } from './printBisProjectsList'
+import { printBisDocument, type BisPrintDocumentKind } from '../print/printBisDocument'
 import {
   BIS_PROJECTS_LIST_TITLES,
   emptyBisProjectForm,
@@ -44,6 +45,9 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
   const [form, setForm] = useState<BisProjectForm>(() => emptyBisProjectForm())
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+
+  const [printDocsBusy, setPrintDocsBusy] = useState(false)
+  const canPrintBisForms = listMode === 'applications' || listMode === 'all'
 
   const requestRef = useRef(0)
 
@@ -152,6 +156,23 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
     if (printError) setMessage(printError)
   }
 
+  const handlePrintDocument = async (row: BisProjectRow | undefined, kind: BisPrintDocumentKind) => {
+    if (!row) {
+      setMessage('Select a saved row first.')
+      return
+    }
+    setPrintDocsBusy(true)
+    try {
+      const error = await printBisDocument(row, kind)
+      setMessage(error)
+    } finally {
+      setPrintDocsBusy(false)
+    }
+  }
+
+  const selectedRow = selectedIds.size === 1 ? rows.find((r) => selectedIds.has(r.id)) : undefined
+  const editingRow = editingId ? rows.find((r) => r.id === editingId) : undefined
+
   const handleDeleteSelected = async () => {
     const ids = [...selectedIds]
     if (ids.length === 0) return
@@ -200,6 +221,15 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
         pageCount={pageCount}
         onDeleteSelected={() => void handleDeleteSelected()}
         onPrintList={handlePrintList}
+        onPrintForm1={
+          canPrintBisForms ? () => void handlePrintDocument(selectedRow, 'form1') : undefined
+        }
+        onPrintAuthLetter={
+          canPrintBisForms
+            ? () => void handlePrintDocument(selectedRow, 'authorization-letter')
+            : undefined
+        }
+        printDocsBusy={printDocsBusy}
         onPrevPage={() => setPage((p) => Math.max(1, p - 1))}
         onNextPage={() => setPage((p) => Math.min(pageCount, p + 1))}
         jumpTo={jumpTo}
@@ -219,6 +249,15 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
         saving={saving}
         errorMessage={formError}
         onSave={() => void handleSave()}
+        onPrintForm1={
+          canPrintBisForms ? () => void handlePrintDocument(editingRow, 'form1') : undefined
+        }
+        onPrintAuthLetter={
+          canPrintBisForms
+            ? () => void handlePrintDocument(editingRow, 'authorization-letter')
+            : undefined
+        }
+        printBusy={printDocsBusy}
       />
     </div>
   )

@@ -2,18 +2,24 @@ import type { ElementType } from 'react'
 import { useEffect, useState } from 'react'
 import {
   ArrowRight,
+  Ban,
   BadgeCheck,
   BookOpen,
+  CalendarX2,
+  Eye,
   FilePlus2,
   FolderKanban,
+  Globe,
+  MessageSquareWarning,
+  RefreshCw,
   Users,
-  Wallet,
 } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { supabase } from '@/lib/supabaseClient'
 import { Skeleton } from '@/components/ui/skeleton'
 import { limsPageShellClass, limsPanelClass } from '@/lib/limsThemeUi'
+import { todayIsoDate } from '@/features/bis/projects/types'
 import { cn } from '@/lib/utils'
 
 type StatCard = {
@@ -31,22 +37,41 @@ export default function DashboardPage() {
   const [licenses, setLicenses] = useState(0)
   const [applications, setApplications] = useState(0)
   const [isCodes, setIsCodes] = useState(0)
+  const [qeManaged, setQeManaged] = useState(0)
+  const [stopMarking, setStopMarking] = useState(0)
+  const [expiredLicenses, setExpiredLicenses] = useState(0)
 
   useEffect(() => {
     let canceled = false
     const load = async () => {
       setLoading(true)
-      const [c, b, a, i] = await Promise.all([
+      const today = todayIsoDate()
+      const [c, b, a, i, qe, sm, exp] = await Promise.all([
         supabase.from('clients').select('*', { count: 'exact', head: true }),
         supabase.from('bis_projects').select('*', { count: 'exact', head: true }),
         supabase.from('bis_new_applications').select('*', { count: 'exact', head: true }),
         supabase.from('is_codes').select('*', { count: 'exact', head: true }),
+        supabase
+          .from('bis_projects')
+          .select('*', { count: 'exact', head: true })
+          .eq('is_qe_managed', true),
+        supabase
+          .from('bis_projects')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'stop_marking'),
+        supabase
+          .from('bis_projects')
+          .select('*', { count: 'exact', head: true })
+          .lt('license_validity_date', today),
       ])
       if (canceled) return
       setClients(c.count ?? 0)
       setLicenses(b.count ?? 0)
       setApplications(a.count ?? 0)
       setIsCodes(i.count ?? 0)
+      setQeManaged(qe.count ?? 0)
+      setStopMarking(sm.count ?? 0)
+      setExpiredLicenses(exp.count ?? 0)
       setLoading(false)
     }
     void load()
@@ -55,7 +80,7 @@ export default function DashboardPage() {
     }
   }, [])
 
-  const cards: StatCard[] = [
+  const overviewCards: StatCard[] = [
     {
       title: 'Clients',
       value: clients,
@@ -86,12 +111,68 @@ export default function DashboardPage() {
     },
   ]
 
-  const shortcuts = [
-    { label: 'New BIS Application', href: '/bis/new-applications', icon: FilePlus2 },
-    { label: 'Client Master', href: '/masters/clients', icon: Users },
-    { label: 'Finance Quotation', href: '/finance/sale/quotation', icon: Wallet },
-    { label: 'QE BIS Licenses', href: '/bis/our-licenses', icon: BadgeCheck },
+  const licenseStatusCards: StatCard[] = [
+    {
+      title: 'QE Managed',
+      value: qeManaged,
+      subtitle: 'Licenses managed by Q Engineering',
+      icon: BadgeCheck,
+      href: '/bis/our-licenses',
+    },
+    {
+      title: 'Stop Marking',
+      value: stopMarking,
+      subtitle: 'Licenses in stop marking status',
+      icon: Ban,
+      href: '/bis/stop-marking',
+    },
+    {
+      title: 'Expired Licenses',
+      value: expiredLicenses,
+      subtitle: 'Past license validity date',
+      icon: CalendarX2,
+      href: '/bis/expired-licenses',
+    },
   ]
+
+  const shortcuts = [
+    { label: 'Renewals', href: '/bis/license-renewals', icon: RefreshCw },
+    { label: 'Stop Marking', href: '/bis/stop-marking', icon: Ban },
+    { label: 'Surveillance', href: '/bis/surveillance', icon: Eye },
+    { label: 'Sample Failure Reply', href: '/bis/sample-failure-reply', icon: MessageSquareWarning },
+    { label: 'Website CMS', href: '/tools/cms', icon: Globe },
+  ]
+
+  const renderStatCard = (card: StatCard) => {
+    const Icon = card.icon
+    return (
+      <NavLink
+        key={card.title}
+        to={card.href}
+        className={cn(limsPanelClass, 'group block p-5 transition hover:border-amber-600/40')}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {card.title}
+            </p>
+            {loading ? (
+              <Skeleton className="mt-3 h-8 w-16" />
+            ) : (
+              <p className="mt-2 font-jakarta text-3xl font-bold text-foreground">{card.value}</p>
+            )}
+            <p className="mt-1 text-xs text-muted-foreground">{card.subtitle}</p>
+          </div>
+          <span className="rounded-none border border-stone-700 bg-stone-900 p-2 text-amber-300">
+            <Icon className="h-5 w-5" />
+          </span>
+        </div>
+        <span className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-amber-700 group-hover:gap-2">
+          Open <ArrowRight className="h-3.5 w-3.5" />
+        </span>
+      </NavLink>
+    )
+  }
 
   return (
     <div className={cn(limsPageShellClass, 'space-y-6 p-4 md:p-6')}>
@@ -109,41 +190,21 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {cards.map((card) => {
-          const Icon = card.icon
-          return (
-            <NavLink
-              key={card.title}
-              to={card.href}
-              className={cn(limsPanelClass, 'group block p-5 transition hover:border-amber-600/40')}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    {card.title}
-                  </p>
-                  {loading ? (
-                    <Skeleton className="mt-3 h-8 w-16" />
-                  ) : (
-                    <p className="mt-2 font-jakarta text-3xl font-bold text-foreground">{card.value}</p>
-                  )}
-                  <p className="mt-1 text-xs text-muted-foreground">{card.subtitle}</p>
-                </div>
-                <span className="rounded-none border border-stone-700 bg-stone-900 p-2 text-amber-300">
-                  <Icon className="h-5 w-5" />
-                </span>
-              </div>
-              <span className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-amber-700 group-hover:gap-2">
-                Open <ArrowRight className="h-3.5 w-3.5" />
-              </span>
-            </NavLink>
-          )
-        })}
+        {overviewCards.map(renderStatCard)}
+      </div>
+
+      <div className="space-y-3">
+        <h2 className="font-jakarta text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          License status
+        </h2>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {licenseStatusCards.map(renderStatCard)}
+        </div>
       </div>
 
       <div className={cn(limsPanelClass, 'p-5')}>
         <h2 className="font-jakarta text-lg font-bold text-foreground">Quick actions</h2>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           {shortcuts.map((item) => {
             const Icon = item.icon
             return (
@@ -152,8 +213,8 @@ export default function DashboardPage() {
                 to={item.href}
                 className="flex items-center gap-3 border border-[rgb(var(--lims-paper-border))] bg-[rgb(var(--lims-paper))] px-4 py-3 text-sm font-medium text-foreground transition hover:border-amber-600/50"
               >
-                <Icon className="h-4 w-4 text-amber-700" />
-                {item.label}
+                <Icon className="h-4 w-4 shrink-0 text-amber-700" />
+                <span className="leading-snug">{item.label}</span>
               </NavLink>
             )
           })}

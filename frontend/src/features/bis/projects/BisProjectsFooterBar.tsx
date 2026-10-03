@@ -14,6 +14,9 @@ export function BisProjectsFooterBar({
   pageCount,
   onDeleteSelected,
   onPrintList,
+  onPrintForm1,
+  onPrintAuthLetter,
+  printDocsBusy = false,
   onPrevPage,
   onNextPage,
   jumpTo,
@@ -28,6 +31,9 @@ export function BisProjectsFooterBar({
   pageCount: number
   onDeleteSelected: () => void
   onPrintList?: () => void
+  onPrintForm1?: () => void
+  onPrintAuthLetter?: () => void
+  printDocsBusy?: boolean
   onPrevPage: () => void
   onNextPage: () => void
   jumpTo: string
@@ -76,6 +82,38 @@ export function BisProjectsFooterBar({
             >
               <Printer className="size-3.5 shrink-0 sm:size-4" />
               <span className="hidden lg:inline">Print list</span>
+            </Button>
+          ) : null}
+          {onPrintForm1 ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className={actionBtnClass}
+              onClick={onPrintForm1}
+              disabled={loading || printDocsBusy || selectedCount !== 1}
+              title={selectedCount === 1 ? 'Print BIS Form-I' : 'Select exactly one row to print Form-I'}
+            >
+              <Printer className="size-3.5 shrink-0 sm:size-4" />
+              <span className="hidden lg:inline">Print Form-I</span>
+            </Button>
+          ) : null}
+          {onPrintAuthLetter ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className={actionBtnClass}
+              onClick={onPrintAuthLetter}
+              disabled={loading || printDocsBusy || selectedCount !== 1}
+              title={
+                selectedCount === 1
+                  ? 'Print Authorization Letter'
+                  : 'Select exactly one row to print the Authorization Letter'
+              }
+            >
+              <Printer className="size-3.5 shrink-0 sm:size-4" />
+              <span className="hidden lg:inline">Print Authorization Letter</span>
             </Button>
           ) : null}
           {selectedCount > 0 ? (

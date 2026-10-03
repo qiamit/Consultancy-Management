@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ExternalLink, Search } from 'lucide-react'
+import { ExternalLink, Printer, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -116,6 +116,9 @@ export function BisProjectsForm({
   saving,
   errorMessage,
   onSave,
+  onPrintForm1,
+  onPrintAuthLetter,
+  printBusy = false,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -126,6 +129,9 @@ export function BisProjectsForm({
   saving: boolean
   errorMessage: string | null
   onSave: () => void
+  onPrintForm1?: () => void
+  onPrintAuthLetter?: () => void
+  printBusy?: boolean
 }) {
   const validity = licenseValidityState(form.licenseValidityDate)
   const statusOptions = BIS_PROJECT_STATUS_OPTIONS.some((o) => o.value === form.status)
@@ -454,6 +460,34 @@ export function BisProjectsForm({
               <Search className="mr-1.5 h-3.5 w-3.5" aria-hidden />
               {isCodeFetchBusy ? 'Fetching…' : 'Fetch IS Code'}
             </Button>
+            {editing && onPrintForm1 ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 rounded-none border-stone-500"
+                onClick={onPrintForm1}
+                disabled={saving || printBusy}
+                title="Print BIS Form-I from the saved record"
+              >
+                <Printer className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+                Print Form-I
+              </Button>
+            ) : null}
+            {editing && onPrintAuthLetter ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 rounded-none border-stone-500"
+                onClick={onPrintAuthLetter}
+                disabled={saving || printBusy}
+                title="Print Authorization Letter from the saved record"
+              >
+                <Printer className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+                Print Authorization Letter
+              </Button>
+            ) : null}
           </div>
           <div className="flex items-center gap-2">
             <Button
