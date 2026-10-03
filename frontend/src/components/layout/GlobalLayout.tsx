@@ -8,14 +8,11 @@ import {
   LayoutDashboard,
   Menu,
   X,
-  Settings,
-  HelpCircle,
-  Mail,
   LogOut,
   ChevronsRight,
   Bot,
-  Users,
   Shield,
+  Globe,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -25,6 +22,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
@@ -35,7 +33,12 @@ import { canAccessNavItem as checkNavAccess } from '@/lib/moduleAccess'
 import { useModuleAccessOptional } from '@/features/settings/module-access/ModuleAccessProvider'
 import { RequireModuleAccess } from '@/components/auth/RequireModuleAccess'
 import { getBrandShortName, LAB_NAME_CHANGED_EVENT, LAB_NAME_STORAGE_KEY } from '@/features/settings/lab-settings/brandMark'
-import { NAV_SECTIONS, type NavItem, type NavSection } from '@/lib/appNav'
+import {
+  PROFILE_MENU_SECTIONS,
+  SIDEBAR_NAV_SECTIONS,
+  type NavItem,
+  type NavSection,
+} from '@/lib/appNav'
 
 const formatNavLabel = (value: string) =>
   value
@@ -87,12 +90,64 @@ function sectionContainsPath(section: NavSection, pathname: string): boolean {
   return section.items.some((item) => navItemMatchesPath(item, pathname))
 }
 
+const DIRECTOR_ONLY_PROFILE_PATHS = new Set([
+  '/settings/lab',
+  '/settings/users',
+  '/settings/module-access',
+  '/settings/ai',
+])
+
+function profileMenuIcon(item: NavItem): ElementType {
+  if (item.to === '/settings/ai') return Bot
+  if (item.to === '/settings/module-access') return Shield
+  if (item.to === '/tools/cms') return Globe
+  return item.icon
+}
+
+function ProfileMenuSections() {
+  const canAccess = useNavCanAccess()
+  const { designation } = useAuth()
+  const isDirector = isLaboratoryDirector(designation)
+
+  return (
+    <>
+      {PROFILE_MENU_SECTIONS.map((section, sectionIndex) => {
+        const visibleItems = section.items.filter((item) => {
+          if (!item.to) return false
+          if (DIRECTOR_ONLY_PROFILE_PATHS.has(item.to) && !isDirector) return false
+          return navItemAccessible(item, canAccess)
+        })
+        if (visibleItems.length === 0) return null
+        return (
+          <div key={section.clause}>
+            {sectionIndex > 0 ? <DropdownMenuSeparator /> : null}
+            <DropdownMenuLabel className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              {section.title}
+            </DropdownMenuLabel>
+            {visibleItems.map((item) => {
+              const Icon = profileMenuIcon(item)
+              return (
+                <DropdownMenuItem key={item.to} asChild>
+                  <NavLink to={item.to!} className="flex items-center gap-2">
+                    <Icon size={14} />
+                    {item.label}
+                  </NavLink>
+                </DropdownMenuItem>
+              )
+            })}
+          </div>
+        )
+      })}
+    </>
+  )
+}
+
 function SidebarMainNav() {
   const location = useLocation()
   const [openSectionId, setOpenSectionId] = useState<string | null>(null)
 
   useEffect(() => {
-    const match = NAV_SECTIONS.find((s) => sectionContainsPath(s, location.pathname))
+    const match = SIDEBAR_NAV_SECTIONS.find((s) => sectionContainsPath(s, location.pathname))
     if (match) setOpenSectionId(match.clause)
   }, [location.pathname])
 
@@ -105,7 +160,7 @@ function SidebarMainNav() {
         />
       </div>
 
-      {NAV_SECTIONS.map((section) => (
+      {SIDEBAR_NAV_SECTIONS.map((section) => (
         <NavSectionGroup
           key={section.clause}
           section={section}
@@ -701,54 +756,14 @@ export default function GlobalLayout() {
                 </button>
               </DropdownMenuTrigger>
 
-              <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuContent align="end" className="w-56">
                 <div className="px-2 py-2 sm:hidden">
                   <p className="text-sm font-semibold">{profileName || 'User'}</p>
                   <p className="text-xs text-muted-foreground">{designation || 'Staff'}</p>
                 </div>
                 <DropdownMenuSeparator className="sm:hidden" />
 
-                {isLaboratoryDirector(designation) && (
-                  <>
-                    <DropdownMenuItem asChild>
-                      <NavLink to="/settings/lab" className="flex items-center gap-2">
-                        <Settings size={14} />
-                        Company Settings
-                      </NavLink>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <NavLink to="/settings/users" className="flex items-center gap-2">
-                        <Users size={14} />
-                        User Management
-                      </NavLink>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <NavLink to="/settings/module-access" className="flex items-center gap-2">
-                        <Shield size={14} />
-                        Module Access
-                      </NavLink>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <NavLink to="/settings/ai" className="flex items-center gap-2">
-                        <Bot size={14} />
-                        AI Settings
-                      </NavLink>
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                  </>
-                )}
-                <DropdownMenuItem asChild>
-                  <NavLink to="/help" className="flex items-center gap-2">
-                    <HelpCircle size={14} />
-                    Help
-                  </NavLink>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <NavLink to="/contact" className="flex items-center gap-2">
-                    <Mail size={14} />
-                    Contact Us
-                  </NavLink>
-                </DropdownMenuItem>
+                <ProfileMenuSections />
 
                 <DropdownMenuSeparator />
 

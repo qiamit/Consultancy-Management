@@ -38,7 +38,8 @@ export interface NavSection {
   items: NavItem[]
 }
 
-export const NAV_SECTIONS: NavSection[] = [
+/** Primary ops modules shown in the left sidebar. */
+export const SIDEBAR_NAV_SECTIONS: NavSection[] = [
   {
     title: 'Home',
     clause: 'home',
@@ -181,6 +182,10 @@ export const NAV_SECTIONS: NavSection[] = [
       },
     ],
   },
+]
+
+/** Tools + Settings — shown in the header user-profile dropdown (not sidebar). */
+export const PROFILE_MENU_SECTIONS: NavSection[] = [
   {
     title: 'Tools',
     clause: 'tools',
@@ -244,6 +249,9 @@ export const NAV_SECTIONS: NavSection[] = [
     ],
   },
 ]
+
+/** Full nav tree (sidebar + profile menu) for Module Access catalog. */
+export const NAV_SECTIONS: NavSection[] = [...SIDEBAR_NAV_SECTIONS, ...PROFILE_MENU_SECTIONS]
 
 export function flattenNavModules(): { key: string; label: string; section: string }[] {
   const out: { key: string; label: string; section: string }[] = []
