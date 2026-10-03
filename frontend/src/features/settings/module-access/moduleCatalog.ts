@@ -36,7 +36,9 @@ export function moduleSections(): string[] {
 }
 
 export function normalizeAccessKey(value: string | null | undefined): string {
-  return value?.trim().toLowerCase() ?? ''
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
 }
 
 export function moduleKeyMatchesPath(moduleKey: string, pathname: string): boolean {

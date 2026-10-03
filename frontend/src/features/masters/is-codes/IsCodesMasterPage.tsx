@@ -306,8 +306,8 @@ export default function IsCodesMasterPage() {
     setEditingId(row.id)
     setForm({
       isNumber: row.is_number,
-      revisionYear: row.revision_year ?? '',
-      reaffirmationYear: row.reaffirmation_year ?? 'RA',
+      revisionYear: row.revision_year == null ? '' : String(row.revision_year),
+      reaffirmationYear: row.reaffirmation_year == null ? 'RA' : String(row.reaffirmation_year),
       amendmentNumber: row.amendment_number ?? '',
       title: row.title,
       aspect: row.aspect,
@@ -325,8 +325,8 @@ export default function IsCodesMasterPage() {
     setEditingId(null)
     setForm({
       isNumber: `${row.is_number} - Copy`,
-      revisionYear: row.revision_year ?? '',
-      reaffirmationYear: row.reaffirmation_year ?? 'RA',
+      revisionYear: row.revision_year == null ? '' : String(row.revision_year),
+      reaffirmationYear: row.reaffirmation_year == null ? 'RA' : String(row.reaffirmation_year),
       amendmentNumber: row.amendment_number ?? '',
       title: row.title,
       aspect: row.aspect,

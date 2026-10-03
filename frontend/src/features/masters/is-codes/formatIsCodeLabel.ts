@@ -1,25 +1,30 @@
 /** Canonical IS Code display: `IS 10773: 2025` (no space before colon). */
 
+function asText(value: unknown): string {
+  if (value == null) return ''
+  return String(value).trim()
+}
+
 export function formatIsCodeLabelFromParts(
-  isNumber?: string | null,
-  revisionYear?: string | null,
+  isNumber?: string | number | null,
+  revisionYear?: string | number | null,
 ): string {
-  const num = (isNumber ?? '').trim()
+  const num = asText(isNumber)
   if (!num) return ''
-  const rev = (revisionYear ?? '').trim()
+  const rev = asText(revisionYear)
   return rev ? `${num}: ${rev}` : num
 }
 
 export function formatIsCodeLabel(row: {
-  is_number?: string | null
-  revision_year?: string | null
+  is_number?: string | number | null
+  revision_year?: string | number | null
 }): string {
   return formatIsCodeLabelFromParts(row.is_number, row.revision_year)
 }
 
 /** Normalize legacy labels like `IS 10773 : 2025` → `IS 10773: 2025`. */
-export function normalizeIsCodeLabel(label: string | null | undefined): string {
-  const s = (label ?? '').trim()
+export function normalizeIsCodeLabel(label: string | number | null | undefined): string {
+  const s = asText(label)
   if (!s) return ''
   return s.replace(/\s*:\s*/g, ': ')
 }

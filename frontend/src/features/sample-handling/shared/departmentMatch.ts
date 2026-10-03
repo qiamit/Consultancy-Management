@@ -1,6 +1,8 @@
 /** Normalize lab / allocation department labels for comparison. */
 export function normalizeDepartmentName(value: string | null | undefined): string {
-  return (value ?? '').trim().toLowerCase()
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
 }
 
 /** True when sample allocation department matches the logged-in user's department. */

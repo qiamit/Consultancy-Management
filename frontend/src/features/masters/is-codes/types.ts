@@ -3,8 +3,8 @@ export type IsAspect = string
 export type IsCodeRow = {
   id: string
   is_number: string
-  revision_year: string | null
-  reaffirmation_year: string | null
+  revision_year: string | number | null
+  reaffirmation_year: string | number | null
   amendment_number: string | null
   title: string
   aspect: IsAspect
