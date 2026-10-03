@@ -17,6 +17,7 @@ import {
   type BisRenewalForm,
   type BisRenewalRow,
 } from './types'
+import { printRenewalForm } from './printRenewalForm'
 
 const SEARCH_DEBOUNCE_MS = 350
 
@@ -156,6 +157,21 @@ export default function BisRenewalsMasterPage() {
     }
   }
 
+  const handlePrintRenewal = () => {
+    if (selectedIds.size !== 1) {
+      setMessage('Select exactly one renewal to print the form.')
+      return
+    }
+    const id = [...selectedIds][0]
+    const row = rows.find((r) => r.id === id)
+    if (!row) {
+      setMessage('Selected renewal is not on this page. Open it or change page.')
+      return
+    }
+    const err = printRenewalForm(row)
+    setMessage(err)
+  }
+
   return (
     <div className={limsPageShellClass}>
       <BisProjectsHeaderBar
@@ -189,6 +205,8 @@ export default function BisRenewalsMasterPage() {
         page={Math.min(page, pageCount)}
         pageCount={pageCount}
         onDeleteSelected={() => void handleDeleteSelected()}
+        onPrintList={handlePrintRenewal}
+        printListLabel="Print Renewal Form"
         onPrevPage={() => setPage((p) => Math.max(1, p - 1))}
         onNextPage={() => setPage((p) => Math.min(pageCount, p + 1))}
         jumpTo={jumpTo}

@@ -20,6 +20,7 @@ export function BisProjectsFooterBar({
   pageCount,
   onDeleteSelected,
   onPrintList,
+  printListLabel = 'Print list',
   onPrintForm1,
   onPrintAuthLetter,
   onPrintDocument,
@@ -38,6 +39,8 @@ export function BisProjectsFooterBar({
   pageCount: number
   onDeleteSelected: () => void
   onPrintList?: () => void
+  /** Button label when `onPrintList` is provided (default: Print list). */
+  printListLabel?: string
   onPrintForm1?: () => void
   onPrintAuthLetter?: () => void
   onPrintDocument?: (kind: BisPrintDocumentKind) => void
@@ -85,11 +88,17 @@ export function BisProjectsFooterBar({
               size="sm"
               className={actionBtnClass}
               onClick={onPrintList}
-              disabled={loading || totalCount === 0}
-              title="Print list"
+              disabled={loading || (printListLabel === 'Print list' ? totalCount === 0 : selectedCount !== 1)}
+              title={
+                printListLabel === 'Print list'
+                  ? 'Print list'
+                  : selectedCount === 1
+                    ? printListLabel
+                    : 'Select exactly one row to print'
+              }
             >
               <Printer className="size-3.5 shrink-0 sm:size-4" />
-              <span className="hidden lg:inline">Print list</span>
+              <span className="hidden lg:inline">{printListLabel}</span>
             </Button>
           ) : null}
           {onPrintForm1 ? (
