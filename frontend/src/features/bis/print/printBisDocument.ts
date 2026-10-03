@@ -23,9 +23,17 @@ import {
 import { openPendingPrintWindow, openPrintHtml } from './openPrintHtml'
 import { buildOslSampleRequirementsHtml, oslSampleRequirementsDataFromPrintData } from './oslSampleRequirementsHtml'
 import {
+  buildOslCourierLabelsHtml,
+  oslCourierLabelsDataFromPrintData,
+} from './oslCourierLabelsHtml'
+import {
   buildOslSampleTestRequestHtml,
   oslSampleTestRequestDataFromPrintData,
 } from './oslSampleTestRequestHtml'
+import {
+  buildPlantLayoutHtml,
+  plantLayoutDataFromPrintData,
+} from './plantLayoutHtml'
 import {
   buildProcessDescriptionHtml,
   processDescriptionDataFromPrintData,
@@ -98,6 +106,8 @@ export type BisPrintDocumentKind =
   | 'subcontracted-tests'
   | 'osl-sample-test-request'
   | 'process-flow-chart'
+  | 'plant-layout'
+  | 'osl-courier-labels'
 
 export const BIS_PRINT_DOCUMENT_LABEL: Record<BisPrintDocumentKind, string> = {
   form1: 'BIS Form-I',
@@ -125,6 +135,8 @@ export const BIS_PRINT_DOCUMENT_LABEL: Record<BisPrintDocumentKind, string> = {
   'subcontracted-tests': 'Subcontracted Tests Declaration',
   'osl-sample-test-request': 'OSL Sample Test Request',
   'process-flow-chart': 'Process Flow Chart',
+  'plant-layout': 'Plant Layout',
+  'osl-courier-labels': 'OSL Courier Labels',
 }
 
 /** Documents offered in the "More prints" menu (Form-I and Authorization Letter have their own buttons). */
@@ -152,11 +164,13 @@ export const EXTRA_PRINT_KINDS: BisPrintDocumentKind[] = [
   'subcontracted-tests',
   'osl-sample-test-request',
   'process-flow-chart',
+  'plant-layout',
+  'osl-courier-labels',
 ]
 
 /** Shared tooltip text for the "More prints" trigger. */
 export const MORE_PRINTS_TOOLTIP =
-  'Full BIS application print pack (CMPF, undertakings, staff, SEF, CRM, OSL test request, process flow)'
+  'Full BIS application print pack (CMPF, undertakings, staff, SEF, OSL labels, plant layout, process flow)'
 
 const HTML_BUILDERS: Record<BisPrintDocumentKind, (data: BisPrintData) => string> = {
   form1: (d) => buildBisForm1Html(bisForm1DataFromPrintData(d)),
@@ -188,6 +202,8 @@ const HTML_BUILDERS: Record<BisPrintDocumentKind, (data: BisPrintData) => string
   'osl-sample-test-request': (d) =>
     buildOslSampleTestRequestHtml(oslSampleTestRequestDataFromPrintData(d)),
   'process-flow-chart': (d) => buildProcessFlowChartHtml(processFlowChartDataFromPrintData(d)),
+  'plant-layout': (d) => buildPlantLayoutHtml(plantLayoutDataFromPrintData(d)),
+  'osl-courier-labels': (d) => buildOslCourierLabelsHtml(oslCourierLabelsDataFromPrintData(d)),
 }
 
 /**
