@@ -246,9 +246,9 @@ export default function IsCodesMasterPage() {
     return rows.filter((r) => {
       const blob = [
         r.is_number,
-        r.revision_year ?? '',
-        r.reaffirmation_year ?? '',
-        r.amendment_number ?? '',
+        r.revision_year == null ? '' : String(r.revision_year),
+        r.reaffirmation_year == null ? '' : String(r.reaffirmation_year),
+        r.amendment_number == null ? '' : String(r.amendment_number),
         r.title,
         r.aspect,
         String(r.testing_charges ?? ''),
@@ -785,9 +785,9 @@ export default function IsCodesMasterPage() {
     const lines = exportRows.map((r) => ({
       id: r.id,
       is_number: r.is_number,
-      revision_year: r.revision_year ?? '',
-      reaffirmation_year: r.reaffirmation_year ?? '',
-      amendment_number: r.amendment_number ?? '',
+      revision_year: r.revision_year == null ? '' : String(r.revision_year),
+      reaffirmation_year: r.reaffirmation_year == null ? '' : String(r.reaffirmation_year),
+      amendment_number: r.amendment_number == null ? '' : String(r.amendment_number),
       title: r.title,
       aspect: r.aspect,
       testing_charges: String(r.testing_charges ?? ''),

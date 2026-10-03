@@ -114,11 +114,15 @@ export function IsCodesTable({
                   <TableCell className="align-middle text-center">
                     <div className="space-y-0.5">
                       <p className="text-sm text-foreground">
-                        {r.reaffirmation_year
-                          ? r.reaffirmation_year.replace(/^RA(?=\d)/i, 'RA ')
+                        {r.reaffirmation_year != null && String(r.reaffirmation_year).trim() !== ''
+                          ? String(r.reaffirmation_year).replace(/^RA(?=\d)/i, 'RA ')
                           : '—'}
                       </p>
-                      <p className="text-xs text-muted-foreground">Amendment: {r.amendment_number || '—'}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Amendment: {r.amendment_number != null && String(r.amendment_number).trim() !== ''
+                          ? String(r.amendment_number)
+                          : '—'}
+                      </p>
                     </div>
                   </TableCell>
 
