@@ -10,6 +10,10 @@ import { buildCmpf306Html, cmpf306DataFromPrintData } from './cmpf306Html'
 import { buildCmpf307Html, cmpf307DataFromPrintData } from './cmpf307Html'
 import { buildCmpf310Html, cmpf310DataFromPrintData } from './cmpf310Html'
 import { buildCmpf311Html, cmpf311DataFromPrintData } from './cmpf311Html'
+import {
+  buildCertifiedReferenceMaterialsHtml,
+  certifiedReferenceMaterialsDataFromPrintData,
+} from './certifiedReferenceMaterialsHtml'
 import { buildFactoryTestReportHtml, factoryTestReportDataFromPrintData } from './factoryTestReportHtml'
 import { loadBisPrintData, type BisPrintData } from './loadBisPrintData'
 import {
@@ -23,9 +27,17 @@ import {
   processDescriptionDataFromPrintData,
 } from './processDescriptionHtml'
 import {
+  buildRawMaterialDetailsHtml,
+  rawMaterialDetailsDataFromPrintData,
+} from './rawMaterialDetailsHtml'
+import {
   buildSelfEvaluationFormHtml,
   selfEvaluationFormDataFromPrintData,
 } from './selfEvaluationFormHtml'
+import {
+  buildSubcontractedTestsHtml,
+  subcontractedTestsDataFromPrintData,
+} from './subcontractedTestsHtml'
 import {
   buildTechnicalStaffHtml,
   technicalStaffDataFromPrintData,
@@ -73,6 +85,9 @@ export type BisPrintDocumentKind =
   | 'top-management'
   | 'technical-staff'
   | 'self-evaluation-form'
+  | 'certified-reference-materials'
+  | 'raw-material-details'
+  | 'subcontracted-tests'
 
 export const BIS_PRINT_DOCUMENT_LABEL: Record<BisPrintDocumentKind, string> = {
   form1: 'BIS Form-I',
@@ -95,6 +110,9 @@ export const BIS_PRINT_DOCUMENT_LABEL: Record<BisPrintDocumentKind, string> = {
   'top-management': 'Top Management Details',
   'technical-staff': 'Technical Staff Details',
   'self-evaluation-form': 'Self Evaluation Form',
+  'certified-reference-materials': 'Certified Reference Materials',
+  'raw-material-details': 'Raw Material Details',
+  'subcontracted-tests': 'Subcontracted Tests Declaration',
 }
 
 /** Documents offered in the "More prints" menu (Form-I and Authorization Letter have their own buttons). */
@@ -117,11 +135,14 @@ export const EXTRA_PRINT_KINDS: BisPrintDocumentKind[] = [
   'top-management',
   'technical-staff',
   'self-evaluation-form',
+  'certified-reference-materials',
+  'raw-material-details',
+  'subcontracted-tests',
 ]
 
 /** Shared tooltip text for the "More prints" trigger. */
 export const MORE_PRINTS_TOOLTIP =
-  'CMPF pack, undertakings, Annex-1, Appointment, Manufacturing Scope, Process Description, Top Management, Technical Staff, SEF'
+  'Full BIS application print pack (CMPF, undertakings, staff, SEF, CRM, raw materials, subcontracted tests)'
 
 const HTML_BUILDERS: Record<BisPrintDocumentKind, (data: BisPrintData) => string> = {
   form1: (d) => buildBisForm1Html(bisForm1DataFromPrintData(d)),
@@ -146,6 +167,10 @@ const HTML_BUILDERS: Record<BisPrintDocumentKind, (data: BisPrintData) => string
   'top-management': (d) => buildTopManagementHtml(topManagementDataFromPrintData(d)),
   'technical-staff': (d) => buildTechnicalStaffHtml(technicalStaffDataFromPrintData(d)),
   'self-evaluation-form': (d) => buildSelfEvaluationFormHtml(selfEvaluationFormDataFromPrintData(d)),
+  'certified-reference-materials': (d) =>
+    buildCertifiedReferenceMaterialsHtml(certifiedReferenceMaterialsDataFromPrintData(d)),
+  'raw-material-details': (d) => buildRawMaterialDetailsHtml(rawMaterialDetailsDataFromPrintData(d)),
+  'subcontracted-tests': (d) => buildSubcontractedTestsHtml(subcontractedTestsDataFromPrintData(d)),
 }
 
 /**
