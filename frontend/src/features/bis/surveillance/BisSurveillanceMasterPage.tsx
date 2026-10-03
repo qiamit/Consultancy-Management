@@ -11,10 +11,14 @@ import {
   formatBisApiError,
   saveSurveillance,
 } from './surveillanceApi'
+import { downloadCsv } from '../shared/downloadCsv'
+import { formatCmL } from '../projects/types'
 import { printSurveillanceForm } from './printSurveillanceForm'
 import {
   emptySurveillanceForm,
   rowToSurveillanceForm,
+  surveillanceClientName,
+  surveillanceIsCodeLabel,
   type SurveillanceForm as SurveillanceFormValue,
   type SurveillanceRow,
 } from './types'
@@ -175,6 +179,26 @@ export default function BisSurveillanceMasterPage() {
     })()
   }
 
+  const handleExport = () => {
+    const source = selectedIds.size > 0 ? rows.filter((r) => selectedIds.has(r.id)) : rows
+    if (source.length === 0) {
+      setMessage('Nothing to export on this page.')
+      return
+    }
+    downloadCsv(
+      'bis_surveillance.csv',
+      ['firm', 'cm_l', 'is_code', 'surveillance_date', 'allotted_employee'],
+      source.map((r) => ({
+        firm: surveillanceClientName(r),
+        cm_l: formatCmL(r.cm_l_digits),
+        is_code: surveillanceIsCodeLabel(r),
+        surveillance_date: r.surveillance_date ?? '',
+        allotted_employee: r.allotted_employee_name ?? '',
+      })),
+    )
+    setMessage(`Exported ${source.length} row(s).`)
+  }
+
   return (
     <div className={limsPageShellClass}>
       <BisProjectsHeaderBar
@@ -210,6 +234,7 @@ export default function BisSurveillanceMasterPage() {
         page={Math.min(page, pageCount)}
         pageCount={pageCount}
         onDeleteSelected={() => void handleDeleteSelected()}
+        onExport={handleExport}
         onPrintList={handlePrintSurveillance}
         printListLabel="Print Surveillance"
         onPrevPage={() => setPage((p) => Math.max(1, p - 1))}

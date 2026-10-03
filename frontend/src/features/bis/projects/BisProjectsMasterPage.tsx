@@ -11,11 +11,15 @@ import {
   formatBisApiError,
   saveBisProject,
 } from './bisProjectsApi'
+import { downloadCsv } from '../shared/downloadCsv'
 import { printBisProjectsList } from './printBisProjectsList'
 import { printBisDocument, type BisPrintDocumentKind } from '../print/printBisDocument'
 import {
   BIS_PROJECTS_LIST_TITLES,
+  clientDisplayName,
   emptyBisProjectForm,
+  formatCmL,
+  isCodeDisplayLabel,
   rowToBisProjectForm,
   type BisProjectForm,
   type BisProjectRow,
@@ -157,6 +161,39 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
     if (printError) setMessage(printError)
   }
 
+  const handleExport = () => {
+    const source = selectedIds.size > 0 ? rows.filter((r) => selectedIds.has(r.id)) : rows
+    if (source.length === 0) {
+      setMessage('Nothing to export on this page.')
+      return
+    }
+    const headers = [
+      'firm',
+      'cm_l',
+      'is_code',
+      'project_kind',
+      'status',
+      'license_number',
+      'validity',
+      'application_number',
+    ]
+    downloadCsv(
+      `bis_${listMode}.csv`,
+      headers,
+      source.map((r) => ({
+        firm: clientDisplayName(r),
+        cm_l: formatCmL(r.cm_l_digits),
+        is_code: isCodeDisplayLabel(r),
+        project_kind: r.project_kind ?? '',
+        status: r.status ?? '',
+        license_number: r.license_number ?? '',
+        validity: r.license_validity_date ?? '',
+        application_number: r.application_number ?? '',
+      })),
+    )
+    setMessage(`Exported ${source.length} row(s).`)
+  }
+
   const handlePrintDocument = async (row: BisProjectRow | undefined, kind: BisPrintDocumentKind) => {
     if (!row) {
       setMessage('Select a saved row first.')
@@ -221,6 +258,7 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
         page={Math.min(page, pageCount)}
         pageCount={pageCount}
         onDeleteSelected={() => void handleDeleteSelected()}
+        onExport={handleExport}
         onPrintList={handlePrintList}
         onPrintForm1={
           canPrintBisForms ? () => void handlePrintDocument(selectedRow, 'form1') : undefined

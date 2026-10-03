@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronLeft, ChevronRight, Printer, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronLeft, ChevronRight, Download, Printer, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { limsDarkBarBtnClass, limsDarkBarFieldClass, limsDeleteBtnClass } from '@/lib/limsThemeUi'
 import { Button } from '@/components/ui/button'
@@ -19,6 +19,7 @@ export function BisProjectsFooterBar({
   page,
   pageCount,
   onDeleteSelected,
+  onExport,
   onPrintList,
   printListLabel = 'Print list',
   onPrintForm1,
@@ -38,6 +39,8 @@ export function BisProjectsFooterBar({
   page: number
   pageCount: number
   onDeleteSelected: () => void
+  /** Export current page / selection as CSV. */
+  onExport?: () => void
   onPrintList?: () => void
   /** Button label when `onPrintList` is provided (default: Print list). */
   printListLabel?: string
@@ -81,6 +84,20 @@ export function BisProjectsFooterBar({
               <span className="hidden lg:inline">Delete</span>
             </Button>
           </LaboratoryDirectorOnly>
+          {onExport ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className={actionBtnClass}
+              onClick={onExport}
+              disabled={loading || totalCount === 0}
+              title="Export CSV (selected rows, or current page)"
+            >
+              <Download className="size-3.5 shrink-0 sm:size-4" />
+              <span className="hidden lg:inline">Export</span>
+            </Button>
+          ) : null}
           {onPrintList ? (
             <Button
               type="button"

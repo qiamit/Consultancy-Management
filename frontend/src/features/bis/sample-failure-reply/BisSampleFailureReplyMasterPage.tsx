@@ -15,10 +15,16 @@ import {
   uploadSampleFailureAttachment,
   type SampleFailureAttachmentKind,
 } from './sampleFailureReplyApi'
+import { downloadCsv } from '../shared/downloadCsv'
+import { formatCmL } from '../projects/types'
 import { printSampleFailureReply } from './printSampleFailureReply'
 import {
   emptySampleFailureReplyForm,
   rowToSampleFailureReplyForm,
+  sampleFailureClientName,
+  sampleFailureIsCodeLabel,
+  sampleFailureStatusLabel,
+  sampleFailureTypeLabel,
   type SampleFailureReplyForm as SampleFailureReplyFormValue,
   type SampleFailureReplyRow,
 } from './types'
@@ -180,6 +186,27 @@ export default function BisSampleFailureReplyMasterPage() {
     })()
   }
 
+  const handleExport = () => {
+    const source = selectedIds.size > 0 ? rows.filter((r) => selectedIds.has(r.id)) : rows
+    if (source.length === 0) {
+      setMessage('Nothing to export on this page.')
+      return
+    }
+    downloadCsv(
+      'bis_sample_failure_replies.csv',
+      ['firm', 'cm_l', 'is_code', 'type', 'status', 'sample_code'],
+      source.map((r) => ({
+        firm: sampleFailureClientName(r),
+        cm_l: formatCmL(r.cm_l_digits),
+        is_code: sampleFailureIsCodeLabel(r),
+        type: sampleFailureTypeLabel(r.sample_failure_type),
+        status: sampleFailureStatusLabel(r.status),
+        sample_code: r.sample_code ?? '',
+      })),
+    )
+    setMessage(`Exported ${source.length} row(s).`)
+  }
+
   const applyEditedRow = (row: SampleFailureReplyRow) => {
     setEditingRow(row)
     setRows((prev) => prev.map((r) => (r.id === row.id ? row : r)))
@@ -266,6 +293,7 @@ export default function BisSampleFailureReplyMasterPage() {
         page={Math.min(page, pageCount)}
         pageCount={pageCount}
         onDeleteSelected={() => void handleDeleteSelected()}
+        onExport={handleExport}
         onPrintList={handlePrintReply}
         printListLabel="Print Reply"
         onPrevPage={() => setPage((p) => Math.max(1, p - 1))}

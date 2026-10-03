@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
+import { loadCompanyPrintContext } from '@/features/bis/print/loadCompanyPrintContext'
 import { supabase } from '@/lib/supabaseClient'
 import { limsFieldClass, limsPrimaryBtnClass } from '@/lib/limsThemeUi'
 import { Button } from '@/components/ui/button'
@@ -27,6 +28,7 @@ export default function CmsSettingsPanel() {
   const [form, setForm] = useState<FormState>(emptyForm)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [filling, setFilling] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -59,6 +61,34 @@ export default function CmsSettingsPanel() {
 
   const set = (key: keyof FormState) => (e: { target: { value: string } }) =>
     setForm((f) => ({ ...f, [key]: e.target.value }))
+
+  const fillFromCompanySettings = async () => {
+    setFilling(true)
+    try {
+      const company = await loadCompanyPrintContext()
+      const addressParts = [
+        company.address,
+        [company.district, company.state].filter(Boolean).join(', '),
+        company.pinCode ? `PIN ${company.pinCode}` : '',
+        company.country,
+      ]
+        .map((p) => p.trim())
+        .filter(Boolean)
+      setForm((prev) => ({
+        ...prev,
+        company_name: company.companyName || prev.company_name,
+        contact_email: company.email || prev.contact_email,
+        contact_phone: company.phone || prev.contact_phone,
+        address: addressParts.join('\n') || prev.address,
+        logo_url: company.logoUrl || prev.logo_url,
+      }))
+      toast.success('Filled from Lab / Company Settings. Review and Save.')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Unable to load company settings')
+    } finally {
+      setFilling(false)
+    }
+  }
 
   const save = async () => {
     setSaving(true)
@@ -130,8 +160,17 @@ export default function CmsSettingsPanel() {
         />
       </div>
 
-      <div className="flex justify-end border-t border-stone-300 pt-3">
-        <Button type="button" className={limsPrimaryBtnClass} disabled={saving} onClick={() => void save()}>
+      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-stone-300 pt-3">
+        <Button
+          type="button"
+          variant="outline"
+          className="rounded-none border-stone-500"
+          disabled={saving || filling}
+          onClick={() => void fillFromCompanySettings()}
+        >
+          {filling ? 'Loading…' : 'Fill from Company Settings'}
+        </Button>
+        <Button type="button" className={limsPrimaryBtnClass} disabled={saving || filling} onClick={() => void save()}>
           {saving ? 'Saving…' : 'Save Settings'}
         </Button>
       </div>
