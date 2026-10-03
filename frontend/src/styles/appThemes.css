@@ -1,0 +1,456 @@
+/* LIMS chrome colors — stone (neutral) + amber (accent) remapped per theme.
+   RGB channels so Tailwind opacity modifiers keep working. */
+
+:root,
+[data-app-theme='light'] {
+  color-scheme: light;
+
+  --color-stone-50: 250 250 249;
+  --color-stone-100: 245 245 244;
+  --color-stone-200: 231 229 228;
+  --color-stone-300: 214 211 209;
+  --color-stone-400: 168 162 158;
+  --color-stone-500: 120 113 108;
+  --color-stone-600: 87 83 78;
+  --color-stone-700: 68 64 60;
+  --color-stone-800: 41 37 36;
+  --color-stone-900: 28 25 23;
+  --color-stone-950: 12 10 9;
+
+  --color-amber-50: 255 251 235;
+  --color-amber-100: 254 243 199;
+  --color-amber-200: 253 230 138;
+  --color-amber-300: 252 211 77;
+  --color-amber-400: 251 191 36;
+  --color-amber-500: 245 158 11;
+  --color-amber-600: 217 119 6;
+  --color-amber-700: 180 83 9;
+  --color-amber-800: 146 64 14;
+  --color-amber-900: 120 53 15;
+  --color-amber-950: 69 26 3;
+
+  --lims-paper: 247 243 235;
+  --lims-paper-border: 231 224 212;
+}
+
+html.dark:not([data-app-theme='custom']) {
+  color-scheme: dark;
+
+  /* Surfaces: 50–200 dark paper/fields; 800–950 stay near-black for headers */
+  --color-stone-50: 45 41 38;
+  --color-stone-100: 55 49 45;
+  --color-stone-200: 72 64 58;
+  --color-stone-300: 90 82 76;
+  --color-stone-400: 130 120 112;
+  --color-stone-500: 168 158 150;
+  --color-stone-600: 196 186 176;
+  --color-stone-700: 220 212 204;
+  --color-stone-800: 22 19 17;
+  --color-stone-900: 14 12 11;
+  --color-stone-950: 8 7 6;
+
+  /* Accent: keep pale amber surfaces light (search/chips); bright gold for accents */
+  --color-amber-50: 255 251 235;
+  --color-amber-100: 254 243 199;
+  --color-amber-200: 253 230 138;
+  --color-amber-300: 252 211 77;
+  --color-amber-400: 251 191 36;
+  --color-amber-500: 245 158 11;
+  --color-amber-600: 217 119 6;
+  --color-amber-700: 180 83 9;
+  --color-amber-800: 146 64 14;
+  --color-amber-900: 120 53 15;
+  --color-amber-950: 69 26 3;
+
+  --lims-paper: 40 36 33;
+  --lims-paper-border: 72 64 58;
+
+  --background: 24 10% 9%;
+  --foreground: 40 15% 94%;
+  --card: 24 10% 12%;
+  --card-foreground: 40 15% 94%;
+  --popover: 24 10% 12%;
+  --popover-foreground: 40 15% 94%;
+  --primary: 32 95% 48%;
+  --primary-foreground: 24 10% 8%;
+  --secondary: 24 8% 18%;
+  --secondary-foreground: 40 15% 90%;
+  --muted: 24 8% 16%;
+  --muted-foreground: 30 10% 70%;
+  --accent: 26 40% 18%;
+  --accent-foreground: 43 74% 88%;
+  --border: 24 8% 28%;
+  --input: 24 8% 28%;
+  --ring: 32 95% 48%;
+  --sidebar: 24 12% 7%;
+  --sidebar-foreground: 40 20% 92%;
+  --sidebar-border: 24 8% 18%;
+  --sidebar-accent: 32 95% 44%;
+  --sidebar-accent-foreground: 0 0% 100%;
+  --sidebar-muted: 24 8% 12%;
+  --sidebar-ring: 32 95% 48%;
+}
+
+/*
+  Amber Night cohesion:
+  - hard-coded white panels → card (dark)
+  - body text tokens that share stone-800 with header BGs → light ink
+  - light status chips keep dark ink (scoped exclusions)
+*/
+html.dark .bg-white {
+  background-color: hsl(var(--card)) !important;
+  color: hsl(var(--card-foreground));
+}
+html.dark .bg-white\/95,
+html.dark .bg-white\/90,
+html.dark .bg-white\/80 {
+  background-color: hsl(var(--card) / 0.95) !important;
+  color: hsl(var(--card-foreground));
+}
+html.dark .hover\:bg-white:hover,
+html.dark .focus\:bg-white:focus,
+html.dark .focus-visible\:bg-white:focus-visible,
+html.dark .focus-within\:bg-white:focus-within,
+html.dark .focus\:bg-card:focus,
+html.dark .focus-visible\:bg-card:focus-visible,
+html.dark .focus-within\:bg-card:focus-within {
+  background-color: hsl(var(--card)) !important;
+}
+
+html.dark .text-stone-700,
+html.dark .text-stone-800,
+html.dark .text-stone-900,
+html.dark .text-black {
+  color: rgb(236 230 223) !important;
+}
+html.dark .hover\:text-stone-900:hover,
+html.dark .hover\:text-stone-800:hover {
+  color: rgb(250 247 242) !important;
+}
+html.dark .placeholder\:text-stone-400::placeholder,
+html.dark .placeholder\:text-muted-foreground::placeholder {
+  color: rgb(168 158 150) !important;
+}
+
+/* Keep readable dark ink on intentional light chips / search islands */
+html.dark .bg-amber-50,
+html.dark .bg-amber-100,
+html.dark .bg-emerald-50,
+html.dark .bg-rose-50,
+html.dark .bg-sky-50,
+html.dark .bg-red-50,
+html.dark .bg-orange-50,
+html.dark .bg-yellow-50 {
+  color: rgb(28 25 23);
+}
+html.dark .bg-amber-50 .text-stone-700,
+html.dark .bg-amber-50 .text-stone-800,
+html.dark .bg-amber-50 .text-stone-900,
+html.dark .bg-amber-50 .text-black,
+html.dark [class*='bg-amber-50'].text-stone-900 {
+  color: rgb(28 25 23) !important;
+}
+
+html.dark input:not([type='checkbox']):not([type='radio']),
+html.dark textarea,
+html.dark button[role='combobox'],
+html.dark [data-radix-select-trigger] {
+  color: hsl(var(--foreground));
+}
+
+html.dark .text-muted-foreground {
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+/* Light accent links stay bright on dark paper */
+html.dark .text-amber-800,
+html.dark .text-amber-900,
+html.dark .text-amber-950 {
+  color: rgb(252 211 77) !important;
+}
+html.dark .hover\:text-amber-950:hover,
+html.dark .hover\:text-amber-900:hover {
+  color: rgb(254 243 199) !important;
+}
+
+[data-app-theme='ocean'],
+[data-app-theme='forest'],
+[data-app-theme='steel'],
+[data-app-theme='copper'],
+[data-app-theme='teal'],
+[data-app-theme='rose'],
+[data-app-theme='light'] {
+  color-scheme: light;
+}
+
+[data-app-theme='ocean'] {
+  color-scheme: light;
+  --card: 210 40% 99%;
+  --card-foreground: 222 47% 11%;
+  --popover: 210 40% 99%;
+  --popover-foreground: 222 47% 11%;
+  --color-stone-50: 248 250 252;
+  --color-stone-100: 241 245 249;
+  --color-stone-200: 226 232 240;
+  --color-stone-300: 203 213 225;
+  --color-stone-400: 148 163 184;
+  --color-stone-500: 100 116 139;
+  --color-stone-600: 71 85 105;
+  --color-stone-700: 51 65 85;
+  --color-stone-800: 30 41 59;
+  --color-stone-900: 15 23 42;
+  --color-stone-950: 2 6 23;
+
+  --color-amber-50: 240 249 255;
+  --color-amber-100: 224 242 254;
+  --color-amber-200: 186 230 253;
+  --color-amber-300: 125 211 252;
+  --color-amber-400: 56 189 248;
+  --color-amber-500: 14 165 233;
+  --color-amber-600: 2 132 199;
+  --color-amber-700: 3 105 161;
+  --color-amber-800: 7 89 133;
+  --color-amber-900: 12 74 110;
+  --color-amber-950: 8 47 73;
+
+  --lims-paper: 241 245 249;
+  --lims-paper-border: 203 213 225;
+
+  --background: 210 40% 98%;
+  --foreground: 222 47% 11%;
+  --primary: 199 89% 40%;
+  --primary-foreground: 0 0% 100%;
+  --ring: 199 89% 48%;
+  --sidebar: 222 47% 11%;
+  --sidebar-accent: 199 89% 48%;
+  --sidebar-ring: 199 89% 48%;
+}
+
+[data-app-theme='forest'] {
+  color-scheme: light;
+  --card: 140 25% 99%;
+  --card-foreground: 150 20% 10%;
+  --color-stone-50: 250 250 249;
+  --color-stone-100: 245 245 244;
+  --color-stone-200: 231 229 228;
+  --color-stone-300: 214 211 209;
+  --color-stone-400: 168 162 158;
+  --color-stone-500: 120 113 108;
+  --color-stone-600: 87 83 78;
+  --color-stone-700: 68 64 60;
+  --color-stone-800: 28 35 30;
+  --color-stone-900: 20 28 23;
+  --color-stone-950: 10 16 12;
+
+  --color-amber-50: 236 253 245;
+  --color-amber-100: 209 250 229;
+  --color-amber-200: 167 243 208;
+  --color-amber-300: 110 231 183;
+  --color-amber-400: 52 211 153;
+  --color-amber-500: 16 185 129;
+  --color-amber-600: 5 150 105;
+  --color-amber-700: 4 120 87;
+  --color-amber-800: 6 95 70;
+  --color-amber-900: 6 78 59;
+  --color-amber-950: 2 44 34;
+
+  --lims-paper: 243 247 242;
+  --lims-paper-border: 214 226 214;
+
+  --background: 140 20% 97%;
+  --foreground: 150 20% 10%;
+  --primary: 160 84% 30%;
+  --primary-foreground: 0 0% 100%;
+  --ring: 160 84% 39%;
+  --sidebar: 150 25% 12%;
+  --sidebar-accent: 160 84% 39%;
+  --sidebar-ring: 160 84% 39%;
+}
+
+[data-app-theme='steel'] {
+  color-scheme: light;
+  --card: 210 20% 99%;
+  --card-foreground: 215 25% 12%;
+  --color-stone-50: 248 250 252;
+  --color-stone-100: 241 245 249;
+  --color-stone-200: 226 232 240;
+  --color-stone-300: 203 213 225;
+  --color-stone-400: 148 163 184;
+  --color-stone-500: 100 116 139;
+  --color-stone-600: 71 85 105;
+  --color-stone-700: 51 65 85;
+  --color-stone-800: 30 41 59;
+  --color-stone-900: 15 23 42;
+  --color-stone-950: 2 6 23;
+
+  --color-amber-50: 248 250 252;
+  --color-amber-100: 241 245 249;
+  --color-amber-200: 226 232 240;
+  --color-amber-300: 203 213 225;
+  --color-amber-400: 148 163 184;
+  --color-amber-500: 100 116 139;
+  --color-amber-600: 71 85 105;
+  --color-amber-700: 51 65 85;
+  --color-amber-800: 30 41 59;
+  --color-amber-900: 15 23 42;
+  --color-amber-950: 2 6 23;
+
+  --lims-paper: 241 245 249;
+  --lims-paper-border: 203 213 225;
+
+  --background: 210 20% 98%;
+  --foreground: 215 25% 12%;
+  --primary: 215 20% 35%;
+  --primary-foreground: 0 0% 100%;
+  --ring: 215 16% 47%;
+  --sidebar: 222 47% 11%;
+  --sidebar-accent: 215 16% 47%;
+  --sidebar-ring: 215 16% 47%;
+}
+
+[data-app-theme='copper'] {
+  color-scheme: light;
+  --card: 30 30% 99%;
+  --card-foreground: 20 25% 12%;
+  --color-stone-50: 250 248 246;
+  --color-stone-100: 245 241 237;
+  --color-stone-200: 232 224 216;
+  --color-stone-300: 214 201 190;
+  --color-stone-400: 168 148 132;
+  --color-stone-500: 130 110 95;
+  --color-stone-600: 95 78 66;
+  --color-stone-700: 72 58 48;
+  --color-stone-800: 52 38 30;
+  --color-stone-900: 36 26 20;
+  --color-stone-950: 20 14 10;
+
+  --color-amber-50: 255 247 237;
+  --color-amber-100: 255 237 213;
+  --color-amber-200: 254 215 170;
+  --color-amber-300: 253 186 116;
+  --color-amber-400: 251 146 60;
+  --color-amber-500: 249 115 22;
+  --color-amber-600: 234 88 12;
+  --color-amber-700: 194 65 12;
+  --color-amber-800: 154 52 18;
+  --color-amber-900: 124 45 18;
+  --color-amber-950: 67 20 7;
+
+  --lims-paper: 248 242 235;
+  --lims-paper-border: 232 220 206;
+
+  --background: 30 25% 97%;
+  --foreground: 20 25% 12%;
+  --primary: 21 90% 40%;
+  --primary-foreground: 0 0% 100%;
+  --ring: 25 95% 48%;
+  --sidebar: 20 30% 12%;
+  --sidebar-accent: 25 95% 48%;
+  --sidebar-ring: 25 95% 48%;
+}
+
+[data-app-theme='teal'] {
+  color-scheme: light;
+  --card: 180 25% 99%;
+  --card-foreground: 190 25% 12%;
+  --color-stone-50: 248 250 250;
+  --color-stone-100: 240 244 245;
+  --color-stone-200: 226 232 234;
+  --color-stone-300: 204 214 217;
+  --color-stone-400: 148 163 168;
+  --color-stone-500: 100 116 122;
+  --color-stone-600: 71 85 90;
+  --color-stone-700: 51 65 70;
+  --color-stone-800: 22 42 46;
+  --color-stone-900: 15 30 34;
+  --color-stone-950: 6 18 20;
+
+  --color-amber-50: 240 253 250;
+  --color-amber-100: 204 251 241;
+  --color-amber-200: 153 246 228;
+  --color-amber-300: 94 234 212;
+  --color-amber-400: 45 212 191;
+  --color-amber-500: 20 184 166;
+  --color-amber-600: 13 148 136;
+  --color-amber-700: 15 118 110;
+  --color-amber-800: 17 94 89;
+  --color-amber-900: 19 78 74;
+  --color-amber-950: 4 47 46;
+
+  --lims-paper: 240 247 246;
+  --lims-paper-border: 204 224 220;
+
+  --background: 180 20% 97%;
+  --foreground: 190 25% 12%;
+  --primary: 173 80% 28%;
+  --primary-foreground: 0 0% 100%;
+  --ring: 173 58% 39%;
+  --sidebar: 190 30% 12%;
+  --sidebar-accent: 173 58% 39%;
+  --sidebar-ring: 173 58% 39%;
+}
+
+[data-app-theme='rose'] {
+  color-scheme: light;
+  --card: 350 35% 99%;
+  --card-foreground: 350 20% 12%;
+  --color-stone-50: 250 250 249;
+  --color-stone-100: 245 245 244;
+  --color-stone-200: 231 229 228;
+  --color-stone-300: 214 211 209;
+  --color-stone-400: 168 162 158;
+  --color-stone-500: 120 113 108;
+  --color-stone-600: 87 83 78;
+  --color-stone-700: 68 64 60;
+  --color-stone-800: 44 28 34;
+  --color-stone-900: 30 18 24;
+  --color-stone-950: 16 8 12;
+
+  --color-amber-50: 255 241 242;
+  --color-amber-100: 255 228 230;
+  --color-amber-200: 254 205 211;
+  --color-amber-300: 253 164 175;
+  --color-amber-400: 251 113 133;
+  --color-amber-500: 244 63 94;
+  --color-amber-600: 225 29 72;
+  --color-amber-700: 190 18 60;
+  --color-amber-800: 159 18 57;
+  --color-amber-900: 136 19 55;
+  --color-amber-950: 76 5 25;
+
+  --lims-paper: 250 242 244;
+  --lims-paper-border: 232 214 218;
+
+  --background: 350 30% 98%;
+  --foreground: 350 20% 12%;
+  --primary: 347 77% 42%;
+  --primary-foreground: 0 0% 100%;
+  --ring: 347 77% 50%;
+  --sidebar: 350 25% 12%;
+  --sidebar-accent: 347 77% 50%;
+  --sidebar-ring: 347 77% 50%;
+}
+
+/* Custom themes inject CSS variables via #qirlpl-custom-theme-vars */
+[data-app-theme='custom'] {
+  /* Fallback until inject runs — teal-ish light */
+  color-scheme: light;
+}
+.bg-\[\#f7f3eb\],
+.bg-\[\#F7F3EB\] {
+  background-color: rgb(var(--lims-paper)) !important;
+}
+
+.bg-\[\#f7f3eb\]\/90,
+.bg-\[\#F7F3EB\]\/90 {
+  background-color: rgb(var(--lims-paper) / 0.9) !important;
+}
+
+.bg-\[\#f7f3eb\]\/80,
+.bg-\[\#F7F3EB\]\/80 {
+  background-color: rgb(var(--lims-paper) / 0.8) !important;
+}
+
+.border-\[\#e7e0d4\] {
+  border-color: rgb(var(--lims-paper-border)) !important;
+}

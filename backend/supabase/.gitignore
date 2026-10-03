@@ -1,0 +1,10 @@
+# Hosted Supabase CLI local state (Railway uses versioned migrations only)
+.branches/
+.temp/
+config.toml
+
+# Secrets
+.env
+.env.local
+.env.*.local
+.env.keys

@@ -1,0 +1,22 @@
+# Consultancy Pro – Cursor Rules
+
+Yeh project **Consultancy Pro** (Q Engineering) hai — BIS licensing / consultancy ops.
+Stack **Qirlpl_Lims_Railway** jaisi hai (Vite + React + Railway GoTrue/PostgREST/Storage + Resend).
+
+## AI Behavior
+- Seedha files edit karo; chat me long code blocks mat dump karo.
+- Multi-file changes ek saath apply karo.
+- Pehle codebase search, phir edit.
+
+## Project Structure
+- `frontend/` – React + Vite + TypeScript (LIMS stone/amber theme)
+- `backend/supabase/migrations/` – Railway Postgres SQL
+- `railway-stack/gateway/` – Caddy API gateway
+- `railway-stack/functions/` – Node functions (users + Resend email)
+- `pdf-service/` – Playwright PDF
+
+## Rules
+- Hosted Supabase Cloud / Vercel mat use karo.
+- Theme/UI: existing `limsThemeUi` + MasterPage patterns reuse karo.
+- App English; explanations Hindi/Hinglish OK.
+- Domain: BIS ops, clients, IS codes, finance, email.

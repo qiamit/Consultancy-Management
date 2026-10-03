@@ -1,0 +1,14 @@
+{
+  "name": "qirlpl-lims-functions",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "packageManager": "npm@10.9.2",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "build": "node -e \"process.exit(0)\""
+  }
+}

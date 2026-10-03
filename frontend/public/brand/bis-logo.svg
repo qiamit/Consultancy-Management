@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="BIS">
+  <rect width="64" height="64" fill="#ffffff"/>
+  <rect x="3" y="3" width="58" height="58" fill="#0b3a82"/>
+  <path fill="#f4c542" d="M32 10l3.2 9.8h10.3l-8.3 6 3.2 9.8L32 29.6l-8.4 6 3.2-9.8-8.3-6h10.3z"/>
+  <text x="32" y="54" text-anchor="middle" fill="#ffffff" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="700" letter-spacing="1">BIS</text>
+</svg>

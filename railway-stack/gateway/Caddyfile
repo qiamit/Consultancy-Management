@@ -1,0 +1,92 @@
+{
+  auto_https off
+}
+
+:80 {
+  # Local Vite origins
+  @localDev header_regexp Origin ^https?://(localhost|127\.0\.0\.1):(3000|517[3-9]|518[0-5])$
+  header @localDev Access-Control-Allow-Origin "{http.request.header.Origin}"
+
+  @prod header Origin https://www.qengineering.in
+  header @prod Access-Control-Allow-Origin "https://www.qengineering.in"
+
+  @apex header Origin https://qengineering.in
+  header @apex Access-Control-Allow-Origin "https://qengineering.in"
+
+  @railwayFrontend header_regexp Origin ^https://frontend-production-[a-z0-9]+\.up\.railway\.app$
+  header @railwayFrontend Access-Control-Allow-Origin "{http.request.header.Origin}"
+
+  @railwayApp header_regexp Origin ^https://consultancy-[a-z0-9-]+\.up\.railway\.app$
+  header @railwayApp Access-Control-Allow-Origin "{http.request.header.Origin}"
+
+  header {
+    Access-Control-Allow-Credentials "true"
+    Access-Control-Expose-Headers "Content-Range, Range, Content-Location, Content-Profile, Preference-Applied, X-Request-Id"
+    Vary "Origin"
+  }
+
+  @preflight method OPTIONS
+  handle @preflight {
+    header Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+    header Access-Control-Allow-Headers "Authorization, apikey, Content-Type, Accept, Accept-Profile, Content-Profile, Prefer, Range, X-Client-Info, X-Supabase-Api-Version, X-Requested-With, Profile, X-User-Jwt, x-upsert, cache-control, content-disposition"
+    header Access-Control-Max-Age "86400"
+    respond "" 204
+  }
+
+  @health path /health
+  handle @health {
+    respond "ok" 200
+  }
+
+  @auth path /auth/v1 /auth/v1/*
+  handle @auth {
+    uri strip_prefix /auth/v1
+    reverse_proxy {$GOTRUE_UPSTREAM} {
+      header_down -Access-Control-Allow-Origin
+      header_down -Access-Control-Allow-Credentials
+      header_down -Access-Control-Allow-Headers
+      header_down -Access-Control-Allow-Methods
+      header_down -Access-Control-Expose-Headers
+    }
+  }
+
+  @rest path /rest/v1 /rest/v1/*
+  handle @rest {
+    uri strip_prefix /rest/v1
+    reverse_proxy {$PGRST_UPSTREAM} {
+      header_down -Access-Control-Allow-Origin
+      header_down -Access-Control-Allow-Credentials
+      header_down -Access-Control-Allow-Headers
+      header_down -Access-Control-Allow-Methods
+      header_down -Access-Control-Expose-Headers
+    }
+  }
+
+  @storage path /storage/v1 /storage/v1/*
+  handle @storage {
+    uri strip_prefix /storage/v1
+    reverse_proxy {$STORAGE_UPSTREAM} {
+      header_down -Access-Control-Allow-Origin
+      header_down -Access-Control-Allow-Credentials
+      header_down -Access-Control-Allow-Headers
+      header_down -Access-Control-Allow-Methods
+      header_down -Access-Control-Expose-Headers
+    }
+  }
+
+  @functions path /functions/v1 /functions/v1/*
+  handle @functions {
+    uri strip_prefix /functions/v1
+    reverse_proxy {$FUNCTIONS_UPSTREAM} {
+      header_down -Access-Control-Allow-Origin
+      header_down -Access-Control-Allow-Credentials
+      header_down -Access-Control-Allow-Headers
+      header_down -Access-Control-Allow-Methods
+      header_down -Access-Control-Expose-Headers
+    }
+  }
+
+  handle {
+    respond "Not Found" 404
+  }
+}

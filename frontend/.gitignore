@@ -1,0 +1,8 @@
+# Frontend-local ignores (root .gitignore covers most monorepo patterns)
+.vercel/
+dist/
+.vite/
+*.local
+.env
+.env.*
+!.env.example

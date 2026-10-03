@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/brand/qe-logo.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0c416a" />
+    <title>Consultancy Pro — Q Engineering</title>
+    <script>
+      (function () {
+        try {
+          var key = 'consultancy.appTheme'
+          var pref = localStorage.getItem(key) || 'light'
+          var builtins = {
+            light: 1,
+            dark: 1,
+            system: 1,
+            ocean: 1,
+            forest: 1,
+            steel: 1,
+            copper: 1,
+            teal: 1,
+            rose: 1,
+          }
+          var isCustom = pref.indexOf('custom_') === 0
+          if (!builtins[pref] && !isCustom) pref = 'light'
+          var resolved = pref
+          if (pref === 'system') {
+            resolved = window.matchMedia('(prefers-color-scheme: dark)').matches
+              ? 'dark'
+              : 'light'
+          }
+          document.documentElement.setAttribute('data-app-theme-pref', pref)
+          if (isCustom) {
+            document.documentElement.setAttribute('data-app-theme', 'custom')
+            document.documentElement.setAttribute('data-custom-theme-id', pref)
+            try {
+              var list = JSON.parse(localStorage.getItem('consultancy.customThemes') || '[]')
+              var found = Array.isArray(list)
+                ? list.find(function (t) { return t && t.id === pref })
+                : null
+              if (found && found.mode === 'dark') document.documentElement.classList.add('dark')
+              else document.documentElement.classList.remove('dark')
+            } catch (e2) {
+              document.documentElement.classList.remove('dark')
+            }
+          } else {
+            document.documentElement.setAttribute('data-app-theme', resolved)
+            document.documentElement.removeAttribute('data-custom-theme-id')
+            if (resolved === 'dark') document.documentElement.classList.add('dark')
+            else document.documentElement.classList.remove('dark')
+          }
+        } catch (e) {}
+      })()
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

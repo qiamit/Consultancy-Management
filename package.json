@@ -1,0 +1,19 @@
+{
+  "name": "consultancy-pro",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "npm run dev --prefix frontend",
+    "pdf:dev": "npm run dev --prefix pdf-service",
+    "pdf:install": "npm install --prefix pdf-service && npm run install-browser --prefix pdf-service",
+    "build": "npm run build --prefix frontend",
+    "typecheck": "npm run typecheck --prefix frontend",
+    "lint": "npm run lint --prefix frontend",
+    "preview": "npm run preview --prefix frontend",
+    "db:push": "node backend/scripts/refuse-hosted-cloud.cjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "pg": "^8.23.0"
+  }
+}
