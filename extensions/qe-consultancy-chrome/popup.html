@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>QE Consultancy</title>
+    <link rel="stylesheet" href="styles.css?v=2.2.32" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="topbar">
+        <div class="brand-row">
+          <span class="mark" aria-hidden="true">QE</span>
+          <div>
+            <h1>QE Consultancy</h1>
+          </div>
+        </div>
+      </header>
+
+      <section class="panel panel-copy" aria-labelledby="copyTitle">
+        <div class="panel-head">
+          <span class="step">1</span>
+          <h2 id="copyTitle">Copy &amp; Paste</h2>
+        </div>
+        <div class="toggle-grid">
+          <label class="tile" for="enableBypass">
+            <span class="tile-top">
+              <span class="tile-title">Copy / Paste</span>
+              <span class="switch">
+                <input id="enableBypass" type="checkbox" />
+                <span class="slider"></span>
+              </span>
+            </span>
+          </label>
+          <label class="tile" for="enableCtrlBypass">
+            <span class="tile-top">
+              <span class="tile-title">Shortcuts</span>
+              <span class="switch">
+                <input id="enableCtrlBypass" type="checkbox" />
+                <span class="slider"></span>
+              </span>
+            </span>
+          </label>
+        </div>
+      </section>
+
+      <section class="panel panel-manak" aria-labelledby="manakTitle">
+        <div class="panel-head">
+          <span class="step">2</span>
+          <h2 id="manakTitle">Manak Online</h2>
+        </div>
+        <div class="toggle-grid manak-toggles">
+          <label class="tile tile-power" for="powerToggle">
+            <span class="tile-top">
+              <span class="tile-title">Manak Test Request</span>
+              <span class="switch">
+                <input id="powerToggle" type="checkbox" />
+                <span class="slider"></span>
+              </span>
+            </span>
+            <span id="powerLabel" class="tile-hint">ON — login → Test Request → save back</span>
+          </label>
+          <label class="tile tile-power tile-import-qr" for="importQrToggle">
+            <span class="tile-top">
+              <span class="tile-title">Import QR Code</span>
+              <span class="switch">
+                <input id="importQrToggle" type="checkbox" />
+                <span class="slider"></span>
+              </span>
+            </span>
+            <span id="importQrLabel" class="tile-hint">OFF — enables after Login</span>
+          </label>
+        </div>
+        <p class="flow-note">
+          <strong>Test Request:</strong> from Consultancy Pro 🧪 — auto-enables, login → fill → PDF + Sample Code, then turns OFF.
+          <strong>Import QR:</strong> Import → Available list only (no samples / no Test Request).
+        </p>
+        <p id="importQrStatus" class="import-qr-status" aria-live="polite"></p>
+      </section>
+
+      <section class="panel panel-bulk" aria-labelledby="fillTitle">
+        <div class="panel-head">
+          <span class="step">3</span>
+          <h2 id="fillTitle">Bulk Fields Fill</h2>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="fieldName">Field name</label>
+            <input id="fieldName" type="text" placeholder="email, batch…" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label for="fieldValue">Value</label>
+            <input id="fieldValue" type="text" placeholder="Value to apply" autocomplete="off" />
+          </div>
+        </div>
+        <button id="fillButton" class="action-btn action-btn-teal" type="button">
+          Fill matching fields
+        </button>
+      </section>
+
+      <p id="status" class="status" aria-live="polite"></p>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

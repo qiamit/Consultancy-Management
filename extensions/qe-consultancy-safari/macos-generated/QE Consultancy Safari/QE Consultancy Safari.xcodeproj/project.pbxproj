@@ -1,0 +1,621 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 110;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		B2F1428130677EF400BCC047 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2F1428030677EF400BCC047 /* AppDelegate.swift */; };
+		B2F1428530677EF400BCC047 /* Main.html in Resources */ = {isa = PBXBuildFile; fileRef = B2F1428330677EF400BCC047 /* Main.html */; };
+		B2F1428730677EF400BCC047 /* Icon.png in Resources */ = {isa = PBXBuildFile; fileRef = B2F1428630677EF400BCC047 /* Icon.png */; };
+		B2F1428930677EF400BCC047 /* Style.css in Resources */ = {isa = PBXBuildFile; fileRef = B2F1428830677EF400BCC047 /* Style.css */; };
+		B2F1428B30677EF400BCC047 /* Script.js in Resources */ = {isa = PBXBuildFile; fileRef = B2F1428A30677EF400BCC047 /* Script.js */; };
+		B2F1428D30677EF400BCC047 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2F1428C30677EF400BCC047 /* ViewController.swift */; };
+		B2F1429030677EF400BCC047 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = B2F1428E30677EF400BCC047 /* Main.storyboard */; };
+		B2F1429230677EF400BCC047 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B2F1429130677EF400BCC047 /* Assets.xcassets */; };
+		B2F1429930677EF400BCC047 /* QE Consultancy Safari Extension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B2F1429830677EF400BCC047 /* QE Consultancy Safari Extension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		B2F1429E30677EF400BCC047 /* SafariWebExtensionHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2F1429D30677EF400BCC047 /* SafariWebExtensionHandler.swift */; };
+		B2F142B630677EF400BCC047 /* close-play-store.js in Resources */ = {isa = PBXBuildFile; fileRef = B2F142AA30677EF400BCC047 /* close-play-store.js */; };
+		B2F142B730677EF400BCC047 /* popup.js in Resources */ = {isa = PBXBuildFile; fileRef = B2F142AB30677EF400BCC047 /* popup.js */; };
+		B2F142B830677EF400BCC047 /* styles.css in Resources */ = {isa = PBXBuildFile; fileRef = B2F142AC30677EF400BCC047 /* styles.css */; };
+		B2F142B930677EF400BCC047 /* background.js in Resources */ = {isa = PBXBuildFile; fileRef = B2F142AD30677EF400BCC047 /* background.js */; };
+		B2F142BA30677EF400BCC047 /* bridge.js in Resources */ = {isa = PBXBuildFile; fileRef = B2F142AE30677EF400BCC047 /* bridge.js */; };
+		B2F142BB30677EF400BCC047 /* content-bypass.js in Resources */ = {isa = PBXBuildFile; fileRef = B2F142AF30677EF400BCC047 /* content-bypass.js */; };
+		B2F142BC30677EF400BCC047 /* popup.html in Resources */ = {isa = PBXBuildFile; fileRef = B2F142B030677EF400BCC047 /* popup.html */; };
+		B2F142BD30677EF400BCC047 /* block-rules.json in Resources */ = {isa = PBXBuildFile; fileRef = B2F142B130677EF400BCC047 /* block-rules.json */; };
+		B2F142BE30677EF400BCC047 /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = B2F142B230677EF400BCC047 /* manifest.json */; };
+		B2F142BF30677EF400BCC047 /* page-hook.js in Resources */ = {isa = PBXBuildFile; fileRef = B2F142B330677EF400BCC047 /* page-hook.js */; };
+		B2F142C030677EF400BCC047 /* content.js in Resources */ = {isa = PBXBuildFile; fileRef = B2F142B430677EF400BCC047 /* content.js */; };
+		B2F142C130677EF400BCC047 /* field-map.js in Resources */ = {isa = PBXBuildFile; fileRef = B2F142B530677EF400BCC047 /* field-map.js */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		B2F1429A30677EF400BCC047 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B2F1427530677EF400BCC047 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B2F1429730677EF400BCC047;
+			remoteInfo = "QE Consultancy Safari Extension";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		B2F142A530677EF400BCC047 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			dstPath = "";
+			dstSubfolder = PlugIns;
+			files = (
+				B2F1429930677EF400BCC047 /* QE Consultancy Safari Extension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		B2F1427D30677EF400BCC047 /* QE Consultancy Safari.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "QE Consultancy Safari.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		B2F1428030677EF400BCC047 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		B2F1428430677EF400BCC047 /* Base */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = Base; path = Base.lproj/Main.html; sourceTree = "<group>"; };
+		B2F1428630677EF400BCC047 /* Icon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = Icon.png; sourceTree = "<group>"; };
+		B2F1428830677EF400BCC047 /* Style.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = Style.css; sourceTree = "<group>"; };
+		B2F1428A30677EF400BCC047 /* Script.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = Script.js; sourceTree = "<group>"; };
+		B2F1428C30677EF400BCC047 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
+		B2F1428F30677EF400BCC047 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
+		B2F1429130677EF400BCC047 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		B2F1429330677EF400BCC047 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		B2F1429830677EF400BCC047 /* QE Consultancy Safari Extension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "QE Consultancy Safari Extension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
+		B2F1429D30677EF400BCC047 /* SafariWebExtensionHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariWebExtensionHandler.swift; sourceTree = "<group>"; };
+		B2F1429F30677EF400BCC047 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		B2F142AA30677EF400BCC047 /* close-play-store.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = "close-play-store.js"; path = "Resources/close-play-store.js"; sourceTree = "<group>"; };
+		B2F142AB30677EF400BCC047 /* popup.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = popup.js; path = Resources/popup.js; sourceTree = "<group>"; };
+		B2F142AC30677EF400BCC047 /* styles.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; name = styles.css; path = Resources/styles.css; sourceTree = "<group>"; };
+		B2F142AD30677EF400BCC047 /* background.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = background.js; path = Resources/background.js; sourceTree = "<group>"; };
+		B2F142AE30677EF400BCC047 /* bridge.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = bridge.js; path = Resources/bridge.js; sourceTree = "<group>"; };
+		B2F142AF30677EF400BCC047 /* content-bypass.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = "content-bypass.js"; path = "Resources/content-bypass.js"; sourceTree = "<group>"; };
+		B2F142B030677EF400BCC047 /* popup.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = popup.html; path = Resources/popup.html; sourceTree = "<group>"; };
+		B2F142B130677EF400BCC047 /* block-rules.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = "block-rules.json"; path = "Resources/block-rules.json"; sourceTree = "<group>"; };
+		B2F142B230677EF400BCC047 /* manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = manifest.json; path = Resources/manifest.json; sourceTree = "<group>"; };
+		B2F142B330677EF400BCC047 /* page-hook.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = "page-hook.js"; path = "Resources/page-hook.js"; sourceTree = "<group>"; };
+		B2F142B430677EF400BCC047 /* content.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = content.js; path = Resources/content.js; sourceTree = "<group>"; };
+		B2F142B530677EF400BCC047 /* field-map.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = "field-map.js"; path = "Resources/field-map.js"; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		B2F1427A30677EF400BCC047 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
+		B2F1429530677EF400BCC047 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		B2F1427430677EF400BCC047 = {
+			isa = PBXGroup;
+			children = (
+				B2F1427F30677EF400BCC047 /* QE Consultancy Safari */,
+				B2F1429C30677EF400BCC047 /* QE Consultancy Safari Extension */,
+				B2F1427E30677EF400BCC047 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		B2F1427E30677EF400BCC047 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				B2F1427D30677EF400BCC047 /* QE Consultancy Safari.app */,
+				B2F1429830677EF400BCC047 /* QE Consultancy Safari Extension.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		B2F1427F30677EF400BCC047 /* QE Consultancy Safari */ = {
+			isa = PBXGroup;
+			children = (
+				B2F1428030677EF400BCC047 /* AppDelegate.swift */,
+				B2F1428C30677EF400BCC047 /* ViewController.swift */,
+				B2F1428E30677EF400BCC047 /* Main.storyboard */,
+				B2F1429130677EF400BCC047 /* Assets.xcassets */,
+				B2F1429330677EF400BCC047 /* Info.plist */,
+				B2F1428230677EF400BCC047 /* Resources */,
+			);
+			path = "QE Consultancy Safari";
+			sourceTree = "<group>";
+		};
+		B2F1428230677EF400BCC047 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				B2F1428330677EF400BCC047 /* Main.html */,
+				B2F1428630677EF400BCC047 /* Icon.png */,
+				B2F1428830677EF400BCC047 /* Style.css */,
+				B2F1428A30677EF400BCC047 /* Script.js */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		B2F1429C30677EF400BCC047 /* QE Consultancy Safari Extension */ = {
+			isa = PBXGroup;
+			children = (
+				B2F142A930677EF400BCC047 /* Resources */,
+				B2F1429D30677EF400BCC047 /* SafariWebExtensionHandler.swift */,
+				B2F1429F30677EF400BCC047 /* Info.plist */,
+			);
+			path = "QE Consultancy Safari Extension";
+			sourceTree = "<group>";
+		};
+		B2F142A930677EF400BCC047 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				B2F142AA30677EF400BCC047 /* close-play-store.js */,
+				B2F142AB30677EF400BCC047 /* popup.js */,
+				B2F142AC30677EF400BCC047 /* styles.css */,
+				B2F142AD30677EF400BCC047 /* background.js */,
+				B2F142AE30677EF400BCC047 /* bridge.js */,
+				B2F142AF30677EF400BCC047 /* content-bypass.js */,
+				B2F142B030677EF400BCC047 /* popup.html */,
+				B2F142B130677EF400BCC047 /* block-rules.json */,
+				B2F142B230677EF400BCC047 /* manifest.json */,
+				B2F142B330677EF400BCC047 /* page-hook.js */,
+				B2F142B430677EF400BCC047 /* content.js */,
+				B2F142B530677EF400BCC047 /* field-map.js */,
+			);
+			name = Resources;
+			path = "QE Consultancy Safari Extension";
+			sourceTree = SOURCE_ROOT;
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		B2F1427C30677EF400BCC047 /* QE Consultancy Safari */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B2F142A630677EF400BCC047 /* Build configuration list for PBXNativeTarget "QE Consultancy Safari" */;
+			buildPhases = (
+				B2F1427930677EF400BCC047 /* Sources */,
+				B2F1427A30677EF400BCC047 /* Frameworks */,
+				B2F1427B30677EF400BCC047 /* Resources */,
+				B2F142A530677EF400BCC047 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B2F1429B30677EF400BCC047 /* PBXTargetDependency */,
+			);
+			name = "QE Consultancy Safari";
+			productName = "QE Consultancy Safari";
+			productReference = B2F1427D30677EF400BCC047 /* QE Consultancy Safari.app */;
+			productType = "com.apple.product-type.application";
+		};
+		B2F1429730677EF400BCC047 /* QE Consultancy Safari Extension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B2F142A230677EF400BCC047 /* Build configuration list for PBXNativeTarget "QE Consultancy Safari Extension" */;
+			buildPhases = (
+				B2F1429430677EF400BCC047 /* Sources */,
+				B2F1429530677EF400BCC047 /* Frameworks */,
+				B2F1429630677EF400BCC047 /* Resources */,
+			);
+			buildRules = (
+			);
+			name = "QE Consultancy Safari Extension";
+			productName = "QE Consultancy Safari Extension";
+			productReference = B2F1429830677EF400BCC047 /* QE Consultancy Safari Extension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		B2F1427530677EF400BCC047 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2700;
+				LastUpgradeCheck = 2700;
+				TargetAttributes = {
+					B2F1427C30677EF400BCC047 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+					B2F1429730677EF400BCC047 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+				};
+			};
+			buildConfigurationList = B2F1427830677EF400BCC047 /* Build configuration list for PBXProject "QE Consultancy Safari" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = B2F1427430677EF400BCC047;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = B2F1427E30677EF400BCC047 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				B2F1427C30677EF400BCC047 /* QE Consultancy Safari */,
+				B2F1429730677EF400BCC047 /* QE Consultancy Safari Extension */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		B2F1427B30677EF400BCC047 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+				B2F1428730677EF400BCC047 /* Icon.png in Resources */,
+				B2F1429030677EF400BCC047 /* Main.storyboard in Resources */,
+				B2F1428B30677EF400BCC047 /* Script.js in Resources */,
+				B2F1428530677EF400BCC047 /* Main.html in Resources */,
+				B2F1429230677EF400BCC047 /* Assets.xcassets in Resources */,
+				B2F1428930677EF400BCC047 /* Style.css in Resources */,
+			);
+		};
+		B2F1429630677EF400BCC047 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+				B2F142BC30677EF400BCC047 /* popup.html in Resources */,
+				B2F142C030677EF400BCC047 /* content.js in Resources */,
+				B2F142BB30677EF400BCC047 /* content-bypass.js in Resources */,
+				B2F142BF30677EF400BCC047 /* page-hook.js in Resources */,
+				B2F142B930677EF400BCC047 /* background.js in Resources */,
+				B2F142BD30677EF400BCC047 /* block-rules.json in Resources */,
+				B2F142BE30677EF400BCC047 /* manifest.json in Resources */,
+				B2F142B830677EF400BCC047 /* styles.css in Resources */,
+				B2F142BA30677EF400BCC047 /* bridge.js in Resources */,
+				B2F142B630677EF400BCC047 /* close-play-store.js in Resources */,
+				B2F142C130677EF400BCC047 /* field-map.js in Resources */,
+				B2F142B730677EF400BCC047 /* popup.js in Resources */,
+			);
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		B2F1427930677EF400BCC047 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+				B2F1428D30677EF400BCC047 /* ViewController.swift in Sources */,
+				B2F1428130677EF400BCC047 /* AppDelegate.swift in Sources */,
+			);
+		};
+		B2F1429430677EF400BCC047 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+				B2F1429E30677EF400BCC047 /* SafariWebExtensionHandler.swift in Sources */,
+			);
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		B2F1429B30677EF400BCC047 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B2F1429730677EF400BCC047 /* QE Consultancy Safari Extension */;
+			targetProxy = B2F1429A30677EF400BCC047 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin PBXVariantGroup section */
+		B2F1428330677EF400BCC047 /* Main.html */ = {
+			isa = PBXVariantGroup;
+			children = (
+				B2F1428430677EF400BCC047 /* Base */,
+			);
+			name = Main.html;
+			sourceTree = "<group>";
+		};
+		B2F1428E30677EF400BCC047 /* Main.storyboard */ = {
+			isa = PBXVariantGroup;
+			children = (
+				B2F1428F30677EF400BCC047 /* Base */,
+			);
+			name = Main.storyboard;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
+
+/* Begin XCBuildConfiguration section */
+		B2F142A030677EF400BCC047 /* Debug configuration for PBXProject "QE Consultancy Safari" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 27.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		B2F142A130677EF400BCC047 /* Release configuration for PBXProject "QE Consultancy Safari" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 27.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		B2F142A330677EF400BCC047 /* Debug configuration for PBXNativeTarget "QE Consultancy Safari Extension" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "QE Consultancy Safari Extension/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "QE Consultancy Safari Extension";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "in.qengineering.qe-consultancy.safari.Extension";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		B2F142A430677EF400BCC047 /* Release configuration for PBXNativeTarget "QE Consultancy Safari Extension" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "QE Consultancy Safari Extension/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "QE Consultancy Safari Extension";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "in.qengineering.qe-consultancy.safari.Extension";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		B2F142A730677EF400BCC047 /* Debug configuration for PBXNativeTarget "QE Consultancy Safari" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "QE Consultancy Safari/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "QE Consultancy Safari";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMainStoryboardFile = Main;
+				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				INFOPLIST_KEY_NSViewGestureRecognizerIsExclusive = NO;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+					"-framework",
+					WebKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "in.qengineering.qe-consultancy.safari";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		B2F142A830677EF400BCC047 /* Release configuration for PBXNativeTarget "QE Consultancy Safari" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "QE Consultancy Safari/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "QE Consultancy Safari";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMainStoryboardFile = Main;
+				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				INFOPLIST_KEY_NSViewGestureRecognizerIsExclusive = NO;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+					"-framework",
+					WebKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "in.qengineering.qe-consultancy.safari";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		B2F1427830677EF400BCC047 /* Build configuration list for PBXProject "QE Consultancy Safari" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B2F142A030677EF400BCC047 /* Debug configuration for PBXProject "QE Consultancy Safari" */,
+				B2F142A130677EF400BCC047 /* Release configuration for PBXProject "QE Consultancy Safari" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		B2F142A230677EF400BCC047 /* Build configuration list for PBXNativeTarget "QE Consultancy Safari Extension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B2F142A330677EF400BCC047 /* Debug configuration for PBXNativeTarget "QE Consultancy Safari Extension" */,
+				B2F142A430677EF400BCC047 /* Release configuration for PBXNativeTarget "QE Consultancy Safari Extension" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		B2F142A630677EF400BCC047 /* Build configuration list for PBXNativeTarget "QE Consultancy Safari" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B2F142A730677EF400BCC047 /* Debug configuration for PBXNativeTarget "QE Consultancy Safari" */,
+				B2F142A830677EF400BCC047 /* Release configuration for PBXNativeTarget "QE Consultancy Safari" */,
+			);
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = B2F1427530677EF400BCC047 /* Project object */;
+	validationLevel = 1;
+}

@@ -15,6 +15,10 @@ import ProformaInvoicePage from '@/features/finance/sale/proforma-invoice/Profor
 import InvoicePage from '@/features/finance/sale/invoice/InvoicePage'
 import CreditNotePage from '@/features/finance/sale/credit-note/CreditNotePage'
 import PaymentReceiptPage from '@/features/finance/sale/payment-receipt/PaymentReceiptPage'
+import BisProjectsMasterPage from '@/features/bis/projects/BisProjectsMasterPage'
+import BisRenewalsMasterPage from '@/features/bis/renewals/BisRenewalsMasterPage'
+import BisSurveillanceMasterPage from '@/features/bis/surveillance/BisSurveillanceMasterPage'
+import BisSampleFailureReplyMasterPage from '@/features/bis/sample-failure-reply/BisSampleFailureReplyMasterPage'
 import ModulePlaceholderPage from '@/features/modules/ModulePlaceholderPage'
 import { RequireAuth } from '@/components/auth/RequireAuth'
 import { RequireLaboratoryDirector } from '@/components/auth/RequireLaboratoryDirector'
@@ -71,49 +75,39 @@ export {
 }
 
 export function BisNewApplicationsRoute() {
-  return (
-    <ModulePlaceholderPage
-      title="BIS New Application"
-      description="Port of Consultancy Pro BIS new-application workflow (checklist, print pack, Form-I)."
-    />
-  )
+  return <BisProjectsMasterPage key="applications" listMode="applications" />
 }
 
 export function BisNewInclusionRoute() {
-  return <ModulePlaceholderPage title="BIS New Inclusion" />
+  return <BisProjectsMasterPage key="inclusion" listMode="inclusion" />
 }
 
 export function BisLicenseRenewalsRoute() {
-  return <ModulePlaceholderPage title="BIS License Renewals" />
+  return <BisRenewalsMasterPage />
 }
 
 export function LicenseStopMarkingRoute() {
-  return <ModulePlaceholderPage title="License in Stop Marking" />
+  return <BisProjectsMasterPage key="stop_marking" listMode="stop_marking" />
 }
 
 export function BisSurveillanceRoute() {
-  return <ModulePlaceholderPage title="BIS Surveillances" />
+  return <BisSurveillanceMasterPage />
 }
 
 export function BisSampleFailureReplyRoute() {
-  return <ModulePlaceholderPage title="BIS Sample Failure Reply" />
+  return <BisSampleFailureReplyMasterPage />
 }
 
 export function OurBisLicensesRoute() {
-  return <ModulePlaceholderPage title="QE BIS Licenses" />
+  return <BisProjectsMasterPage key="our" listMode="our" />
 }
 
 export function BisProjectsRoute() {
-  return (
-    <ModulePlaceholderPage
-      title="All BIS Licenses"
-      description="License registry (bis_projects) — porting from Consultancy Pro next."
-    />
-  )
+  return <BisProjectsMasterPage key="all" listMode="all" />
 }
 
 export function ExpiredLicensesRoute() {
-  return <ModulePlaceholderPage title="Expired Licenses" />
+  return <BisProjectsMasterPage key="expired" listMode="expired" />
 }
 
 export function EmailToolsRoute() {

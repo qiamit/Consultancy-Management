@@ -78,6 +78,7 @@ import {
 import { amountInIndianRupeesWords } from './amountInIndianRupeesWords'
 import { parseLabSettingsRow } from '@/features/settings/lab-settings/labSettingsDb'
 import { computeClientSaleBalance } from '@/features/finance/sale/shared/clientSaleBalance'
+import { refreshSaleLedgerCache } from '@/features/finance/sale/shared/saleDocumentsApi'
 import { supabase } from '@/lib/supabaseClient'
 
 export type QuotationClientContact = {
@@ -377,6 +378,21 @@ export function QuotationFormView({
   const [notes, setNotes] = useState<QuotationNoteRow[]>([])
   const [notesOpen, setNotesOpen] = useState(false)
   const [convertedInvoiceTotal, setConvertedInvoiceTotal] = useState(0)
+  const [ledgerVersion, setLedgerVersion] = useState(0)
+
+  useEffect(() => {
+    let cancelled = false
+    void refreshSaleLedgerCache()
+      .then(() => {
+        if (!cancelled) setLedgerVersion((v) => v + 1)
+      })
+      .catch(() => {
+        /* balances fall back to opening balance only */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
   const [manageNotesOpen, setManageNotesOpen] = useState(false)
   const [showDiscountRow, setShowDiscountRow] = useState(false)
   const [showTransportRow, setShowTransportRow] = useState(false)
@@ -706,6 +722,7 @@ export function QuotationFormView({
     excludeReceiptId,
     form.clientId,
     form.clientName,
+    ledgerVersion,
   ])
 
   const paymentAmountValue = parseMoney(form.paymentAmount)

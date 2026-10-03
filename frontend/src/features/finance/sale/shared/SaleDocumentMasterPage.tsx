@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { limsDarkBarGlowStyle, limsPageShellClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabaseClient'
@@ -16,18 +16,23 @@ import {
   type QuotationProductDetails,
 } from '../quotation/QuotationForm'
 import {
-  computeQuotationTotals,
   emptyQuotationForm,
-  lineAmount,
-  nextQuotationNumber,
-  normalizePaymentMethod,
   parseMoney,
   rowToForm,
   type QuotationForm as QuotationFormType,
-  type QuotationLineRow,
   type QuotationRow,
   type QuotationStatus,
 } from '../quotation/types'
+import {
+  deleteSaleDocuments,
+  fetchNextSaleDocumentNumber,
+  fetchSaleDocumentsPage,
+  formatSaleApiError,
+  refreshSaleLedgerCache,
+  saveSaleDocument,
+  updateSaleDocumentStatus,
+  type SaleDocumentKind,
+} from './saleDocumentsApi'
 import { fetchDefaultQuotationTerm } from '../quotation/quotationTermsApi'
 import { fetchDefaultQuotationNote } from '../quotation/quotationNotesApi'
 import { fetchDefaultSignatureForKind } from '../quotation/quotationSignatureStorage'
@@ -38,14 +43,10 @@ import {
 
 export type SaleDocumentModuleConfig = {
   title: string
-  documentKind: DocumentTemplateKind
+  documentKind: SaleDocumentKind
   addLabel: string
   emptyHint: string
   numberColumnLabel: string
-}
-
-function storageKey(kind: DocumentTemplateKind): string {
-  return `lims.saleDocuments.${kind}`
 }
 
 function defaultNumberPrefix(kind: DocumentTemplateKind): string {
@@ -101,101 +102,21 @@ function isAbortOrLockError(err: unknown): boolean {
   )
 }
 
-function loadStoredRows(kind: DocumentTemplateKind): QuotationRow[] {
-  try {
-    const raw = localStorage.getItem(storageKey(kind))
-    if (!raw) return []
-    const parsed = JSON.parse(raw) as unknown
-    return Array.isArray(parsed) ? (parsed as QuotationRow[]) : []
-  } catch {
-    return []
-  }
-}
-
-function persistRows(kind: DocumentTemplateKind, rows: QuotationRow[]) {
-  try {
-    localStorage.setItem(storageKey(kind), JSON.stringify(rows))
-  } catch {
-    /* ignore quota / private mode */
-  }
-}
-
-function formToStoredRow(
-  form: QuotationFormType,
-  existingId: string | null,
-  opts?: { paymentReceipt?: boolean },
-): QuotationRow {
-  const totals = computeQuotationTotals(form)
-  const paymentAmount = Math.max(0, parseMoney(form.paymentAmount))
-  const id = existingId ?? crypto.randomUUID()
-  const lineItems: QuotationLineRow[] = opts?.paymentReceipt
-    ? []
-    : form.lines
-        .filter((l) => l.description.trim().length > 0)
-        .map((l, index) => ({
-          id: crypto.randomUUID(),
-          quotation_id: id,
-          line_no: index + 1,
-          description: l.description.trim(),
-          details: l.details.trim() || null,
-          make: l.make.trim() || null,
-          hsn_sac: l.hsnSac.trim() || null,
-          item_code: l.itemCode.trim() || null,
-          quantity: parseMoney(l.quantity) || 1,
-          unit: l.unit.trim() || 'Nos',
-          rate: parseMoney(l.rate),
-          amount: lineAmount(l),
-          discount_percent: parseMoney(l.discountPercent),
-          gst_percent: parseMoney(l.gstPercent),
-          line_remarks: l.lineRemarks.trim() || null,
-          delivery_period: l.deliveryPeriod.trim() || null,
-        }))
-
-  return {
-    id,
-    quotation_number: form.quotationNumber.trim(),
-    quotation_date: form.quotationDate || new Date().toISOString().slice(0, 10),
-    valid_until: opts?.paymentReceipt ? null : form.validUntil || null,
-    client_id: form.clientId || null,
-    client_name: form.clientName.trim(),
-    contact_person: form.contactPerson.trim() || null,
-    contact_email: form.contactEmail.trim() || null,
-    contact_mobile: form.contactMobile.trim() || null,
-    client_address: form.clientAddress.trim() || null,
-    client_gst_number: form.clientGstNumber.trim() || null,
-    subject: form.subject.trim() || null,
-    reference_no: opts?.paymentReceipt
-      ? normalizePaymentMethod(form.paymentMethod)
-      : form.referenceNo.trim() || null,
-    status: form.status,
-    payment_terms: form.paymentTerms.trim() || null,
-    notes: form.notes.trim() || null,
-    remarks: form.remarks.trim() || null,
-    signature_text: form.signatureText.trim() || null,
-    signature_image_path: form.signatureImagePath.trim() || null,
-    discount_percent: 0,
-    discount_amount: opts?.paymentReceipt ? 0 : totals.discountAmount,
-    transportation_charges: opts?.paymentReceipt ? 0 : totals.transportationCharges,
-    packaging_charges: opts?.paymentReceipt ? 0 : totals.packagingCharges,
-    gst_percent: opts?.paymentReceipt ? 0 : totals.effectiveGstPercent,
-    gst_amount: opts?.paymentReceipt ? 0 : totals.gstAmount,
-    subtotal: opts?.paymentReceipt ? paymentAmount : totals.subtotal,
-    grand_total: opts?.paymentReceipt ? paymentAmount : totals.grandTotal,
-    line_items: lineItems,
-    updated_at: new Date().toISOString(),
-    created_at: new Date().toISOString(),
-  }
-}
-
 /**
  * Quotation-matching chrome for other Sale modules (same theme, header, table, footer, form).
- * Records persist in localStorage until dedicated DB tables are added.
+ * Records persist in Postgres (finance_* tables; receipts in `transactions`).
  */
 export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleConfig }) {
-  const [rows, setRows] = useState<QuotationRow[]>(() => loadStoredRows(config.documentKind))
+  const [rows, setRows] = useState<QuotationRow[]>([])
+  const [total, setTotal] = useState(0)
+  const [listLoading, setListLoading] = useState(false)
+  const [listError, setListError] = useState<string | null>(null)
+  const [reloadKey, setReloadKey] = useState(0)
+  const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
   const [pageSize, setPageSize] = useState(10)
   const [page, setPage] = useState(1)
+  const requestRef = useRef(0)
   const [jumpTo, setJumpTo] = useState('')
   const [message, setMessage] = useState<string | null>(null)
   const [showTemplates, setShowTemplates] = useState(false)
@@ -226,21 +147,9 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
       ? parseMoney(String(form.paymentAmount ?? '')) > 0
       : form.lines.some((l) => l.description.trim().length > 0))
 
-  const filteredRows = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    if (!q) return rows
-    return rows.filter((r) => {
-      const blob = `${r.client_name} ${r.quotation_number} ${r.status}`.toLowerCase()
-      return blob.includes(q)
-    })
-  }, [rows, search])
-
-  const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize) || 1)
+  const pageCount = Math.max(1, Math.ceil(total / pageSize))
   const safePage = Math.min(Math.max(1, page), pageCount)
-  const pagedRows = useMemo(() => {
-    const start = (safePage - 1) * pageSize
-    return filteredRows.slice(start, start + pageSize)
-  }, [filteredRows, pageSize, safePage])
+  const pagedRows = rows
 
   const emptyPrimary = search.trim()
     ? `No ${config.title.toLowerCase()} records match your search.`
@@ -249,13 +158,47 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
     ? undefined
     : `Use "${config.addLabel}" to create your first record.`
 
-  const commitRows = useCallback(
-    (next: QuotationRow[]) => {
-      setRows(next)
-      persistRows(config.documentKind, next)
-    },
-    [config.documentKind],
-  )
+  const reload = useCallback(() => setReloadKey((k) => k + 1), [])
+
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      setSearch((prev) => {
+        const next = searchInput.trim()
+        if (prev !== next) setPage(1)
+        return next
+      })
+    }, 350)
+    return () => window.clearTimeout(id)
+  }, [searchInput])
+
+  useEffect(() => {
+    const requestId = ++requestRef.current
+    setListLoading(true)
+    setListError(null)
+    void (async () => {
+      try {
+        const [result] = await Promise.all([
+          fetchSaleDocumentsPage({ kind: config.documentKind, search, page, pageSize }),
+          isPaymentReceipt ? refreshSaleLedgerCache().catch(() => undefined) : Promise.resolve(),
+        ])
+        if (requestId !== requestRef.current) return
+        const lastPage = Math.max(1, Math.ceil(result.total / pageSize))
+        if (result.rows.length === 0 && result.total > 0 && page > lastPage) {
+          setPage(lastPage)
+          return
+        }
+        setRows(result.rows)
+        setTotal(result.total)
+      } catch (err) {
+        if (requestId !== requestRef.current) return
+        setListError(formatSaleApiError(err))
+        setRows([])
+        setTotal(0)
+      } finally {
+        if (requestId === requestRef.current) setListLoading(false)
+      }
+    })()
+  }, [config.documentKind, isPaymentReceipt, search, page, pageSize, reloadKey])
 
   const loadClients = useCallback(async () => {
     for (let attempt = 1; attempt <= 3; attempt++) {
@@ -389,27 +332,26 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
   }, [loadClients, loadProducts])
 
   useEffect(() => {
-    setRows(loadStoredRows(config.documentKind))
     setSelectedIds(new Set())
     setPage(1)
     setSearch('')
+    setSearchInput('')
   }, [config.documentKind])
 
-  const allocateNextNumber = useCallback(() => {
+  const allocateNextNumber = useCallback(async () => {
     const prefix = defaultNumberPrefix(config.documentKind)
-    return nextQuotationNumber(
-      rows.map((r) => r.quotation_number),
-      prefix,
-    )
-  }, [config.documentKind, rows])
+    try {
+      return await fetchNextSaleDocumentNumber(config.documentKind, prefix)
+    } catch {
+      return `${prefix}0001`
+    }
+  }, [config.documentKind])
 
   const openNew = () => {
     void (async () => {
       const [next, defaultTerm, defaultNote, defaultSign] = await Promise.all([
-        Promise.resolve(allocateNextNumber()),
-        fetchDefaultQuotationTerm(config.documentKind).catch(() =>
-          config.documentKind === 'quotation' ? '100 % Advance' : '',
-        ),
+        allocateNextNumber(),
+        fetchDefaultQuotationTerm(config.documentKind).catch(() => ''),
         fetchDefaultQuotationNote(config.documentKind).catch(() => ''),
         fetchDefaultSignatureForKind(config.documentKind).catch(() => ({
           signatureText: '',
@@ -438,14 +380,15 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
   }
 
   const openCopy = (row: QuotationRow) => {
-    const next = allocateNextNumber()
-    setEditingId(null)
-    setForm(rowToForm(row, true, next))
-    setSaveMessage(null)
-    setShowForm(true)
+    void allocateNextNumber().then((next) => {
+      setEditingId(null)
+      setForm(rowToForm(row, true, next))
+      setSaveMessage(null)
+      setShowForm(true)
+    })
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.quotationNumber.trim()) {
       setSaveMessage(`${config.title} number is required.`)
       return
@@ -465,18 +408,13 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
     setSaveLoading(true)
     setSaveMessage(null)
     try {
-      const stored = formToStoredRow(form, editingId, {
-        paymentReceipt: isPaymentReceipt,
-      })
-      const next = editingId
-        ? rows.map((r) => (r.id === editingId ? { ...stored, created_at: r.created_at } : r))
-        : [stored, ...rows]
-      commitRows(next)
-      setMessage(`Saved ${stored.quotation_number}.`)
+      await saveSaleDocument(config.documentKind, form, editingId)
+      setMessage(`Saved ${form.quotationNumber.trim()}.`)
       setShowForm(false)
       setEditingId(null)
+      reload()
     } catch (err) {
-      setSaveMessage(err instanceof Error ? err.message : 'Could not save.')
+      setSaveMessage(formatSaleApiError(err))
     } finally {
       setSaveLoading(false)
     }
@@ -500,20 +438,28 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
     })
   }
 
-  const handleDeleteSelected = () => {
+  const handleDeleteSelected = async () => {
     const ids = [...selectedIds]
     if (ids.length === 0) return
     if (!window.confirm(`Delete ${ids.length} ${config.title.toLowerCase()} record(s)?`)) return
-    commitRows(rows.filter((r) => !selectedIds.has(r.id)))
-    setSelectedIds(new Set())
-    setMessage(`Deleted ${ids.length} record(s).`)
+    try {
+      await deleteSaleDocuments(config.documentKind, ids)
+      setSelectedIds(new Set())
+      setMessage(`Deleted ${ids.length} record(s).`)
+      reload()
+    } catch (err) {
+      setMessage(formatSaleApiError(err))
+    }
   }
 
-  const handleStatusChange = (row: QuotationRow, status: QuotationStatus) => {
+  const handleStatusChange = async (row: QuotationRow, status: QuotationStatus) => {
     setStatusUpdatingId(row.id)
     try {
-      commitRows(rows.map((r) => (r.id === row.id ? { ...r, status } : r)))
+      await updateSaleDocumentStatus(config.documentKind, row, status)
+      setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, status } : r)))
       setMessage(`Status updated to ${status}.`)
+    } catch (err) {
+      setMessage(formatSaleApiError(err))
     } finally {
       setStatusUpdatingId(null)
     }
@@ -537,11 +483,8 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
         title={config.title}
         addLabel={config.addLabel}
         searchAriaLabel={`Search ${config.title.toLowerCase()}`}
-        search={search}
-        onSearchChange={(v) => {
-          setSearch(v)
-          setPage(1)
-        }}
+        search={searchInput}
+        onSearchChange={setSearchInput}
         pageSize={pageSize}
         onPageSizeChange={(size) => {
           setPageSize(size)
@@ -552,8 +495,8 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
 
       <QuotationTable
         rows={pagedRows}
-        loading={false}
-        error={null}
+        loading={listLoading}
+        error={listError}
         searchActive={Boolean(search.trim())}
         selectedIds={selectedIds}
         statusUpdatingId={statusUpdatingId}
@@ -577,7 +520,7 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
             (err) => setMessage(err instanceof Error ? err.message : 'PDF failed.'),
           )
         }}
-        onStatusChange={handleStatusChange}
+        onStatusChange={(row, status) => void handleStatusChange(row, status)}
         emptyPrimary={emptyPrimary}
         emptySecondary={emptySecondary}
         hideValidUntil={isPaymentReceipt}
@@ -596,13 +539,13 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
 
       <QuotationFooterBar
         message={message}
-        loading={false}
+        loading={listLoading || saveLoading}
         selectedCount={selectedIds.size}
         page={safePage}
         pageCount={pageCount}
         onTemplates={() => setShowTemplates(true)}
         onPrintSelected={handlePrintSelected}
-        onDeleteSelected={handleDeleteSelected}
+        onDeleteSelected={() => void handleDeleteSelected()}
         onPrevPage={() => setPage((p) => Math.max(1, p - 1))}
         onNextPage={() => setPage((p) => Math.min(pageCount, p + 1))}
         jumpTo={jumpTo}
@@ -660,7 +603,7 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
               onReloadProducts={() => loadProducts()}
               canSave={canSave}
               saveLoading={saveLoading}
-              onSave={handleSave}
+              onSave={() => void handleSave()}
               documentLabel={config.title}
               formMode={isPaymentReceipt ? 'paymentReceipt' : 'standard'}
               documentKind={config.documentKind}

@@ -1,19 +1,18 @@
 import type { DocumentTemplateKind } from '@/features/settings/lab-settings/documentTemplateTypes'
 import type { QuotationRow } from '../quotation/types'
 
-function storageKey(kind: DocumentTemplateKind): string {
-  return `lims.saleDocuments.${kind}`
+/**
+ * In-memory snapshot of invoice / credit note / receipt totals loaded from Postgres
+ * (see `refreshSaleLedgerCache`). Keeps balance helpers synchronous.
+ */
+const documentCache: Partial<Record<DocumentTemplateKind, QuotationRow[]>> = {}
+
+export function setSaleDocumentCache(kind: DocumentTemplateKind, rows: QuotationRow[]): void {
+  documentCache[kind] = rows
 }
 
 export function loadSaleDocumentRows(kind: DocumentTemplateKind): QuotationRow[] {
-  try {
-    const raw = localStorage.getItem(storageKey(kind))
-    if (!raw) return []
-    const parsed = JSON.parse(raw) as unknown
-    return Array.isArray(parsed) ? (parsed as QuotationRow[]) : []
-  } catch {
-    return []
-  }
+  return documentCache[kind] ?? []
 }
 
 function sameClient(row: QuotationRow, clientId: string, clientName: string): boolean {
