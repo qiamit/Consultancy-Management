@@ -2,15 +2,28 @@ import type { BisProjectRow } from '../projects/types'
 import { authorizationLetterDataFromPrintData, buildAuthorizationLetterHtml } from './authorizationLetterHtml'
 import { bisForm1DataFromPrintData, buildBisForm1Html } from './bisForm1Html'
 import { buildCmpf305Html, cmpf305DataFromPrintData } from './cmpf305Html'
+import { buildCmpf306Html, cmpf306DataFromPrintData } from './cmpf306Html'
+import { buildCmpf307Html, cmpf307DataFromPrintData } from './cmpf307Html'
+import { buildCmpf310Html, cmpf310DataFromPrintData } from './cmpf310Html'
+import { buildFactoryTestReportHtml, factoryTestReportDataFromPrintData } from './factoryTestReportHtml'
 import { loadBisPrintData, type BisPrintData } from './loadBisPrintData'
 import { openPendingPrintWindow, openPrintHtml } from './openPrintHtml'
 import { buildOslSampleRequirementsHtml, oslSampleRequirementsDataFromPrintData } from './oslSampleRequirementsHtml'
 import { buildUndertakingGeneralHtml, undertakingGeneralDataFromPrintData } from './undertakingGeneralHtml'
+import {
+  buildUpdatedSchemeOfInspectionHtml,
+  updatedSchemeOfInspectionDataFromPrintData,
+} from './updatedSchemeOfInspectionHtml'
 
 export type BisPrintDocumentKind =
   | 'form1'
   | 'authorization-letter'
   | 'cmpf-305'
+  | 'cmpf-306'
+  | 'cmpf-307'
+  | 'cmpf-310'
+  | 'updated-sit'
+  | 'factory-test-report'
   | 'osl-sample-requirements'
   | 'undertaking-general'
 
@@ -18,6 +31,11 @@ export const BIS_PRINT_DOCUMENT_LABEL: Record<BisPrintDocumentKind, string> = {
   form1: 'BIS Form-I',
   'authorization-letter': 'Authorization Letter',
   'cmpf-305': 'CMPF-305 (Plant & Machinery)',
+  'cmpf-306': 'CMPF-306 (Testing Equipment)',
+  'cmpf-307': 'CMPF-307 (Brand Names)',
+  'cmpf-310': 'CMPF-310 (Marking Fee)',
+  'updated-sit': 'Updated Scheme of Inspection',
+  'factory-test-report': 'Factory Test Report',
   'osl-sample-requirements': 'OSL Sample Requirements',
   'undertaking-general': 'Undertaking (General & ISS)',
 }
@@ -25,14 +43,27 @@ export const BIS_PRINT_DOCUMENT_LABEL: Record<BisPrintDocumentKind, string> = {
 /** Documents offered in the "More prints" menu (Form-I and Authorization Letter have their own buttons). */
 export const EXTRA_PRINT_KINDS: BisPrintDocumentKind[] = [
   'cmpf-305',
+  'cmpf-306',
+  'cmpf-307',
+  'cmpf-310',
+  'updated-sit',
+  'factory-test-report',
   'osl-sample-requirements',
   'undertaking-general',
 ]
+
+/** Shared tooltip text for the "More prints" trigger. */
+export const MORE_PRINTS_TOOLTIP = 'CMPF-305/306/307/310, Scheme of Inspection, Factory Test Report, OSL Samples, Undertaking'
 
 const HTML_BUILDERS: Record<BisPrintDocumentKind, (data: BisPrintData) => string> = {
   form1: (d) => buildBisForm1Html(bisForm1DataFromPrintData(d)),
   'authorization-letter': (d) => buildAuthorizationLetterHtml(authorizationLetterDataFromPrintData(d)),
   'cmpf-305': (d) => buildCmpf305Html(cmpf305DataFromPrintData(d)),
+  'cmpf-306': (d) => buildCmpf306Html(cmpf306DataFromPrintData(d)),
+  'cmpf-307': (d) => buildCmpf307Html(cmpf307DataFromPrintData(d)),
+  'cmpf-310': (d) => buildCmpf310Html(cmpf310DataFromPrintData(d)),
+  'updated-sit': (d) => buildUpdatedSchemeOfInspectionHtml(updatedSchemeOfInspectionDataFromPrintData(d)),
+  'factory-test-report': (d) => buildFactoryTestReportHtml(factoryTestReportDataFromPrintData(d)),
   'osl-sample-requirements': (d) => buildOslSampleRequirementsHtml(oslSampleRequirementsDataFromPrintData(d)),
   'undertaking-general': (d) => buildUndertakingGeneralHtml(undertakingGeneralDataFromPrintData(d)),
 }

@@ -14,6 +14,7 @@ import {
 } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { PublicInfoCard, PublicSection, publicHeroPatternStyle } from './PublicChrome'
+import { formatPublished, usePublicWebsiteContent } from './usePublicWebsiteContent'
 import {
   PUBLIC_ADDRESS,
   PUBLIC_BIS,
@@ -133,10 +134,16 @@ function AccreditationCard({
 }
 
 export default function PublicHomePage() {
+  const { settings, services, news } = usePublicWebsiteContent()
   const [contactPanel, setContactPanel] = useState<ContactPanel>('contact')
   const [email, setEmail] = useState('')
   const [message, setMessage] = useState('')
   const canSubmit = Boolean(email.trim() && message.trim())
+
+  const contactEmail = settings?.contact_email?.trim() || PUBLIC_EMAIL
+  const contactPhone = settings?.contact_phone?.trim() || PUBLIC_PHONE_PRIMARY
+  const contactAddress = settings?.address?.trim() || PUBLIC_ADDRESS
+  const aboutText = settings?.about_text?.trim() || ''
 
   useEffect(() => {
     const id = window.location.hash.replace('#', '')
@@ -147,7 +154,7 @@ export default function PublicHomePage() {
   const sendEnquiry = () => {
     const subject = encodeURIComponent('Enquiry — QIRLPL website')
     const body = encodeURIComponent(`Email: ${email.trim()}\n\n${message.trim()}`)
-    window.location.href = `mailto:${PUBLIC_EMAIL}?subject=${subject}&body=${body}`
+    window.location.href = `mailto:${contactEmail}?subject=${subject}&body=${body}`
   }
 
   return (
@@ -199,16 +206,18 @@ export default function PublicHomePage() {
               <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-200/80">
                 Laboratory & Office
               </p>
-              <p className="text-xs leading-relaxed text-stone-300">{PUBLIC_ADDRESS}</p>
-              <a className="block break-all hover:text-amber-200" href={`mailto:${PUBLIC_EMAIL}`}>
-                {PUBLIC_EMAIL}
+              <p className="text-xs leading-relaxed text-stone-300">{contactAddress}</p>
+              <a className="block break-all hover:text-amber-200" href={`mailto:${contactEmail}`}>
+                {contactEmail}
               </a>
-              <a className="block hover:text-amber-200" href="tel:+919981633040">
-                {PUBLIC_PHONE_PRIMARY}
+              <a className="block hover:text-amber-200" href={`tel:${contactPhone.replace(/\s/g, '')}`}>
+                {contactPhone}
               </a>
-              <a className="block hover:text-amber-200" href="tel:+919914663040">
-                {PUBLIC_PHONE_SECONDARY}
-              </a>
+              {!settings?.contact_phone?.trim() ? (
+                <a className="block hover:text-amber-200" href="tel:+919914663040">
+                  {PUBLIC_PHONE_SECONDARY}
+                </a>
+              ) : null}
             </div>
           ) : null}
 
@@ -282,27 +291,70 @@ export default function PublicHomePage() {
       </aside>
 
       <div className={cn(limsPageShellClass, 'max-w-none min-w-0')}>
-        <PublicSection id="about" title="About QIRLPL">
-          <PublicInfoCard
-            title="Our Laboratory"
-            body={`${PUBLIC_LAB_NAME} (QIRLPL) is a NABL-accredited testing and calibration laboratory incorporated on 12th February 2024. We operate from Raipur, Chhattisgarh, serving manufacturing, construction, and quality-conscious industries with independent, traceable test and calibration results.`}
-          />
-          <PublicInfoCard
-            title="Leadership"
-            body="Our operations are led by Director Yogeshwar Krishna, with a commitment to ISO/IEC 17025:2017 across all activities. We maintain strict quality controls, trained personnel, and calibrated equipment to deliver results you can rely on for compliance and business decisions."
-          />
-          <div className="grid gap-4 sm:grid-cols-2">
-            <PublicInfoCard
-              title="Mission"
-              body="To provide accurate, timely testing and calibration services with full traceability and impartiality, supporting industry quality and compliance."
-            />
-            <PublicInfoCard
-              title="Vision"
-              body="To be the preferred NABL-accredited laboratory in the region for testing and calibration, recognised for reliability and professional service."
-            />
-          </div>
-          <PublicInfoCard title="Location" body={PUBLIC_ADDRESS} />
+        <PublicSection id="about" title={`About ${settings?.company_name?.trim() || PUBLIC_LAB_NAME}`}>
+          {aboutText ? (
+            <PublicInfoCard title="About Us" body={aboutText} />
+          ) : (
+            <>
+              <PublicInfoCard
+                title="Our Laboratory"
+                body={`${PUBLIC_LAB_NAME} (QIRLPL) is a NABL-accredited testing and calibration laboratory incorporated on 12th February 2024. We operate from Raipur, Chhattisgarh, serving manufacturing, construction, and quality-conscious industries with independent, traceable test and calibration results.`}
+              />
+              <PublicInfoCard
+                title="Leadership"
+                body="Our operations are led by Director Yogeshwar Krishna, with a commitment to ISO/IEC 17025:2017 across all activities. We maintain strict quality controls, trained personnel, and calibrated equipment to deliver results you can rely on for compliance and business decisions."
+              />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <PublicInfoCard
+                  title="Mission"
+                  body="To provide accurate, timely testing and calibration services with full traceability and impartiality, supporting industry quality and compliance."
+                />
+                <PublicInfoCard
+                  title="Vision"
+                  body="To be the preferred NABL-accredited laboratory in the region for testing and calibration, recognised for reliability and professional service."
+                />
+              </div>
+            </>
+          )}
+          <PublicInfoCard title="Location" body={contactAddress} />
         </PublicSection>
+
+        {services.length > 0 ? (
+          <PublicSection id="services" title="Our Services">
+            <div className="grid gap-4 sm:grid-cols-2">
+              {services.map((service) => (
+                <PublicInfoCard
+                  key={service.id}
+                  title={service.title}
+                  body={service.description || '—'}
+                />
+              ))}
+            </div>
+          </PublicSection>
+        ) : null}
+
+        {news.length > 0 ? (
+          <PublicSection id="news" title="News & Updates">
+            <div className="space-y-4">
+              {news.map((item) => (
+                <article key={item.id} className="rounded-none border border-stone-500 bg-stone-50 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <h3 className="text-sm font-semibold text-stone-900">{item.title}</h3>
+                    <time className="text-xs text-stone-500">{formatPublished(item.published_date)}</time>
+                  </div>
+                  {item.image_url ? (
+                    <img
+                      src={item.image_url}
+                      alt=""
+                      className="mt-3 max-h-48 w-full border border-stone-300 object-cover"
+                    />
+                  ) : null}
+                  <p className="mt-2 text-sm leading-relaxed text-stone-600">{item.content}</p>
+                </article>
+              ))}
+            </div>
+          </PublicSection>
+        ) : null}
       </div>
 
       <aside className={cn(limsDarkBarClass, 'flex h-full flex-col p-0')}>

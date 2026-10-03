@@ -4,7 +4,11 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { BIS_PRINT_DOCUMENT_LABEL, EXTRA_PRINT_KINDS, type BisPrintDocumentKind } from '../print/printBisDocument'
+import {
+  BIS_PRINT_DOCUMENT_LABEL,
+  EXTRA_PRINT_KINDS,
+  MORE_PRINTS_TOOLTIP,
+  type BisPrintDocumentKind } from '../print/printBisDocument'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -501,7 +505,7 @@ export function BisProjectsForm({
                     size="sm"
                     className="h-8 rounded-none border-stone-500"
                     disabled={saving || printBusy}
-                    title="Print CMPF-305, OSL Sample Requirements or Undertaking from the saved record"
+                    title={`Print from the saved record: ${MORE_PRINTS_TOOLTIP}`}
                   >
                     <Printer className="mr-1.5 h-3.5 w-3.5" aria-hidden />
                     More prints

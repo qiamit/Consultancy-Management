@@ -1,4 +1,4 @@
-import { formatCmL } from '../projects/types'
+import { formatCmL, formatDisplayDate } from '../projects/types'
 import type { BisPrintData } from './loadBisPrintData'
 import { escapeHtml as esc } from './openPrintHtml'
 
@@ -107,6 +107,100 @@ export function signatoryHtml(opts: { firmName: string; name: string; designatio
 export function preparedByHtml(preparedBy: string): string {
   return preparedBy ? `<div class="pd-prepared">Prepared by ${esc(preparedBy)}</div>` : ''
 }
+
+export function dateOrNa(raw: string): string {
+  const v = (raw ?? '').trim()
+  return v ? formatDisplayDate(v) : 'N/A'
+}
+
+/** Applicant / application meta grid used at the top of CMPF Form-style documents. */
+export function applicationMetaTableHtml(ctx: PrintApplicantContext): string {
+  return `
+<table class="pd-meta">
+  <tr><td class="pd-lbl">Applicant Name</td><td colspan="3"><strong>${esc(ctx.applicantName || '—')}</strong></td></tr>
+  <tr><td class="pd-lbl">Applicant Address</td><td colspan="3">${esc(addressWithIndia(ctx.applicantAddress))}</td></tr>
+  <tr>
+    <td class="pd-lbl">Application No.</td><td>${esc(applicationNoDisplay(ctx.applicationNumber))}</td>
+    <td class="pd-lbl">Date of Application</td><td>${esc(dateOrNa(ctx.dateOfApplication))}</td>
+  </tr>
+  <tr>
+    <td class="pd-lbl">IS Code</td><td>${esc(ctx.isNumber || '—')}</td>
+    <td class="pd-lbl">Date of Inspection</td><td>${esc(dateOrNa(ctx.dateOfInspection))}</td>
+  </tr>
+</table>`
+}
+
+export function blankTableRows(
+  count: number,
+  columns: number,
+  opts?: { leftColumn?: number; unnumbered?: boolean },
+): string {
+  const rows: string[] = []
+  for (let i = 0; i < count; i += 1) {
+    const cells = [`<td>${opts?.unnumbered ? '&nbsp;' : i + 1}</td>`]
+    for (let c = 1; c < columns; c += 1) {
+      cells.push(`<td${opts?.leftColumn === c ? ' class="pd-left"' : ''}>&nbsp;</td>`)
+    }
+    rows.push(`<tr>${cells.join('')}</tr>`)
+  }
+  return rows.join('')
+}
+
+export function cmpfDeclarationHtml(opts: {
+  firmParagraphs: string[]
+  bisParagraphs: string[]
+  repName: string
+  repDesignation: string
+  officerName: string
+  officerDesignation: string
+  date: string
+}): string {
+  const paras = (list: string[], align = 'justify') =>
+    list.map((p) => `<p style="text-align:${align}">${esc(p)}</p>`).join('')
+  return `
+<table class="cmpf-decl">
+  <tr>
+    <td>
+      ${paras(opts.firmParagraphs)}
+      <div class="cmpf-sig">
+        <div>Sig. of Firm's Representative :-</div>
+        <div class="cmpf-sig-gap"></div>
+        <div>Name :- ${esc(opts.repName.trim() || '—')}</div>
+        <div>Designation :- ${esc(opts.repDesignation.trim() || '—')}</div>
+        <div>Date :- ${esc(opts.date)}</div>
+      </div>
+    </td>
+    <td>
+      ${paras(opts.bisParagraphs, 'right')}
+      <div class="cmpf-sig" style="text-align:right">
+        <div>Sig. of BIS Certification Officer :-</div>
+        <div class="cmpf-sig-gap"></div>
+        <div>Name :- ${esc(opts.officerName.trim() || '----')}</div>
+        <div>Designation :- ${esc(opts.officerDesignation.trim() || '----')}</div>
+        <div>Date :- ${esc(opts.date)}</div>
+      </div>
+    </td>
+  </tr>
+</table>`
+}
+
+/** Common styles for CMPF-style forms (form id, intro blocks, declaration boxes). */
+export const CMPF_FORM_STYLES = `
+  .cmpf-form-id { text-align: right; font-weight: 700; font-size: 11px; margin-bottom: 4px; }
+  .cmpf-to { font-size: 11.5px; line-height: 1.45; margin: 6px 0 4px; }
+  .cmpf-heading { margin: 10px 0 6px; font-size: 11px; font-weight: 700; }
+  .cmpf-terms p, .cmpf-decls p { margin: 5px 0; font-size: 10.5px; line-height: 1.45; text-align: justify; break-inside: avoid; page-break-inside: avoid; }
+  .cmpf-box { border: 1px solid #111; min-height: 14mm; padding: 6px 8px; font-size: 11px; margin-bottom: 8px; }
+  .cmpf-decl { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 6px; page-break-inside: avoid; break-inside: avoid; }
+  .cmpf-decl td { border: 1px solid #111; vertical-align: top; padding: 6px 8px; width: 50%; font-size: 11px; line-height: 1.4; }
+  .cmpf-decl p { margin: 0 0 6px; }
+  .cmpf-sig { margin-top: 10px; font-size: 11px; line-height: 1.5; }
+  .cmpf-sig-gap { height: 14mm; }
+  .cmpf-footnote { font-size: 10px; font-weight: 700; line-height: 1.4; text-align: justify; margin: 6px 0 0; }
+  .cmpf-sign-right { margin-top: 14px; text-align: right; }
+  .cmpf-sign-right .pd-signatory { text-align: left; }
+  .cmpf-table td { height: 7mm; }
+`
 
 export function buildPrintPage(opts: { title: string; styles: string; body: string; landscape?: boolean }): string {
   return `<!doctype html>

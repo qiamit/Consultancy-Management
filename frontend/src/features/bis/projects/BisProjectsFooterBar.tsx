@@ -5,7 +5,11 @@ import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { LaboratoryDirectorOnly } from '@/components/lims/LaboratoryDirectorOnly'
-import { BIS_PRINT_DOCUMENT_LABEL, EXTRA_PRINT_KINDS, type BisPrintDocumentKind } from '../print/printBisDocument'
+import {
+  BIS_PRINT_DOCUMENT_LABEL,
+  EXTRA_PRINT_KINDS,
+  MORE_PRINTS_TOOLTIP,
+  type BisPrintDocumentKind } from '../print/printBisDocument'
 
 export function BisProjectsFooterBar({
   message,
@@ -131,7 +135,7 @@ export function BisProjectsFooterBar({
                   disabled={loading || printDocsBusy || selectedCount !== 1}
                   title={
                     selectedCount === 1
-                      ? 'More BIS documents (CMPF-305, OSL Samples, Undertaking)'
+                      ? `More BIS documents (${MORE_PRINTS_TOOLTIP})`
                       : 'Select exactly one row to print more documents'
                   }
                 >
