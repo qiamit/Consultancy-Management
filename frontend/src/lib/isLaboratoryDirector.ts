@@ -3,7 +3,9 @@
  * Matches designations stored in user_profiles.
  */
 export function isLaboratoryDirector(designation: string | null | undefined): boolean {
-  const d = designation?.trim().toLowerCase() ?? ''
+  const d = String(designation ?? '')
+    .trim()
+    .toLowerCase()
   return (
     d === 'laboratory director' ||
     d === 'admin' ||

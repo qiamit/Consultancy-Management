@@ -36,8 +36,15 @@ export function canAccessNavItem(
   if (!to) return false
   if (!ctx) return false
   if (requiredDesignations?.length) {
-    const d = ctx.designation.trim().toLowerCase()
-    const allowed = requiredDesignations.some((x) => x.trim().toLowerCase() === d)
+    const d = String(ctx.designation ?? '')
+      .trim()
+      .toLowerCase()
+    const allowed = requiredDesignations.some(
+      (x) =>
+        String(x ?? '')
+          .trim()
+          .toLowerCase() === d,
+    )
     if (!allowed && !isLaboratoryDirector(ctx.designation)) return false
   }
   return canAccessPath(to, ctx)

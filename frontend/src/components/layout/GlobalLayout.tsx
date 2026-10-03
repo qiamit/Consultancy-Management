@@ -660,7 +660,7 @@ export default function GlobalLayout() {
             <div className="min-w-0">
               {location.pathname === '/' ? (
                 <p className="truncate text-sm font-semibold tracking-tight text-white sm:text-base">
-                  Welcome Back, {designation.trim() || 'Team'}
+                  Welcome Back, {String(designation ?? '').trim() || 'Team'}
                 </p>
               ) : (
                 <>
