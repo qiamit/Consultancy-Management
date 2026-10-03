@@ -11,6 +11,7 @@ import {
   formatBisApiError,
   saveBisProject,
 } from './bisProjectsApi'
+import { printBisProjectsList } from './printBisProjectsList'
 import {
   BIS_PROJECTS_LIST_TITLES,
   emptyBisProjectForm,
@@ -140,6 +141,17 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
     })
   }
 
+  const handlePrintList = () => {
+    const source =
+      selectedIds.size > 0 ? rows.filter((row) => selectedIds.has(row.id)) : rows
+    const printError = printBisProjectsList(source, BIS_PROJECTS_LIST_TITLES[listMode], {
+      page: Math.min(page, pageCount),
+      pageCount,
+      selectedCount: selectedIds.size > 0 ? selectedIds.size : undefined,
+    })
+    if (printError) setMessage(printError)
+  }
+
   const handleDeleteSelected = async () => {
     const ids = [...selectedIds]
     if (ids.length === 0) return
@@ -187,6 +199,7 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
         page={Math.min(page, pageCount)}
         pageCount={pageCount}
         onDeleteSelected={() => void handleDeleteSelected()}
+        onPrintList={handlePrintList}
         onPrevPage={() => setPage((p) => Math.max(1, p - 1))}
         onNextPage={() => setPage((p) => Math.min(pageCount, p + 1))}
         jumpTo={jumpTo}

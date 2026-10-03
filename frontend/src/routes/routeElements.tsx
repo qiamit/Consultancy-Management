@@ -20,7 +20,7 @@ import BisRenewalsMasterPage from '@/features/bis/renewals/BisRenewalsMasterPage
 import BisSurveillanceMasterPage from '@/features/bis/surveillance/BisSurveillanceMasterPage'
 import BisSampleFailureReplyMasterPage from '@/features/bis/sample-failure-reply/BisSampleFailureReplyMasterPage'
 import EmailToolsPage from '@/features/tools/email/EmailToolsPage'
-import ModulePlaceholderPage from '@/features/modules/ModulePlaceholderPage'
+import CmsToolsPage from '@/features/tools/cms/CmsToolsPage'
 import { RequireAuth } from '@/components/auth/RequireAuth'
 import { RequireLaboratoryDirector } from '@/components/auth/RequireLaboratoryDirector'
 
@@ -116,5 +116,5 @@ export function EmailToolsRoute() {
 }
 
 export function CmsToolsRoute() {
-  return <ModulePlaceholderPage title="Website CMS" />
+  return <CmsToolsPage />
 }

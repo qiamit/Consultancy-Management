@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Printer, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { limsDarkBarBtnClass, limsDarkBarFieldClass, limsDeleteBtnClass } from '@/lib/limsThemeUi'
 import { Button } from '@/components/ui/button'
@@ -13,6 +13,7 @@ export function BisProjectsFooterBar({
   page,
   pageCount,
   onDeleteSelected,
+  onPrintList,
   onPrevPage,
   onNextPage,
   jumpTo,
@@ -26,6 +27,7 @@ export function BisProjectsFooterBar({
   page: number
   pageCount: number
   onDeleteSelected: () => void
+  onPrintList?: () => void
   onPrevPage: () => void
   onNextPage: () => void
   jumpTo: string
@@ -62,6 +64,20 @@ export function BisProjectsFooterBar({
               <span className="hidden lg:inline">Delete</span>
             </Button>
           </LaboratoryDirectorOnly>
+          {onPrintList ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className={actionBtnClass}
+              onClick={onPrintList}
+              disabled={loading || totalCount === 0}
+              title="Print list"
+            >
+              <Printer className="size-3.5 shrink-0 sm:size-4" />
+              <span className="hidden lg:inline">Print list</span>
+            </Button>
+          ) : null}
           {selectedCount > 0 ? (
             <span className="hidden shrink-0 whitespace-nowrap text-[10px] text-stone-300 sm:inline sm:text-xs">
               Selected: {selectedCount}
