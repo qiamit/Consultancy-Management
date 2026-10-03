@@ -23,7 +23,7 @@ function paintPower(on) {
   if (powerLabel) {
     powerLabel.textContent = on
       ? "ON — login → Test Request → save back"
-      : "OFF — idle (auto-ON when you press 🧪)";
+      : "OFF — Manak site works normally (auto-ON only from 🧪)";
   }
 }
 
@@ -64,7 +64,8 @@ async function loadPower() {
     "qeManakImportQr",
     "manakQrImport",
   ]);
-  paintPower(data.qeManakEnabled !== false);
+  // Default OFF — only explicit true means Manak auto-flow is active.
+  paintPower(data.qeManakEnabled === true);
   const waiting = data.qeManakImportQr === true && data.qeManakImportQrEnabled !== true;
   const on = data.qeManakImportQrEnabled === true;
   paintImportQr(on, waiting);
@@ -85,16 +86,27 @@ function init() {
 
   powerToggle.addEventListener("change", async () => {
     const next = powerToggle.checked;
-    await chrome.storage.local.set({
-      qeManakEnabled: next,
-      qeManakArmed: next,
-    });
-    if (!next) {
-      await chrome.storage.local.remove([
-        "pendingFill",
-        "qeManakHomeReady",
-        "qeManakPortal",
-      ]);
+    if (next) {
+      await chrome.storage.local.set({
+        qeManakEnabled: true,
+        qeManakArmed: true,
+      });
+    } else {
+      // Hard idle: clear every Manak auto flag so downloads / navigation stay normal.
+      await chrome.storage.local.set({
+        qeManakEnabled: false,
+        qeManakArmed: false,
+        pendingFill: null,
+        qeManakHomeReady: false,
+        qeManakPortal: null,
+        qeManakImportQr: false,
+        qeManakImportQrEnabled: false,
+        qeManakImportQrLanded: false,
+        qeManakImportQrTabId: 0,
+      });
+      chrome.runtime.sendMessage({ type: "QE_MANAK_IDLE" }, () => {
+        void chrome.runtime.lastError;
+      });
     }
     paintPower(next);
     setStatus(
@@ -107,12 +119,26 @@ function init() {
 
   importQrToggle.addEventListener("change", async () => {
     const next = importQrToggle.checked;
-    await chrome.storage.local.set({ qeManakImportQrEnabled: next });
+    if (next) {
+      await chrome.storage.local.set({ qeManakImportQrEnabled: true });
+    } else {
+      // Turning Import OFF must also disarm — otherwise redirects / scrape keep running.
+      await chrome.storage.local.set({
+        qeManakImportQrEnabled: false,
+        qeManakImportQr: false,
+        qeManakImportQrLanded: false,
+        qeManakImportQrTabId: 0,
+        manakQrImport: null,
+      });
+      chrome.runtime.sendMessage({ type: "QE_MANAK_IDLE" }, () => {
+        void chrome.runtime.lastError;
+      });
+    }
     paintImportQr(next, false);
     setStatus(
       next
         ? "Import QR ON — collecting Not Used codes when armed."
-        : "Import QR OFF.",
+        : "Import QR OFF — Manak QR page works normally.",
       false,
     );
   });

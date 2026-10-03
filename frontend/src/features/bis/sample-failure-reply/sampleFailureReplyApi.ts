@@ -1,11 +1,38 @@
 import { supabase } from '@/lib/supabaseClient'
 import { currentUserId } from '../shared/bisLookupApi'
-import type { SampleFailureReplyForm, SampleFailureReplyRow } from './types'
+import type {
+  SampleFailureAttachmentKind,
+  SampleFailureReplyForm,
+  SampleFailureReplyRow,
+} from './types'
 
+export type { SampleFailureAttachmentKind } from './types'
 export { formatBisApiError } from '../projects/bisProjectsApi'
+
+const BUCKET = 'bis-sample-failure-files'
 
 const SELECT_WITH_JOINS =
   '*, client:clients(company_name), is_code:is_codes(is_number, title, revision_year), bis_project:bis_projects(title, license_number)'
+
+const ATTACHMENT_COLUMNS: Record<
+  SampleFailureAttachmentKind,
+  { path: keyof SampleFailureReplyRow; name: keyof SampleFailureReplyRow }
+> = {
+  failure_letter: { path: 'failure_letter_path', name: 'failure_letter_name' },
+  offer_letter: { path: 'offer_letter_path', name: 'offer_letter_name' },
+  factory_test_report: {
+    path: 'factory_test_report_path',
+    name: 'factory_test_report_name',
+  },
+}
+
+async function ensureBucket(): Promise<void> {
+  try {
+    await supabase.storage.createBucket(BUCKET, { public: false })
+  } catch {
+    // bucket may already exist
+  }
+}
 
 const LOOKUP_ID_LIMIT = 100
 
@@ -111,4 +138,57 @@ export async function saveSampleFailureReply(
 export async function deleteSampleFailureReplies(ids: string[]): Promise<void> {
   const { error } = await supabase.from('bis_sample_failure_replies').delete().in('id', ids)
   if (error) throw error
+}
+
+export async function uploadSampleFailureAttachment(
+  replyId: string,
+  kind: SampleFailureAttachmentKind,
+  file: File,
+): Promise<SampleFailureReplyRow> {
+  await ensureBucket()
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+  const path = `${replyId}/${kind}_${crypto.randomUUID()}_${safeName}`
+  const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file, {
+    upsert: true,
+    contentType: file.type || undefined,
+  })
+  if (upErr) throw upErr
+
+  const cols = ATTACHMENT_COLUMNS[kind]
+  const { data, error } = await supabase
+    .from('bis_sample_failure_replies')
+    .update({ [cols.path]: path, [cols.name]: file.name })
+    .eq('id', replyId)
+    .select(SELECT_WITH_JOINS)
+    .single()
+  if (error) throw error
+  return data as unknown as SampleFailureReplyRow
+}
+
+export async function clearSampleFailureAttachment(
+  replyId: string,
+  kind: SampleFailureAttachmentKind,
+  existingPath: string | null,
+): Promise<SampleFailureReplyRow> {
+  if (existingPath?.trim()) {
+    await supabase.storage.from(BUCKET).remove([existingPath.trim()])
+  }
+  const cols = ATTACHMENT_COLUMNS[kind]
+  const { data, error } = await supabase
+    .from('bis_sample_failure_replies')
+    .update({ [cols.path]: null, [cols.name]: null })
+    .eq('id', replyId)
+    .select(SELECT_WITH_JOINS)
+    .single()
+  if (error) throw error
+  return data as unknown as SampleFailureReplyRow
+}
+
+export async function openSampleFailureAttachment(path: string): Promise<void> {
+  const p = path.trim()
+  if (!p) throw new Error('No file path.')
+  const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(p, 60 * 10)
+  if (error) throw error
+  if (!data?.signedUrl) throw new Error('Could not generate download link.')
+  window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
 }

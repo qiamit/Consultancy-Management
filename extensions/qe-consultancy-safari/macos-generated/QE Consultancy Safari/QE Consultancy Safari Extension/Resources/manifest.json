@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "QE Consultancy Safari",
   "version": "2.2.32",
-  "description": "Manak Test Request, IS Code portal fetch, copy/paste bypass, and bulk field fill for Chrome, Edge, and other Chromium browsers.",
+  "description": "Manak Test Request, Import QR, IS Code portal fetch, copy/paste bypass, and bulk field fill for Chrome, Edge, and other Chromium browsers.",
   "action": {
     "default_title": "QE Consultancy",
     "default_popup": "popup.html"
@@ -97,7 +97,8 @@
     "scripting",
     "downloads",
     "declarativeNetRequest",
-    "webNavigation"
+    "webNavigation",
+    "debugger"
   ],
   "host_permissions": [
     "<all_urls>"

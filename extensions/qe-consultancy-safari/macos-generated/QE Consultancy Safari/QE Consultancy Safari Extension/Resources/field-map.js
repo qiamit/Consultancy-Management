@@ -14,6 +14,9 @@ var QE_MANAK_FIELD_MAP = {
   loginUrl: "https://www.manakonline.in/MANAK/eBISLogin",
   testRequestUrl:
     "https://www.manakonline.in/MANAK/testRequestGenerationForApplicant",
+  generateQrUrl:
+    "https://www.manakonline.in/MANAK/employeeQrCodeGeneration",
+  testSamplesUrl: "https://www.manakonline.in/MANAK/ApplicantTestSample",
   lockedFrom: "Live testRequestGenerationForApplicant DOM 2026-09-23",
   lockedAt: "2026-09-23",
   neverClick: [

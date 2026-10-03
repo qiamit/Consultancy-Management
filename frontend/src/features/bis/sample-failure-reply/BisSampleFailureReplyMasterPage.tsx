@@ -6,11 +6,16 @@ import { BisProjectsFooterBar } from '../projects/BisProjectsFooterBar'
 import { SampleFailureReplyForm } from './SampleFailureReplyForm'
 import { SampleFailureReplyTable } from './SampleFailureReplyTable'
 import {
+  clearSampleFailureAttachment,
   deleteSampleFailureReplies,
   fetchSampleFailureRepliesPage,
   formatBisApiError,
+  openSampleFailureAttachment,
   saveSampleFailureReply,
+  uploadSampleFailureAttachment,
+  type SampleFailureAttachmentKind,
 } from './sampleFailureReplyApi'
+import { printSampleFailureReply } from './printSampleFailureReply'
 import {
   emptySampleFailureReplyForm,
   rowToSampleFailureReplyForm,
@@ -40,6 +45,7 @@ export default function BisSampleFailureReplyMasterPage() {
   const [editingRow, setEditingRow] = useState<SampleFailureReplyRow | null>(null)
   const [form, setForm] = useState<SampleFailureReplyFormValue>(() => emptySampleFailureReplyForm())
   const [saving, setSaving] = useState(false)
+  const [attachmentBusy, setAttachmentBusy] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
   const requestRef = useRef(0)
@@ -157,6 +163,71 @@ export default function BisSampleFailureReplyMasterPage() {
     }
   }
 
+  const handlePrintReply = () => {
+    if (selectedIds.size !== 1) {
+      setMessage('Select exactly one sample failure reply to print.')
+      return
+    }
+    const id = [...selectedIds][0]
+    const row = rows.find((r) => r.id === id)
+    if (!row) {
+      setMessage('Selected reply is not on this page. Open it or change page.')
+      return
+    }
+    setMessage(printSampleFailureReply(row))
+  }
+
+  const applyEditedRow = (row: SampleFailureReplyRow) => {
+    setEditingRow(row)
+    setRows((prev) => prev.map((r) => (r.id === row.id ? row : r)))
+  }
+
+  const handleUploadAttachment = async (kind: SampleFailureAttachmentKind, file: File) => {
+    if (!editingRow) return
+    setAttachmentBusy(true)
+    setFormError(null)
+    try {
+      const updated = await uploadSampleFailureAttachment(editingRow.id, kind, file)
+      applyEditedRow(updated)
+      setMessage('Attachment uploaded.')
+    } catch (err) {
+      setFormError(formatBisApiError(err))
+    } finally {
+      setAttachmentBusy(false)
+    }
+  }
+
+  const handleClearAttachment = async (kind: SampleFailureAttachmentKind) => {
+    if (!editingRow) return
+    if (!window.confirm('Remove this attachment?')) return
+    const path =
+      kind === 'failure_letter'
+        ? editingRow.failure_letter_path
+        : kind === 'offer_letter'
+          ? editingRow.offer_letter_path
+          : editingRow.factory_test_report_path
+    setAttachmentBusy(true)
+    setFormError(null)
+    try {
+      const updated = await clearSampleFailureAttachment(editingRow.id, kind, path)
+      applyEditedRow(updated)
+      setMessage('Attachment removed.')
+    } catch (err) {
+      setFormError(formatBisApiError(err))
+    } finally {
+      setAttachmentBusy(false)
+    }
+  }
+
+  const handleOpenAttachment = async (path: string) => {
+    setFormError(null)
+    try {
+      await openSampleFailureAttachment(path)
+    } catch (err) {
+      setFormError(formatBisApiError(err))
+    }
+  }
+
   return (
     <div className={limsPageShellClass}>
       <BisProjectsHeaderBar
@@ -186,12 +257,14 @@ export default function BisSampleFailureReplyMasterPage() {
       />
       <BisProjectsFooterBar
         message={message}
-        loading={listLoading || saving}
+        loading={listLoading || saving || attachmentBusy}
         selectedCount={selectedIds.size}
         totalCount={total}
         page={Math.min(page, pageCount)}
         pageCount={pageCount}
         onDeleteSelected={() => void handleDeleteSelected()}
+        onPrintList={handlePrintReply}
+        printListLabel="Print Reply"
         onPrevPage={() => setPage((p) => Math.max(1, p - 1))}
         onNextPage={() => setPage((p) => Math.min(pageCount, p + 1))}
         jumpTo={jumpTo}
@@ -211,6 +284,10 @@ export default function BisSampleFailureReplyMasterPage() {
         saving={saving}
         errorMessage={formError}
         onSave={() => void handleSave()}
+        attachmentBusy={attachmentBusy}
+        onUploadAttachment={(kind, file) => void handleUploadAttachment(kind, file)}
+        onClearAttachment={(kind) => void handleClearAttachment(kind)}
+        onOpenAttachment={(path) => void handleOpenAttachment(path)}
       />
     </div>
   )

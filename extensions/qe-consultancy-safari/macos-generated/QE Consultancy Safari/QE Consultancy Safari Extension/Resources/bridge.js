@@ -63,7 +63,18 @@
   }
 
   function publish(result, force) {
-    if (!result || (!result.sample_code && !result.pdfBase64)) return;
+    if (!result) return;
+    if (result.kind === "QE_MANAK_QR_IMPORT_V1") {
+      const codes = Array.isArray(result.qr_codes) ? result.qr_codes : [];
+      if (!codes.length) return;
+      const key = `qr|${codes.join(",")}|${result.filledAt || ""}`;
+      if (!force && key && key === lastPublishedKey) return;
+      lastPublishedKey = key;
+      window.postMessage({ type: "QE_MANAK_QR_IMPORT", result }, "*");
+      window.dispatchEvent(new CustomEvent("qe-manak-qr-import", { detail: result }));
+      return;
+    }
+    if (!result.sample_code && !result.pdfBase64) return;
     const key = resultKey(result);
     if (!force && key && key === lastPublishedKey) return;
     lastPublishedKey = key;
@@ -128,6 +139,7 @@
           );
           return;
         }
+        if (data && data.manakQrImport) publish(data.manakQrImport, force);
         if (light) publish(light, force);
       });
     } catch {
@@ -166,6 +178,8 @@
         type: "QE_MANAK_OPEN_TR",
         payload: data.payload,
         loginOnly: Boolean(data.loginOnly),
+        importQr: Boolean(data.importQr),
+        qrCount: Number(data.qrCount) || 1,
         loginUrl: data.loginUrl || "",
         homeUrl: data.homeUrl || "",
         portalUserId: data.portalUserId || "",
@@ -184,6 +198,9 @@
       chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         if (!msg || typeof msg !== "object") return;
         if ((msg.type === "QE_MANAK_RESULT" || msg.type === "QE_MANAK_PDF") && msg.result) {
+          publish(msg.result, true);
+        }
+        if (msg.type === "QE_MANAK_QR_IMPORT" && msg.result) {
           publish(msg.result, true);
         }
         if (msg.type === "QE_MANAK_PDF_CHUNK") {

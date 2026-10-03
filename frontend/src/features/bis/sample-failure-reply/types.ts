@@ -113,13 +113,34 @@ export function rowToSampleFailureReplyForm(row: SampleFailureReplyRow): SampleF
   }
 }
 
-export type SampleFailureAttachment = { label: string; name: string | null; path: string | null }
+export type SampleFailureAttachmentKind =
+  | 'failure_letter'
+  | 'offer_letter'
+  | 'factory_test_report'
+
+export type SampleFailureAttachment = {
+  kind: SampleFailureAttachmentKind
+  label: string
+  name: string | null
+  path: string | null
+}
 
 export function sampleFailureAttachments(row: SampleFailureReplyRow): SampleFailureAttachment[] {
   return [
-    { label: 'Failure Letter', name: row.failure_letter_name, path: row.failure_letter_path },
-    { label: 'Offer Letter', name: row.offer_letter_name, path: row.offer_letter_path },
     {
+      kind: 'failure_letter',
+      label: 'Failure Letter',
+      name: row.failure_letter_name,
+      path: row.failure_letter_path,
+    },
+    {
+      kind: 'offer_letter',
+      label: 'Offer Letter',
+      name: row.offer_letter_name,
+      path: row.offer_letter_path,
+    },
+    {
+      kind: 'factory_test_report',
       label: 'Factory Test Report',
       name: row.factory_test_report_name,
       path: row.factory_test_report_path,
