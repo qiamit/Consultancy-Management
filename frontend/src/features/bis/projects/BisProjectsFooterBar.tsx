@@ -1,4 +1,13 @@
-import { ChevronDown, ChevronLeft, ChevronRight, Download, Mail, Printer, Trash2 } from 'lucide-react'
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Mail,
+  Printer,
+  RefreshCw,
+  Trash2,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { limsDarkBarBtnClass, limsDarkBarFieldClass, limsDeleteBtnClass } from '@/lib/limsThemeUi'
 import { Button } from '@/components/ui/button'
@@ -24,6 +33,7 @@ export function BisProjectsFooterBar({
   printListLabel = 'Print list',
   onEmailClient,
   emailClientLabel = 'Email client',
+  onStartRenewal,
   onPrintForm1,
   onPrintAuthLetter,
   onPrintDocument,
@@ -49,6 +59,8 @@ export function BisProjectsFooterBar({
   /** Email the selected document HTML to the client master email. */
   onEmailClient?: () => void
   emailClientLabel?: string
+  /** Open renewal form for the selected license (Due Soon / Expired). */
+  onStartRenewal?: () => void
   onPrintForm1?: () => void
   onPrintAuthLetter?: () => void
   onPrintDocument?: (kind: BisPrintDocumentKind) => void
@@ -142,6 +154,24 @@ export function BisProjectsFooterBar({
             >
               <Mail className="size-3.5 shrink-0 sm:size-4" />
               <span className="hidden lg:inline">{emailClientLabel}</span>
+            </Button>
+          ) : null}
+          {onStartRenewal ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className={actionBtnClass}
+              onClick={onStartRenewal}
+              disabled={loading || selectedCount !== 1}
+              title={
+                selectedCount === 1
+                  ? 'Start license renewal for the selected row'
+                  : 'Select exactly one license to start renewal'
+              }
+            >
+              <RefreshCw className="size-3.5 shrink-0 sm:size-4" />
+              <span className="hidden lg:inline">Start Renewal</span>
             </Button>
           ) : null}
           {onPrintForm1 ? (

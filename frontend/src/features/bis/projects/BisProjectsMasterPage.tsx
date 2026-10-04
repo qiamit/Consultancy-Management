@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { limsPageShellClass } from '@/lib/limsThemeUi'
 import { useFormDialogOpenChange } from '@/lib/formDialogOpenChange'
 import { BisProjectsHeaderBar } from './BisProjectsHeaderBar'
@@ -31,6 +32,7 @@ import {
 const SEARCH_DEBOUNCE_MS = 350
 
 export default function BisProjectsMasterPage({ listMode }: { listMode: BisProjectsListMode }) {
+  const navigate = useNavigate()
   const [rows, setRows] = useState<BisProjectRow[]>([])
   const [total, setTotal] = useState(0)
   const [listLoading, setListLoading] = useState(false)
@@ -232,6 +234,14 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
   const selectedRow = selectedIds.size === 1 ? rows.find((r) => selectedIds.has(r.id)) : undefined
   const editingRow = editingId ? rows.find((r) => r.id === editingId) : undefined
 
+  const handleStartRenewal = () => {
+    if (!selectedRow) {
+      setMessage('Select exactly one license to start renewal.')
+      return
+    }
+    navigate(`/bis/license-renewals?projectId=${encodeURIComponent(selectedRow.id)}`)
+  }
+
   const handleDeleteSelected = async () => {
     const ids = [...selectedIds]
     if (ids.length === 0) return
@@ -285,6 +295,9 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
           canPrintBisForms ? () => void handleEmailForm1(selectedRow) : undefined
         }
         emailClientLabel="Email Form-I"
+        onStartRenewal={
+          listMode === 'due_soon' || listMode === 'expired' ? handleStartRenewal : undefined
+        }
         onPrintForm1={
           canPrintBisForms ? () => void handlePrintDocument(selectedRow, 'form1') : undefined
         }

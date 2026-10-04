@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { limsPageShellClass } from '@/lib/limsThemeUi'
 import { useFormDialogOpenChange } from '@/lib/formDialogOpenChange'
 import { BisProjectsHeaderBar } from '../projects/BisProjectsHeaderBar'
@@ -7,6 +8,7 @@ import { BisRenewalsTable } from './BisRenewalsTable'
 import { BisRenewalsForm } from './BisRenewalsForm'
 import {
   deleteRenewals,
+  fetchRenewalProjectSummary,
   fetchRenewalsPage,
   formatBisApiError,
   saveRenewal,
@@ -25,6 +27,7 @@ import { formatIsCodeLabelFromParts } from '@/features/masters/is-codes/formatIs
 const SEARCH_DEBOUNCE_MS = 350
 
 export default function BisRenewalsMasterPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [rows, setRows] = useState<BisRenewalRow[]>([])
   const [total, setTotal] = useState(0)
   const [listLoading, setListLoading] = useState(false)
@@ -48,6 +51,42 @@ export default function BisRenewalsMasterPage() {
   const [emailBusy, setEmailBusy] = useState(false)
 
   const requestRef = useRef(0)
+  const prefillHandledRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    const projectId = (searchParams.get('projectId') ?? '').trim()
+    if (!projectId || prefillHandledRef.current === projectId) return
+    prefillHandledRef.current = projectId
+    const nextParams = new URLSearchParams(searchParams)
+    nextParams.delete('projectId')
+    setSearchParams(nextParams, { replace: true })
+
+    void (async () => {
+      try {
+        const summary = await fetchRenewalProjectSummary(projectId)
+        if (!summary) {
+          setMessage('License not found for renewal.')
+          return
+        }
+        setEditingId(null)
+        setForm({
+          ...emptyRenewalForm(),
+          projectId,
+          projectLabel: summary.projectLabel,
+          clientId: summary.clientId,
+          clientLabel: summary.clientLabel,
+          currentValidity: summary.currentValidity,
+          cmLDigits: summary.cmLDigits,
+          isCodeLabel: summary.isCodeLabel,
+        })
+        setFormError(null)
+        setShowForm(true)
+        setMessage(`Renewal started for ${summary.projectLabel}.`)
+      } catch (err) {
+        setMessage(formatBisApiError(err))
+      }
+    })()
+  }, [searchParams, setSearchParams])
 
   useEffect(() => {
     const id = window.setTimeout(() => {

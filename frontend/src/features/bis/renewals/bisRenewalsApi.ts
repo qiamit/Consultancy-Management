@@ -113,6 +113,7 @@ export async function searchRenewalProjectOptions(term: string): Promise<FilterC
 }
 
 export type RenewalProjectSummary = {
+  projectLabel: string
   clientId: string
   clientLabel: string
   currentValidity: string
@@ -126,24 +127,27 @@ export async function fetchRenewalProjectSummary(
   const { data, error } = await supabase
     .from('bis_projects')
     .select(
-      'id, client_id, cm_l_digits, license_validity_date, client:clients(company_name), is_code:is_codes(is_number, revision_year)',
+      'id, title, client_id, cm_l_digits, license_validity_date, client:clients(company_name), is_code:is_codes(is_number, revision_year)',
     )
     .eq('id', projectId)
     .maybeSingle()
   if (error) throw error
   if (!data) return null
   const row = data as unknown as {
+    title: string | null
     client_id: string | null
     cm_l_digits: string | null
     license_validity_date: string | null
     client: { company_name: string | null } | null
     is_code: { is_number: string | null; revision_year: string | null } | null
   }
+  const cmLDigits = String(row.cm_l_digits ?? '').replace(/\D/g, '')
   return {
+    projectLabel: (row.title ?? '').trim() || (cmLDigits ? `CM/L-${cmLDigits}` : 'BIS License'),
     clientId: row.client_id ?? '',
     clientLabel: renewalClientName({ client: row.client }),
     currentValidity: row.license_validity_date ?? '',
-    cmLDigits: String(row.cm_l_digits ?? '').replace(/\D/g, ''),
+    cmLDigits,
     isCodeLabel: row.is_code
       ? formatIsCodeLabelFromParts(row.is_code.is_number, row.is_code.revision_year)
       : '',
