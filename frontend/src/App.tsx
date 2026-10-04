@@ -17,6 +17,7 @@ import {
   CmsToolsRoute,
   ContactUsRoute,
   DashboardPage,
+  DueSoonLicensesRoute,
   EmailToolsRoute,
   ExpiredLicensesRoute,
   HelpRoute,
@@ -59,6 +60,7 @@ export default function App() {
           <Route path="/bis/our-licenses" element={<OurBisLicensesRoute />} />
           <Route path="/bis/projects" element={<BisProjectsRoute />} />
           <Route path="/bis/expired-licenses" element={<ExpiredLicensesRoute />} />
+          <Route path="/bis/due-soon" element={<DueSoonLicensesRoute />} />
 
           <Route path="/masters/clients" element={<ClientsPage />} />
           <Route path="/masters/is-codes" element={<IsCodesPage />} />

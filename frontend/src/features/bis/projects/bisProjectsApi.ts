@@ -3,6 +3,7 @@ import { formatIsCodeLabelFromParts } from '@/features/masters/is-codes/formatIs
 import type { FilterComboboxOption } from '@/features/sample-handling/receiving/FilterCombobox'
 import {
   buildBisProjectTitle,
+  dueSoonEndIsoDate,
   todayIsoDate,
   type BisProjectForm,
   type BisProjectRow,
@@ -95,8 +96,14 @@ export async function fetchBisProjectsPage({
 
   let query = supabase.from('bis_projects').select(SELECT_WITH_JOINS, { count: 'exact' })
 
+  const today = todayIsoDate()
   if (listMode === 'our') query = query.eq('is_qe_managed', true)
-  if (listMode === 'expired') query = query.lt('license_validity_date', todayIsoDate())
+  if (listMode === 'expired') query = query.lt('license_validity_date', today)
+  if (listMode === 'due_soon') {
+    query = query
+      .gte('license_validity_date', today)
+      .lte('license_validity_date', dueSoonEndIsoDate(today))
+  }
   if (listMode === 'stop_marking') query = query.eq('status', 'stop_marking')
   if (listMode === 'applications') {
     query = query.or('project_kind.eq.Application,project_kind.eq.application')
@@ -105,8 +112,10 @@ export async function fetchBisProjectsPage({
   if (orFilter) query = query.or(orFilter)
 
   query =
-    listMode === 'expired'
-      ? query.order('license_validity_date', { ascending: false }).order('id', { ascending: true })
+    listMode === 'expired' || listMode === 'due_soon'
+      ? query
+          .order('license_validity_date', { ascending: listMode === 'due_soon' })
+          .order('id', { ascending: true })
       : query.order('created_at', { ascending: false }).order('id', { ascending: true })
 
   const from = (Math.max(1, page) - 1) * pageSize

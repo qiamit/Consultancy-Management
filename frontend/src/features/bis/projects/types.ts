@@ -1,11 +1,19 @@
 import { formatIsCodeLabelFromParts } from '@/features/masters/is-codes/formatIsCodeLabel'
 
-export type BisProjectsListMode = 'all' | 'our' | 'expired' | 'stop_marking' | 'applications' | 'inclusion'
+export type BisProjectsListMode =
+  | 'all'
+  | 'our'
+  | 'expired'
+  | 'due_soon'
+  | 'stop_marking'
+  | 'applications'
+  | 'inclusion'
 
 export const BIS_PROJECTS_LIST_TITLES: Record<BisProjectsListMode, string> = {
   all: 'All BIS Licenses',
   our: 'QE BIS Licenses',
   expired: 'Expired Licenses',
+  due_soon: 'Licenses Due Soon',
   stop_marking: 'License in Stop Marking',
   applications: 'BIS New Application',
   inclusion: 'BIS New Inclusion',
@@ -217,7 +225,17 @@ export function projectStatusLabel(status: string | null | undefined): string {
 
 export type LicenseValidityState = 'operative' | 'expiring' | 'expired' | 'unknown'
 
-const RENEWAL_WINDOW_DAYS = 90
+export const RENEWAL_WINDOW_DAYS = 90
+
+/** Inclusive end date (YYYY-MM-DD) for the due-soon renewal window. */
+export function dueSoonEndIsoDate(today: string = todayIsoDate(), days = RENEWAL_WINDOW_DAYS): string {
+  const d = new Date(`${today.slice(0, 10)}T00:00:00`)
+  d.setDate(d.getDate() + days)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
 
 export function licenseValidityState(
   validityDate: string | null | undefined,

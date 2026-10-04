@@ -111,6 +111,10 @@ export function ExpiredLicensesRoute() {
   return <BisProjectsMasterPage key="expired" listMode="expired" />
 }
 
+export function DueSoonLicensesRoute() {
+  return <BisProjectsMasterPage key="due_soon" listMode="due_soon" />
+}
+
 export function EmailToolsRoute() {
   return <EmailToolsPage />
 }

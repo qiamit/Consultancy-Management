@@ -186,6 +186,7 @@ const ROUTE_LABELS: Record<string, string> = {
   '/bis/our-licenses': 'QE BIS Licenses',
   '/bis/projects': 'All BIS Licenses',
   '/bis/expired-licenses': 'Expired Licenses',
+  '/bis/due-soon': 'Licenses Due Soon',
   '/masters/clients': 'Client Master',
   '/masters/is-codes': 'IS Code Master',
   '/masters/product-services': 'Product & Services',

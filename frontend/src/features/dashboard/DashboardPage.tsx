@@ -5,6 +5,7 @@ import {
   Ban,
   BadgeCheck,
   BookOpen,
+  CalendarClock,
   CalendarX2,
   Eye,
   FilePlus2,
@@ -20,7 +21,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { supabase } from '@/lib/supabaseClient'
 import { Skeleton } from '@/components/ui/skeleton'
 import { limsPageShellClass, limsPanelClass } from '@/lib/limsThemeUi'
-import { todayIsoDate } from '@/features/bis/projects/types'
+import { dueSoonEndIsoDate, todayIsoDate } from '@/features/bis/projects/types'
 import { cn } from '@/lib/utils'
 
 type StatCard = {
@@ -39,6 +40,7 @@ type DashCounts = {
   qeManaged: number
   stopMarking: number
   expiredLicenses: number
+  dueSoonLicenses: number
   renewals: number
   surveillance: number
   sampleFailures: number
@@ -53,6 +55,7 @@ const EMPTY: DashCounts = {
   qeManaged: 0,
   stopMarking: 0,
   expiredLicenses: 0,
+  dueSoonLicenses: 0,
   renewals: 0,
   surveillance: 0,
   sampleFailures: 0,
@@ -69,6 +72,7 @@ export default function DashboardPage() {
     const load = async () => {
       setLoading(true)
       const today = todayIsoDate()
+      const dueEnd = dueSoonEndIsoDate(today)
       const [
         c,
         b,
@@ -77,6 +81,7 @@ export default function DashboardPage() {
         qe,
         sm,
         exp,
+        due,
         ren,
         surv,
         sfr,
@@ -95,6 +100,11 @@ export default function DashboardPage() {
           .from('bis_projects')
           .select('*', { count: 'exact', head: true })
           .lt('license_validity_date', today),
+        supabase
+          .from('bis_projects')
+          .select('*', { count: 'exact', head: true })
+          .gte('license_validity_date', today)
+          .lte('license_validity_date', dueEnd),
         supabase.from('bis_renewal_applications').select('*', { count: 'exact', head: true }),
         supabase.from('license_surveillance').select('*', { count: 'exact', head: true }),
         supabase.from('bis_sample_failure_replies').select('*', { count: 'exact', head: true }),
@@ -109,6 +119,7 @@ export default function DashboardPage() {
         qeManaged: qe.count ?? 0,
         stopMarking: sm.count ?? 0,
         expiredLicenses: exp.count ?? 0,
+        dueSoonLicenses: due.count ?? 0,
         renewals: ren.count ?? 0,
         surveillance: surv.count ?? 0,
         sampleFailures: sfr.count ?? 0,
@@ -174,6 +185,13 @@ export default function DashboardPage() {
       subtitle: 'Past license validity date',
       icon: CalendarX2,
       href: '/bis/expired-licenses',
+    },
+    {
+      title: 'Due Soon',
+      value: counts.dueSoonLicenses,
+      subtitle: 'Validity within next 90 days',
+      icon: CalendarClock,
+      href: '/bis/due-soon',
     },
   ]
 
