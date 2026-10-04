@@ -214,6 +214,15 @@ const HTML_BUILDERS: Record<BisPrintDocumentKind, (data: BisPrintData) => string
   'location-map': (d) => buildLocationMapHtml(locationMapDataFromPrintData(d)),
 }
 
+/** Builds full HTML for one BIS print document (no popup). */
+export async function buildBisDocumentHtml(
+  row: BisProjectRow,
+  kind: BisPrintDocumentKind,
+): Promise<string> {
+  const printData = await loadBisPrintData(row)
+  return HTML_BUILDERS[kind](printData)
+}
+
 /**
  * Loads client / IS code / company context and opens the printable document.
  * Must be called directly from a user click so the pre-opened tab is not blocked.
@@ -228,8 +237,7 @@ export async function printBisDocument(
   if (!target) return 'Popup blocked. Allow popups to print.'
 
   try {
-    const printData = await loadBisPrintData(row)
-    return openPrintHtml(HTML_BUILDERS[kind](printData), { target })
+    return openPrintHtml(await buildBisDocumentHtml(row, kind), { target })
   } catch (err) {
     target.close()
     const message = err instanceof Error ? err.message : 'Unknown error'

@@ -1,6 +1,7 @@
 import { formatIsCodeLabelFromParts } from '@/features/masters/is-codes/formatIsCodeLabel'
 import { loadCompanyPrintContext } from '../print/loadCompanyPrintContext'
 import { escapeHtml as esc, openPendingPrintWindow, openPrintHtml } from '../print/openPrintHtml'
+import { emailHtmlDocumentToClient } from '../shared/emailHtmlToClient'
 import { formatCmL, formatDisplayDate, formatInr, type BisRenewalRow } from './types'
 
 function cell(label: string, value: string, wide = false): string {
@@ -157,6 +158,20 @@ export async function buildRenewalFormHtml(row: BisRenewalRow): Promise<string> 
   .footer-right { text-align: right; }
   @media print { .sheet { page-break-inside: avoid; } }
 </style></head><body>${body}</body></html>`
+}
+
+/** Emails the renewal form HTML to the client's master email. */
+export async function emailRenewalFormToClient(row: BisRenewalRow): Promise<string> {
+  const html = await buildRenewalFormHtml(row)
+  const cmL = (row.project?.cm_l_digits ?? '').trim()
+  const title = 'BIS License Renewal Form'
+  return emailHtmlDocumentToClient({
+    clientId: row.client_id ?? row.project?.client_id,
+    title,
+    subject: cmL ? `${title} — CM/L ${cmL}` : title,
+    html,
+    filenameBase: cmL ? `renewal_${cmL}` : 'renewal_form',
+  })
 }
 
 /** Opens the renewal form print for one row. Call from a user click. */

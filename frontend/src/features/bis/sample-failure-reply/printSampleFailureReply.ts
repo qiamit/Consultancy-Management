@@ -1,5 +1,6 @@
 import { loadCompanyPrintContext } from '../print/loadCompanyPrintContext'
 import { escapeHtml as esc, openPendingPrintWindow, openPrintHtml } from '../print/openPrintHtml'
+import { emailHtmlDocumentToClient } from '../shared/emailHtmlToClient'
 import {
   sampleFailureAttachments,
   sampleFailureClientName,
@@ -126,6 +127,20 @@ export async function buildSampleFailureReplyHtml(row: SampleFailureReplyRow): P
   .footer-note { margin-top: 12px; font-size: 6.5pt; color: #78716c; border-top: 1px solid #e7e5e4; padding-top: 4px; display: flex; justify-content: space-between; gap: 12px; }
   .footer-right { text-align: right; }
 </style></head><body>${body}</body></html>`
+}
+
+/** Emails the sample failure reply HTML to the client's master email. */
+export async function emailSampleFailureReplyToClient(row: SampleFailureReplyRow): Promise<string> {
+  const html = await buildSampleFailureReplyHtml(row)
+  const sample = (row.sample_code ?? '').trim()
+  const title = 'BIS Sample Failure Reply'
+  return emailHtmlDocumentToClient({
+    clientId: row.client_id,
+    title,
+    subject: sample ? `${title} — ${sample}` : title,
+    html,
+    filenameBase: sample ? `sfr_${sample}` : 'sample_failure_reply',
+  })
 }
 
 /** Opens the sample failure reply print for one row. Call from a user click. */

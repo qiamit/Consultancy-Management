@@ -17,7 +17,7 @@ import {
 } from './sampleFailureReplyApi'
 import { downloadCsv } from '../shared/downloadCsv'
 import { formatCmL } from '../projects/types'
-import { printSampleFailureReply } from './printSampleFailureReply'
+import { emailSampleFailureReplyToClient, printSampleFailureReply } from './printSampleFailureReply'
 import {
   emptySampleFailureReplyForm,
   rowToSampleFailureReplyForm,
@@ -52,6 +52,7 @@ export default function BisSampleFailureReplyMasterPage() {
   const [form, setForm] = useState<SampleFailureReplyFormValue>(() => emptySampleFailureReplyForm())
   const [saving, setSaving] = useState(false)
   const [attachmentBusy, setAttachmentBusy] = useState(false)
+  const [emailBusy, setEmailBusy] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
   const requestRef = useRef(0)
@@ -186,6 +187,30 @@ export default function BisSampleFailureReplyMasterPage() {
     })()
   }
 
+  const handleEmailReply = () => {
+    if (selectedIds.size !== 1) {
+      setMessage('Select exactly one sample failure reply to email the client.')
+      return
+    }
+    const id = [...selectedIds][0]
+    const row = rows.find((r) => r.id === id)
+    if (!row) {
+      setMessage('Selected reply is not on this page. Open it or change page.')
+      return
+    }
+    void (async () => {
+      setEmailBusy(true)
+      setMessage(null)
+      try {
+        setMessage(await emailSampleFailureReplyToClient(row))
+      } catch (err) {
+        setMessage(formatBisApiError(err))
+      } finally {
+        setEmailBusy(false)
+      }
+    })()
+  }
+
   const handleExport = () => {
     const source = selectedIds.size > 0 ? rows.filter((r) => selectedIds.has(r.id)) : rows
     if (source.length === 0) {
@@ -296,6 +321,9 @@ export default function BisSampleFailureReplyMasterPage() {
         onExport={handleExport}
         onPrintList={handlePrintReply}
         printListLabel="Print Reply"
+        onEmailClient={handleEmailReply}
+        emailClientLabel="Email Reply"
+        printDocsBusy={emailBusy}
         onPrevPage={() => setPage((p) => Math.max(1, p - 1))}
         onNextPage={() => setPage((p) => Math.min(pageCount, p + 1))}
         jumpTo={jumpTo}

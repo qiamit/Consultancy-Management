@@ -13,6 +13,7 @@ import {
 } from './bisProjectsApi'
 import { downloadCsv } from '../shared/downloadCsv'
 import { printBisProjectsList } from './printBisProjectsList'
+import { emailBisDocumentToClient } from '../print/emailBisDocument'
 import { printBisDocument, type BisPrintDocumentKind } from '../print/printBisDocument'
 import {
   BIS_PROJECTS_LIST_TITLES,
@@ -208,6 +209,22 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
     }
   }
 
+  const handleEmailForm1 = async (row: BisProjectRow | undefined) => {
+    if (!row) {
+      setMessage('Select exactly one license to email Form-I.')
+      return
+    }
+    setPrintDocsBusy(true)
+    setMessage(null)
+    try {
+      setMessage(await emailBisDocumentToClient(row, 'form1'))
+    } catch (err) {
+      setMessage(formatBisApiError(err))
+    } finally {
+      setPrintDocsBusy(false)
+    }
+  }
+
   const selectedRow = selectedIds.size === 1 ? rows.find((r) => selectedIds.has(r.id)) : undefined
   const editingRow = editingId ? rows.find((r) => r.id === editingId) : undefined
 
@@ -260,6 +277,10 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
         onDeleteSelected={() => void handleDeleteSelected()}
         onExport={handleExport}
         onPrintList={handlePrintList}
+        onEmailClient={
+          canPrintBisForms ? () => void handleEmailForm1(selectedRow) : undefined
+        }
+        emailClientLabel="Email Form-I"
         onPrintForm1={
           canPrintBisForms ? () => void handlePrintDocument(selectedRow, 'form1') : undefined
         }

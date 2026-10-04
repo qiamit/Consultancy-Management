@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronLeft, ChevronRight, Download, Printer, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronLeft, ChevronRight, Download, Mail, Printer, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { limsDarkBarBtnClass, limsDarkBarFieldClass, limsDeleteBtnClass } from '@/lib/limsThemeUi'
 import { Button } from '@/components/ui/button'
@@ -22,6 +22,8 @@ export function BisProjectsFooterBar({
   onExport,
   onPrintList,
   printListLabel = 'Print list',
+  onEmailClient,
+  emailClientLabel = 'Email client',
   onPrintForm1,
   onPrintAuthLetter,
   onPrintDocument,
@@ -44,6 +46,9 @@ export function BisProjectsFooterBar({
   onPrintList?: () => void
   /** Button label when `onPrintList` is provided (default: Print list). */
   printListLabel?: string
+  /** Email the selected document HTML to the client master email. */
+  onEmailClient?: () => void
+  emailClientLabel?: string
   onPrintForm1?: () => void
   onPrintAuthLetter?: () => void
   onPrintDocument?: (kind: BisPrintDocumentKind) => void
@@ -63,7 +68,8 @@ export function BisProjectsFooterBar({
     message != null &&
     (message.toLowerCase().includes('saved') ||
       message.toLowerCase().includes('deleted') ||
-      message.toLowerCase().includes('exported'))
+      message.toLowerCase().includes('exported') ||
+      message.toLowerCase().includes('emailed'))
 
   return (
     <div className="relative overflow-hidden rounded-none border-2 border-stone-500 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-2 py-1.5 text-white shadow-sm ring-1 ring-amber-700/20 sm:px-3 sm:py-2 md:px-4">
@@ -118,6 +124,24 @@ export function BisProjectsFooterBar({
             >
               <Printer className="size-3.5 shrink-0 sm:size-4" />
               <span className="hidden lg:inline">{printListLabel}</span>
+            </Button>
+          ) : null}
+          {onEmailClient ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className={actionBtnClass}
+              onClick={onEmailClient}
+              disabled={loading || printDocsBusy || selectedCount !== 1}
+              title={
+                selectedCount === 1
+                  ? emailClientLabel
+                  : 'Select exactly one row to email the client'
+              }
+            >
+              <Mail className="size-3.5 shrink-0 sm:size-4" />
+              <span className="hidden lg:inline">{emailClientLabel}</span>
             </Button>
           ) : null}
           {onPrintForm1 ? (

@@ -19,7 +19,7 @@ import {
 } from './types'
 import { downloadCsv } from '../shared/downloadCsv'
 import { formatCmL } from '../projects/types'
-import { printRenewalForm } from './printRenewalForm'
+import { emailRenewalFormToClient, printRenewalForm } from './printRenewalForm'
 import { formatIsCodeLabelFromParts } from '@/features/masters/is-codes/formatIsCodeLabel'
 
 const SEARCH_DEBOUNCE_MS = 350
@@ -45,6 +45,7 @@ export default function BisRenewalsMasterPage() {
   const [form, setForm] = useState<BisRenewalForm>(() => emptyRenewalForm())
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  const [emailBusy, setEmailBusy] = useState(false)
 
   const requestRef = useRef(0)
 
@@ -178,6 +179,30 @@ export default function BisRenewalsMasterPage() {
     })()
   }
 
+  const handleEmailRenewal = () => {
+    if (selectedIds.size !== 1) {
+      setMessage('Select exactly one renewal to email the client.')
+      return
+    }
+    const id = [...selectedIds][0]
+    const row = rows.find((r) => r.id === id)
+    if (!row) {
+      setMessage('Selected renewal is not on this page. Open it or change page.')
+      return
+    }
+    void (async () => {
+      setEmailBusy(true)
+      setMessage(null)
+      try {
+        setMessage(await emailRenewalFormToClient(row))
+      } catch (err) {
+        setMessage(formatBisApiError(err))
+      } finally {
+        setEmailBusy(false)
+      }
+    })()
+  }
+
   const handleExport = () => {
     const source = selectedIds.size > 0 ? rows.filter((r) => selectedIds.has(r.id)) : rows
     if (source.length === 0) {
@@ -238,6 +263,9 @@ export default function BisRenewalsMasterPage() {
         onExport={handleExport}
         onPrintList={handlePrintRenewal}
         printListLabel="Print Renewal Form"
+        onEmailClient={handleEmailRenewal}
+        emailClientLabel="Email Renewal"
+        printDocsBusy={emailBusy}
         onPrevPage={() => setPage((p) => Math.max(1, p - 1))}
         onNextPage={() => setPage((p) => Math.min(pageCount, p + 1))}
         jumpTo={jumpTo}
