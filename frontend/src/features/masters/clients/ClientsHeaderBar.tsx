@@ -35,26 +35,9 @@ export function ClientsHeaderBar({
   assistantContext: string
   onAssistantDataChanged?: () => void
 }) {
-  const pageSizeSelect = (
-    <Select value={String(pageSize)} onValueChange={(v) => onPageSizeChange(Number(v))}>
-      <SelectTrigger
-        className={cn(clientDarkBarFieldClass, 'h-9 w-[6.5rem] shrink-0 sm:w-[7.5rem]')}
-        aria-label="Rows per page"
-      >
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="5">5 / Page</SelectItem>
-        <SelectItem value="10">10 / Page</SelectItem>
-        <SelectItem value="20">20 / Page</SelectItem>
-        <SelectItem value="50">50 / Page</SelectItem>
-      </SelectContent>
-    </Select>
-  )
-
   return (
     <div className={cn(clientPanelClass)}>
-      <div className="relative overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-3 py-2.5 text-white sm:px-5 sm:py-3">
+      <div className="relative overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-2 py-2 text-white sm:px-4 sm:py-2.5 md:px-5">
         <div
           className="pointer-events-none absolute inset-0 opacity-[0.18]"
           style={{
@@ -64,57 +47,76 @@ export function ClientsHeaderBar({
         />
         <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
 
-        <div className="relative flex flex-col gap-2.5 sm:gap-3">
-          <div className="flex min-w-0 items-center justify-between gap-2">
-            <h1 className="min-w-0 truncate text-base font-semibold tracking-tight text-white sm:text-lg">
-              Client Directory
-            </h1>
-            <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-              <QiAssistant
-                page="clients"
-                pageTitle="Client Directory"
-                contextSummary={assistantContext}
-                suggestedQuestions={[
-                  'Add a new client ABC Labs Pvt Ltd with Dr balance',
-                  'Summarize clients in the current list',
-                  'Update payment term for a client by company name',
-                  'What is the difference between Dr and Cr balance?',
-                ]}
-                onDataChanged={onAssistantDataChanged}
-                triggerVariant="icon"
-                triggerClassName={clientAiTriggerClass}
-              />
-              <Button
-                type="button"
-                className={cn('gap-1.5 shrink-0 sm:gap-2', clientPrimaryBtnClass)}
-                size="sm"
-                onClick={onNew}
-                aria-label="Add New Client"
-              >
-                <Plus size={14} />
-                <span className="hidden sm:inline">Add New Client</span>
-                <span className="sm:hidden">Add</span>
-              </Button>
-            </div>
+        <div className="relative flex min-w-0 flex-nowrap items-center gap-1 sm:gap-1.5 md:gap-2.5">
+          <h1
+            className="shrink-0 max-w-[4.5rem] truncate text-sm font-semibold tracking-tight text-white sm:max-w-[9rem] sm:text-base md:max-w-none md:text-lg"
+            title="Client Directory"
+          >
+            <span className="md:hidden">Clients</span>
+            <span className="hidden md:inline">Client Directory</span>
+          </h1>
+
+          <div className="relative min-w-0 flex-1 basis-0">
+            <Search
+              className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-stone-400 sm:left-3 sm:h-4 sm:w-4"
+              aria-hidden
+            />
+            <Input
+              type="search"
+              value={search}
+              onChange={(e) => onSearchChange(e.target.value)}
+              placeholder="Search Client | Address | Email | Mobile | Scale | Type"
+              className={cn(clientDarkBarSearchClass, 'h-8 min-w-0 pl-7 text-xs sm:pl-9 sm:text-sm')}
+              aria-label="Search by client, address, email, mobile, scale, or type"
+            />
           </div>
 
-          <div className="flex w-full min-w-0 items-center gap-2">
-            <div className="relative min-w-0 flex-1 sm:max-w-md md:max-w-lg">
-              <Search
-                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400"
-                aria-hidden
-              />
-              <Input
-                type="search"
-                value={search}
-                onChange={(e) => onSearchChange(e.target.value)}
-                placeholder="Search Client | Address | Email | Mobile | Scale | Type"
-                className={cn(clientDarkBarSearchClass, 'pl-9')}
-                aria-label="Search by client, address, email, mobile, scale, or type"
-              />
-            </div>
-            {pageSizeSelect}
-          </div>
+          <Select value={String(pageSize)} onValueChange={(v) => onPageSizeChange(Number(v))}>
+            <SelectTrigger
+              className={cn(
+                clientDarkBarFieldClass,
+                'h-8 w-[3.5rem] shrink-0 px-1 text-[11px] tabular-nums sm:w-[4.25rem] sm:px-2 sm:text-xs',
+              )}
+              aria-label="Rows per page"
+              title={`${pageSize} per page`}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent align="end">
+              <SelectItem value="5">5</SelectItem>
+              <SelectItem value="10">10</SelectItem>
+              <SelectItem value="20">20</SelectItem>
+              <SelectItem value="50">50</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <QiAssistant
+            page="clients"
+            pageTitle="Client Directory"
+            contextSummary={assistantContext}
+            suggestedQuestions={[
+              'Add a new client ABC Labs Pvt Ltd with Dr balance',
+              'Summarize clients in the current list',
+              'Update payment term for a client by company name',
+              'What is the difference between Dr and Cr balance?',
+            ]}
+            onDataChanged={onAssistantDataChanged}
+            triggerVariant="icon"
+            triggerClassName={cn(clientAiTriggerClass, 'h-8 w-8 shrink-0')}
+          />
+
+          <Button
+            type="button"
+            className={cn('h-8 shrink-0 gap-1 px-2 sm:gap-1.5 sm:px-3', clientPrimaryBtnClass)}
+            size="sm"
+            onClick={onNew}
+            aria-label="Add New Client"
+            title="Add New Client"
+          >
+            <Plus size={14} className="shrink-0" />
+            <span className="hidden lg:inline">Add New Client</span>
+            <span className="hidden sm:inline lg:hidden">Add</span>
+          </Button>
         </div>
       </div>
     </div>
