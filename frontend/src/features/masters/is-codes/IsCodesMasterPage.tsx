@@ -153,6 +153,7 @@ export default function IsCodesMasterPage() {
   const [listError, setListError] = useState<string | null>(null)
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
+  const [idsWithFiles, setIdsWithFiles] = useState<Set<string>>(() => new Set())
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [jumpTo, setJumpTo] = useState('')
@@ -184,6 +185,30 @@ export default function IsCodesMasterPage() {
     }
   }
 
+  const loadFilePresence = async () => {
+    try {
+      const { data, error } = await supabase.from('is_code_files').select('is_code_id')
+      if (error) throw error
+      const next = new Set<string>()
+      for (const row of Array.isArray(data) ? data : []) {
+        const id = typeof row?.is_code_id === 'string' ? row.is_code_id : ''
+        if (id) next.add(id)
+      }
+      setIdsWithFiles(next)
+    } catch {
+      // keep previous presence map on failure
+    }
+  }
+
+  const setFilePresenceFor = (isCodeId: string, hasFiles: boolean) => {
+    setIdsWithFiles((prev) => {
+      const next = new Set(prev)
+      if (hasFiles) next.add(isCodeId)
+      else next.delete(isCodeId)
+      return next
+    })
+  }
+
   const loadIsCodes = async () => {
     setListLoading(true)
     setListError(null)
@@ -196,6 +221,7 @@ export default function IsCodesMasterPage() {
         title: r.title ?? '',
         aspect: (r.aspect ?? 'Specification') as IsCodeRow['aspect'],
       })))
+      await loadFilePresence()
     } catch (err) {
       setListError(err instanceof Error ? err.message : 'Unable to load IS codes')
     } finally {
@@ -643,6 +669,7 @@ export default function IsCodesMasterPage() {
       const files = await buildPopupFilesForIsCode(row)
       setFilesDialogFiles(files)
       setFilesDialogTitle(formatIsCodeDisplay(row))
+      setFilePresenceFor(row.id, files.length > 0)
     } catch {
       // keep dialog list as-is on refresh failure
     }
@@ -661,6 +688,7 @@ export default function IsCodesMasterPage() {
       const files = await buildPopupFilesForIsCode(row)
       setFilesDialogFiles(files)
       setFilesDialogTitle(formatIsCodeDisplay(row))
+      setFilePresenceFor(row.id, files.length > 0)
     } catch (err) {
       const msg = formatSupabaseError(err)
       setFilesDialogFiles([
@@ -1096,6 +1124,7 @@ export default function IsCodesMasterPage() {
             void openFilesDialog(row)
           }}
           onAssistantDataChanged={() => void loadIsCodes()}
+          idsWithFiles={idsWithFiles}
           sortKey={sortKey}
           sortDir={sortDir}
           onSort={handleSort}

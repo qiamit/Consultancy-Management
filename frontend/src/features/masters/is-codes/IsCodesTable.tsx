@@ -88,13 +88,21 @@ function formatCharges(row: IsCodeRow): string {
   return `Rs ${Number(row.testing_charges ?? 0).toFixed(2)}`
 }
 
+function viewFilesBtnClass(hasFiles: boolean) {
+  return hasFiles
+    ? 'border-emerald-700/60 bg-emerald-600 text-white hover:bg-emerald-700 hover:text-white'
+    : 'border-red-700/60 bg-red-600 text-white hover:bg-red-700 hover:text-white'
+}
+
 function RowActions({
   row,
+  hasFiles,
   onEdit,
   onViewFiles,
   onAssistantDataChanged,
 }: {
   row: IsCodeRow
+  hasFiles: boolean
   onEdit: (row: IsCodeRow) => void
   onViewFiles: (row: IsCodeRow) => void
   onAssistantDataChanged?: () => void
@@ -126,9 +134,13 @@ function RowActions({
       <Button
         type="button"
         size="sm"
-        variant="ghost"
-        className="h-8 gap-1 rounded-none px-1.5 text-[11px] text-[#92400e] hover:bg-[#f3e9d8] hover:text-[#78350f] lg:hidden"
+        variant="outline"
+        className={cn(
+          'h-8 gap-1 rounded-none px-1.5 text-[11px] lg:hidden',
+          viewFilesBtnClass(hasFiles),
+        )}
         aria-label={`View files for ${formatIsCodeLabel(row)}`}
+        title={hasFiles ? 'Files available' : 'No files uploaded'}
         onClick={() => onViewFiles(row)}
       >
         <FolderOpen size={14} />
@@ -149,6 +161,7 @@ export function IsCodesTable({
   onEdit,
   onViewFiles,
   onAssistantDataChanged,
+  idsWithFiles,
   sortKey,
   sortDir,
   onSort,
@@ -163,6 +176,7 @@ export function IsCodesTable({
   onEdit: (row: IsCodeRow) => void
   onViewFiles: (row: IsCodeRow) => void
   onAssistantDataChanged?: () => void
+  idsWithFiles: Set<string>
   sortKey: IsCodeSortKey
   sortDir: IsCodeSortDir
   onSort: (key: IsCodeSortKey) => void
@@ -257,6 +271,7 @@ export function IsCodesTable({
                         </div>
                         <RowActions
                           row={r}
+                          hasFiles={idsWithFiles.has(r.id)}
                           onEdit={onEdit}
                           onViewFiles={onViewFiles}
                           onAssistantDataChanged={onAssistantDataChanged}
@@ -359,9 +374,13 @@ export function IsCodesTable({
                             type="button"
                             variant="outline"
                             size="sm"
-                            className="mt-1 h-7 gap-1 rounded-none border-stone-400 px-2 text-[11px] text-[#92400e] hover:bg-[#f3e9d8]"
+                            className={cn(
+                              'mt-1 h-7 gap-1 rounded-none px-2 text-[11px]',
+                              viewFilesBtnClass(idsWithFiles.has(r.id)),
+                            )}
                             onClick={() => onViewFiles(r)}
                             aria-label={`View files for ${formatIsCodeLabel(r)}`}
+                            title={idsWithFiles.has(r.id) ? 'Files available' : 'No files uploaded'}
                           >
                             View Files
                             <FolderOpen size={12} />
@@ -389,6 +408,7 @@ export function IsCodesTable({
                         <div className="flex w-full items-center justify-center gap-0.5 p-[1mm]">
                           <RowActions
                             row={r}
+                            hasFiles={idsWithFiles.has(r.id)}
                             onEdit={onEdit}
                             onViewFiles={onViewFiles}
                             onAssistantDataChanged={onAssistantDataChanged}
