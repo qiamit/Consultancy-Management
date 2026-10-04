@@ -227,6 +227,16 @@ function receiptFromRaw(raw: RawRow): QuotationRow {
   const extra = raw.extra ?? {}
   const amount = num(raw.amount)
   const receiptNumber = strOrNull(raw.receipt_number) ?? `PR-${raw.id.slice(0, 8).toUpperCase()}`
+  const paymentMethod =
+    MODE_FROM_DB[str(raw.mode_of_payment)] ??
+    (strOrNull(extra.payment_method) as PaymentMethod | null) ??
+    'Bank'
+  const invoiceRef =
+    strOrNull(extra.invoice_reference_no) ??
+    strOrNull(extra.against_invoice_no) ??
+    strOrNull(extra.tax_invoice_number) ??
+    // Older rows may have stored the invoice number in extra.reference_no
+    strOrNull(extra.reference_no)
   return {
     id: raw.id,
     quotation_number: receiptNumber,
@@ -240,13 +250,14 @@ function receiptFromRaw(raw: RawRow): QuotationRow {
     client_address: strOrNull(extra.client_address),
     client_gst_number: strOrNull(extra.client_gst_number),
     subject: strOrNull(raw.description),
-    reference_no: MODE_FROM_DB[str(raw.mode_of_payment)] ?? 'Bank',
+    reference_no: invoiceRef,
     status: (strOrNull(extra.status_label) as QuotationStatus | null) ?? 'Draft',
     payment_terms: strOrNull(extra.payment_terms),
     notes: strOrNull(raw.notes),
     remarks: strOrNull(extra.remarks),
     signature_text: strOrNull(extra.signature_text),
     signature_image_path: strOrNull(extra.signature_image_path),
+    payment_method: paymentMethod,
     discount_percent: 0,
     discount_amount: 0,
     transportation_charges: 0,
@@ -454,6 +465,7 @@ async function saveHeaderDocument(
 async function saveReceipt(form: QuotationForm, editingId: string | null): Promise<void> {
   const amount = Math.max(0, parseMoney(String(form.paymentAmount ?? '')))
   const method = normalizePaymentMethod(form.paymentMethod)
+  const againstInvoice = form.referenceNo.trim() || null
   const payload: Record<string, unknown> = {
     payment_flow: 'in',
     receipt_number: form.quotationNumber.trim(),
@@ -472,6 +484,11 @@ async function saveReceipt(form: QuotationForm, editingId: string | null): Promi
       signature_text: form.signatureText.trim() || null,
       signature_image_path: form.signatureImagePath.trim() || null,
       status_label: form.status,
+      payment_method: method,
+      /** Invoice / document this receipt is against (kept separate from mode_of_payment). */
+      invoice_reference_no: againstInvoice,
+      against_invoice_no: againstInvoice,
+      allocated_amount: amount,
     },
     updated_at: new Date().toISOString(),
   }

@@ -501,7 +501,12 @@ function buildOneQuotationHtml(
     ${
       isPaymentReceipt && !tpl.showLineItems
         ? `<div class="items-wrap" style="padding:8px 10px;border:2px solid #000;">
-        <div style="margin-bottom:4px;"><b>Payment Mode:</b> ${cell(row.reference_no)}</div>
+        <div style="margin-bottom:4px;"><b>Payment Mode:</b> ${cell(row.payment_method || 'Bank')}</div>
+        ${
+          row.reference_no?.trim()
+            ? `<div style="margin-bottom:4px;"><b>Against Invoice:</b> ${cell(row.reference_no)}</div>`
+            : ''
+        }
         <div style="font-size:1.05em;font-weight:700;margin-bottom:4px;">Amount Received: ${getCurrencySymbol()} ${esc(formatMoney(row.grand_total))}</div>
         ${
           row.subject?.trim()

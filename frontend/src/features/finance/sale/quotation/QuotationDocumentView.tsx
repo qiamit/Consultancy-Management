@@ -410,8 +410,14 @@ export function QuotationDocumentView({
           <div className="mt-2 space-y-1 border-2 border-black px-3 py-2">
             <div className="text-[0.95em]">
               <span className="font-bold">Payment Mode:</span>{' '}
-              {(row.reference_no || '').trim() || '—'}
+              {(row.payment_method || '').trim() || 'Bank'}
             </div>
+            {row.reference_no?.trim() ? (
+              <div className="text-[0.95em]">
+                <span className="font-bold">Against Invoice:</span>{' '}
+                {row.reference_no.trim()}
+              </div>
+            ) : null}
             <div className="text-[1.05em] font-bold">
               Amount Received: {getCurrencySymbol()} {formatMoney(row.grand_total)}
             </div>

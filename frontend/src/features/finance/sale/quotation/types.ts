@@ -102,6 +102,7 @@ export type QuotationRow = {
   client_address: string | null
   client_gst_number: string | null
   subject: string | null
+  /** Against-document / PO / invoice number (not payment mode). */
   reference_no: string | null
   status: QuotationStatus
   payment_terms: string | null
@@ -109,6 +110,8 @@ export type QuotationRow = {
   remarks: string | null
   signature_text: string | null
   signature_image_path: string | null
+  /** Payment Receipt only — Bank / Cash / UPI / … (from transactions.mode_of_payment). */
+  payment_method?: string | null
   discount_percent: number
   discount_amount: number
   transportation_charges?: number | null
@@ -470,7 +473,13 @@ export function rowToForm(row: QuotationRow, asCopy = false, nextNumber = ''): Q
     discountPercent: String(row.discount_percent ?? 0),
     gstPercent: String(row.gst_percent ?? 18),
     paymentAmount: String(row.grand_total ?? 0),
-    paymentMethod: normalizePaymentMethod(row.reference_no),
+    paymentMethod: normalizePaymentMethod(
+      row.payment_method ??
+        // Legacy receipts briefly stored mode in reference_no before invoice-link fix.
+        ((PAYMENT_METHOD_OPTIONS as readonly string[]).includes(String(row.reference_no ?? '').trim())
+          ? row.reference_no
+          : null),
+    ),
     lines,
   }
 }
