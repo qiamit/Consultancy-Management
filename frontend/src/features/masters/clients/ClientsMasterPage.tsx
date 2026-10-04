@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { getCurrencySymbol } from '@/lib/appCurrency'
 import { supabase } from '@/lib/supabaseClient'
 import { useFormDialogOpenChange } from '@/lib/formDialogOpenChange'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -11,6 +10,9 @@ import { clientPageShellClass } from './clientsFormUi'
 import { buildClientsAssistantContext } from './buildClientsAssistantContext'
 import { cn } from '@/lib/utils'
 import {
+  BALANCE_TYPES,
+  COMPANY_SCALES,
+  COMPANY_TYPES,
   DEFAULT_COUNTRY,
   DEFAULT_STATE,
   emptyClientForm,
@@ -19,13 +21,105 @@ import {
   isValidGst,
   isValidIndianPin,
   isValidMobile,
+  PAYMENT_TERMS,
   toContinuousText,
   toProperTitleCase,
+  type BalanceType,
   type ClientForm as ClientFormType,
   type ClientRow,
+  type CompanyScale,
+  type CompanyType,
+  type PaymentTerm,
 } from './types'
 
 const normalizeText = (value: string) => value.trim()
+
+/** CSV columns matching every Client form field (+ id for round-trip). */
+const CLIENT_CSV_HEADERS = [
+  'gst_number',
+  'company_type',
+  'company_scale',
+  'company_name',
+  'address',
+  'pin_code',
+  'district',
+  'state',
+  'country',
+  'contact_person_name',
+  'country_code',
+  'mobile',
+  'email',
+  'opening_balance',
+  'balance_type',
+  'payment_term',
+  'remark',
+  'id',
+] as const
+
+const CLIENT_CSV_HEADER_ALIASES: Record<(typeof CLIENT_CSV_HEADERS)[number], string[]> = {
+  gst_number: ['gst_number', 'gst number', 'gst', 'gstnumber'],
+  company_type: ['company_type', 'company type', 'type'],
+  company_scale: ['company_scale', 'company scale', 'scale'],
+  company_name: ['company_name', 'company name', 'name of the company', 'name', 'client'],
+  address: ['address', 'address of the company', 'company address'],
+  pin_code: ['pin_code', 'pin code', 'pincode', 'postal code', 'zip'],
+  district: ['district'],
+  state: ['state'],
+  country: ['country'],
+  contact_person_name: [
+    'contact_person_name',
+    'contact person name',
+    'name of the contact person',
+    'contact person',
+    'contact',
+  ],
+  country_code: ['country_code', 'country code', 'dial code', 'isd'],
+  mobile: ['mobile', 'mobile number', 'phone', 'phone number'],
+  email: ['email', 'email id', 'email_id', 'e-mail'],
+  opening_balance: ['opening_balance', 'opening balance', 'balance'],
+  balance_type: ['balance_type', 'balance type', 'dr_cr', 'dr/cr'],
+  payment_term: ['payment_term', 'payment term', 'payment terms'],
+  remark: ['remark', 'remarks', 'note', 'notes'],
+  id: ['id', 'client_id', 'uuid'],
+}
+
+function normalizeCsvHeaderKey(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/%/g, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+}
+
+function resolveCsvHeaderIndex(header: string[]): Record<string, number> {
+  const normalized = header.map(normalizeCsvHeaderKey)
+  const map: Record<string, number> = {}
+  for (const field of CLIENT_CSV_HEADERS) {
+    const aliases = CLIENT_CSV_HEADER_ALIASES[field].map(normalizeCsvHeaderKey)
+    const idx = normalized.findIndex((h) => aliases.includes(h) || h === field)
+    if (idx >= 0) map[field] = idx
+  }
+  return map
+}
+
+function pickCsvEnum<T extends string>(value: string, allowed: readonly T[], fallback: T): T {
+  const raw = value.trim()
+  if (!raw) return fallback
+  const hit = allowed.find((a) => a.toLowerCase() === raw.toLowerCase())
+  if (hit) return hit
+  const compact = raw.replace(/\s+/g, ' ').toLowerCase()
+  const soft = allowed.find((a) => a.toLowerCase().replace(/\s+/g, ' ') === compact)
+  return soft ?? fallback
+}
+
+function normalizePaymentTerm(value: string): PaymentTerm {
+  const raw = value.trim()
+  if (!raw) return '100 % Advance'
+  const compact = raw.replace(/\s+/g, '').toLowerCase()
+  if (compact === '100%advance' || compact === '100advance') return '100 % Advance'
+  return pickCsvEnum(raw, PAYMENT_TERMS, '100 % Advance')
+}
 
 const formatSupabaseError = (err: unknown) => {
   if (!err || typeof err !== 'object') return 'Unknown error'
@@ -709,12 +803,7 @@ export default function ClientsMasterPage() {
 
   const selectedRows = useMemo(() => rows.filter((r) => selectedIds.has(r.id)), [rows, selectedIds])
 
-  const handlePrintSelected = () => {
-    const exportRows = selectedRows.length > 0 ? selectedRows : filteredRows
-    if (exportRows.length === 0) return
-    const html = buildClientsPrintHtml(exportRows)
-
-    // Use iframe printing to avoid popup blockers and blank about:blank windows.
+  const printHtmlInIframe = (html: string) => {
     const iframe = document.createElement('iframe')
     iframe.style.position = 'fixed'
     iframe.style.right = '0'
@@ -745,21 +834,43 @@ export default function ClientsMasterPage() {
     doc.write(html)
     doc.close()
 
-    iframe.onload = () => {
+    const runPrint = () => {
       try {
         win.focus()
         win.print()
       } finally {
-        // Give the print dialog a moment before cleanup.
-        window.setTimeout(cleanup, 500)
+        window.setTimeout(cleanup, 800)
       }
     }
+
+    iframe.onload = () => runPrint()
+    window.setTimeout(runPrint, 400)
+  }
+
+  const handlePrintSelected = () => {
+    if (selectedRows.length === 0) {
+      setSaveMessage('Select at least one client to print a courier slip.')
+      return
+    }
+    printHtmlInIframe(buildCourierSlipPrintHtml(selectedRows))
+    setSaveMessage(`Print ready: ${selectedRows.length} courier slip(s) (half A4).`)
   }
 
   const handleDeleteSelected = () => {
     void (async () => {
-      if (selectedRows.length === 0) return
-      const ok = window.confirm(`Delete ${selectedRows.length} selected client(s)?`)
+      if (selectedRows.length === 0) {
+        setSaveMessage('Select at least one client to delete.')
+        return
+      }
+      const preview = selectedRows
+        .slice(0, 5)
+        .map((r) => `• ${r.company_name}`)
+        .join('\n')
+      const more =
+        selectedRows.length > 5 ? `\n…and ${selectedRows.length - 5} more` : ''
+      const ok = window.confirm(
+        `Delete ${selectedRows.length} selected client(s)?\n\n${preview}${more}\n\nThis cannot be undone.`,
+      )
       if (!ok) return
       setSaveMessage(null)
       setSaveLoading(true)
@@ -767,7 +878,7 @@ export default function ClientsMasterPage() {
         const ids = selectedRows.map((r) => r.id)
         const { error } = await supabase.from('clients').delete().in('id', ids)
         if (error) throw error
-        setSaveMessage('Deleted successfully.')
+        setSaveMessage(`Deleted ${ids.length} client(s).`)
         setSelectedIds(new Set())
         await loadClients()
       } catch (err) {
@@ -780,61 +891,46 @@ export default function ClientsMasterPage() {
 
   const handleExport = () => {
     const exportRows = selectedRows.length > 0 ? selectedRows : filteredRows
+    if (exportRows.length === 0) {
+      setSaveMessage('No clients to export.')
+      return
+    }
 
-    const headers = [
-      'id',
-      'gst_number',
-      'company_type',
-      'company_scale',
-      'company_name',
-      'contact_person_name',
-      'country_code',
-      'mobile',
-      'email',
-      'address',
-      'pin_code',
-      'district',
-      'state',
-      'country',
-      'opening_balance',
-      'balance_type',
-      'payment_term',
-      'remark',
-      'created_at',
-    ]
-
+    const headers = [...CLIENT_CSV_HEADERS]
     const lines = exportRows.map((r) => ({
-      id: r.id,
       gst_number: r.gst_number ?? '',
       company_type: r.company_type,
       company_scale: r.company_scale,
       company_name: r.company_name,
-      contact_person_name: r.contact_person_name ?? '',
-      country_code: r.country_code ?? '',
-      mobile: r.mobile ?? '',
-      email: r.email ?? '',
       address: r.address ?? '',
       pin_code: r.pin_code ?? '',
       district: r.district ?? '',
       state: r.state ?? '',
       country: r.country ?? '',
+      contact_person_name: r.contact_person_name ?? '',
+      country_code: r.country_code ?? '',
+      mobile: r.mobile ?? '',
+      email: r.email ?? '',
       opening_balance: String(r.opening_balance ?? 0),
       balance_type: r.balance_type,
       payment_term: r.payment_term,
       remark: r.remark ?? '',
-      created_at: r.created_at ?? '',
+      id: r.id,
     }))
 
-    const csv = toCsv(headers, lines)
-
+    const csv = `\uFEFF${toCsv(headers, lines)}`
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = 'clients.csv'
+    a.download = `clients-export-${new Date().toISOString().slice(0, 10)}.csv`
     a.click()
     URL.revokeObjectURL(url)
-    setSaveMessage('Exported.')
+    setSaveMessage(
+      `Exported ${exportRows.length} client(s) with all form fields${
+        selectedRows.length > 0 ? ' (selection)' : ' (current filter)'
+      }.`,
+    )
   }
 
   const handleImport = () => {
@@ -848,55 +944,77 @@ export default function ClientsMasterPage() {
       setSaveLoading(true)
       try {
         const text = await file.text()
-        const records = parseCsv(text)
-        if (records.length === 0) {
-          setSaveMessage('No rows found in CSV.')
+        const records = parseCsv(text.replace(/^\uFEFF/, ''))
+        if (records.length < 2) {
+          setSaveMessage('CSV must include a header row and at least one data row.')
           return
         }
 
-        const header = records[0].map((h) => h.trim())
+        const header = records[0]!.map((h) => h.trim())
+        const col = resolveCsvHeaderIndex(header)
+        if (col.company_name == null) {
+          setSaveMessage('CSV header must include company_name (or “Name of the Company”).')
+          return
+        }
+
         const rowsData = records.slice(1).filter((r) => r.some((c) => String(c ?? '').trim().length > 0))
+        const get = (cells: string[], key: (typeof CLIENT_CSV_HEADERS)[number]) => {
+          const idx = col[key]
+          return idx == null ? '' : String(cells[idx] ?? '')
+        }
 
-        const payloads = rowsData.map((cells) => {
-          const get = (key: string) => {
-            const idx = header.indexOf(key)
-            return idx >= 0 ? (cells[idx] ?? '') : ''
-          }
+        const withId: Array<Record<string, unknown>> = []
+        const byName: Array<Record<string, unknown>> = []
 
-          const opening = Number(get('opening_balance'))
-          const balanceType = (get('balance_type') || 'Dr').trim() === 'Cr' ? 'Cr' : 'Dr'
+        for (const cells of rowsData) {
+          const companyName = toProperTitleCase(normalizeText(get(cells, 'company_name')))
+          if (!companyName) continue
 
-          return {
-            gst_number: normalizeText(get('gst_number')).toUpperCase() || null,
-            company_type: (normalizeText(get('company_type')) || 'Manufacturer') as ClientRow['company_type'],
-            company_scale: (normalizeText(get('company_scale')) || 'Medium') as ClientRow['company_scale'],
-            company_name: toProperTitleCase(normalizeText(get('company_name'))),
-            contact_person_name: normalizeText(get('contact_person_name')) || null,
-            country_code: normalizeText(get('country_code')) || null,
-            mobile: normalizeText(get('mobile')) || null,
-            email: normalizeText(get('email')) || null,
-            address: toProperTitleCase(normalizeText(get('address'))) || null,
-            pin_code: normalizeText(get('pin_code')) || null,
-            district: normalizeText(get('district')) || null,
-            state: normalizeText(get('state')) || null,
-            country: normalizeText(get('country')) || null,
+          const opening = Number(String(get(cells, 'opening_balance')).replace(/,/g, ''))
+          const payload: Record<string, unknown> = {
+            gst_number: normalizeText(get(cells, 'gst_number')).toUpperCase() || null,
+            company_type: pickCsvEnum(get(cells, 'company_type'), COMPANY_TYPES, 'Manufacturer') as CompanyType,
+            company_scale: pickCsvEnum(get(cells, 'company_scale'), COMPANY_SCALES, 'Medium') as CompanyScale,
+            company_name: companyName,
+            contact_person_name: toProperTitleCase(normalizeText(get(cells, 'contact_person_name'))) || null,
+            country_code: normalizeText(get(cells, 'country_code')) || '+91',
+            mobile: normalizeText(get(cells, 'mobile')).replace(/\s+/g, '') || null,
+            email: normalizeText(get(cells, 'email')).toLowerCase() || null,
+            address: toProperTitleCase(normalizeText(get(cells, 'address'))) || null,
+            pin_code: normalizeText(get(cells, 'pin_code')) || null,
+            district: toProperTitleCase(normalizeText(get(cells, 'district'))) || null,
+            state: toProperTitleCase(normalizeText(get(cells, 'state'))) || DEFAULT_STATE,
+            country: toProperTitleCase(normalizeText(get(cells, 'country'))) || DEFAULT_COUNTRY,
             opening_balance: Number.isFinite(opening) ? opening : 0,
-            balance_type: balanceType,
-            payment_term: (normalizeText(get('payment_term')) || '100 % Advance') as ClientRow['payment_term'],
-            remark: normalizeText(get('remark')) || null,
+            balance_type: pickCsvEnum(get(cells, 'balance_type'), BALANCE_TYPES, 'Dr') as BalanceType,
+            payment_term: normalizePaymentTerm(get(cells, 'payment_term')),
+            remark: normalizeText(get(cells, 'remark')) || null,
           }
-        })
 
-        const cleanPayloads = payloads.filter((p) => p.company_name.trim().length > 0)
-        if (cleanPayloads.length === 0) {
+          const id = normalizeText(get(cells, 'id'))
+          if (id) {
+            withId.push({ ...payload, id })
+          } else {
+            byName.push(payload)
+          }
+        }
+
+        const total = withId.length + byName.length
+        if (total === 0) {
           setSaveMessage('No valid rows found (company_name missing).')
           return
         }
 
-        const { error } = await supabase.from('clients').upsert(cleanPayloads, { onConflict: 'company_name' })
-        if (error) throw error
+        if (withId.length > 0) {
+          const { error } = await supabase.from('clients').upsert(withId, { onConflict: 'id' })
+          if (error) throw error
+        }
+        if (byName.length > 0) {
+          const { error } = await supabase.from('clients').upsert(byName, { onConflict: 'company_name' })
+          if (error) throw error
+        }
 
-        setSaveMessage(`Imported ${cleanPayloads.length} client(s).`)
+        setSaveMessage(`Imported ${total} client(s) with all form fields.`)
         await loadClients()
       } catch (err) {
         setSaveMessage(formatSupabaseError(err))
@@ -1188,7 +1306,8 @@ function parseCsv(text: string): string[][] {
   return rows.map((r) => r.map((c) => c.trim()))
 }
 
-function buildClientsPrintHtml(rows: ClientRow[]) {
+/** Half-A4 courier address slips — cut along the dashed line to stick on parcels. */
+function buildCourierSlipPrintHtml(rows: ClientRow[]) {
   const esc = (v: string) =>
     v
       .replace(/&/g, '&amp;')
@@ -1197,69 +1316,144 @@ function buildClientsPrintHtml(rows: ClientRow[]) {
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;')
 
-  const cards = rows
-    .map((r) => {
-      const address = formatClientAddress(r)
-      const contactLine = [
-        `Contact: ${r.contact_person_name || '-'}`,
-        `Mobile: ${(`${r.country_code || ''} ${r.mobile || ''}`.trim() || '-')}`,
-        `Email: ${r.email || '-'}`,
-      ].join('   |   ')
-      return `
-        <section class="card">
-          <div class="card-header">
-            <div>
-              <div class="title">${esc(r.company_name)}</div>
-              <div class="subtitle">GST: ${esc(r.gst_number || '-')}</div>
-            </div>
-            <div class="badge">${esc(r.company_type)} • ${esc(r.company_scale)}</div>
-          </div>
-          <div class="grid">
-            <div class="field span2"><div class="k">Contact / Mobile / Email</div><div class="v mono">${esc(contactLine)}</div></div>
-            <div class="field span2"><div class="k">Address</div><div class="v">${esc(address)}</div></div>
-            <div class="field span2"><div class="k">Remark</div><div class="v">${esc(r.remark || '-')}</div></div>
-            <div class="field"><div class="k">Opening Balance</div><div class="v">${getCurrencySymbol()} ${esc(String(r.opening_balance ?? 0))} (${esc(r.balance_type)})</div></div>
-            <div class="field"><div class="k">Payment Term</div><div class="v">${esc(r.payment_term)}</div></div>
-          </div>
-        </section>
-      `
-    })
-    .join('')
+  const slipHtml = (r: ClientRow) => {
+    const address = formatClientAddress(r)
+    const mobile = `${r.country_code || '+91'} ${r.mobile || ''}`.trim()
+    return `
+      <article class="slip">
+        <div class="cut">✂ Cut here — half A4 courier slip</div>
+        <p class="to">TO</p>
+        <h1 class="name">${esc(r.company_name)}</h1>
+        ${r.contact_person_name?.trim() ? `<p class="attn">Attn: ${esc(r.contact_person_name)}</p>` : ''}
+        <p class="addr">${esc(address || '—')}</p>
+        <div class="meta">
+          <div><span class="k">Mobile</span><span class="v">${esc(mobile || '—')}</span></div>
+          <div><span class="k">Email</span><span class="v">${esc(r.email || '—')}</span></div>
+          <div><span class="k">GST</span><span class="v">${esc(r.gst_number || '—')}</span></div>
+          <div><span class="k">Type</span><span class="v">${esc(r.company_type)} · ${esc(r.company_scale)}</span></div>
+        </div>
+        <p class="foot">Q Engineering · Client Directory</p>
+      </article>`
+  }
+
+  const pages: string[] = []
+  for (let i = 0; i < rows.length; i += 2) {
+    const top = rows[i]!
+    const bottom = rows[i + 1]
+    pages.push(`
+      <section class="sheet">
+        ${slipHtml(top)}
+        ${bottom ? slipHtml(bottom) : '<article class="slip empty"></article>'}
+      </section>`)
+  }
 
   return `<!doctype html>
-  <html>
-    <head>
-      <meta charset="utf-8" />
-      <meta name="viewport" content="width=device-width, initial-scale=1" />
-      <title>Clients Print Preview</title>
-      <style>
-        :root{--fg:#0b1220;--muted:#5b6473;--border:#e7eaf0;--bg:#ffffff;--chip:#f5f7fb;--header:#0f172a;--accent:#2563eb}
-        *{box-sizing:border-box}
-        body{margin:24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; color:var(--fg); background:linear-gradient(180deg,#ffffff 0%, #fbfcff 100%)}
-        .wrap{display:flex;flex-direction:column;gap:16px}
-        .card{border:1px solid var(--border);border-radius:14px;overflow:hidden;break-inside:avoid;page-break-inside:avoid;box-shadow:0 1px 0 rgba(15,23,42,.04)}
-        .card-header{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;padding:14px 16px;margin-bottom:0;background:linear-gradient(90deg,#0f172a 0%, #111827 60%, #0b1220 100%);color:#fff}
-        .title{font-size:18px;font-weight:700;line-height:1.2}
-        .subtitle{font-size:12px;opacity:.85;margin-top:2px}
-        .badge{font-size:12px;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);padding:6px 10px;border-radius:999px;white-space:nowrap}
-        .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:14px 16px}
-        .field{border:1px solid var(--border);border-radius:12px;padding:10px 12px;background:#fff}
-        .field .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
-        .field .v{font-size:13px;margin-top:4px}
-        .mono{font-variant-numeric:tabular-nums; white-space:nowrap}
-        .span2{grid-column:span 2}
-        @media print{body{margin:0;background:#fff} .card{border-radius:0; box-shadow:none; border-left:none;border-right:none} .card-header{border-bottom:1px solid var(--border)}}
-      </style>
-    </head>
-    <body>
-      <div class="wrap">${cards}</div>
-      <script>
-        window.addEventListener('load', function () {
-          setTimeout(function () {
-            try { window.focus(); window.print(); } catch (e) {}
-          }, 250);
-        });
-      </script>
-    </body>
-  </html>`
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Courier Slips</title>
+    <style>
+      @page { size: A4 portrait; margin: 0; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        color: #1c1917;
+        font-family: "Courier New", Courier, ui-monospace, monospace;
+        background: #fff;
+      }
+      .sheet {
+        width: 210mm;
+        height: 297mm;
+        page-break-after: always;
+        break-after: page;
+      }
+      .sheet:last-child { page-break-after: auto; }
+      .slip {
+        height: 148.5mm;
+        padding: 10mm 12mm 8mm;
+        border-bottom: 1px dashed #78716c;
+        position: relative;
+        overflow: hidden;
+      }
+      .slip.empty { border-bottom: 0; }
+      .cut {
+        position: absolute;
+        top: 3mm;
+        right: 8mm;
+        font-size: 9px;
+        letter-spacing: 0.04em;
+        color: #78716c;
+        text-transform: uppercase;
+      }
+      .to {
+        margin: 4mm 0 2mm;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        color: #57534e;
+      }
+      .name {
+        margin: 0 0 2mm;
+        font-size: 20px;
+        line-height: 1.2;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+      .attn {
+        margin: 0 0 3mm;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .addr {
+        margin: 0 0 5mm;
+        font-size: 13px;
+        line-height: 1.45;
+        white-space: pre-wrap;
+        max-width: 170mm;
+      }
+      .meta {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2.5mm 6mm;
+        border-top: 1px solid #d6d3d1;
+        padding-top: 4mm;
+      }
+      .meta .k {
+        display: block;
+        font-size: 9px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: #78716c;
+      }
+      .meta .v {
+        display: block;
+        margin-top: 1mm;
+        font-size: 12px;
+        font-weight: 600;
+        word-break: break-word;
+      }
+      .foot {
+        position: absolute;
+        left: 12mm;
+        bottom: 5mm;
+        margin: 0;
+        font-size: 9px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #a8a29e;
+      }
+      @media screen {
+        body { background: #e7e5e4; padding: 12px; }
+        .sheet {
+          margin: 0 auto 16px;
+          background: #fff;
+          box-shadow: 0 2px 12px rgba(0,0,0,.12);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    ${pages.join('')}
+  </body>
+</html>`
 }

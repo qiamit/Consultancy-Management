@@ -91,8 +91,8 @@ export function ClientsTableFooterBar({
                 size="sm"
                 className={actionBtn}
                 onClick={onPrintSelected}
-                disabled={loading}
-                title="Print"
+                disabled={loading || selectionDisabled}
+                title="Print half-A4 courier slip for selected clients"
               >
                 <Printer size={14} />
                 <span className="hidden md:inline">Print</span>
@@ -104,7 +104,7 @@ export function ClientsTableFooterBar({
                 className={cn(clientDeleteBtnClass, 'h-8 shrink-0 gap-1 px-2 text-xs sm:px-2.5')}
                 onClick={onDeleteSelected}
                 disabled={loading || selectionDisabled}
-                title="Delete"
+                title="Delete selected clients (confirmation required)"
               >
                 <Trash2 size={14} />
                 <span className="hidden md:inline">Delete</span>
