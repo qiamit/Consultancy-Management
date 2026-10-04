@@ -36,11 +36,6 @@ const rowEvenClass = 'bg-[#f7f3eb] hover:bg-[#f3e9d8]'
 const rowOddClass = 'bg-[#fffcf7] hover:bg-[#f3e9d8]'
 const rowSelectedClass = 'bg-[#fde68a]/80 hover:bg-[#fde68a]/80'
 
-const stickyEven = 'bg-[#f7f3eb]'
-const stickyOdd = 'bg-[#fffcf7]'
-const stickySelected = 'bg-[#fde68a]/80'
-const stickyHover = 'group-hover:bg-[#f3e9d8]'
-
 const checkboxClass =
   'h-4 w-4 rounded-none border-stone-500 text-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/30'
 
@@ -101,7 +96,7 @@ export function ClientsTable({
           </colgroup>
           <TableHeader>
             <TableRow className="border-stone-700 bg-stone-800 hover:bg-stone-800">
-              <TableHead className={cn('sticky left-0 z-20 w-11 shadow-[2px_0_0_0_rgba(68,64,60,0.35)]', thBase)}>
+              <TableHead className={cn('w-11', thBase)}>
                 <input
                   type="checkbox"
                   className={checkboxClass}
@@ -113,26 +108,12 @@ export function ClientsTable({
                   onChange={(e) => onToggleAll(e.target.checked)}
                 />
               </TableHead>
-              <TableHead
-                className={cn(
-                  'sticky left-11 z-20 min-w-[12rem] text-left shadow-[2px_0_0_0_rgba(68,64,60,0.35)]',
-                  thBase,
-                )}
-              >
-                Company Identity
-              </TableHead>
+              <TableHead className={cn('min-w-[12rem] text-left', thBase)}>Company Identity</TableHead>
               <TableHead className={cn('min-w-[7rem]', thBase)}>Type &amp; Scale</TableHead>
               <TableHead className={cn('min-w-[11rem]', thBase)}>Contact Details</TableHead>
               <TableHead className={cn('min-w-[12rem]', thBase)}>Address</TableHead>
               <TableHead className={cn('min-w-[7.5rem]', thBase)}>Balance</TableHead>
-              <TableHead
-                className={cn(
-                  'sticky right-0 z-20 w-[5.5rem] shadow-[-2px_0_0_0_rgba(68,64,60,0.35)]',
-                  thBase,
-                )}
-              >
-                Actions
-              </TableHead>
+              <TableHead className={cn('w-[5.5rem]', thBase)}>Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -142,7 +123,6 @@ export function ClientsTable({
               const selected = selectedIds.has(r.id)
               const even = index % 2 === 0
               const rowTone = selected ? rowSelectedClass : even ? rowEvenClass : rowOddClass
-              const stickyBg = selected ? stickySelected : even ? stickyEven : stickyOdd
               const balanceTone =
                 String(r.balance_type).toUpperCase() === 'CR' ? 'text-[#047857]' : 'text-[#c2410c]'
 
@@ -152,13 +132,7 @@ export function ClientsTable({
                   data-state={selected ? 'selected' : undefined}
                   className={cn('group border-[#e7e0d4] transition-colors', rowTone)}
                 >
-                  <TableCell
-                    className={cn(
-                      'sticky left-0 z-10 w-11 text-center align-middle shadow-[2px_0_0_0_rgba(231,224,212,0.9)]',
-                      stickyBg,
-                      !selected && stickyHover,
-                    )}
-                  >
+                  <TableCell className="w-11 text-center align-middle">
                     <input
                       type="checkbox"
                       className={checkboxClass}
@@ -167,13 +141,7 @@ export function ClientsTable({
                       onChange={() => onToggle(r.id)}
                     />
                   </TableCell>
-                  <TableCell
-                    className={cn(
-                      'sticky left-11 z-10 min-w-[12rem] align-middle text-left shadow-[2px_0_0_0_rgba(231,224,212,0.9)]',
-                      stickyBg,
-                      !selected && stickyHover,
-                    )}
-                  >
+                  <TableCell className="min-w-[12rem] align-middle text-left">
                     <div className={cn(cellInnerClass, 'text-left')}>
                       <p className={companyNameClass} title={r.company_name}>
                         {r.company_name}
@@ -217,13 +185,7 @@ export function ClientsTable({
                       <p className={secondaryLineClass}>{r.payment_term}</p>
                     </div>
                   </TableCell>
-                  <TableCell
-                    className={cn(
-                      'sticky right-0 z-10 w-[5.5rem] align-middle text-center shadow-[-2px_0_0_0_rgba(231,224,212,0.9)]',
-                      stickyBg,
-                      !selected && stickyHover,
-                    )}
-                  >
+                  <TableCell className="w-[5.5rem] align-middle text-center">
                     <div className="flex w-full items-center justify-center gap-0.5 p-[1mm]">
                       <Button
                         type="button"
