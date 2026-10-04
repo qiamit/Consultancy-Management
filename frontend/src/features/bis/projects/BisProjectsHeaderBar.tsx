@@ -58,7 +58,7 @@ export function BisProjectsHeaderBar({
     <div className="relative flex flex-col gap-3 overflow-hidden rounded-none border-2 border-stone-500 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-3 py-3 text-white shadow-sm ring-1 ring-amber-700/20 sm:px-5 sm:py-4">
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3 md:gap-4">
-          <h1 className="shrink-0 text-base font-semibold tracking-tight text-white sm:text-lg">
+          <h1 className="min-w-0 max-w-[50%] truncate text-base font-semibold tracking-tight text-white sm:max-w-none sm:shrink-0 sm:text-lg">
             {title}
           </h1>
           <div className="relative hidden min-w-0 flex-1 sm:block sm:max-w-xs md:max-w-sm lg:max-w-md">

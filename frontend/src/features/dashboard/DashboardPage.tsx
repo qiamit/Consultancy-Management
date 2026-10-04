@@ -267,12 +267,12 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className={cn(limsPageShellClass, 'space-y-6 p-4 md:p-6')}>
-      <div className={cn(limsPanelClass, 'p-6')}>
+    <div className={cn(limsPageShellClass, 'space-y-4 sm:space-y-6')}>
+      <div className={cn(limsPanelClass, 'p-4 sm:p-6')}>
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">
           Quality Engineering
         </p>
-        <h1 className="mt-2 font-jakarta text-3xl font-bold tracking-tight text-foreground">
+        <h1 className="mt-2 break-words font-jakarta text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
           Welcome{profileName || user?.email ? `, ${profileName || user?.email}` : ''}
         </h1>
         <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
@@ -289,7 +289,7 @@ export default function DashboardPage() {
         <h2 className="font-jakarta text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           License status
         </h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {licenseStatusCards.map(renderStatCard)}
         </div>
       </div>

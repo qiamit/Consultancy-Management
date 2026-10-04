@@ -9,7 +9,12 @@ import {
   Trash2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { limsDarkBarBtnClass, limsDarkBarFieldClass, limsDeleteBtnClass } from '@/lib/limsThemeUi'
+import {
+  limsDarkBarBtnClass,
+  limsDarkBarFieldClass,
+  limsDeleteBtnClass,
+  limsToolbarScrollClass,
+} from '@/lib/limsThemeUi'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
@@ -88,8 +93,8 @@ export function BisProjectsFooterBar({
 
   return (
     <div className="relative overflow-hidden rounded-none border-2 border-stone-500 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-2 py-1.5 text-white shadow-sm ring-1 ring-amber-700/20 sm:px-3 sm:py-2 md:px-4">
-      <div className="flex min-w-0 flex-nowrap items-center justify-between gap-1.5 sm:gap-2 md:gap-3">
-        <div className="flex min-w-0 flex-nowrap items-center gap-1 sm:gap-1.5">
+      <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+        <div className={cn(limsToolbarScrollClass, 'pb-0.5')}>
           <LaboratoryDirectorOnly>
             <Button
               type="button"
@@ -293,7 +298,7 @@ export function BisProjectsFooterBar({
           ) : null}
         </div>
 
-        <div className="flex min-w-0 flex-nowrap items-center justify-end gap-1 overflow-x-auto overscroll-x-contain sm:gap-1.5 md:gap-2 [-webkit-overflow-scrolling:touch]">
+        <div className={cn(limsToolbarScrollClass, 'justify-end sm:shrink-0')}>
           <Input
             aria-label="Jump to page"
             placeholder="Page"
@@ -302,7 +307,7 @@ export function BisProjectsFooterBar({
             onKeyDown={(e) => {
               if (e.key === 'Enter') onJumpToGo()
             }}
-            className={cn(fieldClass, 'w-10 sm:w-14 md:w-16')}
+            className={cn(fieldClass, 'w-12 sm:w-14 md:w-16')}
             inputMode="numeric"
           />
           <Button
@@ -319,14 +324,14 @@ export function BisProjectsFooterBar({
             type="button"
             variant="outline"
             size="icon"
-            className={cn(limsDarkBarBtnClass, 'h-7 w-7 shrink-0 sm:h-8 sm:w-8')}
+            className={cn(limsDarkBarBtnClass, 'h-8 w-8 shrink-0')}
             onClick={onPrevPage}
             disabled={loading || page <= 1}
           >
             <ChevronLeft className="size-3.5 sm:size-4" />
             <span className="sr-only">Previous page</span>
           </Button>
-          <span className="shrink-0 whitespace-nowrap text-center text-[10px] font-medium text-stone-300 sm:min-w-[5rem] sm:text-xs md:min-w-[6.5rem]">
+          <span className="shrink-0 whitespace-nowrap text-center text-xs font-medium text-stone-300 sm:min-w-[5rem] md:min-w-[6.5rem]">
             <span className="hidden sm:inline">Page </span>
             {page}/{Math.max(pageCount, 1)}
           </span>
@@ -334,7 +339,7 @@ export function BisProjectsFooterBar({
             type="button"
             variant="outline"
             size="icon"
-            className={cn(limsDarkBarBtnClass, 'h-7 w-7 shrink-0 sm:h-8 sm:w-8')}
+            className={cn(limsDarkBarBtnClass, 'h-8 w-8 shrink-0')}
             onClick={onNextPage}
             disabled={loading || page >= pageCount}
           >

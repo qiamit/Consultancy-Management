@@ -126,8 +126,16 @@
 
 @layer components {
   .app-shell-main {
-    @apply min-h-0 min-w-0 flex-1 overflow-auto bg-gradient-to-b from-stone-100/90 via-background to-stone-50;
+    @apply min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-gradient-to-b from-stone-100/90 via-background to-stone-50;
     -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+  }
+
+  /* Master list footers / dark bars: keep action buttons tappable while scrolling sideways */
+  .app-toolbar-scroll {
+    @apply flex min-w-0 max-w-full flex-nowrap items-center gap-1 overflow-x-auto overscroll-x-contain sm:gap-1.5;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
   }
 
   .app-card {

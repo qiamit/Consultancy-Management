@@ -1,5 +1,10 @@
 import { cn } from '@/lib/utils'
-import { limsDarkBarBtnClass, limsDarkBarFieldClass, limsDeleteBtnClass } from '@/lib/limsThemeUi'
+import {
+  limsDarkBarBtnClass,
+  limsDarkBarFieldClass,
+  limsDeleteBtnClass,
+  limsToolbarScrollClass,
+} from '@/lib/limsThemeUi'
 import { ChevronLeft, ChevronRight, Download, LayoutTemplate, Printer, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -45,8 +50,8 @@ export function QuotationFooterBar({
 
   return (
     <div className="relative overflow-hidden rounded-none border-2 border-stone-500 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-2 py-1.5 text-white shadow-sm ring-1 ring-amber-700/20 sm:px-3 sm:py-2 md:px-4">
-      <div className="flex min-w-0 flex-nowrap items-center justify-between gap-1.5 sm:gap-2 md:gap-3">
-        <div className="flex min-w-0 flex-nowrap items-center gap-1 sm:gap-1.5">
+      <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+        <div className={cn(limsToolbarScrollClass, 'pb-0.5')}>
           <Button
             type="button"
             variant="outline"
@@ -125,7 +130,7 @@ export function QuotationFooterBar({
           ) : null}
         </div>
 
-        <div className="flex min-w-0 flex-nowrap items-center justify-end gap-1 overflow-x-auto overscroll-x-contain sm:gap-1.5 md:gap-2 [-webkit-overflow-scrolling:touch]">
+        <div className={cn(limsToolbarScrollClass, 'justify-end sm:shrink-0')}>
           <Input
             aria-label="Jump to page"
             placeholder="Page"
@@ -134,7 +139,7 @@ export function QuotationFooterBar({
             onKeyDown={(e) => {
               if (e.key === 'Enter') onJumpToGo()
             }}
-            className={cn(fieldClass, 'w-10 sm:w-12 md:w-14')}
+            className={cn(fieldClass, 'w-12 sm:w-14')}
             inputMode="numeric"
           />
           <Button

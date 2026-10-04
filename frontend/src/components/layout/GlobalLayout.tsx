@@ -219,12 +219,20 @@ function Breadcrumbs() {
   if (!label || location.pathname === '/') return null
 
   return (
-    <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-sm text-stone-300">
-      <NavLink to="/" className="transition-colors hover:text-amber-200">
+    <nav
+      aria-label="Breadcrumb"
+      className="flex min-w-0 max-w-[min(100%,42rem)] items-center gap-1 text-xs text-stone-300 sm:gap-1.5 sm:text-sm"
+    >
+      <NavLink
+        to="/"
+        className="hidden shrink-0 transition-colors hover:text-amber-200 sm:inline"
+      >
         Dashboard
       </NavLink>
-      <ChevronsRight size={14} className="text-stone-500" />
-      <span className="font-medium text-white">{label}</span>
+      <ChevronsRight size={14} className="hidden shrink-0 text-stone-500 sm:block" aria-hidden />
+      <span className="min-w-0 truncate font-medium text-white" title={label}>
+        {label}
+      </span>
     </nav>
   )
 }
@@ -684,7 +692,7 @@ export default function GlobalLayout() {
       ) : null}
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="relative sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between gap-2 overflow-hidden border-b border-stone-700 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-3 text-white shadow-md sm:px-6">
+        <header className="relative sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between gap-2 overflow-hidden border-b border-stone-700 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-2 text-white shadow-md sm:px-4 md:px-6">
           <div
             className="pointer-events-none absolute inset-0 opacity-[0.16]"
             style={{
@@ -694,7 +702,7 @@ export default function GlobalLayout() {
           />
           <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
 
-          <div className="relative flex min-w-0 items-center gap-3">
+          <div className="relative flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
             <button
               type="button"
               className={cn(

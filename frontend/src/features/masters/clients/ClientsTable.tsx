@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
 import { getCurrencySymbol } from '@/lib/appCurrency'
 
 const GRID_TABLE =
-  'table-fixed min-w-[920px] w-full border-collapse font-jakarta [&_th]:border [&_td]:border [&_th]:border-stone-700 [&_td]:border-[#e7e0d4] [&_th]:p-[1mm] [&_td]:!p-[1mm]'
+  'min-w-[860px] w-full border-collapse font-jakarta [&_th]:border [&_td]:border [&_th]:border-stone-700 [&_td]:border-[#e7e0d4] [&_th]:p-[1mm] [&_td]:!p-[1mm]'
 
 const thBase =
   'bg-stone-800 text-center text-[11px] font-bold uppercase tracking-[0.14em] text-amber-200'
@@ -91,17 +91,17 @@ export function ClientsTable({
       ) : (
         <Table className={GRID_TABLE}>
           <colgroup>
-            <col className="w-[3%]" />
-            <col className="w-[25%]" />
-            <col className="w-[10%]" />
-            <col className="w-[20%]" />
-            <col className="w-[25%]" />
-            <col className="w-[10%]" />
-            <col className="w-[7%]" />
+            <col className="w-11" />
+            <col className="min-w-[12rem]" />
+            <col className="min-w-[7rem]" />
+            <col className="min-w-[11rem]" />
+            <col className="min-w-[12rem]" />
+            <col className="min-w-[7.5rem]" />
+            <col className="w-[5.5rem]" />
           </colgroup>
           <TableHeader>
             <TableRow className="border-stone-700 bg-stone-800 hover:bg-stone-800">
-              <TableHead className={cn('sticky left-0 z-10 w-[3%]', thBase)}>
+              <TableHead className={cn('sticky left-0 z-20 w-11 shadow-[2px_0_0_0_rgba(68,64,60,0.35)]', thBase)}>
                 <input
                   type="checkbox"
                   className={checkboxClass}
@@ -113,14 +113,26 @@ export function ClientsTable({
                   onChange={(e) => onToggleAll(e.target.checked)}
                 />
               </TableHead>
-              <TableHead className={cn('sticky left-[3%] z-10 w-[25%]', thBase)}>
+              <TableHead
+                className={cn(
+                  'sticky left-11 z-20 min-w-[12rem] text-left shadow-[2px_0_0_0_rgba(68,64,60,0.35)]',
+                  thBase,
+                )}
+              >
                 Company Identity
               </TableHead>
-              <TableHead className={cn('w-[10%]', thBase)}>Type &amp; Scale</TableHead>
-              <TableHead className={cn('w-[20%]', thBase)}>Contact Details</TableHead>
-              <TableHead className={cn('w-[25%]', thBase)}>Address</TableHead>
-              <TableHead className={cn('w-[10%]', thBase)}>Balance</TableHead>
-              <TableHead className={cn('w-[7%]', thBase)}>Actions</TableHead>
+              <TableHead className={cn('min-w-[7rem]', thBase)}>Type &amp; Scale</TableHead>
+              <TableHead className={cn('min-w-[11rem]', thBase)}>Contact Details</TableHead>
+              <TableHead className={cn('min-w-[12rem]', thBase)}>Address</TableHead>
+              <TableHead className={cn('min-w-[7.5rem]', thBase)}>Balance</TableHead>
+              <TableHead
+                className={cn(
+                  'sticky right-0 z-20 w-[5.5rem] shadow-[-2px_0_0_0_rgba(68,64,60,0.35)]',
+                  thBase,
+                )}
+              >
+                Actions
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -142,7 +154,7 @@ export function ClientsTable({
                 >
                   <TableCell
                     className={cn(
-                      'sticky left-0 z-10 w-[3%] text-center align-middle',
+                      'sticky left-0 z-10 w-11 text-center align-middle shadow-[2px_0_0_0_rgba(231,224,212,0.9)]',
                       stickyBg,
                       !selected && stickyHover,
                     )}
@@ -157,7 +169,7 @@ export function ClientsTable({
                   </TableCell>
                   <TableCell
                     className={cn(
-                      'sticky left-[3%] z-10 w-[25%] align-middle text-left',
+                      'sticky left-11 z-10 min-w-[12rem] align-middle text-left shadow-[2px_0_0_0_rgba(231,224,212,0.9)]',
                       stickyBg,
                       !selected && stickyHover,
                     )}
@@ -169,13 +181,13 @@ export function ClientsTable({
                       {r.gst_number?.trim() ? <p className={metaLineClass}>{r.gst_number}</p> : null}
                     </div>
                   </TableCell>
-                  <TableCell className="w-[10%] align-middle text-center">
+                  <TableCell className="min-w-[7rem] align-middle text-center">
                     <div className={cn(cellInnerClass, 'text-center')}>
                       <p className={primaryLineClass}>{r.company_type}</p>
                       <p className={scaleClass}>{r.company_scale}</p>
                     </div>
                   </TableCell>
-                  <TableCell className="w-[20%] align-middle text-center">
+                  <TableCell className="min-w-[11rem] align-middle text-center">
                     <div className={cn(cellInnerClass, 'text-center')} title={contactTitle || undefined}>
                       {contact.name ? <p className={primaryLineClass}>{contact.name}</p> : null}
                       {contact.email ? (
@@ -188,7 +200,7 @@ export function ClientsTable({
                       ) : null}
                     </div>
                   </TableCell>
-                  <TableCell className="w-[25%] align-middle text-center">
+                  <TableCell className="min-w-[12rem] align-middle text-center">
                     <div
                       className={cn(cellInnerClass, secondaryLineClass, 'text-center text-[#57534e] line-clamp-3')}
                       title={formatClientAddress(r)}
@@ -196,7 +208,7 @@ export function ClientsTable({
                       {formatClientAddress(r)}
                     </div>
                   </TableCell>
-                  <TableCell className="w-[10%] align-middle text-center">
+                  <TableCell className="min-w-[7.5rem] align-middle text-center">
                     <div className={cn(cellInnerClass, 'text-center')}>
                       <p className={cn('text-[11px] font-bold uppercase tracking-[0.12em]', balanceTone)}>
                         {r.balance_type}
@@ -205,13 +217,19 @@ export function ClientsTable({
                       <p className={secondaryLineClass}>{r.payment_term}</p>
                     </div>
                   </TableCell>
-                  <TableCell className="w-[7%] align-middle text-center">
+                  <TableCell
+                    className={cn(
+                      'sticky right-0 z-10 w-[5.5rem] align-middle text-center shadow-[-2px_0_0_0_rgba(231,224,212,0.9)]',
+                      stickyBg,
+                      !selected && stickyHover,
+                    )}
+                  >
                     <div className="flex w-full items-center justify-center gap-0.5 p-[1mm]">
                       <Button
                         type="button"
                         size="sm"
                         variant="ghost"
-                        className="rounded-none text-[#92400e] hover:bg-[#f3e9d8] hover:text-[#78350f]"
+                        className="h-8 w-8 rounded-none p-0 text-[#92400e] hover:bg-[#f3e9d8] hover:text-[#78350f]"
                         aria-label={`Edit ${r.company_name}`}
                         onClick={() => onEdit(r)}
                       >
@@ -221,7 +239,7 @@ export function ClientsTable({
                         type="button"
                         size="sm"
                         variant="ghost"
-                        className="rounded-none text-[#92400e] hover:bg-[#f3e9d8] hover:text-[#78350f]"
+                        className="h-8 w-8 rounded-none p-0 text-[#92400e] hover:bg-[#f3e9d8] hover:text-[#78350f]"
                         aria-label={`Copy ${r.company_name}`}
                         onClick={() => onCopy(r)}
                       >
