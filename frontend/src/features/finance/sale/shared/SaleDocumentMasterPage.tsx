@@ -37,6 +37,7 @@ import {
   convertInvoiceToCreditNoteIfNeeded,
   convertQuotationIfNeeded,
 } from './convertQuotationToSaleDocument'
+import { emailSaleDocumentToClient } from './emailSaleDocument'
 import { exportSaleDocumentsCsv } from './exportSaleDocumentsCsv'
 import { fetchDefaultQuotationTerm } from '../quotation/quotationTermsApi'
 import { fetchDefaultQuotationNote } from '../quotation/quotationNotesApi'
@@ -134,6 +135,7 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
   const [saveLoading, setSaveLoading] = useState(false)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null)
+  const [emailBusyId, setEmailBusyId] = useState<string | null>(null)
 
   const [clientOptions, setClientOptions] = useState<FilterComboboxOption[]>([])
   const [clientContactById, setClientContactById] = useState<Record<string, QuotationClientContact>>(
@@ -573,6 +575,20 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
     setMessage(`Exported ${count} row(s).`)
   }
 
+  const handleEmailClient = (row: QuotationRow) => {
+    void (async () => {
+      setEmailBusyId(row.id)
+      setMessage(null)
+      try {
+        setMessage(await emailSaleDocumentToClient(row, config.documentKind))
+      } catch (err) {
+        setMessage(formatSaleApiError(err))
+      } finally {
+        setEmailBusyId(null)
+      }
+    })()
+  }
+
   return (
     <div className={limsPageShellClass}>
       <QuotationHeaderBar
@@ -616,6 +632,8 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
             (err) => setMessage(err instanceof Error ? err.message : 'PDF failed.'),
           )
         }}
+        onEmailClient={handleEmailClient}
+        emailBusyId={emailBusyId}
         onStatusChange={(row, status) => void handleStatusChange(row, status)}
         emptyPrimary={emptyPrimary}
         emptySecondary={emptySecondary}

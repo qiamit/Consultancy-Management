@@ -113,7 +113,8 @@ export function QuotationFooterBar({
                 'min-w-0 max-w-[8rem] truncate text-[10px] sm:max-w-[12rem] sm:text-xs md:max-w-[16rem]',
                 message.toLowerCase().includes('saved') ||
                   message.toLowerCase().includes('deleted') ||
-                  message.toLowerCase().includes('exported')
+                  message.toLowerCase().includes('exported') ||
+                  message.toLowerCase().includes('emailed')
                   ? 'text-emerald-300'
                   : 'text-red-300',
               )}

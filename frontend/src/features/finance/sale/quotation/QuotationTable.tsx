@@ -1,4 +1,4 @@
-import { Copy, Download, Pencil, Printer } from 'lucide-react'
+import { Copy, Download, Mail, Pencil, Printer } from 'lucide-react'
 import { getCurrencySymbol } from '@/lib/appCurrency'
 import { Button } from '@/components/ui/button'
 import {
@@ -61,6 +61,8 @@ export function QuotationTable({
   onCopy,
   onPrint,
   onDownloadPdf,
+  onEmailClient,
+  emailBusyId = null,
   onStatusChange,
   onRetry,
   emptyPrimary,
@@ -82,6 +84,8 @@ export function QuotationTable({
   onCopy: (row: QuotationRow) => void
   onPrint: (row: QuotationRow) => void
   onDownloadPdf: (row: QuotationRow) => void
+  onEmailClient?: (row: QuotationRow) => void
+  emailBusyId?: string | null
   onStatusChange: (row: QuotationRow, status: QuotationStatus) => void
   onRetry?: () => void
   emptyPrimary?: string
@@ -354,6 +358,19 @@ export function QuotationTable({
                       >
                         <Download size={16} />
                       </Button>
+                      {onEmailClient ? (
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          aria-label={`Email ${r.quotation_number} to client`}
+                          title="Email to client"
+                          disabled={busy || loading || emailBusyId === r.id}
+                          onClick={() => onEmailClient(r)}
+                        >
+                          <Mail size={16} />
+                        </Button>
+                      ) : null}
                     </div>
                   </TableCell>
                 </TableRow>

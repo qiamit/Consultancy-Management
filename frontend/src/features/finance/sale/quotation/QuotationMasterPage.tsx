@@ -33,6 +33,7 @@ import { fetchDefaultQuotationNote } from './quotationNotesApi'
 import { downloadQuotationPdfWithTemplate, printQuotationsWithTemplate } from './outputQuotationDocument'
 import { fetchDefaultSignatureForKind } from './quotationSignatureStorage'
 import { convertQuotationIfNeeded } from '../shared/convertQuotationToSaleDocument'
+import { emailSaleDocumentToClient } from '../shared/emailSaleDocument'
 import { exportSaleDocumentsCsv } from '../shared/exportSaleDocumentsCsv'
 
 function isAbortOrLockError(err: unknown): boolean {
@@ -122,6 +123,7 @@ export default function QuotationMasterPage() {
   const [saveLoading, setSaveLoading] = useState(false)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null)
+  const [emailBusyId, setEmailBusyId] = useState<string | null>(null)
 
   const [clientOptions, setClientOptions] = useState<FilterComboboxOption[]>([])
   const [clientContactById, setClientContactById] = useState<Record<string, QuotationClientContact>>(
@@ -663,6 +665,20 @@ export default function QuotationMasterPage() {
     })()
   }
 
+  const handleEmailClient = (row: QuotationRow) => {
+    void (async () => {
+      setEmailBusyId(row.id)
+      setSaveMessage(null)
+      try {
+        setSaveMessage(await emailSaleDocumentToClient(row, 'quotation'))
+      } catch (err) {
+        setSaveMessage(err instanceof Error ? err.message : 'Failed to email client')
+      } finally {
+        setEmailBusyId(null)
+      }
+    })()
+  }
+
   return (
     <div className={limsPageShellClass}>
       <QuotationHeaderBar
@@ -691,6 +707,8 @@ export default function QuotationMasterPage() {
         onCopy={openCopy}
         onPrint={handlePrintRow}
         onDownloadPdf={handleDownloadPdfRow}
+        onEmailClient={handleEmailClient}
+        emailBusyId={emailBusyId}
         onStatusChange={handleStatusChange}
         onRetry={() => {
           void (async () => {
