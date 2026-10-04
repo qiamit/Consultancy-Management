@@ -194,7 +194,7 @@ export function FilterCombobox({
     if (!input) return
 
     const rect = input.getBoundingClientRect()
-    const estimatedHeight = Math.min(Math.max(itemCount, 1) * 44, 224)
+    const estimatedHeight = Math.min(32 + Math.max(itemCount, 1) * 40, 260)
     const spaceBelow = window.innerHeight - rect.bottom
     const spaceAbove = rect.top
     const openUp =
@@ -293,13 +293,20 @@ export function FilterCombobox({
     }, 200)
   }
 
+  const resultLabel =
+    options.length === 0
+      ? 'No matches'
+      : options.length === 1
+        ? '1 match'
+        : `${options.length} matches`
+
   const dropdownList = showList && dropdownPosition ? (
     <div
       {...{ [FILTER_COMBOBOX_DROPDOWN_ATTR]: '' }}
-      className="pointer-events-auto fixed z-[10000] overflow-hidden rounded-none border-2 border-stone-500 bg-white shadow-xl ring-1 ring-amber-700/25"
+      className="pointer-events-auto fixed z-[10000] overflow-hidden rounded-none border-2 border-stone-600 bg-[#fffcf7] shadow-2xl ring-1 ring-amber-700/30"
       style={{
         left: dropdownPosition.left,
-        width: Math.max(dropdownPosition.width, 420),
+        width: Math.max(dropdownPosition.width, 260),
         top: dropdownPosition.top,
         bottom: dropdownPosition.bottom,
         pointerEvents: 'auto',
@@ -310,76 +317,109 @@ export function FilterCombobox({
         e.stopPropagation()
       }}
     >
+      <div className="flex items-center justify-between gap-2 border-b border-stone-500 bg-gradient-to-r from-stone-800 via-stone-900 to-stone-800 px-3 py-1.5">
+        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-amber-200">Suggestions</p>
+        <p className="truncate text-[10px] font-medium tabular-nums text-stone-300">{resultLabel}</p>
+      </div>
+      <div className="h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
+
       <ul
         id={optionListId}
         role="listbox"
-        className="max-h-56 overflow-auto bg-gradient-to-b from-stone-50 to-white py-1 text-sm"
+        className="max-h-56 overflow-auto overscroll-contain bg-gradient-to-b from-[#fffcf7] to-[#f7f3eb] py-1 text-sm [scrollbar-width:thin] [scrollbar-color:rgb(168_162_158)_transparent]"
       >
         {showOptions ? (
           <>
-            {options.map((opt, index) => (
-              <li key={opt.id} role="presentation">
-                <button
-                  id={`${optionListId}-option-${index}`}
-                  type="button"
-                  role="option"
-                  tabIndex={-1}
-                  {...{ [FILTER_COMBOBOX_OPTION_INDEX_ATTR]: String(index) }}
-                  aria-selected={highlightIndex === index}
-                  title={
-                    opt.secondaryLabel?.trim()
-                      ? `${opt.label} | ${opt.secondaryLabel.trim()}`
-                      : opt.label
-                  }
-                  className={cn(
-                    'flex w-full items-center gap-1 px-3 py-2 text-left text-[13px] leading-none text-stone-800 transition-colors',
-                    'whitespace-nowrap',
-                    highlightIndex === index
-                      ? 'bg-amber-100 text-stone-900'
-                      : 'hover:bg-stone-100 hover:text-stone-950',
-                  )}
-                  onPointerDown={handleOptionPointerDown(index)}
-                  onMouseEnter={() => setHighlightIndex(index)}
-                >
-                  <span className="shrink-0 font-medium">{opt.label}</span>
-                  {opt.secondaryLabel?.trim() ? (
-                    <span className="min-w-0 truncate font-normal text-stone-500">
-                      | {opt.secondaryLabel.trim()}
-                    </span>
-                  ) : null}
-                </button>
-              </li>
-            ))}
-            {extraActions.map((action, actionIndex) => {
-              const index = options.length + actionIndex
+            {options.map((opt, index) => {
+              const active = highlightIndex === index
               return (
-                <li key={action.key} role="presentation" className="border-t border-stone-200">
+                <li key={opt.id} role="presentation">
                   <button
                     id={`${optionListId}-option-${index}`}
                     type="button"
                     role="option"
                     tabIndex={-1}
                     {...{ [FILTER_COMBOBOX_OPTION_INDEX_ATTR]: String(index) }}
-                    aria-selected={highlightIndex === index}
+                    aria-selected={active}
+                    title={
+                      opt.secondaryLabel?.trim()
+                        ? `${opt.label} | ${opt.secondaryLabel.trim()}`
+                        : opt.label
+                    }
                     className={cn(
-                      'block w-full px-3 py-2.5 text-left text-[12px] font-semibold text-amber-800 transition-colors',
+                      'relative flex w-full items-start gap-2.5 border-l-2 px-3 py-2 text-left transition-colors',
+                      active
+                        ? 'border-l-amber-600 bg-amber-100/90 text-stone-950'
+                        : 'border-l-transparent text-stone-800 hover:border-l-amber-400/80 hover:bg-[#f3e9d8]',
+                    )}
+                    onPointerDown={handleOptionPointerDown(index)}
+                    onMouseEnter={() => setHighlightIndex(index)}
+                  >
+                    <span
+                      className={cn(
+                        'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center border text-[9px] font-bold tabular-nums',
+                        active
+                          ? 'border-amber-700 bg-amber-600 text-white'
+                          : 'border-stone-400 bg-white text-stone-500',
+                      )}
+                      aria-hidden
+                    >
+                      {index + 1}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[13px] font-semibold tracking-tight leading-snug">
+                        {opt.label}
+                      </span>
+                      {opt.secondaryLabel?.trim() ? (
+                        <span className="mt-0.5 block truncate text-[11px] font-medium text-stone-500">
+                          {opt.secondaryLabel.trim()}
+                        </span>
+                      ) : null}
+                    </span>
+                  </button>
+                </li>
+              )
+            })}
+            {extraActions.map((action, actionIndex) => {
+              const index = options.length + actionIndex
+              const active = highlightIndex === index
+              return (
+                <li key={action.key} role="presentation" className="border-t border-stone-300/80">
+                  <button
+                    id={`${optionListId}-option-${index}`}
+                    type="button"
+                    role="option"
+                    tabIndex={-1}
+                    {...{ [FILTER_COMBOBOX_OPTION_INDEX_ATTR]: String(index) }}
+                    aria-selected={active}
+                    className={cn(
+                      'flex w-full items-center gap-2 border-l-2 px-3 py-2.5 text-left text-[12px] font-semibold transition-colors',
                       'whitespace-normal break-words',
-                      highlightIndex === index
-                        ? 'bg-amber-100 text-amber-950'
-                        : 'hover:bg-amber-50 hover:text-amber-950',
+                      active
+                        ? 'border-l-amber-600 bg-amber-100 text-amber-950'
+                        : 'border-l-transparent text-amber-800 hover:border-l-amber-500 hover:bg-amber-50 hover:text-amber-950',
                       action.className,
                     )}
                     onPointerDown={handleOptionPointerDown(index)}
                     onMouseEnter={() => setHighlightIndex(index)}
                   >
-                    {action.label}
+                    <span
+                      className="flex h-4 w-4 shrink-0 items-center justify-center border border-amber-700/50 bg-amber-500/15 text-[11px] font-bold text-amber-800"
+                      aria-hidden
+                    >
+                      +
+                    </span>
+                    <span>{action.label}</span>
                   </button>
                 </li>
               )
             })}
           </>
         ) : (
-          <li className="px-3 py-2.5 text-sm text-stone-500">No results found</li>
+          <li className="px-3 py-4 text-center">
+            <p className="text-[12px] font-semibold text-stone-700">No results found</p>
+            <p className="mt-0.5 text-[11px] text-stone-500">Try another spelling, or add a new value.</p>
+          </li>
         )}
       </ul>
     </div>
