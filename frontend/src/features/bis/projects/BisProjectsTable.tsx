@@ -93,7 +93,7 @@ export function BisProjectsTable({
           <Table className={GRID_TABLE}>
             <TableHeader>
               <TableRow className="bg-stone-800 hover:bg-stone-800">
-                <TableHead className="sticky left-0 z-10 w-12 bg-stone-800 text-center text-[11px] font-bold uppercase tracking-[0.14em] text-amber-200 sm:w-14">
+                <TableHead className="z-10 w-12 bg-stone-800 text-center text-[11px] font-bold uppercase tracking-[0.14em] text-amber-200 sm:w-14">
                   <input
                     type="checkbox"
                     className={checkboxClass}
@@ -105,7 +105,7 @@ export function BisProjectsTable({
                     onChange={(e) => onToggleAll(e.target.checked)}
                   />
                 </TableHead>
-                <TableHead className="sticky left-12 z-10 min-w-[220px] bg-stone-800 text-left text-[11px] font-bold uppercase tracking-[0.14em] text-amber-200 sm:left-14">
+                <TableHead className="z-10 min-w-[220px] bg-stone-800 text-left text-[11px] font-bold uppercase tracking-[0.14em] text-amber-200 ">
                   Name of the Client
                 </TableHead>
                 <TableHead className={cn(headClass, 'min-w-[160px]')}>IS Code</TableHead>
@@ -131,7 +131,7 @@ export function BisProjectsTable({
                   <TableRow key={r.id} data-state={selected ? 'selected' : undefined} className="group">
                     <TableCell
                       className={cn(
-                        'sticky left-0 z-10 text-center align-middle transition-colors',
+                        'z-10 text-center align-middle transition-colors',
                         stickyCellBg,
                       )}
                     >
@@ -145,7 +145,7 @@ export function BisProjectsTable({
                     </TableCell>
                     <TableCell
                       className={cn(
-                        'sticky left-12 z-10 align-middle transition-colors sm:left-14',
+                        'z-10 align-middle transition-colors ',
                         stickyCellBg,
                       )}
                     >

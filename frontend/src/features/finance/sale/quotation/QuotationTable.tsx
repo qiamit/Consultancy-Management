@@ -141,7 +141,7 @@ export function QuotationTable({
         <Table className={GRID_TABLE}>
           <TableHeader>
             <TableRow className="bg-stone-800 hover:bg-stone-800">
-              <TableHead className="sticky left-0 z-10 w-12 bg-stone-800 text-center text-[11px] font-bold uppercase tracking-[0.14em] text-amber-200 sm:w-14">
+              <TableHead className="z-10 w-12 bg-stone-800 text-center text-[11px] font-bold uppercase tracking-[0.14em] text-amber-200 sm:w-14">
                 <input
                   type="checkbox"
                   className={checkboxClass}
@@ -153,7 +153,7 @@ export function QuotationTable({
                   onChange={(e) => onToggleAll(e.target.checked)}
                 />
               </TableHead>
-              <TableHead className="sticky left-12 z-10 min-w-[200px] bg-stone-800 text-left text-[11px] font-bold uppercase tracking-[0.14em] text-amber-200 sm:left-14">
+              <TableHead className="z-10 min-w-[200px] bg-stone-800 text-left text-[11px] font-bold uppercase tracking-[0.14em] text-amber-200 ">
                 Client
               </TableHead>
               <TableHead className="min-w-[120px] text-center text-xs">Date</TableHead>
@@ -200,7 +200,7 @@ export function QuotationTable({
                 >
                   <TableCell
                     className={cn(
-                      'sticky left-0 z-10 text-center align-middle transition-colors',
+                      'z-10 text-center align-middle transition-colors',
                       stickyCellBg,
                     )}
                   >
@@ -214,7 +214,7 @@ export function QuotationTable({
                   </TableCell>
                   <TableCell
                     className={cn(
-                      'sticky left-12 z-10 align-middle transition-colors sm:left-14',
+                      'z-10 align-middle transition-colors ',
                       stickyCellBg,
                     )}
                   >

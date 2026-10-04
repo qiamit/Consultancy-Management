@@ -56,7 +56,7 @@ export function ProductsServicesTable({
         <Table className={GRID_TABLE}>
           <TableHeader>
             <TableRow className="bg-stone-800 hover:bg-stone-800">
-              <TableHead className="sticky left-0 z-10 w-12 bg-stone-800 text-center text-[11px] font-bold uppercase tracking-[0.14em] text-amber-200 sm:w-14">
+              <TableHead className="z-10 w-12 bg-stone-800 text-center text-[11px] font-bold uppercase tracking-[0.14em] text-amber-200 sm:w-14">
                 <input
                   type="checkbox"
                   className={checkboxClass}
@@ -68,7 +68,7 @@ export function ProductsServicesTable({
                   onChange={(e) => onToggleAll(e.target.checked)}
                 />
               </TableHead>
-              <TableHead className="sticky left-12 z-10 min-w-[160px] bg-stone-800 text-left text-[11px] font-bold uppercase tracking-[0.14em] text-amber-200 sm:left-14">
+              <TableHead className="z-10 min-w-[160px] bg-stone-800 text-left text-[11px] font-bold uppercase tracking-[0.14em] text-amber-200 ">
                 Item Identity
               </TableHead>
               <TableHead className="min-w-[110px] text-center text-xs">Type &amp; Category</TableHead>
@@ -88,7 +88,7 @@ export function ProductsServicesTable({
                 <TableRow key={r.id} data-state={selected ? 'selected' : undefined}>
                   <TableCell
                     className={cn(
-                      'sticky left-0 z-10 text-center align-middle',
+                      'z-10 text-center align-middle',
                       selected ? 'bg-muted' : 'bg-card',
                     )}
                   >
@@ -102,7 +102,7 @@ export function ProductsServicesTable({
                   </TableCell>
                   <TableCell
                     className={cn(
-                      'sticky left-12 z-10 align-middle text-left sm:left-14',
+                      'z-10 align-middle text-left ',
                       selected ? 'bg-muted' : 'bg-card',
                     )}
                   >
