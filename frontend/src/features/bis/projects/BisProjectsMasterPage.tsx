@@ -215,15 +215,18 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
     }
   }
 
-  const handleEmailForm1 = async (row: BisProjectRow | undefined) => {
+  const handleEmailDocument = async (
+    row: BisProjectRow | undefined,
+    kind: BisPrintDocumentKind,
+  ) => {
     if (!row) {
-      setMessage('Select exactly one license to email Form-I.')
+      setMessage('Select exactly one license to email the client.')
       return
     }
     setPrintDocsBusy(true)
     setMessage(null)
     try {
-      setMessage(await emailBisDocumentToClient(row, 'form1'))
+      setMessage(await emailBisDocumentToClient(row, kind))
     } catch (err) {
       setMessage(formatBisApiError(err))
     } finally {
@@ -291,10 +294,9 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
         onDeleteSelected={() => void handleDeleteSelected()}
         onExport={handleExport}
         onPrintList={handlePrintList}
-        onEmailClient={
-          canPrintBisForms ? () => void handleEmailForm1(selectedRow) : undefined
+        onEmailDocument={
+          canPrintBisForms ? (kind) => void handleEmailDocument(selectedRow, kind) : undefined
         }
-        emailClientLabel="Email Form-I"
         onStartRenewal={
           listMode === 'due_soon' || listMode === 'expired' ? handleStartRenewal : undefined
         }
@@ -339,6 +341,9 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
         }
         onPrintDocument={
           canPrintBisForms ? (kind) => void handlePrintDocument(editingRow, kind) : undefined
+        }
+        onEmailDocument={
+          canPrintBisForms ? (kind) => void handleEmailDocument(editingRow, kind) : undefined
         }
         printBusy={printDocsBusy}
       />

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronDown, ExternalLink, Printer, Search } from 'lucide-react'
+import { ChevronDown, ExternalLink, Mail, Printer, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -126,6 +126,7 @@ export function BisProjectsForm({
   onPrintForm1,
   onPrintAuthLetter,
   onPrintDocument,
+  onEmailDocument,
   printBusy = false,
 }: {
   open: boolean
@@ -140,6 +141,7 @@ export function BisProjectsForm({
   onPrintForm1?: () => void
   onPrintAuthLetter?: () => void
   onPrintDocument?: (kind: BisPrintDocumentKind) => void
+  onEmailDocument?: (kind: BisPrintDocumentKind) => void
   printBusy?: boolean
 }) {
   const validity = licenseValidityState(form.licenseValidityDate)
@@ -535,6 +537,37 @@ export function BisProjectsForm({
                 <DropdownMenuContent align="start">
                   {EXTRA_PRINT_KINDS.map((kind) => (
                     <DropdownMenuItem key={kind} onSelect={() => onPrintDocument(kind)}>
+                      {BIS_PRINT_DOCUMENT_LABEL[kind]}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null}
+            {editing && onEmailDocument ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 rounded-none border-stone-500"
+                    disabled={saving || printBusy}
+                    title="Email BIS documents to the client from the saved record"
+                  >
+                    <Mail className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+                    Email docs
+                    <ChevronDown className="ml-1 h-3 w-3" aria-hidden />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto">
+                  <DropdownMenuItem onSelect={() => onEmailDocument('form1')}>
+                    {BIS_PRINT_DOCUMENT_LABEL.form1}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => onEmailDocument('authorization-letter')}>
+                    {BIS_PRINT_DOCUMENT_LABEL['authorization-letter']}
+                  </DropdownMenuItem>
+                  {EXTRA_PRINT_KINDS.map((kind) => (
+                    <DropdownMenuItem key={`email-${kind}`} onSelect={() => onEmailDocument(kind)}>
                       {BIS_PRINT_DOCUMENT_LABEL[kind]}
                     </DropdownMenuItem>
                   ))}

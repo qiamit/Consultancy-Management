@@ -33,6 +33,7 @@ export function BisProjectsFooterBar({
   printListLabel = 'Print list',
   onEmailClient,
   emailClientLabel = 'Email client',
+  onEmailDocument,
   onStartRenewal,
   onPrintForm1,
   onPrintAuthLetter,
@@ -56,9 +57,11 @@ export function BisProjectsFooterBar({
   onPrintList?: () => void
   /** Button label when `onPrintList` is provided (default: Print list). */
   printListLabel?: string
-  /** Email the selected document HTML to the client master email. */
+  /** Email one fixed document HTML to the client (renewals / SFR / surveillance). */
   onEmailClient?: () => void
   emailClientLabel?: string
+  /** Email any BIS print document kind to the client (license lists). */
+  onEmailDocument?: (kind: BisPrintDocumentKind) => void
   /** Open renewal form for the selected license (Due Soon / Expired). */
   onStartRenewal?: () => void
   onPrintForm1?: () => void
@@ -138,7 +141,41 @@ export function BisProjectsFooterBar({
               <span className="hidden lg:inline">{printListLabel}</span>
             </Button>
           ) : null}
-          {onEmailClient ? (
+          {onEmailDocument ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className={actionBtnClass}
+                  disabled={loading || printDocsBusy || selectedCount !== 1}
+                  title={
+                    selectedCount === 1
+                      ? 'Email BIS documents to the client'
+                      : 'Select exactly one row to email the client'
+                  }
+                >
+                  <Mail className="size-3.5 shrink-0 sm:size-4" />
+                  <span className="hidden lg:inline">Email docs</span>
+                  <ChevronDown className="size-3 shrink-0" aria-hidden />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto">
+                <DropdownMenuItem onSelect={() => onEmailDocument('form1')}>
+                  {BIS_PRINT_DOCUMENT_LABEL.form1}
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => onEmailDocument('authorization-letter')}>
+                  {BIS_PRINT_DOCUMENT_LABEL['authorization-letter']}
+                </DropdownMenuItem>
+                {EXTRA_PRINT_KINDS.map((kind) => (
+                  <DropdownMenuItem key={`email-${kind}`} onSelect={() => onEmailDocument(kind)}>
+                    {BIS_PRINT_DOCUMENT_LABEL[kind]}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : onEmailClient ? (
             <Button
               type="button"
               variant="outline"
