@@ -1,4 +1,4 @@
-import { Building2, Copy, Mail, MapPin, Pencil, Phone, Wallet } from 'lucide-react'
+import { ArrowDown, ArrowUp, ArrowUpDown, Building2, Copy, Mail, MapPin, Pencil, Phone, Wallet } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
 import type { ClientRow } from './types'
@@ -6,6 +6,53 @@ import { formatClientAddress, formatClientContact, formatClientContactLines } fr
 import { clientPanelClass } from './clientsFormUi'
 import { cn } from '@/lib/utils'
 import { getCurrencySymbol } from '@/lib/appCurrency'
+
+export type ClientSortKey =
+  | 'companyIdentity'
+  | 'typeScale'
+  | 'contact'
+  | 'address'
+  | 'balance'
+
+export type ClientSortDir = 'asc' | 'desc'
+
+function SortableHeader({
+  label,
+  columnKey,
+  sortKey,
+  sortDir,
+  onSort,
+  className,
+  align = 'center',
+}: {
+  label: string
+  columnKey: ClientSortKey
+  sortKey: ClientSortKey
+  sortDir: ClientSortDir
+  onSort: (key: ClientSortKey) => void
+  className?: string
+  align?: 'left' | 'center'
+}) {
+  const active = sortKey === columnKey
+  const Icon = active ? (sortDir === 'asc' ? ArrowUp : ArrowDown) : ArrowUpDown
+
+  return (
+    <TableHead className={className}>
+      <button
+        type="button"
+        className={cn(
+          'inline-flex w-full items-center gap-1 text-amber-200 transition-colors hover:text-amber-100',
+          align === 'left' ? 'justify-start text-left' : 'justify-center text-center',
+        )}
+        onClick={() => onSort(columnKey)}
+        aria-label={`Sort by ${label}${active ? `, ${sortDir === 'asc' ? 'ascending' : 'descending'}` : ''}`}
+      >
+        <span>{label}</span>
+        <Icon className={cn('h-3.5 w-3.5 shrink-0', active ? 'text-amber-300' : 'text-amber-200/60')} />
+      </button>
+    </TableHead>
+  )
+}
 
 /** ~10" / desktop: row table. Below that: cards. */
 const TABLE_MQ_SHOW = 'hidden lg:block'
@@ -96,6 +143,9 @@ export function ClientsTable({
   onToggleAll,
   onEdit,
   onCopy,
+  sortKey,
+  sortDir,
+  onSort,
 }: {
   rows: ClientRow[]
   loading: boolean
@@ -106,6 +156,9 @@ export function ClientsTable({
   onToggleAll: (checked: boolean) => void
   onEdit: (row: ClientRow) => void
   onCopy: (row: ClientRow) => void
+  sortKey: ClientSortKey
+  sortDir: ClientSortDir
+  onSort: (key: ClientSortKey) => void
 }) {
   const allChecked = rows.length > 0 && rows.every((r) => selectedIds.has(r.id))
   const someChecked = rows.some((r) => selectedIds.has(r.id))
@@ -282,11 +335,47 @@ export function ClientsTable({
                       onChange={(e) => onToggleAll(e.target.checked)}
                     />
                   </TableHead>
-                  <TableHead className={cn('min-w-[12rem] text-left', thBase)}>Company Identity</TableHead>
-                  <TableHead className={cn('min-w-[7rem]', thBase)}>Type &amp; Scale</TableHead>
-                  <TableHead className={cn('min-w-[11rem]', thBase)}>Contact Details</TableHead>
-                  <TableHead className={cn('min-w-[12rem]', thBase)}>Address</TableHead>
-                  <TableHead className={cn('min-w-[7.5rem]', thBase)}>Balance</TableHead>
+                  <SortableHeader
+                    label="Company Identity"
+                    columnKey="companyIdentity"
+                    sortKey={sortKey}
+                    sortDir={sortDir}
+                    onSort={onSort}
+                    className={cn('min-w-[12rem] text-left', thBase)}
+                    align="left"
+                  />
+                  <SortableHeader
+                    label="Type & Scale"
+                    columnKey="typeScale"
+                    sortKey={sortKey}
+                    sortDir={sortDir}
+                    onSort={onSort}
+                    className={cn('min-w-[7rem]', thBase)}
+                  />
+                  <SortableHeader
+                    label="Contact Details"
+                    columnKey="contact"
+                    sortKey={sortKey}
+                    sortDir={sortDir}
+                    onSort={onSort}
+                    className={cn('min-w-[11rem]', thBase)}
+                  />
+                  <SortableHeader
+                    label="Address"
+                    columnKey="address"
+                    sortKey={sortKey}
+                    sortDir={sortDir}
+                    onSort={onSort}
+                    className={cn('min-w-[12rem]', thBase)}
+                  />
+                  <SortableHeader
+                    label="Balance"
+                    columnKey="balance"
+                    sortKey={sortKey}
+                    sortDir={sortDir}
+                    onSort={onSort}
+                    className={cn('min-w-[7.5rem]', thBase)}
+                  />
                   <TableHead className={cn('w-[5.5rem]', thBase)}>Actions</TableHead>
                 </TableRow>
               </TableHeader>

@@ -1,6 +1,5 @@
 import type { ElementType } from 'react'
 import {
-  LayoutDashboard,
   FilePlus2,
   FileStack,
   RefreshCw,
@@ -39,21 +38,8 @@ export interface NavSection {
   items: NavItem[]
 }
 
-/** Primary ops modules shown in the left sidebar. */
+/** Primary ops modules shown in the left sidebar. Dashboard is a top-level link in GlobalLayout. */
 export const SIDEBAR_NAV_SECTIONS: NavSection[] = [
-  {
-    title: 'Home',
-    clause: 'home',
-    icon: LayoutDashboard,
-    items: [
-      {
-        label: 'Dashboard',
-        to: '/',
-        icon: LayoutDashboard,
-        clause: 'dashboard',
-      },
-    ],
-  },
   {
     title: 'BIS Operations',
     clause: 'bis-operations',

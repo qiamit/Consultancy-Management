@@ -94,12 +94,8 @@ export function ClientsHeaderBar({
             page="clients"
             pageTitle="Client Directory"
             contextSummary={assistantContext}
-            suggestedQuestions={[
-              'Save this business card photo as a new client',
-              'Add a new client ABC Labs Pvt Ltd with Dr balance',
-              'Summarize clients in the current list',
-              'Update payment term for a client by company name',
-            ]}
+            welcomeMessage=""
+            suggestedQuestions={[]}
             onDataChanged={onAssistantDataChanged}
             enableImageImport
             imageAttachHint="business card or company photo"

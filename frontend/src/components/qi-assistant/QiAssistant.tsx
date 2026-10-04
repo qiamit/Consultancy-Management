@@ -23,10 +23,18 @@ import {
 } from './qiAssistantApi'
 import {
   filterSkillsForTrigger,
+  parseAttachTrigger,
   parseSkillTrigger,
   type AiSkillPick,
   type SkillTriggerMatch,
 } from './skillTrigger'
+
+type AttachPickOption = {
+  id: 'image' | 'pdf'
+  label: string
+  hint: string
+  keywords: string[]
+}
 import { cn } from '@/lib/utils'
 
 function newId() {
@@ -130,7 +138,9 @@ export function QiAssistant({
   const [voiceSupported, setVoiceSupported] = useState(false)
   const [busyHint, setBusyHint] = useState<string | null>(null)
   const [skillPickerOpen, setSkillPickerOpen] = useState(false)
+  const [attachPickerOpen, setAttachPickerOpen] = useState(false)
   const [skillHighlight, setSkillHighlight] = useState(0)
+  const [attachHighlight, setAttachHighlight] = useState(0)
   const [caretPos, setCaretPos] = useState(0)
   const scrollRef = useRef<HTMLDivElement>(null)
   const pdfInputRef = useRef<HTMLInputElement>(null)
@@ -144,10 +154,47 @@ export function QiAssistant({
     [skillPickerOpen, input, caretPos],
   )
 
+  const attachTrigger = useMemo(
+    () => (attachPickerOpen ? parseAttachTrigger(input, caretPos) : null),
+    [attachPickerOpen, input, caretPos],
+  )
+
   const filteredSkills = useMemo(() => {
     if (!skillTrigger) return skills
     return filterSkillsForTrigger(skills, skillTrigger.filter)
   }, [skills, skillTrigger])
+
+  const attachOptions = useMemo((): AttachPickOption[] => {
+    const opts: AttachPickOption[] = []
+    if (enableImageImport) {
+      opts.push({
+        id: 'image',
+        label: 'Photo / card',
+        hint: imageAttachHint,
+        keywords: ['photo', 'image', 'card', 'pic', 'camera'],
+      })
+    }
+    if (enablePdfImport) {
+      opts.push({
+        id: 'pdf',
+        label: 'PDF file',
+        hint: pdfAttachHint,
+        keywords: ['pdf', 'file', 'document', 'doc'],
+      })
+    }
+    return opts
+  }, [enableImageImport, enablePdfImport, imageAttachHint, pdfAttachHint])
+
+  const filteredAttachOptions = useMemo(() => {
+    const q = (attachTrigger?.filter ?? '').trim().toLowerCase()
+    if (!q) return attachOptions
+    return attachOptions.filter(
+      (o) =>
+        o.label.toLowerCase().includes(q) ||
+        o.hint.toLowerCase().includes(q) ||
+        o.keywords.some((k) => k.includes(q) || q.includes(k)),
+    )
+  }, [attachOptions, attachTrigger])
 
   const defaults = [
     'How do I add a new client?',
@@ -231,7 +278,7 @@ export function QiAssistant({
     const isCodeNote = showIsCodePicker
       ? ' Pick an **IS Code** below so I can read its uploaded PDFs.'
       : ''
-    const skillNote = ' Tap **!** or type **!** to pick a **Skill**.'
+    const skillNote = ' Type **/** for **Skills**, **@** to attach a file from your computer.'
     const intro =
       welcomeMessage !== undefined
         ? welcomeMessage
@@ -250,14 +297,44 @@ export function QiAssistant({
     showIsCodePicker,
   ])
 
-  const openSkillPicker = () => {
-    const next = input.includes('!') ? input : `${input}${input && !input.endsWith(' ') ? ' ' : ''}!`
+  const insertComposerToken = (token: '/' | '@') => {
+    const el = textareaRef.current
+    const start = el?.selectionStart ?? input.length
+    const end = el?.selectionEnd ?? start
+    const before = input.slice(0, start)
+    const after = input.slice(end)
+    const needsSpace = before.length > 0 && !/\s$/.test(before)
+
+    // Single attach type → open the computer file picker immediately.
+    if (token === '@' && attachOptions.length === 1) {
+      const option = attachOptions[0]!
+      setSkillPickerOpen(false)
+      setAttachPickerOpen(false)
+      requestAnimationFrame(() => {
+        if (option.id === 'image') imageInputRef.current?.click()
+        else pdfInputRef.current?.click()
+        el?.focus()
+      })
+      return
+    }
+
+    const next = `${before}${needsSpace ? ' ' : ''}${token}${after}`
+    const caret = before.length + (needsSpace ? 1 : 0) + 1
     setInput(next)
-    const pos = next.length
-    setCaretPos(pos)
-    setSkillPickerOpen(true)
-    setSkillHighlight(0)
-    requestAnimationFrame(() => textareaRef.current?.focus())
+    setCaretPos(caret)
+    if (token === '/') {
+      setAttachPickerOpen(false)
+      setSkillPickerOpen(true)
+      setSkillHighlight(0)
+    } else {
+      setSkillPickerOpen(false)
+      setAttachPickerOpen(attachOptions.length > 0)
+      setAttachHighlight(0)
+    }
+    requestAnimationFrame(() => {
+      el?.focus()
+      el?.setSelectionRange(caret, caret)
+    })
   }
 
   const appendAssistantResult = (reply: string, actionsExecuted?: QiAssistantActionResult[]) => {
@@ -272,23 +349,49 @@ export function QiAssistant({
     setMessages((prev) => [...prev, { id: newId(), role: 'assistant', content }])
   }
 
-  const syncSkillPicker = (text: string, pos: number) => {
+  const stripTriggerFromInput = (trigger: SkillTriggerMatch | null) => {
+    if (!trigger) return
+    const before = input.slice(0, trigger.start)
+    const after = input.slice(trigger.end)
+    const next = `${before}${after}`.replace(/^\s+/, '').replace(/\s{2,}/g, ' ')
+    setInput(next)
+  }
+
+  const syncComposerPickers = (text: string, pos: number) => {
     setCaretPos(pos)
-    const trigger = parseSkillTrigger(text, pos)
-    setSkillPickerOpen(Boolean(trigger))
-    if (trigger) setSkillHighlight(0)
+    const skill = parseSkillTrigger(text, pos)
+    const attach = parseAttachTrigger(text, pos)
+    if (skill) {
+      setSkillPickerOpen(true)
+      setAttachPickerOpen(false)
+      setSkillHighlight(0)
+      return
+    }
+    if (attach && attachOptions.length > 0) {
+      setAttachPickerOpen(true)
+      setSkillPickerOpen(false)
+      setAttachHighlight(0)
+      return
+    }
+    setSkillPickerOpen(false)
+    setAttachPickerOpen(false)
   }
 
   const applySkillSelection = (skill: AiSkillPick, trigger: SkillTriggerMatch | null) => {
     setSelectedSkill(skill)
     setSkillPickerOpen(false)
-    if (trigger) {
-      const before = input.slice(0, trigger.start)
-      const after = input.slice(trigger.end)
-      const next = `${before}${after}`.replace(/^\s+/, '')
-      setInput(next)
-    }
+    stripTriggerFromInput(trigger)
     requestAnimationFrame(() => textareaRef.current?.focus())
+  }
+
+  const applyAttachSelection = (option: AttachPickOption, trigger: SkillTriggerMatch | null) => {
+    setAttachPickerOpen(false)
+    stripTriggerFromInput(trigger)
+    requestAnimationFrame(() => {
+      if (option.id === 'image') imageInputRef.current?.click()
+      else pdfInputRef.current?.click()
+      textareaRef.current?.focus()
+    })
   }
 
   const handlePdfAttach = (file: File) => {
@@ -505,6 +608,36 @@ export function QiAssistant({
       }
     }
 
+    if (attachPickerOpen && filteredAttachOptions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setAttachHighlight((i) => (i + 1) % filteredAttachOptions.length)
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setAttachHighlight((i) => (i - 1 + filteredAttachOptions.length) % filteredAttachOptions.length)
+        return
+      }
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault()
+        const option = filteredAttachOptions[attachHighlight]
+        if (option) applyAttachSelection(option, attachTrigger)
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setAttachPickerOpen(false)
+        return
+      }
+      if (e.key === 'Tab') {
+        e.preventDefault()
+        const option = filteredAttachOptions[attachHighlight]
+        if (option) applyAttachSelection(option, attachTrigger)
+        return
+      }
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       void sendMessage(input)
@@ -571,13 +704,8 @@ export function QiAssistant({
               <span className="flex h-8 w-8 items-center justify-center border border-amber-400/40 bg-amber-400/15">
                 <Sparkles size={16} className="text-amber-200" />
               </span>
-              <span className="min-w-0">
-                <span className="block truncate">
-                  {assistantDialogTitle(activeRecordTable, effectiveIsCodeId, page)}
-                </span>
-                <span className="mt-0.5 block text-[11px] font-medium text-stone-300">
-                  Voice · Card photo · Skills · Live data
-                </span>
+              <span className="min-w-0 truncate">
+                {assistantDialogTitle(activeRecordTable, effectiveIsCodeId, page)}
               </span>
             </DialogTitle>
           </DialogHeader>
@@ -639,7 +767,7 @@ export function QiAssistant({
               aria-label="Select AI skill"
             >
               <div className="border-b border-stone-500 bg-stone-900 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-amber-200">
-                Skills
+                Skills · type / to filter
               </div>
               {filteredSkills.length === 0 ? (
                 <p className="px-3 py-2 text-xs text-stone-500">
@@ -667,10 +795,58 @@ export function QiAssistant({
                     }}
                     onClick={() => applySkillSelection(skill, skillTrigger)}
                   >
-                    <span className="font-semibold">{skill.name}</span>
+                    <span className="font-semibold">/{skill.name}</span>
                     {skill.description && (
                       <span className="line-clamp-1 text-xs text-stone-500">{skill.description}</span>
                     )}
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+
+          {attachPickerOpen && attachOptions.length > 0 && (
+            <div
+              className="absolute bottom-full left-3 right-3 z-10 mb-1 max-h-48 overflow-y-auto border-2 border-stone-600 bg-white shadow-xl ring-1 ring-amber-700/25"
+              role="listbox"
+              aria-label="Attach a file"
+            >
+              <div className="border-b border-stone-500 bg-stone-900 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-amber-200">
+                Attach · type @ to pick from computer
+              </div>
+              {filteredAttachOptions.length === 0 ? (
+                <p className="px-3 py-2 text-xs text-stone-500">No attach options match.</p>
+              ) : (
+                filteredAttachOptions.map((option, idx) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    role="option"
+                    aria-selected={idx === attachHighlight}
+                    className={cn(
+                      'flex w-full items-center gap-2 border-l-2 px-3 py-2 text-left text-sm transition-colors',
+                      idx === attachHighlight
+                        ? 'border-l-amber-600 bg-amber-100 text-stone-950'
+                        : 'border-l-transparent hover:bg-[#f3e9d8]',
+                    )}
+                    onMouseEnter={() => setAttachHighlight(idx)}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onPointerDown={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      applyAttachSelection(option, attachTrigger)
+                    }}
+                    onClick={() => applyAttachSelection(option, attachTrigger)}
+                  >
+                    {option.id === 'image' ? (
+                      <ImagePlus size={16} className="shrink-0 text-amber-800" />
+                    ) : (
+                      <FileUp size={16} className="shrink-0 text-amber-800" />
+                    )}
+                    <span className="min-w-0">
+                      <span className="font-semibold">@{option.label}</span>
+                      <span className="ml-1.5 text-xs text-stone-500">{option.hint}</span>
+                    </span>
                   </button>
                 ))
               )}
@@ -778,135 +954,144 @@ export function QiAssistant({
             </div>
           )}
 
-          <div className="flex items-end gap-1.5 p-3 sm:gap-2 sm:p-4">
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              className="h-10 w-10 shrink-0 rounded-none border-stone-500 font-semibold text-amber-800 hover:bg-amber-50"
-              aria-label="Pick AI skill"
-              disabled={loading}
-              title="Pick skill (!)"
-              onClick={openSkillPicker}
-            >
-              !
-            </Button>
-            {voiceSupported && (
+          {(enableImageImport || enablePdfImport) && (
+            <>
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp,.gif"
+                capture="environment"
+                className="hidden"
+                aria-hidden
+                onChange={(e) => {
+                  const f = e.target.files?.[0]
+                  if (f) handleImageAttach(f)
+                  if (e.target) e.target.value = ''
+                }}
+              />
+              <input
+                ref={pdfInputRef}
+                type="file"
+                accept="application/pdf,.pdf"
+                className="hidden"
+                aria-hidden
+                onChange={(e) => {
+                  const f = e.target.files?.[0]
+                  if (f) handlePdfAttach(f)
+                  if (e.target) e.target.value = ''
+                }}
+              />
+            </>
+          )}
+
+          <div className="space-y-1.5 p-3 sm:p-4">
+            <div className="flex items-end gap-1.5 sm:gap-2">
               <Button
                 type="button"
                 variant="outline"
                 size="icon"
                 className={cn(
-                  'h-10 w-10 shrink-0 rounded-none border-stone-500',
-                  listening
-                    ? 'border-red-600 bg-red-50 text-red-700 hover:bg-red-100'
-                    : 'text-stone-700 hover:bg-amber-50 hover:text-amber-900',
+                  'h-10 w-10 shrink-0 rounded-none border-stone-500 font-bold text-amber-800 hover:bg-amber-50',
+                  skillPickerOpen && 'border-amber-600 bg-amber-50',
                 )}
-                aria-label={listening ? 'Stop voice typing' : 'Start voice typing'}
+                aria-label="Pick AI skill"
                 disabled={loading}
-                title={listening ? 'Stop listening' : 'Voice typing'}
-                onClick={toggleListening}
+                title="Type / for skills"
+                onClick={() => insertComposerToken('/')}
               >
-                {listening ? <MicOff size={18} /> : <Mic size={18} />}
+                /
               </Button>
-            )}
-            {enableImageImport && (
-              <>
-                <input
-                  ref={imageInputRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp,.gif"
-                  capture="environment"
-                  className="hidden"
-                  aria-hidden
-                  onChange={(e) => {
-                    const f = e.target.files?.[0]
-                    if (f) handleImageAttach(f)
-                    if (e.target) e.target.value = ''
-                  }}
-                />
+              {(enableImageImport || enablePdfImport) && (
                 <Button
                   type="button"
                   variant="outline"
                   size="icon"
-                  className="h-10 w-10 shrink-0 rounded-none border-stone-500 text-stone-700 hover:bg-amber-50 hover:text-amber-900"
-                  aria-label={`Attach ${imageAttachHint}`}
+                  className={cn(
+                    'h-10 w-10 shrink-0 rounded-none border-stone-500 font-bold text-amber-800 hover:bg-amber-50',
+                    attachPickerOpen && 'border-amber-600 bg-amber-50',
+                  )}
+                  aria-label="Attach file from computer"
                   disabled={loading}
-                  title={`Attach ${imageAttachHint} — then Save`}
-                  onClick={() => imageInputRef.current?.click()}
+                  title="Type @ to attach a file from your computer"
+                  onClick={() => insertComposerToken('@')}
                 >
-                  <ImagePlus size={18} />
+                  @
                 </Button>
-              </>
-            )}
-            {enablePdfImport && (
-              <>
-                <input
-                  ref={pdfInputRef}
-                  type="file"
-                  accept="application/pdf,.pdf"
-                  className="hidden"
-                  aria-hidden
-                  onChange={(e) => {
-                    const f = e.target.files?.[0]
-                    if (f) handlePdfAttach(f)
-                    if (e.target) e.target.value = ''
-                  }}
-                />
+              )}
+              {voiceSupported && (
                 <Button
                   type="button"
                   variant="outline"
                   size="icon"
-                  className="h-10 w-10 shrink-0 rounded-none border-stone-500"
-                  aria-label={`Upload ${pdfAttachHint} to process with AI`}
+                  className={cn(
+                    'h-10 w-10 shrink-0 rounded-none border-stone-500',
+                    listening
+                      ? 'border-red-600 bg-red-50 text-red-700 hover:bg-red-100'
+                      : 'text-stone-700 hover:bg-amber-50 hover:text-amber-900',
+                  )}
+                  aria-label={listening ? 'Stop voice typing' : 'Start voice typing'}
                   disabled={loading}
-                  title={`Attach ${pdfAttachHint} — then type a command and Send`}
-                  onClick={() => pdfInputRef.current?.click()}
+                  title={listening ? 'Stop listening' : 'Voice typing'}
+                  onClick={toggleListening}
                 >
-                  <FileUp size={18} />
+                  {listening ? <MicOff size={18} /> : <Mic size={18} />}
                 </Button>
-              </>
-            )}
-            <Textarea
-              ref={textareaRef}
-              value={input}
-              onChange={(e) => {
-                setInput(e.target.value)
-                syncSkillPicker(e.target.value, e.target.selectionStart ?? e.target.value.length)
-              }}
-              onClick={(e) => syncSkillPicker(input, e.currentTarget.selectionStart ?? input.length)}
-              onKeyUp={(e) => syncSkillPicker(input, e.currentTarget.selectionStart ?? input.length)}
-              placeholder={
-                attachedImage && isClientsPage
-                  ? 'Card attached — Send to save client, or edit the prompt…'
-                  : attachedPdf
-                    ? page === 'samples/receiving'
-                      ? 'e.g. Register this test request as a new sample…'
-                      : 'Type command for attached PDF, then Send…'
-                    : showIsCodePicker
-                      ? 'Select IS Code, pick ! skill, ask to import test parameters…'
-                      : page === 'samples/receiving'
-                        ? 'Attach Test Request PDF, then ask to add sample…'
-                        : 'Ask, speak, or attach a card photo…'
-              }
-              className="min-h-10 max-h-28 flex-1 resize-none rounded-none border-stone-500 bg-stone-50 shadow-none focus-visible:border-amber-600 focus-visible:ring-amber-500/20"
-              rows={1}
-              onKeyDown={handleInputKeyDown}
-              disabled={loading}
-              aria-label="Message to QI Assistant"
-              aria-expanded={skillPickerOpen}
-              aria-autocomplete="list"
-            />
-            <Button
-              type="button"
-              size="icon"
-              className="h-10 w-10 shrink-0 rounded-none bg-amber-700 text-white hover:bg-amber-800"
-              aria-label="Send message"
-              disabled={loading || !canSend}
-              onClick={() => void sendMessage(input)}
-            >
-              <Send size={18} />
-            </Button>
+              )}
+              <Textarea
+                ref={textareaRef}
+                value={input}
+                onChange={(e) => {
+                  setInput(e.target.value)
+                  syncComposerPickers(e.target.value, e.target.selectionStart ?? e.target.value.length)
+                }}
+                onClick={(e) =>
+                  syncComposerPickers(input, e.currentTarget.selectionStart ?? input.length)
+                }
+                onKeyUp={(e) =>
+                  syncComposerPickers(input, e.currentTarget.selectionStart ?? input.length)
+                }
+                placeholder={
+                  attachedImage && isClientsPage
+                    ? 'Card attached — Send to save client, or edit the prompt…'
+                    : attachedPdf
+                      ? page === 'samples/receiving'
+                        ? 'e.g. Register this test request as a new sample…'
+                        : 'Type command for attached PDF, then Send…'
+                      : showIsCodePicker
+                        ? 'Select IS Code, type / for skill, ask to import…'
+                        : page === 'samples/receiving'
+                          ? 'Type @ to attach Test Request PDF, then ask…'
+                          : 'Ask anything — / skills · @ attach file…'
+                }
+                className="min-h-10 max-h-28 flex-1 resize-none rounded-none border-stone-500 bg-stone-50 shadow-none focus-visible:border-amber-600 focus-visible:ring-amber-500/20"
+                rows={1}
+                onKeyDown={handleInputKeyDown}
+                disabled={loading}
+                aria-label="Message to QI Assistant"
+                aria-expanded={skillPickerOpen || attachPickerOpen}
+                aria-autocomplete="list"
+              />
+              <Button
+                type="button"
+                size="icon"
+                className="h-10 w-10 shrink-0 rounded-none bg-amber-700 text-white hover:bg-amber-800"
+                aria-label="Send message"
+                disabled={loading || !canSend}
+                onClick={() => void sendMessage(input)}
+              >
+                <Send size={18} />
+              </Button>
+            </div>
+            <p className="px-0.5 text-[10px] font-medium tracking-wide text-stone-500">
+              <span className="text-amber-800">/</span> skills
+              {(enableImageImport || enablePdfImport) && (
+                <>
+                  {' · '}
+                  <span className="text-amber-800">@</span> attach from computer
+                </>
+              )}
+              {voiceSupported ? ' · mic to speak' : ''}
+            </p>
           </div>
         </div>
       </DialogContent>

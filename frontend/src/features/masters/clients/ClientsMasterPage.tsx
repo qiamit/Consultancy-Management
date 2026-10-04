@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { ClientsTableFooterBar } from './ClientsFooterBar'
 import { ClientsForm } from './ClientsForm'
 import { ClientsHeaderBar } from './ClientsHeaderBar'
-import { ClientsTable } from './ClientsTable'
+import { ClientsTable, type ClientSortDir, type ClientSortKey } from './ClientsTable'
 import { clientPageShellClass } from './clientsFormUi'
 import { buildClientsAssistantContext } from './buildClientsAssistantContext'
 import { cn } from '@/lib/utils'
@@ -148,6 +148,8 @@ export default function ClientsMasterPage() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [jumpTo, setJumpTo] = useState('')
+  const [sortKey, setSortKey] = useState<ClientSortKey>('companyIdentity')
+  const [sortDir, setSortDir] = useState<ClientSortDir>('asc')
 
   const [states, setStates] = useState<Array<{ id: string; label: string }>>(() => [{ id: 'default-state', label: DEFAULT_STATE }])
   const [countries, setCountries] = useState<Array<{ id: string; label: string }>>(() => [{ id: 'default-country', label: DEFAULT_COUNTRY }])
@@ -730,46 +732,90 @@ export default function ClientsMasterPage() {
 
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase()
-    const byName = (a: ClientRow, b: ClientRow) =>
-      (a.company_name || '').localeCompare(b.company_name || '', undefined, { sensitivity: 'base' })
+    const list = !q
+      ? [...rows]
+      : rows.filter((r) => {
+          const blob = [
+            r.company_name,
+            r.gst_number ?? '',
+            r.company_type,
+            r.company_scale,
+            r.contact_person_name ?? '',
+            r.country_code ?? '',
+            r.mobile ?? '',
+            r.email ?? '',
+            r.address ?? '',
+            r.pin_code ?? '',
+            r.district ?? '',
+            r.state ?? '',
+            r.country ?? '',
+            String(r.opening_balance ?? ''),
+            r.balance_type,
+            r.payment_term,
+            r.remark ?? '',
+          ]
+            .join(' ')
+            .toLowerCase()
 
-    if (!q) return [...rows].sort(byName)
+          return blob.includes(q)
+        })
 
-    return rows
-      .filter((r) => {
-        const blob = [
-          r.company_name,
-          r.gst_number ?? '',
-          r.company_type,
-          r.company_scale,
-          r.contact_person_name ?? '',
-          r.country_code ?? '',
-          r.mobile ?? '',
-          r.email ?? '',
-          r.address ?? '',
-          r.pin_code ?? '',
-          r.district ?? '',
-          r.state ?? '',
-          r.country ?? '',
-          String(r.opening_balance ?? ''),
-          r.balance_type,
-          r.payment_term,
-          r.remark ?? '',
-        ]
-          .join(' ')
-          .toLowerCase()
+    const dir = sortDir === 'asc' ? 1 : -1
+    const cmpText = (a: string, b: string) =>
+      a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true }) * dir
 
-        return blob.includes(q)
-      })
-      .sort(byName)
-  }, [rows, search])
+    return list.sort((a, b) => {
+      let primary = 0
+      switch (sortKey) {
+        case 'companyIdentity':
+          primary = cmpText(a.company_name || '', b.company_name || '')
+          break
+        case 'typeScale':
+          primary = cmpText(
+            `${a.company_type} ${a.company_scale}`,
+            `${b.company_type} ${b.company_scale}`,
+          )
+          break
+        case 'contact':
+          primary = cmpText(
+            [a.contact_person_name, a.email, a.mobile].filter(Boolean).join(' '),
+            [b.contact_person_name, b.email, b.mobile].filter(Boolean).join(' '),
+          )
+          break
+        case 'address':
+          primary = cmpText(formatClientAddress(a), formatClientAddress(b))
+          break
+        case 'balance': {
+          const signed = (r: ClientRow) => {
+            const amt = Number(r.opening_balance) || 0
+            return String(r.balance_type).toUpperCase() === 'CR' ? -amt : amt
+          }
+          primary = (signed(a) - signed(b)) * dir
+          break
+        }
+        default:
+          primary = cmpText(a.company_name || '', b.company_name || '')
+      }
+      if (primary !== 0) return primary
+      return cmpText(a.company_name || '', b.company_name || '')
+    })
+  }, [rows, search, sortKey, sortDir])
 
   const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize))
 
   useEffect(() => {
     setPage(1)
     setJumpTo('')
-  }, [search, pageSize])
+  }, [search, pageSize, sortKey, sortDir])
+
+  const handleSort = (key: ClientSortKey) => {
+    if (sortKey === key) {
+      setSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'))
+      return
+    }
+    setSortKey(key)
+    setSortDir('asc')
+  }
 
   const pagedRows = useMemo(() => {
     const start = (page - 1) * pageSize
@@ -1185,6 +1231,9 @@ export default function ClientsMasterPage() {
           onToggleAll={toggleAllOnPage}
           onEdit={handleEdit}
           onCopy={handleCopy}
+          sortKey={sortKey}
+          sortDir={sortDir}
+          onSort={handleSort}
         />
       </div>
 

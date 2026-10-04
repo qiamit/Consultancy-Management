@@ -9,7 +9,6 @@ import {
   Menu,
   X,
   LogOut,
-  ChevronsRight,
   Bot,
   Shield,
   Globe,
@@ -204,37 +203,6 @@ const ROUTE_LABELS: Record<string, string> = {
   '/help': 'Help',
   '/contact': 'Contact Us',
 };
-
-function Breadcrumbs() {
-  const location = useLocation()
-  let label = ROUTE_LABELS[location.pathname]
-  if (
-    location.pathname === '/nonconforming-work/corrective-action' &&
-    new URLSearchParams(location.search).get('source') === 'audit'
-  ) {
-    label = 'Management Documentation / Audit & MRM Management / Non Conformities (Corrective Action)'
-  }
-
-  if (!label || location.pathname === '/') return null
-
-  return (
-    <nav
-      aria-label="Breadcrumb"
-      className="flex min-w-0 max-w-[min(100%,42rem)] items-center gap-1 text-xs text-stone-300 sm:gap-1.5 sm:text-sm"
-    >
-      <NavLink
-        to="/"
-        className="hidden shrink-0 transition-colors hover:text-amber-200 sm:inline"
-      >
-        Dashboard
-      </NavLink>
-      <ChevronsRight size={14} className="hidden shrink-0 text-stone-500 sm:block" aria-hidden />
-      <span className="min-w-0 truncate font-medium text-white" title={label}>
-        {label}
-      </span>
-    </nav>
-  )
-}
 
 function NavSectionGroup({
   section,
@@ -721,20 +689,21 @@ export default function GlobalLayout() {
               <Menu size={18} aria-hidden />
             </button>
             <div className="min-w-0">
+              <p
+                className="truncate text-sm font-semibold tracking-tight text-white sm:text-base"
+                title={labName.trim() || brandShortName}
+              >
+                {labName.trim() || brandShortName || 'Company'}
+              </p>
               {location.pathname === '/' ? (
-                <p className="truncate text-sm font-semibold tracking-tight text-white sm:text-base">
+                <p className="truncate text-[11px] text-stone-300">
                   Welcome Back, {String(designation ?? '').trim() || 'Team'}
                 </p>
-              ) : (
-                <>
-                  <Breadcrumbs />
-                  {!ROUTE_LABELS[location.pathname] ? (
-                    <span className="block truncate text-sm font-semibold text-white sm:text-base">
-                      {labName || 'Quality International Research & Laboratories Pvt. Ltd.'}
-                    </span>
-                  ) : null}
-                </>
-              )}
+              ) : ROUTE_LABELS[location.pathname] ? (
+                <p className="truncate text-[11px] text-stone-300">
+                  {ROUTE_LABELS[location.pathname]}
+                </p>
+              ) : null}
             </div>
           </div>
 
