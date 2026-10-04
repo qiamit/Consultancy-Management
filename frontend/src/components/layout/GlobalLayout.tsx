@@ -740,13 +740,6 @@ export default function GlobalLayout() {
           </div>
 
           <div className="relative flex shrink-0 items-center gap-2 sm:gap-3">
-            <div className="hidden items-center gap-2 rounded-none border border-amber-500/30 bg-amber-500/10 px-3 py-1 md:flex">
-              <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400" />
-              <span className="text-[11px] font-semibold text-amber-200">Accredited</span>
-            </div>
-
-            <Separator orientation="vertical" className="hidden h-6 bg-stone-600 md:block" />
-
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-2 rounded-none px-2 py-1.5 transition-colors hover:bg-white/10">
