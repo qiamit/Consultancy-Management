@@ -1,4 +1,4 @@
-import { Copy, Pencil } from 'lucide-react'
+import { Building2, Copy, Mail, MapPin, Pencil, Phone, Wallet } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
 import type { ClientRow } from './types'
@@ -7,8 +7,12 @@ import { clientPanelClass } from './clientsFormUi'
 import { cn } from '@/lib/utils'
 import { getCurrencySymbol } from '@/lib/appCurrency'
 
+/** ~10" / desktop: row table. Below that: cards. */
+const TABLE_MQ_SHOW = 'hidden lg:block'
+const CARDS_MQ_SHOW = 'lg:hidden'
+
 const GRID_TABLE =
-  'min-w-[860px] w-full border-collapse font-jakarta [&_th]:border [&_td]:border [&_th]:border-stone-700 [&_td]:border-[#e7e0d4] [&_th]:p-[1mm] [&_td]:!p-[1mm] [&_th]:static [&_td]:static'
+  'min-w-[860px] w-full border-collapse font-jakarta [&_th]:border [&_td]:border [&_th]:border-stone-700 [&_td]:border-[#e7e0d4] [&_th]:p-[1mm] [&_td]:!p-[1mm] [&_th]:sticky [&_th]:top-0 [&_th]:z-[1] [&_td]:static'
 
 const thBase =
   'bg-stone-800 text-center text-[11px] font-bold uppercase tracking-[0.14em] text-amber-200'
@@ -107,8 +111,10 @@ export function ClientsTable({
   const someChecked = rows.some((r) => selectedIds.has(r.id))
 
   return (
-    <div className={cn(clientPanelClass, '@container bg-[#f7f3eb]')}>
-      {error ? <p className="px-3 pt-3 text-sm text-red-600 sm:px-5 sm:pt-4">{error}</p> : null}
+    <div className={cn(clientPanelClass, 'flex h-full min-h-0 flex-col bg-[#f7f3eb]')}>
+      {error ? (
+        <p className="shrink-0 px-3 pt-3 text-sm text-red-600 sm:px-5 sm:pt-4">{error}</p>
+      ) : null}
 
       {loading ? (
         <p className="px-5 py-8 text-center text-sm text-[#78716c]">Loading…</p>
@@ -122,10 +128,10 @@ export function ClientsTable({
           ) : null}
         </div>
       ) : (
-        <>
-          {/* Card list — when panel is narrower than the table needs */}
-          <div className="space-y-2 p-2 sm:p-3 @[860px]:hidden">
-            <div className="flex items-center gap-2 border border-stone-500 bg-stone-800 px-2.5 py-2 text-amber-200">
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
+          {/* Cards — below ~10" / lg */}
+          <div className={cn('space-y-2.5 p-2 sm:p-3', CARDS_MQ_SHOW)}>
+            <div className="sticky top-0 z-[1] flex items-center gap-2 border border-stone-500 bg-stone-800 px-2.5 py-2 text-amber-200 shadow-sm">
               <input
                 type="checkbox"
                 className={checkboxClass}
@@ -146,85 +152,112 @@ export function ClientsTable({
               const contactTitle = formatClientContact(r)
               const selected = selectedIds.has(r.id)
               const even = index % 2 === 0
-              const tone = selected ? rowSelectedClass : even ? rowEvenClass : rowOddClass
+              const tone = selected ? 'bg-[#fde68a]/70' : even ? 'bg-[#fffcf7]' : 'bg-white'
               const balanceTone = balanceToneClass(r.balance_type)
+              const address = formatClientAddress(r)
 
               return (
                 <article
                   key={r.id}
                   className={cn(
-                    'border border-stone-500 font-jakarta shadow-sm ring-1 ring-amber-700/15',
+                    'overflow-hidden border-2 border-stone-500 font-jakarta shadow-sm ring-1 ring-amber-700/20',
                     tone,
+                    selected && 'ring-2 ring-amber-500/40',
                   )}
                 >
-                  <div className="flex items-start gap-2 border-b border-[#e7e0d4] px-2.5 py-2">
-                    <input
-                      type="checkbox"
-                      className={cn(checkboxClass, 'mt-1 shrink-0')}
-                      aria-label={`Select ${r.company_name}`}
-                      checked={selected}
-                      onChange={() => onToggle(r.id)}
-                    />
+                  <div className="flex items-stretch">
+                    <div className="w-1 shrink-0 bg-gradient-to-b from-amber-500 via-amber-600 to-stone-700" />
                     <div className="min-w-0 flex-1">
-                      <p className={cn(companyNameClass, 'whitespace-normal break-words')} title={r.company_name}>
-                        {r.company_name}
-                      </p>
-                      {r.gst_number?.trim() ? <p className={metaLineClass}>{r.gst_number}</p> : null}
-                    </div>
-                    <ClientRowActions row={r} onEdit={onEdit} onCopy={onCopy} />
-                  </div>
+                      <div className="flex items-start gap-2 px-2.5 py-2.5">
+                        <input
+                          type="checkbox"
+                          className={cn(checkboxClass, 'mt-1 shrink-0')}
+                          aria-label={`Select ${r.company_name}`}
+                          checked={selected}
+                          onChange={() => onToggle(r.id)}
+                        />
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <div className="flex items-start gap-2">
+                            <Building2
+                              className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-700"
+                              aria-hidden
+                            />
+                            <div className="min-w-0 flex-1">
+                              <p
+                                className="text-[13px] font-bold leading-snug tracking-tight text-[#1c1917]"
+                                title={r.company_name}
+                              >
+                                {r.company_name}
+                              </p>
+                              {r.gst_number?.trim() ? (
+                                <p className={metaLineClass}>{r.gst_number}</p>
+                              ) : null}
+                            </div>
+                          </div>
 
-                  <dl className="grid gap-2 px-2.5 py-2 text-left sm:grid-cols-2">
-                    <div>
-                      <dt className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#a16207]">
-                        Type &amp; Scale
-                      </dt>
-                      <dd className={primaryLineClass}>{r.company_type}</dd>
-                      <dd className={scaleClass}>{r.company_scale}</dd>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="border border-stone-400 bg-stone-100 px-1.5 py-0.5 text-[10px] font-semibold text-stone-700">
+                              {r.company_type || '—'}
+                            </span>
+                            <span className="border border-amber-700/40 bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-amber-800">
+                              {r.company_scale || '—'}
+                            </span>
+                            <span
+                              className={cn(
+                                'ml-auto border px-1.5 py-0.5 font-mono text-[10px] font-bold tabular-nums',
+                                String(r.balance_type).toUpperCase() === 'CR'
+                                  ? 'border-emerald-700/30 bg-emerald-50 text-emerald-800'
+                                  : 'border-orange-700/30 bg-orange-50 text-orange-800',
+                              )}
+                            >
+                              <span className={balanceTone}>{r.balance_type}</span>{' '}
+                              {getCurrencySymbol()} {formatMoney(r.opening_balance)}
+                            </span>
+                          </div>
+                        </div>
+                        <ClientRowActions row={r} onEdit={onEdit} onCopy={onCopy} />
+                      </div>
+
+                      <div
+                        className="space-y-1.5 border-t border-[#e7e0d4] bg-[#f7f3eb]/70 px-2.5 py-2"
+                        title={contactTitle || undefined}
+                      >
+                        <div className="flex min-w-0 items-start gap-2 text-[11px]">
+                          <Mail className="mt-0.5 h-3 w-3 shrink-0 text-amber-700" aria-hidden />
+                          <div className="min-w-0 space-y-0.5">
+                            {contact.name ? (
+                              <p className="font-semibold text-[#292524]">{contact.name}</p>
+                            ) : null}
+                            {contact.email ? (
+                              <p className="break-all font-medium text-[#92400e]">{contact.email}</p>
+                            ) : null}
+                            {!contact.name && !contact.email ? (
+                              <p className="text-[#78716c]">No email</p>
+                            ) : null}
+                          </div>
+                        </div>
+                        <div className="flex min-w-0 items-center gap-2 text-[11px]">
+                          <Phone className="h-3 w-3 shrink-0 text-amber-700" aria-hidden />
+                          <p className="font-mono text-[#44403c]">{contact.mobile || '—'}</p>
+                        </div>
+                        <div className="flex min-w-0 items-start gap-2 text-[11px]">
+                          <MapPin className="mt-0.5 h-3 w-3 shrink-0 text-amber-700" aria-hidden />
+                          <p className="leading-snug text-[#57534e]">{address || '—'}</p>
+                        </div>
+                        <div className="flex min-w-0 items-center gap-2 text-[11px]">
+                          <Wallet className="h-3 w-3 shrink-0 text-amber-700" aria-hidden />
+                          <p className="font-medium text-[#57534e]">{r.payment_term || '—'}</p>
+                        </div>
+                      </div>
                     </div>
-                    <div title={contactTitle || undefined}>
-                      <dt className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#a16207]">
-                        Contact
-                      </dt>
-                      {contact.name ? <dd className={primaryLineClass}>{contact.name}</dd> : null}
-                      {contact.email ? (
-                        <dd className={cn(secondaryLineClass, 'break-all text-[#92400e]')}>{contact.email}</dd>
-                      ) : null}
-                      {contact.mobile ? (
-                        <dd className={cn(secondaryLineClass, 'font-mono text-[#44403c]')}>{contact.mobile}</dd>
-                      ) : null}
-                      {!contact.name && !contact.email && !contact.mobile ? (
-                        <dd className={secondaryLineClass}>—</dd>
-                      ) : null}
-                    </div>
-                    <div className="sm:col-span-2">
-                      <dt className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#a16207]">
-                        Address
-                      </dt>
-                      <dd className={cn(secondaryLineClass, 'text-[#57534e]')}>{formatClientAddress(r) || '—'}</dd>
-                    </div>
-                    <div className="sm:col-span-2">
-                      <dt className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#a16207]">
-                        Balance
-                      </dt>
-                      <dd className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                        <span className={cn('text-[11px] font-bold uppercase tracking-[0.12em]', balanceTone)}>
-                          {r.balance_type}
-                        </span>
-                        <span className={moneyClass}>
-                          {getCurrencySymbol()} {formatMoney(r.opening_balance)}
-                        </span>
-                        <span className={secondaryLineClass}>{r.payment_term}</span>
-                      </dd>
-                    </div>
-                  </dl>
+                  </div>
                 </article>
               )
             })}
           </div>
 
-          {/* Table — when panel is wide enough */}
-          <div className="hidden @[860px]:block">
+          {/* Table rows — ~10" / lg and above */}
+          <div className={TABLE_MQ_SHOW}>
             <Table className={GRID_TABLE}>
               <colgroup>
                 <col className="w-11" />
@@ -338,7 +371,7 @@ export function ClientsTable({
               </TableBody>
             </Table>
           </div>
-        </>
+        </div>
       )}
     </div>
   )

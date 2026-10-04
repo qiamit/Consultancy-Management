@@ -126,9 +126,22 @@
 
 @layer components {
   .app-shell-main {
-    @apply min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-gradient-to-b from-stone-100/90 via-background to-stone-50;
+    @apply flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto bg-gradient-to-b from-stone-100/90 via-background to-stone-50;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-y: contain;
+  }
+
+  /* Master lists that pin header/footer: page shell fills main; only the table region scrolls. */
+  .app-shell-main:has([data-master-scroll='table']) {
+    @apply overflow-hidden;
+  }
+
+  .app-shell-main:has([data-master-scroll='table']) > * {
+    @apply flex min-h-0 min-w-0 flex-1 flex-col;
+  }
+
+  .app-shell-main [data-master-scroll='table'] {
+    @apply min-h-0 flex-1;
   }
 
   /* Master list footers / dark bars: keep action buttons tappable while scrolling sideways */

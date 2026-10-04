@@ -9,6 +9,7 @@ import { ClientsHeaderBar } from './ClientsHeaderBar'
 import { ClientsTable } from './ClientsTable'
 import { clientPageShellClass } from './clientsFormUi'
 import { buildClientsAssistantContext } from './buildClientsAssistantContext'
+import { cn } from '@/lib/utils'
 import {
   DEFAULT_COUNTRY,
   DEFAULT_STATE,
@@ -906,19 +907,27 @@ export default function ClientsMasterPage() {
   }
 
   return (
-    <div className={clientPageShellClass}>
-      <ClientsHeaderBar
-        search={search}
-        onSearchChange={setSearch}
-        pageSize={pageSize}
-        onPageSizeChange={(size) => {
-          setPageSize(size)
-          setPage(1)
-        }}
-        onNew={handleNew}
-        assistantContext={assistantContext}
-        onAssistantDataChanged={() => void loadClients()}
-      />
+    <div
+      data-master-scroll="table"
+      className={cn(
+        clientPageShellClass,
+        'flex h-full min-h-0 flex-col overflow-hidden !space-y-0 gap-2 sm:gap-3 md:gap-3',
+      )}
+    >
+      <div className="shrink-0">
+        <ClientsHeaderBar
+          search={search}
+          onSearchChange={setSearch}
+          pageSize={pageSize}
+          onPageSizeChange={(size) => {
+            setPageSize(size)
+            setPage(1)
+          }}
+          onNew={handleNew}
+          assistantContext={assistantContext}
+          onAssistantDataChanged={() => void loadClients()}
+        />
+      </div>
 
       <Dialog open={showForm} onOpenChange={handleFormOpenChange}>
         <DialogContent
@@ -1047,38 +1056,42 @@ export default function ClientsMasterPage() {
         </DialogContent>
       </Dialog>
 
-      <ClientsTable
-        rows={pagedRows}
-        loading={listLoading}
-        error={listError}
-        searchActive={search.trim().length > 0}
-        selectedIds={selectedIds}
-        onToggle={toggleRow}
-        onToggleAll={toggleAllOnPage}
-        onEdit={handleEdit}
-        onCopy={handleCopy}
-      />
+      <div className="min-h-0 flex-1 overflow-hidden">
+        <ClientsTable
+          rows={pagedRows}
+          loading={listLoading}
+          error={listError}
+          searchActive={search.trim().length > 0}
+          selectedIds={selectedIds}
+          onToggle={toggleRow}
+          onToggleAll={toggleAllOnPage}
+          onEdit={handleEdit}
+          onCopy={handleCopy}
+        />
+      </div>
 
-      <ClientsTableFooterBar
-        message={saveMessage}
-        loading={saveLoading}
-        selectedCount={selectedIds.size}
-        page={page}
-        pageCount={pageCount}
-        onImport={handleImport}
-        onExport={handleExport}
-        onPrintSelected={handlePrintSelected}
-        onDeleteSelected={handleDeleteSelected}
-        onPrevPage={() => setPage((p) => Math.max(1, p - 1))}
-        onNextPage={() => setPage((p) => Math.min(pageCount, p + 1))}
-        jumpTo={jumpTo}
-        onJumpToChange={setJumpTo}
-        onJumpToGo={() => {
-          const n = Number(jumpTo)
-          if (!Number.isFinite(n) || n <= 0) return
-          setPage(Math.min(pageCount, Math.max(1, n)))
-        }}
-      />
+      <div className="shrink-0">
+        <ClientsTableFooterBar
+          message={saveMessage}
+          loading={saveLoading}
+          selectedCount={selectedIds.size}
+          page={page}
+          pageCount={pageCount}
+          onImport={handleImport}
+          onExport={handleExport}
+          onPrintSelected={handlePrintSelected}
+          onDeleteSelected={handleDeleteSelected}
+          onPrevPage={() => setPage((p) => Math.max(1, p - 1))}
+          onNextPage={() => setPage((p) => Math.min(pageCount, p + 1))}
+          jumpTo={jumpTo}
+          onJumpToChange={setJumpTo}
+          onJumpToGo={() => {
+            const n = Number(jumpTo)
+            if (!Number.isFinite(n) || n <= 0) return
+            setPage(Math.min(pageCount, Math.max(1, n)))
+          }}
+        />
+      </div>
 
       <input
         ref={importInputRef}
