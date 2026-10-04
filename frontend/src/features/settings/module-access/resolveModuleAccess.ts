@@ -97,6 +97,8 @@ const CAPA_HUB_PATH = '/nonconforming-work/corrective-action'
 const AUDIT_NC_PATH = '/audit-mrm/non-conformities'
 const CUSTOMER_FEEDBACK_PATH = '/complaints/customer-feedback'
 const FEEDBACK_EVALUATION_PATH = '/complaints/feedback-evaluation'
+const EXPIRED_LICENSES_PATH = '/bis/expired-licenses'
+const DUE_SOON_LICENSES_PATH = '/bis/due-soon'
 
 function accessLevelRank(level: ModuleAccessLevel): number {
   if (level === 'edit') return 2
@@ -140,6 +142,14 @@ export function resolveModuleAccessLevel(
     return maxAccessLevel(
       resolveSinglePathAccessLevel(FEEDBACK_EVALUATION_PATH, ctx, rules),
       resolveSinglePathAccessLevel(CUSTOMER_FEEDBACK_PATH, ctx, rules),
+    )
+  }
+
+  // Due Soon: inherit Expired Licenses grant until matrices are re-saved.
+  if (path === DUE_SOON_LICENSES_PATH || path.startsWith(`${DUE_SOON_LICENSES_PATH}/`)) {
+    return maxAccessLevel(
+      resolveSinglePathAccessLevel(DUE_SOON_LICENSES_PATH, ctx, rules),
+      resolveSinglePathAccessLevel(EXPIRED_LICENSES_PATH, ctx, rules),
     )
   }
 
