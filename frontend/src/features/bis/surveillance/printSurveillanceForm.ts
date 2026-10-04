@@ -1,5 +1,6 @@
 import { loadCompanyPrintContext } from '../print/loadCompanyPrintContext'
 import { escapeHtml as esc, openPendingPrintWindow, openPrintHtml } from '../print/openPrintHtml'
+import { emailHtmlDocumentToClient } from '../shared/emailHtmlToClient'
 import { formatDisplayDate } from '../projects/types'
 import {
   surveillanceClientName,
@@ -97,6 +98,20 @@ export async function buildSurveillanceFormHtml(row: SurveillanceRow): Promise<s
   .footer-note { margin-top: 16px; font-size: 6.5pt; color: #78716c; border-top: 1px solid #e7e5e4; padding-top: 4px; display: flex; justify-content: space-between; gap: 12px; }
   .footer-right { text-align: right; }
 </style></head><body>${body}</body></html>`
+}
+
+/** Emails the surveillance form HTML to the client's master email. */
+export async function emailSurveillanceFormToClient(row: SurveillanceRow): Promise<string> {
+  const html = await buildSurveillanceFormHtml(row)
+  const cmL = String(row.cm_l_digits ?? '').replace(/\D/g, '')
+  const title = 'BIS Surveillance Form'
+  return emailHtmlDocumentToClient({
+    clientId: row.client_id,
+    title,
+    subject: cmL ? `${title} — CM/L ${cmL}` : title,
+    html,
+    filenameBase: cmL ? `surveillance_${cmL}` : 'surveillance_form',
+  })
 }
 
 export async function printSurveillanceForm(row: SurveillanceRow): Promise<string | null> {

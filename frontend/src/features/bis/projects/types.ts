@@ -32,9 +32,17 @@ export const BIS_PROJECT_STATUS_OPTIONS: Array<{ value: string; label: string }>
 export const BIS_PROJECT_KIND_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'Licence', label: 'Licence' },
   { value: 'Application', label: 'Application' },
-  { value: 'application', label: 'Application (legacy)' },
   { value: 'Inclusion', label: 'Inclusion' },
 ]
+
+export const DEFAULT_PROJECT_KIND = 'Licence'
+
+/** Default project_kind when creating a row from a filtered list page. */
+export function defaultProjectKindForListMode(mode: BisProjectsListMode): string {
+  if (mode === 'applications') return 'Application'
+  if (mode === 'inclusion') return 'Inclusion'
+  return DEFAULT_PROJECT_KIND
+}
 
 export const BIS_BILLING_FREQUENCIES = [
   'Monthly',
@@ -47,7 +55,6 @@ export const BIS_BILLING_FREQUENCIES = [
 export const DEFAULT_CASE_HANDLED_BY = 'Amit Kumar'
 export const DEFAULT_CASE_REFERRED_BY = 'QE'
 export const DEFAULT_BILLING_FREQUENCY = 'Yearly'
-export const DEFAULT_PROJECT_KIND = 'Licence'
 
 export type BisProjectClientJoin = {
   company_name: string | null
@@ -107,9 +114,9 @@ export type BisProjectForm = {
   notes: string
 }
 
-export function emptyBisProjectForm(): BisProjectForm {
+export function emptyBisProjectForm(projectKind: string = DEFAULT_PROJECT_KIND): BisProjectForm {
   return {
-    projectKind: DEFAULT_PROJECT_KIND,
+    projectKind: projectKind.trim() || DEFAULT_PROJECT_KIND,
     title: '',
     clientId: '',
     clientLabel: '',

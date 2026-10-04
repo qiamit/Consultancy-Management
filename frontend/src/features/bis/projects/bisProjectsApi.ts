@@ -3,6 +3,7 @@ import { formatIsCodeLabelFromParts } from '@/features/masters/is-codes/formatIs
 import type { FilterComboboxOption } from '@/features/sample-handling/receiving/FilterCombobox'
 import {
   buildBisProjectTitle,
+  DEFAULT_PROJECT_KIND,
   dueSoonEndIsoDate,
   todayIsoDate,
   type BisProjectForm,
@@ -172,7 +173,7 @@ export async function saveBisProject(
   const payload = {
     client_id: form.clientId || null,
     is_code_id: form.isCodeId || null,
-    project_kind: form.projectKind || 'new_license',
+    project_kind: form.projectKind || DEFAULT_PROJECT_KIND,
     title: form.title.trim() || buildBisProjectTitle(form),
     status: form.status || 'in_progress',
     application_stage: form.applicationStage.trim() || null,

@@ -18,6 +18,7 @@ import { printBisDocument, type BisPrintDocumentKind } from '../print/printBisDo
 import {
   BIS_PROJECTS_LIST_TITLES,
   clientDisplayName,
+  defaultProjectKindForListMode,
   emptyBisProjectForm,
   formatCmL,
   isCodeDisplayLabel,
@@ -102,7 +103,10 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
 
   const openNew = () => {
     setEditingId(null)
-    setForm(emptyBisProjectForm())
+    const next = emptyBisProjectForm(defaultProjectKindForListMode(listMode))
+    if (listMode === 'stop_marking') next.status = 'stop_marking'
+    if (listMode === 'our') next.isQeManaged = true
+    setForm(next)
     setFormError(null)
     setShowForm(true)
   }

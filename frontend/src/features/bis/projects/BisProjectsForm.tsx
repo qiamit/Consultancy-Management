@@ -37,6 +37,7 @@ import {
 } from './manakExtensionBridge'
 import {
   BIS_BILLING_FREQUENCIES,
+  BIS_PROJECT_KIND_OPTIONS,
   BIS_PROJECT_STATUS_OPTIONS,
   licenseValidityState,
   sanitizeCurrencyInput,
@@ -145,6 +146,9 @@ export function BisProjectsForm({
   const statusOptions = BIS_PROJECT_STATUS_OPTIONS.some((o) => o.value === form.status)
     ? BIS_PROJECT_STATUS_OPTIONS
     : [...BIS_PROJECT_STATUS_OPTIONS, { value: form.status, label: form.status }]
+  const kindOptions = BIS_PROJECT_KIND_OPTIONS.some((o) => o.value === form.projectKind)
+    ? BIS_PROJECT_KIND_OPTIONS
+    : [...BIS_PROJECT_KIND_OPTIONS, { value: form.projectKind, label: form.projectKind }]
   const frequencyOptions: string[] = BIS_BILLING_FREQUENCIES.includes(
     form.billingFrequency as (typeof BIS_BILLING_FREQUENCIES)[number],
   )
@@ -313,6 +317,22 @@ export function BisProjectsForm({
                 ) : validity.state === 'expiring' ? (
                   <p className="text-xs text-amber-700">{validity.daysLeft} day(s) left — renewal due.</p>
                 ) : null}
+              </div>
+
+              <div className="col-span-12 space-y-2 md:col-span-3">
+                <Label>Project Kind</Label>
+                <Select value={form.projectKind} onValueChange={(v) => set('projectKind', v)}>
+                  <SelectTrigger aria-label="Project Kind">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-none border-stone-500">
+                    {kindOptions.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="col-span-12 space-y-2 md:col-span-3">

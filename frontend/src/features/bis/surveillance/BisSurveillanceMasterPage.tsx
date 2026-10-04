@@ -13,7 +13,7 @@ import {
 } from './surveillanceApi'
 import { downloadCsv } from '../shared/downloadCsv'
 import { formatCmL } from '../projects/types'
-import { printSurveillanceForm } from './printSurveillanceForm'
+import { emailSurveillanceFormToClient, printSurveillanceForm } from './printSurveillanceForm'
 import {
   emptySurveillanceForm,
   rowToSurveillanceForm,
@@ -46,6 +46,7 @@ export default function BisSurveillanceMasterPage() {
   const [form, setForm] = useState<SurveillanceFormValue>(() => emptySurveillanceForm())
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  const [emailBusy, setEmailBusy] = useState(false)
 
   const requestRef = useRef(0)
 
@@ -179,6 +180,30 @@ export default function BisSurveillanceMasterPage() {
     })()
   }
 
+  const handleEmailSurveillance = () => {
+    if (selectedIds.size !== 1) {
+      setMessage('Select exactly one surveillance record to email the client.')
+      return
+    }
+    const id = [...selectedIds][0]
+    const row = rows.find((r) => r.id === id)
+    if (!row) {
+      setMessage('Selected surveillance is not on this page. Open it or change page.')
+      return
+    }
+    void (async () => {
+      setEmailBusy(true)
+      setMessage(null)
+      try {
+        setMessage(await emailSurveillanceFormToClient(row))
+      } catch (err) {
+        setMessage(formatBisApiError(err))
+      } finally {
+        setEmailBusy(false)
+      }
+    })()
+  }
+
   const handleExport = () => {
     const source = selectedIds.size > 0 ? rows.filter((r) => selectedIds.has(r.id)) : rows
     if (source.length === 0) {
@@ -237,6 +262,9 @@ export default function BisSurveillanceMasterPage() {
         onExport={handleExport}
         onPrintList={handlePrintSurveillance}
         printListLabel="Print Surveillance"
+        onEmailClient={handleEmailSurveillance}
+        emailClientLabel="Email Surveillance"
+        printDocsBusy={emailBusy}
         onPrevPage={() => setPage((p) => Math.max(1, p - 1))}
         onNextPage={() => setPage((p) => Math.min(pageCount, p + 1))}
         jumpTo={jumpTo}
