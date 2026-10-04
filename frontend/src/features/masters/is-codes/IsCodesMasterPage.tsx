@@ -6,7 +6,7 @@ import { useFormDialogOpenChange } from '@/lib/formDialogOpenChange'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { IsCodesHeaderBar } from './IsCodesHeaderBar'
 import { IsCodesForm } from './IsCodesForm'
-import { IsCodesTable } from './IsCodesTable'
+import { IsCodesTable, type IsCodeSortDir, type IsCodeSortKey } from './IsCodesTable'
 import { IsCodesTableFooterBar } from './IsCodesFooterBar'
 import { IsCodesFilesDialog, type IsCodeViewFile } from './IsCodesFilesDialog'
 import { buildIsCodesListAssistantContext, formatIsCodeLabel } from './buildIsCodeAssistantContext'
@@ -156,6 +156,8 @@ export default function IsCodesMasterPage() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [jumpTo, setJumpTo] = useState('')
+  const [sortKey, setSortKey] = useState<IsCodeSortKey>('isDetails')
+  const [sortDir, setSortDir] = useState<IsCodeSortDir>('asc')
 
   const [form, setForm] = useState<IsCodeForm>(() => emptyIsCodeForm())
 
@@ -238,25 +240,60 @@ export default function IsCodesMasterPage() {
   useEffect(() => {
     setPage(1)
     setJumpTo('')
-  }, [search, pageSize])
+  }, [search, pageSize, sortKey, sortDir])
 
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return rows
-    return rows.filter((r) => {
-      const blob = [
-        r.is_number,
-        r.revision_year == null ? '' : String(r.revision_year),
-        r.reaffirmation_year == null ? '' : String(r.reaffirmation_year),
-        r.amendment_number == null ? '' : String(r.amendment_number),
-        r.title,
-        r.aspect,
-        String(r.testing_charges ?? ''),
-        r.remarks ?? '',
-      ].join(' ').toLowerCase()
-      return blob.includes(q)
+    const list = !q
+      ? [...rows]
+      : rows.filter((r) => {
+          const blob = [
+            r.is_number,
+            r.revision_year == null ? '' : String(r.revision_year),
+            r.reaffirmation_year == null ? '' : String(r.reaffirmation_year),
+            r.amendment_number == null ? '' : String(r.amendment_number),
+            r.title,
+            r.aspect,
+            String(r.testing_charges ?? ''),
+            r.remarks ?? '',
+          ]
+            .join(' ')
+            .toLowerCase()
+          return blob.includes(q)
+        })
+
+    const dir = sortDir === 'asc' ? 1 : -1
+    const cmpText = (a: string, b: string) =>
+      a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true }) * dir
+
+    return list.sort((a, b) => {
+      let primary = 0
+      switch (sortKey) {
+        case 'isDetails':
+          primary = cmpText(formatIsCodeLabel(a), formatIsCodeLabel(b))
+          break
+        case 'title':
+          primary = cmpText(a.title || '', b.title || '')
+          break
+        case 'reaffirmation':
+          primary = cmpText(
+            `${a.reaffirmation_year ?? ''} ${a.amendment_number ?? ''}`,
+            `${b.reaffirmation_year ?? ''} ${b.amendment_number ?? ''}`,
+          )
+          break
+        case 'aspectCharges': {
+          const chargesCmp =
+            (Number(a.testing_charges ?? 0) - Number(b.testing_charges ?? 0)) * dir
+          primary = cmpText(a.aspect || '', b.aspect || '') || chargesCmp
+          break
+        }
+        default:
+          primary = cmpText(formatIsCodeLabel(a), formatIsCodeLabel(b))
+      }
+      if (primary !== 0) return primary
+      return cmpText(formatIsCodeLabel(a), formatIsCodeLabel(b))
     })
-  }, [rows, search])
+  }, [rows, search, sortKey, sortDir])
 
   const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize))
 
@@ -270,6 +307,15 @@ export default function IsCodesMasterPage() {
     [filteredRows, search],
   )
 
+  const handleSort = (key: IsCodeSortKey) => {
+    if (sortKey === key) {
+      setSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'))
+      return
+    }
+    setSortKey(key)
+    setSortDir('asc')
+  }
+
   const toggleRow = (id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev)
@@ -279,12 +325,13 @@ export default function IsCodesMasterPage() {
     })
   }
 
-  const toggleAllOnPage = () => {
+  const toggleAllOnPage = (checked: boolean) => {
     setSelectedIds((prev) => {
       const next = new Set(prev)
-      const allSelected = pagedRows.length > 0 && pagedRows.every((r) => next.has(r.id))
-      if (allSelected) pagedRows.forEach((r) => next.delete(r.id))
-      else pagedRows.forEach((r) => next.add(r.id))
+      for (const r of pagedRows) {
+        if (checked) next.add(r.id)
+        else next.delete(r.id)
+      }
       return next
     })
   }
@@ -872,11 +919,16 @@ export default function IsCodesMasterPage() {
   }
 
   const handlePrintSelected = () => {
-    const exportRows = selectedRows.length > 0 ? selectedRows : filteredRows
-    if (exportRows.length === 0) return
+    if (selectedRows.length === 0) {
+      setSaveMessage('Select at least one IS code to print.')
+      return
+    }
+    const exportRows = selectedRows
     const html = `<!doctype html><html><head><meta charset="utf-8"/><title>IS Codes</title></head><body><pre>${exportRows
-      .map((r) => `${r.is_number} | ${r.title}`)
+      .map((r) => `${formatIsCodeLabel(r)} | ${r.title}`)
       .join('\n')}</pre></body></html>`
+
+    setSaveMessage(`Print ready: ${exportRows.length} IS code(s).`)
 
     const iframe = document.createElement('iframe')
     iframe.style.position = 'fixed'
@@ -918,7 +970,13 @@ export default function IsCodesMasterPage() {
   }
 
   return (
-    <div className={limsPageShellClass}>
+    <div
+      data-master-scroll="table"
+      className={cn(
+        limsPageShellClass,
+        'flex h-full min-h-0 flex-col overflow-hidden !space-y-0 gap-2 sm:gap-3 md:gap-3',
+      )}
+    >
       <input
         ref={importInputRef}
         type="file"
@@ -930,25 +988,28 @@ export default function IsCodesMasterPage() {
           if (e.target) e.target.value = ''
         }}
       />
-      <IsCodesHeaderBar
-        search={search}
-        onSearchChange={setSearch}
-        pageSize={pageSize}
-        onPageSizeChange={(size) => {
-          setPageSize(size)
-          setPage(1)
-        }}
-        onNew={handleNew}
-        onOpenBIS={() => window.open('https://standards.bis.gov.in', '_blank', 'noreferrer')}
-        assistantContext={assistantContext}
-        onAssistantDataChanged={() => void loadIsCodes()}
-      />
+      <div className="shrink-0">
+        <IsCodesHeaderBar
+          search={search}
+          onSearchChange={setSearch}
+          pageSize={pageSize}
+          onPageSizeChange={(size) => {
+            setPageSize(size)
+            setPage(1)
+          }}
+          onNew={handleNew}
+          onOpenBIS={() => window.open('https://standards.bis.gov.in', '_blank', 'noreferrer')}
+          assistantContext={assistantContext}
+          onAssistantDataChanged={() => void loadIsCodes()}
+        />
+      </div>
 
       <Dialog open={showForm} onOpenChange={handleFormOpenChange}>
         <DialogContent
           persistOnFocusLoss
           aria-describedby={undefined}
           overlayClassName="lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto"
+          portalClassName="lg:left-[268px] lg:right-0 lg:w-auto"
           className={cn(
             limsDialogClass,
             'max-h-[92vh] w-[calc(100%-1.5rem)] max-w-3xl sm:w-full',
@@ -1021,41 +1082,48 @@ export default function IsCodesMasterPage() {
         onDeleteFile={handleFilesDialogDelete}
       />
 
-      <IsCodesTable
-        rows={pagedRows}
-        loading={listLoading}
-        error={listError}
-        searchActive={search.trim().length > 0}
-        selectedIds={selectedIds}
-        onToggle={toggleRow}
-        onToggleAll={toggleAllOnPage}
-        onEdit={handleEdit}
-        onViewFiles={(row) => {
-          void openFilesDialog(row)
-        }}
-        onAssistantDataChanged={() => void loadIsCodes()}
-      />
+      <div className="min-h-0 flex-1 overflow-hidden">
+        <IsCodesTable
+          rows={pagedRows}
+          loading={listLoading}
+          error={listError}
+          searchActive={search.trim().length > 0}
+          selectedIds={selectedIds}
+          onToggle={toggleRow}
+          onToggleAll={toggleAllOnPage}
+          onEdit={handleEdit}
+          onViewFiles={(row) => {
+            void openFilesDialog(row)
+          }}
+          onAssistantDataChanged={() => void loadIsCodes()}
+          sortKey={sortKey}
+          sortDir={sortDir}
+          onSort={handleSort}
+        />
+      </div>
 
-      <IsCodesTableFooterBar
-        loading={saveLoading}
-        selectedCount={selectedIds.size}
-        page={page}
-        pageCount={pageCount}
-        onImport={handleImport}
-        onExport={handleExport}
-        onPrintSelected={handlePrintSelected}
-        onDeleteSelected={handleDeleteSelected}
-        onPrevPage={() => setPage((p) => Math.max(1, p - 1))}
-        onNextPage={() => setPage((p) => Math.min(pageCount, p + 1))}
-        jumpTo={jumpTo}
-        onJumpToChange={setJumpTo}
-        onJumpToGo={() => {
-          const n = Number(jumpTo)
-          if (!Number.isFinite(n) || n <= 0) return
-          setPage(Math.min(pageCount, Math.max(1, Math.floor(n))))
-          setJumpTo('')
-        }}
-      />
+      <div className="shrink-0">
+        <IsCodesTableFooterBar
+          message={saveMessage}
+          loading={saveLoading}
+          selectedCount={selectedIds.size}
+          page={page}
+          pageCount={pageCount}
+          onImport={handleImport}
+          onExport={handleExport}
+          onPrintSelected={handlePrintSelected}
+          onDeleteSelected={handleDeleteSelected}
+          onPrevPage={() => setPage((p) => Math.max(1, p - 1))}
+          onNextPage={() => setPage((p) => Math.min(pageCount, p + 1))}
+          jumpTo={jumpTo}
+          onJumpToChange={setJumpTo}
+          onJumpToGo={() => {
+            const n = Number(jumpTo)
+            if (!Number.isFinite(n) || n <= 0) return
+            setPage(Math.min(pageCount, Math.max(1, Math.floor(n))))
+          }}
+        />
+      </div>
     </div>
   )
 }
