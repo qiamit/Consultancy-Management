@@ -2,7 +2,7 @@ import { ChevronLeft, ChevronRight, Download, FileUp, Printer, Trash2 } from 'lu
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { clientDeleteBtnClass, clientPanelClass } from './clientsFormUi'
-import { limsDarkBarBtnClass, limsDarkBarFieldClass, limsToolbarScrollClass } from '@/lib/limsThemeUi'
+import { limsDarkBarBtnClass, limsDarkBarFieldClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { LaboratoryDirectorOnly } from '@/components/lims/LaboratoryDirectorOnly'
 
@@ -48,7 +48,7 @@ export function ClientsTableFooterBar({
 
   return (
     <div className={cn(clientPanelClass)}>
-      <div className="relative overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-3 py-2 text-white sm:px-5">
+      <div className="relative overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-2 py-2 text-white sm:px-4 md:px-5">
         <div
           className="pointer-events-none absolute inset-0 opacity-[0.18]"
           style={{
@@ -58,8 +58,8 @@ export function ClientsTableFooterBar({
         />
         <div className="absolute top-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
 
-        <div className="relative flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-          <div className={cn(limsToolbarScrollClass, 'pb-0.5')}>
+        <div className="relative flex min-w-0 flex-nowrap items-center gap-1 overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch] sm:gap-1.5 md:gap-2.5">
+          <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
             <LaboratoryDirectorOnly>
               <Button
                 type="button"
@@ -118,7 +118,7 @@ export function ClientsTableFooterBar({
             {message ? (
               <p
                 className={cn(
-                  'min-w-0 max-w-[10rem] truncate text-[10px] sm:max-w-[14rem] sm:text-xs md:max-w-[18rem]',
+                  'min-w-0 max-w-[8rem] truncate text-[10px] sm:max-w-[12rem] sm:text-xs md:max-w-[16rem]',
                   message.toLowerCase().includes('saved') ||
                     message.toLowerCase().includes('deleted') ||
                     message.toLowerCase().includes('exported')
@@ -132,7 +132,7 @@ export function ClientsTableFooterBar({
             ) : null}
           </div>
 
-          <div className={cn(limsToolbarScrollClass, 'justify-end sm:shrink-0')}>
+          <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5">
             <Input
               aria-label="Jump to page"
               placeholder="Page"

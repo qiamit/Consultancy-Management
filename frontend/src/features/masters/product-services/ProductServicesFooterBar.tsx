@@ -3,7 +3,6 @@ import {
   limsDarkBarBtnClass,
   limsDarkBarFieldClass,
   limsDeleteBtnClass,
-  limsToolbarScrollClass,
 } from '@/lib/limsThemeUi'
 import { ChevronLeft, ChevronRight, Download, FileUp, Printer, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -46,8 +45,8 @@ export function ProductServicesTableFooterBar({
 
   return (
     <div className="relative overflow-hidden rounded-none border-2 border-stone-500 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-3 py-2 text-white shadow-sm ring-1 ring-amber-700/20 sm:px-5">
-      <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-        <div className={cn(limsToolbarScrollClass, 'pb-0.5')}>
+      <div className="flex min-w-0 flex-nowrap items-center gap-1 overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch] sm:gap-1.5 md:gap-2.5">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
           <LaboratoryDirectorOnly>
             <Button
               type="button"
@@ -120,7 +119,7 @@ export function ProductServicesTableFooterBar({
           ) : null}
         </div>
 
-        <div className={cn(limsToolbarScrollClass, 'justify-end sm:shrink-0')}>
+        <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5">
           <Input
             aria-label="Jump to page"
             placeholder="Page"
