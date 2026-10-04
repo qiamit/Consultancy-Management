@@ -89,16 +89,34 @@ async function connect() {
 const client = await connect()
 console.log('Connected')
 
+// Keep app migration history off public.schema_migrations — GoTrue/pop also uses
+// that name (expects a `version` column) and will fail healthchecks if ours wins.
 await client.query(`
-  CREATE TABLE IF NOT EXISTS public.schema_migrations (
+  CREATE TABLE IF NOT EXISTS public.app_schema_migrations (
     filename text PRIMARY KEY,
     applied_at timestamptz NOT NULL DEFAULT now()
   );
 `)
+await client.query(`
+  DO $$
+  BEGIN
+    IF EXISTS (
+      SELECT 1 FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_name = 'schema_migrations'
+    ) AND EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'schema_migrations' AND column_name = 'filename'
+    ) THEN
+      ALTER TABLE public.schema_migrations RENAME TO app_schema_migrations;
+    END IF;
+  EXCEPTION WHEN duplicate_table THEN
+    NULL;
+  END $$;
+`)
 
 for (const file of SKIP_FILES) {
   await client.query(
-    `INSERT INTO public.schema_migrations (filename) VALUES ($1) ON CONFLICT DO NOTHING`,
+    `INSERT INTO public.app_schema_migrations (filename) VALUES ($1) ON CONFLICT DO NOTHING`,
     [file],
   )
   console.log('MARK SKIPPED', file)
@@ -113,7 +131,7 @@ const files = fs
 let failed = false
 for (const file of files) {
   const { rows } = await client.query(
-    'SELECT 1 FROM public.schema_migrations WHERE filename = $1',
+    'SELECT 1 FROM public.app_schema_migrations WHERE filename = $1',
     [file],
   )
   if (rows.length) {
@@ -125,7 +143,7 @@ for (const file of files) {
   try {
     await client.query('BEGIN')
     await client.query(sql)
-    await client.query('INSERT INTO public.schema_migrations (filename) VALUES ($1)', [file])
+    await client.query('INSERT INTO public.app_schema_migrations (filename) VALUES ($1)', [file])
     await client.query('COMMIT')
     console.log('OK', file)
   } catch (err) {
