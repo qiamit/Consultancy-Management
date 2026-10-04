@@ -108,9 +108,9 @@ export function ClientsHeaderBar({
                 type="search"
                 value={search}
                 onChange={(e) => onSearchChange(e.target.value)}
-                placeholder="Search Clients"
+                placeholder="Search Client | Address | Email | Mobile | Scale | Type"
                 className={cn(clientDarkBarSearchClass, 'pl-9')}
-                aria-label="Search Clients"
+                aria-label="Search by client, address, email, mobile, scale, or type"
               />
             </div>
             {pageSizeSelect}
