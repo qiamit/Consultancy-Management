@@ -95,12 +95,14 @@ export function ClientsHeaderBar({
             pageTitle="Client Directory"
             contextSummary={assistantContext}
             suggestedQuestions={[
+              'Save this business card photo as a new client',
               'Add a new client ABC Labs Pvt Ltd with Dr balance',
               'Summarize clients in the current list',
               'Update payment term for a client by company name',
-              'What is the difference between Dr and Cr balance?',
             ]}
             onDataChanged={onAssistantDataChanged}
+            enableImageImport
+            imageAttachHint="business card or company photo"
             triggerVariant="icon"
             triggerClassName={cn(clientAiTriggerClass, 'h-8 w-8 shrink-0')}
           />

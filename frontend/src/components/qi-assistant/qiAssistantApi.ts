@@ -21,6 +21,8 @@ export type QiAssistantResponse = {
 }
 
 const MAX_PDF_BYTES = 5 * 1024 * 1024
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024
+const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
 
 async function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -94,6 +96,33 @@ export function validateAssistantPdfFile(file: File): void {
   }
 }
 
+export function validateAssistantImageFile(file: File): void {
+  const type = (file.type || '').toLowerCase()
+  const name = file.name.toLowerCase()
+  const okType =
+    ALLOWED_IMAGE_TYPES.has(type) ||
+    name.endsWith('.jpg') ||
+    name.endsWith('.jpeg') ||
+    name.endsWith('.png') ||
+    name.endsWith('.webp') ||
+    name.endsWith('.gif')
+  if (!okType) {
+    throw new Error('Only JPG, PNG, WEBP, or GIF images are supported.')
+  }
+  if (file.size > MAX_IMAGE_BYTES) {
+    throw new Error('Image must be 4 MB or smaller.')
+  }
+}
+
+function guessImageMime(file: File): string {
+  if (file.type && ALLOWED_IMAGE_TYPES.has(file.type.toLowerCase())) return file.type.toLowerCase()
+  const name = file.name.toLowerCase()
+  if (name.endsWith('.png')) return 'image/png'
+  if (name.endsWith('.webp')) return 'image/webp'
+  if (name.endsWith('.gif')) return 'image/gif'
+  return 'image/jpeg'
+}
+
 export async function sendQiAssistantMessage(input: {
   page: string
   message: string
@@ -109,6 +138,8 @@ export async function sendQiAssistantMessage(input: {
   attachedPdf?: File
   /** Multiple PDFs (preferred for document AI). Falls back to attachedPdf. */
   attachedPdfs?: File[]
+  /** Business card / photo attached in chat (vision). */
+  attachedImage?: File
   history: Array<{ role: 'user' | 'assistant'; content: string }>
 }): Promise<QiAssistantResponse> {
   const body: Record<string, unknown> = {
@@ -146,6 +177,15 @@ export async function sendQiAssistantMessage(input: {
         pdfBase64: await fileToBase64(f),
       })),
     )
+  }
+
+  if (input.attachedImage) {
+    validateAssistantImageFile(input.attachedImage)
+    body.importImage = {
+      fileName: input.attachedImage.name,
+      mimeType: guessImageMime(input.attachedImage),
+      imageBase64: await fileToBase64(input.attachedImage),
+    }
   }
 
   return postQiAssistant(body)

@@ -32,9 +32,13 @@ type QiAssistantBody = {
   importPdf?: { fileName: string; pdfBase64: string }
   /** Multiple chat-attached PDFs (text extracted into context). */
   importPdfs?: Array<{ fileName: string; pdfBase64: string }>
+  /** Business card / photo attached for vision models. */
+  importImage?: { fileName: string; mimeType?: string; imageBase64: string }
 }
 
 const MAX_IMPORT_PDF_BYTES = 5 * 1024 * 1024
+const MAX_IMPORT_IMAGE_BYTES = 4 * 1024 * 1024
+const ALLOWED_IMAGE_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
 
 const AI_SETTINGS_ID = '00000000-0000-0000-0000-000000000002'
 const IS_CODE_FILES_BUCKET = 'is-code-files'
@@ -617,6 +621,40 @@ Deno.serve(async (req) => {
     body.page?.trim() === 'samples/receiving' &&
     Boolean(attachedPdfBytes && attachedPdfBytes.length > 0)
 
+  const attachedImage = body.importImage?.imageBase64?.trim()
+    ? {
+        fileName: String(body.importImage.fileName || 'card.jpg'),
+        mimeType: String(body.importImage.mimeType || 'image/jpeg').toLowerCase(),
+        imageBase64: body.importImage.imageBase64.trim().replace(/^data:[^;]+;base64,/, ''),
+      }
+    : null
+
+  if (attachedImage) {
+    if (!ALLOWED_IMAGE_MIME.has(attachedImage.mimeType)) {
+      return new Response(JSON.stringify({ error: 'Image must be JPG, PNG, WEBP, or GIF' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+    try {
+      const raw = atob(attachedImage.imageBase64)
+      if (raw.length > MAX_IMPORT_IMAGE_BYTES) {
+        return new Response(JSON.stringify({ error: 'Image must be 4 MB or smaller' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+    } catch {
+      return new Response(JSON.stringify({ error: 'Invalid attached image data' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+  }
+
+  const isClientCardImportMode =
+    body.page?.trim() === 'clients' && Boolean(attachedImage)
+
   const isCodeNotebookRules = isDraftReportReview
     ? [
         'TEST REPORT REVIEW (draft, pre-issue): IS standard PDF excerpts below are reference for Part C cross-check only.',
@@ -654,6 +692,17 @@ Deno.serve(async (req) => {
           'One PDF usually means one sample; create multiple samples only if the PDF clearly lists separate items.',
           'After create, the system links the uploaded PDF as client reference on the sample.',
         ].join(' ')
+      : isClientCardImportMode
+        ? [
+            'CLIENT BUSINESS CARD / PHOTO IMPORT: The user attached an image (visiting card, letterhead, or photo). Read text from the image.',
+            'When they ask to save, add, create, or import the client — or the message implies saving from the card — call lims_crud create on table clients immediately.',
+            'Required: company_name (legal/trade name from the card). Prefer the largest company name on the card.',
+            'Also extract when visible: contact_person_name, mobile_number, email_id, address, pin_code, district, state, country, gst_number.',
+            'Defaults if not on the card: company_type=Manufacturer, company_scale=Medium, country=India, balance_type=Dr, opening_balance=0, payment_term=100 % Advance.',
+            'If company_name is unreadable, ask one short clarifying question — do not invent a fake name.',
+            'If the same company_name already exists in Page data, update that client instead of creating a duplicate (use match company_name or id).',
+            'After success, confirm the saved company_name and key fields in your reply.',
+          ].join(' ')
       : isCodeNotebookPrimary
       ? [
           'NOTEBOOK MODE (IS Code row): Answer ONLY about this single Indian Standard using the metadata and PDF excerpts below.',
@@ -701,21 +750,45 @@ Deno.serve(async (req) => {
     skillsBlock,
   ].filter((p) => p.trim().length > 0)
 
+  const userText = body.message!.trim()
   const history = (body.history ?? [])
     .filter((m) => m?.content?.trim() && (m.role === 'user' || m.role === 'assistant'))
     .slice(-10)
     .map((m) => ({ role: m.role, content: m.content.trim() }))
+    // Drop trailing duplicate of the current user turn (frontend also sends `message`).
+    .filter((m, idx, arr) => !(idx === arr.length - 1 && m.role === 'user' && m.content === userText))
 
   type ChatMsg = Record<string, unknown>
+  const userContent: unknown = attachedImage
+    ? [
+        {
+          type: 'text',
+          text: userText,
+        },
+        {
+          type: 'image_url',
+          image_url: {
+            url: `data:${attachedImage.mimeType};base64,${attachedImage.imageBase64}`,
+          },
+        },
+      ]
+    : userText
+
   const chatMessages: ChatMsg[] = [
     { role: 'system', content: systemParts.join('\n\n') },
     ...history,
-    { role: 'user', content: body.message!.trim() },
+    { role: 'user', content: userContent },
   ]
 
   const actionsExecuted: CrudActionResult[] = []
   let reply = ''
-  const maxToolRounds = isTestParamImportMode ? 24 : isSampleReceivingImportMode ? 10 : 6
+  const maxToolRounds = isTestParamImportMode
+    ? 24
+    : isSampleReceivingImportMode
+      ? 10
+      : isClientCardImportMode
+        ? 8
+        : 6
   const chatMaxTokens =
     isDraftReportReview || isIssuedReportReview
       ? Math.min(Number.isFinite(maxTokens) ? maxTokens : 8192, 8192)

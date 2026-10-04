@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { FileUp, Loader2, Send, Sparkles, X } from 'lucide-react'
+import { FileUp, ImagePlus, Loader2, Mic, MicOff, Send, Sparkles, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { IsCodeSearchPicker } from './IsCodeSearchPicker'
@@ -16,6 +16,7 @@ import { AI_SETTINGS_SINGLETON_ID } from '@/features/settings/ai-settings/types'
 import { useShowAiAssistant } from '@/hooks/useShowAiAssistant'
 import {
   sendQiAssistantMessage,
+  validateAssistantImageFile,
   validateAssistantPdfFile,
   type QiAssistantActionResult,
   type QiChatMessage,
@@ -37,10 +38,39 @@ function assistantDialogTitle(activeRecordTable?: string, isCodeId?: string, pag
   if (page === 'nabl-scope') return 'NABL Scope Assistant'
   if (page === 'calibration-nabl-scope') return 'Calibration NABL Scope Assistant'
   if (page === 'equipment-breakdown-register') return 'Equipment Breakdown Register Assistant'
+  if (page === 'clients') return 'Client Directory Assistant'
   if (activeRecordTable === 'test_parameters') return 'Test Parameter Assistant'
   if (activeRecordTable === 'is_codes' || isCodeId) return 'IS Code Assistant'
   return 'QI Assistant'
 }
+
+type SpeechRecognitionLike = {
+  continuous: boolean
+  interimResults: boolean
+  lang: string
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null
+  onerror: ((event: { error?: string }) => void) | null
+  onend: (() => void) | null
+  start: () => void
+  stop: () => void
+  abort: () => void
+}
+
+type SpeechRecognitionEventLike = {
+  resultIndex: number
+  results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }>
+}
+
+function getSpeechRecognitionCtor(): (new () => SpeechRecognitionLike) | null {
+  const w = window as Window & {
+    SpeechRecognition?: new () => SpeechRecognitionLike
+    webkitSpeechRecognition?: new () => SpeechRecognitionLike
+  }
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null
+}
+
+const CLIENT_CARD_SAVE_PROMPT =
+  'Read this business card / photo and save the client now. Create the client record with company name and any contact, mobile, email, address, and GST you can read.'
 
 export type QiAssistantIsCodeOption = { id: string; label: string; displayCode?: string }
 
@@ -58,7 +88,9 @@ export function QiAssistant({
   triggerClassName,
   onDataChanged,
   enablePdfImport = false,
+  enableImageImport = false,
   pdfAttachHint = 'IS standard PDF',
+  imageAttachHint = 'business card or photo',
 }: {
   page: string
   pageTitle: string
@@ -75,8 +107,11 @@ export function QiAssistant({
   triggerClassName?: string
   onDataChanged?: () => void
   enablePdfImport?: boolean
+  /** Allow camera / gallery attach (vision) — e.g. Client Directory business cards */
+  enableImageImport?: boolean
   /** Label for PDF attach button, e.g. "test request PDF" */
   pdfAttachHint?: string
+  imageAttachHint?: string
 }) {
   const showAssistant = useShowAiAssistant()
   const [open, setOpen] = useState(false)
@@ -89,12 +124,20 @@ export function QiAssistant({
   const [selectedSkill, setSelectedSkill] = useState<AiSkillPick | null>(null)
   const [selectedIsCodeId, setSelectedIsCodeId] = useState('')
   const [attachedPdf, setAttachedPdf] = useState<File | null>(null)
+  const [attachedImage, setAttachedImage] = useState<File | null>(null)
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
+  const [listening, setListening] = useState(false)
+  const [voiceSupported, setVoiceSupported] = useState(false)
+  const [busyHint, setBusyHint] = useState<string | null>(null)
   const [skillPickerOpen, setSkillPickerOpen] = useState(false)
   const [skillHighlight, setSkillHighlight] = useState(0)
   const [caretPos, setCaretPos] = useState(0)
   const scrollRef = useRef<HTMLDivElement>(null)
   const pdfInputRef = useRef<HTMLInputElement>(null)
+  const imageInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
+  const voiceBaseRef = useRef('')
 
   const skillTrigger = useMemo(
     () => (skillPickerOpen ? parseSkillTrigger(input, caretPos) : null),
@@ -113,10 +156,32 @@ export function QiAssistant({
   ]
 
   const prompts = suggestedQuestions ?? defaults
+  const isClientsPage = page === 'clients'
 
   const showIsCodePicker = Boolean(isCodeOptions?.length) && !isCodeId
   const effectiveIsCodeId = isCodeId ?? (selectedIsCodeId || undefined)
   const selectedIsCodeLabel = isCodeOptions?.find((o) => o.id === selectedIsCodeId)?.label
+
+  useEffect(() => {
+    setVoiceSupported(Boolean(getSpeechRecognitionCtor()))
+  }, [])
+
+  useEffect(() => {
+    if (!attachedImage) {
+      setImagePreviewUrl(null)
+      return
+    }
+    const url = URL.createObjectURL(attachedImage)
+    setImagePreviewUrl(url)
+    return () => URL.revokeObjectURL(url)
+  }, [attachedImage])
+
+  useEffect(() => {
+    return () => {
+      recognitionRef.current?.abort()
+      recognitionRef.current = null
+    }
+  }, [])
 
   useEffect(() => {
     if (!open) return
@@ -144,29 +209,46 @@ export function QiAssistant({
       setSelectedSkill(null)
       setSelectedIsCodeId('')
       setAttachedPdf(null)
+      setAttachedImage(null)
       setSkillPickerOpen(false)
       setInput('')
+      setListening(false)
+      recognitionRef.current?.abort()
+      recognitionRef.current = null
       return
     }
     if (messages.length > 0) return
     const pdfNote = enablePdfImport
-      ? ' Use the **PDF** button to attach a file, then type your command and press **Send** (nothing runs until you send).'
+      ? ' Use the **PDF** button to attach a file, then type your command and press **Send**.'
       : ''
+    const imageNote = enableImageImport
+      ? ' Attach a **business card / photo** — I can read it and **save the client** automatically.'
+      : ''
+    const voiceNote = ' Tap the **mic** to speak your request.'
     const crudNote = agentCrudEnabled
       ? ' I can **create, update, and delete** records in this module when you ask.'
       : ''
     const isCodeNote = showIsCodePicker
       ? ' Pick an **IS Code** below so I can read its uploaded PDFs.'
       : ''
-    const skillNote = ' Tap **!** or type **!** in the box to pick a **Skill** for your next message.'
+    const skillNote = ' Tap **!** or type **!** to pick a **Skill**.'
     const intro =
       welcomeMessage !== undefined
         ? welcomeMessage
-        : `Hello! I'm **QI Assistant** on **${pageTitle}**. Ask me about this screen or the data shown here.${crudNote}${pdfNote}${isCodeNote}${skillNote}`
+        : `Hello! I'm **QI Assistant** on **${pageTitle}**. Ask me about this screen or the data shown here.${crudNote}${imageNote}${pdfNote}${voiceNote}${isCodeNote}${skillNote}`
     if (intro.trim()) {
       setMessages([{ id: newId(), role: 'assistant', content: intro }])
     }
-  }, [open, messages.length, pageTitle, welcomeMessage, agentCrudEnabled, enablePdfImport, showIsCodePicker])
+  }, [
+    open,
+    messages.length,
+    pageTitle,
+    welcomeMessage,
+    agentCrudEnabled,
+    enablePdfImport,
+    enableImageImport,
+    showIsCodePicker,
+  ])
 
   const openSkillPicker = () => {
     const next = input.includes('!') ? input : `${input}${input && !input.endsWith(' ') ? ' ' : ''}!`
@@ -213,9 +295,80 @@ export function QiAssistant({
     try {
       validateAssistantPdfFile(file)
       setAttachedPdf(file)
+      setAttachedImage(null)
       setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Invalid PDF')
+    }
+  }
+
+  const handleImageAttach = (file: File) => {
+    try {
+      validateAssistantImageFile(file)
+      setAttachedImage(file)
+      setAttachedPdf(null)
+      setError(null)
+      if (isClientsPage && !input.trim()) {
+        setInput(CLIENT_CARD_SAVE_PROMPT)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Invalid image')
+    }
+  }
+
+  const stopListening = useCallback(() => {
+    recognitionRef.current?.stop()
+    setListening(false)
+  }, [])
+
+  const toggleListening = () => {
+    if (loading) return
+    const Ctor = getSpeechRecognitionCtor()
+    if (!Ctor) {
+      setError('Voice typing is not supported in this browser. Try Chrome or Edge.')
+      return
+    }
+
+    if (listening) {
+      stopListening()
+      return
+    }
+
+    try {
+      const recognition = new Ctor()
+      recognition.continuous = true
+      recognition.interimResults = true
+      recognition.lang = 'en-IN'
+      voiceBaseRef.current = input.trim() ? `${input.trim()} ` : ''
+      recognition.onresult = (event) => {
+        let interim = ''
+        let finalChunk = ''
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const piece = event.results[i]![0]!.transcript
+          if (event.results[i]!.isFinal) finalChunk += piece
+          else interim += piece
+        }
+        if (finalChunk) {
+          voiceBaseRef.current = `${voiceBaseRef.current}${finalChunk}`.replace(/\s+/g, ' ')
+        }
+        setInput(`${voiceBaseRef.current}${interim}`.trimStart())
+      }
+      recognition.onerror = (event) => {
+        if (event.error === 'aborted' || event.error === 'no-speech') return
+        setError(event.error === 'not-allowed' ? 'Microphone permission denied.' : `Voice error: ${event.error}`)
+        setListening(false)
+      }
+      recognition.onend = () => {
+        setListening(false)
+        recognitionRef.current = null
+      }
+      recognitionRef.current = recognition
+      recognition.start()
+      setListening(true)
+      setError(null)
+    } catch {
+      setError('Could not start voice typing.')
+      setListening(false)
     }
   }
 
@@ -225,7 +378,9 @@ export function QiAssistant({
 
   const sendMessage = useCallback(
     async (text: string) => {
-      const trimmed = text.trim()
+      const trimmed =
+        text.trim() ||
+        (attachedImage && isClientsPage ? CLIENT_CARD_SAVE_PROMPT : '')
       if (!trimmed || loading) return
 
       if (
@@ -238,24 +393,37 @@ export function QiAssistant({
         return
       }
 
+      stopListening()
       setError(null)
       setInput('')
       setSkillPickerOpen(false)
 
       const skillTag = selectedSkill ? `[Skill: ${selectedSkill.name}] ` : ''
-      const pdfTag = attachedPdf ? `📎 Attached: ${attachedPdf.name}\n\n` : ''
+      const pdfTag = attachedPdf ? `📎 PDF: ${attachedPdf.name}\n\n` : ''
+      const imageTag = attachedImage ? `🖼️ Card/Photo: ${attachedImage.name}\n\n` : ''
       const userMsg: QiChatMessage = {
         id: newId(),
         role: 'user',
-        content: `${skillTag}${pdfTag}${trimmed}`,
+        content: `${skillTag}${pdfTag}${imageTag}${trimmed}`,
       }
       const skillId = selectedSkill?.id
       const pdfFile = attachedPdf
+      const imageFile = attachedImage
       setSelectedSkill(null)
       setAttachedPdf(null)
+      setAttachedImage(null)
 
       setMessages((prev) => [...prev, userMsg])
       setLoading(true)
+      setBusyHint(
+        imageFile
+          ? 'Reading card photo and saving client…'
+          : pdfFile
+            ? 'Reading attached PDF…'
+            : effectiveIsCodeId && page !== 'samples/receiving'
+              ? 'Reading IS PDFs and thinking…'
+              : 'Working…',
+      )
 
       try {
         const history = [...messages, userMsg]
@@ -272,6 +440,7 @@ export function QiAssistant({
           activeRecordTable,
           activeSkillId: skillId,
           attachedPdf: pdfFile ?? undefined,
+          attachedImage: imageFile ?? undefined,
           history,
         })
 
@@ -285,9 +454,24 @@ export function QiAssistant({
         ])
       } finally {
         setLoading(false)
+        setBusyHint(null)
       }
     },
-    [activeRecordId, activeRecordTable, attachedPdf, contextSummary, effectiveIsCodeId, loading, messages, page, selectedSkill],
+    [
+      activeRecordId,
+      activeRecordTable,
+      attachedImage,
+      attachedPdf,
+      contextSummary,
+      effectiveIsCodeId,
+      isClientsPage,
+      loading,
+      messages,
+      page,
+      selectedSkill,
+      showIsCodePicker,
+      stopListening,
+    ],
   )
 
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -329,6 +513,8 @@ export function QiAssistant({
 
   if (!showAssistant) return null
 
+  const canSend = Boolean(input.trim() || (attachedImage && isClientsPage))
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -356,7 +542,7 @@ export function QiAssistant({
             )}
             aria-label="Open QI Assistant"
           >
-            <Sparkles size={16} className="text-primary" />
+            <Sparkles size={16} className="text-amber-300" />
             QI Assistant
           </Button>
         )}
@@ -364,13 +550,14 @@ export function QiAssistant({
       <DialogContent
         aria-describedby={undefined}
         overlayClassName="lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto"
+        portalClassName="lg:left-[268px] lg:right-0 lg:w-auto"
         className={cn(
-          'flex max-h-[88vh] w-[calc(100vw-1rem)] flex-col gap-0 overflow-hidden border-slate-300 bg-white p-0 shadow-2xl sm:max-w-xl sm:rounded-lg',
-          'lg:left-[calc(268px+(100vw-268px)/2)] md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2',
-          '[&>button]:text-white [&>button]:opacity-80 [&>button]:hover:bg-white/10 [&>button]:hover:opacity-100',
+          'flex max-h-[90vh] w-[calc(100vw-1rem)] flex-col gap-0 overflow-hidden rounded-none border-4 border-stone-700 bg-[#fffcf7] p-0 shadow-2xl ring-2 ring-amber-700/35 sm:max-w-xl',
+          'lg:left-[calc(268px+(100vw-268px)/2)] lg:right-auto lg:mx-0 md:top-1/2 md:!-translate-x-1/2 md:!-translate-y-1/2',
+          '[&>button]:!rounded-none [&>button]:opacity-100',
         )}
       >
-        <div className="relative bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-5 py-4 text-white">
+        <div className="relative shrink-0 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-3 text-white sm:px-5">
           <div
             className="pointer-events-none absolute inset-0 opacity-[0.18]"
             style={{
@@ -379,54 +566,57 @@ export function QiAssistant({
             }}
           />
           <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
-          <DialogHeader className="relative space-y-1.5 pr-8 text-left">
-            <DialogTitle className="flex items-center gap-2 text-lg font-semibold tracking-tight text-white">
-              <span className="flex h-8 w-8 items-center justify-center rounded-none bg-amber-400/20 ring-1 ring-amber-400/30">
+          <DialogHeader className="relative space-y-1 pr-10 text-left">
+            <DialogTitle className="flex items-center gap-2.5 text-base font-semibold tracking-tight text-white sm:text-lg">
+              <span className="flex h-8 w-8 items-center justify-center border border-amber-400/40 bg-amber-400/15">
                 <Sparkles size={16} className="text-amber-200" />
               </span>
-              {assistantDialogTitle(activeRecordTable, effectiveIsCodeId, page)}
+              <span className="min-w-0">
+                <span className="block truncate">
+                  {assistantDialogTitle(activeRecordTable, effectiveIsCodeId, page)}
+                </span>
+                <span className="mt-0.5 block text-[11px] font-medium text-stone-300">
+                  Voice · Card photo · Skills · Live data
+                </span>
+              </span>
             </DialogTitle>
           </DialogHeader>
         </div>
 
         <div
           ref={scrollRef}
-          className="min-h-[260px] max-h-[46vh] flex-1 space-y-3 overflow-y-auto bg-[#fafbfc] px-5 py-4"
+          className="min-h-[220px] max-h-[42vh] flex-1 space-y-3 overflow-y-auto bg-gradient-to-b from-[#f7f3eb] to-[#fffcf7] px-4 py-3 sm:px-5"
         >
           {messages.map((m) => (
             <div
               key={m.id}
               className={cn(
-                'max-w-[92%] px-3.5 py-2.5 text-sm leading-relaxed shadow-sm',
+                'max-w-[92%] border px-3.5 py-2.5 text-sm leading-relaxed shadow-sm',
                 m.role === 'user'
-                  ? 'ml-auto rounded-2xl rounded-br-md bg-teal-600 text-white'
-                  : 'mr-auto rounded-2xl rounded-bl-md border border-slate-200 bg-white text-slate-800',
+                  ? 'ml-auto border-amber-800/30 bg-amber-700 text-amber-50'
+                  : 'mr-auto border-stone-400 bg-white text-stone-800',
               )}
             >
               <p className="whitespace-pre-wrap">{m.content}</p>
             </div>
           ))}
           {loading && (
-            <div className="mr-auto flex max-w-[92%] items-center gap-2 rounded-2xl rounded-bl-md border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-500">
-              <Loader2 size={14} className="animate-spin text-teal-600" />
-              {effectiveIsCodeId && page !== 'samples/receiving'
-                ? 'Reading IS PDFs and thinking…'
-                : attachedPdf
-                  ? 'Reading test request and thinking…'
-                  : 'Working…'}
+            <div className="mr-auto flex max-w-[92%] items-center gap-2 border border-stone-400 bg-white px-3.5 py-2.5 text-sm text-stone-600">
+              <Loader2 size={14} className="animate-spin text-amber-700" />
+              {busyHint ?? 'Working…'}
             </div>
           )}
         </div>
 
         {messages.length <= 1 && prompts.length > 0 && (
-          <div className="space-y-2 border-t border-slate-200 bg-white px-5 py-3">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">Try asking</p>
+          <div className="space-y-2 border-t border-stone-400 bg-[#fffcf7] px-4 py-3 sm:px-5">
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-amber-800/80">Try asking</p>
             <div className="flex flex-col gap-1.5">
               {prompts.map((q) => (
                 <button
                   key={q}
                   type="button"
-                  className="rounded-md border border-slate-200 bg-[#fafbfc] px-3 py-2 text-left text-xs text-slate-700 transition-colors hover:border-teal-500/40 hover:bg-teal-50/60 hover:text-teal-900"
+                  className="border border-stone-400 bg-white px-3 py-2 text-left text-xs text-stone-700 transition-colors hover:border-amber-600 hover:bg-amber-50 hover:text-amber-950"
                   onClick={() => void sendMessage(q)}
                   disabled={loading}
                 >
@@ -438,18 +628,21 @@ export function QiAssistant({
         )}
 
         {error && (
-          <p className="border-t border-destructive/20 bg-destructive/5 px-5 py-2 text-xs text-destructive">{error}</p>
+          <p className="border-t border-red-300 bg-red-50 px-4 py-2 text-xs text-red-700 sm:px-5">{error}</p>
         )}
 
-        <div className="relative border-t border-slate-200 bg-white">
+        <div className="relative border-t-2 border-stone-500 bg-[#fffcf7]">
           {skillPickerOpen && (
             <div
-              className="absolute bottom-full left-3 right-3 z-10 mb-1 max-h-48 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg"
+              className="absolute bottom-full left-3 right-3 z-10 mb-1 max-h-48 overflow-y-auto border-2 border-stone-600 bg-white shadow-xl ring-1 ring-amber-700/25"
               role="listbox"
               aria-label="Select AI skill"
             >
+              <div className="border-b border-stone-500 bg-stone-900 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-amber-200">
+                Skills
+              </div>
               {filteredSkills.length === 0 ? (
-                <p className="px-3 py-2 text-xs text-muted-foreground">
+                <p className="px-3 py-2 text-xs text-stone-500">
                   No skills match. Add skills in Lab Settings → AI Settings → Skills.
                 </p>
               ) : (
@@ -460,8 +653,10 @@ export function QiAssistant({
                     role="option"
                     aria-selected={idx === skillHighlight}
                     className={cn(
-                      'flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left text-sm transition-colors',
-                      idx === skillHighlight ? 'bg-teal-50 text-teal-950' : 'hover:bg-slate-50',
+                      'flex w-full flex-col items-start gap-0.5 border-l-2 px-3 py-2 text-left text-sm transition-colors',
+                      idx === skillHighlight
+                        ? 'border-l-amber-600 bg-amber-100 text-stone-950'
+                        : 'border-l-transparent hover:bg-[#f3e9d8]',
                     )}
                     onMouseEnter={() => setSkillHighlight(idx)}
                     onMouseDown={(e) => e.preventDefault()}
@@ -472,9 +667,9 @@ export function QiAssistant({
                     }}
                     onClick={() => applySkillSelection(skill, skillTrigger)}
                   >
-                    <span className="font-medium">{skill.name}</span>
+                    <span className="font-semibold">{skill.name}</span>
                     {skill.description && (
-                      <span className="line-clamp-1 text-xs text-muted-foreground">{skill.description}</span>
+                      <span className="line-clamp-1 text-xs text-stone-500">{skill.description}</span>
                     )}
                   </button>
                 ))
@@ -482,29 +677,40 @@ export function QiAssistant({
             </div>
           )}
 
-          {(selectedSkill || attachedPdf || (showIsCodePicker && selectedIsCodeId)) && (
+          {(selectedSkill ||
+            attachedPdf ||
+            attachedImage ||
+            (showIsCodePicker && selectedIsCodeId) ||
+            listening) && (
             <div className="flex flex-wrap items-center gap-2 px-4 pt-3">
+              {listening && (
+                <Badge className="gap-1 rounded-none bg-red-600 font-normal text-white hover:bg-red-600">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
+                  Listening…
+                </Badge>
+              )}
               {showIsCodePicker && selectedIsCodeId && selectedIsCodeLabel && (
-                <Badge variant="outline" className="max-w-full gap-1 border-slate-300 pr-1 font-normal">
+                <Badge
+                  variant="outline"
+                  className="max-w-full gap-1 rounded-none border-stone-500 pr-1 font-normal"
+                >
                   <span className="truncate">IS: {selectedIsCodeLabel}</span>
                   <button
                     type="button"
-                    className="shrink-0 rounded-full p-0.5 hover:bg-muted"
+                    className="shrink-0 p-0.5 hover:bg-stone-100"
                     aria-label="Clear selected IS code"
-                    onClick={() => {
-                      setSelectedIsCodeId('')
-                    }}
+                    onClick={() => setSelectedIsCodeId('')}
                   >
                     <X size={12} />
                   </button>
                 </Badge>
               )}
               {selectedSkill && (
-                <Badge className="gap-1 bg-teal-100 pr-1 font-normal text-teal-900 hover:bg-teal-100">
+                <Badge className="gap-1 rounded-none bg-amber-100 pr-1 font-normal text-amber-950 hover:bg-amber-100">
                   Skill: {selectedSkill.name}
                   <button
                     type="button"
-                    className="rounded-full p-0.5 hover:bg-teal-200/60"
+                    className="p-0.5 hover:bg-amber-200/60"
                     aria-label="Clear selected skill"
                     onClick={() => setSelectedSkill(null)}
                   >
@@ -513,11 +719,11 @@ export function QiAssistant({
                 </Badge>
               )}
               {attachedPdf && (
-                <Badge variant="outline" className="gap-1 border-slate-300 pr-1 font-normal">
+                <Badge variant="outline" className="gap-1 rounded-none border-stone-500 pr-1 font-normal">
                   PDF: {attachedPdf.name}
                   <button
                     type="button"
-                    className="rounded-full p-0.5 hover:bg-muted"
+                    className="p-0.5 hover:bg-stone-100"
                     aria-label="Remove attached PDF"
                     onClick={() => setAttachedPdf(null)}
                   >
@@ -525,9 +731,40 @@ export function QiAssistant({
                   </button>
                 </Badge>
               )}
-              <span className="w-full text-xs text-slate-500 sm:w-auto">
-                {attachedPdf ? 'Type a command below, then Send' : 'Active for next message'}
-              </span>
+              {attachedImage && (
+                <Badge
+                  variant="outline"
+                  className="max-w-full gap-1.5 rounded-none border-amber-700/50 bg-amber-50 pr-1 font-normal text-amber-950"
+                >
+                  {imagePreviewUrl ? (
+                    <img
+                      src={imagePreviewUrl}
+                      alt=""
+                      className="h-7 w-7 border border-stone-400 object-cover"
+                    />
+                  ) : null}
+                  <span className="truncate">Card: {attachedImage.name}</span>
+                  <button
+                    type="button"
+                    className="p-0.5 hover:bg-amber-100"
+                    aria-label="Remove attached image"
+                    onClick={() => setAttachedImage(null)}
+                  >
+                    <X size={12} />
+                  </button>
+                </Badge>
+              )}
+              {attachedImage && isClientsPage && (
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-7 rounded-none bg-amber-700 px-2 text-[11px] text-white hover:bg-amber-800"
+                  disabled={loading}
+                  onClick={() => void sendMessage(CLIENT_CARD_SAVE_PROMPT)}
+                >
+                  Save client from card
+                </Button>
+              )}
             </div>
           )}
 
@@ -541,12 +778,12 @@ export function QiAssistant({
             </div>
           )}
 
-          <div className="flex items-end gap-2 p-4">
+          <div className="flex items-end gap-1.5 p-3 sm:gap-2 sm:p-4">
             <Button
               type="button"
               variant="outline"
               size="icon"
-              className="h-10 w-10 shrink-0 border-slate-300 font-semibold text-teal-700 hover:bg-teal-50 hover:text-teal-900"
+              className="h-10 w-10 shrink-0 rounded-none border-stone-500 font-semibold text-amber-800 hover:bg-amber-50"
               aria-label="Pick AI skill"
               disabled={loading}
               title="Pick skill (!)"
@@ -554,6 +791,54 @@ export function QiAssistant({
             >
               !
             </Button>
+            {voiceSupported && (
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className={cn(
+                  'h-10 w-10 shrink-0 rounded-none border-stone-500',
+                  listening
+                    ? 'border-red-600 bg-red-50 text-red-700 hover:bg-red-100'
+                    : 'text-stone-700 hover:bg-amber-50 hover:text-amber-900',
+                )}
+                aria-label={listening ? 'Stop voice typing' : 'Start voice typing'}
+                disabled={loading}
+                title={listening ? 'Stop listening' : 'Voice typing'}
+                onClick={toggleListening}
+              >
+                {listening ? <MicOff size={18} /> : <Mic size={18} />}
+              </Button>
+            )}
+            {enableImageImport && (
+              <>
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp,.gif"
+                  capture="environment"
+                  className="hidden"
+                  aria-hidden
+                  onChange={(e) => {
+                    const f = e.target.files?.[0]
+                    if (f) handleImageAttach(f)
+                    if (e.target) e.target.value = ''
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-10 w-10 shrink-0 rounded-none border-stone-500 text-stone-700 hover:bg-amber-50 hover:text-amber-900"
+                  aria-label={`Attach ${imageAttachHint}`}
+                  disabled={loading}
+                  title={`Attach ${imageAttachHint} — then Save`}
+                  onClick={() => imageInputRef.current?.click()}
+                >
+                  <ImagePlus size={18} />
+                </Button>
+              </>
+            )}
             {enablePdfImport && (
               <>
                 <input
@@ -572,7 +857,7 @@ export function QiAssistant({
                   type="button"
                   variant="outline"
                   size="icon"
-                  className="h-10 w-10 shrink-0 border-slate-300"
+                  className="h-10 w-10 shrink-0 rounded-none border-stone-500"
                   aria-label={`Upload ${pdfAttachHint} to process with AI`}
                   disabled={loading}
                   title={`Attach ${pdfAttachHint} — then type a command and Send`}
@@ -592,17 +877,19 @@ export function QiAssistant({
               onClick={(e) => syncSkillPicker(input, e.currentTarget.selectionStart ?? input.length)}
               onKeyUp={(e) => syncSkillPicker(input, e.currentTarget.selectionStart ?? input.length)}
               placeholder={
-                attachedPdf
-                  ? page === 'samples/receiving'
-                    ? 'e.g. Register this test request as a new sample…'
-                    : 'Type command for attached PDF, then Send…'
-                  : showIsCodePicker
-                    ? 'Select IS Code, pick ! skill, ask to import test parameters…'
-                    : page === 'samples/receiving'
-                      ? 'Attach Test Request PDF, then ask to add sample…'
-                      : 'Ask QI Assistant… (type ! for skills)'
+                attachedImage && isClientsPage
+                  ? 'Card attached — Send to save client, or edit the prompt…'
+                  : attachedPdf
+                    ? page === 'samples/receiving'
+                      ? 'e.g. Register this test request as a new sample…'
+                      : 'Type command for attached PDF, then Send…'
+                    : showIsCodePicker
+                      ? 'Select IS Code, pick ! skill, ask to import test parameters…'
+                      : page === 'samples/receiving'
+                        ? 'Attach Test Request PDF, then ask to add sample…'
+                        : 'Ask, speak, or attach a card photo…'
               }
-              className="min-h-10 max-h-28 flex-1 resize-none rounded-md border-slate-300 bg-[#fafbfc] shadow-none focus-visible:border-teal-600 focus-visible:ring-teal-600/20"
+              className="min-h-10 max-h-28 flex-1 resize-none rounded-none border-stone-500 bg-stone-50 shadow-none focus-visible:border-amber-600 focus-visible:ring-amber-500/20"
               rows={1}
               onKeyDown={handleInputKeyDown}
               disabled={loading}
@@ -613,9 +900,9 @@ export function QiAssistant({
             <Button
               type="button"
               size="icon"
-              className="h-10 w-10 shrink-0 bg-teal-600 text-white hover:bg-teal-500"
+              className="h-10 w-10 shrink-0 rounded-none bg-amber-700 text-white hover:bg-amber-800"
               aria-label="Send message"
-              disabled={loading || !input.trim()}
+              disabled={loading || !canSend}
               onClick={() => void sendMessage(input)}
             >
               <Send size={18} />
