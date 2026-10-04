@@ -4,7 +4,12 @@ import {
   saveSaleDocument,
   type SaleDocumentKind,
 } from './saleDocumentsApi'
-import { rowToForm, type QuotationRow, type QuotationStatus } from '../quotation/types'
+import {
+  normalizePaymentMethod,
+  rowToForm,
+  type QuotationRow,
+  type QuotationStatus,
+} from '../quotation/types'
 
 export type QuotationConvertTarget = 'proformaInvoice' | 'invoice' | 'creditNote'
 
@@ -88,6 +93,37 @@ export async function convertInvoiceToCreditNoteIfNeeded(
   try {
     const { documentNumber } = await convertQuotationToSaleDocument(row, 'creditNote')
     return `Created Credit Note ${documentNumber} from ${row.quotation_number}.`
+  } catch (err) {
+    throw new Error(formatSaleApiError(err))
+  }
+}
+
+/** Invoice → Payment Receipt convert (creates a `transactions` receipt for the invoice total). */
+export async function convertInvoiceToPaymentReceiptIfNeeded(
+  row: QuotationRow,
+  status: QuotationStatus,
+): Promise<string | null> {
+  if (status !== 'Payment') return null
+  try {
+    if (!row.client_id && !row.client_name?.trim()) {
+      throw new Error('Client is required before converting this document.')
+    }
+    const amount = Number(row.grand_total ?? 0)
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new Error('Invoice grand total must be greater than 0 to create a payment receipt.')
+    }
+    const year = new Date().getFullYear()
+    const documentNumber = await fetchNextSaleDocumentNumber('paymentReceipt', `PR-${year}-`)
+    const form = {
+      ...rowToForm(row, true, documentNumber),
+      status: 'Finalized' as QuotationStatus,
+      referenceNo: row.quotation_number,
+      paymentAmount: String(amount),
+      paymentMethod: normalizePaymentMethod(null),
+      subject: (row.subject ?? '').trim() || `Payment against ${row.quotation_number}`,
+    }
+    await saveSaleDocument('paymentReceipt', form, null)
+    return `Created Payment Receipt ${documentNumber} from ${row.quotation_number}.`
   } catch (err) {
     throw new Error(formatSaleApiError(err))
   }

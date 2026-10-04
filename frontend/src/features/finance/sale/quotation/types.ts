@@ -7,6 +7,7 @@ export type QuotationStatus =
   | 'Proforma'
   | 'Invoice'
   | 'CreditNote'
+  | 'Payment'
   /** Legacy values still readable from older rows */
   | 'Accepted'
   | 'Rejected'
@@ -36,7 +37,11 @@ export function statusOptionsForDocumentKind(
     case 'proformaInvoice':
       return [...BASE_STATUS_OPTIONS, { value: 'Invoice', label: 'Convert to Invoice' }]
     case 'invoice':
-      return [...BASE_STATUS_OPTIONS, { value: 'CreditNote', label: 'Convert to Credit Note' }]
+      return [
+        ...BASE_STATUS_OPTIONS,
+        { value: 'CreditNote', label: 'Convert to Credit Note' },
+        { value: 'Payment', label: 'Convert to Payment Receipt' },
+      ]
     case 'creditNote':
     case 'paymentReceipt':
       return BASE_STATUS_OPTIONS
@@ -54,6 +59,7 @@ export const QUOTATION_STATUS_LABELS: Record<QuotationStatus, string> = {
   Proforma: 'Convert to Proforma Invoice',
   Invoice: 'Convert to Invoice',
   CreditNote: 'Convert to Credit Note',
+  Payment: 'Convert to Payment Receipt',
   Accepted: 'Finalized',
   Rejected: 'Rejected',
   Expired: 'Expired',

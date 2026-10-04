@@ -16,6 +16,7 @@ import {
   type QuotationProductDetails,
 } from '../quotation/QuotationForm'
 import {
+  computeQuotationTotals,
   emptyQuotationForm,
   parseMoney,
   rowToForm,
@@ -35,6 +36,7 @@ import {
 } from './saleDocumentsApi'
 import {
   convertInvoiceToCreditNoteIfNeeded,
+  convertInvoiceToPaymentReceiptIfNeeded,
   convertQuotationIfNeeded,
 } from './convertQuotationToSaleDocument'
 import { emailSaleDocumentToClient } from './emailSaleDocument'
@@ -417,7 +419,8 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
     try {
       const convertAction = form.status
       const persistStatus: QuotationStatus =
-        (convertAction === 'CreditNote' && config.documentKind === 'invoice') ||
+        ((convertAction === 'CreditNote' || convertAction === 'Payment') &&
+          config.documentKind === 'invoice') ||
         (convertAction === 'Invoice' && config.documentKind === 'proformaInvoice')
           ? 'Finalized'
           : form.status
@@ -426,6 +429,7 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
         persistStatus === form.status ? form : { ...form, status: persistStatus },
         editingId,
       )
+      const totals = computeQuotationTotals(form)
       const convertSource: QuotationRow = {
         id: editingId ?? 'new',
         quotation_number: form.quotationNumber,
@@ -447,13 +451,13 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
         signature_text: form.signatureText || null,
         signature_image_path: form.signatureImagePath || null,
         discount_percent: parseMoney(form.discountPercent),
-        discount_amount: parseMoney(form.discountAmount),
-        transportation_charges: parseMoney(form.transportationCharges),
-        packaging_charges: parseMoney(form.packagingCharges),
-        gst_percent: parseMoney(form.gstPercent),
-        gst_amount: 0,
-        subtotal: 0,
-        grand_total: 0,
+        discount_amount: totals.discountAmount,
+        transportation_charges: totals.transportationCharges,
+        packaging_charges: totals.packagingCharges,
+        gst_percent: totals.effectiveGstPercent,
+        gst_amount: totals.gstAmount,
+        subtotal: totals.subtotal,
+        grand_total: totals.grandTotal,
         line_items: form.lines
           .filter((l) => l.description.trim())
           .map((l, index) => ({
@@ -475,7 +479,9 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
       }
       let convertMsg: string | null = null
       if (config.documentKind === 'invoice') {
-        convertMsg = await convertInvoiceToCreditNoteIfNeeded(convertSource, convertAction)
+        convertMsg =
+          (await convertInvoiceToCreditNoteIfNeeded(convertSource, convertAction)) ??
+          (await convertInvoiceToPaymentReceiptIfNeeded(convertSource, convertAction))
       } else if (config.documentKind === 'proformaInvoice') {
         convertMsg = await convertQuotationIfNeeded(convertSource, convertAction)
       }
@@ -529,12 +535,14 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
     try {
       let convertMsg: string | null = null
       if (config.documentKind === 'invoice') {
-        convertMsg = await convertInvoiceToCreditNoteIfNeeded(row, status)
+        convertMsg =
+          (await convertInvoiceToCreditNoteIfNeeded(row, status)) ??
+          (await convertInvoiceToPaymentReceiptIfNeeded(row, status))
       } else if (config.documentKind === 'proformaInvoice') {
         convertMsg = await convertQuotationIfNeeded(row, status)
       }
       const persistStatus: QuotationStatus =
-        (status === 'CreditNote' && config.documentKind === 'invoice') ||
+        ((status === 'CreditNote' || status === 'Payment') && config.documentKind === 'invoice') ||
         (status === 'Invoice' && config.documentKind === 'proformaInvoice')
           ? 'Finalized'
           : status
