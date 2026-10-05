@@ -1,6 +1,7 @@
 import http from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
+import { createQiAssistantHandler } from './qiAssistant.mjs'
 
 const PORT = Number(process.env.PORT || 8080)
 const MANAK_INBOX_DIR = path.join('/tmp', 'qe-manak-pdf-inbox')
@@ -186,6 +187,13 @@ async function handleManakPdf(req, res) {
 
   return corsJson(res, 400, { ok: false, error: 'Unknown action' })
 }
+
+const handleQiAssistant = createQiAssistantHandler({
+  requireUser,
+  rest,
+  readBody,
+  corsJson,
+})
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -687,6 +695,8 @@ const routes = {
   'POST /send-email': handleSendEmail,
   'POST /create-user': handleCreateUser,
   'POST /delete-user': handleDeleteUser,
+  'POST /qi-assistant': handleQiAssistant,
+  'OPTIONS /qi-assistant': handleQiAssistant,
   'GET /osl/manak-pdf': handleManakPdf,
   'POST /osl/manak-pdf': handleManakPdf,
   'OPTIONS /osl/manak-pdf': handleManakPdf,
