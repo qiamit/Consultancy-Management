@@ -1,10 +1,16 @@
 import { formatDisplayDate } from '../projects/types'
+import {
+  parseOslSampleRequirementsPayload,
+  type OslSampleRequirementRow,
+} from '../projects/oslSampleRequirementsModel'
 import type { BisPrintData } from './loadBisPrintData'
+import { printSignatoryDefaults } from './loadBisPrintData'
 import { escapeHtml as esc } from './openPrintHtml'
 import {
   applicantContextFromPrintData,
   applicationNoDisplay,
   buildPrintPage,
+  inspectionDateOrToday,
   isStandardRefHtml,
   letterheadHtml,
   preparedByHtml,
@@ -13,54 +19,55 @@ import {
   type PrintApplicantContext,
 } from './printDocumentShared'
 
-export type OslSampleRow = {
-  sampleName: string
-  gradeType: string
-  batchNo: string
-  dateOfManufacture: string
-  quantity: string
-  testRequired: string
-  remarks: string
-}
-
 export type OslSampleRequirementsData = PrintApplicantContext & {
   signatoryName: string
   signatoryDesignation: string
-  rows: OslSampleRow[]
+  rows: OslSampleRequirementRow[]
 }
 
-const MIN_BLANK_ROWS = 8
+function printableRows(rows: OslSampleRequirementRow[]): OslSampleRequirementRow[] {
+  return rows.filter(
+    (r) =>
+      r.includeInPrint !== false &&
+      (r.gradeTypeVariety.trim() ||
+        r.sampleDescription.trim() ||
+        r.declaredValue.trim() ||
+        r.batchNumber.trim() ||
+        r.sampleQuantity.trim() ||
+        r.testRequired.trim()),
+  )
+}
 
-function sampleRows(rows: OslSampleRow[]): string {
-  const filled = rows.filter((r) => Object.values(r).some((v) => v.trim()))
-  const total = Math.max(MIN_BLANK_ROWS, filled.length)
-  const out: string[] = []
-  for (let i = 0; i < total; i += 1) {
-    const r = filled[i]
-    out.push(`<tr>
-      <td>${i + 1}</td>
-      <td class="pd-left">${r ? esc(r.sampleName) : '&nbsp;'}</td>
-      <td>${r ? esc(r.gradeType) : '&nbsp;'}</td>
-      <td>${r ? esc(r.batchNo) : '&nbsp;'}</td>
-      <td>${r ? esc(r.dateOfManufacture ? formatDisplayDate(r.dateOfManufacture) : '') : '&nbsp;'}</td>
-      <td>${r ? esc(r.quantity) : '&nbsp;'}</td>
-      <td class="pd-left">${r ? esc(r.testRequired) : '&nbsp;'}</td>
-      <td>${r ? esc(r.remarks) : '&nbsp;'}</td>
-    </tr>`)
+function sampleRows(rows: OslSampleRequirementRow[]): string {
+  const filled = printableRows(rows)
+  if (filled.length === 0) {
+    return `<tr><td colspan="6" class="pd-left">No samples marked for letter.</td></tr>`
   }
-  return out.join('')
+  return filled
+    .map((r, i) => {
+      const grade = r.gradeTypeVariety.trim() || r.sampleDescription.trim()
+      return `<tr>
+      <td>${i + 1}</td>
+      <td class="pd-left">${esc(grade)}</td>
+      <td>${esc(r.declaredValue)}</td>
+      <td>${esc(r.batchNumber)}</td>
+      <td>${esc(r.dateOfManufacturing ? formatDisplayDate(r.dateOfManufacturing) : '')}</td>
+      <td>${esc(r.batchQuantity || r.sampleQuantity)}</td>
+    </tr>`
+    })
+    .join('')
 }
 
 function buildBody(data: OslSampleRequirementsData): string {
   const appNo = applicationNoDisplay(data.applicationNumber)
-  const inspection = data.dateOfInspection.trim() ? formatDisplayDate(data.dateOfInspection) : 'N/A'
+  const inspection = inspectionDateOrToday(data.dateOfInspection)
   const stdRef = isStandardRefHtml(data.isNumber, data.isTitle)
   const sigName = data.signatoryName.trim() || data.contactPerson.trim()
 
   return `
 <div class="pd-sheet">
   ${letterheadHtml(data)}
-  <h1 class="pd-title">OSL Sample Requirements</h1>
+  <h1 class="pd-title">Sample Offer Letter for Inspection</h1>
 
   <div class="pd-to-row">
     <div class="pd-to-block">${toBlockHtml(data.bisBranchName, data.bisBranchState)}</div>
@@ -71,29 +78,27 @@ function buildBody(data: OslSampleRequirementsData): string {
   </div>
 
   <p class="pd-body">
-    <strong>Sub:</strong> Submission of samples for testing at Outside Testing Laboratory (OSL)${stdRef ? ` under Indian Standard ${stdRef}` : ''}.
+    <strong>Sub:</strong> Offer of samples for testing / inspection${stdRef ? ` under Indian Standard ${stdRef}` : ''}.
   </p>
 
   <p class="pd-body">
     We, <strong>M/s. ${esc(data.applicantName)}</strong>${data.applicantAddress ? `, having our factory at <strong>${esc(data.applicantAddress)}</strong>,` : ','}
-    are sending the following samples for testing at the designated Outside Testing Laboratory (OSL)${stdRef ? ` in connection with BIS certification under ${stdRef}` : ' in connection with BIS certification'}.
-    The details of the samples are as under:
+    hereby offer the following samples for testing / inspection${stdRef ? ` in connection with BIS certification under ${stdRef}` : ' in connection with BIS certification'}.
+    The particulars are as under:
   </p>
 
   <table class="pd-table osl-table">
     <colgroup>
-      <col style="width:5%"/><col style="width:22%"/><col style="width:13%"/><col style="width:12%"/><col style="width:12%"/><col style="width:9%"/><col style="width:17%"/><col style="width:10%"/>
+      <col style="width:6%"/><col style="width:28%"/><col style="width:16%"/><col style="width:16%"/><col style="width:16%"/><col style="width:18%"/>
     </colgroup>
     <thead>
       <tr>
         <th>Sr<br/>No</th>
-        <th>Sample Description</th>
-        <th>Grade / Type / Class</th>
-        <th>Batch / Lot No.</th>
-        <th>Date of Manufacture</th>
-        <th>Quantity</th>
-        <th>Tests Required</th>
-        <th>Remarks</th>
+        <th>Grade / Type / Variety</th>
+        <th>Declared Value</th>
+        <th>Batch No.</th>
+        <th>Date of<br/>Manufacturing</th>
+        <th>Batch Quantity</th>
       </tr>
     </thead>
     <tbody>${sampleRows(data.rows)}</tbody>
@@ -120,19 +125,25 @@ const STYLES = `
 
 export function buildOslSampleRequirementsHtml(data: OslSampleRequirementsData): string {
   return buildPrintPage({
-    title: `OSL Sample Requirements — ${data.applicantName || 'Applicant'}`,
+    title: `Sample Offer Letter — ${data.applicantName || 'Applicant'}`,
     styles: STYLES,
     body: buildBody(data),
   })
 }
 
-/** Maps a BIS project row + client + IS code + consultancy context into OSL sample requirement fields. */
+/** Maps project + saved module payload into Sample Offer Letter fields. */
 export function oslSampleRequirementsDataFromPrintData(printData: BisPrintData): OslSampleRequirementsData {
   const ctx = applicantContextFromPrintData(printData)
+  const parsed = parseOslSampleRequirementsPayload(
+    printData.modulePayload && typeof printData.modulePayload === 'object'
+      ? (printData.modulePayload as Record<string, unknown>)
+      : null,
+  )
+  const sig = printSignatoryDefaults(printData)
   return {
     ...ctx,
-    signatoryName: printData.client.contactPerson,
-    signatoryDesignation: '',
-    rows: [],
+    signatoryName: parsed.signatoryName || sig.signatoryName,
+    signatoryDesignation: parsed.signatoryDesignation || sig.signatoryDesignation,
+    rows: parsed.rows,
   }
 }

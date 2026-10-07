@@ -1,4 +1,5 @@
 import type { BisPrintData } from './loadBisPrintData'
+import { printSignatoryDefaults } from './loadBisPrintData'
 import { escapeHtml as esc } from './openPrintHtml'
 import {
   applicantContextFromPrintData,
@@ -6,7 +7,7 @@ import {
   blankTableRows,
   buildPrintPage,
   CMPF_FORM_STYLES,
-  dateOrNa,
+  inspectionDateOrToday,
   letterheadHtml,
   preparedByHtml,
   signatoryHtml,
@@ -48,7 +49,7 @@ function brandRows(rows: Cmpf307BrandRow[]): string {
 }
 
 function buildBody(data: Cmpf307Data): string {
-  const letterDate = dateOrNa(data.dateOfInspection.trim() || data.dateOfApplication)
+  const letterDate = inspectionDateOrToday(data.dateOfInspection)
   const sigName = data.signatoryName.trim() || data.contactPerson.trim()
   const reasons = data.brandsWithoutMarkReasons.trim()
 
@@ -113,8 +114,8 @@ export function buildCmpf307Html(data: Cmpf307Data): string {
 export function cmpf307DataFromPrintData(printData: BisPrintData): Cmpf307Data {
   return {
     ...applicantContextFromPrintData(printData),
-    signatoryName: printData.client.contactPerson,
-    signatoryDesignation: '',
+    signatoryName: printSignatoryDefaults(printData).signatoryName,
+    signatoryDesignation: printSignatoryDefaults(printData).signatoryDesignation,
     brandsWithoutMarkReasons: '',
     rows: [],
   }

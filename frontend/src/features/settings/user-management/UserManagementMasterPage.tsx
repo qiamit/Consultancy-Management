@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { limsPageShellClass } from '@/lib/limsThemeUi'
 import { useAuth } from '@/hooks/useAuth'
 import { supabase } from '@/lib/supabaseClient'
+import { useMasterUiSearchState } from '@/lib/useMasterUiSearchState'
 import { fetchTeamUsers, type TeamUserRecord } from '@/lib/fetchTeamUsers'
 import {
   ensureLabMasterOptionByLabel,
@@ -53,17 +54,20 @@ function formatMobileForSave(mobile: string, countryCode?: string): string {
 
 export default function UserManagementMasterPage() {
   const { session } = useAuth()
+  const { editId, setEdit } = useMasterUiSearchState()
+  const hydratedEditRef = useRef<string | null>(null)
   const [users, setUsers] = useState<UserAccount[]>([])
   const [usersLoadError, setUsersLoadError] = useState<string | null>(null)
   const [userUpdateLoadingId, setUserUpdateLoadingId] = useState<string | null>(null)
   const [userUpdateError, setUserUpdateError] = useState<string | null>(null)
-  const [userDialogOpen, setUserDialogOpen] = useState(false)
+  const userDialogOpen = editId === 'new'
+  const editingId = editId && editId !== 'new' ? editId : null
+  const editDialogOpen = editingId != null
+  const editTarget = editingId ? users.find((u) => u.id === editingId) ?? null : null
   const [searchQuery, setSearchQuery] = useState('')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [jumpTo, setJumpTo] = useState('')
-  const [editDialogOpen, setEditDialogOpen] = useState(false)
-  const [editTarget, setEditTarget] = useState<UserAccount | null>(null)
   const [userDeleteTarget, setUserDeleteTarget] = useState<UserAccount | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [printMessage, setPrintMessage] = useState<string | null>(null)
@@ -259,6 +263,20 @@ export default function UserManagementMasterPage() {
     })
   }, [users])
 
+  useEffect(() => {
+    if (!editId || editId === 'new') {
+      if (!editId) hydratedEditRef.current = null
+      return
+    }
+    if (hydratedEditRef.current === editId) return
+    const fromPage = users.find((u) => u.id === editId)
+    if (fromPage) {
+      hydratedEditRef.current = editId
+      return
+    }
+    if (users.length > 0 || usersLoadError) setEdit(null)
+  }, [editId, users, usersLoadError, setEdit])
+
   const selectedUsers = useMemo(
     () => users.filter((u) => selectedIds.has(u.id)),
     [users, selectedIds],
@@ -304,7 +322,15 @@ export default function UserManagementMasterPage() {
           setPageSize(size)
           setPage(1)
         }}
-        setUserDialogOpen={setUserDialogOpen}
+        setUserDialogOpen={(open) => {
+          if (open) {
+            hydratedEditRef.current = 'new'
+            setEdit('new')
+          } else {
+            hydratedEditRef.current = null
+            setEdit(null)
+          }
+        }}
       />
 
       {usersLoadError && <p className="text-sm text-destructive">{usersLoadError}</p>}
@@ -318,8 +344,8 @@ export default function UserManagementMasterPage() {
         onToggleAll={toggleAllOnPage}
         userUpdateLoadingId={userUpdateLoadingId}
         onEdit={(user: UserAccount) => {
-          setEditTarget(user)
-          setEditDialogOpen(true)
+          hydratedEditRef.current = user.id
+          setEdit(user.id)
         }}
         onDelete={(user: UserAccount) => setUserDeleteTarget(user)}
         onStatusChange={async (user, status) => {
@@ -374,7 +400,12 @@ export default function UserManagementMasterPage() {
       <UserManagementForm
         mode="create"
         open={userDialogOpen}
-        onOpenChange={setUserDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            hydratedEditRef.current = null
+            setEdit(null)
+          }
+        }}
         designations={designations}
         setDesignations={setDesignations}
         departments={departments}
@@ -427,6 +458,8 @@ export default function UserManagementMasterPage() {
             throw new Error(message)
           }
 
+          hydratedEditRef.current = null
+          setEdit(null)
           await reloadUsers()
         }}
         onOptionsChanged={refreshLabOptions}
@@ -435,11 +468,11 @@ export default function UserManagementMasterPage() {
       <UserManagementForm
         key={editTarget?.id || 'edit-placeholder'}
         mode="edit"
-        open={editDialogOpen}
+        open={editDialogOpen && editTarget != null}
         onOpenChange={(open: boolean) => {
           if (!open) {
-            setEditDialogOpen(false)
-            setEditTarget(null)
+            hydratedEditRef.current = null
+            setEdit(null)
           }
         }}
         initialData={editTarget}
@@ -493,8 +526,8 @@ export default function UserManagementMasterPage() {
               if (profileError) throw profileError
             }
 
-            setEditDialogOpen(false)
-            setEditTarget(null)
+            hydratedEditRef.current = null
+            setEdit(null)
             await reloadUsers()
           } catch (err) {
             setUserUpdateError(err instanceof Error ? err.message : 'Unable to update user')

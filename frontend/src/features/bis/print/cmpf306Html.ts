@@ -7,12 +7,13 @@ import {
   buildPrintPage,
   CMPF_FORM_STYLES,
   cmpfDeclarationHtml,
-  dateOrNa,
+  inspectionDateOrToday,
   letterheadHtml,
   preparedByHtml,
   toBlockHtml,
   type PrintApplicantContext,
 } from './printDocumentShared'
+import { parseCmpf306Payload } from '../projects/cmpf306Model'
 
 export type Cmpf306EquipmentRow = {
   equipmentName: string
@@ -53,7 +54,7 @@ function equipmentRows(rows: Cmpf306EquipmentRow[]): string {
 }
 
 function buildBody(data: Cmpf306Data): string {
-  const date = dateOrNa(data.dateOfInspection)
+  const date = inspectionDateOrToday(data.dateOfInspection)
   return `
 <div class="pd-sheet">
   ${letterheadHtml(data)}
@@ -106,12 +107,17 @@ export function buildCmpf306Html(data: Cmpf306Data): string {
 
 /** Maps a BIS project row + client + IS code + consultancy context into CMPF-306 fields. */
 export function cmpf306DataFromPrintData(printData: BisPrintData): Cmpf306Data {
+  const parsed = parseCmpf306Payload(
+    printData.modulePayload && typeof printData.modulePayload === 'object'
+      ? (printData.modulePayload as Record<string, unknown>)
+      : null,
+  )
   return {
     ...applicantContextFromPrintData(printData),
-    firmRepName: printData.client.contactPerson,
-    firmRepDesignation: '',
-    inspectionOfficerName: '',
-    inspectionOfficerDesignation: '',
-    rows: [],
+    firmRepName: parsed.firmRepName || printData.client.contactPerson,
+    firmRepDesignation: parsed.firmRepDesignation,
+    inspectionOfficerName: parsed.inspectionOfficerName,
+    inspectionOfficerDesignation: parsed.inspectionOfficerDesignation,
+    rows: parsed.rows,
   }
 }

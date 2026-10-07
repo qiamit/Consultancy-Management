@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { useFormDialogOpenChange } from '@/lib/formDialogOpenChange'
+import { useMasterUiSearchState } from '@/lib/useMasterUiSearchState'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { ClientsTableFooterBar } from './ClientsFooterBar'
 import { ClientsForm } from './ClientsForm'
@@ -8,6 +9,7 @@ import { ClientsHeaderBar } from './ClientsHeaderBar'
 import { ClientsTable, type ClientSortDir, type ClientSortKey } from './ClientsTable'
 import { clientPageShellClass } from './clientsFormUi'
 import { buildClientsAssistantContext } from './buildClientsAssistantContext'
+import { limsDialogClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import {
   BALANCE_TYPES,
@@ -128,16 +130,44 @@ const formatSupabaseError = (err: unknown) => {
   return parts.length ? parts.join(' | ') : 'Unknown error'
 }
 
+function rowToClientForm(row: ClientRow): ClientFormType {
+  return {
+    gstNumber: row.gst_number ?? '',
+    companyType: row.company_type,
+    companyScale: row.company_scale,
+    companyName: row.company_name ?? '',
+    contactPersonName: row.contact_person_name ?? '',
+    countryCode: row.country_code ?? '+91',
+    mobile: row.mobile ?? '',
+    email: row.email ?? '',
+    address: row.address ?? '',
+    pinCode: row.pin_code ?? '',
+    district: row.district ?? '',
+    state: row.state ?? DEFAULT_STATE,
+    country: row.country ?? DEFAULT_COUNTRY,
+    openingBalance: String(row.opening_balance ?? 0),
+    balanceType: row.balance_type,
+    paymentTerm: row.payment_term,
+    remark: row.remark ?? '',
+  }
+}
+
 export default function ClientsMasterPage() {
+  const { editId, setEdit } = useMasterUiSearchState()
   const [saveLoading, setSaveLoading] = useState(false)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
 
-  const [editingId, setEditingId] = useState<string | null>(null)
-
   const importInputRef = useRef<HTMLInputElement | null>(null)
+  const hydratedEditRef = useRef<string | null>(null)
 
-  const [showForm, setShowForm] = useState(false)
-  const handleFormOpenChange = useFormDialogOpenChange(setShowForm)
+  const showForm = editId != null
+  const editingId = editId && editId !== 'new' ? editId : null
+  const handleFormOpenChange = useFormDialogOpenChange((open) => {
+    if (!open) {
+      hydratedEditRef.current = null
+      setEdit(null)
+    }
+  })
   const [search, setSearch] = useState('')
 
   const [rows, setRows] = useState<ClientRow[]>([])
@@ -305,6 +335,29 @@ export default function ClientsMasterPage() {
     void loadClients()
     void loadMasterOptions()
   }, [])
+
+  useEffect(() => {
+    if (!editId) {
+      hydratedEditRef.current = null
+      return
+    }
+    if (hydratedEditRef.current === editId) return
+
+    if (editId === 'new') {
+      setForm(emptyClientForm())
+      hydratedEditRef.current = 'new'
+      return
+    }
+
+    const fromPage = rows.find((r) => r.id === editId)
+    if (fromPage) {
+      setForm(rowToClientForm(fromPage))
+      hydratedEditRef.current = editId
+      return
+    }
+
+    if (!listLoading) setEdit(null)
+  }, [editId, rows, listLoading, setEdit])
 
   const handleAddState = () => {
     const name = normalizeText(newStateName)
@@ -631,12 +684,14 @@ export default function ClientsMasterPage() {
       setSaveMessage(null)
       setSaveLoading(true)
       try {
+        const companyName = toProperTitleCase(form.companyName)
         const payload = {
-          ...(editingId ? { id: editingId } : null),
+          // Production DB still has legacy NOT NULL `name` alongside `company_name`.
+          name: companyName,
           gst_number: form.gstNumber.trim().toUpperCase() || null,
           company_type: form.companyType,
           company_scale: form.companyScale,
-          company_name: toProperTitleCase(form.companyName),
+          company_name: companyName,
           contact_person_name: form.contactPersonName.trim() || null,
           country_code: form.countryCode || null,
           mobile: form.mobile.trim() || null,
@@ -652,15 +707,20 @@ export default function ClientsMasterPage() {
           remark: form.remark.trim() || null,
         }
 
-        const { error } = await supabase
-          .from('clients')
-          .upsert(payload, { onConflict: editingId ? 'id' : 'company_name' })
-        if (error) throw error
+        // Prefer insert/update over upsert — avoids 42P10 when the unique index
+        // on company_name is missing on some environments.
+        if (editingId) {
+          const { error } = await supabase.from('clients').update(payload).eq('id', editingId)
+          if (error) throw error
+        } else {
+          const { error } = await supabase.from('clients').insert(payload)
+          if (error) throw error
+        }
 
         setSaveMessage('Saved successfully.')
         setForm(emptyClientForm())
-        setEditingId(null)
-        setShowForm(false)
+        hydratedEditRef.current = null
+        setEdit(null)
         await loadClients()
       } catch (err) {
         setSaveMessage(formatSupabaseError(err))
@@ -673,60 +733,24 @@ export default function ClientsMasterPage() {
   const handleNew = () => {
     setSaveMessage(null)
     setForm(emptyClientForm())
-    setEditingId(null)
-    setShowForm(true)
+    hydratedEditRef.current = 'new'
+    setEdit('new')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const handleEdit = (row: ClientRow) => {
     setSaveMessage(null)
-    setEditingId(row.id)
-    setForm({
-      gstNumber: row.gst_number ?? '',
-      companyType: row.company_type,
-      companyScale: row.company_scale,
-      companyName: row.company_name ?? '',
-      contactPersonName: row.contact_person_name ?? '',
-      countryCode: row.country_code ?? '+91',
-      mobile: row.mobile ?? '',
-      email: row.email ?? '',
-      address: row.address ?? '',
-      pinCode: row.pin_code ?? '',
-      district: row.district ?? '',
-      state: row.state ?? DEFAULT_STATE,
-      country: row.country ?? DEFAULT_COUNTRY,
-      openingBalance: String(row.opening_balance ?? 0),
-      balanceType: row.balance_type,
-      paymentTerm: row.payment_term,
-      remark: row.remark ?? '',
-    })
-    setShowForm(true)
+    setForm(rowToClientForm(row))
+    hydratedEditRef.current = row.id
+    setEdit(row.id)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const handleCopy = (row: ClientRow) => {
     setSaveMessage(null)
-    setEditingId(null)
-    setForm({
-      gstNumber: row.gst_number ?? '',
-      companyType: row.company_type,
-      companyScale: row.company_scale,
-      companyName: `${row.company_name} - Copy`,
-      contactPersonName: row.contact_person_name ?? '',
-      countryCode: row.country_code ?? '+91',
-      mobile: row.mobile ?? '',
-      email: row.email ?? '',
-      address: row.address ?? '',
-      pinCode: row.pin_code ?? '',
-      district: row.district ?? '',
-      state: row.state ?? DEFAULT_STATE,
-      country: row.country ?? DEFAULT_COUNTRY,
-      openingBalance: String(row.opening_balance ?? 0),
-      balanceType: row.balance_type,
-      paymentTerm: row.payment_term,
-      remark: row.remark ?? '',
-    })
-    setShowForm(true)
+    setForm({ ...rowToClientForm(row), companyName: `${row.company_name} - Copy` })
+    hydratedEditRef.current = 'new'
+    setEdit('new')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -1018,6 +1042,7 @@ export default function ClientsMasterPage() {
 
           const opening = Number(String(get(cells, 'opening_balance')).replace(/,/g, ''))
           const payload: Record<string, unknown> = {
+            name: companyName,
             gst_number: normalizeText(get(cells, 'gst_number')).toUpperCase() || null,
             company_type: pickCsvEnum(get(cells, 'company_type'), COMPANY_TYPES, 'Manufacturer') as CompanyType,
             company_scale: pickCsvEnum(get(cells, 'company_scale'), COMPANY_SCALES, 'Medium') as CompanyScale,
@@ -1056,8 +1081,18 @@ export default function ClientsMasterPage() {
           if (error) throw error
         }
         if (byName.length > 0) {
-          const { error } = await supabase.from('clients').upsert(byName, { onConflict: 'company_name' })
-          if (error) throw error
+          const { error } = await supabase
+            .from('clients')
+            .upsert(byName, { onConflict: 'company_name' })
+          // 42P10 = missing unique constraint for ON CONFLICT — fall back to insert.
+          if (error) {
+            if (String(error.code) === '42P10' || /ON CONFLICT/i.test(error.message ?? '')) {
+              const { error: insertErr } = await supabase.from('clients').insert(byName)
+              if (insertErr) throw insertErr
+            } else {
+              throw error
+            }
+          }
         }
 
         setSaveMessage(`Imported ${total} client(s) with all form fields.`)
@@ -1097,9 +1132,11 @@ export default function ClientsMasterPage() {
         <DialogContent
           persistOnFocusLoss
           aria-describedby={undefined}
-          overlayClassName="lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto"
-          portalClassName="lg:left-[268px] lg:right-0 lg:w-auto"
-          className="max-h-[92vh] w-[calc(100vw-1rem)] max-w-[51.2rem] gap-0 overflow-hidden rounded-none border-4 border-stone-700 bg-white p-0 shadow-2xl ring-2 ring-amber-700/40 sm:w-full sm:rounded-none [&>button]:!rounded-none [&>button]:opacity-100 md:top-1/2 md:!-translate-x-1/2 md:!-translate-y-1/2 lg:left-[calc(268px+(100vw-268px)/2)] lg:right-auto lg:mx-0 lg:w-[min(51.2rem,calc(100vw-268px-2rem))] lg:max-w-[min(51.2rem,calc(100vw-268px-2rem))]"
+          className={cn(
+            limsDialogClass,
+            'max-h-[92vh] max-w-[51.2rem] bg-white',
+            'w-[min(51.2rem,calc(100vw-1.5rem))]',
+          )}
         >
           <div className="relative overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white sm:px-5 sm:py-3">
             <div
@@ -1117,7 +1154,7 @@ export default function ClientsMasterPage() {
             </DialogHeader>
           </div>
 
-          <div className="max-h-[min(72vh,720px)] overflow-y-auto overflow-x-hidden bg-gradient-to-b from-stone-100/80 to-white px-4 py-4 sm:px-6 sm:py-5">
+          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-gradient-to-b from-stone-100/80 to-white px-3 py-3 sm:px-5 sm:py-4 md:px-6 md:py-5">
             {saveMessage ? (
               <p className="mb-4 border-l-2 border-destructive bg-destructive/5 px-3 py-2 text-sm text-destructive">
                 {saveMessage}

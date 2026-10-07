@@ -4,9 +4,14 @@ import { limsDarkBarGlowStyle, limsDialogClass, limsPageShellClass } from '@/lib
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabaseClient'
 import { useFormDialogOpenChange } from '@/lib/formDialogOpenChange'
+import { useMasterUiSearchState } from '@/lib/useMasterUiSearchState'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { ProductsServicesHeaderBar } from './ProductsServicesHeaderBar'
-import { ProductsServicesTable } from './ProductsServicesTable'
+import {
+  ProductsServicesTable,
+  type ProductServiceSortDir,
+  type ProductServiceSortKey,
+} from './ProductsServicesTable'
 import { ProductsServicesFooterBar } from './ProductsServicesFooterBar'
 import { ProductsServicesForm } from './ProductsServicesForm'
 import {
@@ -162,12 +167,20 @@ const CSV_HEADERS = [
 ] as const
 
 export default function ProductsServicesMasterPage() {
+  const { editId, setEdit } = useMasterUiSearchState()
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const [saveLoading, setSaveLoading] = useState(false)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [showForm, setShowForm] = useState(false)
-  const handleFormOpenChange = useFormDialogOpenChange(setShowForm)
   const importInputRef = useRef<HTMLInputElement | null>(null)
+  const hydratedEditRef = useRef<string | null>(null)
+
+  const showForm = editId != null
+  const editingId = editId && editId !== 'new' ? editId : null
+  const handleFormOpenChange = useFormDialogOpenChange((open) => {
+    if (!open) {
+      hydratedEditRef.current = null
+      setEdit(null)
+    }
+  })
 
   const [search, setSearch] = useState('')
   const [rows, setRows] = useState<ProductServiceRow[]>([])
@@ -177,6 +190,8 @@ export default function ProductsServicesMasterPage() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [jumpTo, setJumpTo] = useState('')
+  const [sortKey, setSortKey] = useState<ProductServiceSortKey>('itemIdentity')
+  const [sortDir, setSortDir] = useState<ProductServiceSortDir>('asc')
   const [form, setForm] = useState<ProductServiceForm>(() => emptyProductServiceForm())
 
   const canSave =
@@ -213,26 +228,113 @@ export default function ProductsServicesMasterPage() {
     void loadRows()
   }, [loadRows])
 
+  const codesForType = (itemType: ItemType) =>
+    rows.filter((r) => r.item_type === itemType).map((r) => r.item_code)
+
+  const rowToForm = (row: ProductServiceRow, asCopy = false): ProductServiceForm => ({
+    itemType: row.item_type,
+    itemCode: asCopy
+      ? nextItemCode(row.item_type, codesForType(row.item_type))
+      : row.item_code,
+    itemCategory: row.item_category,
+    itemName: asCopy ? `${row.item_name} - Copy` : row.item_name,
+    itemDescription: row.item_description ?? '',
+    hsnCode: row.hsn_code ?? '',
+    salePrice: formatMoneyInput(String(row.sale_price ?? 0)),
+    purchasePrice: formatMoneyInput(String(row.purchase_price ?? 0)),
+    gstPercent: formatMoneyInput(String(row.gst_percent ?? 0)),
+    discount: formatMoneyInput(String(row.discount ?? 0)),
+    unitOfMeasurement: row.unit_of_measurement ?? '',
+    make: row.make ?? '',
+    openingStock: String(row.opening_stock ?? 0),
+    lowStockAlert: String(row.low_stock_alert ?? 0),
+  })
+
+  const buildNewForm = useCallback((): ProductServiceForm => {
+    const itemType: ItemType = 'Service'
+    return {
+      ...emptyProductServiceForm(itemType),
+      itemCode: nextItemCode(
+        itemType,
+        rows.filter((r) => r.item_type === itemType).map((r) => r.item_code),
+      ),
+    }
+  }, [rows])
+
+  useEffect(() => {
+    if (!editId) {
+      hydratedEditRef.current = null
+      return
+    }
+    if (hydratedEditRef.current === editId) return
+
+    if (editId === 'new') {
+      setForm(buildNewForm())
+      setSaveMessage(null)
+      hydratedEditRef.current = 'new'
+      return
+    }
+
+    const fromPage = rows.find((r) => r.id === editId)
+    if (fromPage) {
+      setForm(rowToForm(fromPage))
+      setSaveMessage(null)
+      hydratedEditRef.current = editId
+      return
+    }
+
+    if (!listLoading) setEdit(null)
+  }, [editId, rows, listLoading, buildNewForm, setEdit])
+
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return rows
-    return rows.filter((r) =>
-      [
-        r.item_type,
-        r.item_code,
-        r.item_category,
-        r.item_name,
-        r.item_description,
-        r.hsn_code,
-        r.unit_of_measurement,
-        r.make,
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-        .includes(q),
-    )
-  }, [rows, search])
+    const list = !q
+      ? [...rows]
+      : rows.filter((r) =>
+          [
+            r.item_type,
+            r.item_code,
+            r.item_category,
+            r.item_name,
+            r.item_description,
+            r.hsn_code,
+            r.unit_of_measurement,
+            r.make,
+          ]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase()
+            .includes(q),
+        )
+
+    const dir = sortDir === 'asc' ? 1 : -1
+    const cmpText = (a: string, b: string) =>
+      a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true }) * dir
+
+    return list.sort((a, b) => {
+      let primary = 0
+      switch (sortKey) {
+        case 'itemIdentity':
+          primary = cmpText(a.item_name || '', b.item_name || '') || cmpText(a.item_code || '', b.item_code || '')
+          break
+        case 'typeCategory':
+          primary = cmpText(`${a.item_type} ${a.item_category}`, `${b.item_type} ${b.item_category}`)
+          break
+        case 'pricing':
+          primary = (Number(a.sale_price) - Number(b.sale_price)) * dir
+          break
+        case 'stockUom':
+          primary =
+            cmpText(a.unit_of_measurement || '', b.unit_of_measurement || '') ||
+            (Number(a.opening_stock) - Number(b.opening_stock)) * dir
+          break
+        default:
+          primary = cmpText(a.item_name || '', b.item_name || '')
+      }
+      if (primary !== 0) return primary
+      return cmpText(a.item_code || '', b.item_code || '')
+    })
+  }, [rows, search, sortKey, sortDir])
 
   const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize))
   const safePage = Math.min(page, pageCount)
@@ -243,7 +345,16 @@ export default function ProductsServicesMasterPage() {
 
   useEffect(() => {
     setPage(1)
-  }, [search, pageSize])
+  }, [search, pageSize, sortKey, sortDir])
+
+  const handleSort = (key: ProductServiceSortKey) => {
+    if (sortKey === key) {
+      setSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'))
+      return
+    }
+    setSortKey(key)
+    setSortDir('asc')
+  }
 
   const assistantContext = useMemo(() => {
     const lines = [
@@ -265,18 +376,11 @@ export default function ProductsServicesMasterPage() {
     return lines.join('\n')
   }, [rows.length, filteredRows, search])
 
-  const codesForType = (itemType: ItemType) =>
-    rows.filter((r) => r.item_type === itemType).map((r) => r.item_code)
-
   const openNew = () => {
-    const itemType: ItemType = 'Service'
-    setEditingId(null)
-    setForm({
-      ...emptyProductServiceForm(itemType),
-      itemCode: nextItemCode(itemType, codesForType(itemType)),
-    })
+    setForm(buildNewForm())
     setSaveMessage(null)
-    setShowForm(true)
+    hydratedEditRef.current = 'new'
+    setEdit('new')
   }
 
   const handleItemTypeChange = (itemType: ItemType) => {
@@ -291,37 +395,18 @@ export default function ProductsServicesMasterPage() {
     }))
   }
 
-  const rowToForm = (row: ProductServiceRow, asCopy = false): ProductServiceForm => ({
-    itemType: row.item_type,
-    itemCode: asCopy
-      ? nextItemCode(row.item_type, codesForType(row.item_type))
-      : row.item_code,
-    itemCategory: row.item_category,
-    itemName: asCopy ? `${row.item_name} - Copy` : row.item_name,
-    itemDescription: row.item_description ?? '',
-    hsnCode: row.hsn_code ?? '',
-    salePrice: formatMoneyInput(String(row.sale_price ?? 0)),
-    purchasePrice: formatMoneyInput(String(row.purchase_price ?? 0)),
-    gstPercent: formatMoneyInput(String(row.gst_percent ?? 0)),
-    discount: formatMoneyInput(String(row.discount ?? 0)),
-    unitOfMeasurement: row.unit_of_measurement ?? '',
-    make: row.make ?? '',
-    openingStock: String(row.opening_stock ?? 0),
-    lowStockAlert: String(row.low_stock_alert ?? 0),
-  })
-
   const openEdit = (row: ProductServiceRow) => {
-    setEditingId(row.id)
     setForm(rowToForm(row))
     setSaveMessage(null)
-    setShowForm(true)
+    hydratedEditRef.current = row.id
+    setEdit(row.id)
   }
 
   const openCopy = (row: ProductServiceRow) => {
-    setEditingId(null)
     setForm(rowToForm(row, true))
     setSaveMessage(null)
-    setShowForm(true)
+    hydratedEditRef.current = 'new'
+    setEdit('new')
   }
 
   const handleSave = async () => {
@@ -359,8 +444,8 @@ export default function ProductsServicesMasterPage() {
       }
 
       setSaveMessage(`Saved ${payload.item_code}.`)
-      setShowForm(false)
-      setEditingId(null)
+      hydratedEditRef.current = null
+      setEdit(null)
       await loadRows()
     } catch (err) {
       setSaveMessage(formatSupabaseError(err))
@@ -485,10 +570,9 @@ export default function ProductsServicesMasterPage() {
   }
 
   const handlePrintSelected = () => {
-    const source =
-      selectedIds.size > 0 ? filteredRows.filter((r) => selectedIds.has(r.id)) : filteredRows
+    const source = filteredRows.filter((r) => selectedIds.has(r.id))
     if (source.length === 0) {
-      setSaveMessage('Nothing to print.')
+      setSaveMessage('Select at least one item to print.')
       return
     }
     const w = window.open('', '_blank')
@@ -499,28 +583,38 @@ export default function ProductsServicesMasterPage() {
     w.document.open()
     w.document.write(buildPrintHtml(source))
     w.document.close()
+    setSaveMessage(`Print ready: ${source.length} item(s).`)
   }
 
   return (
-    <div className={limsPageShellClass}>
-      <ProductsServicesHeaderBar
-        search={search}
-        onSearchChange={setSearch}
-        pageSize={pageSize}
-        onPageSizeChange={(size) => {
-          setPageSize(size)
-          setPage(1)
-        }}
-        onNew={openNew}
-        assistantContext={assistantContext}
-        onAssistantDataChanged={() => void loadRows()}
-      />
+    <div
+      data-master-scroll="table"
+      className={cn(
+        limsPageShellClass,
+        'flex h-full min-h-0 flex-col overflow-hidden !space-y-0 gap-2 sm:gap-3 md:gap-3',
+      )}
+    >
+      <div className="shrink-0">
+        <ProductsServicesHeaderBar
+          search={search}
+          onSearchChange={setSearch}
+          pageSize={pageSize}
+          onPageSizeChange={(size) => {
+            setPageSize(size)
+            setPage(1)
+          }}
+          onNew={openNew}
+          assistantContext={assistantContext}
+          onAssistantDataChanged={() => void loadRows()}
+        />
+      </div>
 
       <Dialog open={showForm} onOpenChange={handleFormOpenChange}>
         <DialogContent
           persistOnFocusLoss
           aria-describedby={undefined}
           overlayClassName="lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto"
+          portalClassName="lg:left-[268px] lg:right-0 lg:w-auto"
           className={cn(
             limsDialogClass,
             '!flex max-h-[92vh] w-[calc(100%-1.5rem)] max-w-3xl flex-col overflow-hidden sm:w-full',
@@ -557,37 +651,45 @@ export default function ProductsServicesMasterPage() {
         </DialogContent>
       </Dialog>
 
-      <ProductsServicesTable
-        rows={pagedRows}
-        loading={listLoading}
-        error={listError}
-        searchActive={search.trim().length > 0}
-        selectedIds={selectedIds}
-        onToggle={toggleRow}
-        onToggleAll={toggleAllOnPage}
-        onEdit={openEdit}
-        onCopy={openCopy}
-      />
+      <div className="min-h-0 flex-1 overflow-hidden">
+        <ProductsServicesTable
+          rows={pagedRows}
+          loading={listLoading}
+          error={listError}
+          searchActive={search.trim().length > 0}
+          selectedIds={selectedIds}
+          onToggle={toggleRow}
+          onToggleAll={toggleAllOnPage}
+          onEdit={openEdit}
+          onCopy={openCopy}
+          sortKey={sortKey}
+          sortDir={sortDir}
+          onSort={handleSort}
+        />
+      </div>
 
-      <ProductsServicesFooterBar
-        loading={listLoading || saveLoading}
-        selectedCount={selectedIds.size}
-        page={safePage}
-        pageCount={pageCount}
-        onImport={() => importInputRef.current?.click()}
-        onExport={handleExport}
-        onPrintSelected={handlePrintSelected}
-        onDeleteSelected={() => void handleDeleteSelected()}
-        onPrevPage={() => setPage((p) => Math.max(1, p - 1))}
-        onNextPage={() => setPage((p) => Math.min(pageCount, p + 1))}
-        jumpTo={jumpTo}
-        onJumpToChange={setJumpTo}
-        onJumpToGo={() => {
-          const n = Number.parseInt(jumpTo, 10)
-          if (!Number.isFinite(n)) return
-          setPage(Math.min(pageCount, Math.max(1, n)))
-        }}
-      />
+      <div className="shrink-0">
+        <ProductsServicesFooterBar
+          message={saveMessage}
+          loading={listLoading || saveLoading}
+          selectedCount={selectedIds.size}
+          page={safePage}
+          pageCount={pageCount}
+          onImport={() => importInputRef.current?.click()}
+          onExport={handleExport}
+          onPrintSelected={handlePrintSelected}
+          onDeleteSelected={() => void handleDeleteSelected()}
+          onPrevPage={() => setPage((p) => Math.max(1, p - 1))}
+          onNextPage={() => setPage((p) => Math.min(pageCount, p + 1))}
+          jumpTo={jumpTo}
+          onJumpToChange={setJumpTo}
+          onJumpToGo={() => {
+            const n = Number.parseInt(jumpTo, 10)
+            if (!Number.isFinite(n)) return
+            setPage(Math.min(pageCount, Math.max(1, n)))
+          }}
+        />
+      </div>
 
       <input
         ref={importInputRef}

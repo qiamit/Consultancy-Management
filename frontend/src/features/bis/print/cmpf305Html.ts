@@ -1,11 +1,14 @@
+import { parseCmpf305Payload } from '../projects/cmpf305Model'
 import { formatDisplayDate } from '../projects/types'
 import type { BisPrintData } from './loadBisPrintData'
+import { printSignatoryDefaults } from './loadBisPrintData'
 import { escapeHtml as esc } from './openPrintHtml'
 import {
   addressWithIndia,
   applicantContextFromPrintData,
   applicationNoDisplay,
   buildPrintPage,
+  inspectionDateOrToday,
   letterheadHtml,
   preparedByHtml,
   toBlockHtml,
@@ -56,7 +59,7 @@ function machineryRows(rows: Cmpf305MachineryRow[]): string {
 function buildBody(data: Cmpf305Data): string {
   const appNo = applicationNoDisplay(data.applicationNumber)
   const dateApp = dateOrNa(data.dateOfApplication)
-  const dateInsp = dateOrNa(data.dateOfInspection)
+  const dateInsp = inspectionDateOrToday(data.dateOfInspection)
   const repName = data.firmRepName.trim() || data.contactPerson.trim() || '—'
   const repDesig = data.firmRepDesignation.trim() || '—'
   const bisName = data.inspectionOfficerName.trim() || '----'
@@ -151,15 +154,26 @@ export function buildCmpf305Html(data: Cmpf305Data): string {
   })
 }
 
-/** Maps a BIS project row + client + IS code + consultancy context into CMPF-305 fields. */
+/** Maps project + saved CMPF-305 module payload into print fields. */
 export function cmpf305DataFromPrintData(printData: BisPrintData): Cmpf305Data {
   const ctx = applicantContextFromPrintData(printData)
+  const parsed = parseCmpf305Payload(
+    printData.modulePayload && typeof printData.modulePayload === 'object'
+      ? (printData.modulePayload as Record<string, unknown>)
+      : null,
+  )
+  const sig = printSignatoryDefaults(printData)
   return {
     ...ctx,
-    firmRepName: printData.client.contactPerson,
-    firmRepDesignation: '',
-    inspectionOfficerName: '',
-    inspectionOfficerDesignation: '',
-    rows: [],
+    firmRepName:
+      parsed.firmRepName || sig.signatoryName || printData.client.contactPerson,
+    firmRepDesignation: parsed.firmRepDesignation || sig.signatoryDesignation,
+    inspectionOfficerName:
+      parsed.inspectionOfficerName ||
+      (printData.row.inspection_officer_name ?? '').trim(),
+    inspectionOfficerDesignation:
+      parsed.inspectionOfficerDesignation ||
+      (printData.row.inspection_officer_designation ?? '').trim(),
+    rows: parsed.rows.filter((r) => Object.values(r).some((v) => v.trim())),
   }
 }

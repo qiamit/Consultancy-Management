@@ -1,0 +1,472 @@
+{
+  "name": "reliability_eval_v1",
+  "corpus": "19 usable chunks (IS 9666 native_text + IS 2676 scanned); production collection not modified",
+  "notes": [
+    "Gold labels are hand-authored. Do not derive gold from query text automatically.",
+    "standard field is the search filter mode for the case.",
+    "gold: expect_chunk_id / expect_clause OR gold_label NOT_FOUND"
+  ],
+  "answerable": [
+    {
+      "id": "a01_en_extraneous",
+      "lang": "en",
+      "query": "granules free from extraneous material",
+      "standard": "IS 9666",
+      "expect_chunk_id": "native_text:p0003:c004",
+      "expect_clause": "4.1",
+      "gold_label": "CHUNK"
+    },
+    {
+      "id": "a02_hi_extraneous",
+      "lang": "hi",
+      "query": "कणिकाओं में बाहरी पदार्थ के बारे में क्या आवश्यकता है?",
+      "standard": "IS 9666",
+      "expect_chunk_id": "native_text:p0003:c004",
+      "expect_clause": "4.1",
+      "gold_label": "CHUNK"
+    },
+    {
+      "id": "a03_mixed_extraneous",
+      "lang": "mixed",
+      "query": "blank granules में extraneous material नहीं होना चाहिए",
+      "standard": "IS 9666",
+      "expect_chunk_id": "native_text:p0003:c004",
+      "expect_clause": "4.1",
+      "gold_label": "CHUNK"
+    },
+    {
+      "id": "a04_en_binders",
+      "lang": "en",
+      "query": "blank granules may contain binder stabilizer activator",
+      "standard": "IS 9666",
+      "expect_chunk_id": "native_text:p0003:c005",
+      "expect_clause": "4.1.1",
+      "gold_label": "CHUNK"
+    },
+    {
+      "id": "a05_hi_binders",
+      "lang": "hi",
+      "query": "ब्लैंक ग्रेन्यूल्स में बाइंडर स्टेबलाइजर एक्टिवेटर हो सकते हैं",
+      "standard": "IS 9666",
+      "expect_chunk_id": "native_text:p0003:c005",
+      "expect_clause": "4.1.1",
+      "gold_label": "CHUNK"
+    },
+    {
+      "id": "a06_en_packing",
+      "lang": "en",
+      "query": "packed in polypropylene or HDPE bags",
+      "standard": "IS 9666",
+      "expect_chunk_id": "native_text:p0003:c006",
+      "expect_clause": "4.2",
+      "gold_label": "CHUNK"
+    },
+    {
+      "id": "a07_hi_packing",
+      "lang": "hi",
+      "query": "पॉलीप्रोपाइलीन या एचडीपीई बैग में पैकिंग",
+      "standard": "IS 9666",
+      "expect_chunk_id": "native_text:p0003:c006",
+      "expect_clause": "4.2",
+      "gold_label": "CHUNK"
+    },
+    {
+      "id": "a08_en_marking",
+      "lang": "en",
+      "query": "container shall bear Batch No and net mass",
+      "standard": "IS 9666",
+      "expect_chunk_id": "native_text:p0003:c007",
+      "expect_clause": "6.1",
+      "gold_label": "CHUNK"
+    },
+    {
+      "id": "a09_mixed_marking",
+      "lang": "mixed",
+      "query": "Batch No और net mass marking requirement",
+      "standard": "IS 9666",
+      "expect_chunk_id": "native_text:p0003:c007",
+      "expect_clause": "6.1",
+      "gold_label": "CHUNK"
+    },
+    {
+      "id": "a10_en_annex_title",
+      "lang": "en",
+      "query": "DETERMINATION OF LIQUID HOLDING CAPACITY LHC",
+      "standard": "IS 9666",
+      "expect_chunk_id": "native_text:p0005:c014",
+      "expect_clause": "ANNEX A",
+      "gold_label": "CHUNK"
+    },
+    {
+      "id": "a11_en_principle_r5",
+      "lang": "en",
+      "query": "maximum loading of a technical formulation on blank granule",
+      "standard": "IS 9666",
+      "expect_chunk_id": "native_text:p0005:c015",
+      "expect_clause": "A-1",
+      "gold_label": "CHUNK"
+    },
+    {
+      "id": "a12_hi_principle",
+      "lang": "hi",
+      "query": "ब्लैंक ग्रेन्यूल पर तकनीकी फॉर्मूलेशन की अधिकतम लोडिंग का सिद्धांत",
+      "standard": "IS 9666",
+      "expect_chunk_id": "native_text:p0005:c015",
+      "expect_clause": "A-1",
+      "gold_label": "CHUNK"
+    },
+    {
+      "id": "a13_en_solvent_prep",
+      "lang": "en",
+      "query": "heavy aromatic naphtha and cyclohexanone relative density 1000 burette",
+      "standard": "IS 9666",
+      "expect_chunk_id": "native_text:p0005:c016",
+      "expect_clause": "A-2.1",
+      "gold_label": "CHUNK"
+    },
+    {
+      "id": "a14_en_procedure",
+      "lang": "en",
+      "query": "Take 20 g of sample in a 250 ml bottle burette",
+      "standard": "IS 9666",
+      "expect_chunk_id": "native_text:p0005:c017",
+      "expect_clause": "A-2.2",
+      "gold_label": "CHUNK"
+    },
+    {
+      "id": "a15_mixed_procedure",
+      "lang": "mixed",
+      "query": "20 g sample 250 ml bottle में solvent add करके shake",
+      "standard": "IS 9666",
+      "expect_chunk_id": "native_text:p0005:c017",
+      "expect_clause": "A-2.2",
+      "gold_label": "CHUNK"
+    },
+    {
+      "id": "a16_en_lhc_formula",
+      "lang": "en",
+      "query": "Liquid Holding Capacity formula",
+      "standard": "IS 9666",
+      "expect_chunk_id": "native_text:p0005:c018",
+      "expect_clause": "A-3",
+      "gold_label": "CHUNK"
+    },
+    {
+      "id": "a17_hi_lhc_formula",
+      "lang": "hi",
+      "query": "लिक्विड होल्डिंग कैपेसिटी का सूत्र क्या है?",
+      "standard": "IS 9666",
+      "expect_chunk_id": "native_text:p0005:c018",
+      "expect_clause": "A-3",
+      "gold_label": "CHUNK"
+    },
+    {
+      "id": "a18_mixed_lhc",
+      "lang": "mixed",
+      "query": "LHC का calculation formula M M1",
+      "standard": "IS 9666",
+      "expect_chunk_id": "native_text:p0005:c018",
+      "expect_clause": "A-3",
+      "gold_label": "CHUNK"
+    },
+    {
+      "id": "a19_en_percent_by_mass",
+      "lang": "en",
+      "query": "LHC percent by mass M divided by M1 plus M times 100",
+      "standard": "IS 9666",
+      "expect_chunk_id": "native_text:p0005:c018",
+      "expect_clause": "A-3",
+      "gold_label": "CHUNK"
+    },
+    {
+      "id": "a20_clause_specific_4_1",
+      "lang": "en",
+      "query": "What does clause 4.1 require for the material form?",
+      "standard": "IS 9666",
+      "expect_chunk_id": "native_text:p0003:c004",
+      "expect_clause": "4.1",
+      "gold_label": "CHUNK"
+    },
+    {
+      "id": "a21_clause_specific_a3",
+      "lang": "en",
+      "query": "Clause A-3 calculation of liquid holding capacity",
+      "standard": "IS 9666",
+      "expect_chunk_id": "native_text:p0005:c018",
+      "expect_clause": "A-3",
+      "gold_label": "CHUNK"
+    },
+    {
+      "id": "a22_en_scope_blank_granules",
+      "lang": "en",
+      "query": "blank granules for manufacturing pesticidal granules fertilizers",
+      "standard": "IS 9666",
+      "expect_chunk_id": "native_text:p0003:c003",
+      "expect_clause": null,
+      "gold_label": "CHUNK"
+    },
+    {
+      "id": "a23_en_aluminium_scope",
+      "lang": "en",
+      "query": "dimensions and tolerances for wrought aluminium sheet and strip",
+      "standard": "IS 2676",
+      "expect_chunk_id": "scanned:p0007:c011",
+      "expect_clause": "1.1",
+      "gold_label": "CHUNK"
+    },
+    {
+      "id": "a24_hi_aluminium",
+      "lang": "hi",
+      "query": "रॉट एल्युमिनियम शीट और स्ट्रिप के आयाम और टॉलरेंस",
+      "standard": "IS 2676",
+      "expect_chunk_id": "scanned:p0007:c011",
+      "expect_clause": "1.1",
+      "gold_label": "CHUNK"
+    },
+    {
+      "id": "a25_mixed_aluminium",
+      "lang": "mixed",
+      "query": "एल्युमिनियम alloys sheet and strip dimensions",
+      "standard": "IS 2676",
+      "expect_chunk_id": "scanned:p0007:c011",
+      "expect_clause": "1.1",
+      "gold_label": "CHUNK"
+    },
+    {
+      "id": "a26_en_history_1964",
+      "lang": "en",
+      "query": "This standard was first published in 1964",
+      "standard": "IS 2676",
+      "expect_chunk_id": "scanned:p0007:c007",
+      "expect_clause": "0.2",
+      "gold_label": "CHUNK"
+    },
+    {
+      "id": "a27_en_bs_1470",
+      "lang": "en",
+      "query": "assistance derived from BS 1470 Specification for Wrought Aluminium",
+      "standard": "IS 2676",
+      "expect_chunk_id": "scanned:p0007:c008",
+      "expect_clause": "0.3",
+      "gold_label": "CHUNK"
+    },
+    {
+      "id": "a28_en_is_737",
+      "lang": "en",
+      "query": "This standard should be used in conjunction with IS 737",
+      "standard": "IS 2676",
+      "expect_chunk_id": "scanned:p0007:c009",
+      "expect_clause": "0.4",
+      "gold_label": "CHUNK"
+    },
+    {
+      "id": "a29_en_rounding_is2",
+      "lang": "en",
+      "query": "final value rounded off in accordance with IS 2",
+      "standard": "IS 2676",
+      "expect_chunk_id": "scanned:p0007:c010",
+      "expect_clause": "0.5",
+      "gold_label": "CHUNK"
+    },
+    {
+      "id": "a30_en_adopted_1981",
+      "lang": "en",
+      "query": "adopted by the Indian Standards Institution on 24 April 1981",
+      "standard": "IS 2676",
+      "expect_chunk_id": "scanned:p0007:c006",
+      "expect_clause": "0.1",
+      "gold_label": "CHUNK"
+    },
+    {
+      "id": "a31_paraphrase_extraneous",
+      "lang": "en",
+      "query": "material must be granular and without foreign matter",
+      "standard": "IS 9666",
+      "expect_chunk_id": "native_text:p0003:c004",
+      "expect_clause": "4.1",
+      "gold_label": "CHUNK"
+    },
+    {
+      "id": "a32_paraphrase_lhc",
+      "lang": "en",
+      "query": "how is liquid holding capacity calculated as percent by mass",
+      "standard": "IS 9666",
+      "expect_chunk_id": "native_text:p0005:c018",
+      "expect_clause": "A-3",
+      "gold_label": "CHUNK"
+    },
+    {
+      "id": "a33_all_mode_lhc",
+      "lang": "en",
+      "query": "Liquid Holding Capacity formula percent by mass",
+      "standard": "all",
+      "expect_chunk_id": "native_text:p0005:c018",
+      "expect_clause": "A-3",
+      "gold_label": "CHUNK"
+    },
+    {
+      "id": "a34_deactivator",
+      "lang": "en",
+      "query": "blank granules may contain deactivator",
+      "standard": "IS 9666",
+      "expect_chunk_id": "native_text:p0003:c005",
+      "expect_clause": "4.1.1",
+      "gold_label": "CHUNK"
+    },
+    {
+      "id": "a35_squareness_tolerance",
+      "lang": "en",
+      "query": "squareness tolerance and additional standard lengths 2000 mm 4000 mm",
+      "standard": "IS 2676",
+      "expect_chunk_id": "scanned:p0007:c007",
+      "expect_clause": "0.2",
+      "gold_label": "CHUNK"
+    }
+  ],
+  "unanswerable": [
+    {
+      "id": "u01_melting_point",
+      "lang": "en",
+      "query": "What is the melting point of blank granules in IS 9666?",
+      "standard": "IS 9666",
+      "expect_chunk_id": null,
+      "expect_clause": null,
+      "gold_label": "NOT_FOUND"
+    },
+    {
+      "id": "u02_hi_moisture",
+      "lang": "hi",
+      "query": "ब्लैंक ग्रेन्यूल्स की नमी प्रतिशत सीमा क्या है?",
+      "standard": "IS 9666",
+      "expect_chunk_id": null,
+      "expect_clause": null,
+      "gold_label": "NOT_FOUND"
+    },
+    {
+      "id": "u03_bulk_density",
+      "lang": "en",
+      "query": "What is the bulk density requirement for blank granules?",
+      "standard": "IS 9666",
+      "expect_chunk_id": null,
+      "expect_clause": null,
+      "gold_label": "NOT_FOUND"
+    },
+    {
+      "id": "u04_particle_size",
+      "lang": "en",
+      "query": "particle size distribution sieve analysis for blank granules",
+      "standard": "IS 9666",
+      "expect_chunk_id": null,
+      "expect_clause": null,
+      "gold_label": "NOT_FOUND"
+    },
+    {
+      "id": "u05_shelf_life",
+      "lang": "mixed",
+      "query": "blank granules की shelf life कितनी है?",
+      "standard": "IS 9666",
+      "expect_chunk_id": null,
+      "expect_clause": null,
+      "gold_label": "NOT_FOUND"
+    },
+    {
+      "id": "u06_colour",
+      "lang": "en",
+      "query": "What colour should blank granules be according to the standard?",
+      "standard": "IS 9666",
+      "expect_chunk_id": null,
+      "expect_clause": null,
+      "gold_label": "NOT_FOUND"
+    },
+    {
+      "id": "u07_aluminium_tensile",
+      "lang": "en",
+      "query": "minimum tensile strength of wrought aluminium sheet IS 2676",
+      "standard": "IS 2676",
+      "expect_chunk_id": null,
+      "expect_clause": null,
+      "gold_label": "NOT_FOUND"
+    },
+    {
+      "id": "u08_hi_thickness_table",
+      "lang": "hi",
+      "query": "एल्युमिनियम शीट की मोटाई की पूरी तालिका कहाँ है?",
+      "standard": "IS 2676",
+      "expect_chunk_id": null,
+      "expect_clause": null,
+      "gold_label": "NOT_FOUND"
+    },
+    {
+      "id": "u09_chemical_composition",
+      "lang": "en",
+      "query": "chemical composition limits for aluminium alloy sheet",
+      "standard": "IS 2676",
+      "expect_chunk_id": null,
+      "expect_clause": null,
+      "gold_label": "NOT_FOUND"
+    },
+    {
+      "id": "u10_wrong_standard_topic",
+      "lang": "en",
+      "query": "What is the melting point of blank granules?",
+      "standard": "IS 2676",
+      "expect_chunk_id": null,
+      "expect_clause": null,
+      "gold_label": "NOT_FOUND"
+    },
+    {
+      "id": "u11_fee_structure",
+      "lang": "en",
+      "query": "BIS marking fee structure for blank granules licence",
+      "standard": "IS 9666",
+      "expect_chunk_id": null,
+      "expect_clause": null,
+      "gold_label": "NOT_FOUND"
+    },
+    {
+      "id": "u12_sampling_plan",
+      "lang": "en",
+      "query": "detailed sampling plan lot size acceptance number for blank granules",
+      "standard": "IS 9666",
+      "expect_chunk_id": null,
+      "expect_clause": null,
+      "gold_label": "NOT_FOUND"
+    },
+    {
+      "id": "u13_ph_value",
+      "lang": "mixed",
+      "query": "blank granules का pH value क्या होना चाहिए?",
+      "standard": "IS 9666",
+      "expect_chunk_id": null,
+      "expect_clause": null,
+      "gold_label": "NOT_FOUND"
+    },
+    {
+      "id": "u14_coating_mass",
+      "lang": "en",
+      "query": "coating mass requirements for aluminium sheet and strip",
+      "standard": "IS 2676",
+      "expect_chunk_id": null,
+      "expect_clause": null,
+      "gold_label": "NOT_FOUND"
+    },
+    {
+      "id": "u15_storage_temperature",
+      "lang": "en",
+      "query": "recommended storage temperature for blank granules",
+      "standard": "IS 9666",
+      "expect_chunk_id": null,
+      "expect_clause": null,
+      "gold_label": "NOT_FOUND"
+    },
+    {
+      "id": "u16_hardness_brinell",
+      "lang": "en",
+      "query": "Brinell hardness values for wrought aluminium alloys sheet",
+      "standard": "IS 2676",
+      "expect_chunk_id": null,
+      "expect_clause": null,
+      "gold_label": "NOT_FOUND"
+    }
+  ]
+}

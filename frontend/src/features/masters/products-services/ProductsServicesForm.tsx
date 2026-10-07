@@ -30,6 +30,8 @@ import {
 /** Official GST portal — Search HSN / SAC codes (pre-login available). */
 const HSN_SAC_FINDER_URL = 'https://services.gst.gov.in/services/searchhsnsac'
 
+const fieldCellClass = 'col-span-12 flex min-w-0 flex-col space-y-2 sm:col-span-6 lg:col-span-3'
+
 function CurrencyInrField({
   id,
   label,
@@ -49,13 +51,13 @@ function CurrencyInrField({
   const displayValue = focused ? value : formatMoneyInput(value || '0')
 
   return (
-    <div className={cn('flex flex-col space-y-2', className)}>
+    <div className={cn('flex min-w-0 flex-col space-y-2', className)}>
       <div className="flex h-5 items-center">
         <Label htmlFor={id}>{label}</Label>
       </div>
-      <div className="flex h-10 overflow-hidden rounded-none border border-stone-500 bg-stone-50 focus-within:border-amber-600 focus-within:bg-white focus-within:ring-2 focus-within:ring-amber-500/20">
+      <div className="flex h-8 min-w-0 overflow-hidden rounded-none border border-stone-500 bg-stone-50 focus-within:border-amber-600 focus-within:bg-white focus-within:ring-2 focus-within:ring-amber-500/20">
         <span
-          className="inline-flex shrink-0 items-center border-r border-stone-500 bg-stone-100 px-2.5 text-sm font-semibold text-stone-700"
+          className="inline-flex shrink-0 items-center border-r border-stone-500 bg-stone-100 px-2 text-sm font-semibold text-stone-700"
           aria-hidden
         >
           {getCurrencySymbol()}
@@ -119,30 +121,30 @@ export function ProductsServicesForm({
     <div className={cn(limsRegistryFormClass, 'flex min-h-0 flex-1 flex-col')}>
       <div
         className={cn(
-          'min-h-0 flex-1 space-y-5',
+          'min-h-0 flex-1',
           hideFooter
             ? 'overflow-visible px-0 py-0'
             : 'overflow-y-auto overflow-x-hidden px-4 py-4 sm:px-6 sm:py-5',
         )}
       >
         {priceError ? (
-          <p className="border-l-2 border-destructive bg-destructive/5 px-3 py-2 text-sm text-destructive">
+          <p className="mb-4 border-l-2 border-destructive bg-destructive/5 px-3 py-2 text-sm text-destructive">
             Price, GST, discount and stock values must be valid numbers.
           </p>
         ) : null}
 
-        <div className="grid grid-cols-12 gap-4">
-          <div className="col-span-6 flex flex-col space-y-2 md:col-span-3">
+        <div className="grid grid-cols-12 gap-x-5 gap-y-4">
+          <div className={fieldCellClass}>
             <div className="flex h-5 items-center">
               <Label htmlFor="ps-item-type" className="min-w-0 truncate">
                 Item (Product / Service) *
               </Label>
             </div>
             <Select value={form.itemType} onValueChange={(v) => onItemTypeChange(v as ItemType)}>
-              <SelectTrigger id="ps-item-type">
+              <SelectTrigger id="ps-item-type" className="w-full min-w-0">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent position="popper" className="z-[10000]">
                 {ITEM_TYPES.map((t) => (
                   <SelectItem key={t} value={t}>
                     {t}
@@ -152,7 +154,7 @@ export function ProductsServicesForm({
             </Select>
           </div>
 
-          <div className="col-span-6 flex flex-col space-y-2 md:col-span-3">
+          <div className={fieldCellClass}>
             <div className="flex h-5 items-center">
               <Label htmlFor="ps-item-code">Item Code *</Label>
             </div>
@@ -162,11 +164,11 @@ export function ProductsServicesForm({
               onChange={(e) => set('itemCode', e.target.value.toUpperCase())}
               placeholder={form.itemType === 'Product' ? 'P-0001' : 'S-0001'}
               readOnly={codeLocked}
-              className={codeLocked ? 'bg-stone-100 text-stone-700' : undefined}
+              className={cn('min-w-0', codeLocked ? 'bg-stone-100 text-stone-700' : undefined)}
             />
           </div>
 
-          <div className="col-span-6 flex flex-col space-y-2 md:col-span-3">
+          <div className={fieldCellClass}>
             <div className="flex h-5 items-center">
               <Label htmlFor="ps-item-category">Item Category *</Label>
             </div>
@@ -176,26 +178,27 @@ export function ProductsServicesForm({
               value={form.itemCategory}
               onChange={(itemCategory) => set('itemCategory', itemCategory)}
               placeholder="Type or select category"
+              className="min-w-0"
             />
           </div>
 
-          <div className="col-span-6 flex flex-col space-y-2 md:col-span-3">
+          <div className={fieldCellClass}>
             <div className="flex h-5 items-center">
               <Label htmlFor="ps-hsn">Item HSN Code</Label>
             </div>
-            <div className="relative">
+            <div className="relative min-w-0">
               <Input
                 id="ps-hsn"
                 value={form.hsnCode}
                 onChange={(e) => set('hsnCode', e.target.value)}
                 placeholder="HSN Code"
-                className="pr-9"
+                className="min-w-0 pr-9"
               />
               <a
                 href={HSN_SAC_FINDER_URL}
                 target="_blank"
                 rel="noreferrer"
-                className="absolute inset-y-0 right-0 flex w-9 items-center justify-center text-amber-800 hover:bg-amber-500/10 hover:text-amber-950"
+                className="absolute inset-y-0 right-0 flex w-8 items-center justify-center text-amber-800 hover:bg-amber-500/10 hover:text-amber-950"
                 aria-label="Open HSN Code Finder on GST portal"
                 title="HSN Code Finder"
               >
@@ -204,7 +207,7 @@ export function ProductsServicesForm({
             </div>
           </div>
 
-          <div className="col-span-12 flex flex-col space-y-2 sm:col-span-6">
+          <div className="col-span-12 flex min-w-0 flex-col space-y-2 sm:col-span-6">
             <div className="flex h-5 items-center">
               <Label htmlFor="ps-item-name">Item Name *</Label>
             </div>
@@ -213,10 +216,11 @@ export function ProductsServicesForm({
               value={form.itemName}
               onChange={(e) => set('itemName', e.target.value)}
               placeholder="Enter Item Name"
+              className="min-w-0"
             />
           </div>
 
-          <div className="col-span-12 flex flex-col space-y-2 sm:col-span-6">
+          <div className="col-span-12 flex min-w-0 flex-col space-y-2 sm:col-span-6">
             <div className="flex h-5 items-center">
               <Label htmlFor="ps-desc">Item Description</Label>
             </div>
@@ -225,34 +229,40 @@ export function ProductsServicesForm({
               value={form.itemDescription}
               onChange={(e) => set('itemDescription', e.target.value)}
               placeholder="Item Description"
+              className="min-w-0"
             />
           </div>
 
-          <div className="col-span-12 grid grid-cols-2 gap-4 md:grid-cols-4">
+          <div className={fieldCellClass}>
             <CurrencyInrField
               id="ps-sale"
               label="Sale Price"
               value={form.salePrice}
               onChange={(v) => set('salePrice', v)}
             />
+          </div>
+          <div className={fieldCellClass}>
             <CurrencyInrField
               id="ps-purchase"
               label="Purchase Price"
               value={form.purchasePrice}
               onChange={(v) => set('purchasePrice', v)}
             />
-            <div className="flex flex-col space-y-2">
-              <div className="flex h-5 items-center">
-                <Label htmlFor="ps-gst">GST %</Label>
-              </div>
-              <GstRateSelect
-                id="ps-gst"
-                showLabel={false}
-                value={form.gstPercent}
-                onChange={(gstPercent) => set('gstPercent', gstPercent)}
-                placeholder="18"
-              />
+          </div>
+          <div className={fieldCellClass}>
+            <div className="flex h-5 items-center">
+              <Label htmlFor="ps-gst">GST %</Label>
             </div>
+            <GstRateSelect
+              id="ps-gst"
+              showLabel={false}
+              value={form.gstPercent}
+              onChange={(gstPercent) => set('gstPercent', gstPercent)}
+              placeholder="18"
+              className="min-w-0"
+            />
+          </div>
+          <div className={fieldCellClass}>
             <CurrencyInrField
               id="ps-discount"
               label="Discount"
@@ -261,75 +271,68 @@ export function ProductsServicesForm({
             />
           </div>
 
-          <div
-            className={cn(
-              'col-span-12 grid gap-4',
-              showStock
-                ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-4'
-                : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3',
-            )}
-          >
-            <div className="flex flex-col space-y-2">
-              <div className="flex h-5 items-center">
-                <Label htmlFor="ps-make">Make</Label>
-              </div>
-              <MakeSelect
-                id="ps-make"
-                showLabel={false}
-                value={form.make}
-                onChange={(make) => set('make', make)}
-                placeholder="Type or select make"
-              />
+          <div className={fieldCellClass}>
+            <div className="flex h-5 items-center">
+              <Label htmlFor="ps-make">Make</Label>
             </div>
-
-            <div className="flex flex-col space-y-2">
-              <div className="flex h-5 items-center">
-                <Label htmlFor="ps-uom">Unit of Measurement</Label>
-              </div>
-              <MeasurementUnitSelect
-                id="ps-uom"
-                showLabel={false}
-                value={form.unitOfMeasurement}
-                onChange={(unitOfMeasurement) => set('unitOfMeasurement', unitOfMeasurement)}
-                placeholder="Select or Add Unit"
-              />
-            </div>
-
-            {showStock ? (
-              <>
-                <div className="flex flex-col space-y-2">
-                  <div className="flex h-5 items-center">
-                    <Label htmlFor="ps-opening-stock">Opening Stock</Label>
-                  </div>
-                  <Input
-                    id="ps-opening-stock"
-                    type="number"
-                    inputMode="decimal"
-                    step="any"
-                    value={form.openingStock}
-                    onChange={(e) => set('openingStock', e.target.value)}
-                    placeholder="0"
-                    className="h-10"
-                  />
-                </div>
-                <div className="flex flex-col space-y-2">
-                  <div className="flex h-5 items-center">
-                    <Label htmlFor="ps-low-stock">Low Stock Alert</Label>
-                  </div>
-                  <Input
-                    id="ps-low-stock"
-                    type="number"
-                    inputMode="decimal"
-                    step="any"
-                    value={form.lowStockAlert}
-                    onChange={(e) => set('lowStockAlert', e.target.value)}
-                    placeholder="0"
-                    className="h-10"
-                  />
-                </div>
-              </>
-            ) : null}
+            <MakeSelect
+              id="ps-make"
+              showLabel={false}
+              value={form.make}
+              onChange={(make) => set('make', make)}
+              placeholder="Type or select make"
+              className="min-w-0"
+            />
           </div>
+
+          <div className={fieldCellClass}>
+            <div className="flex h-5 items-center">
+              <Label htmlFor="ps-uom">Unit of Measurement</Label>
+            </div>
+            <MeasurementUnitSelect
+              id="ps-uom"
+              showLabel={false}
+              value={form.unitOfMeasurement}
+              onChange={(unitOfMeasurement) => set('unitOfMeasurement', unitOfMeasurement)}
+              placeholder="Select or Add Unit"
+              className="min-w-0"
+            />
+          </div>
+
+          {showStock ? (
+            <>
+              <div className={fieldCellClass}>
+                <div className="flex h-5 items-center">
+                  <Label htmlFor="ps-opening-stock">Opening Stock</Label>
+                </div>
+                <Input
+                  id="ps-opening-stock"
+                  type="number"
+                  inputMode="decimal"
+                  step="any"
+                  value={form.openingStock}
+                  onChange={(e) => set('openingStock', e.target.value)}
+                  placeholder="0"
+                  className="min-w-0"
+                />
+              </div>
+              <div className={fieldCellClass}>
+                <div className="flex h-5 items-center">
+                  <Label htmlFor="ps-low-stock">Low Stock Alert</Label>
+                </div>
+                <Input
+                  id="ps-low-stock"
+                  type="number"
+                  inputMode="decimal"
+                  step="any"
+                  value={form.lowStockAlert}
+                  onChange={(e) => set('lowStockAlert', e.target.value)}
+                  placeholder="0"
+                  className="min-w-0"
+                />
+              </div>
+            </>
+          ) : null}
         </div>
       </div>
 

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useMasterUiSearchState } from '@/lib/useMasterUiSearchState'
 import { ArrowDown, ArrowUp, ArrowUpDown, List, KeyRound, Loader2, RefreshCw, Save, Search, Shield } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -320,7 +321,9 @@ export default function ModuleAccessMasterPage() {
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
 
-  const [accessOpen, setAccessOpen] = useState(false)
+  const { viewId, setView } = useMasterUiSearchState()
+  const hydratedViewRef = useRef<string | null>(null)
+  const accessOpen = viewId != null
   const [accessSubject, setAccessSubject] = useState<{
     subjectType: ModuleAccessSubjectType
     subjectKey: string
@@ -467,8 +470,35 @@ export default function ModuleAccessMasterPage() {
       designation: row.designation.trim(),
     })
     setSelectedModuleKeys(new Set())
-    setAccessOpen(true)
+    hydratedViewRef.current = row.userId
+    setView(row.userId)
   }
+
+  useEffect(() => {
+    if (!viewId) {
+      hydratedViewRef.current = null
+      setAccessSubject(null)
+      setSelectedModuleKeys(new Set())
+      return
+    }
+    if (hydratedViewRef.current === viewId && accessSubject?.subjectKey === viewId) return
+    const row = rows.find((r) => r.userId === viewId)
+    if (!row) {
+      if (!optionsLoading) setView(null)
+      return
+    }
+    setError(null)
+    setAccessSubject({
+      subjectType: 'user',
+      subjectKey: row.userId,
+      subjectLabel: row.userName || row.userId,
+      division: row.division.trim(),
+      department: row.department.trim(),
+      designation: row.designation.trim(),
+    })
+    setSelectedModuleKeys(new Set())
+    hydratedViewRef.current = viewId
+  }, [viewId, rows, optionsLoading, accessSubject?.subjectKey, setView])
 
   useEffect(() => {
     if (!accessOpen || !accessSubject) return
@@ -516,7 +546,8 @@ export default function ModuleAccessMasterPage() {
       })
       await refreshGlobalRules()
       setMessage(`Access saved for ${accessSubject.subjectLabel}.`)
-      setAccessOpen(false)
+      hydratedViewRef.current = null
+      setView(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to save module access')
     } finally {
@@ -779,9 +810,10 @@ export default function ModuleAccessMasterPage() {
       <Dialog
         open={accessOpen}
         onOpenChange={(open) => {
-          setAccessOpen(open)
-          if (!open) setAccessSubject(null)
-          if (!open) setSelectedModuleKeys(new Set())
+          if (!open) {
+            hydratedViewRef.current = null
+            setView(null)
+          }
         }}
       >
         <DialogContent

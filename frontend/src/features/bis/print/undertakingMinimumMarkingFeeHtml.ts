@@ -1,4 +1,5 @@
 import type { BisPrintData } from './loadBisPrintData'
+import { printSignatoryDefaults } from './loadBisPrintData'
 import { escapeHtml as esc } from './openPrintHtml'
 import {
   applicantContextFromPrintData,
@@ -223,7 +224,7 @@ export function undertakingMinimumMarkingFeeDataFromPrintData(
     slab1Text: '',
     slab2Text: '',
     slab3Text: '',
-    signatoryName: printData.client.contactPerson,
-    signatoryDesignation: '',
+    signatoryName: printSignatoryDefaults(printData).signatoryName,
+    signatoryDesignation: printSignatoryDefaults(printData).signatoryDesignation,
   }
 }

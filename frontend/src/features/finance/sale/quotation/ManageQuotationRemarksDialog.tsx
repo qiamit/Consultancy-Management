@@ -144,7 +144,7 @@ export function ManageQuotationRemarksDialog({
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent
-          className={cn(limsDialogClass, 'w-[min(720px,96vw)] max-w-3xl')}
+          className={cn(limsDialogClass, 'w-[min(45rem,calc(100vw-1.5rem))] max-w-3xl')}
           aria-describedby={undefined}
           layer="nested"
           persistOnFocusLoss
@@ -358,7 +358,7 @@ export function ManageQuotationRemarksDialog({
 
       <Dialog open={viewingRemark != null} onOpenChange={(next) => !next && setViewingRemark(null)}>
         <DialogContent
-          className={cn(limsDialogClass, 'w-[min(560px,94vw)] max-w-lg')}
+          className={cn(limsDialogClass, 'w-[min(32rem,calc(100vw-1.5rem))] max-w-lg')}
           aria-describedby={undefined}
           layer="stacked"
           persistOnFocusLoss

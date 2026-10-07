@@ -1,37 +1,63 @@
 import type { BisPrintData } from './loadBisPrintData'
+import { printSignatoryDefaults } from './loadBisPrintData'
 import { escapeHtml as esc } from './openPrintHtml'
 import {
   applicantContextFromPrintData,
   applicationNoDisplay,
   buildPrintPage,
-  dateOrNa,
+  inspectionDateOrToday,
   letterheadHtml,
   preparedByHtml,
   signatoryHtml,
   toBlockHtml,
   type PrintApplicantContext,
 } from './printDocumentShared'
+import {
+  buildLocationRouteMapSvg,
+  defaultBisToLocation,
+  fetchDrivingRoute,
+  googleMapsDirectionsLink,
+  googleMapsPinLink,
+  isValidLatLng,
+  parseLocationMapPayload,
+} from '../projects/locationMapModel'
 
 export type LocationMapData = PrintApplicantContext & {
-  latitude: string
-  longitude: string
+  firmLatitude: string
+  firmLongitude: string
+  bisLatitude: string
+  bisLongitude: string
+  toLocation: string
   mapsUrl: string
+  /** Inline SVG markup for From → To route (print-safe, no external map host). */
+  routeMapSvg: string
   signatoryName: string
   signatoryDesignation: string
+  signatureImageUrl?: string
+}
+
+function valueOrBlank(raw: string): string {
+  const v = raw.trim()
+  return v ? esc(v) : '________________'
 }
 
 function buildBody(data: LocationMapData): string {
-  const letterDate = dateOrNa(data.dateOfInspection.trim() || data.dateOfApplication)
+  const letterDate = inspectionDateOrToday(data.dateOfInspection)
   const sigName = data.signatoryName.trim() || data.contactPerson.trim()
-  const lat = data.latitude.trim() || '________________'
-  const lng = data.longitude.trim() || '________________'
-  const mapsLink = data.mapsUrl.trim()
-  const mapBox = mapsLink
-    ? `<p class="pd-body"><strong>Google Maps:</strong> <a href="${esc(mapsLink)}">${esc(mapsLink)}</a></p>
-       <div class="loc-map-placeholder">Open the maps link above for the factory location route / pin.</div>`
+  const firmOk = isValidLatLng(data.firmLatitude, data.firmLongitude)
+  const bisOk = isValidLatLng(data.bisLatitude, data.bisLongitude)
+  const toLocation =
+    data.toLocation.trim() ||
+    defaultBisToLocation(
+      [data.bisBranchName, data.bisBranchState].map((x) => x.trim()).filter(Boolean).join(', '),
+    )
+
+  const mapImage = data.routeMapSvg.trim()
+    ? `<div class="loc-map-wrap">${data.routeMapSvg}</div>`
     : `<div class="loc-map-placeholder">
          Location map coordinates / route sketch not yet attached.<br/>
-         Latitude: ${esc(lat)} &nbsp;·&nbsp; Longitude: ${esc(lng)}
+         From: ${valueOrBlank(data.firmLatitude)}, ${valueOrBlank(data.firmLongitude)}
+         ${bisOk ? `<br/>To: ${esc(data.bisLatitude)}, ${esc(data.bisLongitude)}` : ''}
        </div>`
 
   return `
@@ -51,29 +77,44 @@ function buildBody(data: LocationMapData): string {
   <p class="pd-body">
     We hereby submit the location map / route sketch of our manufacturing unit for your kind
     reference in connection with our BIS licence application. The factory is situated at
-    <strong>${esc(data.applicantAddress || '________________')}</strong>.
+    <strong>${esc(data.applicantAddress || '________________')}</strong>
+    ${
+      toLocation
+        ? `, with route reference to
+    (<strong>${esc(toLocation)}</strong>).`
+        : '.'
+    }
   </p>
 
   <table class="pd-meta">
-    <tr><td class="pd-lbl">Applicant</td><td colspan="3"><strong>${esc(data.applicantName || '—')}</strong></td></tr>
+    <tr><td class="pd-lbl">From Location</td><td colspan="3"><strong>${esc(data.applicantName || '—')}</strong></td></tr>
     <tr><td class="pd-lbl">Factory Address</td><td colspan="3">${esc(data.applicantAddress || '—')}</td></tr>
     <tr>
-      <td class="pd-lbl">Latitude</td><td>${esc(lat)}</td>
-      <td class="pd-lbl">Longitude</td><td>${esc(lng)}</td>
+      <td class="pd-lbl">To Location</td>
+      <td colspan="3">${esc(toLocation || '—')}</td>
     </tr>
     <tr>
-      <td class="pd-lbl">IS Code</td><td>${esc(data.isNumber || '—')}</td>
-      <td class="pd-lbl">Application No.</td><td>${esc(applicationNoDisplay(data.applicationNumber))}</td>
+      <td class="pd-lbl">From Latitude</td><td>${firmOk ? esc(data.firmLatitude) : '________________'}</td>
+      <td class="pd-lbl">From Longitude</td><td>${firmOk ? esc(data.firmLongitude) : '________________'}</td>
+    </tr>
+    <tr>
+      <td class="pd-lbl">To Latitude</td><td>${bisOk ? esc(data.bisLatitude) : '________________'}</td>
+      <td class="pd-lbl">To Longitude</td><td>${bisOk ? esc(data.bisLongitude) : '________________'}</td>
     </tr>
   </table>
 
-  ${mapBox}
+  ${mapImage}
 
   <p class="pd-body">
     We hereby declare that the above particulars are true and correct to the best of our knowledge and belief.
   </p>
 
-  <div class="cmpf-sign-right">${signatoryHtml({ firmName: data.applicantName, name: sigName, designation: data.signatoryDesignation })}</div>
+  <div class="cmpf-sign-right">${signatoryHtml({
+    firmName: data.applicantName,
+    name: sigName,
+    designation: data.signatoryDesignation,
+    signatureImageUrl: data.signatureImageUrl,
+  })}</div>
   ${preparedByHtml(data.preparedBy)}
 </div>`
 }
@@ -92,6 +133,8 @@ const STYLES = `
     color: #57534e;
     background: #fafaf9;
   }
+  .loc-map-wrap { margin: 10px 0 4px; text-align: center; border: 1px solid #a8a29e; background: #fff; }
+  .loc-map-wrap svg { max-width: 100%; height: auto; display: block; margin: 0 auto; }
   .cmpf-sign-right { margin-top: 14px; text-align: right; }
   .cmpf-sign-right .pd-signatory { text-align: left; }
 `
@@ -104,15 +147,89 @@ export function buildLocationMapHtml(data: LocationMapData): string {
   })
 }
 
-/** Maps a BIS project row + client + consultancy context into Location Map fields. */
+/** Sync base fields; call enrichLocationMapRoute for road geometry SVG. */
 export function locationMapDataFromPrintData(printData: BisPrintData): LocationMapData {
   const ctx = applicantContextFromPrintData(printData)
+  const parsed = parseLocationMapPayload(
+    printData.modulePayload && typeof printData.modulePayload === 'object'
+      ? (printData.modulePayload as Record<string, unknown>)
+      : null,
+  )
+  const sig = printSignatoryDefaults(printData)
+  const firmOk = isValidLatLng(parsed.firmLatitude, parsed.firmLongitude)
+  const bisOk = isValidLatLng(parsed.bisLatitude, parsed.bisLongitude)
+  const branchLabel = [ctx.bisBranchName, ctx.bisBranchState]
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .join(', ')
+  const toLocation = parsed.toLocation.trim() || defaultBisToLocation(branchLabel)
+
+  let mapsUrl = ''
+  if (firmOk && bisOk) {
+    mapsUrl = googleMapsDirectionsLink(
+      parsed.firmLatitude,
+      parsed.firmLongitude,
+      parsed.bisLatitude,
+      parsed.bisLongitude,
+    )
+  } else if (firmOk) {
+    mapsUrl = googleMapsPinLink(parsed.firmLatitude, parsed.firmLongitude)
+  } else if (bisOk) {
+    mapsUrl = googleMapsPinLink(parsed.bisLatitude, parsed.bisLongitude)
+  }
+
+  // Placeholder SVG without route (enrichment replaces with road path when possible).
+  const routeMapSvg = buildLocationRouteMapSvg({
+    firmLat: parsed.firmLatitude,
+    firmLng: parsed.firmLongitude,
+    bisLat: parsed.bisLatitude,
+    bisLng: parsed.bisLongitude,
+    firmLabel: ctx.applicantName || 'From (A)',
+    bisLabel: toLocation,
+  })
+
   return {
     ...ctx,
-    latitude: '',
-    longitude: '',
-    mapsUrl: '',
-    signatoryName: printData.client.contactPerson,
-    signatoryDesignation: '',
+    firmLatitude: parsed.firmLatitude,
+    firmLongitude: parsed.firmLongitude,
+    bisLatitude: parsed.bisLatitude,
+    bisLongitude: parsed.bisLongitude,
+    toLocation,
+    mapsUrl,
+    routeMapSvg,
+    signatoryName: sig.signatoryName,
+    signatoryDesignation: sig.signatoryDesignation,
+    signatureImageUrl: sig.signatureImageUrl,
+  }
+}
+
+/** Fetch OSRM driving geometry and rebuild print SVG with From → To road route. */
+export async function enrichLocationMapRoute(data: LocationMapData): Promise<LocationMapData> {
+  const firmOk = isValidLatLng(data.firmLatitude, data.firmLongitude)
+  const bisOk = isValidLatLng(data.bisLatitude, data.bisLongitude)
+  if (!firmOk || !bisOk) return data
+
+  const route = await fetchDrivingRoute(
+    data.firmLatitude,
+    data.firmLongitude,
+    data.bisLatitude,
+    data.bisLongitude,
+  )
+  if (!route) return data
+
+  return {
+    ...data,
+    routeMapSvg: buildLocationRouteMapSvg({
+      firmLat: data.firmLatitude,
+      firmLng: data.firmLongitude,
+      bisLat: data.bisLatitude,
+      bisLng: data.bisLongitude,
+      firmLabel: data.applicantName || 'From (A)',
+      bisLabel: data.toLocation || 'To (B)',
+      routeCoords: route.coords,
+      distanceKm: route.distanceKm,
+      durationMin: route.durationMin,
+      isRoadRoute: route.isRoadRoute,
+    }),
   }
 }

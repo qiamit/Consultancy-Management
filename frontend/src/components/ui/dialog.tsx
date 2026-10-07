@@ -2,6 +2,11 @@ import * as React from 'react'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import {
+  limsDialogCenterClass,
+  limsDialogSidebarOverlayClass,
+  limsDialogSidebarPortalClass,
+} from '@/lib/limsThemeUi'
 import { preventFormDialogFocusOutside } from '@/lib/formDialogOpenChange'
 import {
   elementFromEventTarget,
@@ -24,12 +29,13 @@ const DialogTrigger = DialogPrimitive.Trigger
 
 const DialogClose = DialogPrimitive.Close
 
-type DialogLayer = 'default' | 'nested' | 'stacked' | 'top'
+type DialogLayer = 'default' | 'nested' | 'stacked' | 'top' | 'overlay'
 
 const dialogLayerZClass = (layer: DialogLayer) => {
   if (layer === 'nested') return 'z-[60]'
   if (layer === 'stacked') return 'z-[70]'
   if (layer === 'top') return 'z-[80]'
+  if (layer === 'overlay') return 'z-[90]'
   return 'z-50'
 }
 
@@ -97,7 +103,7 @@ const DialogContent = React.forwardRef<
     persistOnFocusLoss?: boolean
     /** Render the top-right close control (default true) */
     showCloseButton?: boolean
-    /** Raise nested dialogs above an already-open parent dialog; stacked = 3rd, top = 4th */
+    /** Raise nested dialogs above an already-open parent; stacked=3rd, top=4th, overlay=above top */
     layer?: DialogLayer
     /** Optional classes for the dimmed backdrop (e.g. leave app sidebar uncovered) */
     overlayClassName?: string
@@ -112,8 +118,9 @@ const DialogContent = React.forwardRef<
       persistOnFocusLoss,
       showCloseButton = true,
       layer = 'default',
-      overlayClassName,
-      portalClassName,
+      /** Pass empty string to cover full viewport including sidebar. */
+      overlayClassName = limsDialogSidebarOverlayClass,
+      portalClassName = limsDialogSidebarPortalClass,
       onFocusOutside,
       onPointerDownOutside,
       onInteractOutside,
@@ -122,8 +129,8 @@ const DialogContent = React.forwardRef<
     },
     ref,
   ) => (
-    <DialogPortal layer={layer} className={portalClassName}>
-      <DialogOverlay layer={layer} className={overlayClassName} />
+    <DialogPortal layer={layer} className={portalClassName || undefined}>
+      <DialogOverlay layer={layer} className={overlayClassName || undefined} />
       <DialogPrimitive.Content
         ref={ref}
         aria-describedby={ariaDescribedBy ?? undefined}
@@ -141,7 +148,9 @@ const DialogContent = React.forwardRef<
           onInteractOutside?.(e)
         }}
         className={cn(
-          'fixed left-0 right-0 mx-auto grid w-[calc(100vw-1rem)] max-w-lg max-h-[92dvh] gap-4 overflow-y-auto rounded-none border-2 border-stone-600 bg-background p-6 shadow-lg ring-1 ring-amber-700/20 duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-bottom-5 data-[state=open]:slide-in-from-bottom-5 sm:w-full sm:rounded-none',
+          // Center in main content area (--app-dialog-center-x). Full-bleed sheets override left/top/translate.
+          'fixed grid w-[min(32rem,calc(100vw-1.5rem))] max-w-lg max-h-[92dvh] gap-4 overflow-y-auto rounded-none border-2 border-stone-600 bg-background p-6 shadow-lg ring-1 ring-amber-700/20 duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-bottom-5 data-[state=open]:slide-in-from-bottom-5 sm:rounded-none',
+          limsDialogCenterClass,
           dialogLayerZClass(layer),
           className,
         )}

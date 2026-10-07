@@ -57,7 +57,7 @@ export function emptyProductServiceForm(itemType: ItemType = 'Service'): Product
     gstPercent: '18.00',
     discount: '0.00',
     unitOfMeasurement: 'Nos',
-    make: 'QIRLPL',
+    make: 'QE',
     openingStock: '0',
     lowStockAlert: '0',
   }

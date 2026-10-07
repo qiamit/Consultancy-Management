@@ -3,6 +3,7 @@ import { limsDarkBarGlowStyle, limsPageShellClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabaseClient'
 import { useFormDialogOpenChange } from '@/lib/formDialogOpenChange'
+import { useMasterUiSearchState } from '@/lib/useMasterUiSearchState'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { ProductServicesForm } from './ProductServicesForm'
 import { ProductServicesHeaderBar } from './ProductServicesHeaderBar'
@@ -106,12 +107,20 @@ function nextSNo(list: NablScopeRow[]) {
 }
 
 export default function ProductServicesMasterPage() {
+  const { editId, setEdit } = useMasterUiSearchState()
   const [saveLoading, setSaveLoading] = useState(false)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
-  const [editingId, setEditingId] = useState<string | null>(null)
   const importInputRef = useRef<HTMLInputElement | null>(null)
-  const [showForm, setShowForm] = useState(false)
-  const handleFormOpenChange = useFormDialogOpenChange(setShowForm)
+  const hydratedEditRef = useRef<string | null>(null)
+
+  const showForm = editId != null
+  const editingId = editId && editId !== 'new' ? editId : null
+  const handleFormOpenChange = useFormDialogOpenChange((open) => {
+    if (!open) {
+      hydratedEditRef.current = null
+      setEdit(null)
+    }
+  })
   const [search, setSearch] = useState('')
   const [rows, setRows] = useState<NablScopeRow[]>([])
   const [listLoading, setListLoading] = useState(false)
@@ -165,14 +174,6 @@ export default function ProductServicesMasterPage() {
     void loadItems()
   }, [])
 
-  const handleNew = () => {
-    setSaveMessage(null)
-    setEditingId(null)
-    setForm({ ...emptyNablScopeForm(), sNo: String(nextSNo(rows)) })
-    setShowForm(true)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
-
   const rowToForm = (row: NablScopeRow): NablScopeForm => ({
     sNo: String(row.s_no),
     disciplineGroup: row.discipline_group,
@@ -188,19 +189,52 @@ export default function ProductServicesMasterPage() {
     uncertainty: row.uncertainty?.trim() ?? '',
   })
 
+  useEffect(() => {
+    if (!editId) {
+      hydratedEditRef.current = null
+      return
+    }
+    if (hydratedEditRef.current === editId) return
+
+    if (editId === 'new') {
+      setForm({ ...emptyNablScopeForm(), sNo: String(nextSNo(rows)) })
+      setSaveMessage(null)
+      hydratedEditRef.current = 'new'
+      return
+    }
+
+    const fromPage = rows.find((r) => r.id === editId)
+    if (fromPage) {
+      setForm(rowToForm(fromPage))
+      setSaveMessage(null)
+      hydratedEditRef.current = editId
+      return
+    }
+
+    if (!listLoading) setEdit(null)
+  }, [editId, rows, listLoading, setEdit])
+
+  const handleNew = () => {
+    setSaveMessage(null)
+    setForm({ ...emptyNablScopeForm(), sNo: String(nextSNo(rows)) })
+    hydratedEditRef.current = 'new'
+    setEdit('new')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   const handleEdit = (row: NablScopeRow) => {
     setSaveMessage(null)
-    setEditingId(row.id)
     setForm(rowToForm(row))
-    setShowForm(true)
+    hydratedEditRef.current = row.id
+    setEdit(row.id)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const handleCopy = (row: NablScopeRow) => {
     setSaveMessage(null)
-    setEditingId(null)
     setForm({ ...rowToForm(row), sNo: String(nextSNo(rows)) })
-    setShowForm(true)
+    hydratedEditRef.current = 'new'
+    setEdit('new')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -253,8 +287,8 @@ export default function ProductServicesMasterPage() {
         }
 
         setSaveMessage('Saved successfully.')
-        setShowForm(false)
-        setEditingId(null)
+        hydratedEditRef.current = null
+        setEdit(null)
         await loadItems()
       } catch (err) {
         setSaveMessage(formatSupabaseError(err))

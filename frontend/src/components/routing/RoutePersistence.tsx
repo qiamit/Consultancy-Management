@@ -8,7 +8,8 @@ import {
 
 /**
  * Keeps the last authenticated route and restores it after refresh when the
- * document URL was reset to `/` (e.g. some IDE browser previews).
+ * document URL was reset to `/` (e.g. some IDE browser previews), or when the
+ * SPA path stayed but `?view=` / `?module=` search was stripped.
  */
 export function RoutePersistence() {
   const location = useLocation()
@@ -16,23 +17,21 @@ export function RoutePersistence() {
   const restoredRef = useRef(false)
 
   useEffect(() => {
+    // Restore BEFORE remembering — otherwise a stripped-search refresh would
+    // overwrite the good lastRoute and lose dialog state forever.
+    if (!restoredRef.current) {
+      restoredRef.current = true
+      if (shouldRestoreLastRoute(location.pathname, location.search)) {
+        const last = readLastRoute()
+        const current = `${location.pathname}${location.search}`
+        if (last && last !== current) {
+          navigate(last, { replace: true })
+          return
+        }
+      }
+    }
     rememberRoute(location.pathname, location.search)
-  }, [location.pathname, location.search])
-
-  useEffect(() => {
-    if (restoredRef.current) return
-    if (!shouldRestoreLastRoute(location.pathname)) {
-      restoredRef.current = true
-      return
-    }
-    const last = readLastRoute()
-    if (!last) {
-      restoredRef.current = true
-      return
-    }
-    restoredRef.current = true
-    navigate(last, { replace: true })
-  }, [location.pathname, navigate])
+  }, [location.pathname, location.search, navigate])
 
   return null
 }

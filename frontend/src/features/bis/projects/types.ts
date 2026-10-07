@@ -29,13 +29,18 @@ export const BIS_PROJECT_STATUS_OPTIONS: Array<{ value: string; label: string }>
   { value: 'stop_marking', label: 'Stop Marking' },
 ]
 
+/** Primary Type of Project choices on Add/Edit (Application converts to License later). */
 export const BIS_PROJECT_KIND_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: 'Licence', label: 'Licence' },
   { value: 'Application', label: 'Application' },
+  { value: 'Licence', label: 'License' },
+]
+
+/** Extra kinds used by filtered list pages (not shown on Type of Project). */
+export const BIS_PROJECT_KIND_EXTRA_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'Inclusion', label: 'Inclusion' },
 ]
 
-export const DEFAULT_PROJECT_KIND = 'Licence'
+export const DEFAULT_PROJECT_KIND = 'Application'
 
 /** Default project_kind when creating a row from a filtered list page. */
 export function defaultProjectKindForListMode(mode: BisProjectsListMode): string {
@@ -55,6 +60,7 @@ export const BIS_BILLING_FREQUENCIES = [
 export const DEFAULT_CASE_HANDLED_BY = 'Amit Kumar'
 export const DEFAULT_CASE_REFERRED_BY = 'QE'
 export const DEFAULT_BILLING_FREQUENCY = 'Yearly'
+export const DEFAULT_APPLICATION_STAGE = 'Under Preparation'
 
 export type BisProjectClientJoin = {
   company_name: string | null
@@ -87,10 +93,45 @@ export type BisProjectRow = {
   portal_password: string | null
   application_stage: string | null
   is_qe_managed: boolean | null
+  application_process: string | null
+  application_number: string | null
+  application_date: string | null
+  inspection_date: string | null
+  granted_date: string | null
+  branch_name: string | null
+  branch_state: string | null
+  branch_head_name: string | null
+  branch_head_designation: string | null
+  inspection_officer_name: string | null
+  inspection_officer_designation: string | null
+  dealing_officer_name: string | null
+  dealing_officer_designation: string | null
+  type_of_inspection: string | null
   created_at?: string | null
   updated_at?: string | null
   client: BisProjectClientJoin | null
   is_code: BisProjectIsCodeJoin | null
+}
+
+export type BisApplicationProcess = 'simplified' | 'normal'
+
+export type BisApplicationDetailsForm = {
+  applicationProcess: BisApplicationProcess
+  applicationNumber: string
+  applicationDate: string
+  inspectionDate: string
+  licenseNumberDigits: string
+  grantedDate: string
+  licenseValidityDate: string
+  branchName: string
+  branchState: string
+  branchHeadName: string
+  branchHeadDesignation: string
+  inspectionOfficerName: string
+  inspectionOfficerDesignation: string
+  dealingOfficerName: string
+  dealingOfficerDesignation: string
+  typeOfInspection: string
 }
 
 export type BisProjectForm = {
@@ -102,6 +143,7 @@ export type BisProjectForm = {
   isCodeLabel: string
   cmLDigits: string
   licenseValidityDate: string
+  grantedDate: string
   status: string
   applicationStage: string
   isQeManaged: boolean
@@ -114,6 +156,174 @@ export type BisProjectForm = {
   notes: string
 }
 
+/** Marker prefix for License Scope table JSON stored in the notes field. */
+export const BIS_NOTES_TABLE_PREFIX = '@@BIS_SCOPE_TABLE@@'
+
+/** Legacy separator from earlier multi-textarea experiment. */
+const BIS_NOTES_COLUMN_SEP_LEGACY = '⟦COL⟧'
+
+export const BIS_NOTES_COLUMN_COUNT_OPTIONS = [1, 2, 3, 4, 5, 6] as const
+
+export type BisNotesScopePlain = { mode: 'plain'; text: string }
+export type BisNotesScopeTable = { mode: 'table'; headers: string[]; rows: string[][] }
+export type BisNotesScope = BisNotesScopePlain | BisNotesScopeTable
+
+function emptyRow(columnCount: number): string[] {
+  return Array.from({ length: columnCount }, () => '')
+}
+
+function defaultHeaderAt(index: number, columnCount: number): string {
+  if (columnCount === 2) {
+    return index === 0 ? 'Component' : 'Value'
+  }
+  return `Column ${index + 1}`
+}
+
+function defaultHeaders(columnCount: number): string[] {
+  return Array.from({ length: columnCount }, (_, i) => defaultHeaderAt(i, columnCount))
+}
+
+function normalizeTable(headers: string[], rows: string[][]): BisNotesScopeTable {
+  const colCount = Math.max(2, Math.min(6, headers.length || 2))
+  const nextHeaders = Array.from(
+    { length: colCount },
+    (_, i) => headers[i] ?? defaultHeaderAt(i, colCount),
+  )
+  const nextRows =
+    rows.length > 0
+      ? rows.map((row) => Array.from({ length: colCount }, (_, i) => row[i] ?? ''))
+      : [emptyRow(colCount)]
+  return { mode: 'table', headers: nextHeaders, rows: nextRows }
+}
+
+/**
+ * Notes sometimes holds imported Manak / checklist JSON (branch, officers, etc.).
+ * License Scope editor should only keep the human-readable `license_scope` text.
+ */
+export function sanitizeBisLicenseScopeNotes(notes: string): string {
+  const raw = notes ?? ''
+  if (raw.startsWith(BIS_NOTES_TABLE_PREFIX)) return raw
+  if (raw.includes(BIS_NOTES_COLUMN_SEP_LEGACY)) return raw
+  const trimmed = raw.trim()
+  if (!trimmed.startsWith('{')) return raw
+  try {
+    const parsed = JSON.parse(trimmed) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return ''
+    const obj = parsed as Record<string, unknown>
+    const looksLikeChecklist =
+      obj.type === 'application_checklist' ||
+      'meta' in obj ||
+      'license_scope' in obj ||
+      (obj.meta != null && typeof obj.meta === 'object')
+    if (!looksLikeChecklist) return raw
+    return String(obj.license_scope ?? '').trim()
+  } catch {
+    return raw
+  }
+}
+
+export function parseBisNotesScope(notes: string): BisNotesScope {
+  const raw = sanitizeBisLicenseScopeNotes(notes ?? '')
+  if (raw.startsWith(BIS_NOTES_TABLE_PREFIX)) {
+    try {
+      const parsed = JSON.parse(raw.slice(BIS_NOTES_TABLE_PREFIX.length)) as {
+        headers?: unknown
+        rows?: unknown
+      }
+      const headers = Array.isArray(parsed.headers)
+        ? parsed.headers.map((h) => String(h ?? ''))
+        : defaultHeaders(2)
+      const rows = Array.isArray(parsed.rows)
+        ? parsed.rows.map((row) =>
+            Array.isArray(row) ? row.map((cell) => String(cell ?? '')) : emptyRow(headers.length),
+          )
+        : [emptyRow(headers.length)]
+      return normalizeTable(headers, rows)
+    } catch {
+      return { mode: 'plain', text: raw }
+    }
+  }
+
+  // Migrate legacy side-by-side column text into a table.
+  if (raw.includes(BIS_NOTES_COLUMN_SEP_LEGACY)) {
+    const cols = raw.split(/\n?⟦COL⟧\n?/)
+    const colCount = Math.max(2, Math.min(6, cols.length))
+    const headers = defaultHeaders(colCount)
+    const maxLines = Math.max(1, ...cols.map((c) => c.split('\n').length))
+    const rows = Array.from({ length: maxLines }, (_, r) =>
+      Array.from({ length: colCount }, (_, c) => {
+        const lines = (cols[c] ?? '').split('\n')
+        return lines[r] ?? ''
+      }),
+    )
+    return { mode: 'table', headers, rows }
+  }
+
+  return { mode: 'plain', text: raw }
+}
+
+export function serializeBisNotesScope(scope: BisNotesScope): string {
+  if (scope.mode === 'plain') return scope.text
+  const table = normalizeTable(scope.headers, scope.rows)
+  return `${BIS_NOTES_TABLE_PREFIX}${JSON.stringify({
+    headers: table.headers,
+    rows: table.rows,
+  })}`
+}
+
+/** Switch between plain text (1) and table (2–6 columns). */
+export function setBisNotesScopeColumnCount(notes: string, count: number): string {
+  const n = Math.max(1, Math.min(6, Math.floor(count)))
+  const current = parseBisNotesScope(notes)
+
+  if (n === 1) {
+    if (current.mode === 'plain') return current.text
+    const lines = current.rows.map((row) =>
+      row
+        .map((cell, i) => {
+          const header = current.headers[i]?.trim()
+          const value = cell.trim()
+          if (!value) return ''
+          return header ? `${header}: ${value}` : value
+        })
+        .filter(Boolean)
+        .join(' | '),
+    )
+    return lines.filter(Boolean).join('\n')
+  }
+
+  if (current.mode === 'table') {
+    const headers = Array.from(
+      { length: n },
+      (_, i) => current.headers[i] ?? defaultHeaderAt(i, n),
+    )
+    const rows = current.rows.map((row) => Array.from({ length: n }, (_, i) => row[i] ?? ''))
+    return serializeBisNotesScope({ mode: 'table', headers, rows: rows.length ? rows : [emptyRow(n)] })
+  }
+
+  const headers = defaultHeaders(n)
+  const first = current.text.trim()
+  const rows = [Array.from({ length: n }, (_, i) => (i === 0 ? first : ''))]
+  return serializeBisNotesScope({ mode: 'table', headers, rows })
+}
+
+export function bisNotesScopeColumnCount(notes: string): number {
+  const scope = parseBisNotesScope(notes)
+  return scope.mode === 'table' ? scope.headers.length : 1
+}
+
+/** Flatten notes / license-scope table for print / plain-text consumers. */
+export function flattenBisNotesColumns(notes: string): string {
+  const scope = parseBisNotesScope(notes)
+  if (scope.mode === 'plain') return scope.text.trim()
+
+  const headerLine = scope.headers.map((h) => h.trim()).join('\t')
+  const body = scope.rows
+    .map((row) => row.map((cell) => cell.trim()).join('\t'))
+    .filter((line) => line.replace(/\t/g, '').trim().length > 0)
+  return [headerLine, ...body].filter(Boolean).join('\n')
+}
+
 export function emptyBisProjectForm(projectKind: string = DEFAULT_PROJECT_KIND): BisProjectForm {
   return {
     projectKind: projectKind.trim() || DEFAULT_PROJECT_KIND,
@@ -124,8 +334,9 @@ export function emptyBisProjectForm(projectKind: string = DEFAULT_PROJECT_KIND):
     isCodeLabel: '',
     cmLDigits: '',
     licenseValidityDate: '',
+    grantedDate: '',
     status: 'in_progress',
-    applicationStage: '',
+    applicationStage: DEFAULT_APPLICATION_STAGE,
     isQeManaged: true,
     caseHandledBy: DEFAULT_CASE_HANDLED_BY,
     caseReferredBy: DEFAULT_CASE_REFERRED_BY,
@@ -149,8 +360,12 @@ export function isCodeDisplayLabel(row: Pick<BisProjectRow, 'is_code'>): string 
 
 export function rowToBisProjectForm(row: BisProjectRow): BisProjectForm {
   const amount = Number(row.billing_amount)
+  const kindRaw = row.project_kind?.trim() || DEFAULT_PROJECT_KIND
+  // Normalize legacy "License" spelling to stored "Licence".
+  const projectKind =
+    kindRaw.toLowerCase() === 'license' ? 'Licence' : kindRaw
   return {
-    projectKind: row.project_kind?.trim() || DEFAULT_PROJECT_KIND,
+    projectKind,
     title: row.title ?? '',
     clientId: row.client_id ?? '',
     clientLabel: clientDisplayName(row),
@@ -158,8 +373,9 @@ export function rowToBisProjectForm(row: BisProjectRow): BisProjectForm {
     isCodeLabel: isCodeDisplayLabel(row),
     cmLDigits: String(row.cm_l_digits ?? '').replace(/\D/g, '').slice(0, 10),
     licenseValidityDate: row.license_validity_date ?? '',
+    grantedDate: row.granted_date ?? '',
     status: row.status?.trim() || 'in_progress',
-    applicationStage: row.application_stage ?? '',
+    applicationStage: row.application_stage?.trim() || DEFAULT_APPLICATION_STAGE,
     isQeManaged: row.is_qe_managed !== false,
     caseHandledBy: row.case_handled_by ?? DEFAULT_CASE_HANDLED_BY,
     caseReferredBy: row.case_referred_by ?? DEFAULT_CASE_REFERRED_BY,
@@ -167,7 +383,7 @@ export function rowToBisProjectForm(row: BisProjectRow): BisProjectForm {
     billingFrequency: row.billing_frequency?.trim() || DEFAULT_BILLING_FREQUENCY,
     portalUserId: row.portal_user_id ?? '',
     portalPassword: row.portal_password ?? '',
-    notes: row.notes ?? '',
+    notes: sanitizeBisLicenseScopeNotes(row.notes ?? ''),
   }
 }
 
@@ -207,6 +423,59 @@ export function formatDisplayDate(value: string | null | undefined): string {
 export function formatCmL(digits: string | null | undefined): string {
   const d = String(digits ?? '').replace(/\D/g, '')
   return d ? `CM/L-${d}` : '—'
+}
+
+export function formatCmA(digits: string | null | undefined): string {
+  const d = String(digits ?? '').replace(/\D/g, '')
+  return d ? `CM/A-${d}` : '—'
+}
+
+export function emptyBisApplicationDetailsForm(): BisApplicationDetailsForm {
+  return {
+    applicationProcess: 'simplified',
+    applicationNumber: '',
+    applicationDate: '',
+    inspectionDate: '',
+    licenseNumberDigits: '',
+    grantedDate: '',
+    licenseValidityDate: '',
+    branchName: '',
+    branchState: '',
+    branchHeadName: '',
+    branchHeadDesignation: '',
+    inspectionOfficerName: '',
+    inspectionOfficerDesignation: '',
+    dealingOfficerName: '',
+    dealingOfficerDesignation: '',
+    typeOfInspection: '',
+  }
+}
+
+export function rowToBisApplicationDetailsForm(
+  row: BisProjectRow,
+): BisApplicationDetailsForm {
+  const processRaw = (row.application_process ?? '').trim().toLowerCase()
+  const licenseDigits = String(row.cm_l_digits ?? row.license_number ?? '')
+    .replace(/\D/g, '')
+    .slice(0, 10)
+  return {
+    applicationProcess: processRaw === 'normal' ? 'normal' : 'simplified',
+    applicationNumber: String(row.application_number ?? '').replace(/\D/g, ''),
+    applicationDate: row.application_date ?? '',
+    inspectionDate: row.inspection_date ?? '',
+    licenseNumberDigits: licenseDigits,
+    grantedDate: row.granted_date ?? '',
+    licenseValidityDate: row.license_validity_date ?? '',
+    branchName: row.branch_name ?? '',
+    branchState: row.branch_state ?? '',
+    branchHeadName: row.branch_head_name ?? '',
+    branchHeadDesignation: row.branch_head_designation ?? '',
+    inspectionOfficerName: row.inspection_officer_name ?? '',
+    inspectionOfficerDesignation: row.inspection_officer_designation ?? '',
+    dealingOfficerName: row.dealing_officer_name ?? '',
+    dealingOfficerDesignation: row.dealing_officer_designation ?? '',
+    typeOfInspection: row.type_of_inspection ?? '',
+  }
 }
 
 export function formatInr(value: number | string | null | undefined): string {

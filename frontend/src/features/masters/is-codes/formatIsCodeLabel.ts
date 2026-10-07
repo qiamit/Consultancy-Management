@@ -28,3 +28,27 @@ export function normalizeIsCodeLabel(label: string | number | null | undefined):
   if (!s) return ''
   return s.replace(/\s*:\s*/g, ': ')
 }
+
+/**
+ * Ensure Test Method shows revision year when linked IS Code has one
+ * (e.g. stored `IS 277` + code `IS 277: 2018` → `IS 277: 2018`).
+ */
+export function formatTestMethodWithYear(
+  testMethod: string | number | null | undefined,
+  isCodeWithYear?: string | number | null,
+): string {
+  const method = normalizeIsCodeLabel(testMethod)
+  if (!method) return ''
+  if (/:\s*\d{4}\b/.test(method)) return method
+
+  const code = normalizeIsCodeLabel(isCodeWithYear)
+  if (!code) return method
+  const yearMatch = code.match(/:\s*(\d{4})\b/)
+  if (!yearMatch) return method
+
+  const methodBase = method.split(':')[0].trim().toLowerCase()
+  const codeBase = code.split(':')[0].trim().toLowerCase()
+  if (methodBase !== codeBase) return method
+
+  return `${method.split(':')[0].trim()}: ${yearMatch[1]}`
+}

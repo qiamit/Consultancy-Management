@@ -1,4 +1,5 @@
 import type { BisPrintData } from './loadBisPrintData'
+import { printSignatoryDefaults } from './loadBisPrintData'
 import { escapeHtml as esc } from './openPrintHtml'
 import {
   addressWithIndia,
@@ -7,6 +8,7 @@ import {
   applicationNoDisplay,
   buildPrintPage,
   dateOrNa,
+  inspectionDateOrToday,
   preparedByHtml,
   toBlockHtml,
   type PrintApplicantContext,
@@ -78,7 +80,7 @@ function buildBody(data: UndertakingLongDurationData): string {
   const standard = blankOr(data.isStandard || data.isNumber)
   const factory = addressWithIndia(data.factoryAddress || data.applicantAddress)
   const place = data.place.trim() || data.bisBranchState.trim() || '________________'
-  const dateVal = dateOrNa(data.dateOfInspection.trim() || data.dateOfApplication)
+  const dateVal = inspectionDateOrToday(data.dateOfInspection)
   const sigName = data.signatoryName.trim() || data.declarantName.trim() || data.contactPerson.trim()
 
   return `
@@ -159,8 +161,8 @@ export function undertakingLongDurationDataFromPrintData(
     productForMark: product,
     isStandard: printData.isCode.label || printData.isCode.isNumber,
     factoryAddress: ctx.applicantAddress,
-    signatoryName: printData.client.contactPerson,
-    signatoryDesignation: '',
+    signatoryName: printSignatoryDefaults(printData).signatoryName,
+    signatoryDesignation: printSignatoryDefaults(printData).signatoryDesignation,
     place: printData.client.district || printData.client.state,
     testRows: [],
   }

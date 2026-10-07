@@ -115,6 +115,7 @@ export function FilterCombobox({
   onInputFocus,
   multiline = false,
   rows = 2,
+  showSerialNumbers = true,
 }: {
   value: string
   onValueChange: (value: string) => void
@@ -135,6 +136,8 @@ export function FilterCombobox({
   /** Use textarea so long values can wrap. */
   multiline?: boolean
   rows?: number
+  /** Show 1, 2, 3… badges beside options (default true). */
+  showSerialNumbers?: boolean
 }) {
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null)
   const selectingRef = useRef(false)
@@ -355,17 +358,19 @@ export function FilterCombobox({
                     onPointerDown={handleOptionPointerDown(index)}
                     onMouseEnter={() => setHighlightIndex(index)}
                   >
-                    <span
-                      className={cn(
-                        'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center border text-[9px] font-bold tabular-nums',
-                        active
-                          ? 'border-amber-700 bg-amber-600 text-white'
-                          : 'border-stone-400 bg-white text-stone-500',
-                      )}
-                      aria-hidden
-                    >
-                      {index + 1}
-                    </span>
+                    {showSerialNumbers ? (
+                      <span
+                        className={cn(
+                          'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center border text-[9px] font-bold tabular-nums',
+                          active
+                            ? 'border-amber-700 bg-amber-600 text-white'
+                            : 'border-stone-400 bg-white text-stone-500',
+                        )}
+                        aria-hidden
+                      >
+                        {index + 1}
+                      </span>
+                    ) : null}
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[13px] font-semibold tracking-tight leading-snug">
                         {opt.label}
@@ -463,7 +468,12 @@ export function FilterCombobox({
           onClick={() => onOpenChange(true)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className={inputClassName}
+          className={cn(
+            'h-8 rounded-none border-0 bg-stone-50 shadow-none',
+            'focus-visible:border-transparent focus-visible:bg-stone-50 focus-visible:ring-0',
+            '[&:-webkit-autofill]:[box-shadow:inset_0_0_0_1000px_rgb(250_250_249)]',
+            inputClassName,
+          )}
           autoComplete="off"
           role="combobox"
           aria-expanded={showList}

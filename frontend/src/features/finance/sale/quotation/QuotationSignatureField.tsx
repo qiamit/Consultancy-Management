@@ -170,35 +170,37 @@ export function QuotationSignatureField({
   return (
     <div className={cn('flex min-w-0 flex-col space-y-2', className)}>
       <Label htmlFor="quotation-signature">Signature</Label>
-      <div
-        className={cn(
-          'flex h-10 min-w-0 items-stretch overflow-hidden rounded-none border border-stone-500 bg-stone-50',
-          'focus-within:border-amber-600 focus-within:bg-white focus-within:ring-2 focus-within:ring-amber-500/20',
-        )}
-      >
-        {previewUrl ? (
-          <span className="inline-flex h-full w-10 shrink-0 items-center justify-center border-r border-stone-500 bg-white">
-            <img
-              src={previewUrl}
-              alt="Signature preview"
-              className="max-h-8 max-w-9 object-contain"
-            />
-          </span>
-        ) : null}
-        <Input
-          id="quotation-signature"
-          value={text}
-          onChange={(e) => onTextChange(e.target.value)}
-          placeholder="Type signature name"
+      <div className="flex min-w-0 flex-col gap-1.5 sm:flex-row sm:items-stretch">
+        <div
           className={cn(
-            'h-full min-w-0 flex-1 rounded-none border-0 bg-transparent px-3 shadow-none',
-            'italic focus-visible:border-transparent focus-visible:bg-transparent focus-visible:ring-0',
+            'flex h-10 min-w-0 flex-1 items-stretch overflow-hidden rounded-none border border-stone-500 bg-stone-50',
+            'focus-within:border-amber-600 focus-within:bg-white focus-within:ring-2 focus-within:ring-amber-500/20',
           )}
-          style={{
-            fontFamily: '"Segoe Script", "Brush Script MT", "Lucida Handwriting", cursive',
-          }}
-          aria-label="Typed signature"
-        />
+        >
+          {previewUrl ? (
+            <span className="inline-flex h-full w-10 shrink-0 items-center justify-center border-r border-stone-500 bg-white">
+              <img
+                src={previewUrl}
+                alt="Signature preview"
+                className="max-h-8 max-w-9 object-contain"
+              />
+            </span>
+          ) : null}
+          <Input
+            id="quotation-signature"
+            value={text}
+            onChange={(e) => onTextChange(e.target.value)}
+            placeholder="Type signature name"
+            className={cn(
+              'h-full min-w-0 flex-1 rounded-none border-0 bg-transparent px-3 shadow-none',
+              'italic focus-visible:border-transparent focus-visible:bg-transparent focus-visible:ring-0',
+            )}
+            style={{
+              fontFamily: '"Segoe Script", "Brush Script MT", "Lucida Handwriting", cursive',
+            }}
+            aria-label="Typed signature"
+          />
+        </div>
         <input
           ref={fileRef}
           type="file"
@@ -206,61 +208,63 @@ export function QuotationSignatureField({
           className="hidden"
           onChange={(e) => void handleUpload(e.target.files?.[0] ?? null)}
         />
-        <button
-          type="button"
-          className="inline-flex h-full w-9 shrink-0 items-center justify-center border-l border-stone-500 bg-stone-100 text-amber-800 transition-colors hover:bg-amber-500/15 hover:text-amber-950 disabled:opacity-40"
-          onClick={() => void handleSetAsDefault()}
-          disabled={busy || !canDownload}
-          aria-label={`Set as default signature for ${documentLabel}`}
-          title={
-            defaultSaved
-              ? `Saved as ${documentLabel} default`
-              : `Set as default for ${documentLabel}`
-          }
-        >
-          <Star
-            size={14}
-            strokeWidth={2.25}
-            aria-hidden
-            className={defaultSaved ? 'fill-amber-500 text-amber-600' : undefined}
-          />
-        </button>
-        <button
-          type="button"
-          className="inline-flex h-full w-9 shrink-0 items-center justify-center border-l border-stone-500 bg-stone-100 text-amber-800 transition-colors hover:bg-amber-500/15 hover:text-amber-950 disabled:opacity-40"
-          onClick={() => fileRef.current?.click()}
-          disabled={busy}
-          aria-label="Upload signature image"
-          title="Upload signature image"
-        >
-          <ImagePlus size={14} strokeWidth={2.25} aria-hidden />
-        </button>
-        <button
-          type="button"
-          className="inline-flex h-full w-9 shrink-0 items-center justify-center border-l border-stone-500 bg-stone-100 text-amber-800 transition-colors hover:bg-amber-500/15 hover:text-amber-950 disabled:opacity-40"
-          onClick={() => void handleDownload()}
-          disabled={busy || !canDownload}
-          aria-label="Download signature image"
-          title={
-            imagePath.trim()
-              ? 'Download signature image'
-              : 'Download typed signature as image'
-          }
-        >
-          <Download size={14} strokeWidth={2.25} aria-hidden />
-        </button>
-        {imagePath.trim() ? (
+        <div className="flex h-10 shrink-0 items-stretch overflow-hidden rounded-none border border-stone-500 sm:border-l-0 sm:border-stone-500">
           <button
             type="button"
-            className="inline-flex h-full w-9 shrink-0 items-center justify-center border-l border-stone-500 bg-stone-100 text-red-700 transition-colors hover:bg-red-500/10 disabled:opacity-40"
-            onClick={() => void handleClearImage()}
-            disabled={busy}
-            aria-label="Remove signature image"
-            title="Remove signature image"
+            className="inline-flex h-full min-w-0 flex-1 items-center justify-center border-r border-stone-500 bg-stone-100 px-2 text-amber-800 transition-colors hover:bg-amber-500/15 hover:text-amber-950 disabled:opacity-40 sm:w-9 sm:flex-none sm:px-0"
+            onClick={() => void handleSetAsDefault()}
+            disabled={busy || !canDownload}
+            aria-label={`Set as default signature for ${documentLabel}`}
+            title={
+              defaultSaved
+                ? `Saved as ${documentLabel} default`
+                : `Set as default for ${documentLabel}`
+            }
           >
-            <Trash2 size={14} strokeWidth={2.25} aria-hidden />
+            <Star
+              size={14}
+              strokeWidth={2.25}
+              aria-hidden
+              className={defaultSaved ? 'fill-amber-500 text-amber-600' : undefined}
+            />
           </button>
-        ) : null}
+          <button
+            type="button"
+            className="inline-flex h-full min-w-0 flex-1 items-center justify-center border-r border-stone-500 bg-stone-100 px-2 text-amber-800 transition-colors hover:bg-amber-500/15 hover:text-amber-950 disabled:opacity-40 sm:w-9 sm:flex-none sm:px-0"
+            onClick={() => fileRef.current?.click()}
+            disabled={busy}
+            aria-label="Upload signature image"
+            title="Upload signature image"
+          >
+            <ImagePlus size={14} strokeWidth={2.25} aria-hidden />
+          </button>
+          <button
+            type="button"
+            className="inline-flex h-full min-w-0 flex-1 items-center justify-center bg-stone-100 px-2 text-amber-800 transition-colors hover:bg-amber-500/15 hover:text-amber-950 disabled:opacity-40 sm:w-9 sm:flex-none sm:border-r sm:border-stone-500 sm:px-0"
+            onClick={() => void handleDownload()}
+            disabled={busy || !canDownload}
+            aria-label="Download signature image"
+            title={
+              imagePath.trim()
+                ? 'Download signature image'
+                : 'Download typed signature as image'
+            }
+          >
+            <Download size={14} strokeWidth={2.25} aria-hidden />
+          </button>
+          {imagePath.trim() ? (
+            <button
+              type="button"
+              className="inline-flex h-full min-w-0 flex-1 items-center justify-center border-l border-stone-500 bg-stone-100 px-2 text-red-700 transition-colors hover:bg-red-500/10 disabled:opacity-40 sm:w-9 sm:flex-none sm:px-0"
+              onClick={() => void handleClearImage()}
+              disabled={busy}
+              aria-label="Remove signature image"
+              title="Remove signature image"
+            >
+              <Trash2 size={14} strokeWidth={2.25} aria-hidden />
+            </button>
+          ) : null}
+        </div>
       </div>
       {error ? <p className="text-[11px] text-destructive">{error}</p> : null}
     </div>

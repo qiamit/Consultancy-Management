@@ -72,12 +72,19 @@ async function postQiAssistant(body: Record<string, unknown>): Promise<QiAssista
 
   const payload = (await response.json().catch(() => null)) as {
     reply?: string
-    error?: string
+    error?: string | { message?: string }
     actionsExecuted?: QiAssistantActionResult[]
     createdIsCodeId?: string
   } | null
   if (!response.ok) {
-    throw new Error(payload?.error ?? `QI Assistant failed (${response.status})`)
+    const err = payload?.error
+    const errText =
+      typeof err === 'string'
+        ? err
+        : typeof err === 'object' && err && typeof err.message === 'string'
+          ? err.message
+          : `QI Assistant failed (${response.status})`
+    throw new Error(errText)
   }
 
   return {

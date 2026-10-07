@@ -60,11 +60,32 @@ export const limsTableHeadClass =
 
 export const limsTableBodyToneClass = 'bg-lims-paper text-foreground'
 
+/**
+ * Modal shell — center of main content (sidebar excluded when docked).
+ * Uses --app-dialog-center-x from GlobalLayout (50% when sidebar hidden/collapsed).
+ */
 export const limsDialogClass = cn(
-  'w-[calc(100vw-1rem)] max-w-5xl gap-0 max-h-[92dvh] overflow-hidden rounded-none border-4 border-stone-700 bg-card text-card-foreground p-0 shadow-2xl',
-  'ring-2 ring-amber-700/40 sm:w-full sm:rounded-none',
+  'flex w-[min(51.2rem,calc(100vw-1.5rem))] max-w-5xl flex-col gap-0 max-h-[min(92dvh,920px)] overflow-hidden rounded-none border-4 border-stone-700 bg-card text-card-foreground p-0 shadow-2xl',
+  'left-[var(--app-dialog-center-x,50%)] right-auto top-1/2 mx-0 -translate-x-1/2 -translate-y-1/2',
+  'ring-2 ring-amber-700/40 sm:rounded-none',
   '[&>button]:!rounded-none [&>button]:opacity-100',
 )
+
+/** Compact nested “Manage …” / +button dialogs */
+export const limsManageDialogClass = cn(
+  limsDialogClass,
+  'w-[min(32rem,calc(100vw-1.5rem))] max-w-lg',
+)
+
+/** Overlay/portal: leave docked sidebar clear (--app-dialog-overlay-left from GlobalLayout). */
+export const limsDialogSidebarOverlayClass =
+  'inset-y-0 right-0 left-[var(--app-dialog-overlay-left,0px)] w-auto'
+export const limsDialogSidebarPortalClass =
+  'left-[var(--app-dialog-overlay-left,0px)] right-0 w-auto'
+
+/** Horizontal center for fixed dialogs (content area, not full viewport). */
+export const limsDialogCenterClass =
+  'left-[var(--app-dialog-center-x,50%)] right-auto top-1/2 mx-0 -translate-x-1/2 -translate-y-1/2'
 
 export const limsAddLinkClass =
   'inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-[11px] font-semibold text-amber-800 hover:text-amber-950 hover:underline'
@@ -75,17 +96,18 @@ export const limsFieldAddBtnClass =
 
 /** Outer shell that wraps a control + limsFieldAddBtnClass button */
 export const limsFieldWithAddShellClass =
-  'flex h-8 min-w-0 items-stretch overflow-hidden rounded-none border border-stone-500 bg-stone-50 text-foreground focus-within:border-amber-600 focus-within:bg-card focus-within:ring-2 focus-within:ring-amber-500/20'
+  'flex h-8 min-w-0 items-stretch overflow-hidden rounded-none border border-stone-500 bg-stone-50 text-foreground focus-within:border-amber-600 focus-within:bg-stone-50 focus-within:ring-2 focus-within:ring-amber-500/20'
 
 /** Strip borders from nested input/select when inside limsFieldWithAddShellClass */
 export const limsFieldWithAddControlClass = cn(
   'min-w-0 flex-1',
-  '[&_input]:h-full [&_input]:rounded-none [&_input]:border-0 [&_input]:bg-transparent [&_input]:shadow-none',
-  '[&_input]:focus-visible:border-transparent [&_input]:focus-visible:bg-transparent [&_input]:focus-visible:ring-0',
+  '[&_input]:h-full [&_input]:rounded-none [&_input]:border-0 [&_input]:!bg-stone-50 [&_input]:shadow-none',
+  '[&_input]:focus-visible:border-transparent [&_input]:focus-visible:!bg-stone-50 [&_input]:focus-visible:ring-0',
+  '[&_input]:[&:-webkit-autofill]:[box-shadow:inset_0_0_0_1000px_rgb(250_250_249)]',
   '[&_button[role=combobox]]:h-full [&_button[role=combobox]]:w-full [&_button[role=combobox]]:rounded-none',
-  '[&_button[role=combobox]]:!border-0 [&_button[role=combobox]]:!bg-transparent [&_button[role=combobox]]:shadow-none',
+  '[&_button[role=combobox]]:!border-0 [&_button[role=combobox]]:!bg-stone-50 [&_button[role=combobox]]:shadow-none',
   '[&_button[role=combobox]]:text-foreground',
-  '[&_button[role=combobox]]:focus:!border-transparent [&_button[role=combobox]]:focus:!bg-transparent',
+  '[&_button[role=combobox]]:focus:!border-transparent [&_button[role=combobox]]:focus:!bg-stone-50',
   '[&_button[role=combobox]]:focus:ring-0 [&_button[role=combobox]]:focus:ring-offset-0',
 )
 

@@ -251,8 +251,8 @@ export function ClientsForm({
   return (
     <div className={clientRegistryFormClass}>
       <div className={cn(compact ? 'space-y-2' : 'space-y-5')}>
-        <div className={cn('grid grid-cols-12', compact ? 'gap-2' : 'gap-4')}>
-          <div className={cn('col-span-12 md:col-span-4', compact ? 'space-y-1' : 'space-y-2')}>
+        <div className={cn('grid grid-cols-12', compact ? 'gap-2' : 'gap-x-4 gap-y-3 sm:gap-y-4')}>
+          <div className={cn('col-span-12 min-w-0 sm:col-span-6 xl:col-span-4', compact ? 'space-y-1' : 'space-y-2')}>
             <Label htmlFor="gst">GST Number</Label>
             <LimsFieldWithAdd
               className={cn(
@@ -283,7 +283,7 @@ export function ClientsForm({
             </LimsFieldWithAdd>
           </div>
 
-          <div className={cn('col-span-12 md:col-span-4', compact ? 'space-y-1' : 'space-y-2')}>
+          <div className={cn('col-span-12 min-w-0 sm:col-span-6 xl:col-span-4', compact ? 'space-y-1' : 'space-y-2')}>
             <Label htmlFor="company-type" className="text-xs">Company Type</Label>
             <Dialog open={companyTypeDialogOpen} onOpenChange={setCompanyTypeDialogOpen}>
               <LimsFieldWithAdd
@@ -324,7 +324,7 @@ export function ClientsForm({
             </Dialog>
           </div>
 
-          <div className={cn('col-span-12 md:col-span-4', compact ? 'space-y-1' : 'space-y-2')}>
+          <div className={cn('col-span-12 min-w-0 sm:col-span-6 xl:col-span-4', compact ? 'space-y-1' : 'space-y-2')}>
             <Label htmlFor="company-scale" className="text-xs">Company Scale</Label>
             <Dialog open={companyScaleDialogOpen} onOpenChange={setCompanyScaleDialogOpen}>
               <LimsFieldWithAdd
@@ -395,7 +395,7 @@ export function ClientsForm({
             />
           </div>
 
-          <div className={cn('col-span-12 md:col-span-3', compact ? 'space-y-1' : 'space-y-2')}>
+          <div className={cn('col-span-12 min-w-0 sm:col-span-6 xl:col-span-3', compact ? 'space-y-1' : 'space-y-2')}>
             <Label htmlFor="pin" className="text-xs">PIN Code</Label>
             <Dialog open={pinCodeDialogOpen} onOpenChange={setPinCodeDialogOpen}>
               <LimsFieldWithAdd
@@ -444,7 +444,7 @@ export function ClientsForm({
             {pinError && <p className="text-xs text-destructive">{pinError}</p>}
           </div>
 
-          <div className={cn('col-span-12 md:col-span-3', compact ? 'space-y-1' : 'space-y-2')}>
+          <div className={cn('col-span-12 min-w-0 sm:col-span-6 xl:col-span-3', compact ? 'space-y-1' : 'space-y-2')}>
             <Label htmlFor="district" className="text-xs">District</Label>
             <Dialog open={districtDialogOpen} onOpenChange={setDistrictDialogOpen}>
               <LimsFieldWithAdd
@@ -485,7 +485,7 @@ export function ClientsForm({
             </Dialog>
           </div>
 
-          <div className={cn('col-span-12 md:col-span-3', compact ? 'space-y-1' : 'space-y-2')}>
+          <div className={cn('col-span-12 min-w-0 sm:col-span-6 xl:col-span-3', compact ? 'space-y-1' : 'space-y-2')}>
             <Label htmlFor="state" className="text-xs">State</Label>
             <Dialog open={stateDialogOpen} onOpenChange={setStateDialogOpen}>
               <LimsFieldWithAdd
@@ -526,7 +526,7 @@ export function ClientsForm({
             </Dialog>
           </div>
 
-          <div className={cn('col-span-12 md:col-span-3', compact ? 'space-y-1' : 'space-y-2')}>
+          <div className={cn('col-span-12 min-w-0 sm:col-span-6 xl:col-span-3', compact ? 'space-y-1' : 'space-y-2')}>
             <Label htmlFor="country" className="text-xs">Country</Label>
             <Dialog open={countryDialogOpen} onOpenChange={setCountryDialogOpen}>
               <LimsFieldWithAdd
@@ -567,7 +567,7 @@ export function ClientsForm({
             </Dialog>
           </div>
 
-          <div className={cn('col-span-12 grid grid-cols-3', compact ? 'gap-2' : 'gap-4')}>
+          <div className={cn('col-span-12 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3', compact ? 'gap-2' : 'gap-x-4 gap-y-3 sm:gap-y-4')}>
             <div className={cn('flex min-w-0 flex-col', compact ? 'space-y-1' : 'space-y-2')}>
               <Label htmlFor="contact-person">Name of the Contact Person</Label>
               <Input
@@ -655,7 +655,7 @@ export function ClientsForm({
             </div>
           </div>
 
-          <div className={cn('col-span-12 grid grid-cols-3', compact ? 'gap-2' : 'gap-4')}>
+          <div className={cn('col-span-12 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3', compact ? 'gap-2' : 'gap-x-4 gap-y-3 sm:gap-y-4')}>
             <div className={cn('flex min-w-0 flex-col', compact ? 'space-y-1' : 'space-y-2')}>
               <Label htmlFor="opening-balance">Opening Balance</Label>
               <div className="flex h-10 gap-2">

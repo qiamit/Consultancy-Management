@@ -72,7 +72,7 @@ vercel.json
 .vercelignore
 .netlify/
 
-# ── Python (scripts/) ─────────────────────────────────────────────────
+# ── Python (scripts/ + knowledge_engine/) ─────────────────────────────
 __pycache__/
 *.py[cod]
 *$py.class
@@ -80,6 +80,29 @@ __pycache__/
 .venv/
 venv/
 env/
+knowledge_engine/.venv/
+knowledge_engine/venv/
+knowledge_engine/.conda/
+knowledge_engine/.tools/
+
+# ── BIS knowledge engine (local index & secrets; never commit PDFs) ───
+knowledge_engine/.env
+knowledge_engine/.env.local
+knowledge_engine/data/
+knowledge_engine/diagnostics/
+knowledge_engine/vector_store/
+knowledge_engine/vector_db/
+knowledge_engine/.chroma/
+knowledge_engine/**/chroma/
+knowledge_engine/**/*.faiss
+knowledge_engine/**/index/
+# Accidental PDF / client-doc drops under the module (sources stay outside repo)
+knowledge_engine/pdfs/
+knowledge_engine/documents/
+knowledge_engine/bis_pdfs/
+knowledge_engine/client_docs/
+**/bis_pdfs/
+**/client_docs_local/
 
 # ── OS ────────────────────────────────────────────────────────────────
 .DS_Store

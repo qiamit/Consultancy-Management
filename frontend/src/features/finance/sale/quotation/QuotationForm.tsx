@@ -987,14 +987,412 @@ export function QuotationFormView({
           </Button>
         </div>
 
-        <div className="overflow-x-auto rounded-none border-2 border-stone-500">
-          <table className="w-full min-w-[520px] border-collapse text-sm">
+        {/* Cards — ≤~10″ / below xl (1280px) */}
+        <div className="space-y-2.5 xl:hidden">
+          {form.lines.map((line, index) => {
+            const isLast = index === form.lines.length - 1
+            const descOpen = Boolean(descOpenByKey[line.key])
+            const combined = joinLineItemText(line.description, line.details)
+            const descValue = descOpen ? (descQueryByKey[line.key] ?? combined) : combined
+            const gstSplit = lineGstSplit(line, 'intra')
+            return (
+              <article
+                key={`card-${line.key}`}
+                className="overflow-hidden border-2 border-stone-500 bg-[#fffcf7] shadow-sm ring-1 ring-amber-700/20"
+              >
+                <div className="flex items-stretch">
+                  <div className="w-1 shrink-0 bg-gradient-to-b from-amber-500 via-amber-600 to-stone-700" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2 border-b border-[#e7e0d4] bg-stone-800 px-2.5 py-2 text-amber-200">
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          className="inline-flex h-7 w-7 items-center justify-center text-amber-200/80 hover:bg-white/10 hover:text-white disabled:opacity-30"
+                          aria-label={`Move line ${index + 1} up`}
+                          disabled={index === 0}
+                          onClick={() => moveLine(line.key, -1)}
+                        >
+                          <ChevronUp size={14} />
+                        </button>
+                        <span className="min-w-[1.25rem] text-center text-[11px] font-bold tabular-nums">
+                          #{index + 1}
+                        </span>
+                        <button
+                          type="button"
+                          className="inline-flex h-7 w-7 items-center justify-center text-amber-200/80 hover:bg-white/10 hover:text-white disabled:opacity-30"
+                          aria-label={`Move line ${index + 1} down`}
+                          disabled={index >= form.lines.length - 1}
+                          onClick={() => moveLine(line.key, 1)}
+                        >
+                          <ChevronDown size={14} />
+                        </button>
+                      </div>
+                      {isLast ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          className={cn(limsPrimaryBtnClass, 'h-7 gap-1 px-2 text-[11px]')}
+                          onClick={addLine}
+                          disabled={!line.description.trim()}
+                        >
+                          <Plus size={14} />
+                          Add
+                        </Button>
+                      ) : (
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 rounded-none text-red-300 hover:bg-red-500/20 hover:text-red-100"
+                          onClick={() => removeLine(line.key)}
+                          disabled={form.lines.length <= 1}
+                          aria-label="Remove line"
+                        >
+                          <Trash2 size={14} />
+                        </Button>
+                      )}
+                    </div>
+
+                    <div className="space-y-2.5 p-2.5">
+                      <div className="min-w-0 space-y-1">
+                        <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
+                          Item / Description
+                        </p>
+                        {isLast ? (
+                          <FilterCombobox
+                            value={descValue}
+                            onValueChange={(v) => {
+                              setDescQueryByKey((prev) => ({ ...prev, [line.key]: v }))
+                              setDescOpenByKey((prev) => ({ ...prev, [line.key]: true }))
+                              const parts = splitLineItemText(v)
+                              patchLine(line.key, {
+                                description: parts.description,
+                                details: parts.details,
+                              })
+                            }}
+                            options={filteredProductsByQuery[line.key] ?? productOptions}
+                            onSelectOption={(opt) => {
+                              const details = productById[opt.id]
+                              if (details) applyProductToLine(line.key, details)
+                              else {
+                                patchLine(line.key, { description: opt.label, details: '' })
+                                setDescQueryByKey((prev) => ({ ...prev, [line.key]: opt.label }))
+                              }
+                            }}
+                            open={descOpen}
+                            onOpenChange={(open) => {
+                              setDescOpenByKey((prev) => ({ ...prev, [line.key]: open }))
+                              if (open) {
+                                setDescQueryByKey((prev) => ({
+                                  ...prev,
+                                  [line.key]:
+                                    prev[line.key] ??
+                                    joinLineItemText(line.description, line.details),
+                                }))
+                                if (productOptions.length === 0) void onReloadProducts()
+                              }
+                            }}
+                            onInputFocus={() => {
+                              if (productOptions.length === 0) void onReloadProducts()
+                            }}
+                            placeholder="Type to Search Item"
+                            listId={`quotation-line-desc-card-${line.key}`}
+                            inputClassName="!h-9 rounded-none border-stone-500 bg-white text-left text-sm"
+                            extraActions={[
+                              {
+                                key: 'add-product',
+                                label: 'Add New Product / Service',
+                                onSelect: () => {
+                                  setAddProductLineKey(line.key)
+                                  setAddProductInitialName(
+                                    splitLineItemText(
+                                      descQueryByKey[line.key] ??
+                                        joinLineItemText(line.description, line.details),
+                                    ).description.trim(),
+                                  )
+                                },
+                              },
+                            ]}
+                          />
+                        ) : (
+                          <p className="whitespace-pre-wrap break-words text-sm font-semibold text-[#1c1917]">
+                            {combined || '—'}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                        {visibleLineColumns.make ? (
+                          <div className="min-w-0 space-y-1">
+                            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
+                              Make
+                            </p>
+                            {isLast ? (
+                              <Input
+                                className={cn(lineFieldClass, 'text-center')}
+                                value={line.make}
+                                onChange={(e) => patchLine(line.key, { make: e.target.value })}
+                                placeholder="Make"
+                              />
+                            ) : (
+                              <p className="text-sm font-medium text-[#292524]">{line.make.trim() || '—'}</p>
+                            )}
+                          </div>
+                        ) : null}
+                        {visibleLineColumns.hsnSac ? (
+                          <div className="min-w-0 space-y-1">
+                            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
+                              HSN/SAC
+                            </p>
+                            {isLast ? (
+                              <Input
+                                className={cn(lineFieldClass, 'text-center')}
+                                value={line.hsnSac}
+                                onChange={(e) => patchLine(line.key, { hsnSac: e.target.value })}
+                              />
+                            ) : (
+                              <p className="text-sm font-medium text-[#292524]">{line.hsnSac.trim() || '—'}</p>
+                            )}
+                          </div>
+                        ) : null}
+                        {visibleLineColumns.itemCode ? (
+                          <div className="min-w-0 space-y-1">
+                            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
+                              Item Code
+                            </p>
+                            {isLast ? (
+                              <Input
+                                className={cn(lineFieldClass, 'text-center')}
+                                value={line.itemCode}
+                                onChange={(e) => patchLine(line.key, { itemCode: e.target.value })}
+                                placeholder="Code"
+                              />
+                            ) : (
+                              <p className="text-sm font-medium text-[#292524]">{line.itemCode.trim() || '—'}</p>
+                            )}
+                          </div>
+                        ) : null}
+                        {visibleLineColumns.quantity ? (
+                          <div className="min-w-0 space-y-1">
+                            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
+                              Qty
+                            </p>
+                            {isLast ? (
+                              <Input
+                                className={cn(lineFieldClass, 'text-center')}
+                                type="number"
+                                min={0}
+                                step="0.001"
+                                value={line.quantity}
+                                onChange={(e) => patchLine(line.key, { quantity: e.target.value })}
+                              />
+                            ) : (
+                              <p className="text-sm font-medium tabular-nums text-[#292524]">
+                                {line.quantity.trim() || '—'}
+                              </p>
+                            )}
+                          </div>
+                        ) : null}
+                        {visibleLineColumns.unit ? (
+                          <div className="min-w-0 space-y-1">
+                            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
+                              Unit
+                            </p>
+                            {isLast ? (
+                              <Input
+                                className={cn(lineFieldClass, 'text-center')}
+                                value={line.unit}
+                                onChange={(e) => patchLine(line.key, { unit: e.target.value })}
+                              />
+                            ) : (
+                              <p className="text-sm font-medium text-[#292524]">{line.unit.trim() || '—'}</p>
+                            )}
+                          </div>
+                        ) : null}
+                        {visibleLineColumns.rate ? (
+                          <div className="min-w-0 space-y-1">
+                            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
+                              Rate
+                            </p>
+                            {isLast ? (
+                              <div className="flex !h-9 items-stretch overflow-hidden rounded-none border border-stone-500 bg-white">
+                                <span
+                                  className="inline-flex shrink-0 items-center border-r border-stone-500 bg-stone-100 px-1.5 text-xs font-semibold text-stone-700"
+                                  aria-hidden
+                                >
+                                  {getCurrencySymbol()}
+                                </span>
+                                <Input
+                                  className="h-full min-w-0 flex-1 rounded-none border-0 bg-transparent px-1 text-center tabular-nums shadow-none focus-visible:ring-0"
+                                  type="text"
+                                  inputMode="decimal"
+                                  value={
+                                    rateFocusedKey === line.key
+                                      ? line.rate
+                                      : formatMoney(parseMoney(line.rate))
+                                  }
+                                  onFocus={() => {
+                                    setRateFocusedKey(line.key)
+                                    patchLine(line.key, {
+                                      rate: sanitizeMoneyInput(line.rate) || '0',
+                                    })
+                                  }}
+                                  onChange={(e) =>
+                                    patchLine(line.key, { rate: sanitizeMoneyInput(e.target.value) })
+                                  }
+                                  onBlur={() => {
+                                    setRateFocusedKey(null)
+                                    patchLine(line.key, {
+                                      rate: formatMoneyInput(line.rate || '0'),
+                                    })
+                                  }}
+                                />
+                              </div>
+                            ) : (
+                              <p className="text-sm font-medium tabular-nums text-[#292524]">
+                                {getCurrencySymbol()} {formatMoney(parseMoney(line.rate))}
+                              </p>
+                            )}
+                          </div>
+                        ) : null}
+                        {visibleLineColumns.discountPercent ? (
+                          <div className="min-w-0 space-y-1">
+                            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
+                              Disc %
+                            </p>
+                            {isLast ? (
+                              <Input
+                                className={cn(lineFieldClass, 'text-center tabular-nums')}
+                                type="number"
+                                min={0}
+                                max={100}
+                                step="0.01"
+                                value={line.discountPercent}
+                                onChange={(e) =>
+                                  patchLine(line.key, { discountPercent: e.target.value })
+                                }
+                              />
+                            ) : (
+                              <p className="text-sm font-medium tabular-nums text-[#292524]">
+                                {line.discountPercent.trim() || '0'}
+                              </p>
+                            )}
+                          </div>
+                        ) : null}
+                        {visibleLineColumns.gstPercent ? (
+                          <div className="min-w-0 space-y-1">
+                            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
+                              GST %
+                            </p>
+                            {isLast ? (
+                              <Input
+                                className={cn(lineFieldClass, 'text-center tabular-nums')}
+                                type="number"
+                                min={0}
+                                max={100}
+                                step="0.01"
+                                value={line.gstPercent}
+                                onChange={(e) => patchLine(line.key, { gstPercent: e.target.value })}
+                              />
+                            ) : (
+                              <p className="text-sm font-medium tabular-nums text-[#292524]">
+                                {line.gstPercent.trim() || '0'}
+                              </p>
+                            )}
+                          </div>
+                        ) : null}
+                        {visibleLineColumns.lineRemarks ? (
+                          <div className="col-span-2 min-w-0 space-y-1 sm:col-span-3">
+                            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
+                              Remarks
+                            </p>
+                            {isLast ? (
+                              <Input
+                                className={cn(lineFieldClass, 'text-left')}
+                                value={line.lineRemarks}
+                                onChange={(e) =>
+                                  patchLine(line.key, { lineRemarks: e.target.value })
+                                }
+                                placeholder="Remarks"
+                              />
+                            ) : (
+                              <p className="text-sm text-[#292524]">{line.lineRemarks.trim() || '—'}</p>
+                            )}
+                          </div>
+                        ) : null}
+                        {visibleLineColumns.deliveryPeriod ? (
+                          <div className="min-w-0 space-y-1">
+                            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
+                              Delivery
+                            </p>
+                            {isLast ? (
+                              <Input
+                                className={cn(lineFieldClass, 'text-center')}
+                                value={line.deliveryPeriod}
+                                onChange={(e) =>
+                                  patchLine(line.key, { deliveryPeriod: e.target.value })
+                                }
+                                placeholder="e.g. 7 days"
+                              />
+                            ) : (
+                              <p className="text-sm font-medium text-[#292524]">
+                                {line.deliveryPeriod.trim() || '—'}
+                              </p>
+                            )}
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#e7e0d4] pt-2">
+                        {visibleLineColumns.amount ? (
+                          <p className="text-sm font-bold tabular-nums text-[#1c1917]">
+                            Amount: {getCurrencySymbol()} {formatMoney(lineAmount(line))}
+                          </p>
+                        ) : (
+                          <span />
+                        )}
+                        {visibleLineColumns.taxableAmount ? (
+                          <p className="text-xs font-semibold tabular-nums text-[#78716c]">
+                            Taxable: {getCurrencySymbol()} {formatMoney(lineTaxableAmount(line))}
+                          </p>
+                        ) : null}
+                        {visibleLineColumns.cgstAmount ||
+                        visibleLineColumns.sgstAmount ||
+                        visibleLineColumns.igstAmount ? (
+                          <p className="w-full text-[11px] tabular-nums text-[#78716c]">
+                            {[
+                              visibleLineColumns.cgstAmount
+                                ? `CGST ${getCurrencySymbol()} ${formatMoney(gstSplit.cgstAmount)}`
+                                : null,
+                              visibleLineColumns.sgstAmount
+                                ? `SGST ${getCurrencySymbol()} ${formatMoney(gstSplit.sgstAmount)}`
+                                : null,
+                              visibleLineColumns.igstAmount
+                                ? `IGST ${getCurrencySymbol()} ${formatMoney(gstSplit.igstAmount)}`
+                                : null,
+                            ]
+                              .filter(Boolean)
+                              .join(' · ')}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            )
+          })}
+        </div>
+
+        {/* Desktop table — xl+ (~10″ landscape and up) */}
+        <div className="hidden overflow-x-auto overscroll-x-contain rounded-none border-2 border-stone-500 [-webkit-overflow-scrolling:touch] xl:block">
+          <table className="w-full min-w-[780px] border-collapse text-sm">
             <thead>
               <tr className="bg-stone-800 text-white">
-                <th className="w-12 px-0.5 py-2 text-center text-[10px] font-bold uppercase tracking-wider">
+                <th className="sticky left-0 z-[1] w-12 bg-stone-800 px-0.5 py-2 text-center text-[10px] font-bold uppercase tracking-wider">
                   #
                 </th>
-                <th className="min-w-[200px] px-2 py-2 text-left text-[10px] font-bold uppercase tracking-wider">
+                <th className="sticky left-12 z-[1] min-w-[200px] bg-stone-800 px-2 py-2 text-left text-[10px] font-bold uppercase tracking-wider">
                   Item / Description
                 </th>
                 {visibleLineColumns.make ? (
@@ -1108,7 +1506,7 @@ export function QuotationFormView({
                     key={line.key}
                     className="align-middle border-t border-stone-300"
                   >
-                    <td className="w-12 align-middle px-0.5 py-1.5">
+                    <td className="sticky left-0 z-[1] w-12 bg-[#f7f3eb] align-middle px-0.5 py-1.5">
                       <div className="flex items-center justify-center gap-0">
                         <button
                           type="button"
@@ -1138,7 +1536,7 @@ export function QuotationFormView({
 
                     {isLast ? (
                       <>
-                        <td className="align-middle min-w-[220px] px-2 py-1.5">
+                        <td className="sticky left-12 z-[1] min-w-[220px] bg-[#f7f3eb] px-2 py-1.5 align-middle">
                           <FilterCombobox
                             value={descValue}
                             onValueChange={(v) => {
@@ -1395,7 +1793,7 @@ export function QuotationFormView({
                       </>
                     ) : (
                       <>
-                        <td className="align-middle min-w-[220px] px-2 py-1.5 text-left text-sm text-stone-800">
+                        <td className="sticky left-12 z-[1] min-w-[220px] bg-[#f7f3eb] px-2 py-1.5 text-left align-middle text-sm text-stone-800">
                           <p className="whitespace-pre-wrap break-words leading-snug">
                             {combined || '—'}
                           </p>
@@ -1497,21 +1895,21 @@ export function QuotationFormView({
         </div>
       </section>
 
-      {/* Totals + bank */}
-      <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      {/* Totals + bank — stack below ~10″ */}
+      <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <div className="space-y-3 rounded-none border border-stone-500 bg-stone-50 p-3">
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
             <h3 className="shrink-0 text-xs font-bold uppercase tracking-wide text-stone-800">
               Amount in Words:
             </h3>
-            <p className="min-w-0 flex-1 text-sm font-medium leading-snug text-stone-900">
+            <p className="min-w-0 flex-1 break-words text-sm font-medium leading-snug text-stone-900">
               {amountInWords}
             </p>
           </div>
           <h3 className="pt-2 text-xs font-bold uppercase tracking-wide text-stone-800">
             Bank Details
           </h3>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-stone-800">
+          <div className="grid grid-cols-1 gap-x-4 gap-y-1 text-sm text-stone-800 sm:grid-cols-2">
             <p className="min-w-0">
               <span className="font-medium">Bank Name: </span>
               {bankDetails.bankName || '—'}
@@ -1782,10 +2180,10 @@ export function QuotationFormView({
         </>
       )}
 
-      {/* Other */}
+      {/* Other — stack below ~10″ (xl); 3-up only on wide desktop */}
       <section className="space-y-3">
         <h3 className={sectionTitleClass}>Other</h3>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-3 xl:gap-2">
           <div className="flex min-w-0 flex-col space-y-2">
             <Label htmlFor="term-condition">Term &amp; Condition</Label>
             <LimsFieldWithAdd
@@ -1942,7 +2340,7 @@ export function QuotationFormView({
         <DialogContent
           className={cn(
             limsDialogClass,
-            '!flex max-h-[min(90vh,640px)] w-[min(480px,94vw)] max-w-lg flex-col',
+            'max-h-[min(90vh,640px)] w-[min(30rem,calc(100vw-1.5rem))] max-w-lg',
           )}
           aria-describedby={undefined}
           layer="nested"

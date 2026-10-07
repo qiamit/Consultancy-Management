@@ -1,11 +1,12 @@
 import type { BisPrintData } from './loadBisPrintData'
+import { printSignatoryDefaults } from './loadBisPrintData'
 import { escapeHtml as esc } from './openPrintHtml'
 import {
   addressWithIndia,
   applicantContextFromPrintData,
   applicationNoDisplay,
   buildPrintPage,
-  dateOrNa,
+  inspectionDateOrToday,
   letterheadHtml,
   preparedByHtml,
   signatoryHtml,
@@ -36,7 +37,7 @@ function blankOr(value: string): string {
 }
 
 function buildBody(data: UndertakingOption2Data): string {
-  const letterDate = dateOrNa(data.dateOfInspection.trim() || data.dateOfApplication)
+  const letterDate = inspectionDateOrToday(data.dateOfInspection)
   const declarant = blankOr(data.declarantName || data.contactPerson || data.applicantName)
   const product = blankOr(data.productForMark)
   const standard = blankOr(data.isStandard || data.isNumber)
@@ -98,7 +99,7 @@ export function undertakingOption2DataFromPrintData(printData: BisPrintData): Un
     productForMark: product,
     isStandard: printData.isCode.label || printData.isCode.isNumber,
     factoryAddress: ctx.applicantAddress,
-    signatoryName: printData.client.contactPerson,
-    signatoryDesignation: '',
+    signatoryName: printSignatoryDefaults(printData).signatoryName,
+    signatoryDesignation: printSignatoryDefaults(printData).signatoryDesignation,
   }
 }

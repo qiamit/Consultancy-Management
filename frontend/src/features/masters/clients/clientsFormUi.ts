@@ -47,7 +47,7 @@ export const clientOutlineBtnClass = limsOutlineBtnClass
 /** Nested “Manage …” dialogs (Districts, States, etc.) — match Client Form shell */
 export const clientManageDialogClass = cn(
   limsDialogClass,
-  'max-w-lg',
+  'w-[min(32rem,calc(100vw-1.5rem))] max-w-lg',
 )
 
 export const clientManageListItemClass =

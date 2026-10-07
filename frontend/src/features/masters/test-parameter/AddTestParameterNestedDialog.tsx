@@ -4,13 +4,15 @@ import { limsDarkBarGlowStyle, limsDialogClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { formatSupabaseError } from '@/lib/formatSupabaseError'
 import { supabase } from '@/lib/supabaseClient'
-import { formatIsCodeLabelFromParts } from '@/features/masters/is-codes/formatIsCodeLabel'
+import {
+  formatIsCodeLabelFromParts,
+  formatTestMethodWithYear,
+} from '@/features/masters/is-codes/formatIsCodeLabel'
 import { fetchDesignationAndDepartmentLabels } from '@/features/settings/lab-settings/labMasterOptions'
 import { TestParameterForm } from './TestParameterForm'
 import {
   emptyTestParameterForm,
   normalizeText,
-  type AccreditationBodyRow,
   type TestParameterForm as TestParameterFormState,
 } from './types'
 
@@ -53,9 +55,6 @@ export function AddTestParameterNestedDialog({
   const [isCodes, setIsCodes] = useState<
     Array<{ id: string; displayCode: string; searchLabel: string; defaultTestMethod: string }>
   >([])
-  const [accreditationBodies, setAccreditationBodies] = useState<AccreditationBodyRow[]>([])
-  const [accreditationDialogOpen, setAccreditationDialogOpen] = useState(false)
-  const [newAccreditationBody, setNewAccreditationBody] = useState('')
   const [departments, setDepartments] = useState<string[]>([])
   const [designations, setDesignations] = useState<string[]>([])
   const [designationsByDepartment, setDesignationsByDepartment] = useState<Record<string, string[]>>({})
@@ -77,9 +76,8 @@ export function AddTestParameterNestedDialog({
 
     void (async () => {
       try {
-        const [{ data: isData }, { data: abData }, labels] = await Promise.all([
+        const [{ data: isData }, labels] = await Promise.all([
           supabase.from('is_codes').select('id, is_number, title, revision_year').order('created_at', { ascending: false }),
-          supabase.from('accreditation_bodies').select('id, name, created_at').order('name', { ascending: true }),
           fetchDesignationAndDepartmentLabels(),
         ])
 
@@ -99,7 +97,6 @@ export function AddTestParameterNestedDialog({
             })
             .sort((a, b) => a.searchLabel.localeCompare(b.searchLabel)),
         )
-        setAccreditationBodies(Array.isArray(abData) ? (abData as AccreditationBodyRow[]) : [])
         setDepartments(labels.departments)
         setDesignations(labels.designations)
         try {
@@ -119,16 +116,6 @@ export function AddTestParameterNestedDialog({
     })()
   }, [open, prefill?.isCodeId, prefill?.isCodeLabel, prefill?.department, prefill?.designation])
 
-  useEffect(() => {
-    if (!open) return
-    if (form.underAccreditationIds?.length) return
-    if (!accreditationBodies.length) return
-    const defaultNabl = accreditationBodies.find((b) => b.name.trim().toLowerCase() === 'nabl')
-    if (defaultNabl) {
-      setForm((prev) => ({ ...prev, underAccreditationIds: [defaultNabl.id] }))
-    }
-  }, [open, accreditationBodies, form.underAccreditationIds?.length])
-
   const canSave = !saveLoading && normalizeText(form.itemName).length > 0
 
   const handleSave = () => {
@@ -142,11 +129,15 @@ export function AddTestParameterNestedDialog({
           is_code_label: normalizeText(form.isCodeLabel) || (isRow?.displayCode ?? null),
           clause_no: normalizeText(form.clauseNo) || null,
           unit_value: normalizeText(form.unitValue) || null,
-          test_method: normalizeText(form.testMethod) || (isRow?.defaultTestMethod ?? null),
+          test_method:
+            formatTestMethodWithYear(
+              normalizeText(form.testMethod) || isRow?.defaultTestMethod,
+              isRow?.displayCode ?? form.isCodeLabel,
+            ) || null,
           item_name: normalizeText(form.itemName),
           specific_requirement: normalizeText(form.specificRequirement) || null,
-          under_accreditation_ids: form.underAccreditationIds ?? [],
-          uncertainty_mu: normalizeText(form.uncertaintyMu) || null,
+          under_accreditation_ids: [],
+          uncertainty_mu: null,
           department: normalizeText(form.department) || null,
           designation: normalizeText(form.designation) || null,
         }
@@ -154,7 +145,7 @@ export function AddTestParameterNestedDialog({
           .from('test_parameters')
           .insert(payload)
           .select(
-            'id, item_name, specific_requirement, under_accreditation_ids, department, designation, is_code_id, is_code_label, test_method, clause_no, unit_value, uncertainty_mu',
+            'id, item_name, specific_requirement, department, designation, is_code_id, is_code_label, test_method, clause_no, unit_value',
           )
           .single()
         if (error) throw error
@@ -163,7 +154,6 @@ export function AddTestParameterNestedDialog({
           id: string
           item_name: string | null
           specific_requirement: string | null
-          under_accreditation_ids: string[] | null
           department: string | null
           designation: string | null
           is_code_id: string | null
@@ -171,22 +161,17 @@ export function AddTestParameterNestedDialog({
           test_method: string | null
           clause_no: string | null
           unit_value: string | null
-          uncertainty_mu: string | null
         }
-
-        const underNames = (row.under_accreditation_ids ?? [])
-          .map((id) => accreditationBodies.find((b) => b.id === id)?.name)
-          .filter(Boolean) as string[]
 
         onSaved?.({
           id: row.id,
           label: row.item_name ?? row.id,
           specificRequirement: row.specific_requirement ?? '',
-          underAccreditation: underNames.length > 0 ? underNames.join(', ') : 'Not Accredited',
+          underAccreditation: 'Not Accredited',
           testMethod: row.test_method ?? null,
           clauseNo: row.clause_no ?? null,
           unitValue: row.unit_value ?? null,
-          uncertaintyMu: row.uncertainty_mu ?? null,
+          uncertaintyMu: null,
           isCodeId: row.is_code_id ?? null,
           isCodeLabel: row.is_code_label || isRow?.displayCode || null,
           department: row.department ?? null,
@@ -196,77 +181,6 @@ export function AddTestParameterNestedDialog({
         setSaveMessage(formatSupabaseError(err))
       } finally {
         setSaveLoading(false)
-      }
-    })()
-  }
-
-  const handleAddAccreditationBody = () => {
-    const name = normalizeText(newAccreditationBody)
-    if (!name) return
-    void (async () => {
-      try {
-        const { data, error } = await supabase
-          .from('accreditation_bodies')
-          .insert({ name })
-          .select('id, name, created_at')
-          .single()
-        if (error) throw error
-        const row = data as AccreditationBodyRow
-        setAccreditationBodies((prev) => {
-          const merged = [...prev, row]
-          const uniq = new Map(merged.map((x) => [x.name.toLowerCase(), x]))
-          return Array.from(uniq.values()).sort((a, b) => a.name.localeCompare(b.name))
-        })
-        setForm((prev) => ({
-          ...prev,
-          underAccreditationIds: Array.from(new Set([...(prev.underAccreditationIds ?? []), row.id])),
-        }))
-      } catch (err) {
-        setSaveMessage(formatSupabaseError(err))
-      } finally {
-        setNewAccreditationBody('')
-        setAccreditationDialogOpen(false)
-      }
-    })()
-  }
-
-  const handleUpdateAccreditationBody = (id: string) => {
-    const name = normalizeText(newAccreditationBody)
-    if (!name) return
-    void (async () => {
-      try {
-        const { data, error } = await supabase
-          .from('accreditation_bodies')
-          .update({ name })
-          .eq('id', id)
-          .select('id, name, created_at')
-          .single()
-        if (error) throw error
-        const row = data as AccreditationBodyRow
-        setAccreditationBodies((prev) =>
-          prev.map((b) => (b.id === id ? row : b)).sort((a, b) => a.name.localeCompare(b.name)),
-        )
-      } catch (err) {
-        setSaveMessage(formatSupabaseError(err))
-      } finally {
-        setNewAccreditationBody('')
-        setAccreditationDialogOpen(false)
-      }
-    })()
-  }
-
-  const handleDeleteAccreditationBody = (id: string) => {
-    void (async () => {
-      try {
-        const { error } = await supabase.from('accreditation_bodies').delete().eq('id', id)
-        if (error) throw error
-        setAccreditationBodies((prev) => prev.filter((b) => b.id !== id))
-        setForm((prev) => ({
-          ...prev,
-          underAccreditationIds: (prev.underAccreditationIds ?? []).filter((x) => x !== id),
-        }))
-      } catch (err) {
-        setSaveMessage(formatSupabaseError(err))
       }
     })()
   }
@@ -305,14 +219,6 @@ export function AddTestParameterNestedDialog({
               saveLoading={saveLoading}
               onSave={handleSave}
               isCodes={isCodes}
-              accreditationBodies={accreditationBodies}
-              accreditationDialogOpen={accreditationDialogOpen}
-              setAccreditationDialogOpen={setAccreditationDialogOpen}
-              newAccreditationBody={newAccreditationBody}
-              setNewAccreditationBody={setNewAccreditationBody}
-              onAddAccreditationBody={handleAddAccreditationBody}
-              onUpdateAccreditationBody={handleUpdateAccreditationBody}
-              onDeleteAccreditationBody={handleDeleteAccreditationBody}
               onOpenAddIsCodeForm={() => {
                 setSaveMessage(
                   'Add IS Code from Test Parameter master if needed; this allotment already has an IS Code.',

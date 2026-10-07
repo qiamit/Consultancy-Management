@@ -3,6 +3,7 @@ import { limsDarkBarGlowStyle, limsDialogClass, limsPageShellClass } from '@/lib
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabaseClient'
 import { useFormDialogOpenChange } from '@/lib/formDialogOpenChange'
+import { useMasterUiSearchState } from '@/lib/useMasterUiSearchState'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { IsCodesHeaderBar } from './IsCodesHeaderBar'
 import { IsCodesForm } from './IsCodesForm'
@@ -10,7 +11,22 @@ import { IsCodesTable, type IsCodeSortDir, type IsCodeSortKey } from './IsCodesT
 import { IsCodesTableFooterBar } from './IsCodesFooterBar'
 import { IsCodesFilesDialog, type IsCodeViewFile } from './IsCodesFilesDialog'
 import { buildIsCodesListAssistantContext, formatIsCodeLabel } from './buildIsCodeAssistantContext'
-import { emptyIsCodeForm, normalizeText, toProperTitleCase, type IsCodeFileRow, type IsCodeForm, type IsCodeRow } from './types'
+import {
+  emptyIsCodeForm,
+  moneyOrZero,
+  moneyToFormStr,
+  normalizeText,
+  reaffirmationToFormStr,
+  toProperTitleCase,
+  yearIntFromForm,
+  type IsCodeFileRow,
+  type IsCodeForm,
+  type IsCodeRow,
+  DEFAULT_IS_CODE_UNIT,
+  DEFAULT_SLAB_1_QTY,
+  DEFAULT_SLAB_2_QTY,
+  DEFAULT_SLAB_3_QTY,
+} from './types'
 
 const BUCKET = 'is-code-files'
 /** Must stay within storage.buckets.file_size_limit for is-code-files. */
@@ -130,22 +146,59 @@ function parseCsv(text: string) {
   return rows.map((r) => r.map((c) => c.trim()))
 }
 
+function rowToIsCodeForm(row: IsCodeRow): IsCodeForm {
+  const title = (row.title || (row as { is_code_title?: string | null }).is_code_title || '').trim()
+  const aspect = (row.aspect || (row as { aspect_of_is?: string | null }).aspect_of_is || 'Specification').trim()
+  return {
+    isNumber: row.is_number,
+    revisionYear: row.revision_year == null ? '' : String(row.revision_year),
+    reaffirmationYear: reaffirmationToFormStr(row.reaffirmation_year),
+    amendmentNumber: row.amendment_number ?? '',
+    title,
+    aspect,
+    testingCharges: moneyToFormStr(row.testing_charges),
+    remarks: row.remarks ?? '',
+    productManualNumber: row.product_manual_number ?? '',
+    unitOfIs: row.unit_of_is?.trim() || DEFAULT_IS_CODE_UNIT,
+    mmfLargeScale: moneyToFormStr(row.mmf_large_scale),
+    mmfMediumScale: moneyToFormStr(row.mmf_medium_scale),
+    mmfSmallScale: moneyToFormStr(row.mmf_small_scale),
+    mmfMicroScale: moneyToFormStr(row.mmf_micro_scale),
+    slab1Quantity: row.slab_1_quantity?.trim() || DEFAULT_SLAB_1_QTY,
+    slab1Rate: moneyToFormStr(row.slab_1_rate),
+    slab2Quantity: row.slab_2_quantity?.trim() || DEFAULT_SLAB_2_QTY,
+    slab2Rate: moneyToFormStr(row.slab_2_rate),
+    slab3Quantity: row.slab_3_quantity?.trim() || DEFAULT_SLAB_3_QTY,
+    slab3Rate: moneyToFormStr(row.slab_3_rate),
+    files: [],
+  }
+}
+
 export default function IsCodesMasterPage() {
+  const { editId, viewId, setEdit, setView } = useMasterUiSearchState()
   const [saveLoading, setSaveLoading] = useState(false)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
-  const [editingId, setEditingId] = useState<string | null>(null)
 
   const importInputRef = useRef<HTMLInputElement | null>(null)
   const filesDialogFileInputBusy = useRef(false)
+  const hydratedEditRef = useRef<string | null>(null)
+  const hydratedViewRef = useRef<string | null>(null)
 
-  const [showForm, setShowForm] = useState(false)
-  const handleFormOpenChange = useFormDialogOpenChange(setShowForm)
-  const [showFilesDialog, setShowFilesDialog] = useState(false)
+  const showForm = editId != null
+  const editingId = editId && editId !== 'new' ? editId : null
+  const handleFormOpenChange = useFormDialogOpenChange((open) => {
+    if (!open) {
+      hydratedEditRef.current = null
+      setEdit(null)
+    }
+  })
   const [filesDialogTitle, setFilesDialogTitle] = useState('IS Code')
-  const [filesDialogIsCodeId, setFilesDialogIsCodeId] = useState<string | null>(null)
   const [filesDialogFiles, setFilesDialogFiles] = useState<IsCodeViewFile[]>([])
   const [filesDialogLoading, setFilesDialogLoading] = useState(false)
   const [filesDialogStatus, setFilesDialogStatus] = useState<string | null>(null)
+  const [formSavedFiles, setFormSavedFiles] = useState<IsCodeViewFile[]>([])
+  const [formFilesLoading, setFormFilesLoading] = useState(false)
+  const [formFilesStatus, setFormFilesStatus] = useState<string | null>(null)
   const [search, setSearch] = useState('')
 
   const [rows, setRows] = useState<IsCodeRow[]>([])
@@ -229,9 +282,33 @@ export default function IsCodesMasterPage() {
     }
   }
 
-  const loadFiles = async (isCodeId: string) => {
+  const loadFormSavedFiles = async (row: IsCodeRow) => {
+    setFormFilesLoading(true)
+    setFormFilesStatus(null)
     try {
-      const { error } = await supabase.from('is_code_files').select('*').eq('is_code_id', isCodeId).order('created_at', { ascending: false })
+      const files = await buildPopupFilesForIsCode(row)
+      setFormSavedFiles(files)
+      setFilePresenceFor(row.id, files.length > 0)
+    } catch (err) {
+      setFormSavedFiles([])
+      setFormFilesStatus(formatSupabaseError(err))
+    } finally {
+      setFormFilesLoading(false)
+    }
+  }
+
+  const loadFiles = async (isCodeId: string) => {
+    const row = rows.find((r) => r.id === isCodeId)
+    if (row) {
+      await loadFormSavedFiles(row)
+      return
+    }
+    try {
+      const { error } = await supabase
+        .from('is_code_files')
+        .select('*')
+        .eq('is_code_id', isCodeId)
+        .order('created_at', { ascending: false })
       if (error) throw error
     } catch {
       // ignore
@@ -242,6 +319,32 @@ export default function IsCodesMasterPage() {
     void loadIsCodes()
     void loadAspects()
   }, [])
+
+  useEffect(() => {
+    if (!editId) {
+      hydratedEditRef.current = null
+      return
+    }
+    if (hydratedEditRef.current === editId) return
+
+    if (editId === 'new') {
+      setForm(emptyIsCodeForm())
+      setFormSavedFiles([])
+      setFormFilesStatus(null)
+      hydratedEditRef.current = 'new'
+      return
+    }
+
+    const fromPage = rows.find((r) => r.id === editId)
+    if (fromPage) {
+      setForm(rowToIsCodeForm(fromPage))
+      void loadFormSavedFiles(fromPage)
+      hydratedEditRef.current = editId
+      return
+    }
+
+    if (!listLoading) setEdit(null)
+  }, [editId, rows, listLoading, setEdit])
 
   useEffect(() => {
     if (!saveMessage) return
@@ -280,7 +383,19 @@ export default function IsCodesMasterPage() {
             r.amendment_number == null ? '' : String(r.amendment_number),
             r.title,
             r.aspect,
+            r.product_manual_number ?? '',
+            r.unit_of_is ?? '',
             String(r.testing_charges ?? ''),
+            String(r.mmf_large_scale ?? ''),
+            String(r.mmf_medium_scale ?? ''),
+            String(r.mmf_small_scale ?? ''),
+            String(r.mmf_micro_scale ?? ''),
+            r.slab_1_quantity ?? '',
+            String(r.slab_1_rate ?? ''),
+            r.slab_2_quantity ?? '',
+            String(r.slab_2_rate ?? ''),
+            r.slab_3_quantity ?? '',
+            String(r.slab_3_rate ?? ''),
             r.remarks ?? '',
           ]
             .join(' ')
@@ -299,13 +414,18 @@ export default function IsCodesMasterPage() {
           primary = cmpText(formatIsCodeLabel(a), formatIsCodeLabel(b))
           break
         case 'title':
-          primary = cmpText(a.title || '', b.title || '')
-          break
-        case 'reaffirmation':
           primary = cmpText(
-            `${a.reaffirmation_year ?? ''} ${a.amendment_number ?? ''}`,
-            `${b.reaffirmation_year ?? ''} ${b.amendment_number ?? ''}`,
+            `${a.title || ''} ${a.product_manual_number || ''}`,
+            `${b.title || ''} ${b.product_manual_number || ''}`,
           )
+          break
+        case 'slabRate':
+          primary =
+            (Number(a.slab_1_rate ?? 0) - Number(b.slab_1_rate ?? 0)) * dir ||
+            cmpText(a.slab_1_quantity || '', b.slab_1_quantity || '')
+          break
+        case 'markingFee':
+          primary = (Number(a.mmf_large_scale ?? 0) - Number(b.mmf_large_scale ?? 0)) * dir
           break
         case 'aspectCharges': {
           const chargesCmp =
@@ -364,55 +484,126 @@ export default function IsCodesMasterPage() {
 
   const selectedRows = useMemo(() => rows.filter((r) => selectedIds.has(r.id)), [rows, selectedIds])
 
-  const canSave = !saveLoading && normalizeText(form.isNumber).length > 0 && normalizeText(form.title).length > 0
+  const canSave =
+    !saveLoading &&
+    normalizeText(form.isNumber).replace(/^IS\s*/i, '').length > 0 &&
+    /^IS/i.test(normalizeText(form.isNumber)) &&
+    normalizeText(form.title).length > 0
 
   const handleNew = () => {
     setSaveMessage(null)
     setForm(emptyIsCodeForm())
-    setEditingId(null)
-    setShowForm(true)
+    setFormSavedFiles([])
+    setFormFilesStatus(null)
+    hydratedEditRef.current = 'new'
+    setEdit('new')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const handleEdit = (row: IsCodeRow) => {
     setSaveMessage(null)
-    setEditingId(row.id)
-    setForm({
-      isNumber: row.is_number,
-      revisionYear: row.revision_year == null ? '' : String(row.revision_year),
-      reaffirmationYear: row.reaffirmation_year == null ? 'RA' : String(row.reaffirmation_year),
-      amendmentNumber: row.amendment_number ?? '',
-      title: row.title,
-      aspect: row.aspect,
-      testingCharges: String(row.testing_charges ?? ''),
-      remarks: row.remarks ?? '',
-      files: [],
-    })
-    setShowForm(true)
-    void loadFiles(row.id)
+    setForm(rowToIsCodeForm(row))
+    hydratedEditRef.current = row.id
+    setEdit(row.id)
+    void loadFormSavedFiles(row)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const handleCopy = (row: IsCodeRow) => {
     setSaveMessage(null)
-    setEditingId(null)
-    setForm({
-      isNumber: `${row.is_number} - Copy`,
-      revisionYear: row.revision_year == null ? '' : String(row.revision_year),
-      reaffirmationYear: row.reaffirmation_year == null ? 'RA' : String(row.reaffirmation_year),
-      amendmentNumber: row.amendment_number ?? '',
-      title: row.title,
-      aspect: row.aspect,
-      testingCharges: String(row.testing_charges ?? ''),
-      remarks: row.remarks ?? '',
-      files: [],
-    })
-    setShowForm(true)
+    setForm({ ...rowToIsCodeForm(row), isNumber: `${row.is_number} - Copy` })
+    setFormSavedFiles([])
+    setFormFilesStatus(null)
+    hydratedEditRef.current = 'new'
+    setEdit('new')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const handlePickFiles = (files: File[]) => {
     setForm((prev) => ({ ...prev, files }))
+  }
+
+  const handleFormAddSavedFiles = (picked: File[]) => {
+    const isCodeId = editingId
+    if (!isCodeId) {
+      handlePickFiles([...form.files, ...picked])
+      return
+    }
+    if (picked.length === 0 || filesDialogFileInputBusy.current) return
+    filesDialogFileInputBusy.current = true
+    void (async () => {
+      setFormFilesStatus(`Uploading ${picked.length} file(s)…`)
+      setSaveLoading(true)
+      try {
+        await uploadFiles(isCodeId, picked)
+        const row = rows.find((r) => r.id === isCodeId)
+        if (row) await loadFormSavedFiles(row)
+        if (viewId === isCodeId) await refreshFilesDialog(isCodeId)
+        setFormFilesStatus('File(s) uploaded.')
+      } catch (err) {
+        const msg = formatSupabaseError(err)
+        setFormFilesStatus(msg)
+        setSaveMessage(msg)
+      } finally {
+        setSaveLoading(false)
+        filesDialogFileInputBusy.current = false
+      }
+    })()
+  }
+
+  const handleFormReplaceSavedFile = (existing: IsCodeViewFile, next: File) => {
+    const isCodeId = editingId
+    if (!isCodeId || filesDialogFileInputBusy.current) return
+    filesDialogFileInputBusy.current = true
+    void (async () => {
+      setFormFilesStatus(`Replacing ${existing.file_name}…`)
+      setSaveLoading(true)
+      try {
+        await uploadFiles(isCodeId, [next])
+        try {
+          await deletePopupFile(existing)
+        } catch {
+          // keep new file
+        }
+        const row = rows.find((r) => r.id === isCodeId)
+        if (row) await loadFormSavedFiles(row)
+        if (viewId === isCodeId) await refreshFilesDialog(isCodeId)
+        setFormFilesStatus('File replaced.')
+      } catch (err) {
+        const msg = formatSupabaseError(err)
+        setFormFilesStatus(msg)
+        setSaveMessage(msg)
+      } finally {
+        setSaveLoading(false)
+        filesDialogFileInputBusy.current = false
+      }
+    })()
+  }
+
+  const handleFormDeleteSavedFile = (file: IsCodeViewFile) => {
+    const isCodeId = editingId
+    if (!file.storage_path) return
+    const ok = window.confirm(`Delete file ${file.file_name}?`)
+    if (!ok) return
+    void (async () => {
+      setSaveLoading(true)
+      setFormFilesStatus(null)
+      try {
+        await deletePopupFile(file)
+        if (isCodeId) {
+          const row = rows.find((r) => r.id === isCodeId)
+          if (row) await loadFormSavedFiles(row)
+          if (viewId === isCodeId) await refreshFilesDialog(isCodeId)
+        }
+        setFormFilesStatus('File deleted.')
+      } catch (err) {
+        const msg = formatSupabaseError(err)
+        setFormFilesStatus(msg)
+        setSaveMessage(msg)
+      } finally {
+        setSaveLoading(false)
+      }
+    })()
   }
 
   const handleDeleteFiles = () => {
@@ -449,7 +640,7 @@ export default function IsCodesMasterPage() {
           await deletePopupFile(file)
         }
 
-        if (showFilesDialog && filesDialogIsCodeId === isCodeId) {
+        if (viewId === isCodeId) {
           setFilesDialogFiles([])
           setFilesDialogStatus('All files deleted.')
         }
@@ -577,19 +768,30 @@ export default function IsCodesMasterPage() {
     storagePath: string,
     opts?: { download?: string | boolean },
   ): Promise<string | undefined> => {
-    try {
-      const { data, error } = await supabase.storage
-        .from(BUCKET)
-        .createSignedUrl(
-          storagePath,
-          60 * 10,
-          opts?.download != null ? { download: opts.download } : undefined,
-        )
-      if (error) throw error
-      return data.signedUrl
-    } catch {
-      return undefined
+    const buckets = [BUCKET, 'is_code_documents', 'documents'] as const
+    for (const bucket of buckets) {
+      try {
+        const { data, error } = await supabase.storage
+          .from(bucket)
+          .createSignedUrl(
+            storagePath,
+            60 * 10,
+            opts?.download != null ? { download: opts.download } : undefined,
+          )
+        if (!error && data?.signedUrl) return data.signedUrl
+      } catch {
+        // try next bucket
+      }
+      try {
+        const { data: blob, error: dlErr } = await supabase.storage
+          .from(bucket)
+          .download(storagePath)
+        if (!dlErr && blob) return URL.createObjectURL(blob)
+      } catch {
+        // try next bucket
+      }
     }
+    return undefined
   }
 
   type PopupFile = IsCodeViewFile
@@ -655,7 +857,7 @@ export default function IsCodesMasterPage() {
     formatIsCodeLabel(row)
 
   const refreshFilesDialog = async (isCodeId: string) => {
-    if (!showFilesDialog || filesDialogIsCodeId !== isCodeId) return
+    if (viewId !== isCodeId) return
     const row =
       rows.find((r) => r.id === isCodeId) ??
       ({
@@ -675,14 +877,12 @@ export default function IsCodesMasterPage() {
     }
   }
 
-  const openFilesDialog = async (row: IsCodeRow) => {
+  const loadFilesDialogContent = async (row: IsCodeRow) => {
     setSaveMessage(null)
     setFilesDialogStatus(null)
-    setFilesDialogIsCodeId(row.id)
     setFilesDialogTitle(formatIsCodeDisplay(row))
     setFilesDialogFiles([])
     setFilesDialogLoading(true)
-    setShowFilesDialog(true)
 
     try {
       const files = await buildPopupFilesForIsCode(row)
@@ -701,8 +901,34 @@ export default function IsCodesMasterPage() {
     }
   }
 
+  const openFilesDialog = async (row: IsCodeRow) => {
+    hydratedViewRef.current = row.id
+    setView(row.id)
+    await loadFilesDialogContent(row)
+  }
+
+  useEffect(() => {
+    if (!viewId) {
+      hydratedViewRef.current = null
+      setFilesDialogFiles([])
+      setFilesDialogLoading(false)
+      setFilesDialogStatus(null)
+      return
+    }
+    if (hydratedViewRef.current === viewId) return
+
+    const fromPage = rows.find((r) => r.id === viewId)
+    if (fromPage) {
+      hydratedViewRef.current = viewId
+      void loadFilesDialogContent(fromPage)
+      return
+    }
+
+    if (!listLoading) setView(null)
+  }, [viewId, rows, listLoading, setView])
+
   const handleFilesDialogAdd = (picked: File[]) => {
-    const isCodeId = filesDialogIsCodeId
+    const isCodeId = viewId
     if (!isCodeId || picked.length === 0 || filesDialogFileInputBusy.current) return
     filesDialogFileInputBusy.current = true
     void (async () => {
@@ -724,8 +950,36 @@ export default function IsCodesMasterPage() {
     })()
   }
 
+  const handleFilesDialogReplace = (existing: IsCodeViewFile, next: File) => {
+    const isCodeId = viewId
+    if (!isCodeId || filesDialogFileInputBusy.current) return
+    filesDialogFileInputBusy.current = true
+    void (async () => {
+      setFilesDialogStatus(`Replacing ${existing.file_name}…`)
+      setSaveLoading(true)
+      try {
+        await uploadFiles(isCodeId, [next])
+        try {
+          await deletePopupFile(existing)
+        } catch {
+          // Keep new file even if old delete fails.
+        }
+        await refreshFilesDialog(isCodeId)
+        if (editingId === isCodeId) await loadFiles(isCodeId)
+        setFilesDialogStatus('File replaced.')
+      } catch (err) {
+        const msg = formatSupabaseError(err)
+        setFilesDialogStatus(msg)
+        setSaveMessage(msg)
+      } finally {
+        setSaveLoading(false)
+        filesDialogFileInputBusy.current = false
+      }
+    })()
+  }
+
   const handleFilesDialogDelete = (file: IsCodeViewFile) => {
-    const isCodeId = filesDialogIsCodeId
+    const isCodeId = viewId
     if (!file.storage_path) return
     const ok = window.confirm(`Delete file ${file.file_name}?`)
     if (!ok) return
@@ -754,15 +1008,47 @@ export default function IsCodesMasterPage() {
       setSaveMessage(null)
       setSaveLoading(true)
       try {
+        // Merge defaults so HMR / older in-memory form shapes never send undefined keys.
+        const f: IsCodeForm = { ...emptyIsCodeForm(), ...form }
+        const revisionYear = yearIntFromForm(f.revisionYear)
+        const isNumberRaw = normalizeText(f.isNumber)
+        const isNumberRest = isNumberRaw.replace(/^IS\s*/i, '').trim()
+        if (!isNumberRaw || !isNumberRest) throw new Error('IS Number is required.')
+        if (!/^IS/i.test(isNumberRaw)) {
+          throw new Error('IS Number must start with IS (e.g. IS 1234).')
+        }
+        const isNumber = `IS ${isNumberRest}`
+        if (revisionYear == null) throw new Error('Revision Year is required (YYYY).')
+        if (!normalizeText(f.title)) throw new Error('Title of the IS Code is required.')
+
+        const title = toProperTitleCase(normalizeText(f.title))
+        const aspect = normalizeText(f.aspect) || 'Specification'
+        // QE DB: revision/reaffirmation are int; fee columns are NOT NULL numeric.
+        // "RA-" alone → null; "RA-2026" → 2026. Never send the literal "RA-".
         const basePayload = {
-          is_number: normalizeText(form.isNumber),
-          revision_year: normalizeText(form.revisionYear) || null,
-          reaffirmation_year: normalizeText(form.reaffirmationYear) || null,
-          amendment_number: normalizeText(form.amendmentNumber) || null,
-          title: toProperTitleCase(normalizeText(form.title)),
-          aspect: form.aspect,
-          testing_charges: form.testingCharges ? Number(form.testingCharges) : null,
-          remarks: normalizeText(form.remarks) || null,
+          is_number: isNumber,
+          revision_year: revisionYear,
+          reaffirmation_year: yearIntFromForm(f.reaffirmationYear),
+          amendment_number: normalizeText(f.amendmentNumber) || null,
+          title,
+          is_code_title: title,
+          aspect,
+          aspect_of_is: aspect,
+          testing_charges: moneyOrZero(f.testingCharges),
+          remarks: normalizeText(f.remarks) || null,
+          product_manual_number: normalizeText(f.productManualNumber) || null,
+          unit_of_is: normalizeText(f.unitOfIs) || DEFAULT_IS_CODE_UNIT,
+          mmf_large_scale: moneyOrZero(f.mmfLargeScale),
+          mmf_medium_scale: moneyOrZero(f.mmfMediumScale),
+          mmf_small_scale: moneyOrZero(f.mmfSmallScale),
+          mmf_micro_scale: moneyOrZero(f.mmfMicroScale),
+          slab_1_quantity: normalizeText(f.slab1Quantity) || DEFAULT_SLAB_1_QTY,
+          slab_1_rate: moneyOrZero(f.slab1Rate),
+          slab_2_quantity: normalizeText(f.slab2Quantity) || DEFAULT_SLAB_2_QTY,
+          slab_2_rate: moneyOrZero(f.slab2Rate),
+          slab_3_quantity: normalizeText(f.slab3Quantity) || DEFAULT_SLAB_3_QTY,
+          slab_3_rate: moneyOrZero(f.slab3Rate),
+          updated_at: new Date().toISOString(),
         }
 
         // Prefer insert/update over upsert — avoids 42P10 when the unique index
@@ -780,15 +1066,15 @@ export default function IsCodesMasterPage() {
         const id = (data as { id: string } | null)?.id ?? editingId
         if (!id) throw new Error('Unable to determine record id')
 
-        if (form.files.length > 0) {
+        if (f.files.length > 0) {
           try {
-            await uploadFiles(id, form.files)
+            await uploadFiles(id, f.files)
           } catch (err) {
             const msg = formatSupabaseError(err)
             const extra = msg.toLowerCase().includes('bucket') ? `\n\nCreate Supabase Storage bucket: ${BUCKET}` : ''
             setSaveMessage(`Saved record, but file upload failed: ${msg}${extra}`)
-            setEditingId(id)
-            setShowForm(true)
+            hydratedEditRef.current = id
+            setEdit(id)
             await loadIsCodes()
             await loadFiles(id)
             return
@@ -797,8 +1083,8 @@ export default function IsCodesMasterPage() {
 
         setSaveMessage('Saved successfully.')
         setForm(emptyIsCodeForm())
-        setEditingId(null)
-        setShowForm(false)
+        hydratedEditRef.current = null
+        setEdit(null)
         await loadIsCodes()
       } catch (err) {
         setSaveMessage(formatSupabaseError(err))
@@ -853,7 +1139,19 @@ export default function IsCodesMasterPage() {
       'amendment_number',
       'title',
       'aspect',
+      'product_manual_number',
+      'unit_of_is',
       'testing_charges',
+      'mmf_large_scale',
+      'mmf_medium_scale',
+      'mmf_small_scale',
+      'mmf_micro_scale',
+      'slab_1_quantity',
+      'slab_1_rate',
+      'slab_2_quantity',
+      'slab_2_rate',
+      'slab_3_quantity',
+      'slab_3_rate',
       'remarks',
       'created_at',
     ]
@@ -865,7 +1163,19 @@ export default function IsCodesMasterPage() {
       amendment_number: r.amendment_number == null ? '' : String(r.amendment_number),
       title: r.title,
       aspect: r.aspect,
+      product_manual_number: r.product_manual_number ?? '',
+      unit_of_is: r.unit_of_is ?? '',
       testing_charges: String(r.testing_charges ?? ''),
+      mmf_large_scale: String(r.mmf_large_scale ?? ''),
+      mmf_medium_scale: String(r.mmf_medium_scale ?? ''),
+      mmf_small_scale: String(r.mmf_small_scale ?? ''),
+      mmf_micro_scale: String(r.mmf_micro_scale ?? ''),
+      slab_1_quantity: r.slab_1_quantity ?? '',
+      slab_1_rate: String(r.slab_1_rate ?? ''),
+      slab_2_quantity: r.slab_2_quantity ?? '',
+      slab_2_rate: String(r.slab_2_rate ?? ''),
+      slab_3_quantity: r.slab_3_quantity ?? '',
+      slab_3_rate: String(r.slab_3_rate ?? ''),
       remarks: r.remarks ?? '',
       created_at: r.created_at ?? '',
     }))
@@ -904,21 +1214,43 @@ export default function IsCodesMasterPage() {
             const idx = header.indexOf(key)
             return idx >= 0 ? (cells[idx] ?? '') : ''
           }
+          const title = toProperTitleCase(normalizeText(get('title') || get('is_code_title')))
+          const aspect = (normalizeText(get('aspect') || get('aspect_of_is')) ||
+            'Specification') as IsCodeRow['aspect']
           return {
             is_number: normalizeText(get('is_number')),
-            revision_year: normalizeText(get('revision_year')) || null,
-            reaffirmation_year: normalizeText(get('reaffirmation_year')) || null,
+            revision_year: yearIntFromForm(get('revision_year')),
+            reaffirmation_year: yearIntFromForm(get('reaffirmation_year')),
             amendment_number: normalizeText(get('amendment_number')) || null,
-            title: toProperTitleCase(normalizeText(get('title'))),
-            aspect: (normalizeText(get('aspect')) || 'Specification') as IsCodeRow['aspect'],
-            testing_charges: get('testing_charges') ? Number(get('testing_charges')) : null,
+            title,
+            is_code_title: title,
+            aspect,
+            aspect_of_is: aspect,
+            product_manual_number: normalizeText(get('product_manual_number')) || null,
+            unit_of_is: normalizeText(get('unit_of_is')) || DEFAULT_IS_CODE_UNIT,
+            testing_charges: moneyOrZero(get('testing_charges')),
+            mmf_large_scale: moneyOrZero(get('mmf_large_scale')),
+            mmf_medium_scale: moneyOrZero(get('mmf_medium_scale')),
+            mmf_small_scale: moneyOrZero(get('mmf_small_scale')),
+            mmf_micro_scale: moneyOrZero(get('mmf_micro_scale')),
+            slab_1_quantity: normalizeText(get('slab_1_quantity')) || DEFAULT_SLAB_1_QTY,
+            slab_1_rate: moneyOrZero(get('slab_1_rate')),
+            slab_2_quantity: normalizeText(get('slab_2_quantity')) || DEFAULT_SLAB_2_QTY,
+            slab_2_rate: moneyOrZero(get('slab_2_rate')),
+            slab_3_quantity: normalizeText(get('slab_3_quantity')) || DEFAULT_SLAB_3_QTY,
+            slab_3_rate: moneyOrZero(get('slab_3_rate')),
             remarks: normalizeText(get('remarks')) || null,
           }
         })
 
-        const cleanPayloads = payloads.filter((p) => p.is_number.trim().length > 0 && p.title.trim().length > 0)
+        const cleanPayloads = payloads.filter(
+          (p) =>
+            p.is_number.trim().length > 0 &&
+            p.title.trim().length > 0 &&
+            p.revision_year != null,
+        )
         if (cleanPayloads.length === 0) {
-          setSaveMessage('No valid rows found (is_number/title missing).')
+          setSaveMessage('No valid rows found (is_number / revision_year / title missing).')
           return
         }
 
@@ -1036,16 +1368,13 @@ export default function IsCodesMasterPage() {
         <DialogContent
           persistOnFocusLoss
           aria-describedby={undefined}
-          overlayClassName="lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto"
-          portalClassName="lg:left-[268px] lg:right-0 lg:w-auto"
           className={cn(
             limsDialogClass,
-            'max-h-[92vh] w-[calc(100%-1.5rem)] max-w-3xl sm:w-full',
-            // Center in main content area (sidebar 268px stays clear)
-            'lg:left-[calc(268px+(100vw-268px)/2)] md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2',
+            'flex !h-[min(94dvh,920px)] !max-h-[min(94dvh,920px)] !flex-col gap-0 overflow-hidden',
+            'w-[min(68rem,calc(100vw-1.5rem))] max-w-6xl bg-stone-100 p-0',
           )}
         >
-          <div className="relative overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white sm:px-5 sm:py-3">
+          <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white sm:px-5 sm:py-3">
             <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={limsDarkBarGlowStyle} />
             <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
             <DialogHeader className="relative pr-10 text-left">
@@ -1055,9 +1384,9 @@ export default function IsCodesMasterPage() {
             </DialogHeader>
           </div>
 
-          <div className="max-h-[min(72vh,720px)] overflow-y-auto overflow-x-hidden bg-gradient-to-b from-stone-100/80 to-white px-4 py-4 sm:px-6 sm:py-5">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-stone-100 p-2 sm:p-3">
             {saveMessage ? (
-              <p className="mb-4 border-l-2 border-destructive bg-destructive/5 px-3 py-2 text-sm text-destructive">
+              <p className="mb-2 shrink-0 border-l-2 border-destructive bg-destructive/5 px-3 py-2 text-sm text-destructive">
                 {saveMessage}
               </p>
             ) : null}
@@ -1076,27 +1405,24 @@ export default function IsCodesMasterPage() {
               onAddAspect={handleAddAspect}
               onUpdateAspect={handleUpdateAspect}
               onDeleteAspect={handleDeleteAspect}
-              onOpenFiles={() => {
-                const id = editingId
-                if (!id) {
-                  setSaveMessage('Please save the IS Code first, then upload and view files.')
-                  return
-                }
-                const row = rows.find((r) => r.id === id)
-                if (!row) return
-                void openFilesDialog(row)
-              }}
-              onDeleteFiles={handleDeleteFiles}
+              savedFiles={formSavedFiles}
+              filesLoading={formFilesLoading}
+              filesStatus={formFilesStatus}
+              filesResetKey={editingId ?? editId ?? 'new'}
+              onAddSavedFiles={handleFormAddSavedFiles}
+              onReplaceSavedFile={handleFormReplaceSavedFile}
+              onDeleteSavedFile={handleFormDeleteSavedFile}
             />
           </div>
         </DialogContent>
       </Dialog>
 
       <IsCodesFilesDialog
-        open={showFilesDialog}
+        open={viewId != null}
         onOpenChange={(open) => {
-          setShowFilesDialog(open)
           if (!open) {
+            hydratedViewRef.current = null
+            setView(null)
             setFilesDialogStatus(null)
             setFilesDialogLoading(false)
           }
@@ -1107,6 +1433,7 @@ export default function IsCodesMasterPage() {
         status={filesDialogStatus}
         busy={saveLoading}
         onAddFiles={handleFilesDialogAdd}
+        onReplaceFile={handleFilesDialogReplace}
         onDeleteFile={handleFilesDialogDelete}
       />
 

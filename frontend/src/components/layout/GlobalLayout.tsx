@@ -173,37 +173,6 @@ function SidebarMainNav() {
   )
 }
 
-const ROUTE_LABELS: Record<string, string> = {
-  '/': 'Dashboard',
-  '/bis/new-applications': 'BIS New Application',
-  '/bis/new-inclusion': 'BIS New Inclusion',
-  '/bis/license-renewals': 'BIS License Renewals',
-  '/bis/stop-marking': 'License Stop Marking',
-  '/bis/surveillance': 'BIS Surveillances',
-  '/bis/sample-failure-reply': 'Sample Failure Reply',
-  '/bis/our-licenses': 'QE BIS Licenses',
-  '/bis/projects': 'All BIS Licenses',
-  '/bis/expired-licenses': 'Expired Licenses',
-  '/bis/due-soon': 'Licenses Due Soon',
-  '/masters/clients': 'Client Master',
-  '/masters/is-codes': 'IS Code Master',
-  '/masters/product-services': 'Product & Services',
-  '/masters/test-parameter': 'Test Parameter',
-  '/finance/sale/quotation': 'Finance / Quotation',
-  '/finance/sale/proforma-invoice': 'Finance / Proforma Invoice',
-  '/finance/sale/invoice': 'Finance / Tax Invoice',
-  '/finance/sale/credit-note': 'Finance / Credit Note',
-  '/finance/sale/payment-receipt': 'Finance / Payment Receipt',
-  '/tools/email': 'Email',
-  '/tools/cms': 'Website CMS',
-  '/settings/lab': 'Company Settings',
-  '/settings/users': 'User Management',
-  '/settings/module-access': 'Module Access',
-  '/settings/ai': 'AI Settings',
-  '/help': 'Help',
-  '/contact': 'Contact Us',
-};
-
 function NavSectionGroup({
   section,
   collapsed,
@@ -462,6 +431,31 @@ export default function GlobalLayout() {
     return window.localStorage.getItem(LAB_NAME_STORAGE_KEY) ?? ''
   })
 
+  // Dialogs portal to <body>; publish content-area center + overlay inset beside docked sidebar.
+  useEffect(() => {
+    const root = document.documentElement
+    const syncDialogLayout = () => {
+      const desktop = window.matchMedia('(min-width: 1024px)').matches
+      if (desktop && !sidebarCollapsed) {
+        root.style.setProperty('--app-dialog-center-x', 'calc(268px + (100vw - 268px) / 2)')
+        root.style.setProperty('--app-dialog-overlay-left', '268px')
+        root.dataset.sidebarDocked = '1'
+      } else {
+        root.style.setProperty('--app-dialog-center-x', '50%')
+        root.style.setProperty('--app-dialog-overlay-left', '0px')
+        delete root.dataset.sidebarDocked
+      }
+    }
+    syncDialogLayout()
+    window.addEventListener('resize', syncDialogLayout)
+    return () => {
+      window.removeEventListener('resize', syncDialogLayout)
+      root.style.removeProperty('--app-dialog-center-x')
+      root.style.removeProperty('--app-dialog-overlay-left')
+      delete root.dataset.sidebarDocked
+    }
+  }, [sidebarCollapsed])
+
   useEffect(() => {
     let canceled = false
 
@@ -695,15 +689,6 @@ export default function GlobalLayout() {
               >
                 {labName.trim() || brandShortName || 'Company'}
               </p>
-              {location.pathname === '/' ? (
-                <p className="truncate text-[11px] text-stone-300">
-                  Welcome Back, {String(designation ?? '').trim() || 'Team'}
-                </p>
-              ) : ROUTE_LABELS[location.pathname] ? (
-                <p className="truncate text-[11px] text-stone-300">
-                  {ROUTE_LABELS[location.pathname]}
-                </p>
-              ) : null}
             </div>
           </div>
 

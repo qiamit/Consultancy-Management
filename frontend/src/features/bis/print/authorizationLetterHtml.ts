@@ -1,6 +1,7 @@
 import { formatCmL, formatDisplayDate, todayIsoDate } from '../projects/types'
 import type { BisPrintData } from './loadBisPrintData'
 import { escapeHtml as esc } from './openPrintHtml'
+import { PRINT_PAGE_FRAME_CSS } from './printDocumentShared'
 
 export const AUTH_LETTER_REPRESENTATION_PARAGRAPH =
   'The said authorized representative is duly empowered to submit all requisite documents and correspondence, furnish complete and truthful information as may be required by the Bureau of Indian Standards, attend meetings and discussions with BIS officials, offer product samples for verification and independent testing, and to affix signature on behalf of the firm in respect of all matters pertaining to the above application, licence grant proceedings, factory inspection, surveillance visits, and related compliance requirements under the BIS Conformity Assessment Scheme.'
@@ -40,13 +41,17 @@ function addressWithIndia(address: string, state: string): string {
 }
 
 function buildLetterheadHtml(data: AuthorizationLetterData): string {
-  const contact = [
-    data.applicantPhone ? `Tel: ${esc(data.applicantPhone)}` : '',
-    data.applicantEmail ? `Email: ${esc(data.applicantEmail)}` : '',
-    data.applicantGst ? `GSTIN: ${esc(data.applicantGst)}` : '',
-  ]
-    .filter(Boolean)
-    .join(' &nbsp;|&nbsp; ')
+  const parts: string[] = []
+  if (data.applicantPhone.trim()) {
+    parts.push(`<span class="pd-lh-phone">Tel: ${esc(data.applicantPhone)}</span>`)
+  }
+  if (data.applicantEmail.trim()) {
+    parts.push(`<span class="pd-lh-email">Email: ${esc(data.applicantEmail)}</span>`)
+  }
+  if (data.applicantGst.trim()) {
+    parts.push(`<span class="pd-lh-gst">GSTIN: ${esc(data.applicantGst)}</span>`)
+  }
+  const contact = parts.join('')
 
   return `
 <div class="al-letterhead">
@@ -63,11 +68,19 @@ function buildBody(data: AuthorizationLetterData): string {
       ? `${esc(isNo)} — ${esc(data.isTitle.trim())}`
       : esc(isNo)
     : '________________'
-  const authorizedName = blank(data.authorizedName || data.signatoryName || data.applicantName)
+  const authorizedName = blank(data.authorizedName || data.applicantName)
   const authorizedDesig = blank(data.authorizedDesignation)
   const appNo = data.applicationNumber.trim() || 'CM/A - N/A'
-  const sigName = data.signatoryName.trim() || data.authorizedName.trim() || '—'
-  const sigDesig = data.signatoryDesignation.trim() || data.authorizedDesignation.trim() || '—'
+  const personName = (data.authorizedName || '—').trim() || '—'
+  const personDesig = data.authorizedDesignation.trim()
+  const personLine = personDesig
+    ? `<strong>${esc(personName)}</strong> (${esc(personDesig)})`
+    : `<strong>${esc(personName)}</strong>`
+  const byName = (data.signatoryName || '—').trim() || '—'
+  const byDesig = data.signatoryDesignation.trim()
+  const byLine = byDesig
+    ? `<strong>${esc(byName)}</strong> (${esc(byDesig)})`
+    : `<strong>${esc(byName)}</strong>`
 
   return `
 <div class="al-sheet">
@@ -105,39 +118,45 @@ function buildBody(data: AuthorizationLetterData): string {
   <p class="al-thanks">Thanking you,</p>
   <p class="al-yours">Yours faithfully,</p>
 
-  <div class="al-signatory">
-    <div class="al-for">For <strong>${esc(data.applicantName)}</strong></div>
-    <div class="al-sign-space"></div>
-    <div class="al-sign-line"></div>
-    <div><strong>${esc(sigName)}</strong></div>
-    <div>${esc(sigDesig)}</div>
-    <div class="al-seal-note">(Signature &amp; Seal of the Firm)</div>
+  <div class="al-sign-row">
+    <div class="al-signatory">
+      <div class="al-for">For <strong>${esc(data.applicantName)}</strong></div>
+      <div class="al-sign-label">Authorized By</div>
+      <div class="al-sign-space al-sign-space-by"></div>
+      <div class="al-sign-line"></div>
+      <div>${byLine}</div>
+    </div>
+    <div class="al-signatory al-signatory-right">
+      <div class="al-sign-label">Authorized Person</div>
+      <div class="al-sign-space al-sign-space-person"></div>
+      <div class="al-sign-line"></div>
+      <div>${personLine}</div>
+    </div>
   </div>
 
-  ${data.preparedBy ? `<div class="al-prepared">Prepared by ${esc(data.preparedBy)}</div>` : ''}
 </div>`
 }
 
 const LETTER_STYLES = `
-  @page { size: A4 portrait; margin: 12mm 15mm; }
+  @page { size: A4 portrait; margin: 5mm 8mm 5mm 11mm; }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; background: #fff; }
   .al-sheet {
-    font-family: "Times New Roman", Times, serif;
-    color: #111;
-    font-size: 12.5px;
-    line-height: 1.55;
+    font-family: Arial, Helvetica, "Liberation Sans", sans-serif;
+    color: #000;
+    font-size: 13px;
+    line-height: 1.45;
     max-width: 180mm;
     margin: 0 auto;
-    padding: 10mm 8mm;
+    padding: 2mm;
     position: relative;
   }
-  @media print { .al-sheet { max-width: none; padding: 0; } }
+  ${PRINT_PAGE_FRAME_CSS}
   .al-letterhead { text-align: center; border-bottom: 2px solid #b45309; padding-bottom: 8px; margin-bottom: 14px; }
-  .al-firm { font-size: 20px; font-weight: 700; letter-spacing: 0.03em; color: #292524; text-transform: uppercase; }
-  .al-firm-addr { font-size: 11.5px; margin-top: 3px; color: #44403c; }
-  .al-firm-contact { font-size: 10.5px; margin-top: 3px; color: #57534e; }
-  .al-title { text-align: center; font-size: 16px; font-weight: 700; text-decoration: underline; margin: 0 0 14px; }
+  .al-firm { font-family: "Times New Roman", Times, serif; font-size: 20px; font-weight: 700; letter-spacing: 0.03em; color: #000; text-transform: uppercase; }
+  .al-firm-addr { font-size: 12.5px; margin-top: 3px; color: #111; font-weight: 500; }
+  .al-firm-contact { font-size: 11.5px; margin-top: 3px; color: #111; font-weight: 500; }
+  .al-title { text-align: center; font-size: 16px; font-weight: 700; text-decoration: underline; margin: 0 0 14px; color: #000; }
   .al-to-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 14px; }
   .al-to-block { line-height: 1.5; }
   .al-date-block { text-align: right; line-height: 1.6; white-space: nowrap; }
@@ -146,11 +165,52 @@ const LETTER_STYLES = `
   .al-body { margin: 0 0 10px; text-align: justify; }
   .al-thanks { margin: 14px 0 2px; }
   .al-yours { margin: 0 0 6px; }
-  .al-signatory { margin-top: 6px; min-width: 70mm; display: inline-block; }
-  .al-sign-space { height: 22mm; }
-  .al-sign-line { border-top: 1px solid #111; width: 60mm; margin-bottom: 3px; }
-  .al-seal-note { font-size: 10px; color: #57534e; margin-top: 2px; }
-  .al-prepared { margin-top: 18px; font-size: 9px; color: #78716c; text-align: right; border-top: 1px solid #e7e5e4; padding-top: 4px; }
+  .al-sign-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 18px;
+    margin-top: 6px;
+  }
+  .al-signatory { margin-top: 0; min-width: 70mm; flex: 1 1 70mm; display: inline-block; line-height: 1.35; text-align: left; }
+  .al-signatory-right { text-align: right; margin-left: auto; }
+  .al-signatory-right .al-sign-space { justify-content: flex-end; }
+  .al-signatory-right .al-sign-line { margin-left: auto; margin-right: 0; }
+  .al-sign-label { font-size: 11px; color: #222; margin: 0 0 2px; font-weight: 700; }
+  .al-for { margin: 0 0 1px; }
+  .al-sign-space { height: 12mm; display: flex; align-items: flex-end; justify-content: flex-start; }
+  .al-sign-space .pd-sign-img {
+    max-height: 11mm;
+    max-width: 48mm;
+    object-fit: contain;
+    background: transparent;
+    mix-blend-mode: multiply;
+  }
+  .al-sign-line {
+    display: block;
+    border-top: 1px solid #111;
+    width: 48mm;
+    max-width: 100%;
+    margin: 1px 0 2px 0;
+    box-sizing: border-box;
+  }
+  .al-seal-note { font-size: 11px; color: #222; margin: 2px 0 4px; }
+  .al-prepared { display: none !important; }
+  .pd-page-num {
+    position: absolute;
+    left: 2mm;
+    right: 2mm;
+    bottom: 2mm;
+    margin: 0;
+    font-size: 10.5px;
+    color: #222;
+    text-align: right;
+    border-top: 1.25px solid #666;
+    padding-top: 4px;
+    background: #fff;
+    z-index: 2;
+    font-weight: 600;
+  }
   .al-signatory, .al-body { break-inside: avoid; page-break-inside: avoid; }
 `
 
@@ -169,16 +229,26 @@ ${buildBody(data)}
 }
 
 /** Maps a BIS project row + client + IS code + consultancy context into Authorization Letter fields. */
-export function authorizationLetterDataFromPrintData({
-  row,
-  client,
-  isCode,
-  company,
-}: BisPrintData): AuthorizationLetterData {
+export function authorizationLetterDataFromPrintData(printData: BisPrintData): AuthorizationLetterData {
+  const { row, client, isCode, company } = printData
   const address = [client.address, client.district, client.state, client.pinCode]
     .map((p) => p.trim())
     .filter(Boolean)
     .join(', ')
+  const tm = printData.topManagement
+  const authName = String(tm?.authorizedSignatoryName ?? '').trim()
+  const authDesig = String(tm?.authorizedSignatoryDesignation ?? '').trim()
+  const authorizedBy = String(tm?.authorizedBy ?? '').trim()
+  const tmRows = Array.isArray(tm?.rows) ? tm.rows : []
+  const byRow = tmRows.find(
+    (item) =>
+      item &&
+      typeof item === 'object' &&
+      String((item as Record<string, unknown>).personName ?? '').trim() === authorizedBy,
+  ) as Record<string, unknown> | undefined
+  // Authorized By must stay the TM "Authorized By" person (not the authorized person overlay).
+  const firmSigName = authorizedBy || client.contactPerson
+  const firmSigDesig = String(byRow?.designation ?? '').trim()
 
   return {
     applicantName: client.companyName,
@@ -192,10 +262,12 @@ export function authorizationLetterDataFromPrintData({
     letterDate: todayIsoDate(),
     isNumber: isCode.label,
     isTitle: isCode.title,
-    authorizedName: client.contactPerson,
-    authorizedDesignation: '',
-    signatoryName: client.contactPerson,
-    signatoryDesignation: '',
+    // 1) Person being authorized (Top Management → Authorized Signatory).
+    authorizedName: authName || client.contactPerson,
+    authorizedDesignation: authDesig,
+    // 2) Person who authorizes / signs for the firm (Top Management → Authorized By).
+    signatoryName: firmSigName,
+    signatoryDesignation: firmSigDesig,
     preparedBy: company.companyName,
   }
 }

@@ -57,17 +57,37 @@ export function resolvePostAuthTarget(_from?: unknown): string {
 
 /**
  * Restore last page when a refresh lands on `/` but the user was elsewhere
- * (common when the browser/preview document URL did not keep the SPA path).
+ * (common when the browser/preview document URL did not keep the SPA path),
+ * or when the path stayed but master-UI search (`view` / `module` / `edit`)
+ * was stripped (common in embedded / IDE browsers).
  */
-export function shouldRestoreLastRoute(currentPathname: string): boolean {
-  if (currentPathname !== '/') return false
-  if (wasExplicitHomeVisit()) return false
-  const last = readLastRoute()
-  if (!last || last === '/') return false
-
+export function shouldRestoreLastRoute(
+  currentPathname: string,
+  currentSearch = '',
+): boolean {
   if (typeof performance === 'undefined') return false
   const nav = performance.getEntriesByType('navigation')[0] as
     | PerformanceNavigationTiming
     | undefined
-  return nav?.type === 'reload'
+  if (nav?.type !== 'reload') return false
+
+  const last = readLastRoute()
+  if (!last || last === '/') return false
+
+  if (currentPathname === '/') {
+    if (wasExplicitHomeVisit()) return false
+    return true
+  }
+
+  try {
+    const lastUrl = new URL(last, 'http://local.invalid')
+    if (lastUrl.pathname !== currentPathname) return false
+    const lastSearch = (lastUrl.search || '').trim()
+    if (!lastSearch || lastSearch === '?') return false
+    const cur = (currentSearch || '').trim()
+    // Path kept, but query (dialog state) vanished on refresh.
+    return !cur || cur === '?'
+  } catch {
+    return false
+  }
 }

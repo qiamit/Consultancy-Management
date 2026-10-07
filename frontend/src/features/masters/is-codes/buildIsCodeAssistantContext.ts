@@ -23,7 +23,7 @@ export function buildIsCodesListAssistantContext(rows: IsCodeRow[], search: stri
   } else {
     for (const r of slice) {
       lines.push(
-        `- id=${r.id} | ${formatIsCodeLabel(r)} | title="${r.title}" | ${r.aspect} | Charges: Rs ${Number(r.testing_charges ?? 0).toFixed(2)}`,
+        `- id=${r.id} | ${formatIsCodeLabel(r)} | title="${r.title}" | PM=${r.product_manual_number ?? '-'} | ${r.aspect} | Unit=${r.unit_of_is ?? '-'} | Charges: Rs ${Number(r.testing_charges ?? 0).toFixed(2)} | MMF L/M/S/µ: ${Number(r.mmf_large_scale ?? 0).toFixed(2)}/${Number(r.mmf_medium_scale ?? 0).toFixed(2)}/${Number(r.mmf_small_scale ?? 0).toFixed(2)}/${Number(r.mmf_micro_scale ?? 0).toFixed(2)}`,
       )
     }
     if (rows.length > 30) {
@@ -42,9 +42,15 @@ export function buildIsCodeAssistantContext(row: IsCodeRow): string {
     `IS: ${formatIsCodeLabel(row)}`,
     `Title: ${row.title}`,
     `Aspect: ${row.aspect}`,
+    `Product manual number: ${row.product_manual_number ?? '-'}`,
+    `Unit of IS: ${row.unit_of_is ?? '-'}`,
     `Reaffirmation year: ${row.reaffirmation_year ?? '-'}`,
     `Amendment: ${row.amendment_number ?? '-'}`,
     `Testing charges: Rs ${Number(row.testing_charges ?? 0).toFixed(2)}`,
+    `MMF Large/Medium/Small/Micro: ${Number(row.mmf_large_scale ?? 0).toFixed(2)} / ${Number(row.mmf_medium_scale ?? 0).toFixed(2)} / ${Number(row.mmf_small_scale ?? 0).toFixed(2)} / ${Number(row.mmf_micro_scale ?? 0).toFixed(2)}`,
+    `Slab 1: ${row.slab_1_quantity ?? '-'} @ ${Number(row.slab_1_rate ?? 0).toFixed(2)}`,
+    `Slab 2: ${row.slab_2_quantity ?? '-'} @ ${Number(row.slab_2_rate ?? 0).toFixed(2)}`,
+    `Slab 3: ${row.slab_3_quantity ?? '-'} @ ${Number(row.slab_3_rate ?? 0).toFixed(2)}`,
     `Remarks: ${row.remarks ?? '-'}`,
     '',
     'When the user asks to change this IS code, use id above in lims_crud (table is_codes).',

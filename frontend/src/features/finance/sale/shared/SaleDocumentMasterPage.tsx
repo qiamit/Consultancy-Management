@@ -3,6 +3,7 @@ import { limsDarkBarGlowStyle, limsPageShellClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabaseClient'
 import { useFormDialogOpenChange } from '@/lib/formDialogOpenChange'
+import { useMasterUiSearchState } from '@/lib/useMasterUiSearchState'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import type { FilterComboboxOption } from '@/features/sample-handling/receiving/FilterCombobox'
 import type { DocumentTemplateKind } from '@/features/settings/lab-settings/documentTemplateTypes'
@@ -115,6 +116,8 @@ function isAbortOrLockError(err: unknown): boolean {
  * Records persist in Postgres (finance_* tables; receipts in `transactions`).
  */
 export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleConfig }) {
+  const { editId, setEdit } = useMasterUiSearchState()
+  const hydratedEditRef = useRef<string | null>(null)
   const [rows, setRows] = useState<QuotationRow[]>([])
   const [total, setTotal] = useState(0)
   const [listLoading, setListLoading] = useState(false)
@@ -130,9 +133,14 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
   const [showTemplates, setShowTemplates] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
 
-  const [showForm, setShowForm] = useState(false)
-  const handleFormOpenChange = useFormDialogOpenChange(setShowForm)
-  const [editingId, setEditingId] = useState<string | null>(null)
+  const showForm = editId != null
+  const editingId = editId && editId !== 'new' ? editId : null
+  const handleFormOpenChange = useFormDialogOpenChange((open) => {
+    if (!open) {
+      hydratedEditRef.current = null
+      setEdit(null)
+    }
+  })
   const [form, setForm] = useState<QuotationFormType>(() => emptyQuotationForm())
   const [saveLoading, setSaveLoading] = useState(false)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
@@ -356,44 +364,74 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
     }
   }, [config.documentKind])
 
+  const bootstrapNewForm = useCallback(async () => {
+    const [next, defaultTerm, defaultNote, defaultSign] = await Promise.all([
+      allocateNextNumber(),
+      fetchDefaultQuotationTerm(config.documentKind).catch(() => ''),
+      fetchDefaultQuotationNote(config.documentKind).catch(() => ''),
+      fetchDefaultSignatureForKind(config.documentKind).catch(() => ({
+        signatureText: '',
+        signatureImagePath: '',
+      })),
+    ])
+    setForm({
+      ...emptyQuotationForm(next),
+      status: defaultStatus(config.documentKind),
+      paymentTerms: defaultTerm,
+      notes: defaultNote,
+      signatureText: defaultSign.signatureText,
+      signatureImagePath: defaultSign.signatureImagePath,
+    })
+    setSaveMessage(null)
+  }, [allocateNextNumber, config.documentKind])
+
+  useEffect(() => {
+    if (!editId) {
+      hydratedEditRef.current = null
+      return
+    }
+    if (hydratedEditRef.current === editId) return
+
+    if (editId === 'new') {
+      void (async () => {
+        await bootstrapNewForm()
+        hydratedEditRef.current = 'new'
+      })()
+      return
+    }
+
+    const fromPage = rows.find((r) => r.id === editId)
+    if (fromPage) {
+      setForm(rowToForm(fromPage, false))
+      setSaveMessage(null)
+      hydratedEditRef.current = editId
+      return
+    }
+
+    if (!listLoading) setEdit(null)
+  }, [editId, rows, listLoading, bootstrapNewForm, setEdit])
+
   const openNew = () => {
     void (async () => {
-      const [next, defaultTerm, defaultNote, defaultSign] = await Promise.all([
-        allocateNextNumber(),
-        fetchDefaultQuotationTerm(config.documentKind).catch(() => ''),
-        fetchDefaultQuotationNote(config.documentKind).catch(() => ''),
-        fetchDefaultSignatureForKind(config.documentKind).catch(() => ({
-          signatureText: '',
-          signatureImagePath: '',
-        })),
-      ])
-      setEditingId(null)
-      setForm({
-        ...emptyQuotationForm(next),
-        status: defaultStatus(config.documentKind),
-        paymentTerms: defaultTerm,
-        notes: defaultNote,
-        signatureText: defaultSign.signatureText,
-        signatureImagePath: defaultSign.signatureImagePath,
-      })
-      setSaveMessage(null)
-      setShowForm(true)
+      await bootstrapNewForm()
+      hydratedEditRef.current = 'new'
+      setEdit('new')
     })()
   }
 
   const openEdit = (row: QuotationRow) => {
-    setEditingId(row.id)
     setForm(rowToForm(row, false))
     setSaveMessage(null)
-    setShowForm(true)
+    hydratedEditRef.current = row.id
+    setEdit(row.id)
   }
 
   const openCopy = (row: QuotationRow) => {
     void allocateNextNumber().then((next) => {
-      setEditingId(null)
       setForm(rowToForm(row, true, next))
       setSaveMessage(null)
-      setShowForm(true)
+      hydratedEditRef.current = 'new'
+      setEdit('new')
     })
   }
 
@@ -486,8 +524,8 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
         convertMsg = await convertQuotationIfNeeded(convertSource, convertAction)
       }
       setMessage(convertMsg ?? `Saved ${form.quotationNumber.trim()}.`)
-      setShowForm(false)
-      setEditingId(null)
+      hydratedEditRef.current = null
+      setEdit(null)
       reload()
     } catch (err) {
       setSaveMessage(formatSaleApiError(err))
@@ -598,87 +636,99 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
   }
 
   return (
-    <div className={limsPageShellClass}>
-      <QuotationHeaderBar
-        title={config.title}
-        addLabel={config.addLabel}
-        searchAriaLabel={`Search ${config.title.toLowerCase()}`}
-        search={searchInput}
-        onSearchChange={setSearchInput}
-        pageSize={pageSize}
-        onPageSizeChange={(size) => {
-          setPageSize(size)
-          setPage(1)
-        }}
-        onNew={openNew}
-      />
+    <div
+      data-master-scroll="table"
+      className={cn(
+        limsPageShellClass,
+        'flex h-full min-h-0 flex-col overflow-hidden !space-y-0 gap-2 sm:gap-3 md:gap-3',
+      )}
+    >
+      <div className="shrink-0">
+        <QuotationHeaderBar
+          title={config.title}
+          addLabel={config.addLabel}
+          searchAriaLabel={`Search ${config.title.toLowerCase()}`}
+          search={searchInput}
+          onSearchChange={setSearchInput}
+          pageSize={pageSize}
+          onPageSizeChange={(size) => {
+            setPageSize(size)
+            setPage(1)
+          }}
+          onNew={openNew}
+        />
+      </div>
 
-      <QuotationTable
-        rows={pagedRows}
-        loading={listLoading}
-        error={listError}
-        searchActive={Boolean(search.trim())}
-        selectedIds={selectedIds}
-        statusUpdatingId={statusUpdatingId}
-        onToggle={toggleRow}
-        onToggleAll={toggleAllOnPage}
-        onEdit={openEdit}
-        onCopy={openCopy}
-        onPrint={(row) => {
-          void printQuotationsWithTemplate([row], config.documentKind).then(
-            () => setMessage(null),
-            (err) => setMessage(err instanceof Error ? err.message : 'Print failed.'),
-          )
-        }}
-        onDownloadPdf={(row) => {
-          void downloadQuotationPdfWithTemplate(
-            row,
-            `${row.quotation_number || config.title}.pdf`,
-            config.documentKind,
-          ).then(
-            () => setMessage('Use Print → Save as PDF for a crisp document.'),
-            (err) => setMessage(err instanceof Error ? err.message : 'PDF failed.'),
-          )
-        }}
-        onEmailClient={handleEmailClient}
-        emailBusyId={emailBusyId}
-        onStatusChange={(row, status) => void handleStatusChange(row, status)}
-        emptyPrimary={emptyPrimary}
-        emptySecondary={emptySecondary}
-        hideValidUntil={isPaymentReceipt}
-        paymentLedger={isPaymentReceipt}
-        documentKind={config.documentKind}
-        paymentOpeningByClientId={
-          isPaymentReceipt
-            ? Object.fromEntries(
-                Object.entries(clientContactById).map(([id, c]) => [
-                  id,
-                  { amount: c.openingBalance, type: c.balanceType },
-                ]),
-              )
-            : undefined
-        }
-      />
+      <div className="min-h-0 flex-1 overflow-hidden">
+        <QuotationTable
+          rows={pagedRows}
+          loading={listLoading}
+          error={listError}
+          searchActive={Boolean(search.trim())}
+          selectedIds={selectedIds}
+          statusUpdatingId={statusUpdatingId}
+          onToggle={toggleRow}
+          onToggleAll={toggleAllOnPage}
+          onEdit={openEdit}
+          onCopy={openCopy}
+          onPrint={(row) => {
+            void printQuotationsWithTemplate([row], config.documentKind).then(
+              () => setMessage(null),
+              (err) => setMessage(err instanceof Error ? err.message : 'Print failed.'),
+            )
+          }}
+          onDownloadPdf={(row) => {
+            void downloadQuotationPdfWithTemplate(
+              row,
+              `${row.quotation_number || config.title}.pdf`,
+              config.documentKind,
+            ).then(
+              () => setMessage('Use Print → Save as PDF for a crisp document.'),
+              (err) => setMessage(err instanceof Error ? err.message : 'PDF failed.'),
+            )
+          }}
+          onEmailClient={handleEmailClient}
+          emailBusyId={emailBusyId}
+          onStatusChange={(row, status) => void handleStatusChange(row, status)}
+          emptyPrimary={emptyPrimary}
+          emptySecondary={emptySecondary}
+          hideValidUntil={isPaymentReceipt}
+          paymentLedger={isPaymentReceipt}
+          documentKind={config.documentKind}
+          paymentOpeningByClientId={
+            isPaymentReceipt
+              ? Object.fromEntries(
+                  Object.entries(clientContactById).map(([id, c]) => [
+                    id,
+                    { amount: c.openingBalance, type: c.balanceType },
+                  ]),
+                )
+              : undefined
+          }
+        />
+      </div>
 
-      <QuotationFooterBar
-        message={message}
-        loading={listLoading || saveLoading}
-        selectedCount={selectedIds.size}
-        page={safePage}
-        pageCount={pageCount}
-        onTemplates={() => setShowTemplates(true)}
-        onExport={handleExport}
-        onPrintSelected={handlePrintSelected}
-        onDeleteSelected={() => void handleDeleteSelected()}
-        onPrevPage={() => setPage((p) => Math.max(1, p - 1))}
-        onNextPage={() => setPage((p) => Math.min(pageCount, p + 1))}
-        jumpTo={jumpTo}
-        onJumpToChange={setJumpTo}
-        onJumpToGo={() => {
-          const n = Number.parseInt(jumpTo, 10)
-          if (Number.isFinite(n) && n >= 1 && n <= pageCount) setPage(n)
-        }}
-      />
+      <div className="shrink-0">
+        <QuotationFooterBar
+          message={message}
+          loading={listLoading || saveLoading}
+          selectedCount={selectedIds.size}
+          page={safePage}
+          pageCount={pageCount}
+          onTemplates={() => setShowTemplates(true)}
+          onExport={handleExport}
+          onPrintSelected={handlePrintSelected}
+          onDeleteSelected={() => void handleDeleteSelected()}
+          onPrevPage={() => setPage((p) => Math.max(1, p - 1))}
+          onNextPage={() => setPage((p) => Math.min(pageCount, p + 1))}
+          jumpTo={jumpTo}
+          onJumpToChange={setJumpTo}
+          onJumpToGo={() => {
+            const n = Number.parseInt(jumpTo, 10)
+            if (Number.isFinite(n) && n >= 1 && n <= pageCount) setPage(n)
+          }}
+        />
+      </div>
 
       <QuotationTemplatesDialog
         open={showTemplates}
@@ -690,11 +740,10 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
         <DialogContent
           persistOnFocusLoss
           aria-describedby={undefined}
-          overlayClassName="lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto"
           className={cn(
             '!flex z-50 h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 bg-white p-0 shadow-none sm:rounded-none',
-            'left-0 top-0',
-            'lg:left-[268px] lg:w-[calc(100vw-268px)] lg:max-w-[calc(100vw-268px)]',
+            'left-[var(--app-dialog-overlay-left,0px)] top-0 right-0',
+            'w-[calc(100vw-var(--app-dialog-overlay-left,0px))] max-w-none',
             'border-stone-600 ring-1 ring-amber-700/20',
             '[&>button]:!rounded-none [&>button]:text-white [&>button]:opacity-100 [&>button]:hover:bg-white/10',
           )}
@@ -709,7 +758,7 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
             </DialogHeader>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-gradient-to-b from-stone-100/80 to-white px-4 py-4 sm:px-6 sm:py-5">
+          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-gradient-to-b from-stone-100/80 to-white px-3 py-3 sm:px-5 sm:py-4 md:px-6 md:py-5">
             {saveMessage && showForm ? (
               <p className="mb-4 border-l-2 border-destructive bg-destructive/5 px-3 py-2 text-sm text-destructive">
                 {saveMessage}

@@ -1,3 +1,5 @@
+import type { OslSampleRequirementRow } from '../projects/oslSampleRequirementsModel'
+import { parseOslSampleRequirementsPayload } from '../projects/oslSampleRequirementsModel'
 import type { BisPrintData } from './loadBisPrintData'
 import { escapeHtml as esc } from './openPrintHtml'
 import {
@@ -13,6 +15,7 @@ import {
 export type OslSampleTestRequestRow = {
   laboratoryName: string
   laboratoryAddress: string
+  laboratoryMobile: string
   sampleCode: string
   qrCode: string
   sampleType: string
@@ -36,6 +39,8 @@ export type OslSampleTestRequestData = PrintApplicantContext & {
 }
 
 const BLV_CARE_OF = 'BLV Testing Solutions C/o'
+/** Shared lab contact printed on Sample Sent To / courier slip. */
+const BLV_MOBILE = 'Mobile: +91 90094 13040'
 
 function pairRow(aLabel: string, aValue: string, bLabel: string, bValue: string): string {
   return `<tr>
@@ -53,11 +58,42 @@ function cell(value: string): string {
   return v ? esc(v) : '&nbsp;'
 }
 
+export function oslSampleRowToTestRequestRow(
+  row: OslSampleRequirementRow,
+): OslSampleTestRequestRow {
+  const labName = row.laboratoryName.trim() || row.destinationLab.trim()
+  const dest = row.destinationLab.trim()
+  const address =
+    dest && dest.toLowerCase() !== labName.toLowerCase() ? dest : ''
+  return {
+    laboratoryName: labName,
+    laboratoryAddress: address,
+    laboratoryMobile: BLV_MOBILE,
+    sampleCode: row.sampleCode,
+    qrCode: row.qrCode,
+    sampleType: row.sampleType,
+    priority: row.priority,
+    shelfLife: row.shelfLife,
+    serialNumber: row.serialNumber,
+    testRequired: row.testRequired,
+    testingCharges: row.testingCharges,
+    batchNumber: row.batchNumber,
+    dateOfManufacturing: row.dateOfManufacturing,
+    gradeTypeVariety: row.gradeTypeVariety,
+    declaredValue: row.declaredValue,
+    sampleDescription: row.sampleDescription || row.gradeTypeVariety,
+    additionalInformation: row.additionalInformation,
+    sampleQuantity: row.sampleQuantity,
+  }
+}
+
 function pageHtml(data: OslSampleTestRequestData, row: OslSampleTestRequestRow, index: number): string {
   const firm = row.laboratoryName.trim() || '________________'
   const address = row.laboratoryAddress.trim()
+  const mobile = row.laboratoryMobile.trim() || BLV_MOBILE
   const today = dateOrNa(new Date().toISOString().slice(0, 10))
   const isNo = data.isNumber.trim() || '—'
+  const firmFrom = [data.applicantName, data.applicantAddress].filter(Boolean).join(', ') || '—'
 
   return `
 <article class="tr-page">
@@ -71,6 +107,7 @@ function pageHtml(data: OslSampleTestRequestData, row: OslSampleTestRequestRow, 
         ${data.includeBlvCareOf ? `<div class="tr-sent-blv">${esc(BLV_CARE_OF)}</div>` : ''}
         <div class="tr-sent-firm">${esc(firm)}</div>
         ${address ? `<div class="tr-sent-addr">${esc(address)}</div>` : ''}
+        <div class="tr-sent-mobile">${esc(mobile)}</div>
       </div>
     </section>
     <aside class="tr-head-qr-card">
@@ -106,37 +143,41 @@ function pageHtml(data: OslSampleTestRequestData, row: OslSampleTestRequestRow, 
 
   <section class="tr-sent tr-sent-from">
     <span class="tr-k">Sample Sent From :</span>
-    <span>${esc([data.applicantName, data.applicantAddress].filter(Boolean).join(', ') || '—')}</span>
+    <div class="tr-sent-body">
+      <div class="tr-sent-firm">${esc(data.applicantName || '—')}</div>
+      ${data.applicantAddress ? `<div class="tr-sent-addr">${esc(data.applicantAddress)}</div>` : ''}
+      ${!data.applicantName && !data.applicantAddress ? `<div>${esc(firmFrom)}</div>` : ''}
+    </div>
   </section>
   ${preparedByHtml(data.preparedBy)}
 </article>`
 }
 
+function emptyTestRequestRow(isTitle: string): OslSampleTestRequestRow {
+  return {
+    laboratoryName: '',
+    laboratoryAddress: '',
+    laboratoryMobile: BLV_MOBILE,
+    sampleCode: '',
+    qrCode: '',
+    sampleType: '',
+    priority: '',
+    shelfLife: '',
+    serialNumber: '',
+    testRequired: '',
+    testingCharges: '',
+    batchNumber: '',
+    dateOfManufacturing: '',
+    gradeTypeVariety: isTitle,
+    declaredValue: '',
+    sampleDescription: '',
+    additionalInformation: '',
+    sampleQuantity: '',
+  }
+}
+
 function buildBody(data: OslSampleTestRequestData): string {
-  const rows =
-    data.rows.length > 0
-      ? data.rows
-      : [
-          {
-            laboratoryName: '',
-            laboratoryAddress: '',
-            sampleCode: '',
-            qrCode: '',
-            sampleType: '',
-            priority: '',
-            shelfLife: '',
-            serialNumber: '',
-            testRequired: '',
-            testingCharges: '',
-            batchNumber: '',
-            dateOfManufacturing: '',
-            gradeTypeVariety: data.isTitle,
-            declaredValue: '',
-            sampleDescription: '',
-            additionalInformation: '',
-            sampleQuantity: '',
-          },
-        ]
+  const rows = data.rows.length > 0 ? data.rows : [emptyTestRequestRow(data.isTitle)]
   return rows.map((row, i) => pageHtml(data, row, i)).join('')
 }
 
@@ -152,6 +193,7 @@ const STYLES = `
   .tr-sent { border: 0.75pt solid #9ca3af; border-radius: 2mm; padding: 2.5mm 3mm; font-size: 12px; line-height: 1.5; margin-bottom: 2mm; }
   .tr-sent-body { display: flex; flex-direction: column; gap: 0.6mm; margin-top: 1.2mm; }
   .tr-sent-blv, .tr-sent-firm { font-weight: 700; }
+  .tr-sent-mobile { font-weight: 700; margin-top: 0.4mm; }
   .tr-sent-from { margin-top: 3.5mm; margin-bottom: 0; }
   .tr-k { font-weight: 800; display: block; }
   .tr-box { border: 0.75pt solid #d1d5db; border-radius: 2mm; padding: 3mm; }
@@ -169,12 +211,30 @@ export function buildOslSampleTestRequestHtml(data: OslSampleTestRequestData): s
   })
 }
 
-/** Maps a BIS project row + client + consultancy context into OSL Test Request fields. */
+/** Maps a BIS project + Sample Requirements module payload into Test Request / Courier Slip pages. */
 export function oslSampleTestRequestDataFromPrintData(printData: BisPrintData): OslSampleTestRequestData {
+  const ctx = applicantContextFromPrintData(printData)
+  const parsed = parseOslSampleRequirementsPayload(
+    printData.modulePayload && typeof printData.modulePayload === 'object'
+      ? (printData.modulePayload as Record<string, unknown>)
+      : null,
+  )
+  return {
+    ...ctx,
+    rows: parsed.rows.map(oslSampleRowToTestRequestRow),
+    includeBlvCareOf: true,
+  }
+}
+
+/** Build print data for one live sample row (Courier Slip from Sample Requirements table). */
+export function oslSampleTestRequestDataForSample(
+  printData: BisPrintData,
+  sample: OslSampleRequirementRow,
+): OslSampleTestRequestData {
   const ctx = applicantContextFromPrintData(printData)
   return {
     ...ctx,
-    rows: [],
+    rows: [oslSampleRowToTestRequestRow(sample)],
     includeBlvCareOf: true,
   }
 }

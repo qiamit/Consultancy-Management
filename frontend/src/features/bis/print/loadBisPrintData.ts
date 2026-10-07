@@ -24,11 +24,44 @@ export type BisPrintIsCode = {
   label: string
 }
 
+/** Authorized signatory overlay applied to all BIS print documents when enabled. */
+export type BisPrintDocumentSignatory = {
+  name: string
+  designation: string
+  signatureImageUrl?: string
+}
+
 export type BisPrintData = {
   row: BisProjectRow
   client: BisPrintClient
   isCode: BisPrintIsCode
   company: CompanyPrintContext
+  /** Optional Module Edit JSON for the document kind being printed. */
+  modulePayload?: Record<string, unknown> | null
+  /** Top Management module payload (for signatory / authorization letter fields). */
+  topManagement?: Record<string, unknown> | null
+  /** When set, print builders should prefer this signatory on documents. */
+  documentSignatory?: BisPrintDocumentSignatory | null
+}
+
+/** Prefer project-wide authorized signatory when the Top Management flag is on. */
+export function printSignatoryDefaults(printData: BisPrintData): {
+  signatoryName: string
+  signatoryDesignation: string
+  signatureImageUrl?: string
+} {
+  const overlay = printData.documentSignatory
+  if (overlay?.name.trim()) {
+    return {
+      signatoryName: overlay.name.trim(),
+      signatoryDesignation: overlay.designation.trim(),
+      signatureImageUrl: overlay.signatureImageUrl,
+    }
+  }
+  return {
+    signatoryName: printData.client.contactPerson,
+    signatoryDesignation: '',
+  }
 }
 
 function text(value: unknown): string {

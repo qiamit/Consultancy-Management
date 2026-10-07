@@ -1,16 +1,18 @@
 import type { BisPrintData } from './loadBisPrintData'
+import { printSignatoryDefaults } from './loadBisPrintData'
 import { escapeHtml as esc } from './openPrintHtml'
 import {
   applicantContextFromPrintData,
   applicationNoDisplay,
   buildPrintPage,
-  dateOrNa,
+  inspectionDateOrToday,
   letterheadHtml,
   preparedByHtml,
   signatoryHtml,
   toBlockHtml,
   type PrintApplicantContext,
 } from './printDocumentShared'
+import { parseProcessFlowPayload } from '../projects/processFlowModel'
 
 export type ProcessDescriptionData = PrintApplicantContext & {
   descriptionPoints: string[]
@@ -33,8 +35,9 @@ export function processDescriptionPointTexts(data: ProcessDescriptionData): stri
   ]
 }
 
-function buildBody(data: ProcessDescriptionData): string {
-  const letterDate = dateOrNa(data.dateOfInspection.trim() || data.dateOfApplication)
+/** Single A4 sheet body for Process Description (no outer print page wrapper). */
+export function buildProcessDescriptionSheetHtml(data: ProcessDescriptionData): string {
+  const letterDate = inspectionDateOrToday(data.dateOfInspection)
   const isCode = esc(data.isNumber.trim() || 'the applicable Indian Standard')
   const points =
     data.descriptionPoints.map((p) => p.trim()).filter(Boolean).length > 0
@@ -73,27 +76,55 @@ function buildBody(data: ProcessDescriptionData): string {
 </div>`
 }
 
-const STYLES = `
-  .proc-points p { margin: 5px 0; font-size: 11px; line-height: 1.5; text-align: justify; break-inside: avoid; page-break-inside: avoid; }
+export const PROCESS_DESCRIPTION_PRINT_STYLES = `
+  .proc-points p {
+    margin: 6px 0;
+    font-size: 12.5px;
+    font-weight: 500;
+    line-height: 1.55;
+    text-align: justify;
+    color: #000;
+    -webkit-text-fill-color: #000;
+    /* Allow long points to split across pages — avoid clips entire block on print/PDF. */
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+  .proc-points strong { color: #000; -webkit-text-fill-color: #000; font-weight: 700; }
   .cmpf-sign-right { margin-top: 14px; text-align: right; }
   .cmpf-sign-right .pd-signatory { text-align: left; }
+  @media print {
+    .proc-points p {
+      font-size: 12.5pt !important;
+      font-weight: 500 !important;
+      color: #000 !important;
+      -webkit-text-fill-color: #000 !important;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+  }
 `
 
 export function buildProcessDescriptionHtml(data: ProcessDescriptionData): string {
   return buildPrintPage({
     title: `Process Description — ${data.applicantName || 'Applicant'}`,
-    styles: STYLES,
-    body: buildBody(data),
+    styles: PROCESS_DESCRIPTION_PRINT_STYLES,
+    body: buildProcessDescriptionSheetHtml(data),
   })
 }
 
 /** Maps a BIS project row + client + IS code + consultancy context into Process Description fields. */
 export function processDescriptionDataFromPrintData(printData: BisPrintData): ProcessDescriptionData {
   const ctx = applicantContextFromPrintData(printData)
+  const parsed = parseProcessFlowPayload(
+    printData.modulePayload && typeof printData.modulePayload === 'object'
+      ? (printData.modulePayload as Record<string, unknown>)
+      : null,
+  )
+  const sig = printSignatoryDefaults(printData)
   return {
     ...ctx,
-    descriptionPoints: [],
-    signatoryName: printData.client.contactPerson,
-    signatoryDesignation: '',
+    descriptionPoints: parsed.descriptionPoints,
+    signatoryName: sig.signatoryName,
+    signatoryDesignation: sig.signatoryDesignation,
   }
 }

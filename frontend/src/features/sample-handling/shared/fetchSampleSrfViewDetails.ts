@@ -11,42 +11,58 @@ export type IsCodeFileLink = {
 }
 
 export async function loadIsCodeFiles(isCodeId: string): Promise<IsCodeFileLink[]> {
-  const out: IsCodeFileLink[] = []
-  const { data: fileRows } = await supabase
-    .from('is_code_files')
-    .select('file_name, storage_path')
-    .eq('is_code_id', isCodeId)
-    .order('created_at', { ascending: false })
+  const id = isCodeId.trim()
+  if (!id) return []
 
-  let fileList = Array.isArray(fileRows) ? fileRows : []
-  if (fileList.length === 0) {
-    const { data: objects } = await supabase.storage.from(IS_CODE_FILES_BUCKET).list(isCodeId, { limit: 20 })
-    fileList = (Array.isArray(objects) ? objects : [])
-      .map((o) => {
-        const name = String((o as { name?: string }).name ?? '')
-        if (!name) return null
-        return { file_name: name, storage_path: `${isCodeId}/${name}` }
-      })
-      .filter((x): x is { file_name: string; storage_path: string } => x !== null)
-  }
+  try {
+    const out: IsCodeFileLink[] = []
+    const { data: fileRows, error } = await supabase
+      .from('is_code_files')
+      .select('file_name, storage_path')
+      .eq('is_code_id', id)
+      .order('created_at', { ascending: false })
 
-  for (const f of fileList) {
-    const storagePath = (f as { storage_path?: string }).storage_path
-    const fileName = (f as { file_name?: string }).file_name ?? 'File'
-    if (!storagePath) {
-      out.push({ file_name: fileName })
-      continue
-    }
-    try {
-      const { data: signed } = await supabase.storage
+    let fileList: Array<{ file_name?: string; storage_path?: string }> = []
+    if (!error && Array.isArray(fileRows) && fileRows.length > 0) {
+      fileList = fileRows as Array<{ file_name?: string; storage_path?: string }>
+    } else {
+      const { data: objects, error: listErr } = await supabase.storage
         .from(IS_CODE_FILES_BUCKET)
-        .createSignedUrl(storagePath, 60 * 10)
-      out.push({ file_name: fileName, url: signed?.signedUrl })
-    } catch {
-      out.push({ file_name: fileName })
+        .list(id, { limit: 20 })
+      if (!listErr && Array.isArray(objects)) {
+        fileList = objects
+          .map((o) => {
+            const name = String((o as { name?: string }).name ?? '')
+            if (!name) return null
+            return { file_name: name, storage_path: `${id}/${name}` }
+          })
+          .filter((x): x is { file_name: string; storage_path: string } => x !== null)
+      }
     }
+
+    for (const f of fileList) {
+      const storagePath = f.storage_path
+      const fileName = f.file_name ?? 'File'
+      if (!storagePath) {
+        out.push({ file_name: fileName })
+        continue
+      }
+      try {
+        const { data: signed, error: signErr } = await supabase.storage
+          .from(IS_CODE_FILES_BUCKET)
+          .createSignedUrl(storagePath, 60 * 10)
+        out.push({
+          file_name: fileName,
+          url: signErr ? undefined : signed?.signedUrl,
+        })
+      } catch {
+        out.push({ file_name: fileName })
+      }
+    }
+    return out
+  } catch {
+    return []
   }
-  return out
 }
 
 async function signedClientReferenceUrl(path: string | null | undefined): Promise<string | undefined> {

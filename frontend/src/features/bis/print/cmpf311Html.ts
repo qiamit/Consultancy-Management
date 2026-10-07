@@ -1,4 +1,5 @@
 import type { BisPrintData } from './loadBisPrintData'
+import { printSignatoryDefaults } from './loadBisPrintData'
 import { escapeHtml as esc } from './openPrintHtml'
 import {
   applicantContextFromPrintData,
@@ -6,6 +7,7 @@ import {
   buildPrintPage,
   CMPF_FORM_STYLES,
   dateOrNa,
+  inspectionDateOrToday,
   letterheadHtml,
   preparedByHtml,
   signatoryHtml,
@@ -25,7 +27,7 @@ export type Cmpf311Data = PrintApplicantContext & {
 const BLANK = '________________'
 
 function buildBody(data: Cmpf311Data): string {
-  const letterDate = dateOrNa(data.dateOfInspection.trim() || data.dateOfApplication)
+  const letterDate = inspectionDateOrToday(data.dateOfInspection)
   const refDate = data.referenceLetterDate.trim() ? dateOrNa(data.referenceLetterDate) : BLANK
   const licenceFor = data.licenceForStandard.trim() || data.isNumber.trim() || BLANK
   const productManualNo = data.sitDocumentRef.trim() || BLANK
@@ -74,7 +76,7 @@ export function cmpf311DataFromPrintData(printData: BisPrintData): Cmpf311Data {
     referenceLetterDate: '',
     licenceForStandard: printData.isCode.label || printData.isCode.isNumber,
     sitDocumentRef: '',
-    signatoryName: printData.client.contactPerson,
-    signatoryDesignation: '',
+    signatoryName: printSignatoryDefaults(printData).signatoryName,
+    signatoryDesignation: printSignatoryDefaults(printData).signatoryDesignation,
   }
 }

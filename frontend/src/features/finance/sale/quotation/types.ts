@@ -67,7 +67,11 @@ export const QUOTATION_STATUS_LABELS: Record<QuotationStatus, string> = {
 }
 
 export function quotationStatusLabel(status: string): string {
-  return QUOTATION_STATUS_LABELS[status as QuotationStatus] ?? status
+  const known = QUOTATION_STATUS_LABELS[status as QuotationStatus]
+  if (known) return known
+  const trimmed = status.trim()
+  if (!trimmed) return status
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1)
 }
 
 export type QuotationLineRow = {

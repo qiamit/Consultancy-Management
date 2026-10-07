@@ -1,10 +1,11 @@
-import { formatDisplayDate } from '../projects/types'
 import type { BisPrintData } from './loadBisPrintData'
+import { printSignatoryDefaults } from './loadBisPrintData'
 import { escapeHtml as esc } from './openPrintHtml'
 import {
   applicantContextFromPrintData,
   applicationNoDisplay,
   buildPrintPage,
+  inspectionDateOrToday,
   letterheadHtml,
   preparedByHtml,
   signatoryHtml,
@@ -45,8 +46,7 @@ export function undertakingGeneralPoints(data: UndertakingGeneralData): string[]
 
 function buildBody(data: UndertakingGeneralData): string {
   const appNo = applicationNoDisplay(data.applicationNumber)
-  const dateRaw = data.dateOfInspection.trim() || data.dateOfApplication.trim()
-  const letterDate = dateRaw ? formatDisplayDate(dateRaw) : 'N/A'
+  const letterDate = inspectionDateOrToday(data.dateOfInspection)
   const sigName = data.signatoryName.trim() || data.contactPerson.trim()
   const points = undertakingGeneralPoints(data)
 
@@ -96,7 +96,7 @@ export function undertakingGeneralDataFromPrintData(printData: BisPrintData): Un
     markingClause: '',
     packagingClause: '',
     weeklyOff: 'Sunday',
-    signatoryName: printData.client.contactPerson,
-    signatoryDesignation: '',
+    signatoryName: printSignatoryDefaults(printData).signatoryName,
+    signatoryDesignation: printSignatoryDefaults(printData).signatoryDesignation,
   }
 }

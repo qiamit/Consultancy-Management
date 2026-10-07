@@ -1,0 +1,24 @@
+# Consultancy Pro — BIS knowledge indexing (local RAG scaffold)
+#
+# Install later (do not run yet):
+#   python3 -m venv .venv
+#   source .venv/bin/activate   # Windows: .venv\Scripts\activate
+#   pip install -r requirements.txt
+#
+# Paths and secrets: copy .env.example → .env and set absolute paths outside the repo.
+
+# Runtime
+python-dotenv>=1.0.0,<2
+
+# PDF text extraction (sample / diagnostics — install in knowledge_engine/.venv)
+pymupdf>=1.24.0,<2
+pytesseract>=0.3.10,<1
+Pillow>=10.0.0,<12
+
+# Optional: project-local Tesseract binary via micromamba → knowledge_engine/.conda
+#   micromamba create -y -p knowledge_engine/.conda -c conda-forge tesseract
+
+# PDF + vector stack — pin / install only when indexing work starts
+# pypdf>=4.0.0
+# chromadb>=0.5.0
+# openai>=1.0.0

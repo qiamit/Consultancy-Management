@@ -2,6 +2,8 @@
 
 export const MANAK_EBIS_LOGIN_URL = 'https://www.manakonline.in/MANAK/eBISLogin'
 export const MANAK_HOME_URL = 'https://www.manakonline.in/MANAK/login'
+export const MANAK_LICENCE_RELATED_RPT_URL =
+  'https://www.manakonline.in/MANAK/ApplicationLicenceRelatedrpt'
 
 const BLOCKED_OPEN =
   /play\.google\.com|apps\.apple\.com|com\.bis\.app|itunes\.apple\.com/i
@@ -89,10 +91,16 @@ export async function registerManakPdfInbox(
   sampleId = '',
 ): Promise<void> {
   try {
+    const { supabase } = await import('@/lib/supabaseClient')
+    const { data } = await supabase.auth.getSession()
+    const jwt = data.session?.access_token ?? ''
     await fetch(getManakPdfApiUrl(), {
       method: 'POST',
       credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(jwt ? { Authorization: `Bearer ${jwt}` } : {}),
+      },
       body: JSON.stringify({ action: 'register', token, sampleId }),
     })
   } catch {
@@ -102,6 +110,31 @@ export async function registerManakPdfInbox(
 
 export type OpenManakEbisResult = {
   extensionUsed: boolean
+}
+
+/** Digits only from CM/L (expects 10-digit licence number). */
+export function cmLDigitsOnly(value: string | null | undefined): string {
+  return String(value ?? '').replace(/\D/g, '')
+}
+
+/**
+ * Open Manak Application / Licence Related Report and copy the 10-digit CM/L to clipboard.
+ */
+export async function openManakLicenceRelatedRpt(
+  cmLDigits: string | null | undefined,
+): Promise<{ digits: string; copied: boolean }> {
+  const digits = cmLDigitsOnly(cmLDigits)
+  let copied = false
+  if (digits) {
+    try {
+      await navigator.clipboard.writeText(digits)
+      copied = true
+    } catch {
+      copied = false
+    }
+  }
+  openManakUrl(MANAK_LICENCE_RELATED_RPT_URL)
+  return { digits, copied }
 }
 
 /**
@@ -149,11 +182,109 @@ export async function openManakEbisAssist(options: {
   })
 }
 
+/**
+ * Start Manak “Not Used” QR import via QE Consultancy extension (same as QE Import Codes).
+ * Codes arrive later as `QE_MANAK_QR_IMPORT` — use {@link subscribeManakQrImport}.
+ */
+export async function importManakQrCodes(options: {
+  portalUserId?: string | null
+  portalPassword?: string | null
+  qrCount?: number
+}): Promise<OpenManakEbisResult> {
+  const portalUserId = String(options.portalUserId ?? '').trim()
+  const portalPassword = String(options.portalPassword ?? '').trim()
+  const loginUrl = manakEbisLoginHref(portalUserId, portalPassword)
+  const qrCount = Math.max(1, Math.min(5, Number(options.qrCount) || 5))
+
+  let acked = isQeExtensionPresent()
+
+  return new Promise((resolve) => {
+    function onAck(event: MessageEvent) {
+      if (event.source !== window) return
+      if (event.data?.type !== 'QE_MANAK_OPEN_ACK') return
+      acked = true
+      window.removeEventListener('message', onAck)
+      resolve({ extensionUsed: true })
+    }
+
+    window.addEventListener('message', onAck)
+    window.postMessage(
+      {
+        type: 'QE_MANAK_OPEN',
+        payload: null,
+        loginOnly: false,
+        importQr: true,
+        qrCount,
+        loginUrl,
+        homeUrl: MANAK_HOME_URL,
+        portalUserId,
+        portalPassword,
+      },
+      '*',
+    )
+
+    window.setTimeout(() => {
+      window.removeEventListener('message', onAck)
+      if (acked) return
+      openManakUrl(loginUrl)
+      resolve({ extensionUsed: false })
+    }, 400)
+  })
+}
+
+/** Listen for QR codes published by the extension after Import Codes. */
+export function subscribeManakQrImport(
+  onCodes: (codes: string[]) => void,
+): () => void {
+  let lastKey = ''
+  let lastAt = 0
+  function onMessage(event: MessageEvent) {
+    if (event.source !== window) return
+    if (event.data?.type !== 'QE_MANAK_QR_IMPORT') return
+    const raw = event.data?.result?.qr_codes
+    const codes = Array.isArray(raw)
+      ? raw.map((c: unknown) => String(c ?? '').replace(/\D/g, '')).filter((c: string) => c.length >= 12)
+      : []
+    if (!codes.length) return
+    const key = codes.join(',')
+    const now = Date.now()
+    // Extension may post the same import twice (bridge + scripting); ignore dupes.
+    if (key === lastKey && now - lastAt < 8000) return
+    lastKey = key
+    lastAt = now
+    onCodes(codes)
+  }
+  window.addEventListener('message', onMessage)
+  return () => window.removeEventListener('message', onMessage)
+}
+
 export function isNumberFromLabel(label: string | null | undefined): string {
   const raw = String(label ?? '').trim()
   if (!raw) return ''
   const colon = raw.indexOf(':')
   return (colon >= 0 ? raw.slice(0, colon) : raw).trim()
+}
+
+/**
+ * Manak "Enter the IS Number" accepts digits only (e.g. `10748`).
+ * Strips `IS` prefix and revision year (`: 2024`).
+ */
+export function manakIsSearchDigits(label: string | null | undefined): string {
+  const base = isNumberFromLabel(label)
+  if (!base) return ''
+  const nums = base.replace(/^is\s*/i, '').match(/\d{3,7}/g) || []
+  const notYear = nums.filter((n) => !/^(19|20)\d{2}$/.test(n))
+  return (notYear.sort((a, b) => b.length - a.length)[0] || nums[0] || '').trim()
+}
+
+/** Optional 4-digit revision year for picking the right IS from Manak search results. */
+export function manakIsRevisionYear(
+  labelOrYear: string | null | undefined,
+): string {
+  const raw = String(labelOrYear ?? '').trim()
+  if (!raw) return ''
+  const m = raw.match(/\b((?:19|20)\d{2})\b/)
+  return m ? m[1] : ''
 }
 
 export type FetchIsCodeHandlers = {
@@ -222,3 +353,184 @@ export function fetchIsCodeViaExtension(
     window.removeEventListener('message', onMessage)
   }
 }
+
+export type ManakTrFillPayload = {
+  kind: 'QE_MANAK_TR_V1'
+  sampleId: string
+  returnUrl: string
+  returnToken: string
+  application: { isSearch: string; isYear?: string }
+  sample: Record<string, string>
+  portalUserId?: string
+  portalPassword?: string
+  copiedAt?: number
+}
+
+export type ManakTrResult = {
+  sampleId: string
+  sample_code: string
+  qr_code: string
+  pdfName: string
+  pdfBase64: string
+  filledAt?: number
+}
+
+/** Build Manak Test Request fill payload from an OSL sample row + IS number. */
+export function buildManakTrPayload(opts: {
+  sampleId: string
+  isSearch: string
+  /** Optional revision year — used only to pick the matching IS from search results. */
+  isYear?: string | null
+  sample: Record<string, string>
+  portalUserId?: string | null
+  portalPassword?: string | null
+  returnToken: string
+}): ManakTrFillPayload {
+  const digits = manakIsSearchDigits(opts.isSearch)
+  const year =
+    manakIsRevisionYear(opts.isYear) || manakIsRevisionYear(opts.isSearch) || undefined
+  return {
+    kind: 'QE_MANAK_TR_V1',
+    sampleId: opts.sampleId.trim(),
+    returnUrl: getManakApiOrigin(),
+    returnToken: opts.returnToken.trim(),
+    application: {
+      // Manak search box: digits only — never include `: YYYY`.
+      isSearch: digits || opts.isSearch.trim(),
+      ...(year ? { isYear: year } : {}),
+    },
+    sample: opts.sample,
+    portalUserId: String(opts.portalUserId ?? '').trim() || undefined,
+    portalPassword: String(opts.portalPassword ?? '').trim() || undefined,
+    copiedAt: Date.now(),
+  }
+}
+
+/**
+ * Start Manak Test Request Auto-fill (not login-only).
+ * Extension captures PDF and posts QE_MANAK_RESULT / uploads inbox.
+ */
+export async function openManakTestRequestFill(options: {
+  payload: ManakTrFillPayload
+  portalUserId?: string | null
+  portalPassword?: string | null
+}): Promise<OpenManakEbisResult> {
+  const portalUserId =
+    String(options.portalUserId ?? options.payload.portalUserId ?? '').trim()
+  const portalPassword =
+    String(options.portalPassword ?? options.payload.portalPassword ?? '').trim()
+  const loginUrl = manakEbisLoginHref(portalUserId, portalPassword)
+
+  let acked = false
+
+  return new Promise((resolve) => {
+    function onAck(event: MessageEvent) {
+      if (event.source !== window) return
+      if (event.data?.type !== 'QE_MANAK_OPEN_ACK') return
+      acked = true
+      window.removeEventListener('message', onAck)
+      resolve({ extensionUsed: true })
+    }
+
+    window.addEventListener('message', onAck)
+    window.postMessage(
+      {
+        type: 'QE_MANAK_OPEN',
+        payload: options.payload,
+        loginOnly: false,
+        importQr: false,
+        loginUrl,
+        homeUrl: MANAK_HOME_URL,
+        portalUserId,
+        portalPassword,
+      },
+      '*',
+    )
+
+    window.setTimeout(() => {
+      window.removeEventListener('message', onAck)
+      if (acked) return
+      openManakUrl(loginUrl)
+      resolve({ extensionUsed: false })
+    }, 600)
+  })
+}
+
+/** Listen for Manak Test Request results (includes PDF when available). */
+export function subscribeManakTestRequestResult(
+  onResult: (result: ManakTrResult) => void,
+): () => void {
+  let lastKey = ''
+  let lastAt = 0
+  function onMessage(event: MessageEvent) {
+    if (event.source !== window) return
+    if (event.data?.type !== 'QE_MANAK_RESULT') return
+    const raw = event.data?.result
+    if (!raw || typeof raw !== 'object') return
+    const sampleId = String((raw as { sampleId?: string }).sampleId ?? '').trim()
+    const sample_code = String((raw as { sample_code?: string }).sample_code ?? '').trim()
+    const pdfBase64 = String((raw as { pdfBase64?: string }).pdfBase64 ?? '')
+      .replace(/^data:application\/pdf;base64,/i, '')
+      .replace(/\s+/g, '')
+    if (!sampleId && !sample_code) return
+    // Light inject without PDF — wait for chunked PDF delivery.
+    if (!pdfBase64) return
+    const key = `${sampleId}|${sample_code}|${pdfBase64.length}`
+    const now = Date.now()
+    if (key === lastKey && now - lastAt < 8000) return
+    lastKey = key
+    lastAt = now
+    onResult({
+      sampleId,
+      sample_code,
+      qr_code: String((raw as { qr_code?: string }).qr_code ?? '').trim(),
+      pdfName: String((raw as { pdfName?: string }).pdfName ?? 'Test_Request.pdf').trim(),
+      pdfBase64,
+      filledAt: Number((raw as { filledAt?: number }).filledAt) || Date.now(),
+    })
+  }
+  window.addEventListener('message', onMessage)
+  return () => window.removeEventListener('message', onMessage)
+}
+
+/** Poll API inbox until PDF is ready (backup when postMessage is blocked). */
+export async function pollManakPdfInbox(
+  token: string,
+  opts?: { timeoutMs?: number; intervalMs?: number },
+): Promise<ManakTrResult | null> {
+  const timeoutMs = opts?.timeoutMs ?? 12 * 60 * 1000
+  const intervalMs = opts?.intervalMs ?? 2500
+  const started = Date.now()
+  while (Date.now() - started < timeoutMs) {
+    try {
+      const res = await fetch(
+        `${getManakPdfApiUrl()}?token=${encodeURIComponent(token)}`,
+        { credentials: 'include' },
+      )
+      if (res.ok) {
+        const data = (await res.json()) as {
+          ready?: boolean
+          sampleId?: string
+          sample_code?: string
+          pdfName?: string
+          pdfBase64?: string
+        }
+        const pdfBase64 = String(data.pdfBase64 ?? '').replace(/\s+/g, '')
+        if (data.ready && pdfBase64) {
+          return {
+            sampleId: String(data.sampleId ?? '').trim(),
+            sample_code: String(data.sample_code ?? '').trim(),
+            qr_code: '',
+            pdfName: String(data.pdfName ?? 'Test_Request.pdf').trim(),
+            pdfBase64,
+          }
+        }
+      }
+    } catch {
+      /* retry */
+    }
+    await new Promise((r) => window.setTimeout(r, intervalMs))
+  }
+  return null
+}
+

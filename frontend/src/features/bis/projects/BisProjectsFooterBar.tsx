@@ -12,7 +12,9 @@ import { cn } from '@/lib/utils'
 import {
   limsDarkBarBtnClass,
   limsDarkBarFieldClass,
+  limsDarkBarGlowStyle,
   limsDeleteBtnClass,
+  limsPanelClass,
 } from '@/lib/limsThemeUi'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -91,8 +93,14 @@ export function BisProjectsFooterBar({
       message.toLowerCase().includes('emailed'))
 
   return (
-    <div className="relative overflow-hidden rounded-none border-2 border-stone-500 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-2 py-1.5 text-white shadow-sm ring-1 ring-amber-700/20 sm:px-3 sm:py-2 md:px-4">
-      <div className="flex min-w-0 flex-nowrap items-center gap-1 overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch] sm:gap-1.5 md:gap-2.5">
+    <div className={cn(limsPanelClass)}>
+      <div className="relative overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-2 py-1.5 text-white sm:px-3 sm:py-2 md:px-4">
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.18]"
+          style={limsDarkBarGlowStyle}
+        />
+        <div className="absolute top-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
+        <div className="relative flex min-w-0 flex-nowrap items-center gap-1 overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch] sm:gap-1.5 md:gap-2.5">
         <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
           <LaboratoryDirectorOnly>
             <Button
@@ -345,6 +353,7 @@ export function BisProjectsFooterBar({
             <ChevronRight className="size-3.5 sm:size-4" />
             <span className="sr-only">Next page</span>
           </Button>
+        </div>
         </div>
       </div>
     </div>

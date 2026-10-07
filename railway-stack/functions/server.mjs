@@ -92,12 +92,26 @@ async function handleManakPdf(req, res) {
     const entry = readManakEntry(token)
     if (!entry) return corsJson(res, 200, { ready: false })
     if (!entry.ref) return corsJson(res, 200, { ready: false, sampleId: entry.sampleId })
+    let pdfBase64 = ''
+    try {
+      const sampleId = String(entry.sampleId || 'sample')
+        .replace(/[^\w.\-]+/g, '-')
+        .slice(0, 80)
+      const pdfName = String(entry.pdfName || 'Test_Request.pdf').replace(/[^\w.\-]+/g, '_')
+      const pdfPath = path.join('/tmp', 'qe-manak-pdfs', sampleId, pdfName)
+      if (fs.existsSync(pdfPath)) {
+        pdfBase64 = fs.readFileSync(pdfPath).toString('base64')
+      }
+    } catch {
+      /* ignore missing file */
+    }
     return corsJson(res, 200, {
       ready: true,
       sampleId: entry.sampleId,
       sample_code: entry.sample_code || '',
       ref: entry.ref,
       pdfName: entry.pdfName || 'Test_Request.pdf',
+      pdfBase64,
     })
   }
 

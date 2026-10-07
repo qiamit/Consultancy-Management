@@ -258,7 +258,7 @@ export function LocationFieldWithAdd({
           persistOnFocusLoss
           layer="stacked"
           aria-describedby={undefined}
-          className={cn(limsDialogClass, 'max-w-lg p-0')}
+          className={cn(limsDialogClass, 'w-[min(32rem,calc(100vw-1.5rem))] max-w-lg p-0')}
         >
           <div className="relative overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white">
             <div

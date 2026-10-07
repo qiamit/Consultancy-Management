@@ -181,8 +181,14 @@
 
   function highlightCaptcha(input, options) {
     if (!input) return;
-    input.style.outline = "3px solid #0f766e";
-    input.style.background = "#ecfdf5";
+    // Apply once — re-applying outline/background on every poll makes the box blink.
+    if (input.getAttribute("data-qe-captcha-hl") === "1") {
+      if (options && options.focus === false) return;
+    } else {
+      input.setAttribute("data-qe-captcha-hl", "1");
+      input.style.outline = "3px solid #0f766e";
+      input.style.background = "#ecfdf5";
+    }
     if (options && options.focus === false) return;
     try {
       input.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -223,6 +229,9 @@
 
   function prepareManualCaptcha(input) {
     if (!input) return;
+    // Idempotent — re-running clears user typing and looks like a blink.
+    if (input.getAttribute("data-qe-captcha-prepared") === "1") return;
+    input.setAttribute("data-qe-captcha-prepared", "1");
     try {
       const proto = HTMLInputElement.prototype;
       const desc = Object.getOwnPropertyDescriptor(proto, "value");
@@ -331,10 +340,15 @@
     window.addEventListener("paste", onPaste, true);
     const started = Date.now();
     let pingAt = 0;
+    let lastBannerLeft = -1;
+    let highlightedOnce = false;
     try {
       while (Date.now() - started < (timeoutMs || 300000)) {
         const box = preferredCaptchaBox();
-        highlightCaptcha(box, { focus: false });
+        if (!highlightedOnce) {
+          highlightCaptcha(box, { focus: false });
+          highlightedOnce = true;
+        }
         const typed = boxValue(box);
         if (shouldRejectCaptchaValue(typed, userTyped)) {
           clearAutofill(box);
@@ -345,11 +359,14 @@
         }
         if (firstTypedAt) {
           const left = Math.max(0, Math.ceil((holdMs - (Date.now() - firstTypedAt)) / 1000));
-          showManualBanner(
-            left > 0
-              ? `Captcha typing started. Next step in ${left}s…`
-              : "Captcha time done. Continuing…",
-          );
+          if (left !== lastBannerLeft) {
+            lastBannerLeft = left;
+            showManualBanner(
+              left > 0
+                ? `Captcha typing started. Next step in ${left}s…`
+                : "Captcha time done. Continuing…",
+            );
+          }
         }
         if (
           userTyped &&
@@ -726,15 +743,19 @@
   }
 
   async function solvePageCaptcha(options) {
+    // One in-flight wait per page — overlapping calls restart highlight/banner and blink.
+    if (window.__qeCaptchaSolvePromise) return window.__qeCaptchaSolvePromise;
     const opts = options || {};
     const minChars = opts.minChars || 5;
     silencePageAlerts();
     await sleep(300);
     highlightCaptcha(preferredCaptchaBox(), { focus: false });
-    const typed = await waitForCaptchaTyped(opts.fallbackMs || 300000, minChars, {
+    window.__qeCaptchaSolvePromise = waitForCaptchaTyped(opts.fallbackMs || 300000, minChars, {
       holdMs: opts.holdMs != null ? opts.holdMs : 10000,
+    }).finally(() => {
+      window.__qeCaptchaSolvePromise = null;
     });
-    return typed || "";
+    return window.__qeCaptchaSolvePromise;
   }
 
   root.qeCaptchaAssist = {

@@ -134,17 +134,9 @@ export function SampleFailureReplyTable({
                     </TableCell>
                     <TableCell className="align-middle text-center text-sm">
                       {isLabel ? (
-                        <div className="space-y-0.5">
-                          <p className="font-medium text-foreground">{isLabel}</p>
-                          {r.is_code?.title ? (
-                            <p
-                              className="mx-auto max-w-[200px] truncate text-[11px] text-muted-foreground"
-                              title={r.is_code.title}
-                            >
-                              {r.is_code.title}
-                            </p>
-                          ) : null}
-                        </div>
+                        <p className="font-medium text-foreground" title={isLabel}>
+                          {isLabel}
+                        </p>
                       ) : (
                         '—'
                       )}

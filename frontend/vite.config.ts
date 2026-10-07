@@ -16,6 +16,12 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (p) => (p === '/api/pdf' ? '/pdf' : p.replace(/^\/api/, '')),
       },
+      // Local-only BIS knowledge search (dev). Does not affect production / Railway.
+      '/api/knowledge': {
+        target: 'http://127.0.0.1:3851',
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/api\/knowledge/, '') || '/',
+      },
     },
   },
 })

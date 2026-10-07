@@ -214,9 +214,39 @@ const TITLE_SMALL_WORDS = new Set([
   'vs.',
 ])
 
+/** Legal / org suffixes & acronyms that should stay fully uppercase. */
+const TITLE_FORCE_UPPER = new Set([
+  'LLP',
+  'OPC',
+  'LLC',
+  'ISO',
+  'BIS',
+  'GST',
+  'MSME',
+  'SME',
+  'NABL',
+  'QCI',
+  'DPIIT',
+  'FDI',
+  'SEZ',
+  'IEC',
+  'CIN',
+  'PAN',
+  'UDI',
+  'UDIAM',
+  'NSIC',
+  'SSI',
+])
+
 function capitalizeCore(core: string): string {
   if (!core) return core
   if (/^\d+[a-z]?$/i.test(core)) return core
+  // Keep intentional ALL CAPS (e.g. user typed "LLP", "ISO").
+  if (core.length >= 2 && core === core.toUpperCase() && /[A-Z]/.test(core)) {
+    return core
+  }
+  const upper = core.toUpperCase()
+  if (TITLE_FORCE_UPPER.has(upper)) return upper
   return core.charAt(0).toUpperCase() + core.slice(1).toLowerCase()
 }
 
@@ -225,6 +255,13 @@ function formatTitleSegment(segment: string, capitalize: boolean): string {
   if (!match) return capitalize ? capitalizeCore(segment) : segment.toLowerCase()
   const [, lead, core, trail] = match
   if (!core) return segment
+  // Always preserve ALL CAPS / known acronyms even mid-phrase.
+  if (
+    (core.length >= 2 && core === core.toUpperCase() && /[A-Z]/.test(core)) ||
+    TITLE_FORCE_UPPER.has(core.toUpperCase())
+  ) {
+    return `${lead}${capitalizeCore(core)}${trail}`
+  }
   if (!capitalize) return `${lead}${core.toLowerCase()}${trail}`
   return `${lead}${capitalizeCore(core)}${trail}`
 }

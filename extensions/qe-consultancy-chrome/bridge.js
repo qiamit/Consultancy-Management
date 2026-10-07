@@ -168,10 +168,7 @@
       return;
     }
     if (data.type !== "QE_MANAK_OPEN") return;
-    if (window.__qeManakOpenSent && Date.now() - window.__qeManakOpenSent < 2000) {
-      window.postMessage({ type: "QE_MANAK_OPEN_ACK" }, "*");
-      return;
-    }
+    // Always forward to background — ACK-only debounce skipped the login payload.
     window.__qeManakOpenSent = Date.now();
     sendRuntime(
       {
@@ -201,7 +198,7 @@
           publish(msg.result, true);
         }
         if (msg.type === "QE_MANAK_QR_IMPORT" && msg.result) {
-          publish(msg.result, true);
+          publish(msg.result, false);
         }
         if (msg.type === "QE_MANAK_PDF_CHUNK") {
           acceptPdfChunk(msg);

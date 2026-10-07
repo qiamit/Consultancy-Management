@@ -4,10 +4,16 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { DEFAULT_COUNTRY, DEFAULT_STATE, emptyClientForm, toContinuousText, type ClientForm } from '@/features/masters/clients/types'
 import { ClientsForm } from '@/features/masters/clients/ClientsForm'
-import { limsDarkBarGlowStyle, limsDialogClass, limsPrimaryBtnClass } from '@/lib/limsThemeUi'
+import {
+  limsDarkBarGlowStyle,
+  limsDialogClass,
+  limsDialogSidebarOverlayClass,
+  limsDialogSidebarPortalClass,
+  limsPrimaryBtnClass,
+} from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 
-function useClientDialogState(open: boolean) {
+export function useClientDialogState(open: boolean) {
   const [form, setForm] = useState<ClientForm>(emptyClientForm)
   const [states, setStates] = useState<Array<{ id: string; label: string }>>([{ id: 'default-state', label: DEFAULT_STATE }])
   const [countries, setCountries] = useState<Array<{ id: string; label: string }>>([{ id: 'default-country', label: DEFAULT_COUNTRY }])
@@ -262,11 +268,13 @@ export function AddClientDialog({
     setSaveLoading(true)
     try {
       const form = state.form
+      const companyName = form.companyName.trim()
       const payload = {
+        name: companyName,
         gst_number: form.gstNumber.trim().toUpperCase() || null,
         company_type: form.companyType,
         company_scale: form.companyScale,
-        company_name: form.companyName.trim(),
+        company_name: companyName,
         contact_person_name: form.contactPersonName.trim() || null,
         country_code: form.countryCode || null,
         mobile: form.mobile.trim() || null,
@@ -305,12 +313,14 @@ export function AddClientDialog({
       <DialogContent
         className={cn(
           limsDialogClass,
-          'flex w-[min(920px,92vw)] max-w-none flex-col',
-          'max-h-[min(92vh,920px)]',
+          'max-w-[51.2rem] bg-white',
+          'w-[min(51.2rem,calc(100vw-1.5rem))]',
         )}
         aria-describedby={undefined}
         layer={nested ? 'nested' : 'default'}
         persistOnFocusLoss
+        overlayClassName={limsDialogSidebarOverlayClass}
+        portalClassName={limsDialogSidebarPortalClass}
       >
         <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white sm:px-5 sm:py-3">
           <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={limsDarkBarGlowStyle} />
@@ -328,7 +338,7 @@ export function AddClientDialog({
           </p>
         ) : null}
 
-        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-gradient-to-b from-stone-100/80 to-white px-4 py-4 sm:px-6 sm:py-5">
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-gradient-to-b from-stone-100/80 to-white px-3 py-3 sm:px-5 sm:py-4 md:px-6 md:py-5">
           <ClientsForm
             form={state.form}
             onChange={state.setForm}

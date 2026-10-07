@@ -297,22 +297,9 @@ function notifyAppTabs(result) {
 
 function deliverQrImportToTab(tabId, result) {
   if (!tabId || !result) return;
+  // Bridge content script posts to the page once — do not also executeScript
+  // postMessage or the app gets duplicate import events / toasts.
   void safeSendTab(tabId, { type: "QE_MANAK_QR_IMPORT", result });
-  if (!chrome.scripting || !chrome.scripting.executeScript) return;
-  void settle(
-    chrome.scripting.executeScript({
-      target: { tabId },
-      func: (payload) => {
-        try {
-          window.postMessage({ type: "QE_MANAK_QR_IMPORT", result: payload }, "*");
-          window.dispatchEvent(new CustomEvent("qe-manak-qr-import", { detail: payload }));
-        } catch {
-          /* ignore */
-        }
-      },
-      args: [result],
-    }),
-  );
 }
 
 function notifyQrImportToApp(result) {
@@ -682,7 +669,8 @@ function scheduleLoginFill(tabId, userId, password) {
     });
     injectMainWorldLogin(tabId, userId, password);
   };
-  [400, 900, 1600, 2800, 4500, 7000].forEach((ms) => setTimeout(tryFill, ms));
+  // Fewer retries — content script fills idempotently; extra fills refresh captcha image.
+  [500, 1400, 3200, 6000].forEach((ms) => setTimeout(tryFill, ms));
 }
 
 function isScriptableTabUrl(url) {
@@ -730,34 +718,9 @@ function isManakApplicantLoginUrl(url) {
 }
 
 async function findLoggedInManakTab() {
-  const tabs = await queryManakTabs();
-  let any = null;
-  let pathGuess = null;
-  for (const tab of tabs) {
-    if (!tab.id) continue;
-    const url = String(tab.url || tab.pendingUrl || "");
-    const session = await tabSession(tab.id);
-    if (session && session.loggedIn) {
-      if (!any) any = { tab, session };
-      continue;
-    }
-    // Guess only for real applicant pages — never /MANAK/login or eBISLogin.
-    if (
-      !pathGuess &&
-      /manakonline\.in/i.test(url) &&
-      !/ebislogin/i.test(url) &&
-      !isManakApplicantLoginUrl(url)
-    ) {
-      pathGuess = {
-        tab,
-        session: {
-          loggedIn: true,
-          onTr: /testRequestGenerationForApplicant/i.test(url),
-        },
-      };
-    }
-  }
-  return any || pathGuess;
+  // Only trust content-script confirmed sessions — never guess from URL.
+  // A stale Manak tab (home/error) used to fake loggedIn and skip eBIS login fill.
+  return findConfirmedLoggedInManakTab();
 }
 
 /** Import QR / login flows: only trust content-script confirmed sessions. */
@@ -954,7 +917,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const portalPassword = String(message.portalPassword || payload?.portalPassword || "").trim();
     rememberPortal(portalUserId, portalPassword);
     const importQr = Boolean(message.importQr);
-    const qrCount = Math.max(1, Math.min(50, Number(message.qrCount) || 1));
+    const qrCount = Math.max(1, Math.min(5, Number(message.qrCount) || 1));
     const openKey = [
       message.loginOnly ? "login" : importQr ? "import-qr" : "tr",
       portalUserId,
@@ -982,10 +945,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         await chrome.storage.local.set({
           pendingFill: null,
           manakQrImport: null,
+          manakResult: null,
           qeManakImportQr: true,
           qeManakImportQrEnabled: false,
           qeManakImportQrLanded: false,
           qeManakQrCount: qrCount,
+          // Kill any leftover Test Request auto-flow so captcha never routes to TR.
+          qeManakEnabled: false,
           qeManakArmed: true,
           qeManakHomeReady: false,
           qeManakImportQrTabId: 0,
@@ -1045,7 +1011,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return;
       }
       // Generate Test Request from app — always re-enable Auto flow (even if last run turned it OFF).
-      const reused = await findLoggedInManakTab();
+      // Use confirmed session only (same as Import QR) so User ID / captcha wait are not skipped.
+      const reused = await findConfirmedLoggedInManakTab();
       await chrome.storage.local.set({
         pendingFill: payload,
         manakResult: null,
@@ -1071,14 +1038,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         });
         return;
       }
-      const created = await safeTabCreate({ url: loginUrl });
+      // Prefer eBIS login URL with portal query params so content can fill even if message is late.
+      const created = await safeTabCreate({ url: ebisLoginUrl });
       if (created && created.id) {
         scheduleLoginFill(created.id, portalUserId, portalPassword);
       }
       sendResponse({
         ok: true,
         message:
-          "Manak Test Request ON. Opening eBIS login — type captcha, then Test Request fills automatically.",
+          "Manak Test Request ON. Opening eBIS login — User ID / Password will be filled. Type captcha (10s wait).",
       });
     })();
     return true;

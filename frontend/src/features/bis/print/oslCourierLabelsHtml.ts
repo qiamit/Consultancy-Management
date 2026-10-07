@@ -1,3 +1,5 @@
+import type { OslSampleRequirementRow } from '../projects/oslSampleRequirementsModel'
+import { parseOslSampleRequirementsPayload } from '../projects/oslSampleRequirementsModel'
 import type { BisPrintData } from './loadBisPrintData'
 import { escapeHtml as esc } from './openPrintHtml'
 import {
@@ -20,7 +22,7 @@ export type OslCourierLabelsData = PrintApplicantContext & {
 }
 
 const BLV_CARE_OF = 'BLV Testing Solutions C/o'
-const LAB_MOBILE = 'Mobile: +919009413040'
+const LAB_MOBILE = 'Mobile: +91 90094 13040'
 
 function labelCard(row: CourierLabelRow, data: OslCourierLabelsData): string {
   const labName = row.laboratoryName.trim() || '________________'
@@ -40,7 +42,7 @@ function labelCard(row: CourierLabelRow, data: OslCourierLabelsData): string {
         <div class="to-mobile">${esc(LAB_MOBILE)}</div>
       </div>
       <div class="from-block">
-        <div class="block-kicker">From · Applicant</div>
+        <div class="block-kicker">From · Applicant (Firm Details)</div>
         <div class="from-name">${esc(data.applicantName || '—')}</div>
         ${data.applicantAddress ? `<div class="from-address">${esc(data.applicantAddress)}</div>` : ''}
         <div class="from-meta">App No.: ${esc(applicationNoDisplay(data.applicationNumber))}</div>
@@ -60,6 +62,18 @@ function labelCard(row: CourierLabelRow, data: OslCourierLabelsData): string {
     </section>
   </div>
 </article>`
+}
+
+function sampleToCourierRow(row: OslSampleRequirementRow): CourierLabelRow {
+  const labName = row.laboratoryName.trim() || row.destinationLab.trim()
+  const dest = row.destinationLab.trim()
+  return {
+    laboratoryName: labName,
+    laboratoryAddress:
+      dest && dest.toLowerCase() !== labName.toLowerCase() ? dest : '',
+    sampleCode: row.sampleCode,
+    qrCode: row.qrCode,
+  }
 }
 
 function buildBody(data: OslCourierLabelsData): string {
@@ -111,12 +125,17 @@ export function buildOslCourierLabelsHtml(data: OslCourierLabelsData): string {
   })
 }
 
-/** Maps a BIS project row + client + consultancy context into courier label fields. */
+/** Maps a BIS project row + client + Sample Requirements module into courier label fields. */
 export function oslCourierLabelsDataFromPrintData(printData: BisPrintData): OslCourierLabelsData {
   const ctx = applicantContextFromPrintData(printData)
+  const parsed = parseOslSampleRequirementsPayload(
+    printData.modulePayload && typeof printData.modulePayload === 'object'
+      ? (printData.modulePayload as Record<string, unknown>)
+      : null,
+  )
   return {
     ...ctx,
-    rows: [],
+    rows: parsed.rows.map(sampleToCourierRow),
     includeBlvCareOf: true,
   }
 }

@@ -19,6 +19,7 @@ import BisProjectsMasterPage from '@/features/bis/projects/BisProjectsMasterPage
 import BisRenewalsMasterPage from '@/features/bis/renewals/BisRenewalsMasterPage'
 import BisSurveillanceMasterPage from '@/features/bis/surveillance/BisSurveillanceMasterPage'
 import BisSampleFailureReplyMasterPage from '@/features/bis/sample-failure-reply/BisSampleFailureReplyMasterPage'
+import BisKnowledgeSearchPage from '@/features/bis/knowledge-search/BisKnowledgeSearchPage'
 import EmailToolsPage from '@/features/tools/email/EmailToolsPage'
 import CmsToolsPage from '@/features/tools/cms/CmsToolsPage'
 import { RequireAuth } from '@/components/auth/RequireAuth'
@@ -113,6 +114,10 @@ export function ExpiredLicensesRoute() {
 
 export function DueSoonLicensesRoute() {
   return <BisProjectsMasterPage key="due_soon" listMode="due_soon" />
+}
+
+export function BisKnowledgeSearchRoute() {
+  return <BisKnowledgeSearchPage />
 }
 
 export function EmailToolsRoute() {

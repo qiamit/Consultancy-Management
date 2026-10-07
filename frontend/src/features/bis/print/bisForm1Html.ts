@@ -1,5 +1,6 @@
-import { formatDisplayDate, formatCmL } from '../projects/types'
+import { flattenBisNotesColumns, formatDisplayDate, formatCmL } from '../projects/types'
 import type { BisPrintData } from './loadBisPrintData'
+import { printSignatoryDefaults } from './loadBisPrintData'
 import { escapeHtml as esc } from './openPrintHtml'
 
 export type BisForm1Person = { name: string; designation: string }
@@ -279,7 +280,6 @@ function buildFormBody(data: BisForm1Data): string {
     </table>
 
     <p class="f1-important">Important — Application should be signed by CEO of the firm, or in his absence by authorized representative.</p>
-    ${data.preparedBy ? `<p class="f1-prepared">Prepared by ${esc(data.preparedBy)}</p>` : ''}
   </div>
 </div>`
 }
@@ -295,9 +295,17 @@ const FORM1_STYLES = `
     line-height: 1.35;
     max-width: 190mm;
     margin: 0 auto;
-    padding: 8mm 10mm;
+    padding: 2mm;
+    border: 2.5pt double #111;
+    box-sizing: border-box;
   }
-  @media print { .f1-sheet { max-width: none; padding: 0; } }
+  @media print {
+    .f1-sheet {
+      max-width: none;
+      padding: 2mm;
+      border: 2.5pt double #111;
+    }
+  }
   .f1-header { text-align: center; margin-bottom: 6px; border-bottom: 2px solid #b45309; padding-bottom: 5px; }
   .f1-form-title { font-size: 15px; font-weight: 700; }
   .f1-sub { font-size: 10px; margin-top: 2px; }
@@ -399,11 +407,13 @@ ${FIT_SCRIPT}
 }
 
 /** Maps a BIS project row + client + IS code + consultancy context into Form-I fields. */
-export function bisForm1DataFromPrintData({ row, client, isCode, company }: BisPrintData): BisForm1Data {
+export function bisForm1DataFromPrintData(printData: BisPrintData): BisForm1Data {
+  const { row, client, isCode, company } = printData
   const contactPerson = client.contactPerson
   const tel = client.mobile
   const cmL = row.cm_l_digits ? formatCmL(row.cm_l_digits) : ''
   const applicationNumber = (row.license_number ?? '').trim() || cmL
+  const sig = printSignatoryDefaults(printData)
 
   return {
     applicationNumber,
@@ -431,13 +441,13 @@ export function bisForm1DataFromPrintData({ row, client, isCode, company }: BisP
     isNumber: isCode.label,
     isPart: '',
     isSection: '',
-    gradesText: (row.notes ?? '').trim(),
+    gradesText: flattenBisNotesColumns(row.notes ?? ''),
     unitsOfProduction: '',
     quantity: '',
     valueRs: '',
     bisLicensesHeld: '',
-    signatoryName: contactPerson,
-    signatoryDesignation: '',
+    signatoryName: sig.signatoryName,
+    signatoryDesignation: sig.signatoryDesignation,
     dateOfApplication: row.start_date ?? row.created_at ?? '',
     preparedBy: company.companyName,
   }

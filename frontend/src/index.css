@@ -4,6 +4,10 @@
 
 @layer base {
   :root {
+    /* Dialog center / overlay inset — GlobalLayout updates when sidebar docks */
+    --app-dialog-center-x: 50%;
+    --app-dialog-overlay-left: 0px;
+
     /* Warm stone paper + amber accent (Client Master theme) */
     --background: 40 20% 97%;
     --foreground: 24 10% 10%;

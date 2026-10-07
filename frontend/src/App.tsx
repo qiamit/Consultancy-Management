@@ -10,6 +10,7 @@ import {
   BisLicenseRenewalsRoute,
   BisNewApplicationsRoute,
   BisNewInclusionRoute,
+  BisKnowledgeSearchRoute,
   BisProjectsRoute,
   BisSampleFailureReplyRoute,
   BisSurveillanceRoute,
@@ -61,6 +62,7 @@ export default function App() {
           <Route path="/bis/projects" element={<BisProjectsRoute />} />
           <Route path="/bis/expired-licenses" element={<ExpiredLicensesRoute />} />
           <Route path="/bis/due-soon" element={<DueSoonLicensesRoute />} />
+          <Route path="/bis/knowledge-search" element={<BisKnowledgeSearchRoute />} />
 
           <Route path="/masters/clients" element={<ClientsPage />} />
           <Route path="/masters/is-codes" element={<IsCodesPage />} />

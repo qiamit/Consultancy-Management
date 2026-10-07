@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { limsPageShellClass } from '@/lib/limsThemeUi'
 import { useFormDialogOpenChange } from '@/lib/formDialogOpenChange'
+import { useMasterUiSearchState } from '@/lib/useMasterUiSearchState'
 import { BisProjectsHeaderBar } from '../projects/BisProjectsHeaderBar'
 import { BisProjectsFooterBar } from '../projects/BisProjectsFooterBar'
 import { SampleFailureReplyForm } from './SampleFailureReplyForm'
@@ -32,6 +33,7 @@ import {
 const SEARCH_DEBOUNCE_MS = 350
 
 export default function BisSampleFailureReplyMasterPage() {
+  const { editId, setEdit } = useMasterUiSearchState()
   const [rows, setRows] = useState<SampleFailureReplyRow[]>([])
   const [total, setTotal] = useState(0)
   const [listLoading, setListLoading] = useState(false)
@@ -46,16 +48,24 @@ export default function BisSampleFailureReplyMasterPage() {
   const [reloadKey, setReloadKey] = useState(0)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
 
-  const [showForm, setShowForm] = useState(false)
-  const handleFormOpenChange = useFormDialogOpenChange(setShowForm)
-  const [editingRow, setEditingRow] = useState<SampleFailureReplyRow | null>(null)
   const [form, setForm] = useState<SampleFailureReplyFormValue>(() => emptySampleFailureReplyForm())
   const [saving, setSaving] = useState(false)
   const [attachmentBusy, setAttachmentBusy] = useState(false)
   const [emailBusy, setEmailBusy] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
+  const showForm = editId != null
+  const editingId = editId && editId !== 'new' ? editId : null
+  const editingRow = editingId ? rows.find((r) => r.id === editingId) ?? null : null
+  const handleFormOpenChange = useFormDialogOpenChange((open) => {
+    if (!open) {
+      hydratedEditRef.current = null
+      setEdit(null)
+    }
+  })
+
   const requestRef = useRef(0)
+  const hydratedEditRef = useRef<string | null>(null)
 
   useEffect(() => {
     const id = window.setTimeout(() => {
@@ -96,6 +106,31 @@ export default function BisSampleFailureReplyMasterPage() {
 
   const reload = useCallback(() => setReloadKey((k) => k + 1), [])
 
+  useEffect(() => {
+    if (!editId) {
+      hydratedEditRef.current = null
+      return
+    }
+    if (hydratedEditRef.current === editId) return
+
+    if (editId === 'new') {
+      setForm(emptySampleFailureReplyForm())
+      setFormError(null)
+      hydratedEditRef.current = 'new'
+      return
+    }
+
+    const fromPage = rows.find((r) => r.id === editId)
+    if (fromPage) {
+      setForm(rowToSampleFailureReplyForm(fromPage))
+      setFormError(null)
+      hydratedEditRef.current = editId
+      return
+    }
+
+    if (!listLoading) setEdit(null)
+  }, [editId, rows, listLoading, setEdit])
+
   const pageCount = Math.max(1, Math.ceil(total / pageSize))
   const canSave =
     !saving &&
@@ -104,17 +139,17 @@ export default function BisSampleFailureReplyMasterPage() {
     form.sampleFailureType.length > 0
 
   const openNew = () => {
-    setEditingRow(null)
     setForm(emptySampleFailureReplyForm())
     setFormError(null)
-    setShowForm(true)
+    hydratedEditRef.current = 'new'
+    setEdit('new')
   }
 
   const openEdit = (row: SampleFailureReplyRow) => {
-    setEditingRow(row)
     setForm(rowToSampleFailureReplyForm(row))
     setFormError(null)
-    setShowForm(true)
+    hydratedEditRef.current = row.id
+    setEdit(row.id)
   }
 
   const handleSave = async () => {
@@ -122,10 +157,10 @@ export default function BisSampleFailureReplyMasterPage() {
     setSaving(true)
     setFormError(null)
     try {
-      await saveSampleFailureReply(form, editingRow?.id ?? null)
-      setShowForm(false)
-      setMessage(editingRow ? 'Saved changes.' : 'Saved new sample failure reply.')
-      setEditingRow(null)
+      await saveSampleFailureReply(form, editingId)
+      hydratedEditRef.current = null
+      setEdit(null)
+      setMessage(editingId ? 'Saved changes.' : 'Saved new sample failure reply.')
       reload()
     } catch (err) {
       setFormError(formatBisApiError(err))

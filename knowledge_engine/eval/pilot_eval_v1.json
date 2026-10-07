@@ -1,0 +1,93 @@
+{
+  "name": "pilot_eval_v1",
+  "notes": [
+    "Gold labels hand-authored against approved 40-file pilot selection.",
+    "Do not derive gold from query text automatically.",
+    "Baseline regressions also covered by reliability_eval_v1.json"
+  ],
+  "answerable": [
+    {
+      "id": "p_b1_lhc",
+      "lang": "en",
+      "query": "Liquid Holding Capacity formula percent by mass",
+      "standard": "IS 9666",
+      "expect_chunk_id": "native_text:p0005:c018",
+      "expect_clause": "A-3",
+      "gold_label": "CHUNK"
+    },
+    {
+      "id": "p_b2_hi_lhc",
+      "lang": "hi",
+      "query": "लिक्विड होल्डिंग कैपेसिटी का सूत्र क्या है?",
+      "standard": "IS 9666",
+      "expect_chunk_id": "native_text:p0005:c018",
+      "expect_clause": "A-3",
+      "gold_label": "CHUNK"
+    },
+    {
+      "id": "p_b3_r5",
+      "lang": "en",
+      "query": "maximum loading of a technical formulation on blank granule",
+      "standard": "IS 9666",
+      "expect_chunk_id": "native_text:p0005:c015",
+      "expect_clause": "A-1",
+      "gold_label": "CHUNK"
+    },
+    {
+      "id": "p_b4_aluminium_scope",
+      "lang": "en",
+      "query": "dimensions and tolerances for wrought aluminium sheet and strip",
+      "standard": "IS 2676",
+      "expect_chunk_id": "scanned:p0007:c011",
+      "expect_clause": "1.1",
+      "gold_label": "CHUNK"
+    },
+    {
+      "id": "p_extraneous",
+      "lang": "en",
+      "query": "granules free from extraneous material",
+      "standard": "IS 9666",
+      "expect_chunk_id": "native_text:p0003:c004",
+      "expect_clause": "4.1",
+      "gold_label": "CHUNK"
+    },
+    {
+      "id": "p_mixed_lhc",
+      "lang": "mixed",
+      "query": "LHC का calculation formula M M1",
+      "standard": "IS 9666",
+      "expect_chunk_id": "native_text:p0005:c018",
+      "expect_clause": "A-3",
+      "gold_label": "CHUNK"
+    }
+  ],
+  "unanswerable": [
+    {
+      "id": "p_u1_melting",
+      "lang": "en",
+      "query": "What is the melting point of blank granules in IS 9666?",
+      "standard": "IS 9666",
+      "expect_chunk_id": null,
+      "expect_clause": null,
+      "gold_label": "NOT_FOUND"
+    },
+    {
+      "id": "p_u2_tensile_2676",
+      "lang": "en",
+      "query": "minimum tensile strength of wrought aluminium sheet IS 2676",
+      "standard": "IS 2676",
+      "expect_chunk_id": null,
+      "expect_clause": null,
+      "gold_label": "NOT_FOUND"
+    },
+    {
+      "id": "p_u3_hi_moisture",
+      "lang": "hi",
+      "query": "ब्लैंक ग्रेन्यूल्स की नमी प्रतिशत सीमा क्या है?",
+      "standard": "IS 9666",
+      "expect_chunk_id": null,
+      "expect_clause": null,
+      "gold_label": "NOT_FOUND"
+    }
+  ]
+}

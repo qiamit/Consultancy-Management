@@ -1,4 +1,5 @@
 import type { BisPrintData } from './loadBisPrintData'
+import { printSignatoryDefaults } from './loadBisPrintData'
 import { escapeHtml as esc } from './openPrintHtml'
 import {
   applicantContextFromPrintData,
@@ -147,8 +148,8 @@ export function updatedSchemeOfInspectionDataFromPrintData(printData: BisPrintDa
   return {
     ...applicantContextFromPrintData(printData),
     pmReference: '',
-    signatoryName: printData.client.contactPerson,
-    signatoryDesignation: '',
+    signatoryName: printSignatoryDefaults(printData).signatoryName,
+    signatoryDesignation: printSignatoryDefaults(printData).signatoryDesignation,
     annexSections: DEFAULT_ANNEX_HEADERS.map((header) => ({ header, text: '' })),
     notes: ['', '', ''],
   }

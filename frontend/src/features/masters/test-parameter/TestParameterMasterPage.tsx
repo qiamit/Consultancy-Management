@@ -1,38 +1,39 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { limsDarkBarGlowStyle, limsDialogClass, limsPageShellClass } from '@/lib/limsThemeUi'
+import { limsPageShellClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabaseClient'
-import { useFormDialogOpenChange } from '@/lib/formDialogOpenChange'
+import { useMasterUiSearchState } from '@/lib/useMasterUiSearchState'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { TestParameterHeaderBar } from './TestParameterHeaderBar'
 import { buildTestParametersListAssistantContext } from './buildTestParameterAssistantContext'
-import { TestParameterForm } from './TestParameterForm'
 import {
   TestParameterTable,
   type TestParameterSortDir,
   type TestParameterSortKey,
 } from './TestParameterTable'
 import { TestParameterTableFooterBar } from './TestParameterFooterBar'
-import { TestParameterUncertaintyDialog } from './TestParameterUncertaintyDialog'
-import type { UncertaintyCalculationData } from './testParameterUncertainty'
-import { parseUncertaintyCalculationData } from './testParameterUncertainty'
-import {
-  newUncertaintyHistoryId,
-  parseUncertaintyMuHistory,
-  todayIsoDate,
-  type UncertaintyHistoryRecord,
-} from './uncertaintyHistory'
-import { useAuth } from '@/hooks/useAuth'
 import { IsCodesForm } from '@/features/masters/is-codes/IsCodesForm'
 import { fetchDesignationAndDepartmentLabels } from '@/features/settings/lab-settings/labMasterOptions'
 import { emptyIsCodeForm, normalizeText as normalizeIsText, type IsCodeForm, type IsAspect } from '@/features/masters/is-codes/types'
-import { formatIsCodeLabelFromParts, normalizeIsCodeLabel } from '@/features/masters/is-codes/formatIsCodeLabel'
+import {
+  formatIsCodeLabelFromParts,
+  formatTestMethodWithYear,
+  normalizeIsCodeLabel,
+} from '@/features/masters/is-codes/formatIsCodeLabel'
+import { AddSymbolDialog } from './AddSymbolDialog'
+import {
+  TEST_PARAMETER_SYNC_CHANNEL,
+  type TestParameterSyncAddedMessage,
+} from './openAddTestParameterWindow'
+import {
+  insertAtCaret,
+  type SymbolCaretTarget,
+} from './scientificSymbols'
 import {
   emptyTestParameterForm,
   normalizeText,
   toProperTitleCase,
-  type AccreditationBodyRow,
   type TestParameterForm as TestParameterFormType,
   type TestParameterRow,
 } from './types'
@@ -144,18 +145,20 @@ function parseCsv(text: string) {
 }
 
 export default function TestParameterMasterPage() {
-  const { profileName } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
+  const { editId, setEdit } = useMasterUiSearchState()
   const [saveLoading, setSaveLoading] = useState(false)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
 
-  const [editingId, setEditingId] = useState<string | null>(null)
+  const editingId = editId && editId !== 'new' ? editId : null
+  const hydratedEditRef = useRef<string | null>(null)
+  const [editForm, setEditForm] = useState<TestParameterFormType>(() => emptyTestParameterForm())
 
   const importInputRef = useRef<HTMLInputElement | null>(null)
 
-  const [showForm, setShowForm] = useState(false)
-  const handleFormOpenChange = useFormDialogOpenChange(setShowForm)
   const [search, setSearch] = useState('')
+  /** When set (deep-link from FTR etc.), list only rows for this IS id. Cleared when user edits search. */
+  const [lockedIsCodeId, setLockedIsCodeId] = useState<string | null>(null)
 
   const [rows, setRows] = useState<TestParameterRow[]>([])
   const [listLoading, setListLoading] = useState(false)
@@ -163,18 +166,22 @@ export default function TestParameterMasterPage() {
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(10)
+  const [pageSize, setPageSize] = useState(20)
   const [jumpTo, setJumpTo] = useState('')
   const [sortKey, setSortKey] = useState<TestParameterSortKey>('isCode')
   const [sortDir, setSortDir] = useState<TestParameterSortDir>('asc')
 
-  const [form, setForm] = useState<TestParameterFormType>(() => emptyTestParameterForm())
+  const [inlineForm, setInlineForm] = useState<TestParameterFormType>(() => emptyTestParameterForm())
+  const [inlineAddLoading, setInlineAddLoading] = useState(false)
+  const [symbolDialogOpen, setSymbolDialogOpen] = useState(false)
+  const symbolTargetRef = useRef<SymbolCaretTarget>({
+    field: 'itemName',
+    scope: 'inline',
+    start: 0,
+    end: 0,
+  })
 
   const [isCodes, setIsCodes] = useState<Array<{ id: string; displayCode: string; searchLabel: string; defaultTestMethod: string }>>([])
-
-  const [accreditationBodies, setAccreditationBodies] = useState<AccreditationBodyRow[]>([])
-  const [accreditationDialogOpen, setAccreditationDialogOpen] = useState(false)
-  const [newAccreditationBody, setNewAccreditationBody] = useState('')
 
   const [isCodeDialogOpen, setIsCodeDialogOpen] = useState(false)
   const [isCodeForm, setIsCodeForm] = useState<IsCodeForm>(() => emptyIsCodeForm())
@@ -191,45 +198,57 @@ export default function TestParameterMasterPage() {
     readDesignationByDepartmentFromStorage,
   )
 
-  const [uncertaintyRow, setUncertaintyRow] = useState<TestParameterRow | null>(null)
-  const [uncertaintyOpen, setUncertaintyOpen] = useState(false)
-  const [uncertaintySaving, setUncertaintySaving] = useState(false)
-
   useEffect(() => {
-    if (searchParams.get('openAdd') !== '1') return
+    const wantsAdd = searchParams.get('openAdd') === '1'
+    const wantsFilter = searchParams.get('filterIs') === '1'
+    if (!wantsAdd && !wantsFilter) return
 
-    const isCodeId = searchParams.get('isCodeId') ?? ''
+    const isCodeId = (searchParams.get('isCodeId') ?? '').trim()
     const isCodeLabelParam = searchParams.get('isCodeLabel') ?? ''
     const departmentParam = searchParams.get('department') ?? ''
     const designationParam = searchParams.get('designation') ?? ''
+    const syncToken = (searchParams.get('syncToken') ?? '').trim()
     const isCodeRow = isCodes.find((c) => c.id === isCodeId)
-    const base = emptyTestParameterForm()
+    const label = (isCodeLabelParam || isCodeRow?.displayCode || '').trim()
 
-    setSaveMessage(null)
-    setEditingId(null)
-    setForm({
-      ...base,
-      isCodeId,
-      isCodeLabel: isCodeLabelParam || isCodeRow?.displayCode || '',
-      testMethod: isCodeRow?.defaultTestMethod ?? base.testMethod,
-      department: departmentParam || base.department,
-      designation: designationParam || base.designation,
-    })
-    setShowForm(true)
+    if (wantsFilter) {
+      if (isCodeId) setLockedIsCodeId(isCodeId)
+      if (label) setSearch(label)
+      setPage(1)
+    }
+
+    if (wantsAdd) {
+      const base = emptyTestParameterForm()
+      setSaveMessage(null)
+      setInlineForm({
+        ...base,
+        isCodeId,
+        isCodeLabel: label || base.isCodeLabel,
+        testMethod: isCodeRow?.defaultTestMethod ?? (label || base.testMethod),
+        department: departmentParam || base.department,
+        designation: designationParam || base.designation,
+      })
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+
+    if (syncToken) {
+      try {
+        sessionStorage.setItem('qe-test-parameter-sync-token', syncToken)
+      } catch {
+        /* ignore */
+      }
+    }
 
     const next = new URLSearchParams(searchParams)
     next.delete('openAdd')
+    next.delete('filterIs')
     next.delete('isCodeId')
     next.delete('isCodeLabel')
     next.delete('department')
     next.delete('designation')
+    next.delete('syncToken')
     setSearchParams(next, { replace: true })
-    window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [searchParams, setSearchParams, isCodes])
-
-  const canSave =
-    !saveLoading &&
-    normalizeText(form.itemName).length > 0
 
   const loadRows = async () => {
     setListError(null)
@@ -305,19 +324,6 @@ export default function TestParameterMasterPage() {
       )
     } catch (err) {
       errors.push(err instanceof Error ? err.message : 'Unable to load IS codes')
-    }
-
-    try {
-      const { data: abData, error: abErr } = await supabase
-        .from('accreditation_bodies')
-        .select('id, name, created_at')
-        .order('name', { ascending: true })
-
-      if (abErr) throw abErr
-      setAccreditationBodies(Array.isArray(abData) ? (abData as AccreditationBodyRow[]) : [])
-    } catch (err) {
-      setAccreditationBodies([])
-      errors.push(err instanceof Error ? err.message : 'Unable to load accreditation bodies')
     }
 
     if (errors.length > 0) {
@@ -409,32 +415,56 @@ export default function TestParameterMasterPage() {
   }, [])
 
   useEffect(() => {
-    if (!showForm) return
-    void loadUserManagementOptions()
-  }, [showForm])
-
-  useEffect(() => {
-    if (form.underAccreditationIds?.length) return
-    if (!accreditationBodies.length) return
-    const defaultNabl = accreditationBodies.find((body) => body.name.trim().toLowerCase() === 'nabl')
-    if (defaultNabl) {
-      setForm((prev) => ({
-        ...prev,
-        underAccreditationIds: [defaultNabl.id],
-      }))
-    }
-  }, [accreditationBodies, form.underAccreditationIds?.length])
-
-  useEffect(() => {
     setPage(1)
     setJumpTo('')
   }, [search, pageSize])
 
-  const filteredRows = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    if (!q) return rows
+  const resolveTestMethodDisplay = (
+    testMethod: string | null | undefined,
+    isCodeId: string | null | undefined,
+    isCodeLabel: string | null | undefined,
+  ) => {
+    const fromLinked = isCodeId
+      ? isCodes.find((c) => c.id === isCodeId)?.displayCode
+      : undefined
+    let out = formatTestMethodWithYear(testMethod, fromLinked ?? isCodeLabel)
+    if (out && !/:\s*\d{4}\b/.test(out)) {
+      const base = normalizeIsCodeLabel(testMethod).split(':')[0].trim().toLowerCase()
+      const byNumber = isCodes.find(
+        (c) => c.displayCode.split(':')[0].trim().toLowerCase() === base,
+      )
+      out = formatTestMethodWithYear(testMethod, byNumber?.displayCode) || out
+    }
+    return out
+  }
 
-    return rows.filter((r) => {
+  /** List/form display: Test Method always includes revision year when known. */
+  const displayRows = useMemo(() => {
+    const byId = new Map(isCodes.map((c) => [c.id, c.displayCode]))
+    const byBase = new Map(
+      isCodes.map((c) => [c.displayCode.split(':')[0].trim().toLowerCase(), c.displayCode] as const),
+    )
+    return rows.map((r) => {
+      const fromLinked = r.is_code_id ? byId.get(r.is_code_id) : undefined
+      let method = formatTestMethodWithYear(r.test_method, fromLinked ?? r.is_code_label)
+      if (method && !/:\s*\d{4}\b/.test(method)) {
+        const base = normalizeIsCodeLabel(r.test_method).split(':')[0].trim().toLowerCase()
+        method = formatTestMethodWithYear(r.test_method, byBase.get(base)) || method
+      }
+      return { ...r, test_method: method || r.test_method }
+    })
+  }, [rows, isCodes])
+
+  const filteredRows = useMemo(() => {
+    const lockedId = (lockedIsCodeId ?? '').trim()
+    if (lockedId) {
+      return displayRows.filter((r) => (r.is_code_id ?? '').trim() === lockedId)
+    }
+
+    const q = search.trim().toLowerCase()
+    if (!q) return displayRows
+
+    return displayRows.filter((r) => {
       const blob = [
         r.is_code_label ?? '',
         r.test_method ?? '',
@@ -442,7 +472,6 @@ export default function TestParameterMasterPage() {
         r.unit_value ?? '',
         r.item_name ?? '',
         r.specific_requirement ?? '',
-        r.uncertainty_mu ?? '',
         r.department ?? '',
         r.designation ?? '',
       ]
@@ -451,7 +480,7 @@ export default function TestParameterMasterPage() {
 
       return blob.includes(q)
     })
-  }, [rows, search])
+  }, [displayRows, search, lockedIsCodeId])
 
   const sortedRows = useMemo(() => {
     const sortValue = (r: TestParameterRow): string => {
@@ -461,19 +490,13 @@ export default function TestParameterMasterPage() {
         case 'itemName':
           return (r.item_name ?? '').trim().toLowerCase()
         case 'testMethod':
-          return [r.test_method, r.clause_no, r.unit_value].filter(Boolean).join(' ').trim().toLowerCase()
+          return (r.test_method ?? '').trim().toLowerCase()
+        case 'clause':
+          return (r.clause_no ?? '').trim().toLowerCase()
+        case 'unit':
+          return (r.unit_value ?? '').trim().toLowerCase()
         case 'requirement':
           return (r.specific_requirement ?? '').trim().toLowerCase()
-        case 'uncertainty':
-          return (r.uncertainty_mu ?? '').trim().toLowerCase()
-        case 'accreditation': {
-          if (!r.under_accreditation_ids?.length) return ''
-          return r.under_accreditation_ids
-            .map((id) => accreditationBodies.find((b) => b.id === id)?.name ?? '')
-            .filter(Boolean)
-            .join(', ')
-            .toLowerCase()
-        }
         default:
           return ''
       }
@@ -490,7 +513,7 @@ export default function TestParameterMasterPage() {
       })
       return nameCmp * dir
     })
-  }, [filteredRows, sortKey, sortDir, accreditationBodies])
+  }, [filteredRows, sortKey, sortDir])
 
   const pageCount = Math.max(1, Math.ceil(sortedRows.length / pageSize))
 
@@ -498,6 +521,20 @@ export default function TestParameterMasterPage() {
     const start = (page - 1) * pageSize
     return sortedRows.slice(start, start + pageSize)
   }, [sortedRows, page, pageSize])
+
+  const parameterNameOptions = useMemo(() => {
+    const seen = new Set<string>()
+    const names: string[] = []
+    for (const r of rows) {
+      const name = (r.item_name ?? '').trim()
+      if (!name) continue
+      const key = name.toLowerCase()
+      if (seen.has(key)) continue
+      seen.add(key)
+      names.push(name)
+    }
+    return names.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
+  }, [rows])
 
   const handleSort = (key: TestParameterSortKey) => {
     if (sortKey === key) {
@@ -541,91 +578,69 @@ export default function TestParameterMasterPage() {
 
   const selectedRows = useMemo(() => rows.filter((r) => selectedIds.has(r.id)), [rows, selectedIds])
 
-  const handleNew = () => {
-    setSaveMessage(null)
-    setForm(emptyTestParameterForm())
-    setEditingId(null)
-    setShowForm(true)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+  const hydrateEditForm = (row: TestParameterRow) => {
+    const testMethod =
+      resolveTestMethodDisplay(row.test_method, row.is_code_id, row.is_code_label) ||
+      row.test_method ||
+      ''
+    setEditForm({
+      isCodeId: row.is_code_id ?? '',
+      isCodeLabel: row.is_code_label ?? '',
+      clauseNo: row.clause_no ?? '',
+      unitValue: row.unit_value ?? '',
+      testMethod,
+      itemName: row.item_name ?? '',
+      specificRequirement: row.specific_requirement ?? '',
+      department: row.department ?? '',
+      designation: row.designation ?? '',
+    })
   }
+
+  useEffect(() => {
+    if (!editId || editId === 'new') {
+      if (editId === 'new') setEdit(null)
+      hydratedEditRef.current = null
+      return
+    }
+    if (hydratedEditRef.current === editId) return
+
+    const fromPage = rows.find((r) => r.id === editId)
+    if (fromPage) {
+      setSaveMessage(null)
+      hydrateEditForm(fromPage)
+      hydratedEditRef.current = editId
+      return
+    }
+
+    if (!listLoading) setEdit(null)
+  }, [editId, rows, listLoading, isCodes, setEdit])
 
   const handleEdit = (row: TestParameterRow) => {
     setSaveMessage(null)
-    setEditingId(row.id)
-    setForm({
-      isCodeId: row.is_code_id ?? '',
-      isCodeLabel: row.is_code_label ?? '',
-      clauseNo: row.clause_no ?? '',
-      unitValue: row.unit_value ?? '',
-      testMethod: row.test_method ?? '',
-      itemName: row.item_name ?? '',
-      specificRequirement: row.specific_requirement ?? '',
-      underAccreditationIds: row.under_accreditation_ids ?? [],
-      uncertaintyMu: row.uncertainty_mu ?? '',
-      department: row.department ?? '',
-      designation: row.designation ?? '',
-    })
-    setShowForm(true)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    hydrateEditForm(row)
+    hydratedEditRef.current = row.id
+    setEdit(row.id)
   }
 
-  const handleCopy = (row: TestParameterRow) => {
-    setSaveMessage(null)
-    setEditingId(null)
-    setForm({
-      isCodeId: row.is_code_id ?? '',
-      isCodeLabel: row.is_code_label ?? '',
-      clauseNo: row.clause_no ?? '',
-      unitValue: row.unit_value ?? '',
-      testMethod: row.test_method ?? '',
-      itemName: `${row.item_name ?? ''} - Copy`,
-      specificRequirement: row.specific_requirement ?? '',
-      underAccreditationIds: row.under_accreditation_ids ?? [],
-      uncertaintyMu: row.uncertainty_mu ?? '',
-      department: row.department ?? '',
-      designation: row.designation ?? '',
-    })
-    setShowForm(true)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+  const handleInlineEditCancel = () => {
+    hydratedEditRef.current = null
+    setEdit(null)
+    setEditForm(emptyTestParameterForm())
   }
 
-  const handleSave = () => {
+  const handleInlineEditSave = () => {
     void (async () => {
+      if (!editingId || saveLoading || normalizeText(editForm.itemName).length === 0) return
       setSaveMessage(null)
       setSaveLoading(true)
       try {
-        const isRow = isCodes.find((x) => x.id === form.isCodeId)
-
-        const payload = {
-          ...(editingId ? { id: editingId } : {}),
-          is_code_id: form.isCodeId || null,
-          is_code_label: normalizeText(form.isCodeLabel) || (isRow?.displayCode ?? null),
-          clause_no: normalizeText(form.clauseNo) || null,
-          unit_value: normalizeText(form.unitValue) || null,
-          test_method: normalizeText(form.testMethod) || (isRow?.defaultTestMethod ?? null),
-          item_name: toProperTitleCase(normalizeText(form.itemName)),
-          specific_requirement: toProperTitleCase(normalizeText(form.specificRequirement)) || null,
-          under_accreditation_ids: form.underAccreditationIds ?? [],
-          uncertainty_mu: normalizeText(form.uncertaintyMu) || null,
-          department: normalizeText(form.department) || null,
-          designation: normalizeText(form.designation) || null,
-        }
-
-        if (editingId) {
-          const { id: _id, ...updatePayload } = payload as { id: string; [k: string]: unknown }
-          const { error } = await supabase.from('test_parameters').update(updatePayload).eq('id', editingId)
-          if (error) throw error
-        } else {
-          const { id: _id, ...insertPayload } = payload as { id?: string; [k: string]: unknown }
-          const { error } = await supabase.from('test_parameters').insert(insertPayload)
-          if (error) throw error
-        }
-
+        const payload = buildInsertPayload(editForm)
+        const { error } = await supabase.from('test_parameters').update(payload).eq('id', editingId)
+        if (error) throw error
         setSaveMessage('Saved successfully.')
-        setForm(emptyTestParameterForm())
-        setEditingId(null)
-        setShowForm(false)
-        // Keep list page/search/scroll; only refresh rows after closing the form.
+        hydratedEditRef.current = null
+        setEdit(null)
+        setEditForm(emptyTestParameterForm())
         await loadRows()
       } catch (err) {
         setSaveMessage(formatSupabaseError(err))
@@ -633,6 +648,132 @@ export default function TestParameterMasterPage() {
         setSaveLoading(false)
       }
     })()
+  }
+
+  const buildInsertPayload = (source: TestParameterFormType) => {
+    const isRow = isCodes.find((x) => x.id === source.isCodeId)
+    return {
+      is_code_id: source.isCodeId || null,
+      is_code_label: normalizeText(source.isCodeLabel) || (isRow?.displayCode ?? null),
+      clause_no: normalizeText(source.clauseNo) || null,
+      unit_value: normalizeText(source.unitValue) || null,
+      test_method:
+        formatTestMethodWithYear(
+          normalizeText(source.testMethod) || isRow?.defaultTestMethod,
+          isRow?.displayCode ?? source.isCodeLabel,
+        ) || null,
+      item_name: toProperTitleCase(normalizeText(source.itemName)),
+      specific_requirement: toProperTitleCase(normalizeText(source.specificRequirement)) || null,
+      under_accreditation_ids: [] as string[],
+      uncertainty_mu: null,
+      department: normalizeText(source.department) || null,
+      designation: normalizeText(source.designation) || null,
+    }
+  }
+
+  const handleInlineAdd = () => {
+    void (async () => {
+      if (inlineAddLoading || normalizeText(inlineForm.itemName).length === 0) return
+      setSaveMessage(null)
+      setInlineAddLoading(true)
+      try {
+        const payload = buildInsertPayload(inlineForm)
+        const { data, error } = await supabase
+          .from('test_parameters')
+          .insert(payload)
+          .select(
+            'id, item_name, clause_no, unit_value, specific_requirement, test_method, is_code_label, is_code_id',
+          )
+          .single()
+        if (error) throw error
+        setSaveMessage('Saved successfully.')
+
+        try {
+          const syncToken = sessionStorage.getItem('qe-test-parameter-sync-token') ?? ''
+          if (syncToken && data) {
+            const msg: TestParameterSyncAddedMessage = {
+              type: 'test-parameter-added',
+              syncToken,
+              param: {
+                id: String(data.id ?? ''),
+                item_name: String(data.item_name ?? ''),
+                clause_no: data.clause_no != null ? String(data.clause_no) : null,
+                unit_value: data.unit_value != null ? String(data.unit_value) : null,
+                specific_requirement:
+                  data.specific_requirement != null ? String(data.specific_requirement) : null,
+                test_method: data.test_method != null ? String(data.test_method) : null,
+                is_code_label: data.is_code_label != null ? String(data.is_code_label) : null,
+                is_code_id: data.is_code_id != null ? String(data.is_code_id) : null,
+              },
+            }
+            const channel = new BroadcastChannel(TEST_PARAMETER_SYNC_CHANNEL)
+            channel.postMessage(msg)
+            channel.close()
+          }
+        } catch {
+          /* sync is best-effort */
+        }
+
+        // Keep last selected IS Code + Test Method until user changes them manually.
+        setInlineForm((prev) => {
+          const matched =
+            isCodes.find((c) => c.id === prev.isCodeId) ||
+            isCodes.find(
+              (c) =>
+                c.displayCode.trim().toLowerCase() === prev.isCodeLabel.trim().toLowerCase(),
+            )
+          const stickyIsCodeId = prev.isCodeId || matched?.id || ''
+          const stickyIsCodeLabel = prev.isCodeLabel.trim() || matched?.displayCode || ''
+          const stickyTestMethod =
+            prev.testMethod.trim() ||
+            matched?.defaultTestMethod ||
+            stickyIsCodeLabel
+          return {
+            ...emptyTestParameterForm(),
+            isCodeId: stickyIsCodeId,
+            isCodeLabel: stickyIsCodeLabel,
+            testMethod: stickyTestMethod,
+            // Keep last Clause / Requirements until user changes them manually.
+            clauseNo: prev.clauseNo,
+            specificRequirement: prev.specificRequirement,
+            unitValue: prev.unitValue,
+          }
+        })
+        await loadRows()
+      } catch (err) {
+        setSaveMessage(formatSupabaseError(err))
+      } finally {
+        setInlineAddLoading(false)
+      }
+    })()
+  }
+
+  const handleTrackSymbolTarget = (target: SymbolCaretTarget) => {
+    symbolTargetRef.current = target
+  }
+
+  const handleInsertSymbol = (symbol: string) => {
+    const target = symbolTargetRef.current
+    const useEdit = target.scope === 'edit' && Boolean(editingId)
+    const scope = useEdit ? 'edit' : 'inline'
+    const form = useEdit ? editForm : inlineForm
+    const setForm = useEdit ? setEditForm : setInlineForm
+    const field = target.field
+    const current = form[field] ?? ''
+    const { next, caret } = insertAtCaret(current, symbol, target.start, target.end)
+    setForm((prev) => ({ ...prev, [field]: next }))
+    symbolTargetRef.current = { field, scope, start: caret, end: caret }
+    requestAnimationFrame(() => {
+      const nodes = document.querySelectorAll<HTMLInputElement>(
+        `[data-symbol-field="${field}"][data-symbol-scope="${scope}"]`,
+      )
+      for (const el of nodes) {
+        if (el.offsetParent === null && el.getClientRects().length === 0) continue
+        el.focus({ preventScroll: true })
+        el.setSelectionRange(caret, caret)
+        break
+      }
+    })
   }
 
   const openAddIsCodeForm = (typed: string) => {
@@ -731,12 +872,21 @@ export default function TestParameterMasterPage() {
 
         await loadMasters()
 
-        setForm((prev) => ({
-          ...prev,
-          isCodeId: row.id,
-          isCodeLabel: displayCode,
-          testMethod: displayCode,
-        }))
+        if (editingId) {
+          setEditForm((prev) => ({
+            ...prev,
+            isCodeId: row.id,
+            isCodeLabel: displayCode,
+            testMethod: displayCode,
+          }))
+        } else {
+          setInlineForm((prev) => ({
+            ...prev,
+            isCodeId: row.id,
+            isCodeLabel: displayCode,
+            testMethod: displayCode,
+          }))
+        }
       } catch (err) {
         setSaveMessage(formatSupabaseError(err))
       } finally {
@@ -772,6 +922,35 @@ export default function TestParameterMasterPage() {
     })()
   }
 
+  const handleDeleteRow = (row: TestParameterRow) => {
+    void (async () => {
+      const label = row.item_name?.trim() || 'this record'
+      const ok = window.confirm(`Delete "${label}"?`)
+      if (!ok) return
+      setSaveMessage(null)
+      setSaveLoading(true)
+      try {
+        const { error } = await supabase.from('test_parameters').delete().eq('id', row.id)
+        if (error) throw error
+        setSaveMessage('Deleted successfully.')
+        setSelectedIds((prev) => {
+          if (!prev.has(row.id)) return prev
+          const next = new Set(prev)
+          next.delete(row.id)
+          return next
+        })
+        if (editingId === row.id) {
+          handleInlineEditCancel()
+        }
+        await loadRows()
+      } catch (err) {
+        setSaveMessage(err instanceof Error ? err.message : 'Unable to delete')
+      } finally {
+        setSaveLoading(false)
+      }
+    })()
+  }
+
   const handleExport = () => {
     const exportRows = selectedRows.length > 0 ? selectedRows : sortedRows
 
@@ -783,8 +962,6 @@ export default function TestParameterMasterPage() {
       'test_method',
       'item_name',
       'specific_requirement',
-      'under_accreditation_ids',
-      'uncertainty_mu',
       'department',
       'designation',
       'created_at',
@@ -798,8 +975,6 @@ export default function TestParameterMasterPage() {
       test_method: r.test_method ?? '',
       item_name: r.item_name ?? '',
       specific_requirement: r.specific_requirement ?? '',
-      under_accreditation_ids: (r.under_accreditation_ids ?? []).join('|'),
-      uncertainty_mu: r.uncertainty_mu ?? '',
       department: r.department ?? '',
       designation: r.designation ?? '',
       created_at: r.created_at ?? '',
@@ -821,28 +996,17 @@ export default function TestParameterMasterPage() {
     if (exportRows.length === 0) return
 
     const esc = (s: string | null | undefined) => (s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-    const fmtAccreditation = (r: TestParameterRow) => {
-      if (!r.under_accreditation_ids?.length) return '—'
-      return (
-        r.under_accreditation_ids
-          .map((id) => accreditationBodies.find((b) => b.id === id)?.name)
-          .filter(Boolean)
-          .join(', ') || '—'
-      )
-    }
 
     const html = `<!doctype html><html><head><meta charset="utf-8"/><title>Test Parameters</title>
       <style>body{font-family:Arial,sans-serif;font-size:12px;padding:16px}table{width:100%;border-collapse:collapse;table-layout:auto}th,td{border:1px solid #ccc;padding:6px;vertical-align:top}th{background:#f5f5f5;font-weight:600}</style>
       </head><body><h2>Test Parameters</h2>
       <table><thead><tr>
-        <th>IS Code</th><th>Name of the Test Parameter</th><th>Test Method</th><th>Specific Requirements</th><th>Uncertainty &amp; Acceptance Criteria</th><th>Under Accreditation</th>
-      </tr><tr>
-        <th>IS Code</th><th>Test Parameter</th><th>Test Method · Clause No · Unit</th><th>Specific Requirements</th><th>Uncertainty · Acceptance Criteria</th><th>Accreditation Bodies</th>
+        <th>IS Code</th><th>Test Parameter</th><th>Test Method</th><th>Clause</th><th>Unit</th><th>Specific Requirements</th><th>Department</th><th>Designation</th>
       </tr></thead><tbody>
       ${exportRows
         .map(
           (r) =>
-            `<tr><td>${esc(r.is_code_label)}</td><td>${esc(r.item_name)}</td><td>${esc(r.test_method)}<br/><small>Clause: ${esc(r.clause_no)}</small><br/><small>Unit: ${esc(r.unit_value)}</small></td><td>${esc(r.specific_requirement)}</td><td>Uncertainty: ${esc(r.uncertainty_mu)}<br/><small>Acceptance Criteria: ${esc(r.acceptance_criteria ?? '-')}</small></td><td>${esc(fmtAccreditation(r))}</td></tr>`,
+            `<tr><td>${esc(r.is_code_label)}</td><td>${esc(r.item_name)}</td><td>${esc(r.test_method)}</td><td>${esc(r.clause_no)}</td><td>${esc(r.unit_value)}</td><td>${esc(r.specific_requirement)}</td><td>${esc(r.department)}</td><td>${esc(r.designation)}</td></tr>`,
         )
         .join('')}
       </tbody></table></body></html>`
@@ -999,245 +1163,38 @@ export default function TestParameterMasterPage() {
     })()
   }
 
-  const handleAddAccreditationBody = () => {
-    const name = normalizeText(newAccreditationBody)
-    if (!name) return
-    void (async () => {
-      try {
-        const { data, error } = await supabase
-          .from('accreditation_bodies')
-          .insert({ name })
-          .select('id, name, created_at')
-          .single()
-
-        if (error) throw error
-
-        const row = data as AccreditationBodyRow
-
-        setAccreditationBodies((prev) => {
-          const merged = [...prev, row]
-          const uniq = new Map(merged.map((x) => [x.name.toLowerCase(), x]))
-          return Array.from(uniq.values()).sort((a, b) => a.name.localeCompare(b.name))
-        })
-
-        setForm((prev) => ({
-          ...prev,
-          underAccreditationIds: Array.from(new Set([...(prev.underAccreditationIds ?? []), row.id])),
-        }))
-      } catch (err) {
-        setSaveMessage(err instanceof Error ? err.message : 'Unable to add accreditation body')
-      } finally {
-        setNewAccreditationBody('')
-        setAccreditationDialogOpen(false)
-      }
-    })()
-  }
-
-  const handleUpdateAccreditationBody = (id: string) => {
-    const name = normalizeText(newAccreditationBody)
-    if (!name) return
-    void (async () => {
-      try {
-        const { data, error } = await supabase
-          .from('accreditation_bodies')
-          .update({ name })
-          .eq('id', id)
-          .select('id, name, created_at')
-          .single()
-
-        if (error) throw error
-
-        const row = data as AccreditationBodyRow
-        setAccreditationBodies((prev) =>
-          prev
-            .map((b) => (b.id === id ? row : b))
-            .sort((a, b) => a.name.localeCompare(b.name)),
-        )
-      } catch (err) {
-        setSaveMessage(err instanceof Error ? err.message : 'Unable to update accreditation body')
-      } finally {
-        setNewAccreditationBody('')
-        setAccreditationDialogOpen(false)
-      }
-    })()
-  }
-
-  const handleDeleteAccreditationBody = (id: string) => {
-    void (async () => {
-      try {
-        const { error } = await supabase.from('accreditation_bodies').delete().eq('id', id)
-        if (error) throw error
-
-        setAccreditationBodies((prev) => prev.filter((b) => b.id !== id))
-        setForm((prev) => ({
-          ...prev,
-          underAccreditationIds: (prev.underAccreditationIds ?? []).filter((x) => x !== id),
-        }))
-      } catch (err) {
-        setSaveMessage(err instanceof Error ? err.message : 'Unable to delete accreditation body')
-      }
-    })()
-  }
-
-  const handleOpenUncertainty = (row: TestParameterRow) => {
-    const existingHistory = parseUncertaintyMuHistory(row.uncertainty_mu_history)
-    const currentMu = row.uncertainty_mu?.trim() ?? ''
-    if (existingHistory.length === 0 && currentMu) {
-      const seeded: UncertaintyHistoryRecord[] = [
-        {
-          id: newUncertaintyHistoryId(),
-          recordedAt: todayIsoDate(),
-          uncertaintyMu: currentMu,
-          calculationData:
-            parseUncertaintyCalculationData(row.uncertainty_calculation_data, row.unit_value?.trim() ?? '') ??
-            null,
-          savedByName: '',
-        },
-      ]
-      const seededRow = { ...row, uncertainty_mu_history: seeded }
-      setUncertaintyRow(seededRow)
-      setUncertaintyOpen(true)
-      void (async () => {
-        const { error } = await supabase
-          .from('test_parameters')
-          .update({ uncertainty_mu_history: seeded })
-          .eq('id', row.id)
-        if (!error) await loadRows()
-      })()
-      return
-    }
-    setUncertaintyRow(row)
-    setUncertaintyOpen(true)
-  }
-
-  const handleSaveUncertainty = async (
-    uncertaintyMu: string,
-    calculationData: UncertaintyCalculationData,
-  ) => {
-    if (!uncertaintyRow) return
-    setUncertaintySaving(true)
-    setSaveMessage(null)
-    try {
-      const muText = normalizeText(uncertaintyMu) || null
-      const previousHistory = parseUncertaintyMuHistory(uncertaintyRow.uncertainty_mu_history)
-      const historyEntry: UncertaintyHistoryRecord = {
-        id: newUncertaintyHistoryId(),
-        recordedAt: todayIsoDate(),
-        uncertaintyMu: muText ?? '',
-        calculationData,
-        savedByName: profileName.trim(),
-      }
-      const nextHistory = muText
-        ? [historyEntry, ...previousHistory]
-        : previousHistory
-
-      const { error } = await supabase
-        .from('test_parameters')
-        .update({
-          uncertainty_mu: muText,
-          uncertainty_calculation_data: calculationData,
-          uncertainty_mu_history: nextHistory,
-        })
-        .eq('id', uncertaintyRow.id)
-      if (error) throw error
-      setSaveMessage('Uncertainty (MU) saved.')
-      setUncertaintyOpen(false)
-      setUncertaintyRow(null)
-      await loadRows()
-    } catch (err) {
-      setSaveMessage(formatSupabaseError(err))
-    } finally {
-      setUncertaintySaving(false)
-    }
-  }
-
-  const handleUncertaintyHistoryChange = async (next: UncertaintyHistoryRecord[]) => {
-    if (!uncertaintyRow) return
-    const { error } = await supabase
-      .from('test_parameters')
-      .update({ uncertainty_mu_history: next })
-      .eq('id', uncertaintyRow.id)
-    if (error) throw error
-    setUncertaintyRow({ ...uncertaintyRow, uncertainty_mu_history: next })
-    await loadRows()
-  }
-
   return (
-    <div className={limsPageShellClass}>
-      <TestParameterHeaderBar
-        search={search}
-        onSearchChange={setSearch}
-        pageSize={pageSize}
-        onPageSizeChange={(size) => {
-          setPageSize(size)
-          setPage(1)
-        }}
-        onNew={handleNew}
-        assistantContext={assistantContext}
-        onAssistantDataChanged={() => void loadRows()}
-        isCodeOptions={isCodeOptions}
+    <div
+      data-master-scroll="table"
+      className={cn(
+        limsPageShellClass,
+        'flex h-full min-h-0 flex-col overflow-hidden !space-y-0 gap-2 sm:gap-3 md:gap-3',
+      )}
+    >
+      <div className="shrink-0">
+        <TestParameterHeaderBar
+          search={search}
+          onSearchChange={(value) => {
+            setLockedIsCodeId(null)
+            setSearch(value)
+          }}
+          pageSize={pageSize}
+          onPageSizeChange={(size) => {
+            setPageSize(size)
+            setPage(1)
+          }}
+          assistantContext={assistantContext}
+          onAssistantDataChanged={() => void loadRows()}
+          isCodeOptions={isCodeOptions}
+          onAddSymbol={() => setSymbolDialogOpen(true)}
+        />
+      </div>
+
+      <AddSymbolDialog
+        open={symbolDialogOpen}
+        onOpenChange={setSymbolDialogOpen}
+        onInsert={handleInsertSymbol}
       />
-
-      <Dialog open={showForm} onOpenChange={handleFormOpenChange}>
-        <DialogContent
-          persistOnFocusLoss
-          aria-describedby={undefined}
-          overlayClassName="lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto"
-          className={cn(
-            limsDialogClass,
-            'max-h-[92vh] w-[calc(100%-1.5rem)] max-w-5xl p-0 sm:w-full',
-            // Center in main content area (sidebar 268px stays clear)
-            'lg:left-[calc(268px+(100vw-268px)/2)] md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2',
-          )}
-        >
-          <div className="relative shrink-0 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-3 text-white sm:px-6">
-            <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={limsDarkBarGlowStyle} />
-            <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
-            <DialogHeader className="relative pr-10 text-left">
-              <DialogTitle className="text-base font-semibold tracking-tight text-white sm:text-lg">
-                {editingId ? 'Edit Test Parameter' : 'Add New Test Parameter'}
-              </DialogTitle>
-            </DialogHeader>
-          </div>
-
-          <div className="flex max-h-[min(78vh,760px)] min-h-0 flex-col overflow-hidden bg-gradient-to-b from-stone-100/90 to-stone-50">
-            {saveMessage && (
-              <p
-                className={cn(
-                  'shrink-0 px-4 pt-3 text-sm sm:px-6',
-                  saveMessage.toLowerCase().includes('success') || saveMessage.toLowerCase().includes('saved')
-                    ? 'text-emerald-700'
-                    : 'text-red-700',
-                )}
-              >
-                {saveMessage}
-              </p>
-            )}
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
-              <TestParameterForm
-                form={form}
-                onChange={setForm}
-                canSave={canSave}
-                saveLoading={saveLoading}
-                onSave={handleSave}
-                isCodes={isCodes}
-                accreditationBodies={accreditationBodies}
-                accreditationDialogOpen={accreditationDialogOpen}
-                setAccreditationDialogOpen={setAccreditationDialogOpen}
-                newAccreditationBody={newAccreditationBody}
-                setNewAccreditationBody={setNewAccreditationBody}
-                onAddAccreditationBody={handleAddAccreditationBody}
-                onUpdateAccreditationBody={handleUpdateAccreditationBody}
-                onDeleteAccreditationBody={handleDeleteAccreditationBody}
-                onOpenAddIsCodeForm={openAddIsCodeForm}
-                departments={departments}
-                designations={designations}
-                designationsByDepartment={designationsByDepartment}
-              />
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={isCodeDialogOpen} onOpenChange={setIsCodeDialogOpen}>
         <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
@@ -1267,57 +1224,58 @@ export default function TestParameterMasterPage() {
         </DialogContent>
       </Dialog>
 
-      <TestParameterTable
-        rows={pagedRows}
-        loading={listLoading}
-        error={listError}
-        selectedIds={selectedIds}
-        onToggle={toggleRow}
-        onToggleAll={toggleAllOnPage}
-        onEdit={handleEdit}
-        onOpenUncertainty={handleOpenUncertainty}
-        accreditationBodies={accreditationBodies}
-        onAssistantDataChanged={() => void loadRows()}
-        sortKey={sortKey}
-        sortDir={sortDir}
-        onSort={handleSort}
-      />
+      <div className="min-h-0 flex-1 overflow-hidden">
+        <TestParameterTable
+          rows={pagedRows}
+          loading={listLoading}
+          error={listError}
+          searchActive={search.trim().length > 0}
+          selectedIds={selectedIds}
+          onToggle={toggleRow}
+          onToggleAll={toggleAllOnPage}
+          onEdit={handleEdit}
+          onDelete={handleDeleteRow}
+          sortKey={sortKey}
+          sortDir={sortDir}
+          onSort={handleSort}
+          inlineForm={inlineForm}
+          onInlineFormChange={setInlineForm}
+          onInlineAdd={handleInlineAdd}
+          inlineAddBusy={inlineAddLoading}
+          isCodes={isCodes}
+          parameterNameOptions={parameterNameOptions}
+          editingRowId={editingId}
+          editForm={editForm}
+          onEditFormChange={setEditForm}
+          onEditSave={handleInlineEditSave}
+          onEditCancel={handleInlineEditCancel}
+          editBusy={saveLoading}
+          onTrackSymbolTarget={handleTrackSymbolTarget}
+        />
+      </div>
 
-      <TestParameterUncertaintyDialog
-        row={uncertaintyRow}
-        open={uncertaintyOpen}
-        saving={uncertaintySaving}
-        onOpenChange={(open) => {
-          setUncertaintyOpen(open)
-          if (!open) setUncertaintyRow(null)
-        }}
-        onSave={handleSaveUncertainty}
-        onHistoryChange={handleUncertaintyHistoryChange}
-        onAppliedToOthers={async () => {
-          await loadRows()
-        }}
-      />
-
-      <TestParameterTableFooterBar
-        message={saveMessage}
-        loading={saveLoading}
-        selectedCount={selectedIds.size}
-        onImport={handleImport}
-        onExport={handleExport}
-        onPrintSelected={handlePrintSelected}
-        onDeleteSelected={handleDeleteSelected}
-        page={page}
-        pageCount={pageCount}
-        onPrevPage={() => setPage((p) => Math.max(1, p - 1))}
-        onNextPage={() => setPage((p) => Math.min(pageCount, p + 1))}
-        jumpTo={jumpTo}
-        onJumpToChange={setJumpTo}
-        onJumpToGo={() => {
-          const n = Number(jumpTo)
-          if (!Number.isFinite(n) || n <= 0) return
-          setPage(Math.min(pageCount, Math.max(1, n)))
-        }}
-      />
+      <div className="shrink-0">
+        <TestParameterTableFooterBar
+          message={saveMessage}
+          loading={saveLoading}
+          selectedCount={selectedIds.size}
+          onImport={handleImport}
+          onExport={handleExport}
+          onPrintSelected={handlePrintSelected}
+          onDeleteSelected={handleDeleteSelected}
+          page={page}
+          pageCount={pageCount}
+          onPrevPage={() => setPage((p) => Math.max(1, p - 1))}
+          onNextPage={() => setPage((p) => Math.min(pageCount, p + 1))}
+          jumpTo={jumpTo}
+          onJumpToChange={setJumpTo}
+          onJumpToGo={() => {
+            const n = Number(jumpTo)
+            if (!Number.isFinite(n) || n <= 0) return
+            setPage(Math.min(pageCount, Math.max(1, n)))
+          }}
+        />
+      </div>
 
       <input
         ref={importInputRef}

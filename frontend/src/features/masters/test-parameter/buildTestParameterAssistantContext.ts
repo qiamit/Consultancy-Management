@@ -53,10 +53,8 @@ export function buildTestParameterAssistantContext(row: TestParameterRow): strin
     `Clause: ${row.clause_no ?? '-'}`,
     `Unit: ${row.unit_value ?? '-'}`,
     `Specific requirement: ${row.specific_requirement ?? '-'}`,
-    `Uncertainty (MU): ${row.uncertainty_mu ?? '-'}`,
     `Department: ${row.department ?? '-'}`,
     `Designation: ${row.designation ?? '-'}`,
-    `Accreditation ids: ${row.under_accreditation_ids?.length ? row.under_accreditation_ids.join(', ') : '-'}`,
     '',
     'When the user asks to change this test parameter, use id above in lims_crud (table test_parameters).',
     row.is_code_id

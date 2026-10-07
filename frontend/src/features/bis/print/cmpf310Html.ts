@@ -1,4 +1,5 @@
 import type { BisPrintData } from './loadBisPrintData'
+import { printSignatoryDefaults } from './loadBisPrintData'
 import { escapeHtml as esc } from './openPrintHtml'
 import {
   applicantContextFromPrintData,
@@ -6,6 +7,7 @@ import {
   buildPrintPage,
   CMPF_FORM_STYLES,
   dateOrNa,
+  inspectionDateOrToday,
   letterheadHtml,
   preparedByHtml,
   signatoryHtml,
@@ -43,7 +45,7 @@ function paymentTerms(markingFeeInline: string): string[] {
 }
 
 function buildBody(data: Cmpf310Data): string {
-  const letterDate = dateOrNa(data.dateOfInspection.trim() || data.dateOfApplication)
+  const letterDate = inspectionDateOrToday(data.dateOfInspection)
   const refDate = data.referenceLetterDate.trim() ? dateOrNa(data.referenceLetterDate) : BLANK
   const sigName = data.signatoryName.trim() || data.contactPerson.trim()
   const markingFeeInline = data.markingFeeRs.trim() ? rupee(data.markingFeeRs) : 'Rs. ________________'
@@ -109,7 +111,7 @@ export function cmpf310DataFromPrintData(printData: BisPrintData): Cmpf310Data {
     firmScale: printData.client.scale,
     unitRateRs: '',
     markingFeeRs: '',
-    signatoryName: printData.client.contactPerson,
-    signatoryDesignation: '',
+    signatoryName: printSignatoryDefaults(printData).signatoryName,
+    signatoryDesignation: printSignatoryDefaults(printData).signatoryDesignation,
   }
 }

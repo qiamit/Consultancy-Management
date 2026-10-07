@@ -1,4 +1,12 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FocusEvent,
+  type SyntheticEvent,
+} from 'react'
 import { createPortal } from 'react-dom'
 import { Pencil, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -40,6 +48,10 @@ export function MeasurementUnitSelect({
   shellClassName,
   placeholder,
   disabled,
+  onInputFocus,
+  onInputBlur,
+  onInputSelect,
+  inputDataAttrs,
 }: {
   id?: string
   value: string
@@ -53,6 +65,10 @@ export function MeasurementUnitSelect({
   shellClassName?: string
   placeholder?: string
   disabled?: boolean
+  onInputFocus?: (e: FocusEvent<HTMLInputElement>) => void
+  onInputBlur?: (e: FocusEvent<HTMLInputElement>) => void
+  onInputSelect?: (e: SyntheticEvent<HTMLInputElement>) => void
+  inputDataAttrs?: Record<string, string>
 }) {
   const { units } = useMeasurementUnits()
   const inputRef = useRef<HTMLInputElement | null>(null)
@@ -256,8 +272,17 @@ export function MeasurementUnitSelect({
                 onChange(e.target.value)
                 setHighlight(0)
               }}
-              onFocus={() => setOpen(true)}
-              onBlur={() => setTimeout(() => setOpen(false), 150)}
+              onFocus={(e) => {
+                setOpen(true)
+                onInputFocus?.(e)
+              }}
+              onBlur={(e) => {
+                setTimeout(() => setOpen(false), 150)
+                onInputBlur?.(e)
+              }}
+              onSelect={onInputSelect}
+              onKeyUp={onInputSelect}
+              onClick={onInputSelect}
               onKeyDown={handleKeyDown}
               placeholder={resolvedPlaceholder}
               autoComplete="off"
@@ -266,6 +291,7 @@ export function MeasurementUnitSelect({
                 'focus-visible:border-transparent focus-visible:bg-transparent focus-visible:ring-0',
                 inputClassName,
               )}
+              {...inputDataAttrs}
             />
             {showManageButton ? (
               <button
@@ -359,7 +385,7 @@ export function MeasurementUnitSelect({
           persistOnFocusLoss
           layer="stacked"
           aria-describedby={undefined}
-          className={cn(limsDialogClass, 'max-w-lg p-0')}
+          className={cn(limsDialogClass, 'w-[min(32rem,calc(100vw-1.5rem))] max-w-lg p-0')}
         >
           <div className="relative overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white">
             <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={limsDarkBarGlowStyle} />

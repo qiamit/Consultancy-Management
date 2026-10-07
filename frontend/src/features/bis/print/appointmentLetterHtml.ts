@@ -1,4 +1,5 @@
 import type { BisPrintData } from './loadBisPrintData'
+import { printSignatoryDefaults } from './loadBisPrintData'
 import { escapeHtml as esc } from './openPrintHtml'
 import {
   applicantContextFromPrintData,
@@ -143,7 +144,34 @@ export function appointmentLetterDataFromPrintData(printData: BisPrintData): App
     experienceYears: '',
     appointmentDate: '',
     referenceNo: '',
-    signatoryName: printData.client.contactPerson,
-    signatoryDesignation: '',
+    signatoryName: printSignatoryDefaults(printData).signatoryName,
+    signatoryDesignation: printSignatoryDefaults(printData).signatoryDesignation,
+  }
+}
+
+/** Builds Appointment Letter fields for one Technical Staff person. */
+export function appointmentLetterDataForTechnicalStaff(
+  printData: BisPrintData,
+  staff: {
+    personName: string
+    designation: string
+    educationalQualification: string
+    experienceYears: string
+    appointmentDate: string
+    appointmentReferenceNo: string
+  },
+): AppointmentLetterData {
+  const base = appointmentLetterDataFromPrintData(printData)
+  const sig = printData.documentSignatory
+  return {
+    ...base,
+    personName: staff.personName.trim(),
+    designation: staff.designation.trim() || base.designation,
+    educationalQualification: staff.educationalQualification.trim(),
+    experienceYears: staff.experienceYears.trim(),
+    appointmentDate: staff.appointmentDate.trim(),
+    referenceNo: staff.appointmentReferenceNo.trim(),
+    signatoryName: sig?.name.trim() || base.signatoryName,
+    signatoryDesignation: sig?.designation.trim() || base.signatoryDesignation,
   }
 }

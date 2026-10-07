@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Pencil, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -10,6 +11,7 @@ import {
   limsFieldClass,
   limsPrimaryBtnClass,
 } from '@/lib/limsThemeUi'
+import { useAnchoredPortalMenu } from '@/lib/useAnchoredPortalMenu'
 import { cn } from '@/lib/utils'
 import { addGstRate, deleteGstRate, updateGstRate } from './gstRateApi'
 import {
@@ -55,6 +57,7 @@ export function GstRateSelect({
 }) {
   const { rates } = useGstRates()
   const inputRef = useRef<HTMLInputElement | null>(null)
+  const fieldRef = useRef<HTMLDivElement | null>(null)
   const [open, setOpen] = useState(false)
   const [highlight, setHighlight] = useState(0)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -81,6 +84,8 @@ export function GstRateSelect({
   }, [rates, value])
 
   const totalOptions = filteredRates.length + (showAddRateAction ? 1 : 0)
+  const showDropdown = open && !disabled && (filteredRates.length > 0 || showAddRateAction)
+  const dropdownPos = useAnchoredPortalMenu(showDropdown, fieldRef, totalOptions)
   const resolvedPlaceholder =
     placeholder ?? (rates.length > 0 ? 'Select GST %' : 'Add GST rates to use them here')
   const rateInputId = `${id ?? 'gst'}-new`
@@ -188,10 +193,11 @@ export function GstRateSelect({
           </Label>
         ) : null}
 
-        <div className="relative">
+        <div className="relative min-w-0">
           <div
+            ref={fieldRef}
             className={cn(
-              'flex h-10 overflow-hidden rounded-none border border-stone-500 bg-stone-50',
+              'flex h-8 min-w-0 overflow-hidden rounded-none border border-stone-500 bg-stone-50',
               'focus-within:border-amber-600 focus-within:bg-white focus-within:ring-2 focus-within:ring-amber-500/20',
               disabled && 'opacity-50',
             )}
@@ -226,7 +232,7 @@ export function GstRateSelect({
             {showManageButton ? (
               <button
                 type="button"
-                className="inline-flex h-full w-9 shrink-0 items-center justify-center border-l border-stone-500 bg-stone-100 text-amber-800 transition-colors hover:bg-amber-500/15 hover:text-amber-950 disabled:pointer-events-none"
+                className="inline-flex h-full w-8 shrink-0 items-center justify-center border-l border-stone-500 bg-stone-100 text-amber-800 transition-colors hover:bg-amber-500/15 hover:text-amber-950 disabled:pointer-events-none"
                 onClick={() => openManageDialog()}
                 onMouseDown={(e) => e.preventDefault()}
                 aria-label="Add GST rate"
@@ -237,59 +243,72 @@ export function GstRateSelect({
               </button>
             ) : null}
           </div>
-          {(filteredRates.length > 0 || showAddRateAction) && open && !disabled && (
-            <div
-              className="absolute z-30 mt-1 w-full rounded-none border border-stone-500 bg-white shadow-lg"
-              tabIndex={-1}
-            >
-              <ul className="max-h-56 overflow-auto text-sm">
-                {filteredRates.map((row, index) => (
-                  <li key={row.id}>
-                    <button
-                      type="button"
-                      tabIndex={-1}
-                      className={`w-full px-3 py-2 text-left ${index === highlight ? 'bg-[#f3e9d8] font-semibold' : 'hover:bg-[#f7f3eb]'}`}
-                      onMouseDown={(e) => e.preventDefault()}
-                      onPointerDown={(e) => {
-                        e.preventDefault()
-                        e.stopPropagation()
-                        pickRate(row.rate)
-                      }}
-                      onMouseEnter={() => setHighlight(index)}
-                      onClick={() => pickRate(row.rate)}
-                    >
-                      {formatGstRateLabel(row.rate)}
-                    </button>
-                  </li>
-                ))}
-                {showAddRateAction && (
-                  <li>
-                    <button
-                      type="button"
-                      tabIndex={-1}
-                      className={`w-full px-3 py-2 text-left text-amber-800 ${
-                        highlight === filteredRates.length ? 'bg-[#f3e9d8] font-semibold' : 'hover:bg-[#f7f3eb]'
-                      }`}
-                      onMouseDown={(e) => e.preventDefault()}
-                      onPointerDown={(e) => {
-                        e.preventDefault()
-                        e.stopPropagation()
-                        openManageDialog(value)
-                        setOpen(false)
-                      }}
-                      onMouseEnter={() => setHighlight(filteredRates.length)}
-                      onClick={() => {
-                        openManageDialog(value)
-                        setOpen(false)
-                      }}
-                    >
-                      Add &quot;{parseGstRateValue(value)}%&quot; as new GST rate
-                    </button>
-                  </li>
-                )}
-              </ul>
-            </div>
-          )}
+          {showDropdown && dropdownPos
+            ? createPortal(
+                <div
+                  className="pointer-events-auto fixed z-[10000] rounded-none border border-stone-500 bg-white shadow-lg"
+                  style={{
+                    left: dropdownPos.left,
+                    width: dropdownPos.width,
+                    top: dropdownPos.top,
+                    bottom: dropdownPos.bottom,
+                  }}
+                  tabIndex={-1}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  <ul className="max-h-56 overflow-auto text-sm">
+                    {filteredRates.map((row, index) => (
+                      <li key={row.id}>
+                        <button
+                          type="button"
+                          tabIndex={-1}
+                          className={`w-full px-3 py-2 text-left ${index === highlight ? 'bg-[#f3e9d8] font-semibold' : 'hover:bg-[#f7f3eb]'}`}
+                          onMouseDown={(e) => e.preventDefault()}
+                          onPointerDown={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            pickRate(row.rate)
+                          }}
+                          onMouseEnter={() => setHighlight(index)}
+                          onClick={() => pickRate(row.rate)}
+                        >
+                          {formatGstRateLabel(row.rate)}
+                        </button>
+                      </li>
+                    ))}
+                    {showAddRateAction ? (
+                      <li>
+                        <button
+                          type="button"
+                          tabIndex={-1}
+                          className={`w-full px-3 py-2 text-left text-amber-800 ${
+                            highlight === filteredRates.length
+                              ? 'bg-[#f3e9d8] font-semibold'
+                              : 'hover:bg-[#f7f3eb]'
+                          }`}
+                          onMouseDown={(e) => e.preventDefault()}
+                          onPointerDown={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            openManageDialog(value)
+                            setOpen(false)
+                          }}
+                          onMouseEnter={() => setHighlight(filteredRates.length)}
+                          onClick={() => {
+                            openManageDialog(value)
+                            setOpen(false)
+                          }}
+                        >
+                          Add &quot;{parseGstRateValue(value)}%&quot; as new GST rate
+                        </button>
+                      </li>
+                    ) : null}
+                  </ul>
+                </div>,
+                document.body,
+              )
+            : null}
         </div>
       </div>
 
@@ -298,7 +317,7 @@ export function GstRateSelect({
           persistOnFocusLoss
           layer="stacked"
           aria-describedby={undefined}
-          className={cn(limsDialogClass, 'max-w-lg p-0')}
+          className={cn(limsDialogClass, 'w-[min(32rem,calc(100vw-1.5rem))] max-w-lg p-0')}
         >
           <div className="relative overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white">
             <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={limsDarkBarGlowStyle} />

@@ -1,11 +1,12 @@
 import type { BisPrintData } from './loadBisPrintData'
+import { printSignatoryDefaults } from './loadBisPrintData'
 import { escapeHtml as esc } from './openPrintHtml'
 import {
   applicantContextFromPrintData,
   applicationNoDisplay,
   blankTableRows,
   buildPrintPage,
-  dateOrNa,
+  inspectionDateOrToday,
   letterheadHtml,
   preparedByHtml,
   signatoryHtml,
@@ -74,7 +75,7 @@ function blankStaffTable(minRows: number, headers: string[]): string {
 }
 
 function buildBody(data: SelfEvaluationFormData): string {
-  const letterDate = dateOrNa(data.dateOfInspection.trim() || data.dateOfApplication)
+  const letterDate = inspectionDateOrToday(data.dateOfInspection)
   const packaging =
     data.packagingMarkingRows.length > 0
       ? data.packagingMarkingRows
@@ -165,7 +166,7 @@ export function selfEvaluationFormDataFromPrintData(printData: BisPrintData): Se
     plantLayout: 'Enclosed',
     packagingMarkingRows: defaultPackagingMarkingRows(),
     brandsWithoutMarkReasons: '',
-    signatoryName: printData.client.contactPerson,
-    signatoryDesignation: '',
+    signatoryName: printSignatoryDefaults(printData).signatoryName,
+    signatoryDesignation: printSignatoryDefaults(printData).signatoryDesignation,
   }
 }

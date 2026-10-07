@@ -1,10 +1,11 @@
 import type { BisPrintData } from './loadBisPrintData'
+import { printSignatoryDefaults } from './loadBisPrintData'
 import { escapeHtml as esc } from './openPrintHtml'
 import {
   applicantContextFromPrintData,
   applicationNoDisplay,
   buildPrintPage,
-  dateOrNa,
+  inspectionDateOrToday,
   isStandardRefHtml,
   letterheadHtml,
   preparedByHtml,
@@ -66,7 +67,7 @@ function tableHtml(rows: CrmRow[]): string {
 }
 
 function buildBody(data: CertifiedReferenceMaterialsData): string {
-  const letterDate = dateOrNa(data.dateOfInspection.trim() || data.dateOfApplication)
+  const letterDate = inspectionDateOrToday(data.dateOfInspection)
   const isStdRef = isStandardRefHtml(data.isNumber, data.isTitle)
   const sigName = data.signatoryName.trim() || data.contactPerson.trim()
 
@@ -133,7 +134,7 @@ export function certifiedReferenceMaterialsDataFromPrintData(
   return {
     ...ctx,
     rows: [],
-    signatoryName: printData.client.contactPerson,
-    signatoryDesignation: '',
+    signatoryName: printSignatoryDefaults(printData).signatoryName,
+    signatoryDesignation: printSignatoryDefaults(printData).signatoryDesignation,
   }
 }

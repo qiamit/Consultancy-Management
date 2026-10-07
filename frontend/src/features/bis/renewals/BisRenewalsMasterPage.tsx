@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { limsPageShellClass } from '@/lib/limsThemeUi'
 import { useFormDialogOpenChange } from '@/lib/formDialogOpenChange'
+import { useMasterUiSearchState } from '@/lib/useMasterUiSearchState'
 import { BisProjectsHeaderBar } from '../projects/BisProjectsHeaderBar'
 import { BisProjectsFooterBar } from '../projects/BisProjectsFooterBar'
 import { BisRenewalsTable } from './BisRenewalsTable'
@@ -28,6 +29,7 @@ const SEARCH_DEBOUNCE_MS = 350
 
 export default function BisRenewalsMasterPage() {
   const [searchParams, setSearchParams] = useSearchParams()
+  const { editId, setEdit } = useMasterUiSearchState()
   const [rows, setRows] = useState<BisRenewalRow[]>([])
   const [total, setTotal] = useState(0)
   const [listLoading, setListLoading] = useState(false)
@@ -42,9 +44,6 @@ export default function BisRenewalsMasterPage() {
   const [reloadKey, setReloadKey] = useState(0)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
 
-  const [showForm, setShowForm] = useState(false)
-  const handleFormOpenChange = useFormDialogOpenChange(setShowForm)
-  const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<BisRenewalForm>(() => emptyRenewalForm())
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
@@ -52,6 +51,16 @@ export default function BisRenewalsMasterPage() {
 
   const requestRef = useRef(0)
   const prefillHandledRef = useRef<string | null>(null)
+  const hydratedEditRef = useRef<string | null>(null)
+
+  const showForm = editId != null
+  const editingId = editId && editId !== 'new' ? editId : null
+  const handleFormOpenChange = useFormDialogOpenChange((open) => {
+    if (!open) {
+      hydratedEditRef.current = null
+      setEdit(null)
+    }
+  })
 
   useEffect(() => {
     const projectId = (searchParams.get('projectId') ?? '').trim()
@@ -68,7 +77,6 @@ export default function BisRenewalsMasterPage() {
           setMessage('License not found for renewal.')
           return
         }
-        setEditingId(null)
         setForm({
           ...emptyRenewalForm(),
           projectId,
@@ -80,7 +88,8 @@ export default function BisRenewalsMasterPage() {
           isCodeLabel: summary.isCodeLabel,
         })
         setFormError(null)
-        setShowForm(true)
+        hydratedEditRef.current = 'new'
+        setEdit('new')
         setMessage(`Renewal started for ${summary.projectLabel}.`)
       } catch (err) {
         setMessage(formatBisApiError(err))
@@ -127,21 +136,46 @@ export default function BisRenewalsMasterPage() {
 
   const reload = useCallback(() => setReloadKey((k) => k + 1), [])
 
+  useEffect(() => {
+    if (!editId) {
+      hydratedEditRef.current = null
+      return
+    }
+    if (hydratedEditRef.current === editId) return
+
+    if (editId === 'new') {
+      if (!form.projectId) setForm(emptyRenewalForm())
+      setFormError(null)
+      hydratedEditRef.current = 'new'
+      return
+    }
+
+    const fromPage = rows.find((r) => r.id === editId)
+    if (fromPage) {
+      setForm(rowToRenewalForm(fromPage))
+      setFormError(null)
+      hydratedEditRef.current = editId
+      return
+    }
+
+    if (!listLoading) setEdit(null)
+  }, [editId, rows, listLoading, form.projectId, setEdit])
+
   const pageCount = Math.max(1, Math.ceil(total / pageSize))
   const canSave = !saving && form.projectId.length > 0 && form.renewalStatus.length > 0
 
   const openNew = () => {
-    setEditingId(null)
     setForm(emptyRenewalForm())
     setFormError(null)
-    setShowForm(true)
+    hydratedEditRef.current = 'new'
+    setEdit('new')
   }
 
   const openEdit = (row: BisRenewalRow) => {
-    setEditingId(row.id)
     setForm(rowToRenewalForm(row))
     setFormError(null)
-    setShowForm(true)
+    hydratedEditRef.current = row.id
+    setEdit(row.id)
   }
 
   const handleSave = async () => {
@@ -154,8 +188,8 @@ export default function BisRenewalsMasterPage() {
     setFormError(null)
     try {
       await saveRenewal(form, editingId)
-      setShowForm(false)
-      setEditingId(null)
+      hydratedEditRef.current = null
+      setEdit(null)
       setMessage(editingId ? 'Saved changes.' : 'Saved new renewal.')
       reload()
     } catch (err) {

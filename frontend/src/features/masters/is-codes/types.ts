@@ -1,5 +1,20 @@
 export type IsAspect = string
 
+export const IS_CODE_UNITS = [
+  'Tonne',
+  'Pcs',
+  'Nos',
+  'Kilo Litre',
+  'Litre',
+  'Kg',
+] as const
+
+export const DEFAULT_IS_CODE_UNIT = IS_CODE_UNITS[0]
+export const DEFAULT_SLAB_1_QTY = 'All Quantities'
+export const DEFAULT_SLAB_2_QTY = 'N/A'
+export const DEFAULT_SLAB_3_QTY = 'N/A'
+export const DEFAULT_MONEY_FIELD = '0.00'
+
 export type IsCodeRow = {
   id: string
   is_number: string
@@ -10,6 +25,18 @@ export type IsCodeRow = {
   aspect: IsAspect
   testing_charges: number | null
   remarks: string | null
+  product_manual_number: string | null
+  unit_of_is: string | null
+  mmf_large_scale: number | null
+  mmf_medium_scale: number | null
+  mmf_small_scale: number | null
+  mmf_micro_scale: number | null
+  slab_1_quantity: string | null
+  slab_1_rate: number | null
+  slab_2_quantity: string | null
+  slab_2_rate: number | null
+  slab_3_quantity: string | null
+  slab_3_rate: number | null
   created_at?: string
 }
 
@@ -30,20 +57,81 @@ export type IsCodeForm = {
   aspect: IsAspect
   testingCharges: string
   remarks: string
+  productManualNumber: string
+  unitOfIs: string
+  mmfLargeScale: string
+  mmfMediumScale: string
+  mmfSmallScale: string
+  mmfMicroScale: string
+  slab1Quantity: string
+  slab1Rate: string
+  slab2Quantity: string
+  slab2Rate: string
+  slab3Quantity: string
+  slab3Rate: string
   files: File[]
 }
 
 export const emptyIsCodeForm = (): IsCodeForm => ({
-  isNumber: '',
+  isNumber: 'IS ',
   revisionYear: '',
-  reaffirmationYear: 'RA',
+  reaffirmationYear: 'RA-',
   amendmentNumber: '',
   title: '',
   aspect: 'Specification',
-  testingCharges: '',
+  testingCharges: DEFAULT_MONEY_FIELD,
   remarks: '',
+  productManualNumber: '',
+  unitOfIs: DEFAULT_IS_CODE_UNIT,
+  mmfLargeScale: DEFAULT_MONEY_FIELD,
+  mmfMediumScale: DEFAULT_MONEY_FIELD,
+  mmfSmallScale: DEFAULT_MONEY_FIELD,
+  mmfMicroScale: DEFAULT_MONEY_FIELD,
+  slab1Quantity: DEFAULT_SLAB_1_QTY,
+  slab1Rate: DEFAULT_MONEY_FIELD,
+  slab2Quantity: DEFAULT_SLAB_2_QTY,
+  slab2Rate: DEFAULT_MONEY_FIELD,
+  slab3Quantity: DEFAULT_SLAB_3_QTY,
+  slab3Rate: DEFAULT_MONEY_FIELD,
   files: [],
 })
+
+export function moneyToFormStr(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(Number(n))) return DEFAULT_MONEY_FIELD
+  return (Math.round(Number(n) * 100) / 100).toFixed(2)
+}
+
+export function moneyFromFormStr(raw: string | null | undefined): number | null {
+  const v = String(raw ?? '').trim()
+  if (!v) return null
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
+}
+
+/** DB columns are numeric NOT NULL — never send null for money fields. */
+export function moneyOrZero(raw: string | null | undefined): number {
+  return moneyFromFormStr(raw) ?? 0
+}
+
+/**
+ * Parse year fields for Postgres int columns.
+ * Accepts "2026", "RA-2026", "RA2026", "RA-" / "RA" → null (optional reaffirmation).
+ */
+export function yearIntFromForm(raw: string | null | undefined): number | null {
+  const digits = String(raw ?? '').replace(/\D/g, '')
+  if (!digits) return null
+  const n = Number(digits)
+  return Number.isFinite(n) ? n : null
+}
+
+/** Form display: null → "RA-"; 2026 → "RA-2026". */
+export function reaffirmationToFormStr(raw: string | number | null | undefined): string {
+  if (raw == null || String(raw).trim() === '') return 'RA-'
+  const text = String(raw).trim().toUpperCase()
+  if (text === 'RA' || text === 'RA-') return 'RA-'
+  const digits = text.replace(/^RA-?/, '').replace(/\D/g, '').slice(0, 4)
+  return digits ? `RA-${digits}` : 'RA-'
+}
 
 export const isValidYear4 = (value: string) => {
   const v = value.trim()
@@ -57,7 +145,7 @@ export const isValidAmendment2 = (value: string) => {
   return /^[0-9]{1,2}$/.test(v)
 }
 
-export const normalizeText = (v: string) => v.trim()
+export const normalizeText = (v: string | null | undefined) => String(v ?? '').trim()
 
 /** Title Case; keep short connectors lowercase (of, for, and, …) except first/last word. */
 const TITLE_SMALL_WORDS = new Set([
@@ -120,4 +208,14 @@ export function toProperTitleCase(raw: string): string {
         .join('-')
     })
     .join(' ')
+}
+
+export function formatInr(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(Number(n))) return '—'
+  return Number(n).toLocaleString('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
 }

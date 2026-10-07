@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
 import { limsDarkBarGlowStyle, limsPageShellClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabaseClient'
 import { useFormDialogOpenChange } from '@/lib/formDialogOpenChange'
+import { useMasterUiSearchState } from '@/lib/useMasterUiSearchState'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { EquipmentHeaderBar } from './EquipmentHeaderBar'
 import { EquipmentTable } from './EquipmentTable'
@@ -36,11 +36,12 @@ const formatSupabaseError = (err: unknown) => {
   return parts.length ? parts.join(' | ') : 'Unknown error'
 }
 
+type EquipmentFormSection = 'calibration' | 'intermediate' | 'maintenance' | 'details'
+
 export default function EquipmentMasterPage() {
-  const [searchParams, setSearchParams] = useSearchParams()
+  const { editId, moduleSlug, setEdit, setModule } = useMasterUiSearchState()
   const [saveLoading, setSaveLoading] = useState(false)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
-  const [editingId, setEditingId] = useState<string | null>(null)
   const [activeFormSection, setActiveFormSection] = useState<'calibration' | 'intermediate' | 'maintenance' | null>(null)
   const [hideScheduleSections, setHideScheduleSections] = useState(false)
   
@@ -48,10 +49,15 @@ export default function EquipmentMasterPage() {
   const [targetClientField, setTargetClientField] = useState<'purchasedFrom' | 'externalCalibrationAgency' | null>(null)
 
   const importInputRef = useRef<HTMLInputElement | null>(null)
-  const [showForm, setShowForm] = useState(false)
+  const hydratedEditRef = useRef<string | null>(null)
+
+  const showForm = editId != null
+  const editingId = editId && editId !== 'new' ? editId : null
   const handleFormOpenChange = useFormDialogOpenChange((open) => {
-    setShowForm(open)
     if (!open) {
+      hydratedEditRef.current = null
+      setEdit(null)
+      setModule(null)
       setActiveFormSection(null)
       setHideScheduleSections(false)
     }
@@ -343,8 +349,8 @@ export default function EquipmentMasterPage() {
 
         setSaveMessage('Saved successfully.')
         setForm(emptyEquipmentForm())
-        setEditingId(null)
-        setShowForm(false)
+        hydratedEditRef.current = null
+        setEdit(null)
         await loadEquipment()
       } catch (err) {
         const msg = formatSupabaseError(err)
@@ -359,26 +365,13 @@ export default function EquipmentMasterPage() {
     })()
   }
 
-  const handleNew = () => {
-    setSaveMessage(null)
-    setForm(emptyEquipmentForm())
-    setEditingId(null)
-    setActiveFormSection(null)
-    setHideScheduleSections(false)
-    setShowForm(true)
-  }
-
-  const handleEdit = (
+  const applyRowToForm = (
     row: EquipmentRow,
-    section?: 'calibration' | 'intermediate' | 'maintenance' | 'details',
+    section?: EquipmentFormSection,
   ) => {
-    setSaveMessage(null)
-    setEditingId(row.id)
     const isDetailsOnly = section === 'details'
     setHideScheduleSections(isDetailsOnly)
-    setActiveFormSection(
-      section && section !== 'details' ? section : null,
-    )
+    setActiveFormSection(section && section !== 'details' ? section : null)
     const range = splitValueAndUnit(row.range_capacity)
     const resolution = splitValueAndUnit(row.resolution_least_count)
     const accuracy = splitValueAndUnit(row.accuracy_acceptance_criteria)
@@ -428,24 +421,68 @@ export default function EquipmentMasterPage() {
       certificateFile: null,
       manualSopFile: null,
     })
-    setShowForm(true)
+  }
+
+  const handleNew = () => {
+    setSaveMessage(null)
+    setForm(emptyEquipmentForm())
+    setActiveFormSection(null)
+    setHideScheduleSections(false)
+    hydratedEditRef.current = 'new'
+    setModule(null)
+    setEdit('new')
+  }
+
+  const handleEdit = (
+    row: EquipmentRow,
+    section?: EquipmentFormSection,
+  ) => {
+    setSaveMessage(null)
+    applyRowToForm(row, section)
+    hydratedEditRef.current = row.id
+    if (section === 'details') setModule('details')
+    else if (section && section !== 'details') setModule(section)
+    else setModule(null)
+    setEdit(row.id)
   }
 
   useEffect(() => {
-    const viewId = searchParams.get('view')?.trim()
-    if (!viewId || listLoading || rows.length === 0) return
-    const row = rows.find((r) => r.id === viewId)
-    if (!row) return
-    handleEdit(row, 'details')
-    const next = new URLSearchParams(searchParams)
-    next.delete('view')
-    setSearchParams(next, { replace: true })
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- open once when list ready
-  }, [searchParams, listLoading, rows])
+    if (!editId) {
+      hydratedEditRef.current = null
+      return
+    }
+    if (hydratedEditRef.current === editId) return
+
+    if (editId === 'new') {
+      setSaveMessage(null)
+      setForm(emptyEquipmentForm())
+      setActiveFormSection(null)
+      setHideScheduleSections(false)
+      hydratedEditRef.current = 'new'
+      return
+    }
+
+    const row = rows.find((r) => r.id === editId)
+    if (!row) {
+      if (!listLoading) setEdit(null)
+      return
+    }
+
+    setSaveMessage(null)
+    const section =
+      moduleSlug === 'details'
+        ? 'details'
+        : moduleSlug === 'calibration' ||
+            moduleSlug === 'intermediate' ||
+            moduleSlug === 'maintenance'
+          ? moduleSlug
+          : undefined
+    applyRowToForm(row, section)
+    hydratedEditRef.current = editId
+  }, [editId, moduleSlug, rows, listLoading, setEdit])
 
   const handleCopy = (row: EquipmentRow) => {
     setSaveMessage(null)
-    setEditingId(null) // copy resets id
     setActiveFormSection(null)
     setHideScheduleSections(false)
     const range = splitValueAndUnit(row.range_capacity)
@@ -494,7 +531,9 @@ export default function EquipmentMasterPage() {
       certificateFile: null,
       manualSopFile: null,
     })
-    setShowForm(true)
+    hydratedEditRef.current = 'new'
+    setModule(null)
+    setEdit('new')
   }
 
   const filteredRows = useMemo(() => {
