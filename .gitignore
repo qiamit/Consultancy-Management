@@ -156,3 +156,7 @@ backend/supabase/baseline_from_*.sql
 *.tmp
 *.temp
 *.orig
+
+# SQLite / session junk
+:memory:.ses
+*.ses
