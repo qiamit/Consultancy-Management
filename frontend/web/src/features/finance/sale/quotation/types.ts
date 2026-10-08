@@ -71,7 +71,11 @@ export function quotationStatusLabel(status: string): string {
   if (known) return known
   const trimmed = status.trim()
   if (!trimmed) return status
-  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1)
+  const match = (Object.keys(QUOTATION_STATUS_LABELS) as QuotationStatus[]).find(
+    (key) => key.toLowerCase() === trimmed.toLowerCase(),
+  )
+  if (match) return QUOTATION_STATUS_LABELS[match]
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase()
 }
 
 export type QuotationLineRow = {

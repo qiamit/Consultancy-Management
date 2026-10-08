@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { toast } from 'sonner'
 import { FileText, Save } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -25,6 +26,8 @@ import {
 } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabaseClient'
+import { useAuth } from '@/hooks/useAuth'
+import { isLaboratoryDirector } from '@/lib/isLaboratoryDirector'
 import { TemplatesTab } from '@/features/settings/lab-settings/TemplatesTab'
 import {
   DEFAULT_LAB_DOCUMENT_TEMPLATES,
@@ -92,6 +95,8 @@ export function QuotationTemplatesDialog({
   onOpenChange,
   documentKind = 'quotation',
 }: QuotationTemplatesDialogProps) {
+  const { designation } = useAuth()
+  const canEditTemplates = isLaboratoryDirector(designation)
   const [templates, setTemplates] = useState<LabDocumentTemplates>(DEFAULT_LAB_DOCUMENT_TEMPLATES)
   const [headerTemplates, setHeaderTemplates] = useState<NamedTemplate[]>([])
   const [footerTemplates, setFooterTemplates] = useState<NamedTemplate[]>([])
@@ -214,7 +219,9 @@ export function QuotationTemplatesDialog({
         setSettingsPanel(null)
         onOpenChange(false)
       } catch (err) {
-        setMessage(err instanceof Error ? err.message : 'Unable to save templates')
+        const text = err instanceof Error ? err.message : 'Unable to save templates'
+        toast.error(text)
+        setMessage(text)
       } finally {
         setSaving(false)
       }
@@ -230,7 +237,9 @@ export function QuotationTemplatesDialog({
         setTemplates(saved)
         setSettingsPanel(null)
       } catch (err) {
-        setMessage(err instanceof Error ? err.message : 'Unable to save templates')
+        const text = err instanceof Error ? err.message : 'Unable to save templates'
+        toast.error(text)
+        setMessage(text)
       } finally {
         setSaving(false)
       }
@@ -311,12 +320,15 @@ export function QuotationTemplatesDialog({
                 </p>
               ) : null}
             </div>
+            {!canEditTemplates ? (
+              <p className="min-w-0 truncate text-[10px] text-amber-200 sm:text-xs">Only Admin can change templates</p>
+            ) : null}
             <Button
               type="button"
               size="sm"
               className={cn(limsPrimaryBtnClass, 'h-7 gap-1 px-2.5 text-[11px] sm:text-xs')}
               onClick={handleSave}
-              disabled={saving || loading}
+              disabled={saving || loading || !canEditTemplates}
             >
               <Save size={13} aria-hidden />
               {saving ? 'Saving…' : 'Save & Close'}
@@ -621,7 +633,7 @@ export function QuotationTemplatesDialog({
                 size="sm"
                 className={cn(limsPrimaryBtnClass, 'h-7 gap-1 px-2.5 text-[11px] sm:text-xs')}
                 onClick={handleSavePageSettings}
-                disabled={saving || loading}
+                disabled={saving || loading || !canEditTemplates}
               >
                 <Save size={13} aria-hidden />
                 {saving ? 'Saving…' : 'Save & Close'}

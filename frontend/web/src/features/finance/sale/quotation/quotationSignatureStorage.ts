@@ -11,7 +11,8 @@ export function isLabSealStoragePath(path: string): boolean {
   return (
     p.startsWith('company/') ||
     p.startsWith('letterheads/') ||
-    p.startsWith(`${LAB_FILES_BUCKET}:`)
+    p.startsWith(`${LAB_FILES_BUCKET}:`) ||
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/(company|letterheads)\//i.test(p)
   )
 }
 

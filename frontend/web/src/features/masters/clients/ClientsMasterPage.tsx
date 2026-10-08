@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { fetchAllRows } from '@/lib/fetchAllRows'
+import { invalidateClientsCache } from '@/lib/clientsCache'
 import { supabase } from '@/lib/supabaseClient'
 import { useFormDialogOpenChange } from '@/lib/formDialogOpenChange'
 import { useMasterUiSearchState } from '@/lib/useMasterUiSearchState'
@@ -236,13 +237,19 @@ export default function ClientsMasterPage() {
     setListError(null)
     setListLoading(true)
     try {
-      const data = await fetchAllRows<ClientRow>((from, to) =>
-        supabase
-          .from('clients')
-          .select('*')
-          .order('company_name', { ascending: true })
-          .order('id', { ascending: true })
-          .range(from, to),
+      await supabase.auth.getSession()
+      const data = await fetchAllRows<ClientRow>(
+        (from, to) =>
+          supabase
+            .from('clients')
+            .select('*')
+            .order('company_name', { ascending: true })
+            .order('id', { ascending: true })
+            .range(from, to),
+        {
+          concurrency: 4,
+          count: () => supabase.from('clients').select('id', { count: 'exact', head: true }),
+        },
       )
 
       const list = (Array.isArray(data) ? (data as ClientRow[]) : [])
@@ -719,6 +726,7 @@ export default function ClientsMasterPage() {
           const { error } = await supabase.from('clients').insert(payload)
           if (error) throw error
         }
+        invalidateClientsCache()
 
         setSaveMessage('Saved successfully.')
         setForm(emptyClientForm())
@@ -951,6 +959,7 @@ export default function ClientsMasterPage() {
         const ids = selectedRows.map((r) => r.id)
         const { error } = await supabase.from('clients').delete().in('id', ids)
         if (error) throw error
+        invalidateClientsCache()
         setSaveMessage(`Deleted ${ids.length} client(s).`)
         setSelectedIds(new Set())
         await loadClients()
@@ -1082,6 +1091,7 @@ export default function ClientsMasterPage() {
         if (withId.length > 0) {
           const { error } = await supabase.from('clients').upsert(withId, { onConflict: 'id' })
           if (error) throw error
+          invalidateClientsCache()
         }
         if (byName.length > 0) {
           const { error } = await supabase
@@ -1099,6 +1109,7 @@ export default function ClientsMasterPage() {
         }
 
         setSaveMessage(`Imported ${total} client(s) with all form fields.`)
+        invalidateClientsCache()
         await loadClients()
       } catch (err) {
         setSaveMessage(formatSupabaseError(err))

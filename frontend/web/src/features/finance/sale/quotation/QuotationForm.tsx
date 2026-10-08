@@ -489,8 +489,9 @@ export function QuotationFormView({
               : defaultSign.signatureImagePath || prev.signatureImagePath,
           }))
         }
-      } catch {
+      } catch (err) {
         if (!cancelled) {
+          console.warn('Quotation terms/notes could not be loaded.', err)
           setTerms([])
           setNotes([])
         }

@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabaseClient'
-import { LAB_SETTINGS_SINGLETON_ID, letterheadFromRow } from '@/features/settings/lab-settings/labSettingsDb'
+import { LAB_SETTINGS_SINGLETON_ID, letterheadFromRow, resolveLabSettingsRowId } from '@/features/settings/lab-settings/labSettingsDb'
 import {
   DEFAULT_LETTERHEAD_TEMPLATE_NAMES,
   EMPTY_REPORT_SCOPE_TEMPLATES,
@@ -198,12 +198,14 @@ export async function resolveReportScopeTemplate(
 }
 
 export async function saveReportScopeTemplatesConfig(config: ReportScopeTemplatesConfig): Promise<void> {
-  const { error } = await supabase.from('lab_settings').upsert(
-    {
-      id: LAB_SETTINGS_SINGLETON_ID,
-      report_scope_templates: config,
-    },
-    { onConflict: 'id' },
-  )
+  const rowId = await resolveLabSettingsRowId(supabase)
+  const { data, error } = await supabase
+    .from('lab_settings')
+    .update({ report_scope_templates: config })
+    .eq('id', rowId)
+    .select('id')
   if (error) throw error
+  if (!Array.isArray(data) || data.length === 0) {
+    throw new Error('Only Admin can change report scope templates.')
+  }
 }

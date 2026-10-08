@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { invalidateClientsCache } from '@/lib/clientsCache'
 import { supabase } from '@/lib/supabaseClient'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -291,6 +292,7 @@ export function AddClientDialog({
       }
       const { data, error } = await supabase.from('clients').insert(payload).select('id').single()
       if (error) throw error
+      invalidateClientsCache()
       const id = (data as { id: string } | null)?.id
       if (id) {
         onSaved(id)

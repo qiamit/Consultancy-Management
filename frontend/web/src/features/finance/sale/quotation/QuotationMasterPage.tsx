@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { limsDarkBarGlowStyle, limsPageShellClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
-import { fetchAllRows } from '@/lib/fetchAllRows'
+import { getPickerClients } from '@/lib/clientsCache'
 import { supabase } from '@/lib/supabaseClient'
 import { useFormDialogOpenChange } from '@/lib/formDialogOpenChange'
 import { useMasterUiSearchState } from '@/lib/useMasterUiSearchState'
@@ -111,7 +111,7 @@ export default function QuotationMasterPage() {
   const { editId, setEdit } = useMasterUiSearchState()
   const hydratedEditRef = useRef<string | null>(null)
   const [rows, setRows] = useState<QuotationRow[]>([])
-  const [listLoading, setListLoading] = useState(false)
+  const [listLoading, setListLoading] = useState(true)
   const [listError, setListError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
@@ -150,16 +150,7 @@ export default function QuotationMasterPage() {
   const loadClients = useCallback(async () => {
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
-        const data = await fetchAllRows<{ id: string }>((from, to) =>
-          supabase
-            .from('clients')
-            .select(
-              'id, company_name, contact_person_name, email, country_code, mobile, gst_number, address, district, pin_code, state, country, opening_balance, balance_type',
-            )
-            .order('company_name', { ascending: true })
-            .order('id', { ascending: true })
-            .range(from, to),
-        )
+        const data = await getPickerClients()
         const list = Array.isArray(data) ? data : []
         const options = list.map((c) => ({
           id: String((c as { id: string }).id),
@@ -339,12 +330,9 @@ export default function QuotationMasterPage() {
   useEffect(() => {
     let cancelled = false
     void (async () => {
-      // Bootstrap sequentially so auth session lock is not contended.
-      await loadClients()
+      await supabase.auth.getSession()
       if (cancelled) return
-      await loadProducts()
-      if (cancelled) return
-      await loadRows()
+      await Promise.allSettled([loadRows(), loadProducts(), loadClients()])
     })()
     return () => {
       cancelled = true
@@ -353,10 +341,17 @@ export default function QuotationMasterPage() {
 
   useEffect(() => {
     if (!showForm) return
+    let cancelled = false
     void (async () => {
+      await Promise.resolve()
+      if (cancelled) return
       await loadClients()
+      if (cancelled) return
       await loadProducts()
     })()
+    return () => {
+      cancelled = true
+    }
   }, [showForm, loadClients, loadProducts])
 
   const filteredRows = useMemo(() => {
@@ -395,8 +390,14 @@ export default function QuotationMasterPage() {
   const bootstrapNewForm = useCallback(async () => {
     const [next, defaultTerm, defaultNote, defaultSign] = await Promise.all([
       allocateNextQuotationNumber(),
-      fetchDefaultQuotationTerm('quotation').catch(() => '100 % Advance'),
-      fetchDefaultQuotationNote('quotation').catch(() => ''),
+      fetchDefaultQuotationTerm('quotation').catch((err) => {
+        console.warn('Quotation terms could not be loaded.', err)
+        return '100 % Advance'
+      }),
+      fetchDefaultQuotationNote('quotation').catch((err) => {
+        console.warn('Quotation notes could not be loaded.', err)
+        return ''
+      }),
       fetchDefaultSignatureForKind('quotation').catch(() => ({
         signatureText: '',
         signatureImagePath: '',

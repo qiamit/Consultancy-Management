@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabaseClient'
-import { LAB_SETTINGS_SINGLETON_ID, resolveLabSettingsRowId } from './labSettingsDb'
+import { resolveLabSettingsRowId } from './labSettingsDb'
 import {
   DEFAULT_LAB_DOCUMENT_TEMPLATES,
   labDocumentTemplatesToJson,
@@ -48,23 +48,13 @@ export async function saveLabDocumentTemplates(
     .update({ document_templates: json })
     .eq('id', rowId)
     .select('document_templates')
-    .maybeSingle()
 
   if (error) {
-    // Fallback: upsert singleton if row missing
-    const insert = await supabase
-      .from('lab_settings')
-      .upsert({
-        id: LAB_SETTINGS_SINGLETON_ID,
-        document_templates: json,
-      })
-      .select('document_templates')
-      .maybeSingle()
-    if (insert.error) {
-      throw new Error(insert.error.message || 'Failed to save document templates.')
-    }
-    return parseLabDocumentTemplates(insert.data?.document_templates)
+    throw new Error(error.message || 'Failed to save document templates.')
   }
-
-  return parseLabDocumentTemplates(data?.document_templates ?? json)
+  const row = Array.isArray(data) ? data[0] : null
+  if (!row) {
+    throw new Error('Only Admin can change document templates.')
+  }
+  return parseLabDocumentTemplates(row.document_templates ?? json)
 }

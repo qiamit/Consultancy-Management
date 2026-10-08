@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { FileUpload } from '@/components/ui/file-upload'
+import { toast } from 'sonner'
 import { supabase } from '@/lib/supabaseClient'
 import { EMAIL_INPUT_PATTERN } from '@/lib/validation'
 import { LegalDocumentsTab } from './lab-settings/LegalDocumentsTab'
@@ -44,6 +45,7 @@ import type { OptionItem } from './lab-settings/types'
 import {
   LAB_SETTINGS_SINGLETON_ID,
   parseLabSettingsRow,
+  resolveLabSettingsRowId,
   labDetailsPayload,
   labBankPayload,
   labSystemPayload,
@@ -1216,16 +1218,21 @@ export default function LabSettingsPage() {
 
   const upsertLabSettings = (partial: Record<string, unknown>) => {
     return (async () => {
-      const payload = {
-        id: LAB_SETTINGS_SINGLETON_ID,
-        ...partial,
-      }
-
-      const { error: upsertError } = await supabase
+      const rowId = await resolveLabSettingsRowId(supabase)
+      const fields = { ...partial }
+      delete fields.id
+      const { data, error } = await supabase
         .from('lab_settings')
-        .upsert(payload, { onConflict: 'id' })
+        .update(fields)
+        .eq('id', rowId)
+        .select('id')
 
-      if (upsertError) throw upsertError
+      if (error) throw error
+      if (!Array.isArray(data) || data.length === 0) {
+        const message = 'Only Admin can change lab settings.'
+        toast.error(message)
+        throw new Error(message)
+      }
     })()
   }
 

@@ -95,7 +95,13 @@ function queryConsentClients(from: number, to: number) {
 }
 
 async function loadConsentClients(): Promise<ConsentLetterClientOption[]> {
-  return mapClientRows(await fetchAllRows(queryConsentClients))
+  await supabase.auth.getSession()
+  return mapClientRows(
+    await fetchAllRows(queryConsentClients, {
+      concurrency: 4,
+      count: () => supabase.from('clients').select('id', { count: 'exact', head: true }),
+    }),
+  )
 }
 
 function mapClientRows(data: unknown): ConsentLetterClientOption[] {

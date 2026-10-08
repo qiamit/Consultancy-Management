@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabaseClient'
-import { LAB_SETTINGS_SINGLETON_ID, resolveLabSettingsRowId } from './labSettingsDb'
+import { resolveLabSettingsRowId } from './labSettingsDb'
 import {
   DEFAULT_LAB_PRINT_SETTINGS,
   DEFAULT_SRF_PRINT_SETTINGS,
@@ -142,49 +142,20 @@ export async function saveLabPrintSettings(settings: LabPrintSettingsDocument): 
   const rowId = await resolveLabSettingsRowId(supabase)
   const json = labPrintSettingsToJson(settings)
 
-  const { data: existing, error: existsError } = await supabase
+  const { data, error } = await supabase
     .from('lab_settings')
-    .select('id')
+    .update({ print_settings: json })
     .eq('id', rowId)
-    .maybeSingle()
+    .select('print_settings')
 
-  if (existsError) {
-    throw new Error(existsError.message || 'Failed to verify lab settings row.')
+  if (error) {
+    throw new Error(error.message || 'Failed to save print settings.')
   }
-
-  let savedRaw: unknown
-
-  if (existing?.id) {
-    const { data, error } = await supabase
-      .from('lab_settings')
-      .update({ print_settings: json })
-      .eq('id', rowId)
-      .select('print_settings')
-      .single()
-
-    if (error) {
-      throw new Error(error.message || 'Failed to save print settings.')
-    }
-    savedRaw = data?.print_settings
-  } else {
-    const { data, error } = await supabase
-      .from('lab_settings')
-      .upsert(
-        {
-          id: LAB_SETTINGS_SINGLETON_ID,
-          print_settings: json,
-          lab_name: '',
-        },
-        { onConflict: 'id' },
-      )
-      .select('print_settings')
-      .single()
-
-    if (error) {
-      throw new Error(error.message || 'Failed to save print settings.')
-    }
-    savedRaw = data?.print_settings
+  const row = Array.isArray(data) ? data[0] : null
+  if (!row) {
+    throw new Error('Only Admin can change print settings.')
   }
+  const savedRaw = row.print_settings
 
   if (savedRaw == null || typeof savedRaw !== 'object') {
     throw new Error('Print settings were not saved. Check your permissions and try again.')
