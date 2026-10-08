@@ -52,6 +52,7 @@
 
   @rest path /rest/v1 /rest/v1/*
   handle @rest {
+    encode zstd gzip
     uri strip_prefix /rest/v1
     reverse_proxy {$PGRST_UPSTREAM} {
       header_down -Access-Control-Allow-Origin

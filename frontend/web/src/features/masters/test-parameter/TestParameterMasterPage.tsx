@@ -635,8 +635,15 @@ export default function TestParameterMasterPage() {
       setSaveLoading(true)
       try {
         const payload = buildInsertPayload(editForm)
-        const { error } = await supabase.from('test_parameters').update(payload).eq('id', editingId)
+        const { data, error } = await supabase
+          .from('test_parameters')
+          .update(payload)
+          .eq('id', editingId)
+          .select('id')
         if (error) throw error
+        if (!data || data.length === 0) {
+          throw new Error('You do not have edit access for this record (view-only).')
+        }
         setSaveMessage('Saved successfully.')
         hydratedEditRef.current = null
         setEdit(null)
@@ -909,9 +916,14 @@ export default function TestParameterMasterPage() {
       setSaveLoading(true)
       try {
         const ids = selectedRows.map((r) => r.id)
-        const { error } = await supabase.from('test_parameters').delete().in('id', ids)
+        const { data, error } = await supabase.from('test_parameters').delete().in('id', ids).select('id')
         if (error) throw error
-        setSaveMessage('Deleted successfully.')
+        const deleted = Array.isArray(data) ? data.length : 0
+        if (deleted === 0) {
+          setSaveMessage('Delete not allowed — only Laboratory Director/Admin can delete.')
+          return
+        }
+        setSaveMessage(deleted < ids.length ? `Deleted ${deleted} of ${ids.length}.` : 'Deleted successfully.')
         setSelectedIds(new Set())
         await loadRows()
       } catch (err) {
@@ -930,8 +942,13 @@ export default function TestParameterMasterPage() {
       setSaveMessage(null)
       setSaveLoading(true)
       try {
-        const { error } = await supabase.from('test_parameters').delete().eq('id', row.id)
+        const { data, error } = await supabase.from('test_parameters').delete().eq('id', row.id).select('id')
         if (error) throw error
+        const deleted = Array.isArray(data) ? data.length : 0
+        if (deleted === 0) {
+          setSaveMessage('Delete not allowed — only Laboratory Director/Admin can delete.')
+          return
+        }
         setSaveMessage('Deleted successfully.')
         setSelectedIds((prev) => {
           if (!prev.has(row.id)) return prev

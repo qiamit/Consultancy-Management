@@ -38,6 +38,8 @@ import {
 
 const normalizeText = (value: string) => value.trim()
 
+const nameCollator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true })
+
 /** CSV columns matching every Client form field (+ id for round-trip). */
 const CLIENT_CSV_HEADERS = [
   'gst_number',
@@ -261,26 +263,25 @@ export default function ClientsMasterPage() {
           payment_term: (r.payment_term ?? '100 % Advance') as ClientRow['payment_term'],
           remark: (r.remark ?? null) as ClientRow['remark'],
         }))
-        .sort((a, b) => (a.company_name || '').localeCompare(b.company_name || '', undefined, { sensitivity: 'base' }))
 
       setRows(list)
 
       const districtsFromDb = Array.from(new Set(list.map((r) => r.district).filter((d): d is string => !!d && d.trim().length > 0)))
         .map((label) => ({ id: `db-district-${label}`, label }))
-        .sort((a, b) => a.label.localeCompare(b.label))
+        .sort((a, b) => nameCollator.compare(a.label, b.label))
       setDistricts((prev) => {
         const merged = [...prev, ...districtsFromDb]
         const uniq = new Map(merged.map((x) => [x.label.toLowerCase(), x]))
-        return Array.from(uniq.values()).sort((a, b) => a.label.localeCompare(b.label))
+        return Array.from(uniq.values()).sort((a, b) => nameCollator.compare(a.label, b.label))
       })
 
       const pinCodesFromDb = Array.from(new Set(list.map((r) => r.pin_code).filter((p): p is string => !!p && p.trim().length > 0)))
         .map((label) => ({ id: `db-pin-${label}`, label }))
-        .sort((a, b) => a.label.localeCompare(b.label))
+        .sort((a, b) => nameCollator.compare(a.label, b.label))
       setPinCodes((prev) => {
         const merged = [...prev, ...pinCodesFromDb]
         const uniq = new Map(merged.map((x) => [x.label.toLowerCase(), x]))
-        return Array.from(uniq.values()).sort((a, b) => a.label.localeCompare(b.label))
+        return Array.from(uniq.values()).sort((a, b) => nameCollator.compare(a.label, b.label))
       })
     } catch (err) {
       setListError(err instanceof Error ? err.message : 'Unable to load clients')
@@ -720,8 +721,11 @@ export default function ClientsMasterPage() {
         // Prefer insert/update over upsert — avoids 42P10 when the unique index
         // on company_name is missing on some environments.
         if (editingId) {
-          const { error } = await supabase.from('clients').update(payload).eq('id', editingId)
+          const { data, error } = await supabase.from('clients').update(payload).eq('id', editingId).select('id')
           if (error) throw error
+          if (!data || data.length === 0) {
+            throw new Error('You do not have edit access for this record (view-only).')
+          }
         } else {
           const { error } = await supabase.from('clients').insert(payload)
           if (error) throw error
@@ -796,8 +800,7 @@ export default function ClientsMasterPage() {
         })
 
     const dir = sortDir === 'asc' ? 1 : -1
-    const cmpText = (a: string, b: string) =>
-      a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true }) * dir
+    const cmpText = (a: string, b: string) => nameCollator.compare(a, b) * dir
 
     return list.sort((a, b) => {
       let primary = 0
@@ -957,10 +960,17 @@ export default function ClientsMasterPage() {
       setSaveLoading(true)
       try {
         const ids = selectedRows.map((r) => r.id)
-        const { error } = await supabase.from('clients').delete().in('id', ids)
+        const { data, error } = await supabase.from('clients').delete().in('id', ids).select('id')
         if (error) throw error
+        const deleted = Array.isArray(data) ? data.length : 0
+        if (deleted === 0) {
+          setSaveMessage('Delete not allowed — only Laboratory Director/Admin can delete.')
+          return
+        }
         invalidateClientsCache()
-        setSaveMessage(`Deleted ${ids.length} client(s).`)
+        setSaveMessage(
+          deleted < ids.length ? `Deleted ${deleted} of ${ids.length}.` : `Deleted ${ids.length} client(s).`,
+        )
         setSelectedIds(new Set())
         await loadClients()
       } catch (err) {

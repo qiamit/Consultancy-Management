@@ -10,6 +10,7 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { ArrowDown, ArrowUp, ArrowUpDown, Check, FlaskConical, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { useIsLaboratoryDirector } from '@/components/lims/LaboratoryDirectorOnly'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
@@ -835,6 +836,7 @@ function RowActions({
   onEdit: (row: TestParameterRow) => void
   onDelete: (row: TestParameterRow) => void
 }) {
+  const canDelete = useIsLaboratoryDirector()
   return (
     <div className="flex shrink-0 items-center gap-0.5">
       <Button
@@ -848,17 +850,19 @@ function RowActions({
       >
         <Pencil size={16} />
       </Button>
-      <Button
-        type="button"
-        size="sm"
-        variant="ghost"
-        className="h-8 w-8 rounded-none p-0 text-red-700 hover:bg-red-50 hover:text-red-800"
-        aria-label={`Delete ${row.item_name}`}
-        title="Delete"
-        onClick={() => onDelete(row)}
-      >
-        <Trash2 size={16} />
-      </Button>
+      {canDelete ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-8 w-8 rounded-none p-0 text-red-700 hover:bg-red-50 hover:text-red-800"
+          aria-label={`Delete ${row.item_name}`}
+          title="Delete"
+          onClick={() => onDelete(row)}
+        >
+          <Trash2 size={16} />
+        </Button>
+      ) : null}
     </div>
   )
 }

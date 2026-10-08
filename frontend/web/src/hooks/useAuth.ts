@@ -213,7 +213,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const fetchProfile = async () => {
       const { data, error } = await supabase
         .from('user_profiles')
-        .select('designation, department_name, division, full_name')
+        .select('designation, department_name, division, full_name, status')
         .eq('id', userId)
         .maybeSingle()
 
@@ -233,7 +233,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         department_name?: unknown
         division?: unknown
         full_name?: unknown
+        status?: unknown
       } | null
+      if (row && String(row.status ?? 'Active').trim().toLowerCase() !== 'active') {
+        try {
+          sessionStorage.setItem(
+            'authNotice',
+            'Your account is inactive. Contact the Laboratory Director.',
+          )
+        } catch {
+          /* ignore */
+        }
+        await supabase.auth.signOut()
+        return
+      }
       const profileDes = typeof row?.designation === 'string' ? row.designation.trim() : ''
       const profileDept =
         typeof row?.department_name === 'string' ? row.department_name.trim() : ''

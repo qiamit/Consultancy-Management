@@ -38,6 +38,16 @@ export default function AuthPage() {
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [authNotice] = useState<string | null>(() => {
+    try {
+      const message = sessionStorage.getItem('authNotice')
+      if (!message) return null
+      sessionStorage.removeItem('authNotice')
+      return message
+    } catch {
+      return null
+    }
+  })
 
   const canSubmit = useMemo(() => {
     return Boolean(email.trim() && password.trim())
@@ -172,6 +182,11 @@ export default function AuthPage() {
             </div>
 
             <div className={cn(limsRegistryFormClass, 'space-y-5 p-5')}>
+              {authNotice ? (
+                <div className="rounded-none border border-amber-500/50 bg-amber-50 px-3 py-2.5">
+                  <p className="text-sm text-amber-900">{authNotice}</p>
+                </div>
+              ) : null}
               <div className="space-y-4" onKeyDown={handleKeyDown}>
                 <div className="space-y-2">
                   <Label htmlFor="email">Email Address</Label>

@@ -1061,7 +1061,12 @@ export default function IsCodesMasterPage() {
               .select('id')
               .single()
           : await supabase.from('is_codes').insert(basePayload).select('id').single()
-        if (error) throw error
+        if (error) {
+          if (editingId && error.code === 'PGRST116') {
+            throw new Error('You do not have edit access for this record (view-only).')
+          }
+          throw error
+        }
 
         const id = (data as { id: string } | null)?.id ?? editingId
         if (!id) throw new Error('Unable to determine record id')
@@ -1103,23 +1108,36 @@ export default function IsCodesMasterPage() {
       setSaveLoading(true)
       try {
         const ids = selectedRows.map((r) => r.id)
+        const { data: deletedRows, error: dbErr } = await supabase
+          .from('is_codes')
+          .delete()
+          .in('id', ids)
+          .select('id')
+        if (dbErr) throw dbErr
+        const deletedIds = (Array.isArray(deletedRows) ? deletedRows : []).map((row) => String(row.id))
+        if (deletedIds.length === 0) {
+          setSaveMessage('Delete not allowed — only Laboratory Director/Admin can delete.')
+          return
+        }
         const { data: fileRows, error: fileErr } = await supabase
           .from('is_code_files')
           .select('storage_path')
-          .in('is_code_id', ids)
+          .in('is_code_id', deletedIds)
         if (fileErr) throw fileErr
-        const paths = (Array.isArray(fileRows) ? fileRows : []).map((x: any) => x.storage_path).filter(Boolean)
+        const paths = (Array.isArray(fileRows) ? fileRows : [])
+          .map((x: { storage_path?: string | null }) => x.storage_path)
+          .filter((path): path is string => typeof path === 'string' && path.length > 0)
         if (paths.length > 0) {
           const { error: rmErr } = await supabase.storage.from(BUCKET).remove(paths)
           if (rmErr) throw rmErr
         }
-        const { error: dbFileErr } = await supabase.from('is_code_files').delete().in('is_code_id', ids)
+        const { error: dbFileErr } = await supabase.from('is_code_files').delete().in('is_code_id', deletedIds)
         if (dbFileErr) throw dbFileErr
-        const { error: dbErr } = await supabase.from('is_codes').delete().in('id', ids)
-        if (dbErr) throw dbErr
 
         setSelectedIds(new Set())
-        setSaveMessage('Deleted.')
+        setSaveMessage(
+          deletedIds.length < ids.length ? `Deleted ${deletedIds.length} of ${ids.length}.` : 'Deleted.',
+        )
         await loadIsCodes()
       } catch (err) {
         setSaveMessage(formatSupabaseError(err))

@@ -433,11 +433,15 @@ export default function ProductsServicesMasterPage() {
       }
 
       if (editingId) {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('products_services_master')
           .update(payload)
           .eq('id', editingId)
+          .select('id')
         if (error) throw error
+        if (!data || data.length === 0) {
+          throw new Error('You do not have edit access for this record (view-only).')
+        }
       } else {
         const { error } = await supabase.from('products_services_master').insert(payload)
         if (error) throw error
@@ -479,10 +483,15 @@ export default function ProductsServicesMasterPage() {
     setSaveLoading(true)
     setSaveMessage(null)
     try {
-      const { error } = await supabase.from('products_services_master').delete().in('id', ids)
+      const { data, error } = await supabase.from('products_services_master').delete().in('id', ids).select('id')
       if (error) throw error
+      const deleted = Array.isArray(data) ? data.length : 0
+      if (deleted === 0) {
+        setSaveMessage('Delete not allowed — only Laboratory Director/Admin can delete.')
+        return
+      }
       setSelectedIds(new Set())
-      setSaveMessage(`Deleted ${ids.length} record(s).`)
+      setSaveMessage(deleted < ids.length ? `Deleted ${deleted} of ${ids.length}.` : `Deleted ${ids.length} record(s).`)
       await loadRows()
     } catch (err) {
       setSaveMessage(formatSupabaseError(err))
