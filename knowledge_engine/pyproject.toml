@@ -1,0 +1,5 @@
+[project]
+name = "bis-knowledge-engine"
+version = "0.1.0"
+requires-python = ">=3.11"
+description = "Local BIS knowledge search over verified usable chunks. Call the HTTP API; do not import this package from the Consultancy Pro frontend or backend."

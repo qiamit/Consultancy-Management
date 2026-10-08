@@ -3,14 +3,17 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
-    "dev": "npm run dev --prefix frontend",
-    "pdf:dev": "npm run dev --prefix pdf-service",
-    "pdf:install": "npm install --prefix pdf-service && npm run install-browser --prefix pdf-service",
-    "build": "npm run build --prefix frontend",
-    "typecheck": "npm run typecheck --prefix frontend",
-    "lint": "npm run lint --prefix frontend",
-    "preview": "npm run preview --prefix frontend",
-    "db:push": "node backend/scripts/refuse-hosted-cloud.cjs"
+    "dev": "npm run dev --prefix frontend/web",
+    "build": "npm run build --prefix frontend/web",
+    "typecheck": "npm run typecheck --prefix frontend/web",
+    "lint": "npm run lint --prefix frontend/web",
+    "preview": "npm run preview --prefix frontend/web",
+    "pdf:dev": "npm run dev --prefix backend/services/pdf-service",
+    "pdf:install": "npm install --prefix backend/services/pdf-service && npm run install-browser --prefix backend/services/pdf-service",
+    "functions:check": "node --check backend/services/functions/server.mjs && node --check backend/services/functions/qiAssistant.mjs",
+    "db:migrate": "node backend/scripts/apply-migrations.mjs",
+    "db:push": "node backend/scripts/refuse-hosted-cloud.cjs",
+    "knowledge:api": "knowledge_engine/.conda/bin/python -m knowledge_engine.scripts.serve_knowledge_search_api"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

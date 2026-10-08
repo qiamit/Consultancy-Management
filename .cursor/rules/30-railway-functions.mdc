@@ -1,13 +1,13 @@
 ---
-description: Railway functions service and Caddy gateway rules; production QI Assistant is railway-stack/functions/qiAssistant.mjs, not the Deno function
-globs: railway-stack/**,backend/supabase/functions/**
+description: Railway functions service and Caddy gateway rules; production QI Assistant is backend/services/functions/qiAssistant.mjs
+globs: backend/services/functions/**,backend/services/gateway/**
 alwaysApply: false
 ---
 
 # Railway functions and gateway
 
 ## What runs in production
-- The **functions** Railway service runs `railway-stack/functions/server.mjs` on Node 22. It uses plain `node:http`, has no framework and no npm dependencies.
+- The **functions** Railway service runs `backend/services/functions/server.mjs` on Node 22. It uses plain `node:http`, has no framework and no npm dependencies.
 - Its `Dockerfile` copies only `package.json server.mjs qiAssistant.mjs`. **When you add a new `.mjs` module, add it to that `COPY` line**, or production will crash on import. Avoid npm dependencies; if one is truly needed, update the Dockerfile and say so.
 - The health endpoint `GET /health` must keep returning 200; it is the Railway healthcheck in `railway.json`.
 
@@ -18,16 +18,15 @@ alwaysApply: false
 - Never log secrets, JWTs or full request bodies that contain personal or client data.
 - Email goes through Resend (`RESEND_API_KEY`, `EMAIL_FROM`) for the verified domains `qengineering.in` and `qirlpl.com`. Never send real email while testing.
 
-## QI Assistant: keep the two copies in sync
-- **Production QI Assistant = `railway-stack/functions/qiAssistant.mjs`** (`createQiAssistantHandler`, mounted at `POST /qi-assistant`). Changes to prompts, model handling or context building go here.
-- `backend/supabase/functions/qi-assistant/index.ts` (plus `limsCrud.ts`) is the Deno version inherited from LIMS. It is **not deployed**, though it contains extra logic such as NOTEBOOK MODE (IS Code PDF text) and LIMS CRUD tools. Never assume a Deno-only feature works in production.
-- When you change assistant behaviour, port it to `qiAssistant.mjs`. Mirror it in the Deno file only if that file holds the same logic, or else add a short `// NOTE: diverges from qiAssistant.mjs` comment. Mention any remaining divergence in your summary.
+## QI Assistant
+- Production QI Assistant = `backend/services/functions/qiAssistant.mjs`, the only copy.
+- The Deno copy (`backend/supabase/functions/qi-assistant/index.ts` + `limsCrud.ts`) was removed on 2026-10-08 and had NOTEBOOK MODE (IS Code PDF text) and LIMS CRUD tools that are NOT in production. If that logic is needed, recover it with `git show 4e28cc0:backend/supabase/functions/qi-assistant/index.ts` and port it to `qiAssistant.mjs`. Never assume those features exist.
 - Prompt changes should keep the rules: answer in the user's language, ground BIS facts in provided sources, and say "not found" instead of guessing.
 
-## Gateway (`railway-stack/gateway/Caddyfile`)
+## Gateway (`backend/services/gateway/Caddyfile`)
 - The CORS allowlist covers local Vite ports, `qengineering.in` / `www.qengineering.in` and the Railway frontend domains. A new frontend origin needs a matcher here.
 - Keep the `header_down -Access-Control-*` stripping on each `reverse_proxy` to avoid duplicate CORS headers. Upstreams come from env (`GOTRUE_UPSTREAM`, `PGRST_UPSTREAM`, `STORAGE_UPSTREAM`, `FUNCTIONS_UPSTREAM`).
 
 ## Verify
-- Run `node --check railway-stack/functions/server.mjs` and `node --check railway-stack/functions/qiAssistant.mjs`.
+- Run `node --check backend/services/functions/server.mjs` and `node --check backend/services/functions/qiAssistant.mjs`.
 - Don't redeploy Railway services unless Amit asks. If a change needs a deploy, say which service (`functions`, `api`, ...) must be redeployed.

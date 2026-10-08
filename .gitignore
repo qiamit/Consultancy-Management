@@ -9,9 +9,9 @@ lerna-debug.log*
 
 # ── Dependencies & build ──────────────────────────────────────────────
 node_modules/
-frontend/node_modules/
+frontend/web/node_modules/
 backend/node_modules/
-frontend/dist/
+frontend/web/dist/
 dist/
 dist-ssr/
 build/
@@ -25,7 +25,7 @@ test-results/
 
 # ── Tooling caches ────────────────────────────────────────────────────
 .vite/
-frontend/.vite/
+frontend/web/.vite/
 .eslintcache
 .turbo/
 .cache/
@@ -41,16 +41,16 @@ frontend/.vite/
 !.env.*.example
 .railway-secrets.env
 .railway/
-frontend/.env
-frontend/.env.*
-!frontend/.env.example
+frontend/web/.env
+frontend/web/.env.*
+!frontend/web/.env.example
 backend/.env
 backend/.env.*
 !backend/.env.example
 backend/supabase-secrets.env
-backend/supabase/.env
-backend/supabase/.env.*
-backend/supabase/.env.keys
+backend/database/.env
+backend/database/.env.*
+backend/database/.env.keys
 credentials.json
 *.pem
 *.key
@@ -60,9 +60,9 @@ credentials.json
 
 # ── Hosted Supabase CLI (this repo is Railway-only) ───────────────────
 **/.supabase/
-backend/supabase/.temp/
-backend/supabase/.branches/
-backend/supabase/config.toml
+**/supabase/.temp/
+**/supabase/.branches/
+**/supabase/config.toml
 
 # ── Vercel / Netlify leftovers (do not deploy this repo there) ────────
 .vercel/
@@ -144,7 +144,7 @@ backend/.deploy-*
 backend/.tmp-*
 
 # Local DB dump scratch (use versioned migrations instead)
-backend/supabase/baseline_from_*.sql
+backend/database/baseline_from_*.sql
 .migration-tmp/
 *.sql.bak
 *.dump

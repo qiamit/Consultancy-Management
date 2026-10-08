@@ -3,7 +3,8 @@
   "private": true,
   "version": "0.0.0",
   "scripts": {
-    "db:push": "node ./scripts/refuse-hosted-cloud.cjs"
+    "db:push": "node ./scripts/refuse-hosted-cloud.cjs",
+    "migrate": "node ./scripts/apply-migrations.mjs"
   },
   "dependencies": {
     "pg": "^8.21.0"

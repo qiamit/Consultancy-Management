@@ -1,15 +1,16 @@
 ---
-description: Rules for Railway Postgres SQL migrations under backend/supabase (new files only, RLS, audit fields, constraints)
-globs: backend/**,scripts/apply-migrations.mjs
+description: Rules for Railway Postgres SQL migrations under backend/database (new files only, RLS, audit fields, constraints)
+globs: backend/database/**,backend/scripts/**
 alwaysApply: false
 ---
 
 # Database migrations (Railway Postgres)
 
 ## Files
-- Make every schema or data change as a **new** file in `backend/supabase/migrations/`, named `YYYYMMDDHHMMSS_short_snake_description.sql`. Its timestamp must be later than the newest existing file.
+- `backend/database` is the self-hosted Railway Postgres schema (GoTrue/PostgREST/storage-api); it is NOT Supabase.com.
+- Make every schema or data change as a **new** file in `backend/database/migrations/`, named `YYYYMMDDHHMMSS_short_snake_description.sql`. Its timestamp must be later than the newest existing file.
 - **Never edit, rename or delete an existing migration.** It may already be applied on Railway (history lives in `public.app_schema_migrations`). To fix a mistake, write another migration.
-- `scripts/apply-migrations.mjs` has a `SKIP_FILES` list of LIMS-only migrations that must not run on this database. Don't change it without asking.
+- `backend/scripts/apply-migrations.mjs` (`npm run db:migrate`) has a `SKIP_FILES` list of LIMS-only migrations that must not run on this database. Don't change it without asking.
 - Don't add `supabase/config.toml` or use any Supabase CLI command (the project is Railway-only).
 
 ## SQL style (idempotent, safe to re-run)
@@ -30,5 +31,5 @@ alwaysApply: false
 - Storage buckets: create them with `INSERT INTO storage.buckets ... ON CONFLICT (id) DO NOTHING`, with `storage.objects` policies scoped by `bucket_id`. `20261004120000_bis_project_files.sql` is the reference.
 
 ## After a schema change
-- Update the matching TypeScript types (`frontend/src/features/**/types.ts`), the `select(...)` column lists, and any CSV import/export headers.
-- Don't apply to production yourself unless asked. Tell Amit how: `node scripts/apply-migrations.mjs`, with `DATABASE_URL` set or the Railway CLI linked.
+- Update the matching TypeScript types (`frontend/web/src/features/**/types.ts`), the `select(...)` column lists, and any CSV import/export headers.
+- Don't apply to production yourself unless asked. Tell Amit how: `npm run db:migrate`, with `DATABASE_URL` set or the Railway CLI linked.

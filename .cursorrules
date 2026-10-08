@@ -2,12 +2,12 @@
 
 The detailed rules live in `.cursor/rules/*.mdc`, and Cursor loads them automatically:
 - `00-project-core.mdc` (always): app, stack, Railway deploy target, secrets, commands, working style
-- `10-database-migrations.mdc` (backend/**): new migration files only, RLS, audit fields, constraints
-- `20-frontend.mdc` (frontend/**): feature-folder pattern, limsThemeUi, supabase client, forms
-- `30-railway-functions.mdc` (railway-stack/**, backend/supabase/functions/**): production QI Assistant = qiAssistant.mjs
+- `10-database-migrations.mdc` (backend/database/**, backend/scripts/**): new migration files only, RLS, audit fields, constraints
+- `20-frontend.mdc` (frontend/web/**): feature-folder pattern, limsThemeUi, supabase client, forms
+- `30-railway-functions.mdc` (backend/services/functions/**, backend/services/gateway/**): production QI Assistant = qiAssistant.mjs
 - `40-knowledge-engine.mdc` (knowledge_engine/**): usable/needs_review gate, protected collections, same embedding model, evals
 - `50-workflow-prompts.mdc` (always): docs/audits/*.md with VDB-xx / MST-xx / FIN-xx IDs, "continue" workflow
-- `60-extensions.mdc` (extensions/**): keep the Chrome and Safari copies in sync
+- `60-extensions.mdc` (frontend/extensions/**): keep the Chrome and Safari copies in sync
 
 If `.cursor/rules` isn't loaded, follow this short version:
 
@@ -18,10 +18,14 @@ If `.cursor/rules` isn't loaded, follow this short version:
 - Don't commit or push unless asked.
 
 ## Project structure
-- `frontend/`: React 19 + Vite 7 + TypeScript, shadcn/ui, LIMS stone/amber theme (`lib/limsThemeUi.ts`)
-- `backend/supabase/migrations/`: Railway Postgres SQL (new files only, never edit applied ones, RLS on every table)
-- `railway-stack/gateway/`: Caddy API gateway. `railway-stack/functions/`: Node functions (users, Resend email, QI Assistant)
-- `pdf-service/`: Playwright PDF. `knowledge_engine/`: local BIS RAG (Python). `extensions/`: Chrome and Safari extension
+- `frontend/web/`: React 19 + Vite 7 + TypeScript, shadcn/ui, LIMS stone/amber theme (`lib/limsThemeUi.ts`)
+- `frontend/extensions/`: Chrome and Safari extension
+- `backend/database/migrations/`: Railway Postgres SQL (new files only, never edit applied ones, RLS on every table). Not Supabase.com.
+- `backend/services/gateway/`: Caddy API gateway. `backend/services/functions/`: Node functions (users, Resend email, QI Assistant)
+- `backend/services/pdf-service/`: Playwright PDF. `backend/services/storage-minio/`: legacy MinIO Dockerfile
+- `knowledge_engine/`: local BIS RAG (Python), standalone; HTTP only
+
+Paths moved on 2026-10-08, see `docs/REPO_STRUCTURE.md`. If a prompt uses an old path (`frontend/src`, `railway-stack/...`, `pdf-service/`, `storage-service/`, `extensions/`, `scripts/apply-migrations.mjs`, `scripts/dump-schema.mjs`, `scripts/gen-db-types.mjs`, `backend/supabase/...` including `backend/supabase/migrations` and `backend/supabase/schema`), map it to the new path automatically (`backend/supabase/` → `backend/database/`). `backend/supabase/functions` was deleted (recover from git at `4e28cc0`).
 
 ## Rules
 - Railway self-hosted stack only. Never use hosted Supabase Cloud, `supabase db push`, Vercel or Netlify. Don't deploy unless asked.

@@ -70,3 +70,17 @@ Requires a local Tesseract binary (project-local micromamba env under `knowledge
 - Do not commit `.env`, `.venv/`, or any vector index files.
 - Do not copy BIS PDFs or client documents into this repository.
 - Prefer storing the vector DB outside the repo tree when possible.
+
+## Reuse in another app
+
+Run the API from the repo root (`npm run knowledge:api`, or `knowledge_engine/.conda/bin/python -m knowledge_engine.scripts.serve_knowledge_search_api`). Call it over HTTP at `127.0.0.1:3851`. The contract is in `API.md`. Do not import `knowledge_engine` from another application's frontend or backend.
+
+A later extraction can use `git subtree split --prefix=knowledge_engine`.
+
+## Recreate .conda
+
+The env has an absolute prefix. If this folder ever moves, recreate the env. Do not move `.conda`. From inside `knowledge_engine/`:
+
+```bash
+./.tools/bin/micromamba create -y -p "$(pwd)/.conda" -c conda-forge tesseract python=3.11 pip && ./.conda/bin/python -m pip install -r requirements-conda.lock.txt
+```

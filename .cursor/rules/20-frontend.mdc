@@ -1,13 +1,13 @@
 ---
-description: Frontend conventions for the React + Vite app in frontend/ (feature folders, LIMS stone/amber theme, Supabase client via Railway gateway)
-globs: frontend/**
+description: Frontend conventions for the React + Vite app in frontend/web (feature folders, LIMS stone/amber theme, Supabase client via Railway gateway)
+globs: frontend/web/**
 alwaysApply: false
 ---
 
-# Frontend conventions (frontend/)
+# Frontend conventions (frontend/web/)
 
 ## Structure
-- The `@/` alias points to `frontend/src`. Always import with `@/...` across folders; use relative `./` imports only inside a feature folder.
+- The `@/` alias points to `frontend/web/src`. Always import with `@/...` across folders; use relative `./` imports only inside a feature folder.
 - Each module gets a feature folder: `src/features/<area>/<module>/`. The masters pattern, from `features/masters/clients/` and `features/masters/is-codes/`:
   - `XxxMasterPage.tsx`: state, data loading, CRUD, CSV import/export
   - `XxxHeaderBar.tsx`: dark title and actions bar. `XxxTable.tsx`: sortable table. `XxxFooterBar.tsx`: pagination and page size.

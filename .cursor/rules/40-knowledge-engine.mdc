@@ -1,10 +1,12 @@
 ---
 description: BIS knowledge engine (Python RAG) rules; quality gating, protected collections, embedding consistency, evals, no secrets/PDFs in repo
-globs: knowledge_engine/**,frontend/src/features/bis/knowledge-search/**
+globs: knowledge_engine/**,frontend/web/src/features/bis/knowledge-search/**
 alwaysApply: false
 ---
 
 # Knowledge engine (knowledge_engine/)
+
+`knowledge_engine` is a standalone, reusable package; never import it from frontend/backend; talk to it over HTTP only; API contract in `knowledge_engine/API.md`.
 
 ## Environment and running
 - The Python 3.11 env with chromadb, fastembed and tesseract is at `knowledge_engine/.conda`. `knowledge_engine/.venv` covers the basic PyMuPDF extraction.

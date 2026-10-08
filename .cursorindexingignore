@@ -1,15 +1,15 @@
 # .cursorindexingignore: excluded from codebase indexing/semantic search only.
 # The agent can still open these files when explicitly needed.
 
-# Lockfiles (large, noisy; frontend/package-lock.json is ~230 KB)
+# Lockfiles (large, noisy; frontend/web/package-lock.json is ~230 KB)
 **/package-lock.json
 
 # Safari root files mirror the Chrome extension 1:1. Index the Chrome copy only;
 # edit both copies when changing behaviour (see .cursor/rules/60-extensions.mdc).
-extensions/qe-consultancy-safari/*.js
-extensions/qe-consultancy-safari/*.css
-extensions/qe-consultancy-safari/*.html
-extensions/qe-consultancy-safari/*.json
+frontend/extensions/qe-consultancy-safari/*.js
+frontend/extensions/qe-consultancy-safari/*.css
+frontend/extensions/qe-consultancy-safari/*.html
+frontend/extensions/qe-consultancy-safari/*.json
 
 # Knowledge-engine generated markdown reports (pilot/*.json is NOT excluded: alias_policy_v1.json is loaded by code)
 knowledge_engine/pilot/*_report.md

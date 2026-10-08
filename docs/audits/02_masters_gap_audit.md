@@ -1,12 +1,14 @@
+Paths updated 2026-10-08 after folder restructure (see docs/REPO_STRUCTURE.md).
+
 # 02 — Masters Gap Audit + Cursor Fix Prompts (Consultancy Pro / Q Engineering)
 
 - **Repo:** `qiamit/Consultancy-Management` @ `main` 9495c4c (audited read-only from Amit's MacBook, 8 Oct 2026, IST)
 - **Scope:** every master module (Client, IS Code, Test Parameter, Product & Services, Company Settings, Users/Module Access, lookup/option masters) + masters that BIS work needs but the app does not have yet.
-- **Method:** reviewed migrations in `backend/supabase/migrations/`, `scripts/apply-migrations.mjs`, master pages in `frontend/src/features/masters/**`, BIS consumers in `frontend/src/features/bis/**`, finance consumers in `frontend/src/features/finance/**`, and the Chrome extension. Checked against public BIS / Manak Online / CRS / LIMS-BIS pages (section C).
+- **Method:** reviewed migrations in `backend/database/migrations/`, `backend/scripts/apply-migrations.mjs`, master pages in `frontend/web/src/features/masters/**`, BIS consumers in `frontend/web/src/features/bis/**`, finance consumers in `frontend/web/src/features/finance/**`, and the Chrome extension. Checked against public BIS / Manak Online / CRS / LIMS-BIS pages (section C).
 - **Status legend (used by the regular-work prompt in section E):** `OPEN` → `IN-PROGRESS` → `DONE (commit <sha>)` / `WONTFIX (reason)`
 - **Suggested repo location:** copy this file to `docs/audits/02_masters_gap_audit.md` so Cursor can read and update it. The prompts below assume that path.
 
-> **Read this first: the repo's migrations do not describe the live database.** `scripts/apply-migrations.mjs:11-36` marks the LIMS baseline, the products/finance stack and `20261003190000_consultancy_bis_domain.sql` as "skipped", because the tables already existed from the old Consultancy Pro app. Live columns used by the code (`clients.name/phone/city/notes`, `is_codes.is_code_title/aspect_of_is`, `test_parameters.test_name/unit/specified_value`, `product_master_items`, `finance_*`, `transactions`) are not created by any migration in the repo. Prompt P1 fixes this, and every later prompt depends on it.
+> **Read this first: the repo's migrations do not describe the live database.** `backend/scripts/apply-migrations.mjs:11-36` marks the LIMS baseline, the products/finance stack and `20261003190000_consultancy_bis_domain.sql` as "skipped", because the tables already existed from the old Consultancy Pro app. Live columns used by the code (`clients.name/phone/city/notes`, `is_codes.is_code_title/aspect_of_is`, `test_parameters.test_name/unit/specified_value`, `product_master_items`, `finance_*`, `transactions`) are not created by any migration in the repo. Prompt P1 fixes this, and every later prompt depends on it.
 
 ---
 
@@ -15,7 +17,7 @@
 | # | Master | Route / UI | Main tables | Key frontend files | List / search / export / import | Validation | Audit / soft-delete | Used by |
 |---|---|---|---|---|---|---|---|---|
 | 1 | **Client Master** | `/masters/clients` | `clients` (+ `client_master_options`; legacy unused `master_clients`) | `features/masters/clients/*` (ClientsMasterPage 1545 lines, ClientsForm, ClientsTable, ClientDetailsDialog); quick-add `features/sample-handling/receiving/AddClientDialog.tsx` | Client-side search/sort/paginate over the full table; CSV export/import; print courier slip; bulk delete (UI-gated to Director) | GSTIN regex, 10-digit mobile, email, PIN (`clients/types.ts:142-164`), main form only | `created_at/updated_at` only; hard delete | bis_projects, bis_new_applications, license_surveillance (CASCADE), bis_sample_failure_replies (CASCADE), quotations, finance sale docs (`saleDocumentsApi.ts:113`), samples, equipment, consent letters, OSL lab lookup, email tools, dashboard (18 files query `clients` directly) |
-| 2 | **IS Code Master** (Amit's "IS pod master") | `/masters/is-codes` | `is_codes`, `is_code_files` (+ storage bucket), `is_code_master_options` (aspect) | `features/masters/is-codes/*` (IsCodesMasterPage 1485 lines, IsCodesForm, IsCodeDetailsDialog, files dialog); quick-add `sample-handling/receiving/AddIsCodeDialog.tsx`; extension `extensions/qe-consultancy-chrome/is-code-fetch.js` | Client-side search; CSV export/import (upsert on `is_number,revision_year`); file attach; fetch from BIS via extension | Must start with "IS", needs a revision year and a title | timestamps only; hard delete | bis_projects.is_code_id, license_surveillance (RESTRICT), sample failure (RESTRICT), test_parameters (SET NULL), FTR/OSL/print modules, QI assistant, knowledge search (16 files query `is_codes`) |
+| 2 | **IS Code Master** (Amit's "IS pod master") | `/masters/is-codes` | `is_codes`, `is_code_files` (+ storage bucket), `is_code_master_options` (aspect) | `features/masters/is-codes/*` (IsCodesMasterPage 1485 lines, IsCodesForm, IsCodeDetailsDialog, files dialog); quick-add `sample-handling/receiving/AddIsCodeDialog.tsx`; extension `frontend/extensions/qe-consultancy-chrome/is-code-fetch.js` | Client-side search; CSV export/import (upsert on `is_number,revision_year`); file attach; fetch from BIS via extension | Must start with "IS", needs a revision year and a title | timestamps only; hard delete | bis_projects.is_code_id, license_surveillance (RESTRICT), sample failure (RESTRICT), test_parameters (SET NULL), FTR/OSL/print modules, QI assistant, knowledge search (16 files query `is_codes`) |
 | 3 | **Test Parameter Master** | `/masters/test-parameter` | `test_parameters`, `test_parameter_units`, `accreditation_bodies` | `features/masters/test-parameter/*` (Master 1293, Table 1433, Uncertainty dialog 1287) | Client-side search; CSV import with partial dedupe | Required item name only | none | FTR (`FactoryTestReportModuleFields`, `FtrIsTestParameterDialog`), OSL sample requirements, scheme-of-inspection print, LIMS leftovers |
 | 4 | **Product & Services** | `/masters/product-services` | `products_services_master`, `product_item_categories`, `product_makes`, `gst_rates`, units (`test_parameter_units`) | `features/masters/products-services/*` (the route maps here via `ProductServicesPage.tsx`) | Search, export/import, delete | Numeric parsing | none | Quotation and sale documents (line items) |
 | 5 | NABL Scope (legacy LIMS) | none (no route) | `nabl_scope` | `features/masters/product-services/*` | n/a | n/a | n/a | Dead code |
@@ -36,7 +38,7 @@ All items start as `OPEN`.
 
 | ID | Gap | Sev | Evidence | Recommended fix | Status |
 |---|---|---|---|---|---|
-| MST-01 | Repo migrations do not match the live schema. Several migrations are "skipped" and legacy columns or tables exist only in the live DB. No generated DB types. | High | `scripts/apply-migrations.mjs:11-36`; `20261003210000_module_schema_bridge.sql:10-12,69-71,130-155` reference `is_code_title`, `aspect_of_is`, `test_name`, `product_master_items`; `20260501000001_lims_compat_on_consultancy_db.sql:12-22` reference `clients.phone/notes/city` | Commit a `pg_dump --schema-only` snapshot to `backend/supabase/schema/live_schema.sql`, generate `frontend/src/types/database.ts`, and record the real column types (e.g. `revision_year`, `project_kind`, `status`) | OPEN |
+| MST-01 | Repo migrations do not match the live schema. Several migrations are "skipped" and legacy columns or tables exist only in the live DB. No generated DB types. | High | `backend/scripts/apply-migrations.mjs:11-36`; `20261003210000_module_schema_bridge.sql:10-12,69-71,130-155` reference `is_code_title`, `aspect_of_is`, `test_name`, `product_master_items`; `20260501000001_lims_compat_on_consultancy_db.sql:12-22` reference `clients.phone/notes/city` | Commit a `pg_dump --schema-only` snapshot to `backend/database/schema/live_schema.sql`, generate `frontend/web/src/types/database.ts`, and record the real column types (e.g. `revision_year`, `project_kind`, `status`) | OPEN |
 | MST-02 | RLS is `USING (true) WITH CHECK (true)` for every authenticated user on all masters. Delete/import is limited only in the UI (`LaboratoryDirectorOnly`), and "view-only" module access is just a CSS class, so any logged-in user can still change or delete data through the API. | High | baseline `20260501000000_baseline_schema.sql:1047-1063`; `20261003210000:166-181`; `20261003220000:106-117`; `ClientsFooterBar.tsx:63`; `RequireModuleAccess.tsx:51-56` | Add SQL helpers `app_is_admin()` and `app_module_level(module_key)` that mirror `lib/moduleAccess.ts`, then per-command policies: SELECT for all authenticated, INSERT/UPDATE need `edit`, DELETE needs admin | OPEN |
 | MST-03 | Privilege escalation: any authenticated user can write `module_access_rules` and (per the baseline) update `user_profiles.designation`. Admin is a free-text designation match. `handle_new_user` copies `designation` from signup metadata, which the user controls. | Critical | `20260813000001_module_access_rules.sql:46-65`; baseline `:1131,1133` (verify live); `lib/isLaboratoryDirector.ts:5-16`; `20260820000000_user_profiles_handle_new_user_email.sql:25`; `hooks/useAuth.ts:289-299` | Only admins can write module_access_rules and the designation/status columns. Ignore designation from signup metadata. Confirm GoTrue `GOTRUE_DISABLE_SIGNUP=true` on Railway. Add a `role` column (enum) next to designation | OPEN |
 | MST-04 | Hard deletes with no audit trail or soft delete. **Deleting a client cascades** to its surveillance records and sample-failure replies, and orphans its licences (bis_projects.client_id → NULL). | Critical | `20261003240000_bis_surveillance_sample_failure.sql:6,34` (`ON DELETE CASCADE`); `20261003190000_consultancy_bis_domain.sql:27` (`SET NULL`); `ClientsMasterPage.tsx:949` (`.delete().in('id', ids)`) | Add `is_active`, `archived_at`, `archived_by`, `created_by`, `updated_by` on masters; a generic `audit_log` trigger; replace delete with Archive; add an admin-only `delete_master_row()` RPC that refuses when references exist; change those FKs to RESTRICT | OPEN |
@@ -65,7 +67,7 @@ All items start as `OPEN`.
 
 | ID | Gap | Sev | Evidence | Recommended fix | Status |
 |---|---|---|---|---|---|
-| MST-30 | Missing BIS standard metadata: prefix (IS, IS/IEC, IS/ISO), part, section, ICS, technical department, technical committee (e.g. "CED 2"), superseding IS / superseded by, status (Current/Withdrawn/Superseded), degree of equivalence, group/sub-group, certification category (Voluntary / Compulsory / Not certifiable). The extension already sees "Voluntary/Mandatory", "Department" and "Technical Committee" but throws them away. | High | `is-codes/types.ts:18-41`; baseline `:214-226`; `extensions/qe-consultancy-chrome/is-code-fetch.js:866-917` | New columns; extend the scraper's `fields` map and the form | OPEN |
+| MST-30 | Missing BIS standard metadata: prefix (IS, IS/IEC, IS/ISO), part, section, ICS, technical department, technical committee (e.g. "CED 2"), superseding IS / superseded by, status (Current/Withdrawn/Superseded), degree of equivalence, group/sub-group, certification category (Voluntary / Compulsory / Not certifiable). The extension already sees "Voluntary/Mandatory", "Department" and "Technical Committee" but throws them away. | High | `is-codes/types.ts:18-41`; baseline `:214-226`; `frontend/extensions/qe-consultancy-chrome/is-code-fetch.js:866-917` | New columns; extend the scraper's `fields` map and the form | OPEN |
 | MST-31 | No QCO / compulsory-certification data: scheme (Scheme-I / II / IV / X / FMCS / Hallmarking), QCO name, S.O. number and date, ministry, enforcement date, transition or extension orders. | High | none exist; see section C2 | New table `is_code_qcos` (many per IS) + `certification_scheme_id` (MST-73) | OPEN |
 | MST-32 | IS number normalisation bug: the form forces `IS ${rest}`, so "IS/IEC 62368" becomes "IS /IEC 62368". Part/Sec are typed in inconsistently. Import and quick-add don't normalise. The natural-key unique index came from the skipped baseline and may be missing live. | High | `IsCodesMasterPage.tsx:1015-1020,1054-1055,1221`; `AddIsCodeDialog.tsx:101`; baseline `:856` | Structured fields (prefix, number, part, section, year) + generated `is_key` (canonical, uppercase) with a unique index; one `normalizeIsNumber()` used everywhere | OPEN |
 | MST-33 | Amendments stored as one text field (a count); reaffirmation is a single year. No amendment list (no., date, summary, PDF). | Medium | `is-codes/types.ts:23`; baseline `:218-219` | New `is_code_amendments` table (amendment_no, issued_on, effective_on, summary, file) | OPEN |
@@ -196,8 +198,8 @@ Compulsory lists and QCOs:
 | 12 | P12 Server-side lists + cleanup | MST-08, 54, 21 (drop) | Performance + cleanup |
 
 ### House rules (included in every prompt)
-- Make a **new** migration `backend/supabase/migrations/<YYYYMMDDHHMMSS>_<name>.sql` with a timestamp after the newest file (currently `20261005130000`). It must be idempotent (`IF NOT EXISTS`, `DO $$ … $$` guards) and should run inside a transaction.
-- **Never edit an already-applied migration.** Never run `scripts/apply-migrations.mjs`, `railway` CLI or anything that touches the live DB. Amit applies migrations himself.
+- Make a **new** migration `backend/database/migrations/<YYYYMMDDHHMMSS>_<name>.sql` with a timestamp after the newest file (currently `20261005130000`). It must be idempotent (`IF NOT EXISTS`, `DO $$ … $$` guards) and should run inside a transaction.
+- **Never edit an already-applied migration.** Never run `backend/scripts/apply-migrations.mjs`, `railway` CLI or anything that touches the live DB. Amit applies migrations himself.
 - Never open, print or copy `.env`, `.railway-secrets.env` or any secret.
 - Keep existing data (backfill, don't drop). Keep any existing Hindi labels and texts. Don't break other modules that use the table (search all usages first).
 - Reuse `limsThemeUi` and the existing MasterPage / form / table patterns.
@@ -208,20 +210,20 @@ Compulsory lists and QCOs:
 ### P1 — Live schema snapshot + DB types (MST-01)
 
 ```text
-You are working in the Consultancy Management repo (React 19 + TS + Vite frontend in frontend/, self-hosted Supabase stack on Railway, migrations in backend/supabase/migrations/). Read .cursorrules, README.md and docs/audits/02_masters_gap_audit.md (item MST-01) first.
+You are working in the Consultancy Management repo (React 19 + TS + Vite frontend in frontend/, self-hosted Supabase stack on Railway, migrations in backend/database/migrations/). Read .cursorrules, README.md and docs/audits/02_masters_gap_audit.md (item MST-01) first.
 
 GOAL
-The repo's migrations do not describe the live database: scripts/apply-migrations.mjs (SKIP_FILES, lines ~11-36) skips the baseline, the products/finance stack and 20261003190000_consultancy_bis_domain.sql, and legacy columns (clients.name/phone/city/notes, is_codes.is_code_title/aspect_of_is, test_parameters.test_name/unit/specified_value, product_master_items, finance_* tables) exist only live. Build tooling so the real schema is committed and typed. Do NOT connect to the DB yourself.
+The repo's migrations do not describe the live database: backend/scripts/apply-migrations.mjs (SKIP_FILES, lines ~11-36) skips the baseline, the products/finance stack and 20261003190000_consultancy_bis_domain.sql, and legacy columns (clients.name/phone/city/notes, is_codes.is_code_title/aspect_of_is, test_parameters.test_name/unit/specified_value, product_master_items, finance_* tables) exist only live. Build tooling so the real schema is committed and typed. Do NOT connect to the DB yourself.
 
 DO
-1. Create scripts/dump-schema.mjs (Node, ESM, no new heavy deps; use the existing `pg` dependency if present, else document `pg_dump`). It reads DATABASE_URL from process.env only (never reads or prints .env files), runs a schema-only introspection of the `public` schema (tables, columns with types/defaults/nullability, constraints, indexes, FKs with ON DELETE rule, enums, views, functions, triggers, RLS flag + policies) and writes:
-   - backend/supabase/schema/live_schema.sql (pg_dump --schema-only --schema=public --no-owner --no-privileges, if pg_dump is on PATH), and
-   - backend/supabase/schema/live_schema.json (introspection result from information_schema/pg_catalog; works without pg_dump).
+1. Create backend/scripts/dump-schema.mjs (Node, ESM, no new heavy deps; use the existing `pg` dependency if present, else document `pg_dump`). It reads DATABASE_URL from process.env only (never reads or prints .env files), runs a schema-only introspection of the `public` schema (tables, columns with types/defaults/nullability, constraints, indexes, FKs with ON DELETE rule, enums, views, functions, triggers, RLS flag + policies) and writes:
+   - backend/database/schema/live_schema.sql (pg_dump --schema-only --schema=public --no-owner --no-privileges, if pg_dump is on PATH), and
+   - backend/database/schema/live_schema.json (introspection result from information_schema/pg_catalog; works without pg_dump).
    It must never print the connection string.
-2. Add npm script "db:schema": "node scripts/dump-schema.mjs" in the root package.json.
-3. Create backend/supabase/schema/README.md: how Amit runs it (`DATABASE_URL=... npm run db:schema` or via `railway run`), that the output is committed, and a "Known drift" section listing the skipped migrations from apply-migrations.mjs and the legacy columns above.
-4. Create scripts/gen-db-types.mjs that turns live_schema.json into frontend/src/types/database.ts (Row/Insert/Update types per table, enums as string unions). Add npm script "db:types". Commit a placeholder database.ts with a header comment "generated — run npm run db:schema && npm run db:types" (don't invent columns).
-5. Add a SQL file backend/supabase/schema/checks.sql (read-only queries, not a migration) that Amit can run: tables without RLS, policies that are USING(true), FKs with ON DELETE CASCADE/SET NULL into masters (clients, is_codes), existence of unique indexes on clients(company_name) and is_codes(is_number, revision_year), data types of is_codes.revision_year, bis_projects.project_kind and bis_projects.status.
+2. Add npm script "db:schema": "node backend/scripts/dump-schema.mjs" in the root package.json.
+3. Create backend/database/schema/README.md: how Amit runs it (`DATABASE_URL=... npm run db:schema` or via `railway run`), that the output is committed, and a "Known drift" section listing the skipped migrations from apply-migrations.mjs and the legacy columns above.
+4. Create backend/scripts/gen-db-types.mjs that turns live_schema.json into frontend/web/src/types/database.ts (Row/Insert/Update types per table, enums as string unions). Add npm script "db:types". Commit a placeholder database.ts with a header comment "generated — run npm run db:schema && npm run db:types" (don't invent columns).
+5. Add a SQL file backend/database/schema/checks.sql (read-only queries, not a migration) that Amit can run: tables without RLS, policies that are USING(true), FKs with ON DELETE CASCADE/SET NULL into masters (clients, is_codes), existence of unique indexes on clients(company_name) and is_codes(is_number, revision_year), data types of is_codes.revision_year, bis_projects.project_kind and bis_projects.status.
 
 CONSTRAINTS
 - No migration in this prompt. Don't change app behaviour. Don't touch Railway. Never read/print .env or .railway-secrets.env.
@@ -238,7 +240,7 @@ Finally: summarise the changes, run `npm run typecheck && npm run lint && npm ru
 ### P2 — Security hardening: RLS, roles, secrets (MST-02, 03, 06, 07)
 
 ```text
-Repo: Consultancy Management. Read .cursorrules, README.md, docs/audits/02_masters_gap_audit.md (MST-02, MST-03, MST-06, MST-07) and backend/supabase/schema/README.md first. If backend/supabase/schema/live_schema.* exists, use it as the truth for column names.
+Repo: Consultancy Management. Read .cursorrules, README.md, docs/audits/02_masters_gap_audit.md (MST-02, MST-03, MST-06, MST-07) and backend/database/schema/README.md first. If backend/database/schema/live_schema.* exists, use it as the truth for column names.
 
 GOAL
 Move permissions from UI-only to the database and stop exposing secrets.
@@ -247,15 +249,15 @@ EVIDENCE
 - RLS policies are USING(true) for all authenticated users: baseline 20260501000000_baseline_schema.sql ~1039-1133, 20261003210000_module_schema_bridge.sql policy loop, 20261003220000_master_support_tables.sql 106-117.
 - module_access_rules writable by every authenticated user: 20260813000001_module_access_rules.sql 46-65.
 - handle_new_user takes designation from raw_user_meta_data: 20260820000000_user_profiles_handle_new_user_email.sql:25.
-- Admin = designation string match: frontend/src/lib/isLaboratoryDirector.ts; view-only = CSS only: components/auth/RequireModuleAccess.tsx 51-56.
-- Manak portal password stored on bis_projects.portal_password and sent in the URL as `passwd`: frontend/src/features/bis/projects/bisProjectsApi.ts ~348, manakExtensionBridge.ts 48-62.
+- Admin = designation string match: frontend/web/src/lib/isLaboratoryDirector.ts; view-only = CSS only: components/auth/RequireModuleAccess.tsx 51-56.
+- Manak portal password stored on bis_projects.portal_password and sent in the URL as `passwd`: frontend/web/src/features/bis/projects/bisProjectsApi.ts ~348, manakExtensionBridge.ts 48-62.
 - ai_models.api_key readable by all authenticated users.
 - GRANT SELECT ON ALL TABLES TO anon: 20261003210000:339, 20261003220000:120.
 
 DO (one new migration, e.g. 20261008100000_security_hardening.sql, idempotent)
 1. SQL helpers (SECURITY DEFINER, STABLE, `SET search_path = public`):
    - app_is_admin(): true when the current auth.uid()'s user_profiles row is active and (role = 'admin' OR designation matches the same list as lib/isLaboratoryDirector.ts).
-   - app_module_level(p_module text) returns 'none'|'view'|'edit'|'full', mirroring frontend/src/lib/moduleAccess.ts (read it and replicate the rules exactly, including defaults).
+   - app_module_level(p_module text) returns 'none'|'view'|'edit'|'full', mirroring frontend/web/src/lib/moduleAccess.ts (read it and replicate the rules exactly, including defaults).
    Add a user_profiles.role column (text CHECK in ('admin','staff','viewer'), default 'staff'); backfill 'admin' for the current Laboratory Director designations.
 2. Per-command policies on the master tables (clients, client_master_options, is_codes, is_code_files, is_code_master_options, test_parameters, test_parameter_units, accreditation_bodies, products_services_master, product_item_categories, product_makes, gst_rates, lab_master_options, lab_settings, company_settings): SELECT for authenticated; INSERT/UPDATE when app_module_level('<module key>') in ('edit','full') or app_is_admin(); DELETE only for app_is_admin(). Use the module keys from lib/appNav.ts / moduleAccess.ts. Drop the old USING(true) policies by name (guarded with IF EXISTS).
 3. module_access_rules: SELECT authenticated; INSERT/UPDATE/DELETE only app_is_admin().
@@ -268,12 +270,12 @@ DO (one new migration, e.g. 20261008100000_security_hardening.sql, idempotent)
 FRONTEND
 - lib/permissions.ts: fetch role + module level once (reuse the useAuth context) and expose canEdit(module) / canDelete().
 - RequireModuleAccess: in view mode hide or disable save/delete/import buttons (not just CSS).
-- Manak extension bridge: stop putting passwd in any URL. Send credentials to the extension via window.postMessage to the content script (extend extensions/qe-consultancy-chrome content script with a listener that checks event.origin against the app origin) after calling reveal_portal_secret. Keep the auto-login working.
+- Manak extension bridge: stop putting passwd in any URL. Send credentials to the extension via window.postMessage to the content script (extend frontend/extensions/qe-consultancy-chrome content script with a listener that checks event.origin against the app origin) after calling reveal_portal_secret. Keep the auto-login working.
 - BIS project form: portal password field reads/writes through client_portal_accounts (masked, "Reveal" button that calls the RPC).
 
 CONSTRAINTS
 - New migration only; don't edit applied migrations; don't run migrations or touch Railway; never print .env or .railway-secrets.env.
-- Keep existing data and Hindi labels. Search all usages before changing a table (grep -rn "from('<table>')" frontend/src).
+- Keep existing data and Hindi labels. Search all usages before changing a table (grep -rn "from('<table>')" frontend/web/src).
 - Write the migration so it's safe to run twice.
 
 ACCEPTANCE
@@ -313,7 +315,7 @@ FRONTEND
 - Small "History" tab in the client and IS details dialogs reading audit_log (admin only).
 
 CONSTRAINTS
-New migration only; never edit applied migrations; don't run migrations/Railway; never print .env/.railway-secrets.env; keep data and Hindi labels; search all usages of `.delete()` on these tables (grep -rn "\.delete()" frontend/src) and route them through the new functions.
+New migration only; never edit applied migrations; don't run migrations/Railway; never print .env/.railway-secrets.env; keep data and Hindi labels; search all usages of `.delete()` on these tables (grep -rn "\.delete()" frontend/web/src) and route them through the new functions.
 
 ACCEPTANCE
 - Deleting a client that has surveillance rows is refused with a clear message; archiving works.
@@ -333,7 +335,7 @@ GOAL
 Make the Client Master correct for BIS applications and ready for finance.
 
 EVIDENCE
-- frontend/src/features/masters/clients/types.ts (fields 15-35, enums 1-13/57-70, validators 142-164, defaults 72/177).
+- frontend/web/src/features/masters/clients/types.ts (fields 15-35, enums 1-13/57-70, validators 142-164, defaults 72/177).
 - ClientsMasterPage.tsx: save 682-731, copy 751, import 1011-1099 with no validation (payload 1040-1063, upsert onConflict company_name 1086).
 - Quick-add without validation: sample-handling/receiving/AddClientDialog.tsx 272-292 (used by BisProjectsForm.tsx:707, QuotationForm.tsx:2441).
 - Form-I uses client.address for office AND factory, sector hardcoded 'Private', top management = contact person: bis/print/bisForm1Html.ts 410-453.
@@ -351,8 +353,8 @@ DO — migration (e.g. 20261008120000_clients_v2.sql)
 8. RLS for the new tables following the P2 helpers (if P2 isn't applied yet, mirror the existing policy style and leave a TODO).
 
 DO — frontend
-- frontend/src/lib/indiaValidators.ts: validateGstin (regex + mod-36 checksum + state code), validatePan, validateUdyam, validateCin, validateLlpin, validateMobileIndia (^[6-9]\d{9}$ only when country code is +91), validatePin, validateIfsc, validateEmail, gstinStateCode, panFromGstin. Small unit-test-like self-check exported as a dev function (no new test framework required).
-- features/masters/clients/clientsApi.ts: normaliseClient(), validateClient() (returns field errors), createClient(), updateClient(), searchClients(), checkDuplicates() (calls find_similar_clients). ClientsMasterPage, AddClientDialog, and every other insert/update of clients (grep -rn "from('clients')" frontend/src) must use it.
+- frontend/web/src/lib/indiaValidators.ts: validateGstin (regex + mod-36 checksum + state code), validatePan, validateUdyam, validateCin, validateLlpin, validateMobileIndia (^[6-9]\d{9}$ only when country code is +91), validatePin, validateIfsc, validateEmail, gstinStateCode, panFromGstin. Small unit-test-like self-check exported as a dev function (no new test framework required).
+- features/masters/clients/clientsApi.ts: normaliseClient(), validateClient() (returns field errors), createClient(), updateClient(), searchClients(), checkDuplicates() (calls find_similar_clients). ClientsMasterPage, AddClientDialog, and every other insert/update of clients (grep -rn "from('clients')" frontend/web/src) must use it.
 - ClientsForm: new sections "Statutory" (PAN, CIN/LLPIN, Udyam + category + date, constitution, sector, startup, women entrepreneur), "Sites" (repeatable list with type), "Contacts" (repeatable with role), "Billing" (GST registration type, state code auto from GSTIN, credit days/limit, TDS section, currency), "Lifecycle" (status, lead source, referred by, account manager). Duplicate warning panel before save. State select from india_states. Defaults come from company settings, not hardcoded Raipur/Chhattisgarh.
 - Option lists: load from client_master_options (seed missing values, e.g. client types Importer, Foreign Manufacturer, AIR, Jeweller, Trader) through one hook; remove the divergent TS enums or derive them.
 - CSV import: parse → preview table with per-row errors/warnings (invalid GSTIN, unknown option, possible duplicate) → import only valid rows; download error report CSV. Keep onConflict behaviour but on the normalised name.
@@ -420,8 +422,8 @@ GOAL
 IS Code Master that matches BIS "Know your standards" data and can't create duplicates.
 
 EVIDENCE
-- frontend/src/features/masters/is-codes/types.ts 18-41; IsCodesMasterPage.tsx save 1006-1095 (prefix bug 1015-1020: "IS/IEC 62368" becomes "IS /IEC 62368"; revision int comment 1026), import 1198-1278 (no normalisation :1221); AddIsCodeDialog.tsx 100-113; formatIsCodeLabel.ts.
-- Extension scraper discards Voluntary/Mandatory, Department, Technical Committee: extensions/qe-consultancy-chrome/is-code-fetch.js 866-917.
+- frontend/web/src/features/masters/is-codes/types.ts 18-41; IsCodesMasterPage.tsx save 1006-1095 (prefix bug 1015-1020: "IS/IEC 62368" becomes "IS /IEC 62368"; revision int comment 1026), import 1198-1278 (no normalisation :1221); AddIsCodeDialog.tsx 100-113; formatIsCodeLabel.ts.
+- Extension scraper discards Voluntary/Mandatory, Department, Technical Committee: frontend/extensions/qe-consultancy-chrome/is-code-fetch.js 866-917.
 
 DO — migration (e.g. 20261008140000_is_codes_v2.sql)
 1. is_codes new columns: is_prefix ('IS','IS/IEC','IS/ISO','IS/ISO/IEC'), base_number text, part_no text, section_no text, is_key text (canonical uppercase "IS/IEC 62368 (PART 1)" without year), ics_code, technical_department, technical_committee, superseding_is, superseded_by_is_id FK is_codes, standard_status ('Current','Withdrawn','Superseded','Under revision') default 'Current', degree_of_equivalence, group_name, sub_group, certification_category ('Compulsory','Voluntary','Not certifiable'), certification_scheme_id FK certification_schemes (if P5 applied), bis_detail_url, last_synced_at.
@@ -434,8 +436,8 @@ DO — migration (e.g. 20261008140000_is_codes_v2.sql)
 8. RLS for the new tables following P2.
 
 DO — frontend
-- frontend/src/lib/isNumber.ts: parseIsNumber(), normalizeIsNumber(), formatIsLabel(isCode, {withYear, style}) — one formatter used everywhere (replace formatIsCodeLabel usages; keep its export as a wrapper).
-- features/masters/is-codes/isCodesApi.ts: normalise, validate, create, update, search, checkDuplicate(is_key, year). IsCodesMasterPage, AddIsCodeDialog, CSV import and any other insert/update of is_codes (grep -rn "from('is_codes')" frontend/src) use it.
+- frontend/web/src/lib/isNumber.ts: parseIsNumber(), normalizeIsNumber(), formatIsLabel(isCode, {withYear, style}) — one formatter used everywhere (replace formatIsCodeLabel usages; keep its export as a wrapper).
+- features/masters/is-codes/isCodesApi.ts: normalise, validate, create, update, search, checkDuplicate(is_key, year). IsCodesMasterPage, AddIsCodeDialog, CSV import and any other insert/update of is_codes (grep -rn "from('is_codes')" frontend/web/src) use it.
 - IsCodesForm: structured inputs (prefix select, number, part, section, year) with a live preview label; new metadata section; tabs for Amendments, QCOs, Products/Varieties; certification category + scheme.
 - Import: preview + per-row errors (bad format, duplicate is_key/year) like the client import.
 - Extension is-code-fetch.js: map Technical Department, Technical Committee, ICS, Certification (Voluntary/Mandatory/Not certifiable), Superseding, Degree of Equivalence, Group fields into the new columns; set last_synced_at; show a diff before overwriting values Amit edited.
@@ -500,7 +502,7 @@ GOAL
 Labs (BIS labs, BIS-recognised OSLs, NABL/empanelled labs) become their own master with IS scope and rates, instead of being clients with company_type 'Testing Laboratory'.
 
 EVIDENCE
-- Labs looked up as clients by fuzzy company_type: frontend/src/features/bis/projects/bisProjectsApi.ts 246-276.
+- Labs looked up as clients by fuzzy company_type: frontend/web/src/features/bis/projects/bisProjectsApi.ts 246-276.
 - is_codes.testing_charges single number (is-codes/types.ts:26).
 
 DO — migration (e.g. 20261008160000_laboratories.sql)
@@ -508,7 +510,7 @@ DO — migration (e.g. 20261008160000_laboratories.sql)
 2. laboratory_is_scope (laboratory_id FK RESTRICT, is_code_id FK RESTRICT, valid_upto, remarks, PK both).
 3. laboratory_is_rates (id, laboratory_id, is_code_id, rate numeric, gst_pct, tat_days, effective_from, effective_to, notes) with overlap guard.
 4. Backfill laboratories from clients where company_type ilike '%lab%' (keep legacy_client_id; do not delete or change the client rows).
-5. Wherever OSL / sample-sending tables store a lab client id or lab name (find them in the snapshot/code: grep -rn "Testing Laboratory\|lab_client\|osl" frontend/src/features/bis), add laboratory_id FK + backfill via legacy_client_id.
+5. Wherever OSL / sample-sending tables store a lab client id or lab name (find them in the snapshot/code: grep -rn "Testing Laboratory\|lab_client\|osl" frontend/web/src/features/bis), add laboratory_id FK + backfill via legacy_client_id.
 6. View laboratories_expiring (recognition or NABL validity within 60 days).
 7. RLS like P2.
 
@@ -617,7 +619,7 @@ DO — migration (e.g. 20261008190000_company_profile_finance_ready.sql)
 4. RLS: SELECT authenticated, write admin.
 
 DO — frontend
-- frontend/src/lib/gstPlaceOfSupply.ts: placeOfSupply(company, client/site) → { mode: 'intra'|'inter'|'export', stateCode } using company gst_state_code vs client billing site / gstin state code; SEZ or overseas → inter/export.
+- frontend/web/src/lib/gstPlaceOfSupply.ts: placeOfSupply(company, client/site) → { mode: 'intra'|'inter'|'export', stateCode } using company gst_state_code vs client billing site / gstin state code; SEZ or overseas → inter/export.
 - Quotation and sale document forms: default the GST mode from placeOfSupply (template toggle becomes an override with a warning when it disagrees).
 - Company Settings page: statutory + LUT/e-invoice fields with indiaValidators; single-profile UI (no multiple rows).
 - A Document Series settings tab (view/edit prefix, next number per FY).
@@ -647,7 +649,7 @@ EVIDENCE
 
 DO
 1. Migration (e.g. 20261008200000_master_search_indexes.sql): pg_trgm GIN indexes on clients(company_name, gstin, city), is_codes(is_number, title), test_parameters(item_name), products_services_master(name); btree on foreign keys used for filters.
-2. frontend/src/hooks/useServerList.ts: generic hook (table/view, select, search columns with ilike, filters, sort, page, pageSize) using `.range()` and `count: 'exact'`, debounced search, returns rows/total/loading/error.
+2. frontend/web/src/hooks/useServerList.ts: generic hook (table/view, select, search columns with ilike, filters, sort, page, pageSize) using `.range()` and `count: 'exact'`, debounced search, returns rows/total/loading/error.
 3. Switch the four master pages to it; keep existing columns, filters, export (export runs a paged fetch of all matching rows, not just the current page).
 4. Confirm via grep that master_clients is unused; add a comment in a NEW migration (COMMENT ON TABLE ... 'deprecated') — do not drop it. Same note for clients.name (still required by the sync trigger).
 5. Remove or mark deprecated features/masters/product-services and features/masters/equipment-master if not done in P10.
@@ -671,11 +673,11 @@ Paste this into Cursor whenever you want the next master fix done. It reads this
 ```text
 You are continuing the Masters improvement track in the Consultancy Management repo.
 
-1. READ FIRST: .cursorrules, README.md, docs/audits/02_masters_gap_audit.md (whole file), backend/supabase/schema/README.md and backend/supabase/schema/live_schema.* if they exist. Run `git status` and stop and tell me if there are uncommitted changes that are not yours.
+1. READ FIRST: .cursorrules, README.md, docs/audits/02_masters_gap_audit.md (whole file), backend/database/schema/README.md and backend/database/schema/live_schema.* if they exist. Run `git status` and stop and tell me if there are uncommitted changes that are not yours.
 2. PICK: take the lowest-numbered prompt in the "Ordered fix plan" table (P1, P2, …) whose MST rows are not all DONE/WONTFIX. If I named a specific MST id or P number in this chat, do that one instead. Restate in 5-10 lines what you will change (tables, migration name, files) and the acceptance criteria, then start (don't wait for me unless something is ambiguous or destructive).
 3. IMPLEMENT using the prompt text for that P in the audit file, plus these house rules:
-   - Schema changes only in a NEW idempotent migration backend/supabase/migrations/<YYYYMMDDHHMMSS>_<name>.sql with a timestamp later than the newest existing file. Never edit an applied migration.
-   - Never run scripts/apply-migrations.mjs, railway CLI or anything touching the live DB. I apply migrations myself.
+   - Schema changes only in a NEW idempotent migration backend/database/migrations/<YYYYMMDDHHMMSS>_<name>.sql with a timestamp later than the newest existing file. Never edit an applied migration.
+   - Never run backend/scripts/apply-migrations.mjs, railway CLI or anything touching the live DB. I apply migrations myself.
    - Never open, print or copy .env, .railway-secrets.env or other secrets.
    - Keep existing data (backfill, don't drop), keep Hindi labels, reuse limsThemeUi/MasterPage patterns, and grep every usage of a table before changing it so other modules (BIS projects, quotations, sale documents, OSL, FTR, dashboard, extension) don't break.
    - Shared data access goes through the master's *Api.ts file (clientsApi.ts, isCodesApi.ts, …), never new direct inserts.
@@ -713,7 +715,7 @@ GimBooks comparison (invoice layouts, payment reminders, ledger, GST reports) is
 ## Appendix: environment facts and things to verify on Railway
 
 - Checks: `npm run typecheck`, `npm run lint`, `npm run build` (root delegates to frontend). No automated test suite.
-- Migrations are applied by Amit with `scripts/apply-migrations.mjs` (history in `public.app_schema_migrations`). Some files are permanently skipped (lines 11-36).
+- Migrations are applied by Amit with `backend/scripts/apply-migrations.mjs` (history in `public.app_schema_migrations`). Some files are permanently skipped (lines 11-36).
 - **Verify on Railway (read-only) before P2–P4:**
   1. GoTrue signup is disabled (`GOTRUE_DISABLE_SIGNUP=true`). If open, anyone could sign up and (per MST-03) choose their designation.
   2. Live `user_profiles` and `module_access_rules` policies (`select * from pg_policies where tablename in ('user_profiles','module_access_rules')`).

@@ -18,7 +18,7 @@ credentials.json
 *.p12
 *.pfx
 *.secret
-backend/supabase/.env.keys
+backend/database/.env.keys
 
 # ── Dependencies (all levels) ─────────────────────────────────────────
 node_modules/
@@ -102,8 +102,8 @@ chroma.sqlite3
 *.otf
 
 # ── Browser extension generated output ────────────────────────────────
-extensions/qe-consultancy-safari/macos-generated/
-extensions/*/_metadata/
+frontend/extensions/qe-consultancy-safari/macos-generated/
+frontend/extensions/*/_metadata/
 **/xcuserdata/
 **/DerivedData/
 *.xcarchive
@@ -115,14 +115,14 @@ logs/
 *.dump
 *.backup
 *.sql.bak
-backend/supabase/baseline_from_*.sql
+backend/database/baseline_from_*.sql
 .migration-tmp/
 .DS_Store
 
 # ── Hosted Supabase / Vercel leftovers (repo is Railway-only) ─────────
 **/.supabase/
-backend/supabase/.temp/
-backend/supabase/.branches/
+**/supabase/.temp/
+**/supabase/.branches/
 .vercel/
 
 # ── Cursor/agent scratch files ────────────────────────────────────────
