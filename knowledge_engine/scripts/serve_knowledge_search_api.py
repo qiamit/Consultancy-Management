@@ -156,12 +156,23 @@ def run_search(*, query: str, standard: str, limit: int) -> dict[str, Any]:
 
     limit = max(1, min(int(limit or DEFAULT_LIMIT), MAX_LIMIT))
     std = standard_key(standard)
-    payload = run_hybrid_search(
-        collection=STATE.collection,
-        query=q,
-        standard=std,
-        limit=limit,
-    )
+    try:
+        payload = run_hybrid_search(
+            collection=STATE.collection,
+            query=q,
+            standard=std,
+            limit=limit,
+        )
+    except Exception:  # noqa: BLE001
+        # VDB-19: collection.get / query failures must not leak paths or tracebacks.
+        return {
+            "ok": False,
+            "error_code": "search_failed",
+            "message_hi": "खोज पूरी नहीं हो सकी। कृपया दोबारा कोशिश करें।",
+            "answerability_state": "not_found",
+            "results": [],
+            "evidence_chunks": [],
+        }
     payload["collection"] = STATE.collection_name
     payload["usable_chunk_total"] = STATE.collection_count
     payload["model_name"] = STATE.model_name
@@ -215,8 +226,17 @@ class Handler(BaseHTTPRequestHandler):
     server_version = "BisKnowledgeSearch/1.2"
 
     def log_message(self, fmt: str, *args: Any) -> None:
-        # Avoid logging query text / paths.
-        sys.stderr.write("%s - %s\n" % (self.address_string(), fmt % ("*",) if args else fmt))
+        # Method + status only. Never interpolate the request line (it can hold the query).
+        status: Any = "-"
+        if len(args) >= 2:
+            status = args[1]
+        elif len(args) == 1:
+            try:
+                status = fmt % args
+            except (TypeError, ValueError):
+                status = args[0]
+        method = getattr(self, "command", None) or "-"
+        sys.stderr.write("%s - %s %s\n" % (self.address_string(), method, status))
 
     def _origin(self) -> str | None:
         return self.headers.get("Origin")

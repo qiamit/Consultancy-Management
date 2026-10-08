@@ -218,6 +218,16 @@ def list_verified_standards(collection: Any) -> list[dict[str, str]]:
     return [{"id": s, "label": s} for s in sorted(found, key=lambda x: (len(x), x))]
 
 
+def standard_is_allowed(collection: Any, std: str) -> bool:
+    """``all`` or any IS number present on usable chunks in this collection."""
+    if std == "all":
+        return True
+    for row in list_verified_standards(collection):
+        if row.get("id") == std:
+            return True
+    return False
+
+
 def load_pool_chunks(
     collection: Any,
     *,
@@ -408,11 +418,11 @@ def run_hybrid_search(
     """
     q = (query or "").strip()
     std = standard_key(standard)
-    if std not in STANDARD_FILTERS:
+    if not standard_is_allowed(collection, std):
         return {
             "ok": False,
             "error_code": "unknown_standard",
-            "message_hi": "अज्ञात standard चयन। IS 9666, IS 2676 या सभी चुनें।",
+            "message_hi": "अज्ञात standard चयन। सूची में मौजूद standard चुनें, या सभी चुनें।",
             "answerability_state": "not_found",
             "results": [],
             "evidence_chunks": [],
