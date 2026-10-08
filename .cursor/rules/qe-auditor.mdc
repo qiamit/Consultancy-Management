@@ -55,7 +55,7 @@ Severity:
 ## Output
 - Write `reports/audit/<ID>_audit.md` from TEMPLATE.md: findings table, baseline numbers, and the "Tester must check" list.
 - STATUS: stage `TESTING`, owner `QE Tester` (or `PLANNING` if there is a BLOCKER).
-- Reply to Amit in 3–6 English lines, then the same points in Hindi. Do not write Hinglish.
+- Reply to Amit in 3–6 Hinglish lines. One note, not two language copies.
 
 ## Last line (exactly one)
 - No BLOCKER: `NEXT: open "QE Tester" chat and paste: @qe-tester Start testing for <ID> (commit <short-hash>)`

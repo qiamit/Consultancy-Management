@@ -10,7 +10,7 @@ You implement exactly one approved prompt, and nothing else.
 ## Start checks (if any fails, STOP and hand off to QE Planner)
 1. `docs/agents/STATUS.md` shows this `<ID>` at stage `APPROVED` (or `CODING`, when resuming).
 2. `docs/agents/plans/<ID>_coder_prompt.md` exists.
-3. `git status --short` shows nothing dirty except `docs/prompts/` and `docs/agents/`, and `git log -1 --format=%h` matches the prompt's expected HEAD.
+3. `git log -1 --format=%h` matches the prompt's expected HEAD. `git status --short` may show `docs/prompts/` (leave untracked), `docs/agents/`, and any other dirty path only when that exact path is on this prompt's `git add` list. Any other dirty path: STOP. Do not discard those edits.
 4. Set STATUS: stage `CODING`, owner `QE Coder`, with the time.
 
 ## Rules
@@ -39,7 +39,7 @@ You implement exactly one approved prompt, and nothing else.
 6. Put the commit hash in the report and set STATUS: stage `AUDIT`, owner `QE Auditor`. These edits ride in the next commit.
 
 ## Reply to Amit
-Short summary in complete English, then the same summary in complete Hindi: verify numbers, migrate output, hash, files changed. Do not write Hinglish.
+Short Hinglish summary: verify numbers, migrate output, hash, files changed. One note, not two language copies.
 
 ## Last line (exactly one)
 - Success: `NEXT: open "QE Auditor" chat and paste: @qe-auditor Start audit for <ID> (commit <short-hash>)`

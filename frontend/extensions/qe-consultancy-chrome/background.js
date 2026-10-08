@@ -18,13 +18,8 @@ const APP_TAB_URLS = [
   "https://qengineering.in/*",
   "https://www.qengineering.in/*",
   "https://*.qengineering.in/*",
-  "https://*.up.railway.app/*",
-  "https://*.railway.app/*",
-  "https://consultancy-production-9720.up.railway.app/*",
-  "https://frontend-production-ede6b.up.railway.app/*",
 ];
-const APP_HOST_RE =
-  /localhost|127\.0\.0\.1|qengineering\.in|railway\.app|consultancy-production|frontend-production/i;
+const APP_HOST_RE = /localhost|127\.0\.0\.1|qengineering\.in/i;
 const PDF_CHUNK = 160000;
 
 const hasDebugger = Boolean(chrome.debugger);
@@ -130,7 +125,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
       if (/ebislogin/i.test(url) || changeInfo.status === "complete") {
         const portal = (data && data.qeManakPortal) || {};
         const userId = lastPortal.userId || portal.userId || "";
-        const password = lastPortal.password || portal.password || "";
+        const password = lastPortal.password || "";
         if (userId || password) scheduleLoginFill(tabId, userId, password);
       }
 
@@ -148,6 +143,11 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
       void safeTabUpdate(tabId, { url: GENERATE_QR_URL });
     },
   );
+  if (changeInfo.status === "complete" && !/ebislogin/i.test(url)) {
+    void tabSession(tabId).then((session) => {
+      if (session && session.loggedIn) clearRememberedPortal();
+    });
+  }
 });
 
 if (hasWebNavigation && chrome.webNavigation.onCreatedNavigationTarget) {
@@ -562,6 +562,7 @@ async function getActiveTab() {
 let lastOpenKey = "";
 let lastOpenAt = 0;
 let lastPortal = { userId: "", password: "" };
+let portalForgetTimer = 0;
 let lastIsCodeAppTabId = 0;
 let lastManakAppTabId = 0;
 const fillSentAt = new Map();
@@ -619,8 +620,21 @@ function injectLightResult(tabId, result) {
   );
 }
 
+function payloadWithoutPassword(payload) {
+  if (!payload || typeof payload !== "object") return payload || null;
+  const next = { ...payload };
+  delete next.portalPassword;
+  delete next.password;
+  delete next.passwd;
+  return next;
+}
+
 function clearRememberedPortal() {
   lastPortal = { userId: "", password: "" };
+  if (portalForgetTimer) {
+    clearTimeout(portalForgetTimer);
+    portalForgetTimer = 0;
+  }
 }
 
 function rememberPortal(userId, password) {
@@ -628,6 +642,11 @@ function rememberPortal(userId, password) {
     userId: String(userId || "").trim(),
     password: String(password || "").trim(),
   };
+  if (portalForgetTimer) clearTimeout(portalForgetTimer);
+  portalForgetTimer = setTimeout(() => {
+    portalForgetTimer = 0;
+    clearRememberedPortal();
+  }, 120000);
 }
 
 function injectMainWorldLogin(tabId, userId, password) {
@@ -686,14 +705,12 @@ function isScriptableTabUrl(url) {
   );
 }
 
-function ebisLoginHref(userId, password) {
+function ebisLoginHref(userId) {
   const id = String(userId || "").trim();
-  const pwd = String(password || "").trim();
-  if (!id && !pwd) return EBIS_LOGIN;
+  if (!id) return EBIS_LOGIN;
   try {
     const u = new URL(EBIS_LOGIN);
-    if (id) u.searchParams.set("userId", id);
-    if (pwd) u.searchParams.set("passwd", pwd);
+    u.searchParams.set("userId", id);
     return u.toString();
   } catch {
     return EBIS_LOGIN;
@@ -815,43 +832,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  if (message.type === "QE_CAPTCHA_AI") {
-    void (async () => {
-      notifyIsCodeApp(lastIsCodeAppTabId, "QE_IS_CODE_PROGRESS", {
-        message: "Grok / QE Assistant is reading the security image…",
-      });
-      const tabs = await chrome.tabs.query({ url: APP_TAB_URLS });
-      const ordered = [
-        ...tabs.filter((tab) => tab.id === lastIsCodeAppTabId),
-        ...tabs.filter((tab) => tab.id !== lastIsCodeAppTabId),
-      ];
-      const requestId = message.requestId || `cap-${Date.now()}`;
-      if (ordered.length === 0) {
-        notifyIsCodeApp(lastIsCodeAppTabId, "QE_IS_CODE_PROGRESS", {
-          message: "Open the Consultancy dashboard tab so Grok can read the security image.",
-        });
-        sendResponse({ text: "" });
-        return;
-      }
-      for (const tab of ordered) {
-        if (!tab.id) continue;
-        const res = await chrome.tabs
-          .sendMessage(tab.id, {
-            type: "QE_CAPTCHA_AI",
-            image: message.image || "",
-            requestId,
-          })
-          .catch(() => null);
-        if (res && res.text) {
-          sendResponse({ text: String(res.text) });
-          return;
-        }
-      }
-      sendResponse({ text: "" });
-    })();
-    return true;
-  }
-
   if (message.type === "GET_BYPASS_STATE") {
     chrome.storage.sync
       .get([STORAGE_KEY, STORAGE_KEY_CTRL])
@@ -957,11 +937,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           qeManakImportQrTabId: 0,
           qeManakPortal: {
             userId: portalUserId,
-            password: portalPassword,
           },
         });
         const reused = await findConfirmedLoggedInManakTab();
         if (reused && reused.tab.id) {
+          clearRememberedPortal();
           await chrome.storage.local.set({
             qeManakImportQrEnabled: true,
             qeManakImportQrLanded: true,
@@ -997,7 +977,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           qeManakHomeReady: false,
           qeManakPortal: {
             userId: portalUserId,
-            password: portalPassword,
           },
         });
         const created = await safeTabCreate({ url: loginUrl });
@@ -1014,7 +993,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       // Use confirmed session only (same as Import QR) so User ID / captcha wait are not skipped.
       const reused = await findConfirmedLoggedInManakTab();
       await chrome.storage.local.set({
-        pendingFill: payload,
+        pendingFill: payloadWithoutPassword(payload),
         manakResult: null,
         qeManakImportQr: false,
         qeManakEnabled: true,
@@ -1022,10 +1001,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         qeManakHomeReady: Boolean(reused),
         qeManakPortal: {
           userId: portalUserId,
-          password: portalPassword,
         },
       });
       if (reused && reused.tab.id) {
+        clearRememberedPortal();
         if (reused.session && reused.session.onTr) {
           await safeTabUpdate(reused.tab.id, { active: true });
           await safeSendTab(reused.tab.id, { type: "QE_MANAK_FILL", payload });

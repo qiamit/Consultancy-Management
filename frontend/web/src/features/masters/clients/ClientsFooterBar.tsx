@@ -14,7 +14,8 @@ export function ClientsTableFooterBar({
   loading,
   selectedCount,
   totalCount,
-  visibleCount,
+  rangeFrom,
+  rangeTo,
   page,
   pageCount,
   onImport,
@@ -37,7 +38,8 @@ export function ClientsTableFooterBar({
   loading: boolean
   selectedCount: number
   totalCount: number
-  visibleCount: number
+  rangeFrom: number
+  rangeTo: number
   page: number
   pageCount: number
   onImport: () => void
@@ -199,9 +201,7 @@ export function ClientsTableFooterBar({
 
           <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5">
             <span className="shrink-0 whitespace-nowrap text-[10px] font-medium text-stone-200 sm:text-xs">
-              {visibleCount === totalCount
-                ? `${totalCount.toLocaleString('en-IN')} clients`
-                : `${visibleCount.toLocaleString('en-IN')} of ${totalCount.toLocaleString('en-IN')}`}
+              {`Showing ${rangeFrom.toLocaleString('en-IN')}–${rangeTo.toLocaleString('en-IN')} of ${totalCount.toLocaleString('en-IN')}`}
             </span>
             <Input
               aria-label="Jump to page"
@@ -211,7 +211,7 @@ export function ClientsTableFooterBar({
               onKeyDown={(e) => {
                 if (e.key === 'Enter') onJumpToGo()
               }}
-              className={cn(footerFieldClass, 'h-8 w-12 shrink-0 text-xs sm:w-14')}
+              className={cn(footerFieldClass, 'h-10 min-h-10 w-12 shrink-0 text-xs sm:w-14')}
               inputMode="numeric"
             />
             <Button
@@ -228,7 +228,7 @@ export function ClientsTableFooterBar({
               type="button"
               variant="outline"
               size="icon"
-              className={cn(footerBtnClass, 'h-8 w-8 shrink-0')}
+              className={cn(footerBtnClass, 'h-10 min-h-10 w-10 shrink-0')}
               onClick={onPrevPage}
               disabled={loading || page <= 1}
             >
@@ -243,7 +243,7 @@ export function ClientsTableFooterBar({
               type="button"
               variant="outline"
               size="icon"
-              className={cn(footerBtnClass, 'h-8 w-8 shrink-0')}
+              className={cn(footerBtnClass, 'h-10 min-h-10 w-10 shrink-0')}
               onClick={onNextPage}
               disabled={loading || page >= pageCount}
             >

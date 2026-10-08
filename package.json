@@ -13,6 +13,8 @@
     "functions:check": "node --check backend/services/functions/server.mjs && node --check backend/services/functions/qiAssistant.mjs",
     "db:migrate": "node backend/scripts/apply-migrations.mjs",
     "db:push": "node backend/scripts/refuse-hosted-cloud.cjs",
+    "db:dump-schema": "node backend/scripts/dump-schema.mjs",
+    "db:drift": "node backend/scripts/check-schema-drift.mjs",
     "knowledge:api": "knowledge_engine/.conda/bin/python -m knowledge_engine.scripts.serve_knowledge_search_api"
   },
   "dependencies": {

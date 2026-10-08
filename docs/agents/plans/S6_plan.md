@@ -66,3 +66,7 @@ File: `backend/database/migrations/20261008200000_s6_portal_secrets_bis_rls.sql`
 | 10 | SQL read-only | Queries in POST-DEPLOY #10 | 0 plaintext; migrate 257; audit has no secrets |
 
 ## 9. Session summary (filled by QE Planner at close)
+Shipped in `e5dd94a` on 2026-10-08. 257 Manak passwords are encrypted. Plaintext left is 0. BIS module permissions, roles, history on four masters, and archived-client pickers are live.
+Tester verdict: PASS WITH ISSUES. No blocker. Amit should still check Reveal for 20 seconds, Copy, and Manak Assist in a browser that has the extension. Also check Safari, iPhone, Android, and Firefox.
+Two medium leftovers stay out of S6b: a Viewer who still has a director designation remains an admin, and renewal search drops an archived client's name. `bis_new_applications` had 0 password rows, so nothing was lost there.
+S6b remains decision #7. Dropping the old password columns waits until S6 has been live for a week.

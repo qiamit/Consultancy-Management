@@ -64,19 +64,12 @@ S6b contains only these five items:
 4. Drop the deprecated `portal_password` columns and the compatibility trigger after S6 has been live for a week.
 5. Optional: move the encryption key to the functions variable `PORTAL_CREDENTIAL_KEY`. Amit sets that Railway variable.
 
-S6 बंद होने के बाद अगला सत्र S6b है। S7 उसके बाद आएगा। S6b एक नियोजित अगला सत्र है।
-S6b में केवल ये पाँच काम हैं।
-1. ब्राउज़र विस्तार का कड़ा करना। Chrome और Safari की दोनों प्रतियाँ साथ बदलेंगी।
-2. ग्राहक सूची में सर्वर पर खोज और पृष्ठ-दर-पृष्ठ लोड।
-3. जीवित डेटाबेस की रचना, उत्पन्न प्रकार, और अंतर की जाँच।
-4. पुराने `portal_password` स्तंभ और अनुकूलता ट्रिगर। ये तब हटेंगे जब S6 एक सप्ताह चल चुका हो।
-5. वैकल्पिक काम: एन्क्रिप्शन कुंजी फ़ंक्शन सेवा के चर `PORTAL_CREDENTIAL_KEY` में जाएगी। रेलवे चर अमित स्वयं रखेंगे।
+S7, S8, S9 and S10 have no approved scope yet. Do not code them until one plan names each item and Amit approves it. Several session ids may share one coding run, one audit and one test only after that plan is approved. The next plan then comes from those observations.
 
 Decisions log: `docs/agents/decisions.md`. Read it before planning, and never contradict it silently.
 
 ## Language with Amit
-Replies to Amit use complete English, then complete Hindi. Do not write Hinglish. The full rule is in `00-project-core.mdc`.
-अमित को उत्तर पहले पूरी अंग्रेज़ी में दें, फिर पूरी हिंदी में। दोनों भाषाओं को एक वाक्य में न मिलाएँ।
+Planning observations and replies to Amit are Hinglish, in one note. Do not write the same point twice, once in English and once in Hindi. The full rule is in `00-project-core.mdc`.
 
 ## 4-agent team (one repo, one session at a time)
 | Chat name | Role rule | May write | Never |
@@ -86,7 +79,7 @@ Replies to Amit use complete English, then complete Hindi. Do not write Hinglish
 | QE Auditor | `qe-auditor.mdc` | `docs/agents/reports/audit/**`, STATUS | code, git writes, migrations, DB |
 | QE Tester | `qe-tester.mdc` | `docs/agents/reports/testing/**`, `docs/agents/tests/**`, STATUS | code, git writes, migrations, committed DB writes |
 
-- **Flow:** Planner (plan, then Amit approves) → Coder (verify → migrate → commit → push) → Auditor → Tester → Planner (English summary, then Hindi summary, to Amit) → next plan.
+- **Flow:** Planner (plan, then Amit approves) → Coder (verify → migrate → commit → push) → Auditor → Tester → Planner (Hinglish summary to Amit) → next plan.
 - **Handoff:** Chats can't call each other. Each agent:
   1. writes its report file
   2. updates `docs/agents/STATUS.md` (stage, owner, next action, IST time from `date '+%Y-%m-%d %H:%M %Z'`)

@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Workflow: audits, item IDs and "continue"
 
-Amit writes prompts in a separate assistant (Grok Bot) and pastes them here. Since 2026-10-08, session prompts also come from the **QE Planner** chat as `docs/agents/plans/<ID>_coder_prompt.md` (4-agent flow: `05-qe-standards.mdc`, `docs/agents/README.md`). Incoming prompts may be short Hindi or short English, for example "continue", "VDB-03", "MST-05", "next item". Agent replies follow `00-project-core.mdc`: complete English, then complete Hindi. Do not write Hinglish.
+Amit writes prompts in a separate assistant (Grok Bot) and pastes them here. Since 2026-10-08, session prompts also come from the **QE Planner** chat as `docs/agents/plans/<ID>_coder_prompt.md` (4-agent flow: `05-qe-standards.mdc`, `docs/agents/README.md`). Incoming prompts may be short, for example "continue", "VDB-03 karo", "MST-05 fix karo", "next item". Agent replies to Amit are Hinglish, in one note (`00-project-core.mdc`). Do not repeat the same point in English and again in Hindi.
 
 ## Audit and plan files (`docs/audits/`)
 | File | Scope | ID prefix |

@@ -16,6 +16,7 @@ import {
   clientPanelClass,
   clientPrimaryBtnClass,
 } from './clientsFormUi'
+import { limsToolbarScrollClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 
 export function ClientsHeaderBar({
@@ -49,7 +50,7 @@ export function ClientsHeaderBar({
         />
         <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
 
-        <div className="relative flex min-w-0 flex-nowrap items-center gap-1 sm:gap-1.5 md:gap-2.5">
+        <div className={cn('relative', limsToolbarScrollClass, 'md:gap-2.5')}>
           <h1
             className="shrink-0 max-w-[4.5rem] truncate text-sm font-semibold tracking-tight text-white sm:max-w-[9rem] sm:text-base md:max-w-none md:text-lg"
             title="Client Directory"
@@ -68,7 +69,7 @@ export function ClientsHeaderBar({
               value={search}
               onChange={(e) => onSearchChange(e.target.value)}
               placeholder="Search Client | Address | Email | Mobile | Scale | Type"
-              className={cn(clientDarkBarSearchClass, 'h-8 min-w-0 pl-7 text-xs sm:pl-9 sm:text-sm')}
+              className={cn(clientDarkBarSearchClass, 'h-10 min-h-10 min-w-[8rem] pl-7 text-xs sm:pl-9 sm:text-sm')}
               aria-label="Search by client, address, email, mobile, scale, or type"
             />
           </div>
@@ -77,7 +78,7 @@ export function ClientsHeaderBar({
             <SelectTrigger
               className={cn(
                 clientDarkBarFieldClass,
-                'h-8 w-[3.5rem] shrink-0 px-1 text-[11px] tabular-nums sm:w-[4.25rem] sm:px-2 sm:text-xs',
+                'h-10 min-h-10 w-[3.5rem] shrink-0 px-1 text-[11px] tabular-nums sm:w-[4.25rem] sm:px-2 sm:text-xs',
               )}
               aria-label="Rows per page"
               title={`${pageSize} per page`}

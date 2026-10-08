@@ -41,15 +41,8 @@ Self-hosted Supabase-style stack on **Railway**, project **Consultancy Managemen
 ## Language
 - App UI text is in English. Some pages have an EN/हिंदी toggle backed by a small local strings file (example: `features/bis/knowledge-search/knowledgeSearchUiI18n.ts`). Follow that pattern rather than adding an i18n library, and add Hindi strings when you touch a page that already supports Hindi.
 - Code, identifiers, comments, commit messages and SQL stay in English.
-- Replies to Amit use both languages, in this order: complete English, then complete Hindi. Technical names (session ids, file paths, function names) stay in English inside both parts.
-- Do not write Hinglish. A sentence is Hinglish when Hindi grammar and English verbs share one clause.
-- The in-app assistant and knowledge answers still follow the end user's own wording. That is separate from agent replies to Amit.
-
-एप्लिकेशन का लेख, कोड, पहचान-नाम, कमिट संदेश और SQL अंग्रेज़ी में रहते हैं।
-अमित को उत्तर दो भागों में दें: पहले पूरा अंग्रेज़ी अनुच्छेद, फिर पूरा हिंदी अनुच्छेद।
-सत्र नाम, फ़ाइल पथ और फ़ंक्शन नाम दोनों भागों में अंग्रेज़ी ही रहेंगे।
-हिंदी और अंग्रेज़ी को एक ही वाक्य में न मिलाएँ।
-ऐप के अंदर सहायक और ज्ञान-उत्तर अंतिम उपयोगकर्ता की अपनी भाषा में रह सकते हैं। यह अमित को दिए गए एजेंट उत्तर से अलग है।
+- Replies and planning observations to Amit are Hinglish: one short note, not a separate English copy and a separate Hindi copy. Technical names (session ids, file paths, function names) stay in English.
+- The in-app assistant and knowledge answers still follow the end user's own wording.
 
 ## Business naming
 - Always write "Quality International Research & Laboratories Private Limited" in full. Never write "Pvt Ltd", "Pvt. Ltd." or "P. Ltd." This applies to UI, templates, seeds, emails and PDFs.

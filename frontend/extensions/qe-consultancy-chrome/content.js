@@ -758,12 +758,21 @@
     return match ? match[1] : "";
   }
 
+  function payloadWithoutPassword(payload) {
+    if (!payload || typeof payload !== "object") return payload || null;
+    const next = { ...payload };
+    delete next.portalPassword;
+    delete next.password;
+    delete next.passwd;
+    return next;
+  }
+
   function loginCredentialsFromUrl() {
     try {
       const u = new URL(location.href);
       return {
         userId: text(u.searchParams.get("userId") || u.searchParams.get("username")),
-        password: text(u.searchParams.get("passwd") || u.searchParams.get("password")),
+        password: "",
       };
     } catch {
       return { userId: "", password: "" };
@@ -1283,7 +1292,7 @@
             qeManakArmed: true,
             qeManakHomeReady: true,
             qeManakImportQr: false,
-            pendingFill: payload || null,
+            pendingFill: payloadWithoutPassword(payload),
           });
           setTrCaptureFlag(Boolean(payload && payload.sampleId));
           const trUrl = (map && map.testRequestUrl) || TR_URL;
@@ -1924,7 +1933,7 @@
     }
 
     chrome.storage.local.set({
-      pendingFill: payload,
+      pendingFill: payloadWithoutPassword(payload),
       qeManakArmed: true,
       qeManakEnabled: true,
       qeManakImportQr: false,
@@ -1932,7 +1941,7 @@
     setTrCaptureFlag(true);
     const portal = state.qeManakPortal || {};
     const wantedUser = text(portal.userId || payload.portalUserId);
-    const wantedPassword = text(portal.password || payload.portalPassword);
+    const wantedPassword = text(payload.portalPassword);
 
     if (isLoggedInSession() && isLoginPage() === false && !isTrPage()) {
       chrome.storage.local.set({ qeManakHomeReady: true });
@@ -2430,7 +2439,6 @@
         (map && map.loginUrl) || "https://www.manakonline.in/MANAK/eBISLogin";
       const u = new URL(ebis);
       if (portal.userId) u.searchParams.set("userId", portal.userId);
-      if (portal.password) u.searchParams.set("passwd", portal.password);
       location.href = u.toString();
       return { ok: true, message: "Redirecting to eBIS login…" };
     }
@@ -2451,9 +2459,9 @@
         }
         return { ok: true, message: "Logged in. Import QR enabled — opening Generate QR." };
       }
-      fillLoginFields(portal.userId, portal.password);
+      fillLoginFields(portal.userId, "");
       [400, 1200, 2500].forEach((ms) => {
-        window.setTimeout(() => fillLoginFields(portal.userId, portal.password), ms);
+        window.setTimeout(() => fillLoginFields(portal.userId, ""), ms);
       });
       if (!captchaAlreadyImport) {
         startCaptchaContinue({}, "import-qr");

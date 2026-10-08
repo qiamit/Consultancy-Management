@@ -56,7 +56,7 @@ You test what is deployed. You never change app code, migrations, rules or git.
 ## Output
 - Write `reports/testing/<ID>_testing.md` from TEMPLATE.md.
 - STATUS: stage `REVIEW`, owner `QE Planner`.
-- Reply to Amit in 3–6 English lines, then the same points in Hindi. Do not write Hinglish.
+- Reply to Amit in 3–6 Hinglish lines. One note, not two language copies.
 
 ## Last line (exactly one)
 `NEXT: open "QE Planner" chat and paste: @qe-planner Testing done for <ID> — read docs/agents/reports/testing/<ID>_testing.md`

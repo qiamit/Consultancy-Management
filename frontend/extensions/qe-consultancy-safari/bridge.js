@@ -70,7 +70,7 @@
       const key = `qr|${codes.join(",")}|${result.filledAt || ""}`;
       if (!force && key && key === lastPublishedKey) return;
       lastPublishedKey = key;
-      window.postMessage({ type: "QE_MANAK_QR_IMPORT", result }, "*");
+      window.postMessage({ type: "QE_MANAK_QR_IMPORT", result }, window.location.origin);
       window.dispatchEvent(new CustomEvent("qe-manak-qr-import", { detail: result }));
       return;
     }
@@ -78,7 +78,7 @@
     const key = resultKey(result);
     if (!force && key && key === lastPublishedKey) return;
     lastPublishedKey = key;
-    window.postMessage({ type: "QE_MANAK_RESULT", result }, "*");
+    window.postMessage({ type: "QE_MANAK_RESULT", result }, window.location.origin);
     window.dispatchEvent(new CustomEvent("qe-manak-sample-result", { detail: result }));
   }
 
@@ -149,6 +149,7 @@
 
   window.addEventListener("message", (event) => {
     if (event.source !== window) return;
+    if (event.origin !== window.location.origin) return;
     const data = event.data;
     if (!data || typeof data !== "object") return;
     if (data.type === "QE_MANAK_PULL_RESULT") {
@@ -157,13 +158,13 @@
     }
     if (data.type === "QE_IS_CODE_PING") {
       markPresent();
-      window.postMessage({ type: "QE_IS_CODE_PONG" }, "*");
+      window.postMessage({ type: "QE_IS_CODE_PONG" }, window.location.origin);
       sendRuntime({ type: "QE_IS_CODE_PING" });
       return;
     }
     if (data.type === "QE_IS_CODE_FETCH") {
       markPresent();
-      window.postMessage({ type: "QE_IS_CODE_FETCH_ACK" }, "*");
+      window.postMessage({ type: "QE_IS_CODE_FETCH_ACK" }, window.location.origin);
       sendRuntime({ type: "QE_IS_CODE_FETCH", isNumber: data.isNumber || "" });
       return;
     }
@@ -183,7 +184,7 @@
         portalPassword: data.portalPassword || "",
       },
       () => {
-        window.postMessage({ type: "QE_MANAK_OPEN_ACK" }, "*");
+        window.postMessage({ type: "QE_MANAK_OPEN_ACK" }, window.location.origin);
       },
     );
   });
@@ -204,28 +205,10 @@
           acceptPdfChunk(msg);
         }
         if (msg.type === "QE_IS_CODE_PROGRESS") {
-          window.postMessage({ type: "QE_IS_CODE_PROGRESS", message: msg.message || "" }, "*");
+          window.postMessage({ type: "QE_IS_CODE_PROGRESS", message: msg.message || "" }, window.location.origin);
         }
         if (msg.type === "QE_IS_CODE_FILL") {
-          window.postMessage({ type: "QE_IS_CODE_FILL", payload: msg.payload || {} }, "*");
-        }
-        if (msg.type === "QE_CAPTCHA_AI") {
-          const requestId = msg.requestId || `cap-${Date.now()}`;
-          const timer = window.setTimeout(() => {
-            window.removeEventListener("message", onAiResult);
-            sendResponse({ text: "" });
-          }, 25000);
-          function onAiResult(event) {
-            if (event.source !== window) return;
-            if (!event.data || event.data.type !== "QE_CAPTCHA_AI_RESULT") return;
-            if (event.data.requestId && event.data.requestId !== requestId) return;
-            window.clearTimeout(timer);
-            window.removeEventListener("message", onAiResult);
-            sendResponse({ text: String(event.data.text || "") });
-          }
-          window.addEventListener("message", onAiResult);
-          window.postMessage({ type: "QE_CAPTCHA_AI", image: msg.image || "", requestId }, "*");
-          return true;
+          window.postMessage({ type: "QE_IS_CODE_FILL", payload: msg.payload || {} }, window.location.origin);
         }
       });
     } catch {

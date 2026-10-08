@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { fetchAllRows } from '@/lib/fetchAllRows'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { toast } from 'sonner'
+import { searchClients, type ClientSearchRow } from '@/lib/clientsApi'
 import { invalidateClientsCache } from '@/lib/clientsCache'
 import { supabase } from '@/lib/supabaseClient'
 import { useCanEditCurrentModule } from '@/features/settings/module-access/useCanEditCurrentModule'
@@ -164,6 +165,33 @@ const formatSupabaseError = (err: unknown) => {
   return parts.length ? parts.join(' | ') : 'Unknown error'
 }
 
+const CLIENT_FORM_COLUMNS =
+  'id, gst_number, company_type, company_scale, company_name, contact_person_name, country_code, mobile, email, address, pin_code, district, state, country, opening_balance, balance_type, payment_term, remark, archived_at'
+
+function mapSearchRow(row: ClientSearchRow): ClientRow {
+  return {
+    id: row.id,
+    gst_number: row.gst_number,
+    company_type: (row.company_type ?? 'Manufacturer') as ClientRow['company_type'],
+    company_scale: (row.company_scale ?? 'Medium') as ClientRow['company_scale'],
+    company_name: row.company_name ?? '',
+    contact_person_name: row.contact_person_name,
+    country_code: row.country_code,
+    mobile: row.mobile,
+    email: row.email,
+    address: row.address,
+    pin_code: row.pin_code,
+    district: row.district,
+    state: row.state,
+    country: row.country,
+    opening_balance: row.opening_balance,
+    balance_type: (row.balance_type ?? 'Dr') as ClientRow['balance_type'],
+    payment_term: '100 % Advance',
+    remark: null,
+    archived_at: row.archived_at,
+  }
+}
+
 function rowToClientForm(row: ClientRow): ClientFormType {
   return {
     gstNumber: row.gst_number ?? '',
@@ -207,6 +235,9 @@ export default function ClientsMasterPage() {
   const [search, setSearch] = useState('')
 
   const [rows, setRows] = useState<ClientRow[]>([])
+  const [total, setTotal] = useState(0)
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const loadSeq = useRef(0)
   const [listLoading, setListLoading] = useState(false)
   const [listError, setListError] = useState<string | null>(null)
 
@@ -268,60 +299,30 @@ export default function ClientsMasterPage() {
     !pinError &&
     form.companyName.trim().length > 0
 
-  const loadClients = async () => {
+  const pageLimit = Math.min(Math.max(pageSize, 1), 200)
+
+  const loadClients = useCallback(async () => {
+    const seq = ++loadSeq.current
     setListError(null)
     setListLoading(true)
     try {
       await supabase.auth.getSession()
-      const data = await fetchAllRows<ClientRow>(
-        (from, to) =>
-          supabase
-            .from('clients')
-            .select('*')
-            .order('company_name', { ascending: true })
-            .order('id', { ascending: true })
-            .range(from, to),
-        {
-          concurrency: 4,
-          count: () => supabase.from('clients').select('id', { count: 'exact', head: true }),
-        },
-      )
-
-      const list = (Array.isArray(data) ? (data as ClientRow[]) : [])
-        .map((r) => ({
-          ...r,
-          company_type: (r.company_type ?? 'Manufacturer') as ClientRow['company_type'],
-          company_scale: (r.company_scale ?? 'Medium') as ClientRow['company_scale'],
-          balance_type: (r.balance_type ?? 'Dr') as ClientRow['balance_type'],
-          payment_term: (r.payment_term ?? '100 % Advance') as ClientRow['payment_term'],
-          remark: (r.remark ?? null) as ClientRow['remark'],
-        }))
-
-      setRows(list)
-
-      const districtsFromDb = Array.from(new Set(list.map((r) => r.district).filter((d): d is string => !!d && d.trim().length > 0)))
-        .map((label) => ({ id: `db-district-${label}`, label }))
-        .sort((a, b) => nameCollator.compare(a.label, b.label))
-      setDistricts((prev) => {
-        const merged = [...prev, ...districtsFromDb]
-        const uniq = new Map(merged.map((x) => [x.label.toLowerCase(), x]))
-        return Array.from(uniq.values()).sort((a, b) => nameCollator.compare(a.label, b.label))
+      const { rows: found, total: nextTotal } = await searchClients({
+        search: debouncedSearch,
+        limit: pageLimit,
+        offset: (page - 1) * pageLimit,
+        includeArchived: showArchived,
       })
-
-      const pinCodesFromDb = Array.from(new Set(list.map((r) => r.pin_code).filter((p): p is string => !!p && p.trim().length > 0)))
-        .map((label) => ({ id: `db-pin-${label}`, label }))
-        .sort((a, b) => nameCollator.compare(a.label, b.label))
-      setPinCodes((prev) => {
-        const merged = [...prev, ...pinCodesFromDb]
-        const uniq = new Map(merged.map((x) => [x.label.toLowerCase(), x]))
-        return Array.from(uniq.values()).sort((a, b) => nameCollator.compare(a.label, b.label))
-      })
+      if (seq !== loadSeq.current) return
+      setTotal(nextTotal)
+      setRows(found.map(mapSearchRow))
     } catch (err) {
+      if (seq !== loadSeq.current) return
       setListError(err instanceof Error ? err.message : 'Unable to load clients')
     } finally {
-      setListLoading(false)
+      if (seq === loadSeq.current) setListLoading(false)
     }
-  }
+  }, [debouncedSearch, page, pageLimit, showArchived])
 
   const loadMasterOptions = async () => {
     try {
@@ -376,9 +377,17 @@ export default function ClientsMasterPage() {
   }
 
   useEffect(() => {
-    void loadClients()
+    const id = window.setTimeout(() => setDebouncedSearch(search), 300)
+    return () => window.clearTimeout(id)
+  }, [search])
+
+  useEffect(() => {
     void loadMasterOptions()
   }, [])
+
+  useEffect(() => {
+    void loadClients()
+  }, [loadClients])
 
   useEffect(() => {
     if (!editId) {
@@ -393,15 +402,21 @@ export default function ClientsMasterPage() {
       return
     }
 
-    const fromPage = rows.find((r) => r.id === editId)
-    if (fromPage) {
-      setForm(rowToClientForm(fromPage))
+    let cancelled = false
+    void (async () => {
+      const { data, error } = await supabase.from('clients').select(CLIENT_FORM_COLUMNS).eq('id', editId).single()
+      if (cancelled) return
+      if (error || !data) {
+        setEdit(null)
+        return
+      }
+      setForm(rowToClientForm(data as ClientRow))
       hydratedEditRef.current = editId
-      return
+    })()
+    return () => {
+      cancelled = true
     }
-
-    if (!listLoading) setEdit(null)
-  }, [editId, rows, listLoading, setEdit])
+  }, [editId, setEdit])
 
   const handleAddState = () => {
     if (!canEdit) {
@@ -818,52 +833,44 @@ export default function ClientsMasterPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  const openClientById = async (id: string) => {
+    const { data, error } = await supabase.from('clients').select(CLIENT_FORM_COLUMNS).eq('id', id).single()
+    if (error) throw error
+    return data as ClientRow
+  }
+
   const handleEdit = (row: ClientRow) => {
     setSaveMessage(null)
-    setForm(rowToClientForm(row))
-    hydratedEditRef.current = row.id
-    setEdit(row.id)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    void (async () => {
+      try {
+        const full = await openClientById(row.id)
+        setForm(rowToClientForm(full))
+        hydratedEditRef.current = row.id
+        setEdit(row.id)
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      } catch (err) {
+        setSaveMessage(err instanceof Error ? err.message : 'Unable to open client')
+      }
+    })()
   }
 
   const handleCopy = (row: ClientRow) => {
     setSaveMessage(null)
-    setForm({ ...rowToClientForm(row), companyName: `${row.company_name} - Copy` })
-    hydratedEditRef.current = 'new'
-    setEdit('new')
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    void (async () => {
+      try {
+        const full = await openClientById(row.id)
+        setForm({ ...rowToClientForm(full), companyName: `${full.company_name} - Copy` })
+        hydratedEditRef.current = 'new'
+        setEdit('new')
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      } catch (err) {
+        setSaveMessage(err instanceof Error ? err.message : 'Unable to copy client')
+      }
+    })()
   }
 
   const filteredRows = useMemo(() => {
-    const base = showArchived ? rows : rows.filter((r) => !r.archived_at)
-    const q = search.trim().toLowerCase()
-    const list = !q
-      ? [...base]
-      : base.filter((r) => {
-          const blob = [
-            r.company_name,
-            r.gst_number ?? '',
-            r.company_type,
-            r.company_scale,
-            r.contact_person_name ?? '',
-            r.country_code ?? '',
-            r.mobile ?? '',
-            r.email ?? '',
-            r.address ?? '',
-            r.pin_code ?? '',
-            r.district ?? '',
-            r.state ?? '',
-            r.country ?? '',
-            String(r.opening_balance ?? ''),
-            r.balance_type,
-            r.payment_term,
-            r.remark ?? '',
-          ]
-            .join(' ')
-            .toLowerCase()
-
-          return blob.includes(q)
-        })
+    const list = [...rows]
 
     const dir = sortDir === 'asc' ? 1 : -1
     const cmpText = (a: string, b: string) => nameCollator.compare(a, b) * dir
@@ -903,14 +910,14 @@ export default function ClientsMasterPage() {
       if (primary !== 0) return primary
       return cmpText(a.company_name || '', b.company_name || '')
     })
-  }, [rows, search, sortKey, sortDir, showArchived])
+  }, [rows, sortKey, sortDir])
 
-  const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize))
+  const pageCount = Math.max(1, Math.ceil(total / pageLimit))
 
   useEffect(() => {
     setPage(1)
     setJumpTo('')
-  }, [search, pageSize, sortKey, sortDir])
+  }, [search, pageSize, showArchived])
 
   const handleSort = (key: ClientSortKey) => {
     if (sortKey === key) {
@@ -921,10 +928,9 @@ export default function ClientsMasterPage() {
     setSortDir('asc')
   }
 
-  const pagedRows = useMemo(() => {
-    const start = (page - 1) * pageSize
-    return filteredRows.slice(start, start + pageSize)
-  }, [filteredRows, page, pageSize])
+  const pagedRows = filteredRows
+  const rangeFrom = total === 0 ? 0 : (page - 1) * pageLimit + 1
+  const rangeTo = total === 0 ? 0 : (page - 1) * pageLimit + pagedRows.length
 
   const assistantContext = useMemo(
     () => buildClientsAssistantContext(filteredRows, search),
@@ -1107,7 +1113,7 @@ export default function ClientsMasterPage() {
   }
 
   const handleExport = () => {
-    const exportRows = selectedRows.length > 0 ? selectedRows : filteredRows
+    const exportRows = pagedRows
     if (exportRows.length === 0) {
       setSaveMessage('No clients to export.')
       return
@@ -1143,11 +1149,9 @@ export default function ClientsMasterPage() {
     a.download = `clients-export-${new Date().toISOString().slice(0, 10)}.csv`
     a.click()
     URL.revokeObjectURL(url)
-    setSaveMessage(
-      `Exported ${exportRows.length} client(s) with all form fields${
-        selectedRows.length > 0 ? ' (selection)' : ' (current filter)'
-      }.`,
-    )
+    const exportNote = `Exported this page (${exportRows.length} of ${total}).`
+    toast(exportNote)
+    setSaveMessage(exportNote)
   }
 
   const handleImport = () => {
@@ -1437,8 +1441,9 @@ export default function ClientsMasterPage() {
           message={saveMessage}
           loading={saveLoading}
           selectedCount={selectedIds.size}
-          totalCount={rows.length}
-          visibleCount={filteredRows.length}
+          totalCount={total}
+          rangeFrom={rangeFrom}
+          rangeTo={rangeTo}
           page={page}
           pageCount={pageCount}
           onImport={handleImport}

@@ -3,7 +3,7 @@
 Four Cursor chats work in one repo, one session at a time. They hand work to each other through files in `docs/agents/`, plus one `NEXT:` line that Amit pastes into the next chat.
 
 ```
-QE Planner ──(plan + coder prompt, Amit approves)──▶ QE Coder ──(commit + push)──▶ QE Auditor ──(audit report)──▶ QE Tester ──(live test report)──▶ QE Planner ──▶ English summary, then Hindi summary, to Amit ──▶ next plan
+QE Planner ──(plan + coder prompt, Amit approves)──▶ QE Coder ──(commit + push)──▶ QE Auditor ──(audit report)──▶ QE Tester ──(live test report)──▶ QE Planner ──▶ Hinglish summary to Amit ──▶ next plan
 ```
 
 Rules: `.cursor/rules/05-qe-standards.mdc` (always on) and one role rule per chat (`qe-planner.mdc`, `qe-coder.mdc`, `qe-auditor.mdc`, `qe-tester.mdc`).

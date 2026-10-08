@@ -13,7 +13,7 @@ Everything here is called with the **user's own JWT** through the gateway `https
 | `get_audit_history` | `p_table text, p_row_id text, p_limit integer` | admin | Newest-first change history for one row. Secret-like keys are stripped. | S6 |
 | `bis_portal_secret_set` | `p_project_id uuid, p_password text` | BIS edit | Encrypt and store one Manak password, or clear it when null/empty. Returns boolean (password exists). Never returns the password. | S6 |
 | `bis_portal_secret_get` | `p_project_id uuid, p_purpose text` | `reveal`: admin; `extension_login`: BIS edit | Returns one project's password for that purpose only. Rate limit 30 / 10 min. Every call is logged without the value. Never returns a list of passwords. | S6 |
-| `search_clients` | `p_search text, p_limit integer, p_offset integer, p_include_archived boolean, p_company_type text` | authenticated (RLS via SECURITY INVOKER) | Paged client search. Archived hidden unless asked. `total_count` on each row. Limit capped at 200. | S6 |
+| `search_clients` | `p_search text, p_limit integer, p_offset integer, p_include_archived boolean, p_company_type text` | authenticated (RLS via SECURITY INVOKER) | Paged client search. Archived hidden unless asked. `total_count` on each row. Limit capped at 200. Masters → Clients calls it for the directory (limit max 200, archived flag, total_count). | S6 |
 | `master_reference_counts` | `p_table text, p_ids uuid[]` | authenticated | How many rows reference these master rows | S5 |
 | `delete_master_rows` | `p_table text, p_ids uuid[]` | admin | Permanently delete unreferenced master rows; returns `{deleted, blocked, storage_paths}` | S5 |
 | `list_team_users` | – | authenticated (see migration) | Team user list | earlier |

@@ -1,0 +1,6575 @@
+[
+  {
+    "table_name": "_railway_migrations",
+    "column_name": "id",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "_railway_migrations",
+    "column_name": "applied_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "accreditation_bodies",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "accreditation_bodies",
+    "column_name": "name",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "accreditation_bodies",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "ai_models",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "ai_models",
+    "column_name": "provider",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "ai_models",
+    "column_name": "model_id",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "ai_models",
+    "column_name": "display_name",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "ai_models",
+    "column_name": "api_key",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "ai_models",
+    "column_name": "is_active",
+    "data_type": "boolean",
+    "is_nullable": "NO",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "ai_models",
+    "column_name": "sort_order",
+    "data_type": "integer",
+    "is_nullable": "NO",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "ai_models",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "ai_models",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "ai_models",
+    "column_name": "api_base_url",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 10
+  },
+  {
+    "table_name": "ai_models",
+    "column_name": "is_default",
+    "data_type": "boolean",
+    "is_nullable": "NO",
+    "ordinal_position": 11
+  },
+  {
+    "table_name": "ai_settings",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "ai_settings",
+    "column_name": "default_model_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "ai_settings",
+    "column_name": "ai_enabled",
+    "data_type": "boolean",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "ai_settings",
+    "column_name": "temperature",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "ai_settings",
+    "column_name": "max_tokens",
+    "data_type": "integer",
+    "is_nullable": "NO",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "ai_settings",
+    "column_name": "system_prompt_prefix",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "ai_settings",
+    "column_name": "log_requests",
+    "data_type": "boolean",
+    "is_nullable": "NO",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "ai_settings",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "ai_settings",
+    "column_name": "agent_crud_enabled",
+    "data_type": "boolean",
+    "is_nullable": "NO",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "ai_skills",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "ai_skills",
+    "column_name": "name",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "ai_skills",
+    "column_name": "description",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "ai_skills",
+    "column_name": "instructions",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "ai_skills",
+    "column_name": "trigger_keywords",
+    "data_type": "ARRAY",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "ai_skills",
+    "column_name": "is_enabled",
+    "data_type": "boolean",
+    "is_nullable": "NO",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "ai_skills",
+    "column_name": "sort_order",
+    "data_type": "integer",
+    "is_nullable": "NO",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "ai_skills",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "ai_skills",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "app_dropdown_options",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "app_dropdown_options",
+    "column_name": "option_key",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "app_dropdown_options",
+    "column_name": "value",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "app_dropdown_options",
+    "column_name": "label",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "app_dropdown_options",
+    "column_name": "sort_order",
+    "data_type": "integer",
+    "is_nullable": "NO",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "app_dropdown_options",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "app_schema_migrations",
+    "column_name": "filename",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "app_schema_migrations",
+    "column_name": "applied_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "app_settings",
+    "column_name": "id",
+    "data_type": "integer",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "app_settings",
+    "column_name": "site_title",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "app_settings",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "app_settings",
+    "column_name": "document_number_prefix",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "app_settings",
+    "column_name": "document_number_suffix",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "app_settings",
+    "column_name": "reference_prefix",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "app_settings",
+    "column_name": "reference_suffix",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "app_settings",
+    "column_name": "app_theme",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "app_settings",
+    "column_name": "app_currency",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "app_settings",
+    "column_name": "date_format",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 10
+  },
+  {
+    "table_name": "app_settings",
+    "column_name": "time_format",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 11
+  },
+  {
+    "table_name": "app_users",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "app_users",
+    "column_name": "email",
+    "data_type": "USER-DEFINED",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "app_users",
+    "column_name": "password_hash",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "app_users",
+    "column_name": "email_confirmed_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "app_users",
+    "column_name": "last_sign_in_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "app_users",
+    "column_name": "banned_until",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "app_users",
+    "column_name": "raw_user_meta_data",
+    "data_type": "jsonb",
+    "is_nullable": "NO",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "app_users",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "app_users",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "audit_log",
+    "column_name": "id",
+    "data_type": "bigint",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "audit_log",
+    "column_name": "table_name",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "audit_log",
+    "column_name": "row_id",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "audit_log",
+    "column_name": "action",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "audit_log",
+    "column_name": "changed_by",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "audit_log",
+    "column_name": "changed_via",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "audit_log",
+    "column_name": "changed_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "audit_log",
+    "column_name": "old_data",
+    "data_type": "jsonb",
+    "is_nullable": "YES",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "audit_log",
+    "column_name": "new_data",
+    "data_type": "jsonb",
+    "is_nullable": "YES",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "bis_new_applications",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "bis_new_applications",
+    "column_name": "client_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "bis_new_applications",
+    "column_name": "project_kind",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "bis_new_applications",
+    "column_name": "title",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "bis_new_applications",
+    "column_name": "status",
+    "data_type": "USER-DEFINED",
+    "is_nullable": "NO",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "bis_new_applications",
+    "column_name": "license_number",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "bis_new_applications",
+    "column_name": "start_date",
+    "data_type": "date",
+    "is_nullable": "YES",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "bis_new_applications",
+    "column_name": "target_date",
+    "data_type": "date",
+    "is_nullable": "YES",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "bis_new_applications",
+    "column_name": "notes",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "bis_new_applications",
+    "column_name": "is_code_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 10
+  },
+  {
+    "table_name": "bis_new_applications",
+    "column_name": "cm_l_digits",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 11
+  },
+  {
+    "table_name": "bis_new_applications",
+    "column_name": "license_validity_date",
+    "data_type": "date",
+    "is_nullable": "YES",
+    "ordinal_position": 12
+  },
+  {
+    "table_name": "bis_new_applications",
+    "column_name": "case_handled_by",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 13
+  },
+  {
+    "table_name": "bis_new_applications",
+    "column_name": "case_referred_by",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 14
+  },
+  {
+    "table_name": "bis_new_applications",
+    "column_name": "billing_amount",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 15
+  },
+  {
+    "table_name": "bis_new_applications",
+    "column_name": "billing_frequency",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 16
+  },
+  {
+    "table_name": "bis_new_applications",
+    "column_name": "portal_user_id",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 17
+  },
+  {
+    "table_name": "bis_new_applications",
+    "column_name": "portal_password",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 18
+  },
+  {
+    "table_name": "bis_new_applications",
+    "column_name": "created_by",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 19
+  },
+  {
+    "table_name": "bis_new_applications",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 20
+  },
+  {
+    "table_name": "bis_new_applications",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 21
+  },
+  {
+    "table_name": "bis_project_files",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "bis_project_files",
+    "column_name": "bis_project_id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "bis_project_files",
+    "column_name": "doc_kind",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "bis_project_files",
+    "column_name": "file_name",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "bis_project_files",
+    "column_name": "storage_path",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "bis_project_files",
+    "column_name": "file_size",
+    "data_type": "bigint",
+    "is_nullable": "YES",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "bis_project_files",
+    "column_name": "mime_type",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "bis_project_files",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "bis_project_module_data",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "bis_project_module_data",
+    "column_name": "bis_project_id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "bis_project_module_data",
+    "column_name": "module_kind",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "bis_project_module_data",
+    "column_name": "payload",
+    "data_type": "jsonb",
+    "is_nullable": "NO",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "bis_project_module_data",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "bis_project_module_data",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "bis_projects",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "bis_projects",
+    "column_name": "client_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "bis_projects",
+    "column_name": "project_kind",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "bis_projects",
+    "column_name": "title",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "bis_projects",
+    "column_name": "status",
+    "data_type": "USER-DEFINED",
+    "is_nullable": "NO",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "bis_projects",
+    "column_name": "license_number",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "bis_projects",
+    "column_name": "start_date",
+    "data_type": "date",
+    "is_nullable": "YES",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "bis_projects",
+    "column_name": "target_date",
+    "data_type": "date",
+    "is_nullable": "YES",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "bis_projects",
+    "column_name": "notes",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "bis_projects",
+    "column_name": "created_by",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 10
+  },
+  {
+    "table_name": "bis_projects",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 11
+  },
+  {
+    "table_name": "bis_projects",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 12
+  },
+  {
+    "table_name": "bis_projects",
+    "column_name": "is_code_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 13
+  },
+  {
+    "table_name": "bis_projects",
+    "column_name": "cm_l_digits",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 14
+  },
+  {
+    "table_name": "bis_projects",
+    "column_name": "license_validity_date",
+    "data_type": "date",
+    "is_nullable": "YES",
+    "ordinal_position": 15
+  },
+  {
+    "table_name": "bis_projects",
+    "column_name": "case_handled_by",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 16
+  },
+  {
+    "table_name": "bis_projects",
+    "column_name": "case_referred_by",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 17
+  },
+  {
+    "table_name": "bis_projects",
+    "column_name": "billing_amount",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 18
+  },
+  {
+    "table_name": "bis_projects",
+    "column_name": "billing_frequency",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 19
+  },
+  {
+    "table_name": "bis_projects",
+    "column_name": "portal_user_id",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 20
+  },
+  {
+    "table_name": "bis_projects",
+    "column_name": "portal_password",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 21
+  },
+  {
+    "table_name": "bis_projects",
+    "column_name": "application_stage",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 22
+  },
+  {
+    "table_name": "bis_projects",
+    "column_name": "is_qe_managed",
+    "data_type": "boolean",
+    "is_nullable": "NO",
+    "ordinal_position": 23
+  },
+  {
+    "table_name": "bis_projects",
+    "column_name": "application_process",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 24
+  },
+  {
+    "table_name": "bis_projects",
+    "column_name": "application_number",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 25
+  },
+  {
+    "table_name": "bis_projects",
+    "column_name": "application_date",
+    "data_type": "date",
+    "is_nullable": "YES",
+    "ordinal_position": 26
+  },
+  {
+    "table_name": "bis_projects",
+    "column_name": "granted_date",
+    "data_type": "date",
+    "is_nullable": "YES",
+    "ordinal_position": 27
+  },
+  {
+    "table_name": "bis_projects",
+    "column_name": "branch_name",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 28
+  },
+  {
+    "table_name": "bis_projects",
+    "column_name": "branch_state",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 29
+  },
+  {
+    "table_name": "bis_projects",
+    "column_name": "branch_head_name",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 30
+  },
+  {
+    "table_name": "bis_projects",
+    "column_name": "branch_head_designation",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 31
+  },
+  {
+    "table_name": "bis_projects",
+    "column_name": "inspection_officer_name",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 32
+  },
+  {
+    "table_name": "bis_projects",
+    "column_name": "inspection_officer_designation",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 33
+  },
+  {
+    "table_name": "bis_projects",
+    "column_name": "dealing_officer_name",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 34
+  },
+  {
+    "table_name": "bis_projects",
+    "column_name": "dealing_officer_designation",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 35
+  },
+  {
+    "table_name": "bis_projects",
+    "column_name": "type_of_inspection",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 36
+  },
+  {
+    "table_name": "bis_projects",
+    "column_name": "inspection_date",
+    "data_type": "date",
+    "is_nullable": "YES",
+    "ordinal_position": 37
+  },
+  {
+    "table_name": "bis_projects",
+    "column_name": "portal_password_set",
+    "data_type": "boolean",
+    "is_nullable": "NO",
+    "ordinal_position": 38
+  },
+  {
+    "table_name": "bis_renewal_applications",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "bis_renewal_applications",
+    "column_name": "project_id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "bis_renewal_applications",
+    "column_name": "client_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "bis_renewal_applications",
+    "column_name": "application_date",
+    "data_type": "date",
+    "is_nullable": "YES",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "bis_renewal_applications",
+    "column_name": "submission_mode",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "bis_renewal_applications",
+    "column_name": "acknowledgment_number",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "bis_renewal_applications",
+    "column_name": "bis_office",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "bis_renewal_applications",
+    "column_name": "bis_desk_officer",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "bis_renewal_applications",
+    "column_name": "marking_fee_rate",
+    "data_type": "numeric",
+    "is_nullable": "YES",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "bis_renewal_applications",
+    "column_name": "marking_fee_quantity",
+    "data_type": "numeric",
+    "is_nullable": "YES",
+    "ordinal_position": 10
+  },
+  {
+    "table_name": "bis_renewal_applications",
+    "column_name": "marking_fee_total",
+    "data_type": "numeric",
+    "is_nullable": "YES",
+    "ordinal_position": 11
+  },
+  {
+    "table_name": "bis_renewal_applications",
+    "column_name": "fee_challan_number",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 12
+  },
+  {
+    "table_name": "bis_renewal_applications",
+    "column_name": "fee_payment_date",
+    "data_type": "date",
+    "is_nullable": "YES",
+    "ordinal_position": 13
+  },
+  {
+    "table_name": "bis_renewal_applications",
+    "column_name": "fee_payment_mode",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 14
+  },
+  {
+    "table_name": "bis_renewal_applications",
+    "column_name": "test_report_number",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 15
+  },
+  {
+    "table_name": "bis_renewal_applications",
+    "column_name": "test_report_date",
+    "data_type": "date",
+    "is_nullable": "YES",
+    "ordinal_position": 16
+  },
+  {
+    "table_name": "bis_renewal_applications",
+    "column_name": "test_lab_name",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 17
+  },
+  {
+    "table_name": "bis_renewal_applications",
+    "column_name": "test_lab_nabl_no",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 18
+  },
+  {
+    "table_name": "bis_renewal_applications",
+    "column_name": "test_result",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 19
+  },
+  {
+    "table_name": "bis_renewal_applications",
+    "column_name": "inspection_notice_date",
+    "data_type": "date",
+    "is_nullable": "YES",
+    "ordinal_position": 20
+  },
+  {
+    "table_name": "bis_renewal_applications",
+    "column_name": "inspection_date",
+    "data_type": "date",
+    "is_nullable": "YES",
+    "ordinal_position": 21
+  },
+  {
+    "table_name": "bis_renewal_applications",
+    "column_name": "bis_inspector_name",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 22
+  },
+  {
+    "table_name": "bis_renewal_applications",
+    "column_name": "inspection_result",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 23
+  },
+  {
+    "table_name": "bis_renewal_applications",
+    "column_name": "renewal_granted_date",
+    "data_type": "date",
+    "is_nullable": "YES",
+    "ordinal_position": 24
+  },
+  {
+    "table_name": "bis_renewal_applications",
+    "column_name": "new_validity_from",
+    "data_type": "date",
+    "is_nullable": "YES",
+    "ordinal_position": 25
+  },
+  {
+    "table_name": "bis_renewal_applications",
+    "column_name": "new_validity_to",
+    "data_type": "date",
+    "is_nullable": "YES",
+    "ordinal_position": 26
+  },
+  {
+    "table_name": "bis_renewal_applications",
+    "column_name": "renewal_status",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 27
+  },
+  {
+    "table_name": "bis_renewal_applications",
+    "column_name": "notes",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 28
+  },
+  {
+    "table_name": "bis_renewal_applications",
+    "column_name": "created_by",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 29
+  },
+  {
+    "table_name": "bis_renewal_applications",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 30
+  },
+  {
+    "table_name": "bis_renewal_applications",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 31
+  },
+  {
+    "table_name": "bis_sample_failure_replies",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "bis_sample_failure_replies",
+    "column_name": "client_id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "bis_sample_failure_replies",
+    "column_name": "is_code_id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "bis_sample_failure_replies",
+    "column_name": "bis_project_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "bis_sample_failure_replies",
+    "column_name": "cm_l_digits",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "bis_sample_failure_replies",
+    "column_name": "project_kind",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "bis_sample_failure_replies",
+    "column_name": "sample_failure_type",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "bis_sample_failure_replies",
+    "column_name": "sample_code",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "bis_sample_failure_replies",
+    "column_name": "sample_qr_code",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "bis_sample_failure_replies",
+    "column_name": "failure_letter_path",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 10
+  },
+  {
+    "table_name": "bis_sample_failure_replies",
+    "column_name": "failure_letter_name",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 11
+  },
+  {
+    "table_name": "bis_sample_failure_replies",
+    "column_name": "offer_letter_path",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 12
+  },
+  {
+    "table_name": "bis_sample_failure_replies",
+    "column_name": "offer_letter_name",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 13
+  },
+  {
+    "table_name": "bis_sample_failure_replies",
+    "column_name": "factory_test_report_path",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 14
+  },
+  {
+    "table_name": "bis_sample_failure_replies",
+    "column_name": "factory_test_report_name",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 15
+  },
+  {
+    "table_name": "bis_sample_failure_replies",
+    "column_name": "reply_draft",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 16
+  },
+  {
+    "table_name": "bis_sample_failure_replies",
+    "column_name": "status",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 17
+  },
+  {
+    "table_name": "bis_sample_failure_replies",
+    "column_name": "notes",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 18
+  },
+  {
+    "table_name": "bis_sample_failure_replies",
+    "column_name": "created_by",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 19
+  },
+  {
+    "table_name": "bis_sample_failure_replies",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 20
+  },
+  {
+    "table_name": "bis_sample_failure_replies",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 21
+  },
+  {
+    "table_name": "client_master_options",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "client_master_options",
+    "column_name": "category",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "client_master_options",
+    "column_name": "value",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "client_master_options",
+    "column_name": "label",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "client_master_options",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "clients",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "clients",
+    "column_name": "name",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "clients",
+    "column_name": "company_name",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "clients",
+    "column_name": "email",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "clients",
+    "column_name": "phone",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "clients",
+    "column_name": "address",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "clients",
+    "column_name": "notes",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "clients",
+    "column_name": "created_by",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "clients",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "clients",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 10
+  },
+  {
+    "table_name": "clients",
+    "column_name": "gst_number",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 11
+  },
+  {
+    "table_name": "clients",
+    "column_name": "company_type",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 12
+  },
+  {
+    "table_name": "clients",
+    "column_name": "company_scale",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 13
+  },
+  {
+    "table_name": "clients",
+    "column_name": "company_status",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 14
+  },
+  {
+    "table_name": "clients",
+    "column_name": "contact_person_name",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 15
+  },
+  {
+    "table_name": "clients",
+    "column_name": "pin_code",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 16
+  },
+  {
+    "table_name": "clients",
+    "column_name": "city",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 17
+  },
+  {
+    "table_name": "clients",
+    "column_name": "state",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 18
+  },
+  {
+    "table_name": "clients",
+    "column_name": "country",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 19
+  },
+  {
+    "table_name": "clients",
+    "column_name": "opening_balance",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 20
+  },
+  {
+    "table_name": "clients",
+    "column_name": "balance_type",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 21
+  },
+  {
+    "table_name": "clients",
+    "column_name": "payment_term",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 22
+  },
+  {
+    "table_name": "clients",
+    "column_name": "phone_country_code",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 23
+  },
+  {
+    "table_name": "clients",
+    "column_name": "mobile",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 24
+  },
+  {
+    "table_name": "clients",
+    "column_name": "country_code",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 25
+  },
+  {
+    "table_name": "clients",
+    "column_name": "district",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 26
+  },
+  {
+    "table_name": "clients",
+    "column_name": "remark",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 27
+  },
+  {
+    "table_name": "clients",
+    "column_name": "updated_by",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 28
+  },
+  {
+    "table_name": "clients",
+    "column_name": "archived_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "ordinal_position": 29
+  },
+  {
+    "table_name": "clients",
+    "column_name": "archived_by",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 30
+  },
+  {
+    "table_name": "company_notes",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "company_notes",
+    "column_name": "code",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "company_notes",
+    "column_name": "name",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "company_notes",
+    "column_name": "body",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "company_notes",
+    "column_name": "sort_order",
+    "data_type": "integer",
+    "is_nullable": "NO",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "company_notes",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "company_notes",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "company_scope_of_work",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "company_scope_of_work",
+    "column_name": "code",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "company_scope_of_work",
+    "column_name": "name",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "company_scope_of_work",
+    "column_name": "body",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "company_scope_of_work",
+    "column_name": "sort_order",
+    "data_type": "integer",
+    "is_nullable": "NO",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "company_scope_of_work",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "company_scope_of_work",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "id",
+    "data_type": "integer",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "company_name",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "address",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "gst_number",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "phone",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "email",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "logo_path",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "contact_person_name",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "company_city",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 10
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "company_pin_code",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 11
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "company_state",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 12
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "company_country",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 13
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "bank_account_holder_name",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 14
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "bank_account_number",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 15
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "bank_branch_name",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 16
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "bank_ifsc",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 17
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "bank_swift",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 18
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "bank_upi_id",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 19
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "bank_upi_qr_path",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 20
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "bank_cheque_image_path",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 21
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "letterhead_upper_path",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 22
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "letterhead_lower_path",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 23
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "seal_sign_image_path",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 24
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "company_terms_text",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 25
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "print_paper_size",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 26
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "print_orientation",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 27
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "print_margin_top",
+    "data_type": "integer",
+    "is_nullable": "YES",
+    "ordinal_position": 28
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "print_margin_bottom",
+    "data_type": "integer",
+    "is_nullable": "YES",
+    "ordinal_position": 29
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "print_margin_left",
+    "data_type": "integer",
+    "is_nullable": "YES",
+    "ordinal_position": 30
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "print_margin_right",
+    "data_type": "integer",
+    "is_nullable": "YES",
+    "ordinal_position": 31
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "print_font_family",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 32
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "print_primary_color",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 33
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "print_show_letterhead",
+    "data_type": "boolean",
+    "is_nullable": "YES",
+    "ordinal_position": 34
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "print_letterhead_layout",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 35
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "print_letterhead_tagline",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 36
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "print_letterhead_show_address",
+    "data_type": "boolean",
+    "is_nullable": "YES",
+    "ordinal_position": 37
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "print_letterhead_show_contact",
+    "data_type": "boolean",
+    "is_nullable": "YES",
+    "ordinal_position": 38
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "print_letterhead_show_gst",
+    "data_type": "boolean",
+    "is_nullable": "YES",
+    "ordinal_position": 39
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "print_footer_left",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 40
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "print_footer_center",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 41
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "print_footer_right",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 42
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "print_show_page_numbers",
+    "data_type": "boolean",
+    "is_nullable": "YES",
+    "ordinal_position": 43
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "print_show_footer_line",
+    "data_type": "boolean",
+    "is_nullable": "YES",
+    "ordinal_position": 44
+  },
+  {
+    "table_name": "company_settings",
+    "column_name": "website",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 45
+  },
+  {
+    "table_name": "company_terms",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "company_terms",
+    "column_name": "code",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "company_terms",
+    "column_name": "name",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "company_terms",
+    "column_name": "body",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "company_terms",
+    "column_name": "sort_order",
+    "data_type": "integer",
+    "is_nullable": "NO",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "company_terms",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "company_terms",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "email_accounts",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "email_accounts",
+    "column_name": "user_id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "email_accounts",
+    "column_name": "display_name",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "email_accounts",
+    "column_name": "email_address",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "email_accounts",
+    "column_name": "provider",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "email_accounts",
+    "column_name": "auth_type",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "email_accounts",
+    "column_name": "imap_host",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "email_accounts",
+    "column_name": "imap_port",
+    "data_type": "integer",
+    "is_nullable": "NO",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "email_accounts",
+    "column_name": "imap_secure",
+    "data_type": "boolean",
+    "is_nullable": "NO",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "email_accounts",
+    "column_name": "smtp_host",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 10
+  },
+  {
+    "table_name": "email_accounts",
+    "column_name": "smtp_port",
+    "data_type": "integer",
+    "is_nullable": "NO",
+    "ordinal_position": 11
+  },
+  {
+    "table_name": "email_accounts",
+    "column_name": "smtp_secure",
+    "data_type": "boolean",
+    "is_nullable": "NO",
+    "ordinal_position": 12
+  },
+  {
+    "table_name": "email_accounts",
+    "column_name": "username",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 13
+  },
+  {
+    "table_name": "email_accounts",
+    "column_name": "password",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 14
+  },
+  {
+    "table_name": "email_accounts",
+    "column_name": "oauth_access_token",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 15
+  },
+  {
+    "table_name": "email_accounts",
+    "column_name": "oauth_refresh_token",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 16
+  },
+  {
+    "table_name": "email_accounts",
+    "column_name": "oauth_expires_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "ordinal_position": 17
+  },
+  {
+    "table_name": "email_accounts",
+    "column_name": "ai_provider",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 18
+  },
+  {
+    "table_name": "email_accounts",
+    "column_name": "ai_model",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 19
+  },
+  {
+    "table_name": "email_accounts",
+    "column_name": "ai_api_key",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 20
+  },
+  {
+    "table_name": "email_accounts",
+    "column_name": "signature",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 21
+  },
+  {
+    "table_name": "email_accounts",
+    "column_name": "accent_color",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 22
+  },
+  {
+    "table_name": "email_accounts",
+    "column_name": "is_default",
+    "data_type": "boolean",
+    "is_nullable": "NO",
+    "ordinal_position": 23
+  },
+  {
+    "table_name": "email_accounts",
+    "column_name": "last_sync_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "ordinal_position": 24
+  },
+  {
+    "table_name": "email_accounts",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 25
+  },
+  {
+    "table_name": "email_accounts",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 26
+  },
+  {
+    "table_name": "email_messages",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "email_messages",
+    "column_name": "account_id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "email_messages",
+    "column_name": "uid",
+    "data_type": "bigint",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "email_messages",
+    "column_name": "folder",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "email_messages",
+    "column_name": "message_id",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "email_messages",
+    "column_name": "subject",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "email_messages",
+    "column_name": "from_address",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "email_messages",
+    "column_name": "from_name",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "email_messages",
+    "column_name": "to_addresses",
+    "data_type": "jsonb",
+    "is_nullable": "NO",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "email_messages",
+    "column_name": "cc_addresses",
+    "data_type": "jsonb",
+    "is_nullable": "NO",
+    "ordinal_position": 10
+  },
+  {
+    "table_name": "email_messages",
+    "column_name": "bcc_addresses",
+    "data_type": "jsonb",
+    "is_nullable": "NO",
+    "ordinal_position": 11
+  },
+  {
+    "table_name": "email_messages",
+    "column_name": "body_text",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 12
+  },
+  {
+    "table_name": "email_messages",
+    "column_name": "body_html",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 13
+  },
+  {
+    "table_name": "email_messages",
+    "column_name": "snippet",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 14
+  },
+  {
+    "table_name": "email_messages",
+    "column_name": "email_date",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "ordinal_position": 15
+  },
+  {
+    "table_name": "email_messages",
+    "column_name": "is_read",
+    "data_type": "boolean",
+    "is_nullable": "NO",
+    "ordinal_position": 16
+  },
+  {
+    "table_name": "email_messages",
+    "column_name": "is_starred",
+    "data_type": "boolean",
+    "is_nullable": "NO",
+    "ordinal_position": 17
+  },
+  {
+    "table_name": "email_messages",
+    "column_name": "is_flagged",
+    "data_type": "boolean",
+    "is_nullable": "NO",
+    "ordinal_position": 18
+  },
+  {
+    "table_name": "email_messages",
+    "column_name": "has_attachments",
+    "data_type": "boolean",
+    "is_nullable": "NO",
+    "ordinal_position": 19
+  },
+  {
+    "table_name": "email_messages",
+    "column_name": "attachments",
+    "data_type": "jsonb",
+    "is_nullable": "NO",
+    "ordinal_position": 20
+  },
+  {
+    "table_name": "email_messages",
+    "column_name": "in_reply_to",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 21
+  },
+  {
+    "table_name": "email_messages",
+    "column_name": "reply_references",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 22
+  },
+  {
+    "table_name": "email_messages",
+    "column_name": "synced_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 23
+  },
+  {
+    "table_name": "finance_credit_note_lines",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "finance_credit_note_lines",
+    "column_name": "credit_note_id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "finance_credit_note_lines",
+    "column_name": "sort_order",
+    "data_type": "integer",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "finance_credit_note_lines",
+    "column_name": "product_master_item_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "finance_credit_note_lines",
+    "column_name": "item_description",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "finance_credit_note_lines",
+    "column_name": "unit_of_item",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "finance_credit_note_lines",
+    "column_name": "qty",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "finance_credit_note_lines",
+    "column_name": "unit_rate",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "finance_credit_note_lines",
+    "column_name": "line_discount",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "finance_credit_note_lines",
+    "column_name": "gst_rate",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 10
+  },
+  {
+    "table_name": "finance_credit_note_lines",
+    "column_name": "line_subtotal",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 11
+  },
+  {
+    "table_name": "finance_credit_note_lines",
+    "column_name": "line_tax",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 12
+  },
+  {
+    "table_name": "finance_credit_note_lines",
+    "column_name": "line_total",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 13
+  },
+  {
+    "table_name": "finance_credit_note_lines",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 14
+  },
+  {
+    "table_name": "finance_credit_note_lines",
+    "column_name": "extra",
+    "data_type": "jsonb",
+    "is_nullable": "NO",
+    "ordinal_position": 15
+  },
+  {
+    "table_name": "finance_credit_notes",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "finance_credit_notes",
+    "column_name": "credit_note_number",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "finance_credit_notes",
+    "column_name": "credit_note_date",
+    "data_type": "date",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "finance_credit_notes",
+    "column_name": "valid_until_date",
+    "data_type": "date",
+    "is_nullable": "NO",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "finance_credit_notes",
+    "column_name": "client_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "finance_credit_notes",
+    "column_name": "quotation_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "finance_credit_notes",
+    "column_name": "sales_order_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "finance_credit_notes",
+    "column_name": "proforma_invoice_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "finance_credit_notes",
+    "column_name": "invoice_type",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "finance_credit_notes",
+    "column_name": "credit_note_status",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 10
+  },
+  {
+    "table_name": "finance_credit_notes",
+    "column_name": "notes",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 11
+  },
+  {
+    "table_name": "finance_credit_notes",
+    "column_name": "terms_and_conditions",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 12
+  },
+  {
+    "table_name": "finance_credit_notes",
+    "column_name": "scope_of_work",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 13
+  },
+  {
+    "table_name": "finance_credit_notes",
+    "column_name": "bank_details",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 14
+  },
+  {
+    "table_name": "finance_credit_notes",
+    "column_name": "seal_and_sign",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 15
+  },
+  {
+    "table_name": "finance_credit_notes",
+    "column_name": "subtotal",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 16
+  },
+  {
+    "table_name": "finance_credit_notes",
+    "column_name": "tax_total",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 17
+  },
+  {
+    "table_name": "finance_credit_notes",
+    "column_name": "grand_total",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 18
+  },
+  {
+    "table_name": "finance_credit_notes",
+    "column_name": "created_by",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 19
+  },
+  {
+    "table_name": "finance_credit_notes",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 20
+  },
+  {
+    "table_name": "finance_credit_notes",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 21
+  },
+  {
+    "table_name": "finance_credit_notes",
+    "column_name": "extra",
+    "data_type": "jsonb",
+    "is_nullable": "NO",
+    "ordinal_position": 22
+  },
+  {
+    "table_name": "finance_customer_statement_lines",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "finance_customer_statement_lines",
+    "column_name": "customer_statement_id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "finance_customer_statement_lines",
+    "column_name": "sort_order",
+    "data_type": "integer",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "finance_customer_statement_lines",
+    "column_name": "product_master_item_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "finance_customer_statement_lines",
+    "column_name": "item_description",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "finance_customer_statement_lines",
+    "column_name": "unit_of_item",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "finance_customer_statement_lines",
+    "column_name": "qty",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "finance_customer_statement_lines",
+    "column_name": "unit_rate",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "finance_customer_statement_lines",
+    "column_name": "line_discount",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "finance_customer_statement_lines",
+    "column_name": "gst_rate",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 10
+  },
+  {
+    "table_name": "finance_customer_statement_lines",
+    "column_name": "line_subtotal",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 11
+  },
+  {
+    "table_name": "finance_customer_statement_lines",
+    "column_name": "line_tax",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 12
+  },
+  {
+    "table_name": "finance_customer_statement_lines",
+    "column_name": "line_total",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 13
+  },
+  {
+    "table_name": "finance_customer_statement_lines",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 14
+  },
+  {
+    "table_name": "finance_customer_statements",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "finance_customer_statements",
+    "column_name": "customer_statement_number",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "finance_customer_statements",
+    "column_name": "statement_date",
+    "data_type": "date",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "finance_customer_statements",
+    "column_name": "valid_until_date",
+    "data_type": "date",
+    "is_nullable": "NO",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "finance_customer_statements",
+    "column_name": "client_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "finance_customer_statements",
+    "column_name": "quotation_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "finance_customer_statements",
+    "column_name": "sales_order_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "finance_customer_statements",
+    "column_name": "proforma_invoice_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "finance_customer_statements",
+    "column_name": "invoice_type",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "finance_customer_statements",
+    "column_name": "customer_statement_status",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 10
+  },
+  {
+    "table_name": "finance_customer_statements",
+    "column_name": "notes",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 11
+  },
+  {
+    "table_name": "finance_customer_statements",
+    "column_name": "terms_and_conditions",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 12
+  },
+  {
+    "table_name": "finance_customer_statements",
+    "column_name": "scope_of_work",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 13
+  },
+  {
+    "table_name": "finance_customer_statements",
+    "column_name": "bank_details",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 14
+  },
+  {
+    "table_name": "finance_customer_statements",
+    "column_name": "seal_and_sign",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 15
+  },
+  {
+    "table_name": "finance_customer_statements",
+    "column_name": "subtotal",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 16
+  },
+  {
+    "table_name": "finance_customer_statements",
+    "column_name": "tax_total",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 17
+  },
+  {
+    "table_name": "finance_customer_statements",
+    "column_name": "grand_total",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 18
+  },
+  {
+    "table_name": "finance_customer_statements",
+    "column_name": "created_by",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 19
+  },
+  {
+    "table_name": "finance_customer_statements",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 20
+  },
+  {
+    "table_name": "finance_customer_statements",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 21
+  },
+  {
+    "table_name": "finance_proforma_invoice_lines",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "finance_proforma_invoice_lines",
+    "column_name": "proforma_invoice_id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "finance_proforma_invoice_lines",
+    "column_name": "sort_order",
+    "data_type": "integer",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "finance_proforma_invoice_lines",
+    "column_name": "product_master_item_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "finance_proforma_invoice_lines",
+    "column_name": "item_description",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "finance_proforma_invoice_lines",
+    "column_name": "unit_of_item",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "finance_proforma_invoice_lines",
+    "column_name": "qty",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "finance_proforma_invoice_lines",
+    "column_name": "unit_rate",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "finance_proforma_invoice_lines",
+    "column_name": "line_discount",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "finance_proforma_invoice_lines",
+    "column_name": "gst_rate",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 10
+  },
+  {
+    "table_name": "finance_proforma_invoice_lines",
+    "column_name": "line_subtotal",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 11
+  },
+  {
+    "table_name": "finance_proforma_invoice_lines",
+    "column_name": "line_tax",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 12
+  },
+  {
+    "table_name": "finance_proforma_invoice_lines",
+    "column_name": "line_total",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 13
+  },
+  {
+    "table_name": "finance_proforma_invoice_lines",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 14
+  },
+  {
+    "table_name": "finance_proforma_invoice_lines",
+    "column_name": "extra",
+    "data_type": "jsonb",
+    "is_nullable": "NO",
+    "ordinal_position": 15
+  },
+  {
+    "table_name": "finance_proforma_invoices",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "finance_proforma_invoices",
+    "column_name": "proforma_invoice_number",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "finance_proforma_invoices",
+    "column_name": "proforma_date",
+    "data_type": "date",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "finance_proforma_invoices",
+    "column_name": "valid_until_date",
+    "data_type": "date",
+    "is_nullable": "NO",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "finance_proforma_invoices",
+    "column_name": "client_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "finance_proforma_invoices",
+    "column_name": "sales_order_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "finance_proforma_invoices",
+    "column_name": "invoice_type",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "finance_proforma_invoices",
+    "column_name": "proforma_status",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "finance_proforma_invoices",
+    "column_name": "notes",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "finance_proforma_invoices",
+    "column_name": "terms_and_conditions",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 10
+  },
+  {
+    "table_name": "finance_proforma_invoices",
+    "column_name": "scope_of_work",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 11
+  },
+  {
+    "table_name": "finance_proforma_invoices",
+    "column_name": "bank_details",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 12
+  },
+  {
+    "table_name": "finance_proforma_invoices",
+    "column_name": "seal_and_sign",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 13
+  },
+  {
+    "table_name": "finance_proforma_invoices",
+    "column_name": "subtotal",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 14
+  },
+  {
+    "table_name": "finance_proforma_invoices",
+    "column_name": "tax_total",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 15
+  },
+  {
+    "table_name": "finance_proforma_invoices",
+    "column_name": "grand_total",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 16
+  },
+  {
+    "table_name": "finance_proforma_invoices",
+    "column_name": "created_by",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 17
+  },
+  {
+    "table_name": "finance_proforma_invoices",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 18
+  },
+  {
+    "table_name": "finance_proforma_invoices",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 19
+  },
+  {
+    "table_name": "finance_proforma_invoices",
+    "column_name": "extra",
+    "data_type": "jsonb",
+    "is_nullable": "NO",
+    "ordinal_position": 20
+  },
+  {
+    "table_name": "finance_quotation_lines",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "finance_quotation_lines",
+    "column_name": "quotation_id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "finance_quotation_lines",
+    "column_name": "sort_order",
+    "data_type": "integer",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "finance_quotation_lines",
+    "column_name": "product_master_item_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "finance_quotation_lines",
+    "column_name": "item_description",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "finance_quotation_lines",
+    "column_name": "unit_of_item",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "finance_quotation_lines",
+    "column_name": "qty",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "finance_quotation_lines",
+    "column_name": "unit_rate",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "finance_quotation_lines",
+    "column_name": "gst_rate",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "finance_quotation_lines",
+    "column_name": "line_subtotal",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 10
+  },
+  {
+    "table_name": "finance_quotation_lines",
+    "column_name": "line_tax",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 11
+  },
+  {
+    "table_name": "finance_quotation_lines",
+    "column_name": "line_total",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 12
+  },
+  {
+    "table_name": "finance_quotation_lines",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 13
+  },
+  {
+    "table_name": "finance_quotation_lines",
+    "column_name": "line_discount",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 14
+  },
+  {
+    "table_name": "finance_quotations",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "finance_quotations",
+    "column_name": "quotation_number",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "finance_quotations",
+    "column_name": "quotation_date",
+    "data_type": "date",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "finance_quotations",
+    "column_name": "expiry_date",
+    "data_type": "date",
+    "is_nullable": "NO",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "finance_quotations",
+    "column_name": "client_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "finance_quotations",
+    "column_name": "quotation_type",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "finance_quotations",
+    "column_name": "notes",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "finance_quotations",
+    "column_name": "terms_and_conditions",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "finance_quotations",
+    "column_name": "scope_of_work",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "finance_quotations",
+    "column_name": "bank_details",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 10
+  },
+  {
+    "table_name": "finance_quotations",
+    "column_name": "seal_and_sign",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 11
+  },
+  {
+    "table_name": "finance_quotations",
+    "column_name": "subtotal",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 12
+  },
+  {
+    "table_name": "finance_quotations",
+    "column_name": "tax_total",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 13
+  },
+  {
+    "table_name": "finance_quotations",
+    "column_name": "grand_total",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 14
+  },
+  {
+    "table_name": "finance_quotations",
+    "column_name": "created_by",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 15
+  },
+  {
+    "table_name": "finance_quotations",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 16
+  },
+  {
+    "table_name": "finance_quotations",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 17
+  },
+  {
+    "table_name": "finance_quotations",
+    "column_name": "quotation_status",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 18
+  },
+  {
+    "table_name": "finance_sales_order_lines",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "finance_sales_order_lines",
+    "column_name": "sales_order_id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "finance_sales_order_lines",
+    "column_name": "sort_order",
+    "data_type": "integer",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "finance_sales_order_lines",
+    "column_name": "product_master_item_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "finance_sales_order_lines",
+    "column_name": "item_description",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "finance_sales_order_lines",
+    "column_name": "unit_of_item",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "finance_sales_order_lines",
+    "column_name": "qty",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "finance_sales_order_lines",
+    "column_name": "unit_rate",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "finance_sales_order_lines",
+    "column_name": "line_discount",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "finance_sales_order_lines",
+    "column_name": "gst_rate",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 10
+  },
+  {
+    "table_name": "finance_sales_order_lines",
+    "column_name": "line_subtotal",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 11
+  },
+  {
+    "table_name": "finance_sales_order_lines",
+    "column_name": "line_tax",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 12
+  },
+  {
+    "table_name": "finance_sales_order_lines",
+    "column_name": "line_total",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 13
+  },
+  {
+    "table_name": "finance_sales_order_lines",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 14
+  },
+  {
+    "table_name": "finance_sales_orders",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "finance_sales_orders",
+    "column_name": "sales_order_number",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "finance_sales_orders",
+    "column_name": "order_date",
+    "data_type": "date",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "finance_sales_orders",
+    "column_name": "expected_delivery_date",
+    "data_type": "date",
+    "is_nullable": "NO",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "finance_sales_orders",
+    "column_name": "client_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "finance_sales_orders",
+    "column_name": "quotation_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "finance_sales_orders",
+    "column_name": "order_type",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "finance_sales_orders",
+    "column_name": "order_status",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "finance_sales_orders",
+    "column_name": "notes",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "finance_sales_orders",
+    "column_name": "terms_and_conditions",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 10
+  },
+  {
+    "table_name": "finance_sales_orders",
+    "column_name": "scope_of_work",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 11
+  },
+  {
+    "table_name": "finance_sales_orders",
+    "column_name": "bank_details",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 12
+  },
+  {
+    "table_name": "finance_sales_orders",
+    "column_name": "seal_and_sign",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 13
+  },
+  {
+    "table_name": "finance_sales_orders",
+    "column_name": "subtotal",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 14
+  },
+  {
+    "table_name": "finance_sales_orders",
+    "column_name": "tax_total",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 15
+  },
+  {
+    "table_name": "finance_sales_orders",
+    "column_name": "grand_total",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 16
+  },
+  {
+    "table_name": "finance_sales_orders",
+    "column_name": "created_by",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 17
+  },
+  {
+    "table_name": "finance_sales_orders",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 18
+  },
+  {
+    "table_name": "finance_sales_orders",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 19
+  },
+  {
+    "table_name": "finance_tax_invoice_lines",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "finance_tax_invoice_lines",
+    "column_name": "tax_invoice_id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "finance_tax_invoice_lines",
+    "column_name": "sort_order",
+    "data_type": "integer",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "finance_tax_invoice_lines",
+    "column_name": "product_master_item_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "finance_tax_invoice_lines",
+    "column_name": "item_description",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "finance_tax_invoice_lines",
+    "column_name": "unit_of_item",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "finance_tax_invoice_lines",
+    "column_name": "qty",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "finance_tax_invoice_lines",
+    "column_name": "unit_rate",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "finance_tax_invoice_lines",
+    "column_name": "line_discount",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "finance_tax_invoice_lines",
+    "column_name": "gst_rate",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 10
+  },
+  {
+    "table_name": "finance_tax_invoice_lines",
+    "column_name": "line_subtotal",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 11
+  },
+  {
+    "table_name": "finance_tax_invoice_lines",
+    "column_name": "line_tax",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 12
+  },
+  {
+    "table_name": "finance_tax_invoice_lines",
+    "column_name": "line_total",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 13
+  },
+  {
+    "table_name": "finance_tax_invoice_lines",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 14
+  },
+  {
+    "table_name": "finance_tax_invoice_lines",
+    "column_name": "extra",
+    "data_type": "jsonb",
+    "is_nullable": "NO",
+    "ordinal_position": 15
+  },
+  {
+    "table_name": "finance_tax_invoices",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "finance_tax_invoices",
+    "column_name": "tax_invoice_number",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "finance_tax_invoices",
+    "column_name": "tax_date",
+    "data_type": "date",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "finance_tax_invoices",
+    "column_name": "valid_until_date",
+    "data_type": "date",
+    "is_nullable": "NO",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "finance_tax_invoices",
+    "column_name": "client_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "finance_tax_invoices",
+    "column_name": "quotation_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "finance_tax_invoices",
+    "column_name": "sales_order_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "finance_tax_invoices",
+    "column_name": "proforma_invoice_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "finance_tax_invoices",
+    "column_name": "invoice_type",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "finance_tax_invoices",
+    "column_name": "tax_status",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 10
+  },
+  {
+    "table_name": "finance_tax_invoices",
+    "column_name": "notes",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 11
+  },
+  {
+    "table_name": "finance_tax_invoices",
+    "column_name": "terms_and_conditions",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 12
+  },
+  {
+    "table_name": "finance_tax_invoices",
+    "column_name": "scope_of_work",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 13
+  },
+  {
+    "table_name": "finance_tax_invoices",
+    "column_name": "bank_details",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 14
+  },
+  {
+    "table_name": "finance_tax_invoices",
+    "column_name": "seal_and_sign",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 15
+  },
+  {
+    "table_name": "finance_tax_invoices",
+    "column_name": "subtotal",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 16
+  },
+  {
+    "table_name": "finance_tax_invoices",
+    "column_name": "tax_total",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 17
+  },
+  {
+    "table_name": "finance_tax_invoices",
+    "column_name": "grand_total",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 18
+  },
+  {
+    "table_name": "finance_tax_invoices",
+    "column_name": "created_by",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 19
+  },
+  {
+    "table_name": "finance_tax_invoices",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 20
+  },
+  {
+    "table_name": "finance_tax_invoices",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 21
+  },
+  {
+    "table_name": "finance_tax_invoices",
+    "column_name": "extra",
+    "data_type": "jsonb",
+    "is_nullable": "NO",
+    "ordinal_position": 22
+  },
+  {
+    "table_name": "gst_rates",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "gst_rates",
+    "column_name": "rate",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "gst_rates",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "is_code_files",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "is_code_files",
+    "column_name": "is_code_id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "is_code_files",
+    "column_name": "storage_path",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "is_code_files",
+    "column_name": "file_name",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "is_code_files",
+    "column_name": "created_by",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "is_code_files",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "is_code_master_options",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "is_code_master_options",
+    "column_name": "category",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "is_code_master_options",
+    "column_name": "value",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "is_code_master_options",
+    "column_name": "label",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "is_code_master_options",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "is_codes",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "is_codes",
+    "column_name": "is_number",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "is_codes",
+    "column_name": "revision_year",
+    "data_type": "integer",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "is_codes",
+    "column_name": "reaffirmation_year",
+    "data_type": "integer",
+    "is_nullable": "YES",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "is_codes",
+    "column_name": "amendment_number",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "is_codes",
+    "column_name": "aspect_of_is",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "is_codes",
+    "column_name": "product_manual_number",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "is_codes",
+    "column_name": "is_code_title",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "is_codes",
+    "column_name": "testing_charges",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 10
+  },
+  {
+    "table_name": "is_codes",
+    "column_name": "unit_of_is",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 11
+  },
+  {
+    "table_name": "is_codes",
+    "column_name": "mmf_large_scale",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 12
+  },
+  {
+    "table_name": "is_codes",
+    "column_name": "mmf_medium_scale",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 13
+  },
+  {
+    "table_name": "is_codes",
+    "column_name": "mmf_small_scale",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 14
+  },
+  {
+    "table_name": "is_codes",
+    "column_name": "mmf_micro_scale",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 15
+  },
+  {
+    "table_name": "is_codes",
+    "column_name": "slab_1_quantity",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 16
+  },
+  {
+    "table_name": "is_codes",
+    "column_name": "slab_1_rate",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 17
+  },
+  {
+    "table_name": "is_codes",
+    "column_name": "slab_2_quantity",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 18
+  },
+  {
+    "table_name": "is_codes",
+    "column_name": "slab_2_rate",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 19
+  },
+  {
+    "table_name": "is_codes",
+    "column_name": "slab_3_quantity",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 20
+  },
+  {
+    "table_name": "is_codes",
+    "column_name": "slab_3_rate",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 21
+  },
+  {
+    "table_name": "is_codes",
+    "column_name": "created_by",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 22
+  },
+  {
+    "table_name": "is_codes",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 23
+  },
+  {
+    "table_name": "is_codes",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 24
+  },
+  {
+    "table_name": "is_codes",
+    "column_name": "title",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 25
+  },
+  {
+    "table_name": "is_codes",
+    "column_name": "aspect",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 26
+  },
+  {
+    "table_name": "is_codes",
+    "column_name": "remarks",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 27
+  },
+  {
+    "table_name": "is_codes",
+    "column_name": "updated_by",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 28
+  },
+  {
+    "table_name": "is_codes",
+    "column_name": "archived_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "ordinal_position": 29
+  },
+  {
+    "table_name": "is_codes",
+    "column_name": "archived_by",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 30
+  },
+  {
+    "table_name": "iso_projects",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "iso_projects",
+    "column_name": "client_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "iso_projects",
+    "column_name": "project_kind",
+    "data_type": "USER-DEFINED",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "iso_projects",
+    "column_name": "accrediting_body",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "iso_projects",
+    "column_name": "standard",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "iso_projects",
+    "column_name": "title",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "iso_projects",
+    "column_name": "status",
+    "data_type": "USER-DEFINED",
+    "is_nullable": "NO",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "iso_projects",
+    "column_name": "certificate_number",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "iso_projects",
+    "column_name": "start_date",
+    "data_type": "date",
+    "is_nullable": "YES",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "iso_projects",
+    "column_name": "target_date",
+    "data_type": "date",
+    "is_nullable": "YES",
+    "ordinal_position": 10
+  },
+  {
+    "table_name": "iso_projects",
+    "column_name": "notes",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 11
+  },
+  {
+    "table_name": "iso_projects",
+    "column_name": "created_by",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 12
+  },
+  {
+    "table_name": "iso_projects",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 13
+  },
+  {
+    "table_name": "iso_projects",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 14
+  },
+  {
+    "table_name": "lab_accreditations",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "lab_accreditations",
+    "column_name": "accreditation_body",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "lab_accreditations",
+    "column_name": "accreditation_number",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "lab_accreditations",
+    "column_name": "standard",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "lab_accreditations",
+    "column_name": "valid_from",
+    "data_type": "date",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "lab_accreditations",
+    "column_name": "valid_until",
+    "data_type": "date",
+    "is_nullable": "YES",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "lab_accreditations",
+    "column_name": "scope_document_path",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "lab_accreditations",
+    "column_name": "remarks",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "lab_accreditations",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "lab_accreditations",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "ordinal_position": 10
+  },
+  {
+    "table_name": "lab_accreditations",
+    "column_name": "certificate_file_path",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 11
+  },
+  {
+    "table_name": "lab_accreditations",
+    "column_name": "logo_file_path",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 12
+  },
+  {
+    "table_name": "lab_documents",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "lab_documents",
+    "column_name": "name",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "lab_documents",
+    "column_name": "category",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "lab_documents",
+    "column_name": "file_path",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "lab_documents",
+    "column_name": "file_name",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "lab_documents",
+    "column_name": "file_size",
+    "data_type": "bigint",
+    "is_nullable": "YES",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "lab_documents",
+    "column_name": "mime_type",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "lab_documents",
+    "column_name": "expiry_date",
+    "data_type": "date",
+    "is_nullable": "YES",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "lab_documents",
+    "column_name": "remarks",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "lab_documents",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "ordinal_position": 10
+  },
+  {
+    "table_name": "lab_documents",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "ordinal_position": 11
+  },
+  {
+    "table_name": "lab_letterheads",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "lab_letterheads",
+    "column_name": "name",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "lab_letterheads",
+    "column_name": "is_default",
+    "data_type": "boolean",
+    "is_nullable": "YES",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "lab_letterheads",
+    "column_name": "header_html",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "lab_letterheads",
+    "column_name": "footer_html",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "lab_letterheads",
+    "column_name": "logo_path",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "lab_letterheads",
+    "column_name": "watermark_path",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "lab_letterheads",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "lab_letterheads",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "lab_letterheads",
+    "column_name": "template_type",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 10
+  },
+  {
+    "table_name": "lab_letterheads",
+    "column_name": "title",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 11
+  },
+  {
+    "table_name": "lab_letterheads",
+    "column_name": "file_path",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 12
+  },
+  {
+    "table_name": "lab_letterheads",
+    "column_name": "content_text",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 13
+  },
+  {
+    "table_name": "lab_master_options",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "lab_master_options",
+    "column_name": "category",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "lab_master_options",
+    "column_name": "value",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "lab_master_options",
+    "column_name": "label",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "lab_master_options",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "lab_prefixes",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "lab_prefixes",
+    "column_name": "name",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "lab_prefixes",
+    "column_name": "prefix",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "lab_prefixes",
+    "column_name": "last_number",
+    "data_type": "integer",
+    "is_nullable": "YES",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "lab_prefixes",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "lab_prefixes",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "lab_settings",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "lab_settings",
+    "column_name": "lab_name",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "lab_settings",
+    "column_name": "lab_type",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "lab_settings",
+    "column_name": "lab_scale",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "lab_settings",
+    "column_name": "contact_person",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "lab_settings",
+    "column_name": "designation",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "lab_settings",
+    "column_name": "phone",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "lab_settings",
+    "column_name": "email",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "lab_settings",
+    "column_name": "address",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "lab_settings",
+    "column_name": "pin_code",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 10
+  },
+  {
+    "table_name": "lab_settings",
+    "column_name": "district",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 11
+  },
+  {
+    "table_name": "lab_settings",
+    "column_name": "state",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 12
+  },
+  {
+    "table_name": "lab_settings",
+    "column_name": "country",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 13
+  },
+  {
+    "table_name": "lab_settings",
+    "column_name": "country_code",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 14
+  },
+  {
+    "table_name": "lab_settings",
+    "column_name": "website",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 15
+  },
+  {
+    "table_name": "lab_settings",
+    "column_name": "currency",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 16
+  },
+  {
+    "table_name": "lab_settings",
+    "column_name": "date_format",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 17
+  },
+  {
+    "table_name": "lab_settings",
+    "column_name": "time_format",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 18
+  },
+  {
+    "table_name": "lab_settings",
+    "column_name": "logo_path",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 19
+  },
+  {
+    "table_name": "lab_settings",
+    "column_name": "theme",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 20
+  },
+  {
+    "table_name": "lab_settings",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "ordinal_position": 21
+  },
+  {
+    "table_name": "lab_settings",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "ordinal_position": 22
+  },
+  {
+    "table_name": "lab_settings",
+    "column_name": "seal_sign_path",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 23
+  },
+  {
+    "table_name": "lab_settings",
+    "column_name": "bank_name",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 24
+  },
+  {
+    "table_name": "lab_settings",
+    "column_name": "branch_name",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 25
+  },
+  {
+    "table_name": "lab_settings",
+    "column_name": "account_number",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 26
+  },
+  {
+    "table_name": "lab_settings",
+    "column_name": "ifsc",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 27
+  },
+  {
+    "table_name": "lab_settings",
+    "column_name": "upi",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 28
+  },
+  {
+    "table_name": "lab_settings",
+    "column_name": "cheque_copy_path",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 29
+  },
+  {
+    "table_name": "lab_settings",
+    "column_name": "qr_code_path",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 30
+  },
+  {
+    "table_name": "lab_settings",
+    "column_name": "report_scope_templates",
+    "data_type": "jsonb",
+    "is_nullable": "YES",
+    "ordinal_position": 31
+  },
+  {
+    "table_name": "lab_settings",
+    "column_name": "print_settings",
+    "data_type": "jsonb",
+    "is_nullable": "YES",
+    "ordinal_position": 32
+  },
+  {
+    "table_name": "lab_settings",
+    "column_name": "gst_number",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 33
+  },
+  {
+    "table_name": "lab_settings",
+    "column_name": "document_templates",
+    "data_type": "jsonb",
+    "is_nullable": "YES",
+    "ordinal_position": 34
+  },
+  {
+    "table_name": "license_surveillance",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "license_surveillance",
+    "column_name": "bis_project_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "license_surveillance",
+    "column_name": "client_id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "license_surveillance",
+    "column_name": "is_code_id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "license_surveillance",
+    "column_name": "cm_l_digits",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "license_surveillance",
+    "column_name": "project_kind",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "license_surveillance",
+    "column_name": "surveillance_date",
+    "data_type": "date",
+    "is_nullable": "NO",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "license_surveillance",
+    "column_name": "allotted_employee_name",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "license_surveillance",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "license_surveillance",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 10
+  },
+  {
+    "table_name": "module_access_rules",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "module_access_rules",
+    "column_name": "subject_type",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "module_access_rules",
+    "column_name": "subject_key",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "module_access_rules",
+    "column_name": "subject_label",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "module_access_rules",
+    "column_name": "module_key",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "module_access_rules",
+    "column_name": "access_level",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "module_access_rules",
+    "column_name": "updated_by",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "module_access_rules",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "module_access_rules",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "portal_roles",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "portal_roles",
+    "column_name": "slug",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "portal_roles",
+    "column_name": "label",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "portal_roles",
+    "column_name": "is_system",
+    "data_type": "boolean",
+    "is_nullable": "NO",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "portal_roles",
+    "column_name": "sort_order",
+    "data_type": "integer",
+    "is_nullable": "NO",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "portal_roles",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "portal_secret_access_log",
+    "column_name": "id",
+    "data_type": "bigint",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "portal_secret_access_log",
+    "column_name": "project_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "portal_secret_access_log",
+    "column_name": "action",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "portal_secret_access_log",
+    "column_name": "user_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "portal_secret_access_log",
+    "column_name": "via",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "portal_secret_access_log",
+    "column_name": "at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "product_item_categories",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "product_item_categories",
+    "column_name": "name",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "product_item_categories",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "product_makes",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "product_makes",
+    "column_name": "name",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "product_makes",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "product_master_items",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "product_master_items",
+    "column_name": "category",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "product_master_items",
+    "column_name": "item_code",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "product_master_items",
+    "column_name": "name",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "product_master_items",
+    "column_name": "description",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "product_master_items",
+    "column_name": "make",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "product_master_items",
+    "column_name": "unit_of_item",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "product_master_items",
+    "column_name": "hsn_code",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "product_master_items",
+    "column_name": "gst_rate",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "product_master_items",
+    "column_name": "mrp",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 10
+  },
+  {
+    "table_name": "product_master_items",
+    "column_name": "sale_price",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 11
+  },
+  {
+    "table_name": "product_master_items",
+    "column_name": "purchase_price",
+    "data_type": "numeric",
+    "is_nullable": "YES",
+    "ordinal_position": 12
+  },
+  {
+    "table_name": "product_master_items",
+    "column_name": "opening_stock",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 13
+  },
+  {
+    "table_name": "product_master_items",
+    "column_name": "low_stock_value",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 14
+  },
+  {
+    "table_name": "product_master_items",
+    "column_name": "created_by",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 15
+  },
+  {
+    "table_name": "product_master_items",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 16
+  },
+  {
+    "table_name": "product_master_items",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 17
+  },
+  {
+    "table_name": "products_services_master",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "products_services_master",
+    "column_name": "item_type",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "products_services_master",
+    "column_name": "item_code",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "products_services_master",
+    "column_name": "item_category",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "products_services_master",
+    "column_name": "item_name",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "products_services_master",
+    "column_name": "item_description",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "products_services_master",
+    "column_name": "hsn_code",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "products_services_master",
+    "column_name": "sale_price",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "products_services_master",
+    "column_name": "purchase_price",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "products_services_master",
+    "column_name": "gst_percent",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 10
+  },
+  {
+    "table_name": "products_services_master",
+    "column_name": "discount",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 11
+  },
+  {
+    "table_name": "products_services_master",
+    "column_name": "unit_of_measurement",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 12
+  },
+  {
+    "table_name": "products_services_master",
+    "column_name": "make",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 13
+  },
+  {
+    "table_name": "products_services_master",
+    "column_name": "opening_stock",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 14
+  },
+  {
+    "table_name": "products_services_master",
+    "column_name": "low_stock_alert",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 15
+  },
+  {
+    "table_name": "products_services_master",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "ordinal_position": 16
+  },
+  {
+    "table_name": "products_services_master",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "ordinal_position": 17
+  },
+  {
+    "table_name": "products_services_master",
+    "column_name": "created_by",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 18
+  },
+  {
+    "table_name": "products_services_master",
+    "column_name": "updated_by",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 19
+  },
+  {
+    "table_name": "products_services_master",
+    "column_name": "archived_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "ordinal_position": 20
+  },
+  {
+    "table_name": "products_services_master",
+    "column_name": "archived_by",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 21
+  },
+  {
+    "table_name": "profiles",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "profiles",
+    "column_name": "full_name",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "profiles",
+    "column_name": "role",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "profiles",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "profiles",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "profiles",
+    "column_name": "module_access",
+    "data_type": "jsonb",
+    "is_nullable": "NO",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "profiles",
+    "column_name": "mobile",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "project_documents",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "project_documents",
+    "column_name": "bis_project_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "project_documents",
+    "column_name": "iso_project_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "project_documents",
+    "column_name": "storage_path",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "project_documents",
+    "column_name": "file_name",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "project_documents",
+    "column_name": "created_by",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "project_documents",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "quotation_line_items",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "quotation_line_items",
+    "column_name": "quotation_id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "quotation_line_items",
+    "column_name": "line_no",
+    "data_type": "integer",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "quotation_line_items",
+    "column_name": "description",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "quotation_line_items",
+    "column_name": "details",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "quotation_line_items",
+    "column_name": "make",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "quotation_line_items",
+    "column_name": "hsn_sac",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "quotation_line_items",
+    "column_name": "item_code",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "quotation_line_items",
+    "column_name": "quantity",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "quotation_line_items",
+    "column_name": "unit",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 10
+  },
+  {
+    "table_name": "quotation_line_items",
+    "column_name": "rate",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 11
+  },
+  {
+    "table_name": "quotation_line_items",
+    "column_name": "amount",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 12
+  },
+  {
+    "table_name": "quotation_line_items",
+    "column_name": "discount_percent",
+    "data_type": "numeric",
+    "is_nullable": "YES",
+    "ordinal_position": 13
+  },
+  {
+    "table_name": "quotation_line_items",
+    "column_name": "gst_percent",
+    "data_type": "numeric",
+    "is_nullable": "YES",
+    "ordinal_position": 14
+  },
+  {
+    "table_name": "quotation_line_items",
+    "column_name": "line_remarks",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 15
+  },
+  {
+    "table_name": "quotation_line_items",
+    "column_name": "delivery_period",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 16
+  },
+  {
+    "table_name": "quotation_line_items",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "ordinal_position": 17
+  },
+  {
+    "table_name": "quotation_notes",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "quotation_notes",
+    "column_name": "label",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "quotation_notes",
+    "column_name": "content",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "quotation_notes",
+    "column_name": "sort_order",
+    "data_type": "integer",
+    "is_nullable": "YES",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "quotation_notes",
+    "column_name": "is_default",
+    "data_type": "boolean",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "quotation_notes",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "quotation_notes",
+    "column_name": "document_kind",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "quotation_remarks",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "quotation_remarks",
+    "column_name": "label",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "quotation_remarks",
+    "column_name": "content",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "quotation_remarks",
+    "column_name": "sort_order",
+    "data_type": "integer",
+    "is_nullable": "YES",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "quotation_remarks",
+    "column_name": "is_default",
+    "data_type": "boolean",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "quotation_remarks",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "quotation_terms_conditions",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "quotation_terms_conditions",
+    "column_name": "label",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "quotation_terms_conditions",
+    "column_name": "content",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "quotation_terms_conditions",
+    "column_name": "sort_order",
+    "data_type": "integer",
+    "is_nullable": "YES",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "quotation_terms_conditions",
+    "column_name": "is_default",
+    "data_type": "boolean",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "quotation_terms_conditions",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "quotation_terms_conditions",
+    "column_name": "document_kind",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "quotations",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "quotations",
+    "column_name": "quotation_number",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "quotations",
+    "column_name": "quotation_date",
+    "data_type": "date",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "quotations",
+    "column_name": "valid_until",
+    "data_type": "date",
+    "is_nullable": "YES",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "quotations",
+    "column_name": "client_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "quotations",
+    "column_name": "client_name",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "quotations",
+    "column_name": "contact_person",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "quotations",
+    "column_name": "contact_email",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "quotations",
+    "column_name": "contact_mobile",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "quotations",
+    "column_name": "client_address",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 10
+  },
+  {
+    "table_name": "quotations",
+    "column_name": "client_gst_number",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 11
+  },
+  {
+    "table_name": "quotations",
+    "column_name": "subject",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 12
+  },
+  {
+    "table_name": "quotations",
+    "column_name": "reference_no",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 13
+  },
+  {
+    "table_name": "quotations",
+    "column_name": "status",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 14
+  },
+  {
+    "table_name": "quotations",
+    "column_name": "payment_terms",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 15
+  },
+  {
+    "table_name": "quotations",
+    "column_name": "notes",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 16
+  },
+  {
+    "table_name": "quotations",
+    "column_name": "remarks",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 17
+  },
+  {
+    "table_name": "quotations",
+    "column_name": "signature_text",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 18
+  },
+  {
+    "table_name": "quotations",
+    "column_name": "signature_image_path",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 19
+  },
+  {
+    "table_name": "quotations",
+    "column_name": "discount_percent",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 20
+  },
+  {
+    "table_name": "quotations",
+    "column_name": "discount_amount",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 21
+  },
+  {
+    "table_name": "quotations",
+    "column_name": "transportation_charges",
+    "data_type": "numeric",
+    "is_nullable": "YES",
+    "ordinal_position": 22
+  },
+  {
+    "table_name": "quotations",
+    "column_name": "packaging_charges",
+    "data_type": "numeric",
+    "is_nullable": "YES",
+    "ordinal_position": 23
+  },
+  {
+    "table_name": "quotations",
+    "column_name": "gst_percent",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 24
+  },
+  {
+    "table_name": "quotations",
+    "column_name": "gst_amount",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 25
+  },
+  {
+    "table_name": "quotations",
+    "column_name": "subtotal",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 26
+  },
+  {
+    "table_name": "quotations",
+    "column_name": "grand_total",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 27
+  },
+  {
+    "table_name": "quotations",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "ordinal_position": 28
+  },
+  {
+    "table_name": "quotations",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "ordinal_position": 29
+  },
+  {
+    "table_name": "sale_document_signature_defaults",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "sale_document_signature_defaults",
+    "column_name": "document_kind",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "sale_document_signature_defaults",
+    "column_name": "signature_text",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "sale_document_signature_defaults",
+    "column_name": "signature_image_path",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "sale_document_signature_defaults",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "service_offerings",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "service_offerings",
+    "column_name": "name",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "service_offerings",
+    "column_name": "category",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "service_offerings",
+    "column_name": "description",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "service_offerings",
+    "column_name": "is_active",
+    "data_type": "boolean",
+    "is_nullable": "NO",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "service_offerings",
+    "column_name": "sort_order",
+    "data_type": "integer",
+    "is_nullable": "NO",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "service_offerings",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "service_offerings",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "test_parameter_units",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "test_parameter_units",
+    "column_name": "name",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "test_parameter_units",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "test_parameters",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "test_parameters",
+    "column_name": "is_code_id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "test_parameters",
+    "column_name": "test_name",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "test_parameters",
+    "column_name": "clause_no",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "test_parameters",
+    "column_name": "test_method",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "test_parameters",
+    "column_name": "unit",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "test_parameters",
+    "column_name": "specified_value",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "test_parameters",
+    "column_name": "created_by",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "test_parameters",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "test_parameters",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 10
+  },
+  {
+    "table_name": "test_parameters",
+    "column_name": "item_name",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 11
+  },
+  {
+    "table_name": "test_parameters",
+    "column_name": "specific_requirement",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 12
+  },
+  {
+    "table_name": "test_parameters",
+    "column_name": "unit_value",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 13
+  },
+  {
+    "table_name": "test_parameters",
+    "column_name": "uncertainty_mu",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 14
+  },
+  {
+    "table_name": "test_parameters",
+    "column_name": "acceptance_criteria",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 15
+  },
+  {
+    "table_name": "test_parameters",
+    "column_name": "is_code_label",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 16
+  },
+  {
+    "table_name": "test_parameters",
+    "column_name": "accreditation",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 17
+  },
+  {
+    "table_name": "test_parameters",
+    "column_name": "under_accreditation_ids",
+    "data_type": "ARRAY",
+    "is_nullable": "YES",
+    "ordinal_position": 18
+  },
+  {
+    "table_name": "test_parameters",
+    "column_name": "department",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 19
+  },
+  {
+    "table_name": "test_parameters",
+    "column_name": "designation",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 20
+  },
+  {
+    "table_name": "test_parameters",
+    "column_name": "uncertainty_calculation_data",
+    "data_type": "jsonb",
+    "is_nullable": "YES",
+    "ordinal_position": 21
+  },
+  {
+    "table_name": "test_parameters",
+    "column_name": "uncertainty_mu_history",
+    "data_type": "jsonb",
+    "is_nullable": "YES",
+    "ordinal_position": 22
+  },
+  {
+    "table_name": "test_parameters",
+    "column_name": "updated_by",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 23
+  },
+  {
+    "table_name": "test_parameters",
+    "column_name": "archived_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "ordinal_position": 24
+  },
+  {
+    "table_name": "test_parameters",
+    "column_name": "archived_by",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 25
+  },
+  {
+    "table_name": "transactions",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "transactions",
+    "column_name": "client_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "transactions",
+    "column_name": "amount",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "transactions",
+    "column_name": "currency",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "transactions",
+    "column_name": "txn_date",
+    "data_type": "date",
+    "is_nullable": "NO",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "transactions",
+    "column_name": "status",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "transactions",
+    "column_name": "description",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "transactions",
+    "column_name": "notes",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "transactions",
+    "column_name": "created_by",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "transactions",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 10
+  },
+  {
+    "table_name": "transactions",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 11
+  },
+  {
+    "table_name": "transactions",
+    "column_name": "payment_flow",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 12
+  },
+  {
+    "table_name": "transactions",
+    "column_name": "mode_of_payment",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 13
+  },
+  {
+    "table_name": "transactions",
+    "column_name": "receipt_number",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 14
+  },
+  {
+    "table_name": "transactions",
+    "column_name": "extra",
+    "data_type": "jsonb",
+    "is_nullable": "NO",
+    "ordinal_position": 15
+  },
+  {
+    "table_name": "user_profiles",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "user_profiles",
+    "column_name": "full_name",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "user_profiles",
+    "column_name": "email",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "user_profiles",
+    "column_name": "designation",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "user_profiles",
+    "column_name": "department_name",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "user_profiles",
+    "column_name": "division",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "user_profiles",
+    "column_name": "status",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "user_profiles",
+    "column_name": "mobile",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "user_profiles",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "user_profiles",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 10
+  },
+  {
+    "table_name": "user_profiles",
+    "column_name": "role",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 11
+  },
+  {
+    "table_name": "website_news",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "website_news",
+    "column_name": "title",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "website_news",
+    "column_name": "content",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "website_news",
+    "column_name": "image_url",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "website_news",
+    "column_name": "published_date",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "website_news",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "website_services",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "website_services",
+    "column_name": "title",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "website_services",
+    "column_name": "description",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "website_services",
+    "column_name": "icon_name",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "website_services",
+    "column_name": "is_active",
+    "data_type": "boolean",
+    "is_nullable": "NO",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "website_services",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "website_settings",
+    "column_name": "id",
+    "data_type": "integer",
+    "is_nullable": "NO",
+    "ordinal_position": 1
+  },
+  {
+    "table_name": "website_settings",
+    "column_name": "company_name",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 2
+  },
+  {
+    "table_name": "website_settings",
+    "column_name": "logo_url",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 3
+  },
+  {
+    "table_name": "website_settings",
+    "column_name": "contact_email",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 4
+  },
+  {
+    "table_name": "website_settings",
+    "column_name": "contact_phone",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 5
+  },
+  {
+    "table_name": "website_settings",
+    "column_name": "address",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 6
+  },
+  {
+    "table_name": "website_settings",
+    "column_name": "about_text",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 7
+  },
+  {
+    "table_name": "website_settings",
+    "column_name": "facebook_url",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 8
+  },
+  {
+    "table_name": "website_settings",
+    "column_name": "linkedin_url",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 9
+  },
+  {
+    "table_name": "website_settings",
+    "column_name": "instagram_url",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 10
+  },
+  {
+    "table_name": "website_settings",
+    "column_name": "twitter_url",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "ordinal_position": 11
+  },
+  {
+    "table_name": "website_settings",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "ordinal_position": 12
+  }
+]

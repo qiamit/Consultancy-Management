@@ -7,7 +7,7 @@ Merged **QE Consultancy** extension (Manak Test Request, IS Code fetch, copy/pas
 | [`qe-consultancy-chrome`](qe-consultancy-chrome/) | Chrome, Edge, Brave, and other Chromium browsers |
 | [`qe-consultancy-safari`](qe-consultancy-safari/) | Safari 16.4+ (Xcode wrapper in `macos/` and `macos-generated/`) |
 
-**Version:** `2.2.32` (see each folder’s `manifest.json`).
+**Version:** `2.2.33` (see each folder’s `manifest.json`).
 
 ## Allowed app origins
 
@@ -15,9 +15,6 @@ The extension injects `bridge.js` only on Consultancy app pages (not on Manak). 
 
 - `http://localhost` / `127.0.0.1` (any port)
 - `https://qengineering.in`, `https://www.qengineering.in`, `https://*.qengineering.in`
-- `https://*.up.railway.app` and `https://*.railway.app`
-- **Consultancy Pro (Railway):** `https://consultancy-production-9720.up.railway.app`
-- **Consultancy Management (Railway):** `https://frontend-production-ede6b.up.railway.app`
 
 Manak / BIS portal content scripts are unchanged: `manakonline.in`, `lims.bis.gov.in`, `standards.bis.gov.in`, `standardsbis.bsbedge.com`.
 
