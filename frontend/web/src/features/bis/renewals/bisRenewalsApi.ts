@@ -25,6 +25,7 @@ async function matchingClientIds(term: string): Promise<string[]> {
   const { data, error } = await supabase
     .from('clients')
     .select('id')
+    .is('archived_at', null)
     .ilike('company_name', `%${term}%`)
     .limit(LOOKUP_ID_LIMIT)
   if (error) throw error

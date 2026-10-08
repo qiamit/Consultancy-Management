@@ -37,7 +37,7 @@ type ModuleAccessState = {
 const ModuleAccessContext = createContext<ModuleAccessState | null>(null)
 
 export function ModuleAccessProvider({ children }: { children: ReactNode }) {
-  const { user, designation, departmentName, division, profileReady } = useAuth()
+  const { user, designation, departmentName, division, profileReady, role } = useAuth()
   const [rules, setRules] = useState<ModuleAccessRuleRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -72,8 +72,9 @@ export function ModuleAccessProvider({ children }: { children: ReactNode }) {
       departmentName,
       division: division ?? '',
       userId: user?.id ?? null,
+      role,
     }),
-    [designation, departmentName, division, user?.id],
+    [designation, departmentName, division, user?.id, role],
   )
 
   const value = useMemo<ModuleAccessState>(

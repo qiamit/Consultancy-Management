@@ -2,6 +2,8 @@ import { createContext, createElement, useContext, useEffect, useMemo, useRef, u
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabaseClient'
 
+export type AuthRole = 'admin' | 'staff' | 'viewer' | ''
+
 interface AuthState {
   user: User | null
   session: Session | null
@@ -11,6 +13,13 @@ interface AuthState {
   division: string
   profileName: string
   profileReady: boolean
+  role: AuthRole
+}
+
+function normalizeAuthRole(value: unknown): AuthRole {
+  const role = String(value ?? '').trim().toLowerCase()
+  if (role === 'admin' || role === 'staff' || role === 'viewer') return role
+  return ''
 }
 
 const AuthContext = createContext<AuthState | null>(null)
@@ -54,6 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [departmentName, setDepartmentName] = useState('')
   const [division, setDivision] = useState('')
   const [profileName, setProfileName] = useState('')
+  const [role, setRole] = useState<AuthRole>('')
   const [profileReady, setProfileReady] = useState(false)
   const profileUserIdRef = useRef<string | null>(null)
 
@@ -132,6 +142,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setDepartmentName('')
       setDivision('')
       setProfileName('')
+      setRole('')
       setProfileReady(true)
       try {
         localStorage.removeItem('userDesignation')
@@ -213,12 +224,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const fetchProfile = async () => {
       const { data, error } = await supabase
         .from('user_profiles')
-        .select('designation, department_name, division, full_name, status')
+        .select('designation, department_name, division, full_name, status, role')
         .eq('id', userId)
         .maybeSingle()
 
       if (canceled) return
       if (error) {
+        setRole('')
         applyFromProfile(
           String(cachedDesignation ?? ''),
           metaDept || String(cachedDepartment ?? ''),
@@ -234,6 +246,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         division?: unknown
         full_name?: unknown
         status?: unknown
+        role?: unknown
       } | null
       if (row && String(row.status ?? 'Active').trim().toLowerCase() !== 'active') {
         try {
@@ -255,6 +268,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const finalDes = profileDes || String(cachedDesignation ?? '')
       const finalDept = profileDept || metaDept || String(cachedDepartment ?? '')
       const finalDivision = profileDivision || metaDivision || String(cachedDivision ?? '')
+      setRole(normalizeAuthRole(row?.role))
       applyFromProfile(
         finalDes,
         finalDept,
@@ -280,8 +294,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       division,
       profileName,
       profileReady,
+      role,
     }),
-    [user, session, loading, designation, departmentName, division, profileName, profileReady],
+    [user, session, loading, designation, departmentName, division, profileName, profileReady, role],
   )
 
   return createElement(AuthContext.Provider, { value }, children)

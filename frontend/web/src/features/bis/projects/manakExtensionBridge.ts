@@ -1,5 +1,7 @@
 /** window.postMessage bridge for QE Consultancy browser extension (see frontend/extensions/qe-consultancy-chrome/bridge.js). */
 
+import { getPortalPasswordForExtension } from './bisPortalSecretApi'
+
 export const MANAK_EBIS_LOGIN_URL = 'https://www.manakonline.in/MANAK/eBISLogin'
 export const MANAK_HOME_URL = 'https://www.manakonline.in/MANAK/login'
 export const MANAK_LICENCE_RELATED_RPT_URL =
@@ -44,17 +46,12 @@ export function getManakPdfApiUrl(): string {
   return `${getManakApiOrigin()}/api/osl/manak-pdf`
 }
 
-export function manakEbisLoginHref(
-  portalUserId?: string | null,
-  portalPassword?: string | null,
-): string {
+export function manakEbisLoginHref(portalUserId?: string | null): string {
   const userId = String(portalUserId ?? '').trim()
-  const password = String(portalPassword ?? '').trim()
-  if (!userId && !password) return MANAK_EBIS_LOGIN_URL
+  if (!userId) return MANAK_EBIS_LOGIN_URL
   try {
     const url = new URL(MANAK_EBIS_LOGIN_URL)
-    if (userId) url.searchParams.set('userId', userId)
-    if (password) url.searchParams.set('passwd', password)
+    url.searchParams.set('userId', userId)
     return url.toString()
   } catch {
     return MANAK_EBIS_LOGIN_URL
@@ -78,7 +75,7 @@ export function pingExtension(timeoutMs = 400): Promise<boolean> {
       resolve(true)
     }
     window.addEventListener('message', onPong)
-    window.postMessage({ type: 'QE_IS_CODE_PING' }, '*')
+    window.postMessage({ type: 'QE_IS_CODE_PING' }, window.location.origin)
     window.setTimeout(() => {
       window.removeEventListener('message', onPong)
       resolve(isQeExtensionPresent())
@@ -143,11 +140,18 @@ export async function openManakLicenceRelatedRpt(
  */
 export async function openManakEbisAssist(options: {
   portalUserId?: string | null
-  portalPassword?: string | null
+  projectId?: string | null
 }): Promise<OpenManakEbisResult> {
   const portalUserId = String(options.portalUserId ?? '').trim()
-  const portalPassword = String(options.portalPassword ?? '').trim()
-  const loginUrl = manakEbisLoginHref(portalUserId, portalPassword)
+  const loginUrl = manakEbisLoginHref(portalUserId)
+  const present = await pingExtension()
+  if (!present) {
+    openManakUrl(loginUrl)
+    return { extensionUsed: false }
+  }
+  const portalPassword = options.projectId
+    ? ((await getPortalPasswordForExtension(options.projectId)) ?? '')
+    : ''
 
   let acked = isQeExtensionPresent()
 
@@ -170,7 +174,7 @@ export async function openManakEbisAssist(options: {
         portalUserId,
         portalPassword,
       },
-      '*',
+      window.location.origin,
     )
 
     window.setTimeout(() => {
@@ -188,13 +192,20 @@ export async function openManakEbisAssist(options: {
  */
 export async function importManakQrCodes(options: {
   portalUserId?: string | null
-  portalPassword?: string | null
+  projectId?: string | null
   qrCount?: number
 }): Promise<OpenManakEbisResult> {
   const portalUserId = String(options.portalUserId ?? '').trim()
-  const portalPassword = String(options.portalPassword ?? '').trim()
-  const loginUrl = manakEbisLoginHref(portalUserId, portalPassword)
+  const loginUrl = manakEbisLoginHref(portalUserId)
   const qrCount = Math.max(1, Math.min(5, Number(options.qrCount) || 5))
+  const present = await pingExtension()
+  if (!present) {
+    openManakUrl(loginUrl)
+    return { extensionUsed: false }
+  }
+  const portalPassword = options.projectId
+    ? ((await getPortalPasswordForExtension(options.projectId)) ?? '')
+    : ''
 
   let acked = isQeExtensionPresent()
 
@@ -220,7 +231,7 @@ export async function importManakQrCodes(options: {
         portalUserId,
         portalPassword,
       },
-      '*',
+      window.location.origin,
     )
 
     window.setTimeout(() => {
@@ -337,8 +348,8 @@ export function fetchIsCodeViaExtension(
   window.addEventListener('message', onAck)
   window.addEventListener('message', onMessage)
   handlers.onProgress?.('Connecting to QE Consultancy extension…')
-  window.postMessage({ type: 'QE_IS_CODE_PING' }, '*')
-  window.postMessage({ type: 'QE_IS_CODE_FETCH', isNumber: trimmed }, '*')
+  window.postMessage({ type: 'QE_IS_CODE_PING' }, window.location.origin)
+  window.postMessage({ type: 'QE_IS_CODE_FETCH', isNumber: trimmed }, window.location.origin)
 
   const missTimer = window.setTimeout(() => {
     window.removeEventListener('message', onAck)
@@ -413,13 +424,23 @@ export function buildManakTrPayload(opts: {
 export async function openManakTestRequestFill(options: {
   payload: ManakTrFillPayload
   portalUserId?: string | null
-  portalPassword?: string | null
+  projectId?: string | null
 }): Promise<OpenManakEbisResult> {
   const portalUserId =
     String(options.portalUserId ?? options.payload.portalUserId ?? '').trim()
-  const portalPassword =
-    String(options.portalPassword ?? options.payload.portalPassword ?? '').trim()
-  const loginUrl = manakEbisLoginHref(portalUserId, portalPassword)
+  const loginUrl = manakEbisLoginHref(portalUserId)
+  const present = await pingExtension()
+  if (!present) {
+    openManakUrl(loginUrl)
+    return { extensionUsed: false }
+  }
+  const portalPassword = options.projectId
+    ? ((await getPortalPasswordForExtension(options.projectId)) ?? '')
+    : ''
+  const payload: ManakTrFillPayload = {
+    ...options.payload,
+    portalPassword: portalPassword || undefined,
+  }
 
   let acked = false
 
@@ -436,7 +457,7 @@ export async function openManakTestRequestFill(options: {
     window.postMessage(
       {
         type: 'QE_MANAK_OPEN',
-        payload: options.payload,
+        payload,
         loginOnly: false,
         importQr: false,
         loginUrl,
@@ -444,7 +465,7 @@ export async function openManakTestRequestFill(options: {
         portalUserId,
         portalPassword,
       },
-      '*',
+      window.location.origin,
     )
 
     window.setTimeout(() => {

@@ -6,7 +6,7 @@ import {
   limsDeleteBtnClass,
   limsPanelClass,
 } from '@/lib/limsThemeUi'
-import { Archive, ArchiveRestore, ChevronLeft, ChevronRight, Download, FileUp, Printer, Trash2 } from 'lucide-react'
+import { Archive, ArchiveRestore, ChevronLeft, ChevronRight, Download, FileUp, History, Printer, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { LaboratoryDirectorOnly } from '@/components/lims/LaboratoryDirectorOnly'
@@ -19,6 +19,7 @@ export function TestParameterTableFooterBar({
   onExport,
   onPrintSelected,
   onDeleteSelected,
+  onHistory,
   canEdit,
   showArchived,
   onToggleShowArchived,
@@ -39,6 +40,7 @@ export function TestParameterTableFooterBar({
   onExport: () => void
   onPrintSelected: () => void
   onDeleteSelected: () => void
+  onHistory: () => void
   canEdit?: boolean
   showArchived?: boolean
   onToggleShowArchived?: () => void
@@ -98,6 +100,19 @@ export function TestParameterTableFooterBar({
               </Button>
             ) : null}
             <LaboratoryDirectorOnly>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className={cn(actionBtnClass, 'h-10 min-h-10')}
+                onClick={onHistory}
+                disabled={loading || selectedCount !== 1}
+                aria-label="Change history"
+                title="Change history"
+              >
+                <History size={14} />
+                <span className="hidden sm:inline">History</span>
+              </Button>
               <Button
                 type="button"
                 variant="outline"

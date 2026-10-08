@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { limsDarkBarGlowStyle, limsPageShellClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
-import { getPickerClients } from '@/lib/clientsCache'
+import { activePickerClients, getPickerClients, type PickerClientRow } from '@/lib/clientsCache'
 import { supabase } from '@/lib/supabaseClient'
 import { useFormDialogOpenChange } from '@/lib/formDialogOpenChange'
 import { useMasterUiSearchState } from '@/lib/useMasterUiSearchState'
@@ -134,7 +134,15 @@ export default function QuotationMasterPage() {
   const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null)
   const [emailBusyId, setEmailBusyId] = useState<string | null>(null)
 
-  const [clientOptions, setClientOptions] = useState<FilterComboboxOption[]>([])
+  const [pickerRows, setPickerRows] = useState<PickerClientRow[]>([])
+  const clientOptions = useMemo(
+    () =>
+      activePickerClients(pickerRows, form.clientId).map((c) => ({
+        id: String(c.id),
+        label: String(c.company_name ?? '').trim() || 'Unnamed',
+      })),
+    [pickerRows, form.clientId],
+  )
   const [clientContactById, setClientContactById] = useState<Record<string, QuotationClientContact>>(
     {},
   )
@@ -152,11 +160,11 @@ export default function QuotationMasterPage() {
       try {
         const data = await getPickerClients()
         const list = Array.isArray(data) ? data : []
-        const options = list.map((c) => ({
-          id: String((c as { id: string }).id),
-          label: String((c as { company_name?: string }).company_name ?? '').trim() || 'Unnamed',
+        setPickerRows(list)
+        const options = activePickerClients(list).map((c) => ({
+          id: String(c.id),
+          label: String(c.company_name ?? '').trim() || 'Unnamed',
         }))
-        setClientOptions(options)
         const contacts: Record<string, QuotationClientContact> = {}
         for (const c of list) {
           const id = String((c as { id: string }).id)

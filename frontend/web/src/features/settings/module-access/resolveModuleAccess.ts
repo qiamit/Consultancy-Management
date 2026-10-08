@@ -17,6 +17,12 @@ import type { ModuleAccessRuleRow } from './moduleAccessApi'
 export type ModuleAccessUserContext = UserAccessContext & {
   userId?: string | null
   division?: string
+  role?: 'admin' | 'staff' | 'viewer' | ''
+}
+
+function withViewerCap(level: ModuleAccessLevel, ctx: ModuleAccessUserContext): ModuleAccessLevel {
+  if (ctx.role === 'viewer' && level === 'edit') return 'view'
+  return level
 }
 
 const SUBJECT_PRIORITY: ModuleAccessSubjectType[] = [
@@ -64,7 +70,7 @@ export function resolveConfiguredAccessLevel(
   ctx: ModuleAccessUserContext,
   rules: ModuleAccessRuleRow[],
 ): ModuleAccessLevel | null {
-  if (isLaboratoryDirector(ctx.designation)) return 'edit'
+  if (isLaboratoryDirector(ctx.designation, ctx.role)) return 'edit'
   if (!rules.length) return null
 
   const moduleKey = pathToModuleKey(pathname)
@@ -84,7 +90,7 @@ export function resolveConfiguredAccessLevel(
     if (subjectRules.length === 0) continue
 
     const matched = resolveLevelFromSubjectRules(pathname, subjectRules)
-    if (matched !== undefined) return matched
+    if (matched !== undefined) return withViewerCap(matched, ctx)
     // Dashboard stays reachable when a matrix exists but `/` was not saved.
     if ((pathname.replace(/\/+$/, '') || '/') === '/') return 'view'
     return 'none'
@@ -117,7 +123,7 @@ function resolveSinglePathAccessLevel(
 ): ModuleAccessLevel {
   const configured = resolveConfiguredAccessLevel(pathname, ctx, rules)
   if (configured !== null) return configured
-  return legacyCanAccessPath(pathname, ctx) ? 'edit' : 'none'
+  return withViewerCap(legacyCanAccessPath(pathname, ctx) ? 'edit' : 'none', ctx)
 }
 
 export function resolveModuleAccessLevel(
@@ -125,7 +131,7 @@ export function resolveModuleAccessLevel(
   ctx: ModuleAccessUserContext,
   rules: ModuleAccessRuleRow[],
 ): ModuleAccessLevel {
-  if (isLaboratoryDirector(ctx.designation)) return 'edit'
+  if (isLaboratoryDirector(ctx.designation, ctx.role)) return 'edit'
   if (isPublicSupportPath(pathname)) return 'view'
 
   const path = pathname.replace(/\/+$/, '') || '/'
@@ -179,7 +185,7 @@ export function canAccessNavItemWithRules(
   rules: ModuleAccessRuleRow[],
 ): boolean {
   if (!to) return false
-  if (isLaboratoryDirector(ctx.designation)) return true
+  if (isLaboratoryDirector(ctx.designation, ctx.role)) return true
   if (isPublicSupportPath(to)) return true
 
   const configured = resolveConfiguredAccessLevel(to, ctx, rules)

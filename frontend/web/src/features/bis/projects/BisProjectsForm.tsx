@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { Calendar, ChevronDown, Mail, Printer } from 'lucide-react'
+import { Calendar, ChevronDown, ClipboardCopy, Eye, Mail, Printer } from 'lucide-react'
+import { toast } from 'sonner'
+import { useIsLaboratoryDirector } from '@/components/lims/LaboratoryDirectorOnly'
 import { LimsFieldAddButton, LimsFieldWithAdd } from '@/components/lims/LimsFieldWithAdd'
 import { AddClientDialog } from '@/features/sample-handling/receiving/AddClientDialog'
 import { supabase } from '@/lib/supabaseClient'
@@ -36,6 +38,7 @@ import {
 import { cn } from '@/lib/utils'
 import { fetchEmployeeNames } from '../shared/bisLookupApi'
 import { searchClientOptions, searchIsCodeOptions } from './bisProjectsApi'
+import { revealPortalPassword } from './bisPortalSecretApi'
 import { LicenseScopeFields } from './LicenseScopeFields'
 import {
   BIS_BILLING_FREQUENCIES,
@@ -138,6 +141,7 @@ export function BisProjectsForm({
   open,
   onOpenChange,
   editing,
+  projectId = null,
   form,
   onChange,
   canSave,
@@ -153,6 +157,7 @@ export function BisProjectsForm({
   open: boolean
   onOpenChange: (open: boolean) => void
   editing: boolean
+  projectId?: string | null
   form: BisProjectForm
   onChange: (next: BisProjectForm) => void
   canSave: boolean
@@ -173,6 +178,68 @@ export function BisProjectsForm({
 
   const set = <K extends keyof BisProjectForm>(key: K, value: BisProjectForm[K]) =>
     onChange({ ...form, [key]: value })
+  const isAdmin = useIsLaboratoryDirector()
+  const [changingPassword, setChangingPassword] = useState(false)
+  const [revealedPassword, setRevealedPassword] = useState<string | null>(null)
+  const [revealSeconds, setRevealSeconds] = useState(0)
+  const passwordResetKey = `${open ? 'open' : 'closed'}:${projectId ?? ''}`
+  const [seenPasswordKey, setSeenPasswordKey] = useState(passwordResetKey)
+  if (seenPasswordKey !== passwordResetKey) {
+    setSeenPasswordKey(passwordResetKey)
+    setChangingPassword(false)
+    setRevealedPassword(null)
+    setRevealSeconds(0)
+  }
+  const savedPassword = Boolean(form.portalPasswordSet) && !form.clearPortalPassword
+  const showSavedBox = Boolean(projectId) && savedPassword && !changingPassword
+
+  useEffect(() => {
+    if (!revealedPassword) return
+    const id = window.setInterval(() => {
+      setRevealSeconds((seconds) => {
+        if (seconds <= 1) {
+          setRevealedPassword(null)
+          return 0
+        }
+        return seconds - 1
+      })
+    }, 1000)
+    return () => window.clearInterval(id)
+  }, [revealedPassword])
+
+  const passwordBtnClass = 'h-10 min-h-10 rounded-none border-stone-500 px-3'
+
+  const revealPassword = () => {
+    if (!projectId) return
+    void revealPortalPassword(projectId)
+      .then((value) => {
+        if (!value) {
+          toast.error('No password saved')
+          return
+        }
+        setRevealedPassword(value)
+        setRevealSeconds(20)
+      })
+      .catch((err: unknown) => {
+        toast.error(err instanceof Error ? err.message : 'No permission')
+      })
+  }
+
+  const copyPassword = () => {
+    if (!projectId) return
+    void revealPortalPassword(projectId)
+      .then(async (value) => {
+        if (!value) {
+          toast.error('No password saved')
+          return
+        }
+        await navigator.clipboard.writeText(value)
+        toast.success('Password copied')
+      })
+      .catch((err: unknown) => {
+        toast.error(err instanceof Error ? err.message : 'No permission')
+      })
+  }
 
   const isApplicationProject =
     form.projectKind.trim().toLowerCase() === 'application'
@@ -569,13 +636,103 @@ export function BisProjectsForm({
 
                 <div className="col-span-12 space-y-2 md:col-span-6">
                   <Label htmlFor="bis-portal-pass">Portal Password</Label>
-                  <Input
-                    id="bis-portal-pass"
-                    type="password"
-                    autoComplete="new-password"
-                    value={form.portalPassword}
-                    onChange={(e) => set('portalPassword', e.target.value)}
-                  />
+                  {form.clearPortalPassword ? (
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <p className="min-h-10 flex-1 border border-amber-600 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                        Will be removed on Save
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className={passwordBtnClass}
+                        onClick={() =>
+                          onChange({ ...form, clearPortalPassword: false, portalPassword: '' })
+                        }
+                      >
+                        Undo
+                      </Button>
+                    </div>
+                  ) : showSavedBox ? (
+                    <div className="space-y-2">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <Input
+                          id="bis-portal-pass"
+                          readOnly
+                          value={revealedPassword ?? '•••••••• Saved (encrypted)'}
+                          className="min-h-10"
+                          aria-label={revealedPassword ? 'Revealed portal password' : 'Saved encrypted password'}
+                        />
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className={passwordBtnClass}
+                            onClick={() => {
+                              setRevealedPassword(null)
+                              setRevealSeconds(0)
+                              setChangingPassword(true)
+                              onChange({ ...form, portalPassword: '', clearPortalPassword: false })
+                            }}
+                          >
+                            Change
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className={passwordBtnClass}
+                            onClick={() =>
+                              onChange({
+                                ...form,
+                                clearPortalPassword: true,
+                                portalPassword: '',
+                              })
+                            }
+                          >
+                            Clear
+                          </Button>
+                          {isAdmin ? (
+                            <>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className={passwordBtnClass}
+                                onClick={revealPassword}
+                              >
+                                <Eye className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+                                Reveal
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className={passwordBtnClass}
+                                onClick={copyPassword}
+                              >
+                                <ClipboardCopy className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+                                Copy
+                              </Button>
+                            </>
+                          ) : null}
+                        </div>
+                      </div>
+                      {revealedPassword ? (
+                        <p className="text-xs font-medium text-amber-900">
+                          Hides in {revealSeconds}s
+                        </p>
+                      ) : (
+                        <p className="text-xs font-medium text-emerald-800">Password saved • encrypted</p>
+                      )}
+                    </div>
+                  ) : (
+                    <Input
+                      id="bis-portal-pass"
+                      type="password"
+                      autoComplete="new-password"
+                      className="min-h-10"
+                      placeholder={projectId ? 'Not set' : ''}
+                      value={form.portalPassword}
+                      onChange={(e) => set('portalPassword', e.target.value)}
+                    />
+                  )}
                 </div>
               </div>
 

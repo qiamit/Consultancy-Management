@@ -41,6 +41,7 @@ function toUserAccount(row: TeamUserRecord): UserAccount {
     departmentName: row.department_name,
     division: row.division,
     status: row.status.toLowerCase() === 'inactive' ? 'Inactive' : 'Active',
+    accessRole: row.role === 'admin' || row.role === 'viewer' ? row.role : 'staff',
   }
 }
 

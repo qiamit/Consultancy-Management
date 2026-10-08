@@ -1,4 +1,6 @@
+import { searchClients } from '@/lib/clientsApi'
 import { supabase } from '@/lib/supabaseClient'
+import { setPortalPassword } from './bisPortalSecretApi'
 import { formatIsCodeLabelFromParts } from '@/features/masters/is-codes/formatIsCodeLabel'
 import { formatClientAddress } from '@/features/masters/clients/types'
 import type { FilterComboboxOption } from '@/features/sample-handling/receiving/FilterCombobox'
@@ -202,15 +204,11 @@ export async function fetchBisProjectsPage({
 }
 
 export async function searchClientOptions(term: string): Promise<FilterComboboxOption[]> {
-  const clean = sanitizeSearchTerm(term)
-  let query = supabase.from('clients').select('id, company_name').order('company_name', { ascending: true })
-  if (clean) query = query.ilike('company_name', `%${clean}%`)
-  const { data, error } = await query.limit(LOOKUP_OPTION_LIMIT)
-  if (error) throw error
-  return (data ?? []).map((r) => {
-    const row = r as { id: string; company_name: string | null }
-    return { id: String(row.id), label: (row.company_name ?? '').trim() || 'Unnamed' }
-  })
+  const { rows } = await searchClients({ search: term, limit: LOOKUP_OPTION_LIMIT })
+  return rows.map((row) => ({
+    id: String(row.id),
+    label: (row.company_name ?? '').trim() || 'Unnamed',
+  }))
 }
 
 /** Client master lookup filtered to company_type = Testing Laboratory. */
@@ -222,6 +220,7 @@ export async function searchTestingLaboratoryClientOptions(
     .from('clients')
     .select('id, company_name')
     .eq('company_type', 'Testing Laboratory')
+    .is('archived_at', null)
     .order('company_name', { ascending: true })
   if (clean) query = query.ilike('company_name', `%${clean}%`)
   const { data, error } = await query.limit(LOOKUP_OPTION_LIMIT)
@@ -287,6 +286,7 @@ export async function searchIsCodeOptions(term: string): Promise<FilterComboboxO
   let query = supabase
     .from('is_codes')
     .select('id, is_number, revision_year, title')
+    .is('archived_at', null)
     .order('is_number', { ascending: true })
   if (clean) query = query.or(`is_number.ilike.*${clean}*,title.ilike.*${clean}*`)
   const { data, error } = await query.limit(LOOKUP_OPTION_LIMIT)
@@ -320,7 +320,7 @@ export async function fetchBisProjectById(id: string): Promise<BisProjectRow | n
 export async function saveBisProject(
   form: BisProjectForm,
   editingId: string | null,
-): Promise<void> {
+): Promise<string> {
   const billing = Number.parseFloat(form.billingAmount)
   const kindRaw = form.projectKind.trim() || DEFAULT_PROJECT_KIND
   // Normalize UI "License" → stored "Licence"; keep Application / Inclusion as-is.
@@ -345,17 +345,26 @@ export async function saveBisProject(
     billing_frequency:
       form.billingFrequency.trim() || DEFAULT_BILLING_FREQUENCY,
     portal_user_id: form.portalUserId.trim() || null,
-    portal_password: form.portalPassword || null,
     notes: sanitizeBisLicenseScopeNotes(form.notes).trim() || null,
   }
 
+  let id = editingId ?? ''
   if (editingId) {
     const { error } = await supabase.from('bis_projects').update(payload).eq('id', editingId)
     if (error) throw error
-    return
+    id = editingId
+  } else {
+    const { data, error } = await supabase.from('bis_projects').insert(payload).select('id').single()
+    if (error) throw error
+    id = String((data as { id?: string } | null)?.id ?? '')
   }
-  const { error } = await supabase.from('bis_projects').insert(payload)
-  if (error) throw error
+  if (!id) throw new Error('BIS project was saved but its id was missing.')
+  if (form.clearPortalPassword) {
+    await setPortalPassword(id, null)
+  } else if (form.portalPassword.trim()) {
+    await setPortalPassword(id, form.portalPassword)
+  }
+  return id
 }
 
 export async function deleteBisProjects(ids: string[]): Promise<void> {

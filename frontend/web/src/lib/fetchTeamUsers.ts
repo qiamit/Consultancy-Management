@@ -9,6 +9,7 @@ export type TeamUserRecord = {
   department_name: string
   division: string
   status: string
+  role: string
 }
 
 function mapRow(row: Record<string, unknown>): TeamUserRecord | null {
@@ -24,16 +25,35 @@ function mapRow(row: Record<string, unknown>): TeamUserRecord | null {
     department_name: String(row.department_name ?? '').trim(),
     division: String(row.division ?? '').trim(),
     status,
+    role: String(row.role ?? 'staff').trim() || 'staff',
   }
+}
+
+function normalizeRole(value: unknown): string {
+  const role = String(value ?? '').trim().toLowerCase()
+  if (role === 'admin' || role === 'viewer' || role === 'staff') return role
+  return 'staff'
+}
+
+async function attachRoles(rows: TeamUserRecord[]): Promise<TeamUserRecord[]> {
+  if (rows.length === 0) return rows
+  const { data, error } = await supabase.from('user_profiles').select('id, role')
+  if (error || !Array.isArray(data)) return rows
+  const byId = new Map(
+    data.map((row) => [String((row as { id?: string }).id ?? ''), normalizeRole((row as { role?: unknown }).role)]),
+  )
+  return rows.map((row) => ({ ...row, role: byId.get(row.id) ?? normalizeRole(row.role) }))
 }
 
 /** Team directory from Railway Postgres (RPC joins auth email, else user_profiles). */
 export async function fetchTeamUsers(): Promise<TeamUserRecord[]> {
   const rpc = await supabase.rpc('list_team_users')
   if (!rpc.error && Array.isArray(rpc.data)) {
-    return (rpc.data as Array<Record<string, unknown>>)
-      .map((row) => mapRow(row))
-      .filter((row): row is TeamUserRecord => Boolean(row))
+    return attachRoles(
+      (rpc.data as Array<Record<string, unknown>>)
+        .map((row) => mapRow(row))
+        .filter((row): row is TeamUserRecord => Boolean(row)),
+    )
   }
 
   const { data, error } = await supabase
@@ -42,9 +62,11 @@ export async function fetchTeamUsers(): Promise<TeamUserRecord[]> {
     .order('full_name', { ascending: true })
 
   if (!error && Array.isArray(data)) {
-    return data
-      .map((row) => mapRow(row as Record<string, unknown>))
-      .filter((row): row is TeamUserRecord => Boolean(row))
+    return attachRoles(
+      data
+        .map((row) => mapRow(row as Record<string, unknown>))
+        .filter((row): row is TeamUserRecord => Boolean(row)),
+    )
   }
 
   if (rpc.error) throw rpc.error

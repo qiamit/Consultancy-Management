@@ -6,6 +6,7 @@ import { useCanEditCurrentModule } from '@/features/settings/module-access/useCa
 import { useFormDialogOpenChange } from '@/lib/formDialogOpenChange'
 import { useMasterUiSearchState } from '@/lib/useMasterUiSearchState'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { AuditHistoryDialog } from '@/components/lims/AuditHistoryDialog'
 import { ClientsTableFooterBar } from './ClientsFooterBar'
 import { ClientsForm } from './ClientsForm'
 import { ClientsHeaderBar } from './ClientsHeaderBar'
@@ -210,6 +211,7 @@ export default function ClientsMasterPage() {
   const [listError, setListError] = useState<string | null>(null)
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
+  const [historyOpen, setHistoryOpen] = useState(false)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [jumpTo, setJumpTo] = useState('')
@@ -1443,6 +1445,7 @@ export default function ClientsMasterPage() {
           onExport={handleExport}
           onPrintSelected={handlePrintSelected}
           onDeleteSelected={handleDeleteSelected}
+          onHistory={() => setHistoryOpen(true)}
           canEdit={canEdit}
           showArchived={showArchived}
           onToggleShowArchived={() => setShowArchived((v) => !v)}
@@ -1459,6 +1462,17 @@ export default function ClientsMasterPage() {
           }}
         />
       </div>
+
+      <AuditHistoryDialog
+        open={historyOpen}
+        onOpenChange={setHistoryOpen}
+        table="clients"
+        rowId={selectedIds.size === 1 ? [...selectedIds][0] : null}
+        recordLabel={
+          rows.find((row) => selectedIds.size === 1 && selectedIds.has(row.id))?.company_name ??
+          'client'
+        }
+      />
 
       <input
         ref={importInputRef}

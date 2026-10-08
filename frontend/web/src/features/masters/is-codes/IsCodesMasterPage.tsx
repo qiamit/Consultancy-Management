@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { IsCodesHeaderBar } from './IsCodesHeaderBar'
 import { IsCodesForm } from './IsCodesForm'
 import { IsCodesTable, type IsCodeSortDir, type IsCodeSortKey } from './IsCodesTable'
+import { AuditHistoryDialog } from '@/components/lims/AuditHistoryDialog'
 import { IsCodesTableFooterBar } from './IsCodesFooterBar'
 import { IsCodesFilesDialog, type IsCodeViewFile } from './IsCodesFilesDialog'
 import { buildIsCodesListAssistantContext, formatIsCodeLabel } from './buildIsCodeAssistantContext'
@@ -237,6 +238,7 @@ export default function IsCodesMasterPage() {
   const [listError, setListError] = useState<string | null>(null)
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
+  const [historyOpen, setHistoryOpen] = useState(false)
   const [idsWithFiles, setIdsWithFiles] = useState<Set<string>>(() => new Set())
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
@@ -1597,6 +1599,7 @@ export default function IsCodesMasterPage() {
           onExport={handleExport}
           onPrintSelected={handlePrintSelected}
           onDeleteSelected={handleDeleteSelected}
+          onHistory={() => setHistoryOpen(true)}
           canEdit={canEdit}
           showArchived={showArchived}
           onToggleShowArchived={() => setShowArchived((v) => !v)}
@@ -1613,6 +1616,16 @@ export default function IsCodesMasterPage() {
           }}
         />
       </div>
+      <AuditHistoryDialog
+        open={historyOpen}
+        onOpenChange={setHistoryOpen}
+        table="is_codes"
+        rowId={selectedIds.size === 1 ? [...selectedIds][0] : null}
+        recordLabel={(() => {
+          const row = rows.find((item) => selectedIds.size === 1 && selectedIds.has(item.id))
+          return row ? formatIsCodeLabel(row) : 'IS code'
+        })()}
+      />
     </div>
   )
 }

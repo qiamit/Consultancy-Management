@@ -552,6 +552,7 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
         open={showForm}
         onOpenChange={handleFormOpenChange}
         editing={editingId != null}
+        projectId={editingId}
         form={form}
         onChange={setForm}
         canSave={canSave}

@@ -2,7 +2,11 @@
  * Full-access roles for Consultancy Pro (settings, user management, module access).
  * Matches designations stored in user_profiles.
  */
-export function isLaboratoryDirector(designation: string | null | undefined): boolean {
+export function isLaboratoryDirector(
+  designation: string | null | undefined,
+  role?: string | null,
+): boolean {
+  if (String(role ?? '').trim().toLowerCase() === 'admin') return true
   const d = String(designation ?? '')
     .trim()
     .toLowerCase()

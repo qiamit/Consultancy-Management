@@ -8,6 +8,8 @@ The detailed rules live in `.cursor/rules/*.mdc`, and Cursor loads them automati
 - `40-knowledge-engine.mdc` (knowledge_engine/**): usable/needs_review gate, protected collections, same embedding model, evals
 - `50-workflow-prompts.mdc` (always): docs/audits/*.md with VDB-xx / MST-xx / FIN-xx IDs, "continue" workflow
 - `60-extensions.mdc` (frontend/extensions/**): keep the Chrome and Safari copies in sync
+- `05-qe-standards.mdc` (always): Amit's standing design rules (AI/MCP-ready, responsive, futuristic), security musts, baselines, work order, 4-agent team
+- `qe-planner.mdc` / `qe-coder.mdc` / `qe-auditor.mdc` / `qe-tester.mdc` (on request, one per chat): the QE Planner / Coder / Auditor / Tester roles. Handoff files live in `docs/agents/` (start with `docs/agents/README.md`)
 
 If `.cursor/rules` isn't loaded, follow this short version:
 
@@ -31,7 +33,7 @@ Paths moved on 2026-10-08, see `docs/REPO_STRUCTURE.md`. If a prompt uses an old
 - Railway self-hosted stack only. Never use hosted Supabase Cloud, `supabase db push`, Vercel or Netlify. Don't deploy unless asked.
 - Never read, print or commit `.env*` or `.railway-secrets.env`.
 - UI/theme: reuse the existing `limsThemeUi` and MasterPage patterns.
-- App UI is in English (EN/हिंदी toggle only where a page already has one). Explanations in Hindi/Hinglish are fine.
+- App UI is in English (EN/हिंदी toggle only where a page already has one). Replies to Amit are complete English, then complete Hindi. Do not write Hinglish.
 - Write "Quality International Research & Laboratories Private Limited" in full, never "Pvt Ltd".
 - Domain: BIS ops, clients, IS codes, finance, email.
 - Audits and plans live in `docs/audits/`. On "continue" or an item ID: implement it, verify, then update its status in the file.

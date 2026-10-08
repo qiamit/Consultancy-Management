@@ -13,6 +13,7 @@ import {
   type ProductServiceSortDir,
   type ProductServiceSortKey,
 } from './ProductsServicesTable'
+import { AuditHistoryDialog } from '@/components/lims/AuditHistoryDialog'
 import { ProductsServicesFooterBar } from './ProductsServicesFooterBar'
 import { ProductsServicesForm } from './ProductsServicesForm'
 import {
@@ -217,6 +218,7 @@ export default function ProductsServicesMasterPage() {
   const [listLoading, setListLoading] = useState(false)
   const [listError, setListError] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
+  const [historyOpen, setHistoryOpen] = useState(false)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [jumpTo, setJumpTo] = useState('')
@@ -801,6 +803,7 @@ export default function ProductsServicesMasterPage() {
           onExport={handleExport}
           onPrintSelected={handlePrintSelected}
           onDeleteSelected={() => void handleDeleteSelected()}
+          onHistory={() => setHistoryOpen(true)}
           canEdit={canEdit}
           showArchived={showArchived}
           onToggleShowArchived={() => setShowArchived((v) => !v)}
@@ -817,6 +820,16 @@ export default function ProductsServicesMasterPage() {
           }}
         />
       </div>
+      <AuditHistoryDialog
+        open={historyOpen}
+        onOpenChange={setHistoryOpen}
+        table="products_services_master"
+        rowId={selectedIds.size === 1 ? [...selectedIds][0] : null}
+        recordLabel={
+          rows.find((row) => selectedIds.size === 1 && selectedIds.has(row.id))?.item_name ??
+          'product'
+        }
+      />
 
       <input
         ref={importInputRef}

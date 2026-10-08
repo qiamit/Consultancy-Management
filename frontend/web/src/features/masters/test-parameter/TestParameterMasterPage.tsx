@@ -13,6 +13,7 @@ import {
   type TestParameterSortDir,
   type TestParameterSortKey,
 } from './TestParameterTable'
+import { AuditHistoryDialog } from '@/components/lims/AuditHistoryDialog'
 import { TestParameterTableFooterBar } from './TestParameterFooterBar'
 import { IsCodesForm } from '@/features/masters/is-codes/IsCodesForm'
 import { fetchDesignationAndDepartmentLabels } from '@/features/settings/lab-settings/labMasterOptions'
@@ -195,6 +196,7 @@ export default function TestParameterMasterPage() {
   const [listError, setListError] = useState<string | null>(null)
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
+  const [historyOpen, setHistoryOpen] = useState(false)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [jumpTo, setJumpTo] = useState('')
@@ -1409,6 +1411,7 @@ export default function TestParameterMasterPage() {
           onExport={handleExport}
           onPrintSelected={handlePrintSelected}
           onDeleteSelected={handleDeleteSelected}
+          onHistory={() => setHistoryOpen(true)}
           canEdit={canEdit}
           showArchived={showArchived}
           onToggleShowArchived={() => setShowArchived((v) => !v)}
@@ -1427,6 +1430,16 @@ export default function TestParameterMasterPage() {
           }}
         />
       </div>
+      <AuditHistoryDialog
+        open={historyOpen}
+        onOpenChange={setHistoryOpen}
+        table="test_parameters"
+        rowId={selectedIds.size === 1 ? [...selectedIds][0] : null}
+        recordLabel={
+          rows.find((row) => selectedIds.size === 1 && selectedIds.has(row.id))?.item_name ??
+          'test parameter'
+        }
+      />
 
       <input
         ref={importInputRef}

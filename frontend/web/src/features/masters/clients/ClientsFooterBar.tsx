@@ -1,4 +1,4 @@
-import { Archive, ArchiveRestore, ChevronLeft, ChevronRight, Download, FileUp, Printer, Trash2 } from 'lucide-react'
+import { Archive, ArchiveRestore, ChevronLeft, ChevronRight, Download, FileUp, History, Printer, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { clientDeleteBtnClass, clientPanelClass } from './clientsFormUi'
@@ -21,6 +21,7 @@ export function ClientsTableFooterBar({
   onExport,
   onPrintSelected,
   onDeleteSelected,
+  onHistory,
   canEdit,
   showArchived,
   onToggleShowArchived,
@@ -43,6 +44,7 @@ export function ClientsTableFooterBar({
   onExport: () => void
   onPrintSelected: () => void
   onDeleteSelected: () => void
+  onHistory: () => void
   canEdit?: boolean
   showArchived?: boolean
   onToggleShowArchived?: () => void
@@ -109,6 +111,19 @@ export function ClientsTableFooterBar({
               </Button>
             ) : null}
             <LaboratoryDirectorOnly>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className={cn(actionBtn, 'h-10 min-h-10')}
+                onClick={onHistory}
+                disabled={loading || selectedCount !== 1}
+                aria-label="Change history"
+                title="Change history"
+              >
+                <History size={14} />
+                <span className="hidden sm:inline">History</span>
+              </Button>
               <Button
                 type="button"
                 variant="outline"

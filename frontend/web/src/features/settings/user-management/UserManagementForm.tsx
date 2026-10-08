@@ -35,8 +35,9 @@ import {
   limsPrimaryBtnClass,
   limsRegistryFormClass,
 } from '@/lib/limsThemeUi'
+import { supabase } from '@/lib/supabaseClient'
 import { cn } from '@/lib/utils'
-import type { UserAccount, UserForm } from './types'
+import type { AccessRole, UserAccount, UserForm } from './types'
 import { emptyUserForm } from './types'
 
 const sidebarCenteredOverlayClass = 'lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto'
@@ -131,6 +132,8 @@ export function UserManagementForm(props: UserManagementFormProps) {
   const [newDivisionName, setNewDivisionName] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [accessRole, setAccessRole] = useState<AccessRole>('staff')
+  const [savedAccessRole, setSavedAccessRole] = useState<AccessRole>('staff')
 
   const designationOptions =
     props.designations.length > 0 ? props.designations : LAB_MASTER_OPTION_DEFAULTS.designation
@@ -388,6 +391,9 @@ export function UserManagementForm(props: UserManagementFormProps) {
 
   useEffect(() => {
     if (props.mode === 'edit' && props.initialData) {
+      const nextRole = props.initialData.accessRole || 'staff'
+      setAccessRole(nextRole)
+      setSavedAccessRole(nextRole)
       const rawMobile = props.initialData.mobile ?? ''
       const codeMatch = rawMobile.match(/^(\+\d{1,4})\s*(.*)$/)
       const base = {
@@ -414,6 +420,8 @@ export function UserManagementForm(props: UserManagementFormProps) {
     } else if (props.mode === 'create') {
       setFormData(emptyUserForm)
       setSelectedCountryCode('+91')
+      setAccessRole('staff')
+      setSavedAccessRole('staff')
     }
   }, [props.initialData, props.mode])
 
@@ -437,6 +445,24 @@ export function UserManagementForm(props: UserManagementFormProps) {
     setLoading(true)
     try {
       await props.onSave(formData, selectedCountryCode)
+      if (accessRole !== savedAccessRole) {
+        let userId = props.mode === 'edit' ? props.initialData?.id ?? '' : ''
+        if (!userId && props.mode === 'create') {
+          const lookup = await supabase
+            .from('user_profiles')
+            .select('id')
+            .ilike('email', formData.email.trim())
+            .maybeSingle()
+          if (lookup.error) throw new Error(lookup.error.message)
+          userId = String((lookup.data as { id?: string } | null)?.id ?? '')
+        }
+        if (!userId) throw new Error('User was saved, but the access role could not be set.')
+        const { error: roleError } = await supabase.rpc('set_user_role', {
+          p_user_id: userId,
+          p_role: accessRole,
+        })
+        if (roleError) throw new Error(roleError.message)
+      }
       props.onOpenChange(false)
       setFormData(emptyUserForm)
     } catch (err) {
@@ -803,6 +829,24 @@ export function UserManagementForm(props: UserManagementFormProps) {
                     </Select>
                   ),
                 })}
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="user-access-role">Access role</FieldLabel>
+                <Select
+                  value={accessRole}
+                  onValueChange={(value) => setAccessRole(value as AccessRole)}
+                >
+                  <SelectTrigger id="user-access-role" className="h-10 min-h-10">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="admin">Admin</SelectItem>
+                    <SelectItem value="staff">Staff</SelectItem>
+                    <SelectItem value="viewer">Viewer</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-stone-600">Viewer = view-only everywhere</p>
               </Field>
             </div>
           </FormSection>

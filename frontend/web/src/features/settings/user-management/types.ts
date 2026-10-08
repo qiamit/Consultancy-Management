@@ -1,3 +1,5 @@
+export type AccessRole = 'admin' | 'staff' | 'viewer'
+
 export type UserAccount = {
   id: string
   name: string
@@ -8,6 +10,7 @@ export type UserAccount = {
   departmentName: string
   division: string
   status: 'Active' | 'Inactive'
+  accessRole: AccessRole
 }
 
 export type UserForm = {

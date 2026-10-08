@@ -152,16 +152,20 @@ function RowActions({
         onClick={() => {
           void openManakEbisAssist({
             portalUserId: row.portal_user_id,
-            portalPassword: row.portal_password,
-          }).then(({ extensionUsed }) => {
-            if (extensionUsed) {
-              toast.success('Opening Manak eBIS via extension')
-            } else {
-              toast.warning('Extension not detected — opened Manak eBIS in a new tab', {
-                description: EXTENSION_MISSING_MSG,
-              })
-            }
+            projectId: row.id,
           })
+            .then(({ extensionUsed }) => {
+              if (extensionUsed) {
+                toast.success('Opening Manak eBIS via extension')
+              } else {
+                toast.warning('Extension not detected — opened Manak eBIS in a new tab', {
+                  description: EXTENSION_MISSING_MSG,
+                })
+              }
+            })
+            .catch((err: unknown) => {
+              toast.error(err instanceof Error ? err.message : 'Could not open Manak')
+            })
         }}
       >
         <ExternalLink size={16} />

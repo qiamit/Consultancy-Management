@@ -1,0 +1,100 @@
+---
+description: Amit's standing design rules, security musts, baselines, work order and the 4-agent team (QE Planner / Coder / Auditor / Tester) handoff protocol (always on)
+alwaysApply: true
+---
+
+# QE standards + 4-agent team (added 2026-10-08)
+
+This adds to `00-project-core.mdc` (stack, secrets, commands, working style). It does not replace it.
+
+## Live facts
+- Live site: https://www.qengineering.in (Railway `frontend`). API gateway: https://api-production-a87f8.up.railway.app
+- Railway deploys `main` after a push (`frontend`, `functions`, `api`). Check the deployed commit before live testing. Migrations reach the DB only through `npm run db:migrate` on Amit's Mac.
+- The Railway `frontend` service builds **only `frontend/web`**. Every frontend dependency must be in `frontend/web/package.json`; the root `package.json` is not installed there. A new functions `.mjs` file must be added to the `COPY` line in `backend/services/functions/Dockerfile`.
+- This Mac has no `psql` and no `rg`. For DB access use Node `pg` (a root dependency). `lab_settings` is a single row: `00000000-0000-0000-0000-000000000001`.
+- Permission helpers from S4/S5:
+  - `app_is_admin()`, `app_module_level(path)`, `app_can_edit(VARIADIC paths)`
+  - `master_reference_counts(table, ids)` for any logged-in user; `delete_master_rows(table, ids)` for admins only
+  - `audit_log`: admins can read it; only triggers write to it
+  - Masters: insert and update need edit access, delete is admin-only. Settings tables accept admin writes only. `anon` can only call `get_public_company_brand()` and `get_public_website_content()`.
+- RPC and endpoint catalog: `docs/agents/api-catalog.md`.
+
+## Security musts (on top of 00-project-core)
+- Never open, print or commit secrets: `.env*`, `.railway-secrets.env`, `~/Documents/Softwares/old-consultancy-service-variables-backup-2026-10-08.json`, any `*backup*.json`. Never run `railway variables` in a way that prints its values.
+- Never `git add` `docs/prompts/`, env files or backup json. Never use `git add -A` or `git add .`; name each path. Never force-push.
+- Never edit, rename or delete an applied migration. A fix goes into a new migration.
+- Every new `SECURITY DEFINER` function needs:
+  - `SET search_path = public, pg_temp`
+  - `REVOKE ALL ON FUNCTION … FROM PUBLIC, anon`
+  - `GRANT EXECUTE … TO authenticated` only when the app needs it
+  - a permission check inside the function (`app_is_admin()` / `app_can_edit(...)`)
+- New tables:
+  - RLS on, with policies built on the S4 helpers. Never write a `USING (true)` write policy.
+  - No `anon` grants unless the data is meant to be public and the migration header says so.
+- Never ask for passwords, or write them, in chat, files, logs or reports. Amit types logins himself.
+- Client Manak passwords are secrets (encryption approved for S6). Never return them in list queries, logs or the audit log.
+- Tests never modify real users, clients or licences. Test data is named `ZZ TEST …` and deleted afterwards.
+- **Live DB safety (incident 8 Oct 2026, 19:54–19:58 IST: a migration rollback test on live held exclusive locks for ~4.5 min and took the app down).**
+  - NEVER run migration or DDL rollback tests (ALTER/CREATE/DROP, policies, triggers, `BEGIN … ROLLBACK` around a migration) on the live database. Locks are held until ROLLBACK and block every app request.
+  - DB tests on live are SELECT-only, or tiny DML in `BEGIN … ROLLBACK` that finishes in seconds (set `lock_timeout` ≤ 3s, `statement_timeout` ≤ 30s).
+  - Migration tests run on a local throwaway copy (schema-only dump + small sample data, no password values).
+  - `npm run db:migrate` takes brief locks: run it only when nobody is using the app, and migrations set `SET LOCAL lock_timeout = '5s'`.
+
+## Amit's standing design rules (every session from S6 on)
+1. **AI/MCP-ready.** Any AI model or bot must be able to drive every module through the API or MCP, running under the user's own login and permissions.
+   - Business rules live in Postgres RPCs or functions endpoints that check permissions from the user's JWT, not only in React.
+   - Each feature gets a typed `xxxApi.ts`. Every new RPC or endpoint is added to `docs/agents/api-catalog.md` (an app MCP server is planned).
+2. **Responsive and cross-platform.** Every screen must work on Apple, Windows and Android, in Chrome, Safari, Edge and Firefox.
+   - Check widths 360, 390, 768 and 1280 px.
+   - Tables scroll horizontally or switch to cards; toolbars use `limsToolbarScrollClass`; dialogs fit on a 360 px screen.
+   - Touch targets are at least 40 px. No hover-only actions.
+3. **Futuristic.** Proactively propose 1–3 small, high-value improvements per session, such as smart defaults, AI assists, bulk actions, keyboard shortcuts or offline-friendly states. Put them in the plan; don't sneak them into code.
+
+## Baselines
+See `docs/agents/BASELINES.md`. At `ff2b9f7` (S5): typecheck 122, lint 352, build pass. A session may never make these worse. QE Coder updates the file when they improve.
+
+## Work order
+Masters S6–S10 → Finance F1+ → BIS Operations (B0+) → Dashboard last. The vector overnight job is deferred.
+After S6 closes, the next session is S6b (decision #7), before S7. S6b is a planned follow-up, not a bug-fix round.
+
+S6b contains only these five items:
+1. Browser-extension hardening, Chrome and Safari copies together.
+2. Client Directory server-side search and paging.
+3. Live-schema dump, generated types, and drift check.
+4. Drop the deprecated `portal_password` columns and the compatibility trigger after S6 has been live for a week.
+5. Optional: move the encryption key to the functions variable `PORTAL_CREDENTIAL_KEY`. Amit sets that Railway variable.
+
+S6 बंद होने के बाद अगला सत्र S6b है। S7 उसके बाद आएगा। S6b एक नियोजित अगला सत्र है।
+S6b में केवल ये पाँच काम हैं।
+1. ब्राउज़र विस्तार का कड़ा करना। Chrome और Safari की दोनों प्रतियाँ साथ बदलेंगी।
+2. ग्राहक सूची में सर्वर पर खोज और पृष्ठ-दर-पृष्ठ लोड।
+3. जीवित डेटाबेस की रचना, उत्पन्न प्रकार, और अंतर की जाँच।
+4. पुराने `portal_password` स्तंभ और अनुकूलता ट्रिगर। ये तब हटेंगे जब S6 एक सप्ताह चल चुका हो।
+5. वैकल्पिक काम: एन्क्रिप्शन कुंजी फ़ंक्शन सेवा के चर `PORTAL_CREDENTIAL_KEY` में जाएगी। रेलवे चर अमित स्वयं रखेंगे।
+
+Decisions log: `docs/agents/decisions.md`. Read it before planning, and never contradict it silently.
+
+## Language with Amit
+Replies to Amit use complete English, then complete Hindi. Do not write Hinglish. The full rule is in `00-project-core.mdc`.
+अमित को उत्तर पहले पूरी अंग्रेज़ी में दें, फिर पूरी हिंदी में। दोनों भाषाओं को एक वाक्य में न मिलाएँ।
+
+## 4-agent team (one repo, one session at a time)
+| Chat name | Role rule | May write | Never |
+|---|---|---|---|
+| QE Planner | `qe-planner.mdc` | `docs/agents/**` (plans, STATUS, decisions), `docs/audits/**` | app code, git writes, migrations, DB |
+| QE Coder | `qe-coder.mdc` | app code + new migrations per the approved prompt; coding report, BASELINES, api-catalog, STATUS | anything outside the prompt |
+| QE Auditor | `qe-auditor.mdc` | `docs/agents/reports/audit/**`, STATUS | code, git writes, migrations, DB |
+| QE Tester | `qe-tester.mdc` | `docs/agents/reports/testing/**`, `docs/agents/tests/**`, STATUS | code, git writes, migrations, committed DB writes |
+
+- **Flow:** Planner (plan, then Amit approves) → Coder (verify → migrate → commit → push) → Auditor → Tester → Planner (English summary, then Hindi summary, to Amit) → next plan.
+- **Handoff:** Chats can't call each other. Each agent:
+  1. writes its report file
+  2. updates `docs/agents/STATUS.md` (stage, owner, next action, IST time from `date '+%Y-%m-%d %H:%M %Z'`)
+  3. ends its reply with one `NEXT:` line that Amit pastes into the next chat
+- **Session ids:** S6…S10, F1…, B0…, D1…. Bug-fix rounds are `<ID>a`, then `<ID>c`, and so on. `S6b` is reserved for the follow-up in decision #7.
+- **Files:**
+  - `docs/agents/plans/<ID>_plan.md` and `<ID>_coder_prompt.md`
+  - `docs/agents/reports/coding/<ID>_coding.md`, `reports/audit/<ID>_audit.md`, `reports/testing/<ID>_testing.md`
+- With no role rule attached and no role named, behave as a normal assistant under `00-project-core`. Don't pick a role yourself.
+- A role rule's limits override any general instruction in the chat. If Amit asks a role for something outside its limits, say which chat should do it.
+- Rule files (`.cursor/rules/`, `.cursorrules`): the Planner proposes a change first. The Planner edits those files when Amit says to update the rules.

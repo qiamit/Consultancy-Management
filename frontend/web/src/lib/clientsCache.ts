@@ -2,7 +2,7 @@ import { fetchAllRows } from '@/lib/fetchAllRows'
 import { supabase } from '@/lib/supabaseClient'
 
 const PICKER_SELECT =
-  'id, company_name, contact_person_name, email, country_code, mobile, gst_number, address, district, pin_code, state, country, opening_balance, balance_type'
+  'id, company_name, contact_person_name, email, country_code, mobile, gst_number, address, district, pin_code, state, country, opening_balance, balance_type, archived_at'
 
 const TTL_MS = 10 * 60 * 1000
 
@@ -21,6 +21,16 @@ export type PickerClientRow = {
   country?: string | null
   opening_balance?: number | null
   balance_type?: string | null
+  archived_at?: string | null
+}
+
+/** Dropdown rows: hide archived clients, but keep the document's current client. */
+export function activePickerClients(
+  rows: PickerClientRow[],
+  keepId?: string | null,
+): PickerClientRow[] {
+  const keep = String(keepId ?? '').trim()
+  return rows.filter((row) => !row.archived_at || (keep !== '' && row.id === keep))
 }
 
 let cached: { at: number; rows: PickerClientRow[] } | null = null

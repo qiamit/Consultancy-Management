@@ -90,7 +90,9 @@ export type BisProjectRow = {
   billing_amount: number | string | null
   billing_frequency: string | null
   portal_user_id: string | null
+  /** @deprecated S6: always null. The password lives in private.bis_portal_secrets. */
   portal_password: string | null
+  portal_password_set: boolean
   application_stage: string | null
   is_qe_managed: boolean | null
   application_process: string | null
@@ -152,7 +154,10 @@ export type BisProjectForm = {
   billingAmount: string
   billingFrequency: string
   portalUserId: string
+  /** New password typed in this edit. Empty means unchanged. */
   portalPassword: string
+  portalPasswordSet: boolean
+  clearPortalPassword: boolean
   notes: string
 }
 
@@ -344,6 +349,8 @@ export function emptyBisProjectForm(projectKind: string = DEFAULT_PROJECT_KIND):
     billingFrequency: DEFAULT_BILLING_FREQUENCY,
     portalUserId: '',
     portalPassword: '',
+    portalPasswordSet: false,
+    clearPortalPassword: false,
     notes: '',
   }
 }
@@ -382,7 +389,9 @@ export function rowToBisProjectForm(row: BisProjectRow): BisProjectForm {
     billingAmount: Number.isFinite(amount) ? amount.toFixed(2) : '0.00',
     billingFrequency: row.billing_frequency?.trim() || DEFAULT_BILLING_FREQUENCY,
     portalUserId: row.portal_user_id ?? '',
-    portalPassword: row.portal_password ?? '',
+    portalPassword: '',
+    portalPasswordSet: Boolean(row.portal_password_set),
+    clearPortalPassword: false,
     notes: sanitizeBisLicenseScopeNotes(row.notes ?? ''),
   }
 }

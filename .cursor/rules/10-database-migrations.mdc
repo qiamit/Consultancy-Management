@@ -23,7 +23,7 @@ alwaysApply: false
 ## Every new table
 - `id uuid PRIMARY KEY DEFAULT gen_random_uuid()`
 - Audit fields: `created_at timestamptz NOT NULL DEFAULT now()` and `updated_at timestamptz NOT NULL DEFAULT now()`. Keep `updated_at` current with a trigger that reuses an existing function (grep the migrations for `set_updated_at` / `touch_updated_at`) instead of creating a new one. For user-entered rows, add `created_by uuid REFERENCES auth.users(id) ON DELETE SET NULL` (and `updated_by` where edits matter).
-- **RLS on every table**: `ALTER TABLE public.<t> ENABLE ROW LEVEL SECURITY;` plus explicit policies. The current convention is `<t>_authenticated_all` FOR ALL TO authenticated. Only grant to `anon` for intentionally public data (as with the website CMS public read), and say so in the header comment.
+- **RLS on every table**: `ALTER TABLE public.<t> ENABLE ROW LEVEL SECURITY;` plus explicit policies. Since S4 (`20261008180000_s4_masters_settings_rls.sql`), use separate SELECT/INSERT/UPDATE/DELETE policies built on `app_module_level()` / `app_can_edit()` / `app_is_admin()` (settings = admin-only writes). Never add new `USING (true)` write policies; older `<t>_authenticated_all` policies are legacy. Only grant to `anon` for intentionally public data (as with the website CMS public read), and say so in the header comment.
 - **Integrity**:
   - Every FK gets an index and a deliberate `ON DELETE`: CASCADE for child or detail rows, RESTRICT or SET NULL for masters that transactions reference.
   - Natural keys (client `company_name`, GST number, IS number + year, document numbers) get UNIQUE constraints or indexes, case-insensitive (`lower(trim(...))`) where duplicates differ only by case.

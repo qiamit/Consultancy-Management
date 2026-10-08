@@ -30,7 +30,7 @@ export function UserManagementTable(props: UserManagementTableProps) {
   const someSelected = userIds.some((id) => props.selectedIds.has(id)) && !allSelected
 
   return (
-    <div className="overflow-hidden rounded-none border-2 border-stone-500 bg-white shadow-sm ring-1 ring-amber-700/20 overflow-hidden">
+    <div className="overflow-x-auto rounded-none border-2 border-stone-500 bg-white shadow-sm ring-1 ring-amber-700/20">
       {props.users.length > 0 ? (
         <Table className={GRID_TABLE}>
           <TableHeader>
@@ -50,6 +50,7 @@ export function UserManagementTable(props: UserManagementTableProps) {
               <TableHead className="text-[11px] font-bold uppercase tracking-[0.14em] text-amber-200 text-center">Name</TableHead>
               <TableHead className="text-[11px] font-bold uppercase tracking-[0.14em] text-amber-200 text-center">Contact Details</TableHead>
               <TableHead className="text-[11px] font-bold uppercase tracking-[0.14em] text-amber-200 text-center">Division & Department</TableHead>
+              <TableHead className="text-[11px] font-bold uppercase tracking-[0.14em] text-amber-200 text-center">Role</TableHead>
               <TableHead className="text-[11px] font-bold uppercase tracking-[0.14em] text-amber-200 text-center">Status</TableHead>
               <TableHead className="text-[11px] font-bold uppercase tracking-[0.14em] text-amber-200 text-center">Actions</TableHead>
             </TableRow>
@@ -90,6 +91,8 @@ export function UserManagementTable(props: UserManagementTableProps) {
                       <p className="text-sm text-muted-foreground">{user.departmentName?.trim() || '—'}</p>
                     </div>
                   </TableCell>
+
+                  <TableCell className="text-center align-middle text-sm capitalize">{user.accessRole}</TableCell>
 
                   <TableCell className="text-center align-middle">
                     <Select

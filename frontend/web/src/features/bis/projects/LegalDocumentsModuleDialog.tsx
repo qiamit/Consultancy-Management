@@ -1214,7 +1214,7 @@ export function LegalDocumentsModuleDialog({
                     row ? String(row.is_code?.revision_year ?? '').trim() || null : null
                   }
                   portalUserId={row?.portal_user_id}
-                  portalPassword={row?.portal_password}
+                  hasPortalPassword={Boolean(row?.portal_password_set)}
                   onPrintTestRequest={() => {
                     if (!row) return
                     void printBisDocument(row, 'osl-sample-test-request').then((err) => {

@@ -40,8 +40,16 @@ Self-hosted Supabase-style stack on **Railway**, project **Consultancy Managemen
 
 ## Language
 - App UI text is in English. Some pages have an EN/हिंदी toggle backed by a small local strings file (example: `features/bis/knowledge-search/knowledgeSearchUiI18n.ts`). Follow that pattern rather than adding an i18n library, and add Hindi strings when you touch a page that already supports Hindi.
-- AI features (QI Assistant, knowledge answers) reply in the user's language, including Hindi and Hinglish.
-- Explanations to Amit in chat can be in Hindi or Hinglish. Code, identifiers, comments and commit messages stay in English.
+- Code, identifiers, comments, commit messages and SQL stay in English.
+- Replies to Amit use both languages, in this order: complete English, then complete Hindi. Technical names (session ids, file paths, function names) stay in English inside both parts.
+- Do not write Hinglish. A sentence is Hinglish when Hindi grammar and English verbs share one clause.
+- The in-app assistant and knowledge answers still follow the end user's own wording. That is separate from agent replies to Amit.
+
+एप्लिकेशन का लेख, कोड, पहचान-नाम, कमिट संदेश और SQL अंग्रेज़ी में रहते हैं।
+अमित को उत्तर दो भागों में दें: पहले पूरा अंग्रेज़ी अनुच्छेद, फिर पूरा हिंदी अनुच्छेद।
+सत्र नाम, फ़ाइल पथ और फ़ंक्शन नाम दोनों भागों में अंग्रेज़ी ही रहेंगे।
+हिंदी और अंग्रेज़ी को एक ही वाक्य में न मिलाएँ।
+ऐप के अंदर सहायक और ज्ञान-उत्तर अंतिम उपयोगकर्ता की अपनी भाषा में रह सकते हैं। यह अमित को दिए गए एजेंट उत्तर से अलग है।
 
 ## Business naming
 - Always write "Quality International Research & Laboratories Private Limited" in full. Never write "Pvt Ltd", "Pvt. Ltd." or "P. Ltd." This applies to UI, templates, seeds, emails and PDFs.
@@ -59,7 +67,7 @@ Self-hosted Supabase-style stack on **Railway**, project **Consultancy Managemen
 - Make small, reviewable changes, one concern at a time. Apply multi-file edits directly instead of pasting long code blocks into chat.
 - Don't touch unrelated files, don't reformat whole files, and don't add dependencies without explaining why.
 - After frontend changes, run `npm run lint` and `npm run typecheck` (plus `npm run build` if routing or config changed) and fix any errors you introduced. After `knowledge_engine` changes, run the relevant test modules. After `backend/services` changes, run `node --check` on the edited files.
-- Don't commit or push unless Amit asks. Never force-push.
+- Don't commit or push unless Amit asks. Never force-push. (Exception: the QE Coder chat executing an approved `docs/agents/plans/<ID>_coder_prompt.md`. Amit pasting that trigger is the ask; see `qe-coder.mdc`.)
 - End every task with a short summary: files changed, what changed, how you verified it (commands and results), and anything open or risky.
 
 ## Paths moved on 2026-10-08

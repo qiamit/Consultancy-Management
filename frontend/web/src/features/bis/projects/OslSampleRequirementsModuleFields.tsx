@@ -214,7 +214,7 @@ export function OslSampleRequirementsModuleFields({
   isCodeSearch = null,
   isCodeRevisionYear = null,
   portalUserId = null,
-  portalPassword = null,
+  hasPortalPassword = false,
 }: {
   value: OslSampleRequirementsModulePayload
   onChange: (next: OslSampleRequirementsModulePayload) => void
@@ -231,7 +231,7 @@ export function OslSampleRequirementsModuleFields({
   /** Optional revision year — helps pick the matching IS from Manak results. */
   isCodeRevisionYear?: string | null
   portalUserId?: string | null
-  portalPassword?: string | null
+  hasPortalPassword?: boolean
   onPrintTestRequest?: (row: OslSampleRequirementRow) => void
   onPrintTestReport?: (row: OslSampleRequirementRow) => void
   /** @deprecated Courier Slip now opens a read-only A4 preview (print + PDF download). */
@@ -540,7 +540,7 @@ export function OslSampleRequirementsModuleFields({
     setImportBusy(true)
     void importManakQrCodes({
       portalUserId,
-      portalPassword,
+      projectId,
       qrCount: 5,
     })
       .then(({ extensionUsed }) => {
@@ -553,6 +553,9 @@ export function OslSampleRequirementsModuleFields({
             'QE Consultancy extension not detected. Opened Manak login — install/enable the extension to import QR codes.',
           )
         }
+      })
+      .catch((err: unknown) => {
+        toast.error(err instanceof Error ? err.message : 'Could not import QR codes from Manak')
       })
       .finally(() => setImportBusy(false))
   }
@@ -647,8 +650,7 @@ export function OslSampleRequirementsModuleFields({
       return
     }
     const userId = String(portalUserId ?? '').trim()
-    const password = String(portalPassword ?? '').trim()
-    if (!userId || !password) {
+    if (!userId || !hasPortalPassword) {
       toast.error(
         'Portal User ID / Password missing on this BIS project. Save them on the project form, then retry Extension.',
       )
@@ -665,7 +667,7 @@ export function OslSampleRequirementsModuleFields({
       isYear: isCodeRevisionYear,
       returnToken,
       portalUserId: userId,
-      portalPassword: password,
+      portalPassword: '',
       sample: {
         date_of_manufacturing: row.dateOfManufacturing,
         shelf_life: row.shelfLife,
@@ -695,7 +697,7 @@ export function OslSampleRequirementsModuleFields({
         const { extensionUsed } = await openManakTestRequestFill({
           payload,
           portalUserId: userId,
-          portalPassword: password,
+          projectId,
         })
         if (extensionUsed) {
           toast.success(
