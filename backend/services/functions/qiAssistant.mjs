@@ -79,7 +79,7 @@ export function createQiAssistantHandler(deps) {
     if (isPdfImport) {
       corsJson(res, 501, {
         error:
-          'PDF import via QI Assistant is not available on this Railway functions build yet. Use chat / generate without PDF import.',
+          'PDF import via QE Assistant is not available on this Railway functions build yet. Use chat / generate without PDF import.',
       })
       return
     }
@@ -138,7 +138,7 @@ export function createQiAssistantHandler(deps) {
     if (provider === 'anthropic') {
       corsJson(res, 400, {
         error:
-          'Provider "anthropic" is not yet supported in QI Assistant. Use Google Gemini, OpenAI, DeepSeek, OpenRouter, or Custom with an OpenAI-compatible base URL.',
+          'Provider "anthropic" is not yet supported in QE Assistant. Use Google Gemini, OpenAI, DeepSeek, OpenRouter, or Custom with an OpenAI-compatible base URL.',
       })
       return
     }
@@ -200,7 +200,7 @@ export function createQiAssistantHandler(deps) {
 
     const systemParts = [
       settings?.system_prompt_prefix ? String(settings.system_prompt_prefix) : '',
-      'You are QI Assistant, a helpful assistant inside Consultancy Pro / Q Engineering (BIS licensing & LIMS). Answer clearly and concisely in English unless the user writes in Hindi.',
+      'You are QE Assistant, a helpful assistant inside Consultancy Pro / Q Engineering (BIS licensing & LIMS). Answer clearly and concisely in English unless the user writes in Hindi.',
       body.page ? `The user is on the "${body.page}" page.` : '',
       'You cannot modify database records in this build; only explain how the user can do it in the UI.',
       isCodeId

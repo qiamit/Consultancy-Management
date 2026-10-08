@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { limsDarkBarGlowStyle, limsDialogClass, limsPageShellClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabaseClient'
+import { useCanEditCurrentModule } from '@/features/settings/module-access/useCanEditCurrentModule'
 import { useFormDialogOpenChange } from '@/lib/formDialogOpenChange'
 import { useMasterUiSearchState } from '@/lib/useMasterUiSearchState'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -32,6 +33,34 @@ const BUCKET = 'is-code-files'
 /** Must stay within storage.buckets.file_size_limit for is-code-files. */
 const IS_CODE_MAX_FILE_BYTES = 50 * 1024 * 1024
 const IS_CODE_ALLOWED_EXT = new Set(['pdf', 'png', 'jpg', 'jpeg', 'doc', 'docx'])
+
+const VIEW_ONLY_MSG = 'View-only access — ask the Laboratory Director for Edit access.'
+
+type MasterDeleteResult = {
+  deleted?: string[] | null
+  blocked?: { id?: string; refs?: Record<string, number> }[] | null
+  storage_paths?: string[] | null
+}
+
+function formatPermanentDeleteMessage(
+  data: MasterDeleteResult | null,
+  nameOf: (id: string) => string,
+): string {
+  const deleted = Array.isArray(data?.deleted) ? data.deleted : []
+  const blocked = Array.isArray(data?.blocked) ? data.blocked : []
+  let msg = `Deleted ${deleted.length}.`
+  if (blocked.length > 0) {
+    const bits = blocked.slice(0, 5).map((b) => {
+      const id = String(b.id ?? '')
+      const refs = Object.entries(b.refs ?? {})
+        .map(([table, n]) => `${String(table).replace(/^public\./, '')} ${n}`)
+        .join(', ')
+      return `${nameOf(id)} (${refs})`
+    })
+    msg += ` Not deleted (still used): ${bits.join('; ')} — use Archive instead.`
+  }
+  return msg
+}
 
 function isCodeFileContentType(file: File): string {
   if (file.type && file.type !== 'application/octet-stream') return file.type
@@ -178,6 +207,8 @@ export default function IsCodesMasterPage() {
   const { editId, viewId, setEdit, setView } = useMasterUiSearchState()
   const [saveLoading, setSaveLoading] = useState(false)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
+  const canEdit = useCanEditCurrentModule()
+  const [showArchived, setShowArchived] = useState(false)
 
   const importInputRef = useRef<HTMLInputElement | null>(null)
   const filesDialogFileInputBusy = useRef(false)
@@ -372,10 +403,11 @@ export default function IsCodesMasterPage() {
   }, [search, pageSize, sortKey, sortDir])
 
   const filteredRows = useMemo(() => {
+    const base = showArchived ? rows : rows.filter((r) => !r.archived_at)
     const q = search.trim().toLowerCase()
     const list = !q
-      ? [...rows]
-      : rows.filter((r) => {
+      ? [...base]
+      : base.filter((r) => {
           const blob = [
             r.is_number,
             r.revision_year == null ? '' : String(r.revision_year),
@@ -439,7 +471,7 @@ export default function IsCodesMasterPage() {
       if (primary !== 0) return primary
       return cmpText(formatIsCodeLabel(a), formatIsCodeLabel(b))
     })
-  }, [rows, search, sortKey, sortDir])
+  }, [rows, search, sortKey, sortDir, showArchived])
 
   const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize))
 
@@ -718,6 +750,10 @@ export default function IsCodesMasterPage() {
   }
 
   const handleDeleteAspect = (id: string) => {
+    if (!canEdit) {
+      setSaveMessage(VIEW_ONLY_MSG)
+      return
+    }
     void (async () => {
       try {
         if (!id || id.startsWith('default-')) return
@@ -731,6 +767,10 @@ export default function IsCodesMasterPage() {
   }
 
   const uploadFiles = async (isCodeId: string, files: File[]) => {
+    if (!canEdit) {
+      setSaveMessage(VIEW_ONLY_MSG)
+      return
+    }
     const { data: sessionData, error: sessionErr } = await supabase.auth.getSession()
     if (sessionErr) throw sessionErr
     if (!sessionData.session?.access_token) {
@@ -1004,6 +1044,10 @@ export default function IsCodesMasterPage() {
   }
 
   const handleSave = () => {
+    if (!canEdit) {
+      setSaveMessage(VIEW_ONLY_MSG)
+      return
+    }
     void (async () => {
       setSaveMessage(null)
       setSaveLoading(true)
@@ -1099,45 +1143,102 @@ export default function IsCodesMasterPage() {
     })()
   }
 
-  const handleDeleteSelected = () => {
+  const handleArchiveSelected = () => {
     void (async () => {
-      if (selectedRows.length === 0) return
-      const ok = window.confirm(`Delete ${selectedRows.length} selected IS code(s)?`)
+      if (selectedRows.length === 0) {
+        setSaveMessage('Select at least one IS code to archive.')
+        return
+      }
+      const ok = window.confirm(`Archive ${selectedRows.length} selected IS code(s)?`)
       if (!ok) return
       setSaveMessage(null)
       setSaveLoading(true)
       try {
         const ids = selectedRows.map((r) => r.id)
-        const { data: deletedRows, error: dbErr } = await supabase
+        const { data, error } = await supabase
           .from('is_codes')
-          .delete()
+          .update({ archived_at: new Date().toISOString() })
           .in('id', ids)
+          .is('archived_at', null)
           .select('id')
-        if (dbErr) throw dbErr
-        const deletedIds = (Array.isArray(deletedRows) ? deletedRows : []).map((row) => String(row.id))
-        if (deletedIds.length === 0) {
-          setSaveMessage('Delete not allowed — only Laboratory Director/Admin can delete.')
+        if (error) throw error
+        const n = Array.isArray(data) ? data.length : 0
+        if (n === 0) {
+          setSaveMessage('You do not have edit access (view-only).')
           return
         }
-        const { data: fileRows, error: fileErr } = await supabase
-          .from('is_code_files')
-          .select('storage_path')
-          .in('is_code_id', deletedIds)
-        if (fileErr) throw fileErr
-        const paths = (Array.isArray(fileRows) ? fileRows : [])
-          .map((x: { storage_path?: string | null }) => x.storage_path)
-          .filter((path): path is string => typeof path === 'string' && path.length > 0)
+        setSaveMessage(`Archived ${n}.`)
+        setSelectedIds(new Set())
+        await loadIsCodes()
+      } catch (err) {
+        setSaveMessage(formatSupabaseError(err))
+      } finally {
+        setSaveLoading(false)
+      }
+    })()
+  }
+
+  const handleRestoreSelected = () => {
+    void (async () => {
+      if (selectedRows.length === 0) {
+        setSaveMessage('Select at least one IS code to restore.')
+        return
+      }
+      setSaveMessage(null)
+      setSaveLoading(true)
+      try {
+        const ids = selectedRows.map((r) => r.id)
+        const { data, error } = await supabase
+          .from('is_codes')
+          .update({ archived_at: null })
+          .in('id', ids)
+          .not('archived_at', 'is', null)
+          .select('id')
+        if (error) throw error
+        const n = Array.isArray(data) ? data.length : 0
+        if (n === 0) {
+          setSaveMessage('You do not have edit access (view-only).')
+          return
+        }
+        setSaveMessage(`Restored ${n}.`)
+        setSelectedIds(new Set())
+        await loadIsCodes()
+      } catch (err) {
+        setSaveMessage(formatSupabaseError(err))
+      } finally {
+        setSaveLoading(false)
+      }
+    })()
+  }
+
+  const handleDeleteSelected = () => {
+    void (async () => {
+      if (selectedRows.length === 0) return
+      const ok = window.confirm(
+        `Permanently delete ${selectedRows.length} record(s)? Records still used elsewhere will be skipped. This cannot be undone.`,
+      )
+      if (!ok) return
+      setSaveMessage(null)
+      setSaveLoading(true)
+      try {
+        const ids = selectedRows.map((r) => r.id)
+        const { data, error } = await supabase.rpc('delete_master_rows', { p_table: 'is_codes', p_ids: ids })
+        if (error) throw error
+        const res = (data ?? null) as MasterDeleteResult | null
+        const paths = (Array.isArray(res?.storage_paths) ? res.storage_paths : []).filter(
+          (path): path is string => typeof path === 'string' && path.length > 0,
+        )
+        let storageWarn = ''
         if (paths.length > 0) {
           const { error: rmErr } = await supabase.storage.from(BUCKET).remove(paths)
-          if (rmErr) throw rmErr
+          if (rmErr) storageWarn = ' Some PDFs could not be removed from storage.'
         }
-        const { error: dbFileErr } = await supabase.from('is_code_files').delete().in('is_code_id', deletedIds)
-        if (dbFileErr) throw dbFileErr
-
+        const msg = formatPermanentDeleteMessage(res, (id) => {
+          const row = rows.find((r) => r.id === id)
+          return row ? formatIsCodeLabel(row) : id
+        })
+        setSaveMessage(`${msg}${storageWarn}`)
         setSelectedIds(new Set())
-        setSaveMessage(
-          deletedIds.length < ids.length ? `Deleted ${deletedIds.length} of ${ids.length}.` : 'Deleted.',
-        )
         await loadIsCodes()
       } catch (err) {
         setSaveMessage(formatSupabaseError(err))
@@ -1209,11 +1310,19 @@ export default function IsCodesMasterPage() {
   }
 
   const handleImport = () => {
+    if (!canEdit) {
+      setSaveMessage(VIEW_ONLY_MSG)
+      return
+    }
     setSaveMessage(null)
     importInputRef.current?.click()
   }
 
   const handleImportFile = (file: File) => {
+    if (!canEdit) {
+      setSaveMessage(VIEW_ONLY_MSG)
+      return
+    }
     void (async () => {
       setSaveMessage(null)
       setSaveLoading(true)
@@ -1376,6 +1485,7 @@ export default function IsCodesMasterPage() {
             setPage(1)
           }}
           onNew={handleNew}
+          canEdit={canEdit}
           onOpenBIS={() => window.open('https://standards.bis.gov.in', '_blank', 'noreferrer')}
           assistantContext={assistantContext}
           onAssistantDataChanged={() => void loadIsCodes()}
@@ -1487,6 +1597,11 @@ export default function IsCodesMasterPage() {
           onExport={handleExport}
           onPrintSelected={handlePrintSelected}
           onDeleteSelected={handleDeleteSelected}
+          canEdit={canEdit}
+          showArchived={showArchived}
+          onToggleShowArchived={() => setShowArchived((v) => !v)}
+          onArchiveSelected={handleArchiveSelected}
+          onRestoreSelected={handleRestoreSelected}
           onPrevPage={() => setPage((p) => Math.max(1, p - 1))}
           onNextPage={() => setPage((p) => Math.min(pageCount, p + 1))}
           jumpTo={jumpTo}

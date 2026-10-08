@@ -22,6 +22,7 @@ export function TestParameterHeaderBar({
   onAssistantDataChanged,
   isCodeOptions = [],
   onAddSymbol,
+  canEdit = true,
 }: {
   search: string
   onSearchChange: (value: string) => void
@@ -31,6 +32,7 @@ export function TestParameterHeaderBar({
   onAssistantDataChanged?: () => void
   isCodeOptions?: QiAssistantIsCodeOption[]
   onAddSymbol?: () => void
+  canEdit?: boolean
 }) {
   return (
     <div className={cn(limsPanelClass)}>
@@ -82,7 +84,7 @@ export function TestParameterHeaderBar({
             </SelectContent>
           </Select>
 
-          {onAddSymbol ? (
+          {canEdit && onAddSymbol ? (
             <Button
               type="button"
               variant="outline"

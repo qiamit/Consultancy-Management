@@ -26,6 +26,7 @@ export function IsCodesHeaderBar({
   pageSize,
   onPageSizeChange,
   onNew,
+  canEdit = true,
   onOpenBIS,
   assistantContext,
   onAssistantDataChanged,
@@ -35,6 +36,7 @@ export function IsCodesHeaderBar({
   pageSize: number
   onPageSizeChange: (size: number) => void
   onNew: () => void
+  canEdit?: boolean
   onOpenBIS: () => void
   assistantContext: string
   onAssistantDataChanged?: () => void
@@ -111,18 +113,20 @@ export function IsCodesHeaderBar({
             BIS Website
           </Button>
 
-          <Button
-            type="button"
-            className={cn('h-8 shrink-0 gap-1 px-2 sm:gap-1.5 sm:px-3', limsPrimaryBtnClass)}
-            size="sm"
-            onClick={onNew}
-            aria-label="Add New IS Code"
-            title="Add New IS Code"
-          >
-            <Plus size={14} className="shrink-0" />
-            <span className="hidden lg:inline">Add New IS Code</span>
-            <span className="hidden sm:inline lg:hidden">Add</span>
-          </Button>
+          {canEdit ? (
+            <Button
+              type="button"
+              className={cn('h-8 shrink-0 gap-1 px-2 sm:gap-1.5 sm:px-3', limsPrimaryBtnClass)}
+              size="sm"
+              onClick={onNew}
+              aria-label="Add New IS Code"
+              title="Add New IS Code"
+            >
+              <Plus size={14} className="shrink-0" />
+              <span className="hidden lg:inline">Add New IS Code</span>
+              <span className="hidden sm:inline lg:hidden">Add</span>
+            </Button>
+          ) : null}
         </div>
       </div>
     </div>

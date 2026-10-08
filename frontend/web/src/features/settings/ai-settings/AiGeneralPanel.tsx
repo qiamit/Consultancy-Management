@@ -63,16 +63,22 @@ function ToggleRow({
   onChange,
   label,
   id,
+  disabled = false,
 }: {
   checked: boolean
   onChange: (checked: boolean) => void
   label: string
   id: string
+  disabled?: boolean
 }) {
   return (
     <label
       htmlFor={id}
-      className="flex h-full min-h-[44px] cursor-pointer items-center justify-between gap-3 rounded-none border border-stone-500 bg-[#f7f3eb] px-3 py-2.5 transition-colors hover:bg-stone-100"
+      className={
+        disabled
+          ? 'flex h-full min-h-[44px] cursor-not-allowed items-center justify-between gap-3 rounded-none border border-stone-500 bg-[#f7f3eb] px-3 py-2.5 opacity-60'
+          : 'flex h-full min-h-[44px] cursor-pointer items-center justify-between gap-3 rounded-none border border-stone-500 bg-[#f7f3eb] px-3 py-2.5 transition-colors hover:bg-stone-100'
+      }
     >
       <span className="min-w-0 flex-1 text-xs font-medium leading-snug text-stone-800">{label}</span>
       <span className="relative inline-flex h-5 w-9 shrink-0 items-center">
@@ -81,7 +87,10 @@ function ToggleRow({
           type="checkbox"
           className="peer sr-only"
           checked={checked}
-          onChange={(e) => onChange(e.target.checked)}
+          disabled={disabled}
+          onChange={(e) => {
+            if (!disabled) onChange(e.target.checked)
+          }}
         />
         <span className="absolute inset-0 rounded-full bg-stone-400 transition-colors peer-checked:bg-amber-700 peer-focus-visible:ring-2 peer-focus-visible:ring-amber-500/40" />
         <span className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform peer-checked:translate-x-4" />
@@ -240,7 +249,8 @@ export const AiGeneralPanel = forwardRef<AiGeneralPanelHandle, AiGeneralPanelPro
             id="ai-agent-crud"
             checked={agentCrudEnabled}
             onChange={setAgentCrudEnabled}
-            label="Allow QI Assistant to Edit LIMS Data"
+            label="Allow QE Assistant to Edit Data (coming later)"
+            disabled
           />
           <ToggleRow
             id="ai-log-requests"

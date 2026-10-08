@@ -34,9 +34,11 @@ import { getBrandShortName, LAB_NAME_CHANGED_EVENT, LAB_NAME_STORAGE_KEY } from 
 import {
   PROFILE_MENU_SECTIONS,
   SIDEBAR_NAV_SECTIONS,
+  flattenNavModules,
   type NavItem,
   type NavSection,
 } from '@/lib/appNav'
+import { QiAssistant } from '@/components/qi-assistant/QiAssistant'
 
 const formatNavLabel = (value: string) =>
   value
@@ -420,6 +422,26 @@ export default function GlobalLayout() {
   useAppCurrency()
   const navigate = useNavigate()
   const location = useLocation()
+  const globalPageTitle = useMemo(() => {
+    let best = ''
+    let label = ''
+    for (const item of flattenNavModules()) {
+      if (location.pathname === item.key || (item.key !== '/' && location.pathname.startsWith(`${item.key}/`))) {
+        if (item.key.length > best.length) {
+          best = item.key
+          label = item.label
+        }
+      }
+    }
+    return label || 'Q Engineering'
+  }, [location.pathname])
+  const hideGlobalAssistant =
+    location.pathname === '/masters/clients' ||
+    location.pathname.startsWith('/masters/clients/') ||
+    location.pathname === '/masters/is-codes' ||
+    location.pathname.startsWith('/masters/is-codes/') ||
+    location.pathname === '/masters/test-parameter' ||
+    location.pathname.startsWith('/masters/test-parameter/')
   const { profileName, designation } = useAuth()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false
@@ -693,6 +715,27 @@ export default function GlobalLayout() {
           </div>
 
           <div className="relative flex shrink-0 items-center gap-2 sm:gap-3">
+            {hideGlobalAssistant ? null : (
+              <>
+                <div className="hidden sm:block">
+                  <QiAssistant
+                    page="global"
+                    pageTitle={globalPageTitle}
+                    contextSummary={`The user is on the app route ${location.pathname}.`}
+                    triggerVariant="default"
+                    triggerClassName="h-8"
+                  />
+                </div>
+                <div className="sm:hidden">
+                  <QiAssistant
+                    page="global"
+                    pageTitle={globalPageTitle}
+                    contextSummary={`The user is on the app route ${location.pathname}.`}
+                    triggerVariant="icon"
+                  />
+                </div>
+              </>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-2 rounded-none px-2 py-1.5 transition-colors hover:bg-white/10">

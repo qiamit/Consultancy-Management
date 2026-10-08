@@ -32,6 +32,7 @@ export type ClientRow = {
   payment_term: PaymentTerm
   remark: string | null
   created_at?: string
+  archived_at?: string | null
 }
 
 export type ClientForm = {

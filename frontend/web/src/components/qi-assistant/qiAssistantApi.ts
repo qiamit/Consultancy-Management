@@ -83,7 +83,7 @@ async function postQiAssistant(body: Record<string, unknown>): Promise<QiAssista
         ? err
         : typeof err === 'object' && err && typeof err.message === 'string'
           ? err.message
-          : `QI Assistant failed (${response.status})`
+          : `QE Assistant failed (${response.status})`
     throw new Error(errText)
   }
 

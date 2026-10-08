@@ -15,6 +15,7 @@ export type TestParameterRow = {
   designation: string | null
   acceptance_criteria: string | null
   created_at?: string
+  archived_at?: string | null
 }
 
 export type AccreditationBodyRow = {

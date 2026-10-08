@@ -49,7 +49,7 @@ function assistantDialogTitle(activeRecordTable?: string, isCodeId?: string, pag
   if (page === 'clients') return 'Client Directory Assistant'
   if (activeRecordTable === 'test_parameters') return 'Test Parameter Assistant'
   if (activeRecordTable === 'is_codes' || isCodeId) return 'IS Code Assistant'
-  return 'QI Assistant'
+  return 'QE Assistant'
 }
 
 type SpeechRecognitionLike = {
@@ -268,13 +268,9 @@ export function QiAssistant({
     const pdfNote = enablePdfImport
       ? ' Use the **PDF** button to attach a file, then type your command and press **Send**.'
       : ''
-    const imageNote = enableImageImport
-      ? ' Attach a **business card / photo** — I can read it and **save the client** automatically.'
-      : ''
+    const imageNote = ''
+    const crudNote = ''
     const voiceNote = ' Tap the **mic** to speak your request.'
-    const crudNote = agentCrudEnabled
-      ? ' I can **create, update, and delete** records in this module when you ask.'
-      : ''
     const isCodeNote = showIsCodePicker
       ? ' Pick an **IS Code** below so I can read its uploaded PDFs.'
       : ''
@@ -282,7 +278,7 @@ export function QiAssistant({
     const intro =
       welcomeMessage !== undefined
         ? welcomeMessage
-        : `Hello! I'm **QI Assistant** on **${pageTitle}**. Ask me about this screen or the data shown here.${crudNote}${imageNote}${pdfNote}${voiceNote}${isCodeNote}${skillNote}`
+        : `Hello! I'm **QE Assistant** on **${pageTitle}**. Ask me about this screen or the data shown here.${crudNote}${imageNote}${pdfNote}${voiceNote}${isCodeNote}${skillNote}`
     if (intro.trim()) {
       setMessages([{ id: newId(), role: 'assistant', content: intro }])
     }
@@ -660,7 +656,8 @@ export function QiAssistant({
               'rounded-none border-amber-500/45 bg-stone-800/80 text-amber-200 shadow-none hover:bg-amber-500/20 hover:text-amber-100',
               triggerClassName,
             )}
-            aria-label={`Ask AI Assistant about ${pageTitle}`}
+            title={`QE Assistant — ${pageTitle}`}
+            aria-label={`Open QE Assistant (${pageTitle})`}
           >
             <Sparkles size={14} className="text-current" />
           </Button>
@@ -673,10 +670,10 @@ export function QiAssistant({
               'gap-1.5 rounded-none border border-amber-500/40 bg-stone-800/80 text-amber-100 shadow-none hover:bg-amber-500/20 hover:text-amber-50',
               triggerClassName,
             )}
-            aria-label="Open QI Assistant"
+            aria-label="Open QE Assistant"
           >
             <Sparkles size={16} className="text-amber-300" />
-            QI Assistant
+            QE Assistant
           </Button>
         )}
       </DialogTrigger>
@@ -1067,7 +1064,7 @@ export function QiAssistant({
                 rows={1}
                 onKeyDown={handleInputKeyDown}
                 disabled={loading}
-                aria-label="Message to QI Assistant"
+                aria-label="Message to QE Assistant"
                 aria-expanded={skillPickerOpen || attachPickerOpen}
                 aria-autocomplete="list"
               />

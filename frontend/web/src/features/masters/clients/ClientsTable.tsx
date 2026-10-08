@@ -241,6 +241,11 @@ export function ClientsTable({
                                 title={r.company_name}
                               >
                                 {r.company_name}
+                                {r.archived_at ? (
+                                  <span className="ml-1 bg-stone-200 px-1 text-[9px] font-semibold uppercase text-stone-600">
+                                    Archived
+                                  </span>
+                                ) : null}
                               </p>
                               {r.gst_number?.trim() ? (
                                 <p className={metaLineClass}>{r.gst_number}</p>
@@ -407,6 +412,11 @@ export function ClientsTable({
                         <div className={cn(cellInnerClass, 'text-left')}>
                           <p className={companyNameClass} title={r.company_name}>
                             {r.company_name}
+                            {r.archived_at ? (
+                              <span className="ml-1 bg-stone-200 px-1 text-[9px] font-semibold uppercase text-stone-600">
+                                Archived
+                              </span>
+                            ) : null}
                           </p>
                           {r.gst_number?.trim() ? <p className={metaLineClass}>{r.gst_number}</p> : null}
                         </div>

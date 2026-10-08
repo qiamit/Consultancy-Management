@@ -3,6 +3,7 @@ import { limsPageShellClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabaseClient'
+import { useCanEditCurrentModule } from '@/features/settings/module-access/useCanEditCurrentModule'
 import { useMasterUiSearchState } from '@/lib/useMasterUiSearchState'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { TestParameterHeaderBar } from './TestParameterHeaderBar'
@@ -43,6 +44,33 @@ const formatSupabaseError = (err: unknown) => {
   const anyErr = err as { message?: string; details?: string; hint?: string; code?: string }
   const parts = [anyErr.message, anyErr.details, anyErr.hint, anyErr.code].filter(Boolean)
   return parts.length ? parts.join(' | ') : 'Unknown error'
+}
+
+const VIEW_ONLY_MSG = 'View-only access — ask the Laboratory Director for Edit access.'
+
+type MasterDeleteResult = {
+  deleted?: string[] | null
+  blocked?: { id?: string; refs?: Record<string, number> }[] | null
+}
+
+function formatPermanentDeleteMessage(
+  data: MasterDeleteResult | null,
+  nameOf: (id: string) => string,
+): string {
+  const deleted = Array.isArray(data?.deleted) ? data.deleted : []
+  const blocked = Array.isArray(data?.blocked) ? data.blocked : []
+  let msg = `Deleted ${deleted.length}.`
+  if (blocked.length > 0) {
+    const bits = blocked.slice(0, 5).map((b) => {
+      const id = String(b.id ?? '')
+      const refs = Object.entries(b.refs ?? {})
+        .map(([table, n]) => `${String(table).replace(/^public\./, '')} ${n}`)
+        .join(', ')
+      return `${nameOf(id)} (${refs})`
+    })
+    msg += ` Not deleted (still used): ${bits.join('; ')} — use Archive instead.`
+  }
+  return msg
 }
 
 const readListFromStorage = (key: string): string[] => {
@@ -149,6 +177,8 @@ export default function TestParameterMasterPage() {
   const { editId, setEdit } = useMasterUiSearchState()
   const [saveLoading, setSaveLoading] = useState(false)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
+  const canEdit = useCanEditCurrentModule()
+  const [showArchived, setShowArchived] = useState(false)
 
   const editingId = editId && editId !== 'new' ? editId : null
   const hydratedEditRef = useRef<string | null>(null)
@@ -283,6 +313,7 @@ export default function TestParameterMasterPage() {
           designation: (r.designation ? String(r.designation) : null) as string | null,
           acceptance_criteria: (r.acceptance_criteria ? String(r.acceptance_criteria) : null) as string | null,
           created_at: (r.created_at ? String(r.created_at) : undefined) as string | undefined,
+          archived_at: (r.archived_at ? String(r.archived_at) : null) as string | null,
         }))
           .filter((x) => x.id),
       )
@@ -456,15 +487,16 @@ export default function TestParameterMasterPage() {
   }, [rows, isCodes])
 
   const filteredRows = useMemo(() => {
+    const source = showArchived ? displayRows : displayRows.filter((r) => !r.archived_at)
     const lockedId = (lockedIsCodeId ?? '').trim()
     if (lockedId) {
-      return displayRows.filter((r) => (r.is_code_id ?? '').trim() === lockedId)
+      return source.filter((r) => (r.is_code_id ?? '').trim() === lockedId)
     }
 
     const q = search.trim().toLowerCase()
-    if (!q) return displayRows
+    if (!q) return source
 
-    return displayRows.filter((r) => {
+    return source.filter((r) => {
       const blob = [
         r.is_code_label ?? '',
         r.test_method ?? '',
@@ -480,7 +512,7 @@ export default function TestParameterMasterPage() {
 
       return blob.includes(q)
     })
-  }, [displayRows, search, lockedIsCodeId])
+  }, [displayRows, search, lockedIsCodeId, showArchived])
 
   const sortedRows = useMemo(() => {
     const sortValue = (r: TestParameterRow): string => {
@@ -629,6 +661,10 @@ export default function TestParameterMasterPage() {
   }
 
   const handleInlineEditSave = () => {
+    if (!canEdit) {
+      setSaveMessage(VIEW_ONLY_MSG)
+      return
+    }
     void (async () => {
       if (!editingId || saveLoading || normalizeText(editForm.itemName).length === 0) return
       setSaveMessage(null)
@@ -806,6 +842,10 @@ export default function TestParameterMasterPage() {
   }
 
   const handleAddIsAspect = () => {
+    if (!canEdit) {
+      setSaveMessage(VIEW_ONLY_MSG)
+      return
+    }
     const name = normalizeIsText(isCodeNewAspect)
     if (!name) return
     void (async () => {
@@ -833,6 +873,10 @@ export default function TestParameterMasterPage() {
   }
 
   const handleDeleteIsAspect = (id: string) => {
+    if (!canEdit) {
+      setSaveMessage(VIEW_ONLY_MSG)
+      return
+    }
     void (async () => {
       try {
         if (!id || id.startsWith('default-')) return
@@ -849,6 +893,10 @@ export default function TestParameterMasterPage() {
     !isCodeSaveLoading && normalizeIsText(isCodeForm.isNumber).length > 0 && normalizeIsText(isCodeForm.title).length > 0
 
   const handleSaveIsCode = () => {
+    if (!canEdit) {
+      setSaveMessage(VIEW_ONLY_MSG)
+      return
+    }
     void (async () => {
       setSaveMessage(null)
       setIsCodeSaveLoading(true)
@@ -907,23 +955,94 @@ export default function TestParameterMasterPage() {
     setIsCodeForm(emptyIsCodeForm())
   }
 
-  const handleDeleteSelected = () => {
+  const handleArchiveSelected = () => {
     void (async () => {
-      if (selectedRows.length === 0) return
-      const ok = window.confirm(`Delete ${selectedRows.length} selected record(s)?`)
+      if (selectedRows.length === 0) {
+        setSaveMessage('Select at least one parameter to archive.')
+        return
+      }
+      const ok = window.confirm(`Archive ${selectedRows.length} selected record(s)?`)
       if (!ok) return
       setSaveMessage(null)
       setSaveLoading(true)
       try {
         const ids = selectedRows.map((r) => r.id)
-        const { data, error } = await supabase.from('test_parameters').delete().in('id', ids).select('id')
+        const { data, error } = await supabase
+          .from('test_parameters')
+          .update({ archived_at: new Date().toISOString() })
+          .in('id', ids)
+          .is('archived_at', null)
+          .select('id')
         if (error) throw error
-        const deleted = Array.isArray(data) ? data.length : 0
-        if (deleted === 0) {
-          setSaveMessage('Delete not allowed — only Laboratory Director/Admin can delete.')
+        const n = Array.isArray(data) ? data.length : 0
+        if (n === 0) {
+          setSaveMessage('You do not have edit access (view-only).')
           return
         }
-        setSaveMessage(deleted < ids.length ? `Deleted ${deleted} of ${ids.length}.` : 'Deleted successfully.')
+        setSaveMessage(`Archived ${n}.`)
+        setSelectedIds(new Set())
+        await loadRows()
+      } catch (err) {
+        setSaveMessage(err instanceof Error ? err.message : 'Unable to archive')
+      } finally {
+        setSaveLoading(false)
+      }
+    })()
+  }
+
+  const handleRestoreSelected = () => {
+    void (async () => {
+      if (selectedRows.length === 0) {
+        setSaveMessage('Select at least one parameter to restore.')
+        return
+      }
+      setSaveMessage(null)
+      setSaveLoading(true)
+      try {
+        const ids = selectedRows.map((r) => r.id)
+        const { data, error } = await supabase
+          .from('test_parameters')
+          .update({ archived_at: null })
+          .in('id', ids)
+          .not('archived_at', 'is', null)
+          .select('id')
+        if (error) throw error
+        const n = Array.isArray(data) ? data.length : 0
+        if (n === 0) {
+          setSaveMessage('You do not have edit access (view-only).')
+          return
+        }
+        setSaveMessage(`Restored ${n}.`)
+        setSelectedIds(new Set())
+        await loadRows()
+      } catch (err) {
+        setSaveMessage(err instanceof Error ? err.message : 'Unable to restore')
+      } finally {
+        setSaveLoading(false)
+      }
+    })()
+  }
+
+  const handleDeleteSelected = () => {
+    void (async () => {
+      if (selectedRows.length === 0) return
+      const ok = window.confirm(
+        `Permanently delete ${selectedRows.length} record(s)? Records still used elsewhere will be skipped. This cannot be undone.`,
+      )
+      if (!ok) return
+      setSaveMessage(null)
+      setSaveLoading(true)
+      try {
+        const ids = selectedRows.map((r) => r.id)
+        const { data, error } = await supabase.rpc('delete_master_rows', {
+          p_table: 'test_parameters',
+          p_ids: ids,
+        })
+        if (error) throw error
+        const res = (data ?? null) as MasterDeleteResult | null
+        setSaveMessage(
+          formatPermanentDeleteMessage(res, (id) => rows.find((r) => r.id === id)?.item_name || id),
+        )
         setSelectedIds(new Set())
         await loadRows()
       } catch (err) {
@@ -937,19 +1056,20 @@ export default function TestParameterMasterPage() {
   const handleDeleteRow = (row: TestParameterRow) => {
     void (async () => {
       const label = row.item_name?.trim() || 'this record'
-      const ok = window.confirm(`Delete "${label}"?`)
+      const ok = window.confirm(
+        `Permanently delete 1 record(s)? Records still used elsewhere will be skipped. This cannot be undone.`,
+      )
       if (!ok) return
       setSaveMessage(null)
       setSaveLoading(true)
       try {
-        const { data, error } = await supabase.from('test_parameters').delete().eq('id', row.id).select('id')
+        const { data, error } = await supabase.rpc('delete_master_rows', {
+          p_table: 'test_parameters',
+          p_ids: [row.id],
+        })
         if (error) throw error
-        const deleted = Array.isArray(data) ? data.length : 0
-        if (deleted === 0) {
-          setSaveMessage('Delete not allowed — only Laboratory Director/Admin can delete.')
-          return
-        }
-        setSaveMessage('Deleted successfully.')
+        const res = (data ?? null) as MasterDeleteResult | null
+        setSaveMessage(formatPermanentDeleteMessage(res, () => label))
         setSelectedIds((prev) => {
           if (!prev.has(row.id)) return prev
           const next = new Set(prev)
@@ -1069,11 +1189,19 @@ export default function TestParameterMasterPage() {
   }
 
   const handleImport = () => {
+    if (!canEdit) {
+      setSaveMessage(VIEW_ONLY_MSG)
+      return
+    }
     setSaveMessage(null)
     importInputRef.current?.click()
   }
 
   const handleImportFile = (file: File) => {
+    if (!canEdit) {
+      setSaveMessage(VIEW_ONLY_MSG)
+      return
+    }
     void (async () => {
       setSaveMessage(null)
       setSaveLoading(true)
@@ -1204,6 +1332,7 @@ export default function TestParameterMasterPage() {
           onAssistantDataChanged={() => void loadRows()}
           isCodeOptions={isCodeOptions}
           onAddSymbol={() => setSymbolDialogOpen(true)}
+          canEdit={canEdit}
         />
       </div>
 
@@ -1280,6 +1409,11 @@ export default function TestParameterMasterPage() {
           onExport={handleExport}
           onPrintSelected={handlePrintSelected}
           onDeleteSelected={handleDeleteSelected}
+          canEdit={canEdit}
+          showArchived={showArchived}
+          onToggleShowArchived={() => setShowArchived((v) => !v)}
+          onArchiveSelected={handleArchiveSelected}
+          onRestoreSelected={handleRestoreSelected}
           page={page}
           pageCount={pageCount}
           onPrevPage={() => setPage((p) => Math.max(1, p - 1))}

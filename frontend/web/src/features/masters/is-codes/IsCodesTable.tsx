@@ -245,6 +245,11 @@ export function IsCodesTable({
                             <BookOpen className="h-3.5 w-3.5 shrink-0 text-amber-700" aria-hidden />
                             <p className="truncate text-[14px] font-bold tracking-tight text-[#1c1917]">
                               {formatIsCodeLabel(r)}
+                              {r.archived_at ? (
+                                <span className="ml-1 bg-stone-200 px-1 text-[9px] font-semibold uppercase text-stone-600">
+                                  Archived
+                                </span>
+                              ) : null}
                             </p>
                           </div>
                           <p className="mt-1 text-[12.5px] font-semibold leading-snug text-[#292524]">
@@ -420,6 +425,11 @@ export function IsCodesTable({
                         <div className={cn(cellInnerClass, 'text-left')}>
                           <p className={identityClass} title={formatIsCodeLabel(r)}>
                             {formatIsCodeLabel(r)}
+                            {r.archived_at ? (
+                              <span className="ml-1 bg-stone-200 px-1 text-[9px] font-semibold uppercase text-stone-600">
+                                Archived
+                              </span>
+                            ) : null}
                           </p>
                           <p className={secondaryLineClass}>
                             {formatReaffirmation(r)} | Amd {formatAmendment(r)}

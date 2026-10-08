@@ -1221,6 +1221,11 @@ export function TestParameterTable({
                             <FlaskConical className="h-3.5 w-3.5 shrink-0 text-amber-700" aria-hidden />
                             <p className="truncate text-[14px] font-bold tracking-tight text-[#1c1917]">
                               {r.item_name || '—'}
+                              {r.archived_at ? (
+                                <span className="ml-1 bg-stone-200 px-1 text-[9px] font-semibold uppercase text-stone-600">
+                                  Archived
+                                </span>
+                              ) : null}
                             </p>
                           </div>
                           <p className="mt-1 font-mono text-[11px] font-medium text-[#b45309]">
@@ -1410,6 +1415,11 @@ export function TestParameterTable({
                       <TableCell className={cn(tdClass, 'text-left')}>
                         <div className="text-[13px] font-bold tracking-tight text-[#1c1917]">
                           {r.item_name || '—'}
+                          {r.archived_at ? (
+                            <span className="ml-1 bg-stone-200 px-1 text-[9px] font-semibold uppercase text-stone-600">
+                              Archived
+                            </span>
+                          ) : null}
                         </div>
                       </TableCell>
                       <TableCell className={cn(tdClass, 'font-semibold')}>

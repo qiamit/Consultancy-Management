@@ -29,7 +29,7 @@ export function QiAssistantChatPanel({
   contextSummary,
   welcomeMessage = '',
   suggestedQuestions = [],
-  placeholder = 'Ask QI Assistant…',
+  placeholder = 'Ask QE Assistant…',
   staticIsCodeId,
   staticActiveRecordId,
   staticActiveRecordTable,
@@ -244,7 +244,7 @@ export function QiAssistantChatPanel({
           rows={1}
           onKeyDown={handleInputKeyDown}
           disabled={loading}
-          aria-label="Message to QI Assistant"
+          aria-label="Message to QE Assistant"
         />
         <Button
           type="button"

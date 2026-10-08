@@ -25,6 +25,7 @@ export type ProductServiceRow = {
   low_stock_alert: number
   created_at?: string
   updated_at?: string
+  archived_at?: string | null
 }
 
 export type ProductServiceForm = {

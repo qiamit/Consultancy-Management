@@ -6,7 +6,7 @@ import {
   limsPanelClass,
   limsDarkBarGlowStyle,
 } from '@/lib/limsThemeUi'
-import { ChevronLeft, ChevronRight, Download, FileUp, Printer, Trash2 } from 'lucide-react'
+import { Archive, ArchiveRestore, ChevronLeft, ChevronRight, Download, FileUp, Printer, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { LaboratoryDirectorOnly } from '@/components/lims/LaboratoryDirectorOnly'
@@ -21,6 +21,11 @@ export function ProductsServicesFooterBar({
   onExport,
   onPrintSelected,
   onDeleteSelected,
+  canEdit,
+  showArchived,
+  onToggleShowArchived,
+  onArchiveSelected,
+  onRestoreSelected,
   onPrevPage,
   onNextPage,
   jumpTo,
@@ -36,6 +41,11 @@ export function ProductsServicesFooterBar({
   onExport: () => void
   onPrintSelected: () => void
   onDeleteSelected: () => void
+  canEdit?: boolean
+  showArchived?: boolean
+  onToggleShowArchived?: () => void
+  onArchiveSelected?: () => void
+  onRestoreSelected?: () => void
   onPrevPage: () => void
   onNextPage: () => void
   jumpTo: string
@@ -53,6 +63,40 @@ export function ProductsServicesFooterBar({
 
         <div className="relative flex min-w-0 flex-nowrap items-center gap-1 overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch] sm:gap-1.5 md:gap-2.5">
           <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
+            {onToggleShowArchived ? (
+              <label className="flex h-8 shrink-0 items-center gap-1 px-1 text-[10px] text-stone-200 sm:text-xs">
+                <input type="checkbox" checked={Boolean(showArchived)} onChange={() => onToggleShowArchived()} />
+                Show archived
+              </label>
+            ) : null}
+            {canEdit ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className={actionBtnClass}
+                onClick={onArchiveSelected}
+                disabled={loading || selectionDisabled}
+                title="Archive selected"
+              >
+                <Archive size={14} />
+                <span className="hidden md:inline">Archive</span>
+              </Button>
+            ) : null}
+            {canEdit && showArchived ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className={actionBtnClass}
+                onClick={onRestoreSelected}
+                disabled={loading || selectionDisabled}
+                title="Restore selected"
+              >
+                <ArchiveRestore size={14} />
+                <span className="hidden md:inline">Restore</span>
+              </Button>
+            ) : null}
             <LaboratoryDirectorOnly>
               <Button
                 type="button"
@@ -97,10 +141,10 @@ export function ProductsServicesFooterBar({
                 className={cn(limsDeleteBtnClass, 'h-8 shrink-0 gap-1 px-2 text-xs sm:px-2.5')}
                 onClick={onDeleteSelected}
                 disabled={loading || selectionDisabled}
-                title="Delete selected items (confirmation required)"
+                title="Delete permanently"
               >
                 <Trash2 size={14} />
-                <span className="hidden md:inline">Delete</span>
+                <span className="hidden md:inline">Delete permanently</span>
               </Button>
             </LaboratoryDirectorOnly>
             {selectedCount > 0 ? (
@@ -114,6 +158,8 @@ export function ProductsServicesFooterBar({
                   'min-w-0 max-w-[8rem] truncate text-[10px] sm:max-w-[12rem] sm:text-xs md:max-w-[16rem]',
                   message.toLowerCase().includes('saved') ||
                     message.toLowerCase().includes('deleted') ||
+                    message.toLowerCase().includes('archived') ||
+                    message.toLowerCase().includes('restored') ||
                     message.toLowerCase().includes('exported') ||
                     message.toLowerCase().includes('imported') ||
                     message.toLowerCase().includes('print')

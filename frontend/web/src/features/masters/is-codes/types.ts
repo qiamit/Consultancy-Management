@@ -38,6 +38,7 @@ export type IsCodeRow = {
   slab_3_quantity: string | null
   slab_3_rate: number | null
   created_at?: string
+  archived_at?: string | null
 }
 
 export type IsCodeFileRow = {

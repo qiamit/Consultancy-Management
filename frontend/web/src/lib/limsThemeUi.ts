@@ -44,7 +44,7 @@ export const limsDarkBarFieldClass =
 export const limsDarkBarSearchClass =
   'h-8 rounded-none border border-amber-500/50 bg-amber-50 text-[#1c1917] shadow-none placeholder:text-stone-500 focus-visible:border-amber-600 focus-visible:ring-2 focus-visible:ring-amber-500/20'
 
-/** QI Assistant icon trigger on dark bars */
+/** QE Assistant icon trigger on dark bars */
 export const limsAiTriggerClass =
   'rounded-none border-amber-500/45 bg-stone-800/80 text-amber-200 shadow-none hover:bg-amber-500/20 hover:text-amber-100'
 

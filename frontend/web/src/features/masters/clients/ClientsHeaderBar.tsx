@@ -24,6 +24,7 @@ export function ClientsHeaderBar({
   pageSize,
   onPageSizeChange,
   onNew,
+  canEdit = true,
   assistantContext,
   onAssistantDataChanged,
 }: {
@@ -32,6 +33,7 @@ export function ClientsHeaderBar({
   pageSize: number
   onPageSizeChange: (size: number) => void
   onNew: () => void
+  canEdit?: boolean
   assistantContext: string
   onAssistantDataChanged?: () => void
 }) {
@@ -97,24 +99,24 @@ export function ClientsHeaderBar({
             welcomeMessage=""
             suggestedQuestions={[]}
             onDataChanged={onAssistantDataChanged}
-            enableImageImport
-            imageAttachHint="business card or company photo"
             triggerVariant="icon"
             triggerClassName={cn(clientAiTriggerClass, 'h-8 w-8 shrink-0')}
           />
 
-          <Button
-            type="button"
-            className={cn('h-8 shrink-0 gap-1 px-2 sm:gap-1.5 sm:px-3', clientPrimaryBtnClass)}
-            size="sm"
-            onClick={onNew}
-            aria-label="Add New Client"
-            title="Add New Client"
-          >
-            <Plus size={14} className="shrink-0" />
-            <span className="hidden lg:inline">Add New Client</span>
-            <span className="hidden sm:inline lg:hidden">Add</span>
-          </Button>
+          {canEdit ? (
+            <Button
+              type="button"
+              className={cn('h-8 shrink-0 gap-1 px-2 sm:gap-1.5 sm:px-3', clientPrimaryBtnClass)}
+              size="sm"
+              onClick={onNew}
+              aria-label="Add New Client"
+              title="Add New Client"
+            >
+              <Plus size={14} className="shrink-0" />
+              <span className="hidden lg:inline">Add New Client</span>
+              <span className="hidden sm:inline lg:hidden">Add</span>
+            </Button>
+          ) : null}
         </div>
       </div>
     </div>

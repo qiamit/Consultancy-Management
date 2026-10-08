@@ -3,6 +3,7 @@ import { getCurrencySymbol } from '@/lib/appCurrency'
 import { limsDarkBarGlowStyle, limsDialogClass, limsPageShellClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabaseClient'
+import { useCanEditCurrentModule } from '@/features/settings/module-access/useCanEditCurrentModule'
 import { useFormDialogOpenChange } from '@/lib/formDialogOpenChange'
 import { useMasterUiSearchState } from '@/lib/useMasterUiSearchState'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -149,6 +150,33 @@ function buildPrintHtml(rows: ProductServiceRow[]) {
   </body></html>`
 }
 
+const VIEW_ONLY_MSG = 'View-only access — ask the Laboratory Director for Edit access.'
+
+type MasterDeleteResult = {
+  deleted?: string[] | null
+  blocked?: { id?: string; refs?: Record<string, number> }[] | null
+}
+
+function formatPermanentDeleteMessage(
+  data: MasterDeleteResult | null,
+  nameOf: (id: string) => string,
+): string {
+  const deleted = Array.isArray(data?.deleted) ? data.deleted : []
+  const blocked = Array.isArray(data?.blocked) ? data.blocked : []
+  let msg = `Deleted ${deleted.length}.`
+  if (blocked.length > 0) {
+    const bits = blocked.slice(0, 5).map((b) => {
+      const id = String(b.id ?? '')
+      const refs = Object.entries(b.refs ?? {})
+        .map(([table, n]) => `${String(table).replace(/^public\./, '')} ${n}`)
+        .join(', ')
+      return `${nameOf(id)} (${refs})`
+    })
+    msg += ` Not deleted (still used): ${bits.join('; ')} — use Archive instead.`
+  }
+  return msg
+}
+
 const CSV_HEADERS = [
   'item_type',
   'item_code',
@@ -170,6 +198,8 @@ export default function ProductsServicesMasterPage() {
   const { editId, setEdit } = useMasterUiSearchState()
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const [saveLoading, setSaveLoading] = useState(false)
+  const canEdit = useCanEditCurrentModule()
+  const [showArchived, setShowArchived] = useState(false)
   const importInputRef = useRef<HTMLInputElement | null>(null)
   const hydratedEditRef = useRef<string | null>(null)
 
@@ -287,10 +317,11 @@ export default function ProductsServicesMasterPage() {
   }, [editId, rows, listLoading, buildNewForm, setEdit])
 
   const filteredRows = useMemo(() => {
+    const base = showArchived ? rows : rows.filter((r) => !r.archived_at)
     const q = search.trim().toLowerCase()
     const list = !q
-      ? [...rows]
-      : rows.filter((r) =>
+      ? [...base]
+      : base.filter((r) =>
           [
             r.item_type,
             r.item_code,
@@ -334,7 +365,7 @@ export default function ProductsServicesMasterPage() {
       if (primary !== 0) return primary
       return cmpText(a.item_code || '', b.item_code || '')
     })
-  }, [rows, search, sortKey, sortDir])
+  }, [rows, search, sortKey, sortDir, showArchived])
 
   const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize))
   const safePage = Math.min(page, pageCount)
@@ -410,6 +441,10 @@ export default function ProductsServicesMasterPage() {
   }
 
   const handleSave = async () => {
+    if (!canEdit) {
+      setSaveMessage(VIEW_ONLY_MSG)
+      return
+    }
     if (!canSave) return
     setSaveLoading(true)
     setSaveMessage(null)
@@ -476,22 +511,89 @@ export default function ProductsServicesMasterPage() {
     })
   }
 
-  const handleDeleteSelected = async () => {
+  const handleArchiveSelected = async () => {
     const ids = [...selectedIds]
-    if (ids.length === 0) return
-    if (!window.confirm(`Delete ${ids.length} selected item(s)?`)) return
+    if (ids.length === 0) {
+      setSaveMessage('Select at least one item to archive.')
+      return
+    }
+    if (!window.confirm(`Archive ${ids.length} selected item(s)?`)) return
     setSaveLoading(true)
     setSaveMessage(null)
     try {
-      const { data, error } = await supabase.from('products_services_master').delete().in('id', ids).select('id')
+      const { data, error } = await supabase
+        .from('products_services_master')
+        .update({ archived_at: new Date().toISOString() })
+        .in('id', ids)
+        .is('archived_at', null)
+        .select('id')
       if (error) throw error
-      const deleted = Array.isArray(data) ? data.length : 0
-      if (deleted === 0) {
-        setSaveMessage('Delete not allowed — only Laboratory Director/Admin can delete.')
+      const n = Array.isArray(data) ? data.length : 0
+      if (n === 0) {
+        setSaveMessage('You do not have edit access (view-only).')
         return
       }
       setSelectedIds(new Set())
-      setSaveMessage(deleted < ids.length ? `Deleted ${deleted} of ${ids.length}.` : `Deleted ${ids.length} record(s).`)
+      setSaveMessage(`Archived ${n}.`)
+      await loadRows()
+    } catch (err) {
+      setSaveMessage(formatSupabaseError(err))
+    } finally {
+      setSaveLoading(false)
+    }
+  }
+
+  const handleRestoreSelected = async () => {
+    const ids = [...selectedIds]
+    if (ids.length === 0) {
+      setSaveMessage('Select at least one item to restore.')
+      return
+    }
+    setSaveLoading(true)
+    setSaveMessage(null)
+    try {
+      const { data, error } = await supabase
+        .from('products_services_master')
+        .update({ archived_at: null })
+        .in('id', ids)
+        .not('archived_at', 'is', null)
+        .select('id')
+      if (error) throw error
+      const n = Array.isArray(data) ? data.length : 0
+      if (n === 0) {
+        setSaveMessage('You do not have edit access (view-only).')
+        return
+      }
+      setSelectedIds(new Set())
+      setSaveMessage(`Restored ${n}.`)
+      await loadRows()
+    } catch (err) {
+      setSaveMessage(formatSupabaseError(err))
+    } finally {
+      setSaveLoading(false)
+    }
+  }
+
+  const handleDeleteSelected = async () => {
+    const ids = [...selectedIds]
+    if (ids.length === 0) return
+    if (
+      !window.confirm(
+        `Permanently delete ${ids.length} record(s)? Records still used elsewhere will be skipped. This cannot be undone.`,
+      )
+    )
+      return
+    setSaveLoading(true)
+    setSaveMessage(null)
+    try {
+      const { data, error } = await supabase.rpc('delete_master_rows', {
+        p_table: 'products_services_master',
+        p_ids: ids,
+      })
+      if (error) throw error
+      const res = (data ?? null) as MasterDeleteResult | null
+      setSelectedIds(new Set())
+      setSaveMessage(formatPermanentDeleteMessage(res, (id) => rows.find((r) => r.id === id)?.item_name || id))
       await loadRows()
     } catch (err) {
       setSaveMessage(formatSupabaseError(err))
@@ -529,6 +631,10 @@ export default function ProductsServicesMasterPage() {
   }
 
   const onImportFile = async (file: File) => {
+    if (!canEdit) {
+      setSaveMessage(VIEW_ONLY_MSG)
+      return
+    }
     setSaveLoading(true)
     setSaveMessage(null)
     try {
@@ -613,6 +719,7 @@ export default function ProductsServicesMasterPage() {
             setPage(1)
           }}
           onNew={openNew}
+          canEdit={canEdit}
           assistantContext={assistantContext}
           onAssistantDataChanged={() => void loadRows()}
         />
@@ -684,10 +791,21 @@ export default function ProductsServicesMasterPage() {
           selectedCount={selectedIds.size}
           page={safePage}
           pageCount={pageCount}
-          onImport={() => importInputRef.current?.click()}
+          onImport={() => {
+            if (!canEdit) {
+              setSaveMessage(VIEW_ONLY_MSG)
+              return
+            }
+            importInputRef.current?.click()
+          }}
           onExport={handleExport}
           onPrintSelected={handlePrintSelected}
           onDeleteSelected={() => void handleDeleteSelected()}
+          canEdit={canEdit}
+          showArchived={showArchived}
+          onToggleShowArchived={() => setShowArchived((v) => !v)}
+          onArchiveSelected={() => void handleArchiveSelected()}
+          onRestoreSelected={() => void handleRestoreSelected()}
           onPrevPage={() => setPage((p) => Math.max(1, p - 1))}
           onNextPage={() => setPage((p) => Math.min(pageCount, p + 1))}
           jumpTo={jumpTo}

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import { invalidateClientsCache } from '@/lib/clientsCache'
 import { supabase } from '@/lib/supabaseClient'
+import { useCanEditCurrentModule } from '@/features/settings/module-access/useCanEditCurrentModule'
 import { useFormDialogOpenChange } from '@/lib/formDialogOpenChange'
 import { useMasterUiSearchState } from '@/lib/useMasterUiSearchState'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -37,6 +38,34 @@ import {
 } from './types'
 
 const normalizeText = (value: string) => value.trim()
+
+const VIEW_ONLY_MSG = 'View-only access — ask the Laboratory Director for Edit access.'
+
+type MasterDeleteResult = {
+  deleted?: string[] | null
+  blocked?: { id?: string; refs?: Record<string, number> }[] | null
+  storage_paths?: string[] | null
+}
+
+function formatPermanentDeleteMessage(
+  data: MasterDeleteResult | null,
+  nameOf: (id: string) => string,
+): string {
+  const deleted = Array.isArray(data?.deleted) ? data.deleted : []
+  const blocked = Array.isArray(data?.blocked) ? data.blocked : []
+  let msg = `Deleted ${deleted.length}.`
+  if (blocked.length > 0) {
+    const bits = blocked.slice(0, 5).map((b) => {
+      const id = String(b.id ?? '')
+      const refs = Object.entries(b.refs ?? {})
+        .map(([table, n]) => `${String(table).replace(/^public\./, '')} ${n}`)
+        .join(', ')
+      return `${nameOf(id)} (${refs})`
+    })
+    msg += ` Not deleted (still used): ${bits.join('; ')} — use Archive instead.`
+  }
+  return msg
+}
 
 const nameCollator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true })
 
@@ -160,6 +189,8 @@ export default function ClientsMasterPage() {
   const { editId, setEdit } = useMasterUiSearchState()
   const [saveLoading, setSaveLoading] = useState(false)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
+  const canEdit = useCanEditCurrentModule()
+  const [showArchived, setShowArchived] = useState(false)
 
   const importInputRef = useRef<HTMLInputElement | null>(null)
   const hydratedEditRef = useRef<string | null>(null)
@@ -371,6 +402,10 @@ export default function ClientsMasterPage() {
   }, [editId, rows, listLoading, setEdit])
 
   const handleAddState = () => {
+    if (!canEdit) {
+      setSaveMessage(VIEW_ONLY_MSG)
+      return
+    }
     const name = normalizeText(newStateName)
     if (!name) return
     void (async () => {
@@ -398,6 +433,10 @@ export default function ClientsMasterPage() {
   }
 
   const handleAddCountry = () => {
+    if (!canEdit) {
+      setSaveMessage(VIEW_ONLY_MSG)
+      return
+    }
     const name = normalizeText(newCountryName)
     if (!name) return
     void (async () => {
@@ -425,6 +464,10 @@ export default function ClientsMasterPage() {
   }
 
   const handleAddDistrict = () => {
+    if (!canEdit) {
+      setSaveMessage(VIEW_ONLY_MSG)
+      return
+    }
     const name = normalizeText(newDistrictName)
     if (!name) return
     void (async () => {
@@ -452,6 +495,10 @@ export default function ClientsMasterPage() {
   }
 
   const handleAddPinCode = () => {
+    if (!canEdit) {
+      setSaveMessage(VIEW_ONLY_MSG)
+      return
+    }
     const name = newPinCode.trim().replace(/[^0-9]/g, '').slice(0, 6)
     if (!name) return
     void (async () => {
@@ -479,6 +526,10 @@ export default function ClientsMasterPage() {
   }
 
   const deleteMasterOption = (id: string, category: string) => {
+    if (!canEdit) {
+      setSaveMessage(VIEW_ONLY_MSG)
+      return
+    }
     void (async () => {
       try {
         if (!id || id.startsWith('default-') || id.startsWith('db-')) return
@@ -511,6 +562,10 @@ export default function ClientsMasterPage() {
   }
 
   const updateMasterOption = (id: string, category: string, rawLabel: string) => {
+    if (!canEdit) {
+      setSaveMessage(VIEW_ONLY_MSG)
+      return
+    }
     const name =
       category === 'pin_code'
         ? rawLabel.trim().replace(/[^0-9]/g, '').slice(0, 6)
@@ -643,6 +698,10 @@ export default function ClientsMasterPage() {
   }, [rows])
 
   const handleAddCountryCode = () => {
+    if (!canEdit) {
+      setSaveMessage(VIEW_ONLY_MSG)
+      return
+    }
     const raw = normalizeText(newCountryCode)
     if (!raw) return
     const formatted = raw.startsWith('+') ? raw : `+${raw}`
@@ -691,6 +750,10 @@ export default function ClientsMasterPage() {
   }
 
   const handleSave = () => {
+    if (!canEdit) {
+      setSaveMessage(VIEW_ONLY_MSG)
+      return
+    }
     void (async () => {
       setSaveMessage(null)
       setSaveLoading(true)
@@ -770,10 +833,11 @@ export default function ClientsMasterPage() {
   }
 
   const filteredRows = useMemo(() => {
+    const base = showArchived ? rows : rows.filter((r) => !r.archived_at)
     const q = search.trim().toLowerCase()
     const list = !q
-      ? [...rows]
-      : rows.filter((r) => {
+      ? [...base]
+      : base.filter((r) => {
           const blob = [
             r.company_name,
             r.gst_number ?? '',
@@ -837,7 +901,7 @@ export default function ClientsMasterPage() {
       if (primary !== 0) return primary
       return cmpText(a.company_name || '', b.company_name || '')
     })
-  }, [rows, search, sortKey, sortDir])
+  }, [rows, search, sortKey, sortDir, showArchived])
 
   const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize))
 
@@ -940,37 +1004,96 @@ export default function ClientsMasterPage() {
     setSaveMessage(`Print ready: ${selectedRows.length} courier slip(s) (half A4).`)
   }
 
+  const handleArchiveSelected = () => {
+    void (async () => {
+      if (selectedRows.length === 0) {
+        setSaveMessage('Select at least one client to archive.')
+        return
+      }
+      const ok = window.confirm(`Archive ${selectedRows.length} selected client(s)?`)
+      if (!ok) return
+      setSaveMessage(null)
+      setSaveLoading(true)
+      try {
+        const ids = selectedRows.map((r) => r.id)
+        const { data, error } = await supabase
+          .from('clients')
+          .update({ archived_at: new Date().toISOString() })
+          .in('id', ids)
+          .is('archived_at', null)
+          .select('id')
+        if (error) throw error
+        const n = Array.isArray(data) ? data.length : 0
+        if (n === 0) {
+          setSaveMessage('You do not have edit access (view-only).')
+          return
+        }
+        invalidateClientsCache()
+        setSaveMessage(`Archived ${n}.`)
+        setSelectedIds(new Set())
+        await loadClients()
+      } catch (err) {
+        setSaveMessage(err instanceof Error ? err.message : 'Unable to archive clients')
+      } finally {
+        setSaveLoading(false)
+      }
+    })()
+  }
+
+  const handleRestoreSelected = () => {
+    void (async () => {
+      if (selectedRows.length === 0) {
+        setSaveMessage('Select at least one client to restore.')
+        return
+      }
+      setSaveMessage(null)
+      setSaveLoading(true)
+      try {
+        const ids = selectedRows.map((r) => r.id)
+        const { data, error } = await supabase
+          .from('clients')
+          .update({ archived_at: null })
+          .in('id', ids)
+          .not('archived_at', 'is', null)
+          .select('id')
+        if (error) throw error
+        const n = Array.isArray(data) ? data.length : 0
+        if (n === 0) {
+          setSaveMessage('You do not have edit access (view-only).')
+          return
+        }
+        invalidateClientsCache()
+        setSaveMessage(`Restored ${n}.`)
+        setSelectedIds(new Set())
+        await loadClients()
+      } catch (err) {
+        setSaveMessage(err instanceof Error ? err.message : 'Unable to restore clients')
+      } finally {
+        setSaveLoading(false)
+      }
+    })()
+  }
+
   const handleDeleteSelected = () => {
     void (async () => {
       if (selectedRows.length === 0) {
         setSaveMessage('Select at least one client to delete.')
         return
       }
-      const preview = selectedRows
-        .slice(0, 5)
-        .map((r) => `• ${r.company_name}`)
-        .join('\n')
-      const more =
-        selectedRows.length > 5 ? `\n…and ${selectedRows.length - 5} more` : ''
       const ok = window.confirm(
-        `Delete ${selectedRows.length} selected client(s)?\n\n${preview}${more}\n\nThis cannot be undone.`,
+        `Permanently delete ${selectedRows.length} record(s)? Records still used elsewhere will be skipped. This cannot be undone.`,
       )
       if (!ok) return
       setSaveMessage(null)
       setSaveLoading(true)
       try {
         const ids = selectedRows.map((r) => r.id)
-        const { data, error } = await supabase.from('clients').delete().in('id', ids).select('id')
+        const { data, error } = await supabase.rpc('delete_master_rows', { p_table: 'clients', p_ids: ids })
         if (error) throw error
-        const deleted = Array.isArray(data) ? data.length : 0
-        if (deleted === 0) {
-          setSaveMessage('Delete not allowed — only Laboratory Director/Admin can delete.')
-          return
-        }
-        invalidateClientsCache()
-        setSaveMessage(
-          deleted < ids.length ? `Deleted ${deleted} of ${ids.length}.` : `Deleted ${ids.length} client(s).`,
-        )
+        const res = (data ?? null) as MasterDeleteResult | null
+        const deleted = Array.isArray(res?.deleted) ? res.deleted : []
+        if (deleted.length > 0) invalidateClientsCache()
+        setSaveMessage(formatPermanentDeleteMessage(res, (id) => rows.find((r) => r.id === id)?.company_name || id))
         setSelectedIds(new Set())
         await loadClients()
       } catch (err) {
@@ -1026,11 +1149,19 @@ export default function ClientsMasterPage() {
   }
 
   const handleImport = () => {
+    if (!canEdit) {
+      setSaveMessage(VIEW_ONLY_MSG)
+      return
+    }
     setSaveMessage(null)
     importInputRef.current?.click()
   }
 
   const handleImportFile = (file: File) => {
+    if (!canEdit) {
+      setSaveMessage(VIEW_ONLY_MSG)
+      return
+    }
     void (async () => {
       setSaveMessage(null)
       setSaveLoading(true)
@@ -1147,6 +1278,7 @@ export default function ClientsMasterPage() {
             setPage(1)
           }}
           onNew={handleNew}
+          canEdit={canEdit}
           assistantContext={assistantContext}
           onAssistantDataChanged={() => void loadClients()}
         />
@@ -1311,6 +1443,11 @@ export default function ClientsMasterPage() {
           onExport={handleExport}
           onPrintSelected={handlePrintSelected}
           onDeleteSelected={handleDeleteSelected}
+          canEdit={canEdit}
+          showArchived={showArchived}
+          onToggleShowArchived={() => setShowArchived((v) => !v)}
+          onArchiveSelected={handleArchiveSelected}
+          onRestoreSelected={handleRestoreSelected}
           onPrevPage={() => setPage((p) => Math.max(1, p - 1))}
           onNextPage={() => setPage((p) => Math.min(pageCount, p + 1))}
           jumpTo={jumpTo}
