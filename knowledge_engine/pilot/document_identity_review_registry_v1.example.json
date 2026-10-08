@@ -1,0 +1,155 @@
+{
+  "registry_id": "document_identity_review_registry_v1",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-10-07T00:00:00+00:00",
+  "purpose": "Synthetic schema example only — not live metadata.",
+  "constraints_honored": {
+    "live_filter_unchanged": true,
+    "chroma_untouched": true,
+    "authoritative_gold_untouched": true,
+    "selection_untouched": true,
+    "alias_policy_untouched": true,
+    "source_packet_untouched": true
+  },
+  "notes": [
+    "content_records keyed by SHA-256; Document IS lives here",
+    "path_occurrences are per source_relative_path; Parent STD lives here",
+    "same sha256 may have different parent_std values on different paths",
+    "status and provenance are separate; heuristics never auto-verified"
+  ],
+  "content_records": [
+    {
+      "content_id": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "document_is": {
+        "value": "IS 2676",
+        "status": "unverified",
+        "provenance": "filename_heuristic",
+        "evidence": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": []
+      }
+    },
+    {
+      "content_id": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "document_is": {
+        "value": null,
+        "status": "needs_review",
+        "provenance": "unavailable",
+        "evidence": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": ["folder-only / no filename IS token"]
+      }
+    }
+  ],
+  "path_occurrences": [
+    {
+      "occurrence_id": "occ_example_std21",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source_relative_path": "STD 21/Test Method/IS 2676 1981 - 00.pdf",
+      "path_status": "active",
+      "replaced_by_occurrence_id": null,
+      "replaces_occurrence_id": null,
+      "parent_std": {
+        "value": "STD 21",
+        "number": "21",
+        "status": "unverified",
+        "provenance": "path_folder_heuristic",
+        "evidence": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": []
+      },
+      "filename_is_heuristic": "IS 2676",
+      "queue_tags": ["cross_std_test_method"],
+      "seed_notes": []
+    },
+    {
+      "occurrence_id": "occ_example_std9999",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source_relative_path": "STD 9999/Archive/IS 2676 1981 - 00.pdf",
+      "path_status": "active",
+      "replaced_by_occurrence_id": null,
+      "replaces_occurrence_id": null,
+      "parent_std": {
+        "value": "STD 9999",
+        "number": "9999",
+        "status": "unverified",
+        "provenance": "path_folder_heuristic",
+        "evidence": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": ["same content hash; different Parent STD"]
+      },
+      "filename_is_heuristic": "IS 2676",
+      "queue_tags": ["cross_std_same_hash"],
+      "seed_notes": ["same bytes, different parent STD context"]
+    },
+    {
+      "occurrence_id": "occ_example_old_folder_only",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "source_relative_path": "STD 1237/Master Documents/Test Report.pdf",
+      "path_status": "superseded",
+      "replaced_by_occurrence_id": "occ_example_new_folder_only",
+      "replaces_occurrence_id": null,
+      "parent_std": {
+        "value": "STD 1237",
+        "number": "1237",
+        "status": "unverified",
+        "provenance": "path_folder_heuristic",
+        "evidence": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": []
+      },
+      "filename_is_heuristic": null,
+      "queue_tags": ["folder_only"],
+      "seed_notes": ["kept after rename"]
+    },
+    {
+      "occurrence_id": "occ_example_new_folder_only",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "source_relative_path": "STD 1237/Master Documents/Test Report (moved).pdf",
+      "path_status": "active",
+      "replaced_by_occurrence_id": null,
+      "replaces_occurrence_id": "occ_example_old_folder_only",
+      "parent_std": {
+        "value": "STD 1237",
+        "number": "1237",
+        "status": "unverified",
+        "provenance": "path_folder_heuristic",
+        "evidence": null,
+        "reviewer": null,
+        "reviewed_at": null,
+        "notes": []
+      },
+      "filename_is_heuristic": null,
+      "queue_tags": ["folder_only", "path_rename"],
+      "seed_notes": ["renamed_from:STD 1237/Master Documents/Test Report.pdf"]
+    }
+  ],
+  "occurrence_links": [
+    {
+      "link_id": "link_example_rename",
+      "from_occurrence_id": "occ_example_old_folder_only",
+      "to_occurrence_id": "occ_example_new_folder_only",
+      "relation": "renamed_to",
+      "noted_at": "2026-10-07T00:00:00+00:00"
+    }
+  ],
+  "review_queue": [],
+  "unresolved_summary": {
+    "needs_review_document_is": 0,
+    "needs_review_parent_std": 0,
+    "unverified_document_is": 0,
+    "unverified_parent_std": 0,
+    "rejected_document_is": 0,
+    "rejected_parent_std": 0,
+    "folder_only_or_missing_document_is": 0,
+    "filename_vs_parent_conflicts": 0,
+    "queue_item_count": 0
+  }
+}

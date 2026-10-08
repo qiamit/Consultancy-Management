@@ -1,6 +1,6 @@
 /** Local BIS knowledge search API client (Vite proxies /api/knowledge → 127.0.0.1:3851). */
 
-export type KnowledgeStandardId = 'all' | 'IS 9666' | 'IS 2676'
+export type KnowledgeStandardId = string
 
 export type AnswerabilityState = 'supported' | 'uncertain' | 'not_found'
 
@@ -62,6 +62,23 @@ export type KnowledgeHealthResponse = {
   error?: string | null
 }
 
+export type KnowledgeStandardOption = {
+  id: string
+  label: string
+}
+
+export type KnowledgeStandardsResponse = {
+  ok: boolean
+  collection?: string
+  usable_chunk_total?: number
+  corpus_mode?: string
+  standards?: KnowledgeStandardOption[]
+  banner_en?: string
+  banner_hi?: string
+  modes_note_en?: string
+  modes_note_hi?: string
+}
+
 const API_BASE = '/api/knowledge'
 
 export async function fetchKnowledgeHealth(signal?: AbortSignal): Promise<KnowledgeHealthResponse> {
@@ -76,6 +93,22 @@ export async function fetchKnowledgeHealth(signal?: AbortSignal): Promise<Knowle
     const err = new Error('service_down')
     ;(err as Error & { payload?: KnowledgeHealthResponse }).payload = data
     throw err
+  }
+  return data
+}
+
+export async function fetchKnowledgeStandards(
+  signal?: AbortSignal,
+): Promise<KnowledgeStandardsResponse> {
+  const res = await fetch(`${API_BASE}/standards`, { method: 'GET', signal })
+  let data: KnowledgeStandardsResponse
+  try {
+    data = (await res.json()) as KnowledgeStandardsResponse
+  } catch {
+    throw new Error('service_down')
+  }
+  if (!res.ok || !data.ok) {
+    throw new Error('service_down')
   }
   return data
 }

@@ -79,15 +79,18 @@ def _ensure_tesseract_available() -> str:
     which = shutil.which("tesseract")
     if which:
         return which
-    # Common Homebrew locations (Apple Silicon / Intel).
+    # Project conda env, then common Homebrew locations (Apple Silicon / Intel).
+    module_root = Path(__file__).resolve().parent
     for candidate in (
-        "/opt/homebrew/bin/tesseract",
-        "/usr/local/bin/tesseract",
+        module_root / ".conda" / "bin" / "tesseract",
+        Path("/opt/homebrew/bin/tesseract"),
+        Path("/usr/local/bin/tesseract"),
     ):
         if Path(candidate).is_file():
-            return candidate
+            return str(candidate)
     raise RuntimeError(
-        "Tesseract OCR binary not found. Install with: brew install tesseract"
+        "Tesseract OCR binary not found. Install with: brew install tesseract "
+        "or use knowledge_engine/.conda/bin/tesseract"
     )
 
 

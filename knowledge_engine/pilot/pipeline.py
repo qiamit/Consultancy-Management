@@ -21,6 +21,11 @@ from knowledge_engine.chunk_extract import (
     write_chunks_bundle,
 )
 from knowledge_engine.extract_pdf import extract_pdf_hybrid, write_extraction_diagnostics
+from knowledge_engine.pilot.collection_guards import (
+    ProtectedCollectionError,
+    assert_collection_writable,
+    assert_path_not_protected,
+)
 from knowledge_engine.pilot.constants import (
     BASELINE_MUST_INCLUDE,
     CHUNK_VERSION,
@@ -93,14 +98,7 @@ def pilot_paths(vector_db_path: Path) -> dict[str, Path]:
 
 
 def assert_not_protected_path(path: Path) -> None:
-    s = str(path)
-    for name in PROTECTED_COLLECTIONS:
-        # allow reading sibling folders; forbid writing into protected collection dirs
-        if f"/sample_collections/{name}/" in s.replace("\\", "/") or s.endswith(
-            f"/sample_collections/{name}"
-        ):
-            if PILOT_COLLECTION_NAME not in s:
-                raise RuntimeError(f"Refusing to write protected collection path: {path}")
+    assert_path_not_protected(path, operation="pilot_pipeline_write")
 
 
 def open_or_create_pilot_collection(persist_dir: Path) -> tuple[str, Any]:
@@ -108,8 +106,10 @@ def open_or_create_pilot_collection(persist_dir: Path) -> tuple[str, Any]:
     from knowledge_engine.scripts.compare_multilingual_ranking import FastEmbedMultilingualEF
 
     assert_not_protected_path(persist_dir)
-    if PILOT_COLLECTION_NAME in PROTECTED_COLLECTIONS:
-        raise RuntimeError("Pilot collection name collides with protected set")
+    try:
+        assert_collection_writable(PILOT_COLLECTION_NAME, operation="open_or_create_pilot")
+    except ProtectedCollectionError as exc:
+        raise RuntimeError(str(exc)) from exc
 
     persist_dir.mkdir(parents=True, exist_ok=True)
     client = chromadb.PersistentClient(path=str(persist_dir))
@@ -119,7 +119,7 @@ def open_or_create_pilot_collection(persist_dir: Path) -> tuple[str, Any]:
     ]
     for bad in PROTECTED_COLLECTIONS:
         if bad in names:
-            raise RuntimeError(
+            raise ProtectedCollectionError(
                 f"Refusing to operate: protected collection {bad!r} found inside pilot chroma path"
             )
 

@@ -25,11 +25,16 @@ from knowledge_engine.config import load_settings
 from knowledge_engine.extract_pdf import default_diagnostics_dir
 from knowledge_engine.local_vector_test import (
     COLLECTION_NAME,
+    SCRATCH_COLLECTION_NAME,
     assert_no_forbidden_hits,
     build_local_tfidf_index,
     load_usable_chunks,
     query_chromadb,
     try_chromadb_index,
+)
+from knowledge_engine.pilot.collection_guards import (
+    ProtectedCollectionError,
+    assert_path_not_protected,
 )
 
 
@@ -105,8 +110,17 @@ def main(argv: list[str] | None = None) -> int:
     for c in chunks:
         by_sample[c.sample_label] = by_sample.get(c.sample_label, 0) + 1
 
-    # Separate sample collection under vector DB path (not full production index).
-    sample_root = settings.vector_db_path / "sample_collections" / COLLECTION_NAME
+    # Scratch-only workspace — never write under protected COLLECTION_NAME path.
+    sample_root = settings.vector_db_path / "sample_collections" / SCRATCH_COLLECTION_NAME
+    try:
+        assert_path_not_protected(sample_root, operation="usable_vector_search_test")
+    except ProtectedCollectionError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
+    # Also refuse accidental use of the protected production collection name.
+    if SCRATCH_COLLECTION_NAME == COLLECTION_NAME:
+        print("ERROR: scratch collection collides with protected name", file=sys.stderr)
+        return 2
     sample_root.mkdir(parents=True, exist_ok=True)
 
     backend = "tfidf"
@@ -116,7 +130,15 @@ def main(argv: list[str] | None = None) -> int:
 
     if not args.force_tfidf:
         chroma_persist = sample_root / "chroma"
-        built = try_chromadb_index(persist_dir=chroma_persist, chunks=chunks)
+        try:
+            built = try_chromadb_index(
+                persist_dir=chroma_persist,
+                chunks=chunks,
+                collection_name=SCRATCH_COLLECTION_NAME,
+            )
+        except ProtectedCollectionError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
         if built is not None:
             model_name, chroma_collection = built
             backend = "chromadb"
@@ -131,7 +153,8 @@ def main(argv: list[str] | None = None) -> int:
 
     manifest = {
         "created_at": datetime.now(timezone.utc).isoformat(),
-        "collection_name": COLLECTION_NAME,
+        "collection_name": SCRATCH_COLLECTION_NAME,
+        "protected_production_collection_untouched": COLLECTION_NAME,
         "diagnostics_run": str(run_dir),
         "backend": backend,
         "model_name": model_name,
@@ -228,7 +251,8 @@ def main(argv: list[str] | None = None) -> int:
 
     report = {
         "created_at": datetime.now(timezone.utc).isoformat(),
-        "collection_name": COLLECTION_NAME,
+        "collection_name": SCRATCH_COLLECTION_NAME,
+        "protected_production_collection_untouched": COLLECTION_NAME,
         "sample_collection_path": str(sample_root),
         "backend": backend,
         "model_name": model_name,

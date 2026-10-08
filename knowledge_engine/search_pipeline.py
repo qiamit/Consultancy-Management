@@ -27,6 +27,11 @@ from knowledge_engine.local_vector_test import (
     is_number_from_source_path,
     open_existing_chroma_collection,
 )
+from knowledge_engine.pilot.alias_policy import (
+    ContentIdentityRecord,
+    dedupe_search_hits_by_content,
+    try_load_alias_records_for_search,
+)
 
 FORBIDDEN = {
     "scanned": {8},
@@ -49,10 +54,9 @@ def standard_key(value: str | None) -> str:
     raw = (value or "all").strip()
     if not raw or raw.lower() in ("all", "सभी", "*"):
         return "all"
-    if re.search(r"9666", raw):
-        return "IS 9666"
-    if re.search(r"2676", raw):
-        return "IS 2676"
+    normalized = _normalize_is_number(raw)
+    if normalized:
+        return normalized
     if raw in STANDARD_FILTERS:
         return raw
     return raw
@@ -82,23 +86,51 @@ def is_forbidden(sample_label: str, pages: list[int], review_status: str) -> boo
     return bool(bad.intersection(pages))
 
 
+def _normalize_is_number(value: str | None) -> str | None:
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    m = re.search(r"IS\s*(\d+)", raw, re.I)
+    if m:
+        return f"IS {m.group(1)}"
+    return None
+
+
+def verified_is_number(ch: dict[str, Any]) -> str | None:
+    """Prefer chunk metadata is_number; do not invent from folder guesses alone."""
+    meta_is = _normalize_is_number(ch.get("is_number") if isinstance(ch.get("is_number"), str) else None)
+    if meta_is:
+        return meta_is
+    # Legacy baseline labels only (known verified mapping) — not path guessing.
+    sample = (ch.get("sample_label") or "")
+    if sample in STANDARD_TO_IS:
+        return STANDARD_TO_IS[sample]
+    return None
+
+
 def matches_standard(ch: dict[str, Any], std: str) -> bool:
-    """Hard standard constraint for baseline + pilot corpora."""
+    """Hard standard constraint for baseline + pilot corpora.
+
+    Prefer verified ``is_number`` metadata. Path/folder inference is used only as a
+    legacy fallback for the two known baseline standards when metadata is empty.
+    Unknown standards without metadata do not silently match.
+    """
     if std == "all":
         return True
-    is_no = (ch.get("is_number") or "")
+    want = _normalize_is_number(std) or std.strip()
+    got = verified_is_number(ch)
+    if got:
+        return got == want
+
+    # Legacy fallback for older chunks missing is_number (baseline two-sample only).
     rel = (ch.get("source_relative_path") or "")
     sample = (ch.get("sample_label") or "")
-    if std == "IS 9666":
-        return "9666" in is_no or "9666" in rel or sample == "native_text"
-    if std == "IS 2676":
-        return (
-            "2676" in is_no
-            or "2676" in rel
-            or rel.startswith("STD 21/")
-            or sample == "scanned"
-        )
-    return True
+    if want == "IS 9666":
+        return "9666" in rel or sample == "native_text"
+    if want == "IS 2676":
+        return "2676" in rel or sample == "scanned"
+    # Do not path-guess arbitrary standards.
+    return False
 
 
 def experimental_chroma_dir(vector_db_path: Path) -> Path:
@@ -165,6 +197,27 @@ def open_search_collection(vector_db_path: Path) -> tuple[str, Any, str, Path]:
     return model_name, col, COLLECTION_NAME, persist
 
 
+def list_verified_standards(collection: Any) -> list[dict[str, str]]:
+    """Build standards list from verified is_number metadata in the open collection."""
+    raw = collection.get(include=["metadatas"])
+    metas = raw.get("metadatas") or []
+    found: set[str] = set()
+    for meta in metas:
+        meta = meta or {}
+        review = meta.get("review_status") or "usable"
+        if review != "usable":
+            continue
+        ch = {
+            "is_number": meta.get("is_number"),
+            "sample_label": meta.get("sample_label"),
+            "source_relative_path": meta.get("source_relative_path"),
+        }
+        is_no = verified_is_number(ch)
+        if is_no:
+            found.add(is_no)
+    return [{"id": s, "label": s} for s in sorted(found, key=lambda x: (len(x), x))]
+
+
 def load_pool_chunks(
     collection: Any,
     *,
@@ -172,8 +225,9 @@ def load_pool_chunks(
 ) -> list[dict[str, Any]]:
     """All usable chunks in the candidate set after hard standard filter."""
     std = standard_key(standard)
-    if std not in STANDARD_FILTERS:
-        raise ValueError(f"unknown_standard:{std}")
+    # ``all`` and any verified IS number are allowed; reject empty.
+    if not std:
+        raise ValueError("unknown_standard:empty")
 
     # Always load full usable set then filter in Python (pilot sample_labels vary).
     raw = collection.get(include=["documents", "metadatas"])
@@ -195,7 +249,14 @@ def load_pool_chunks(
         clause = meta.get("clause_number") or None
         if clause == "":
             clause = None
-        is_no = meta.get("is_number") or is_number_from_source_path(rel) or STANDARD_TO_IS.get(sample_label)
+        # Prefer stored metadata; path inference only as last-resort label for display,
+        # never as invented filter authority for unknown standards.
+        is_no = meta.get("is_number") or STANDARD_TO_IS.get(sample_label) or ""
+        if not is_no:
+            inferred = is_number_from_source_path(rel)
+            # Keep inferred only for known legacy baselines when metadata empty.
+            if inferred in ("IS 9666", "IS 2676"):
+                is_no = inferred
         row = {
             "chunk_id": cid,
             "text": docs[i] or "",
@@ -212,15 +273,138 @@ def load_pool_chunks(
     return pool
 
 
+def assemble_hybrid_search_results(
+    *,
+    query: str,
+    standard: str,
+    limit: int,
+    ranked_hits: list[dict[str, Any]],
+    alias_records: list[ContentIdentityRecord] | None = None,
+    answerability_public: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """
+    Shared result-assembly path used by run_hybrid_search and mock tests.
+
+    Applies content/chunk alias dedupe before building public results so A/B
+    aliases do not produce duplicate evidence hits.
+    """
+    q = (query or "").strip()
+    std = standard_key(standard)
+    records = alias_records
+    if records is None:
+        records = try_load_alias_records_for_search()
+
+    deduped = dedupe_search_hits_by_content(list(ranked_hits), alias_records=records)
+    # Re-number ranks after dedupe
+    for i, h in enumerate(deduped):
+        h["rank"] = i + 1
+
+    if answerability_public is None:
+        ans = evaluate_answerability(
+            query=q,
+            ranked_hits=deduped[: max(limit, 3)],
+            selected_standard=std,
+        )
+        pub = ans.to_public_dict()
+    else:
+        pub = answerability_public
+
+    top = deduped[:limit]
+    evidence = []
+    for h in top:
+        evidence.append(
+            {
+                "chunk_id": h["chunk_id"],
+                "text": h.get("text"),
+                "standard": h.get("is_number"),
+                "clause": h.get("clause_number"),
+                "pdf_pages": h.get("pdf_pages") or [],
+                "review_status": h.get("review_status"),
+                "rank": h.get("rank"),
+                "sample_label": h.get("sample_label"),
+                "source_relative_path": h.get("source_relative_path"),
+                "source_aliases": h.get("source_aliases") or [],
+                "path_std_contexts": h.get("path_std_contexts") or {},
+                "alias_decision": h.get("alias_decision"),
+                "content_document_id": h.get("content_document_id"),
+            }
+        )
+
+    public_results = []
+    for h in top:
+        public_results.append(
+            {
+                "chunk_id": h["chunk_id"],
+                "text": h.get("text"),
+                "is_number": h.get("is_number"),
+                "clause_number": h.get("clause_number"),
+                "pdf_pages": h.get("pdf_pages") or [],
+                "source_relative_path": h.get("source_relative_path"),
+                "source_aliases": h.get("source_aliases") or [],
+                "path_std_contexts": h.get("path_std_contexts") or {},
+                "alias_decision": h.get("alias_decision"),
+                "content_document_id": h.get("content_document_id"),
+                "review_status": h.get("review_status"),
+                "sample_label": h.get("sample_label"),
+                "is_number_verified": h.get("is_number_verified", False),
+                "is_number_metadata_status": h.get("is_number_metadata_status"),
+                "rank": h.get("rank"),
+                "_debug": {
+                    "distance": h.get("distance"),
+                    "vector_similarity": h.get("vector_similarity"),
+                    "hybrid_score": h.get("hybrid_score"),
+                    "lexical_raw": h.get("lexical_raw"),
+                    "vector_rank": h.get("vector_rank"),
+                },
+            }
+        )
+
+    state = pub["answerability_state"]
+    debug_nearest = public_results if state == "not_found" else []
+    if state == "not_found":
+        public_results = []
+        evidence = []
+
+    return {
+        "ok": True,
+        "query": q,
+        "standard": std,
+        "limit": limit,
+        "result_count": len(public_results),
+        "answerability_state": state,
+        "message_hi": pub["message_hi"] if state != "supported" else (
+            "जाँचा हुआ संबंधित स्रोत मिला।"
+        ),
+        "evidence_reasons": pub["evidence_reasons"],
+        "signals_summary": pub["signals_summary"],
+        "debug_scores": pub["debug_scores"],
+        "debug_nearest": debug_nearest,
+        "results": public_results,
+        "evidence_chunks": evidence,
+        "alias_dedupe_applied": True,
+        "ranked_before_dedupe": len(ranked_hits),
+        "ranked_after_dedupe": len(deduped),
+        "disclaimer_hi": (
+            "परीक्षण/पायलट: खोज usable अंशों पर आधारित है। "
+            "यह पूरे BIS library की पूर्ण खोज नहीं है।"
+        ),
+        "note_hi": (
+            "परिणाम केवल usable अंशों से हैं। मिलान क्रम उत्तर की शुद्धता का प्रतिशत नहीं है। "
+            "AI-generated उत्तर अभी नहीं बनाया जाता।"
+        ),
+    }
+
+
 def run_hybrid_search(
     *,
     collection: Any,
     query: str,
     standard: str = "all",
     limit: int = 5,
+    alias_records: list[ContentIdentityRecord] | None = None,
 ) -> dict[str, Any]:
     """
-    Vector query → hard standard filter → hybrid re-rank → answerability.
+    Vector query → hard standard filter → hybrid re-rank → alias dedupe → answerability.
     """
     q = (query or "").strip()
     std = standard_key(standard)
@@ -260,6 +444,9 @@ def run_hybrid_search(
             "debug_scores": pub["debug_scores"],
             "results": [],
             "evidence_chunks": [],
+            "alias_dedupe_applied": True,
+            "ranked_before_dedupe": 0,
+            "ranked_after_dedupe": 0,
         }
 
     n = min(max(len(pool), limit), min(len(pool) or limit, 50))
@@ -305,84 +492,10 @@ def run_hybrid_search(
             }
         )
 
-    ans = evaluate_answerability(
+    return assemble_hybrid_search_results(
         query=q,
-        ranked_hits=ranked_hits[: max(limit, 3)],
-        selected_standard=std,
+        standard=std,
+        limit=limit,
+        ranked_hits=ranked_hits,
+        alias_records=alias_records,
     )
-    pub = ans.to_public_dict()
-
-    top = ranked_hits[:limit]
-    evidence = []
-    for h in top:
-        evidence.append(
-            {
-                "chunk_id": h["chunk_id"],
-                "text": h["text"],
-                "standard": h.get("is_number"),
-                "clause": h.get("clause_number"),
-                "pdf_pages": h.get("pdf_pages") or [],
-                "review_status": h.get("review_status"),
-                "rank": h.get("rank"),
-                "sample_label": h.get("sample_label"),
-                "source_relative_path": h.get("source_relative_path"),
-            }
-        )
-
-    # Public results omit raw accuracy-like percentages; keep debug separately
-    public_results = []
-    for h in top:
-        public_results.append(
-            {
-                "chunk_id": h["chunk_id"],
-                "text": h["text"],
-                "is_number": h.get("is_number"),
-                "clause_number": h.get("clause_number"),
-                "pdf_pages": h.get("pdf_pages") or [],
-                "source_relative_path": h.get("source_relative_path"),
-                "review_status": h.get("review_status"),
-                "sample_label": h.get("sample_label"),
-                "rank": h.get("rank"),
-                # Internal only — UI must not show as accuracy %
-                "_debug": {
-                    "distance": h.get("distance"),
-                    "vector_similarity": h.get("vector_similarity"),
-                    "hybrid_score": h.get("hybrid_score"),
-                    "lexical_raw": h.get("lexical_raw"),
-                    "vector_rank": h.get("vector_rank"),
-                },
-            }
-        )
-
-    state = pub["answerability_state"]
-    # not_found: do not surface nearest neighbors as answers (keep audit in debug_nearest)
-    debug_nearest = public_results if state == "not_found" else []
-    if state == "not_found":
-        public_results = []
-        evidence = []
-
-    return {
-        "ok": True,
-        "query": q,
-        "standard": std,
-        "limit": limit,
-        "result_count": len(public_results),
-        "answerability_state": state,
-        "message_hi": pub["message_hi"] if state != "supported" else (
-            "जाँचा हुआ संबंधित स्रोत मिला।"
-        ),
-        "evidence_reasons": pub["evidence_reasons"],
-        "signals_summary": pub["signals_summary"],
-        "debug_scores": pub["debug_scores"],
-        "debug_nearest": debug_nearest,
-        "results": public_results,
-        "evidence_chunks": evidence,
-        "disclaimer_hi": (
-            "परीक्षण/पायलट: खोज usable अंशों पर आधारित है। "
-            "यह पूरे BIS library की पूर्ण खोज नहीं है।"
-        ),
-        "note_hi": (
-            "परिणाम केवल usable अंशों से हैं। मिलान क्रम उत्तर की शुद्धता का प्रतिशत नहीं है। "
-            "AI-generated उत्तर अभी नहीं बनाया जाता।"
-        ),
-    }

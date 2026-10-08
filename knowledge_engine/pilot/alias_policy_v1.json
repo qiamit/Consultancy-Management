@@ -1,0 +1,217 @@
+{
+  "policy_id": "second_pilot_alias_policy_v1",
+  "policy_version": 1,
+  "created_for_selection_id": "pilot_selection_v2",
+  "proposed_collection": "bis_pilot_representative_v2",
+  "status": "approved_decisions_recorded",
+  "applied_to_live_index": false,
+  "notes": [
+    "Original pilot_selection_v2_selected.json path rows (150) are NOT modified by this policy.",
+    "v1 collections and manifests are read-only; this file only declares v2 alias/content mapping.",
+    "Path/folder/filename fields are heuristics unless marked content_verified."
+  ],
+  "option_definitions": {
+    "A": "One content record; all paths/filenames in source_aliases; single extraction/chunk identity for exact bytes.",
+    "B": "Per-path alias/source records sharing content+chunk identity; search suppresses duplicate chunk hits; path-specific STD context retained."
+  },
+  "groups": [
+    {
+      "group_id": "g1_is3203_cross_std",
+      "decision": "B",
+      "sha256": "df1253c095b98504f09a881546ca3df2caeccc89ac2d0d873710eadf3dd33d39",
+      "conflict_type": "cross_STD_folder_same_bytes",
+      "paths": [
+        "STD 14951/Test Method/IS 3203 1982 - 01.pdf",
+        "STD 4246/Test Method/IS 3203 1982 - 01.pdf"
+      ],
+      "v1_path_keyed_chunk_sets": [
+        {
+          "source_relative_path": "STD 14951/Test Method/IS 3203 1982 - 01.pdf",
+          "legacy_sample_label": "doc_72ff1f7cb222",
+          "usable_chunk_count": 71,
+          "role": "candidate_reuse_source"
+        },
+        {
+          "source_relative_path": "STD 4246/Test Method/IS 3203 1982 - 01.pdf",
+          "legacy_sample_label": "doc_69bd99162b87",
+          "usable_chunk_count": 71,
+          "role": "alias_only_do_not_second_upsert"
+        }
+      ],
+      "v2_content_mapping": {
+        "document_id": "sha256:df1253c095b98504f09a881546ca3df2caeccc89ac2d0d873710eadf3dd33d39",
+        "shared_chunk_id_prefix": "doc_df1253c095b9",
+        "reuse_plan": "Map both path records to one content-hash chunk identity. Prefer text/chunks from a single v1 path-keyed set (candidate_reuse_source) after sha256 match; never write/delete v1. Second path becomes alias with shared chunk ids — no duplicate upsert."
+      },
+      "is_number_policy": {
+        "value_from_filename_heuristic": "IS 3203",
+        "metadata_status": "filename_heuristic_unverified",
+        "use_as_verified_filter": false
+      }
+    },
+    {
+      "group_id": "g2_is1500_cross_std",
+      "decision": "B",
+      "sha256": "945be84ad87cde81e9adad0a5f1e0fc08c385b09ccf1d9836f5ba7d8e459ae50",
+      "conflict_type": "cross_STD_folder_same_bytes",
+      "paths": [
+        "STD 18384/Test Method/IS 1500 Part 1 2019 - 00.pdf",
+        "STD 3443/Test Method/IS 1500 Part 1 2019 - 00.pdf",
+        "STD 617/Test Method/IS 1500 Part 1 2019 - 00.pdf"
+      ],
+      "v1_path_keyed_chunk_sets": [
+        {
+          "source_relative_path": "STD 18384/Test Method/IS 1500 Part 1 2019 - 00.pdf",
+          "legacy_sample_label": "doc_1a8278b857a0",
+          "usable_chunk_count": 12,
+          "role": "candidate_reuse_source"
+        }
+      ],
+      "v2_content_mapping": {
+        "document_id": "sha256:945be84ad87cde81e9adad0a5f1e0fc08c385b09ccf1d9836f5ba7d8e459ae50",
+        "shared_chunk_id_prefix": "doc_945be84ad87c",
+        "reuse_plan": "Reuse single v1 content set for STD 18384 after hash match; STD 3443 and STD 617 are path aliases sharing the same chunk identity — no second extraction/upsert."
+      },
+      "is_number_policy": {
+        "value_from_filename_heuristic": "IS 1500",
+        "metadata_status": "filename_heuristic_unverified",
+        "use_as_verified_filter": false
+      }
+    },
+    {
+      "group_id": "g3_is1956_amd1_filename_variants",
+      "decision": "A",
+      "sha256": "a51dc99b354112a14b9d635d3ce6de56b70cd5ca4cf44a6eccab4d933539384c",
+      "conflict_type": "same_STD_folder_filename_variants",
+      "paths": [
+        "STD 1956/IS 1956 Part 5 AMD1 (2).pdf",
+        "STD 1956/IS 1956 Part 5 AMD1 (3).pdf",
+        "STD 1956/IS 1956 Part 5 AMD1 (4).pdf",
+        "STD 1956/IS 1956 Part 5 AMD1 (5).pdf",
+        "STD 1956/IS 1956 Part 5 AMD1 (7).pdf",
+        "STD 1956/IS 1956 Part 5 AMD1.pdf"
+      ],
+      "canonical_path_suggestion": "STD 1956/IS 1956 Part 5 AMD1.pdf",
+      "v1_path_keyed_chunk_sets": [
+        {
+          "source_relative_path": "STD 1956/IS 1956 Part 5 AMD1 (2).pdf",
+          "legacy_sample_label": "doc_4a04d3da0320",
+          "usable_chunk_count": 2,
+          "role": "candidate_reuse_source"
+        }
+      ],
+      "v2_content_mapping": {
+        "document_id": "sha256:a51dc99b354112a14b9d635d3ce6de56b70cd5ca4cf44a6eccab4d933539384c",
+        "shared_chunk_id_prefix": "doc_a51dc99b3541",
+        "reuse_plan": "One content record; after hash match reuse the single v1 content set once; all six filenames are source_aliases — not separate amendments."
+      },
+      "is_number_policy": {
+        "value_from_filename_heuristic": "IS 1956",
+        "metadata_status": "filename_heuristic_unverified",
+        "use_as_verified_filter": false
+      }
+    },
+    {
+      "group_id": "g4_is4367_amd1_filename_variants",
+      "decision": "A",
+      "sha256": "7c4b2a53da3ceecde289ab477c0c3d9a61605a0c0c011fa7a6a626447f02ed74",
+      "conflict_type": "same_STD_folder_filename_variants",
+      "paths": [
+        "STD 4367/IS 4367 AMD1 (2).pdf",
+        "STD 4367/IS 4367 AMD1.pdf"
+      ],
+      "canonical_path_suggestion": "STD 4367/IS 4367 AMD1.pdf",
+      "v1_path_keyed_chunk_sets": [
+        {
+          "source_relative_path": "STD 4367/IS 4367 AMD1 (2).pdf",
+          "legacy_sample_label": "doc_b392266e3413",
+          "usable_chunk_count": 1,
+          "role": "candidate_reuse_source"
+        }
+      ],
+      "v2_content_mapping": {
+        "document_id": "sha256:7c4b2a53da3ceecde289ab477c0c3d9a61605a0c0c011fa7a6a626447f02ed74",
+        "shared_chunk_id_prefix": "doc_7c4b2a53da3c",
+        "reuse_plan": "One content record; reuse v1 set once after hash match; both filenames are aliases."
+      },
+      "is_number_policy": {
+        "value_from_filename_heuristic": "IS 4367",
+        "metadata_status": "filename_heuristic_unverified",
+        "use_as_verified_filter": false
+      }
+    },
+    {
+      "group_id": "g5_10951_amd3_filename_variants",
+      "decision": "A",
+      "sha256": "58c6073ef08e9e46d601aa0f92b8dcd60055d1ce07162d48237b26edcd9c3d17",
+      "conflict_type": "same_STD_folder_filename_variants",
+      "paths": [
+        "STD 10951/10951_Amd3 (2).pdf",
+        "STD 10951/10951_Amd3.pdf"
+      ],
+      "canonical_path_suggestion": "STD 10951/10951_Amd3.pdf",
+      "v1_path_keyed_chunk_sets": [],
+      "v2_content_mapping": {
+        "document_id": "sha256:58c6073ef08e9e46d601aa0f92b8dcd60055d1ce07162d48237b26edcd9c3d17",
+        "shared_chunk_id_prefix": "doc_58c6073ef08e",
+        "reuse_plan": "One content record for both aliases; no v1 evidence. Do NOT invent is_number from folder STD 10951."
+      },
+      "is_number_policy": {
+        "value_from_filename_heuristic": null,
+        "metadata_status": "unverified_null",
+        "use_as_verified_filter": false,
+        "forbid_folder_inferred_is_number": true
+      }
+    },
+    {
+      "group_id": "g6_is1570_amd1_filename_variants_suspect",
+      "decision": "A",
+      "sha256": "40dea9b3b17ab4d38edee9e50551a874a4a1d674e65e1aec9389f0a4e94d439c",
+      "conflict_type": "same_STD_folder_filename_variants",
+      "paths": [
+        "STD 1570/IS 1570 Part 2 AMD1 (2).pdf",
+        "STD 1570/IS 1570 Part 2 AMD1 (3).pdf",
+        "STD 1570/IS 1570 Part 2 AMD1.pdf"
+      ],
+      "canonical_path_suggestion": "STD 1570/IS 1570 Part 2 AMD1.pdf",
+      "v1_path_keyed_chunk_sets": [],
+      "quality_override": {
+        "forced_review_status": "needs_review",
+        "forced_selection_classification": "suspect",
+        "reason": "Group 6 suspect quality must apply to the shared content and all aliases; aliases must not promote content to usable."
+      },
+      "v2_content_mapping": {
+        "document_id": "sha256:40dea9b3b17ab4d38edee9e50551a874a4a1d674e65e1aec9389f0a4e94d439c",
+        "shared_chunk_id_prefix": "doc_40dea9b3b17a",
+        "reuse_plan": "One content record; all three aliases; keep suspect/needs_review on content+aliases."
+      },
+      "is_number_policy": {
+        "value_from_filename_heuristic": "IS 1570",
+        "metadata_status": "filename_heuristic_unverified",
+        "use_as_verified_filter": false
+      }
+    },
+    {
+      "group_id": "g7_is2074_amd1_filename_variants",
+      "decision": "A",
+      "sha256": "404e5a9672f5273dabbcc6da798bc0df9e68ac4419ee7282e2e0a23907826c4e",
+      "conflict_type": "same_STD_folder_filename_variants",
+      "paths": [
+        "STD 2074/IS 2074 AMD1 (2).pdf",
+        "STD 2074/IS 2074 AMD1.pdf"
+      ],
+      "canonical_path_suggestion": "STD 2074/IS 2074 AMD1.pdf",
+      "v1_path_keyed_chunk_sets": [],
+      "v2_content_mapping": {
+        "document_id": "sha256:404e5a9672f5273dabbcc6da798bc0df9e68ac4419ee7282e2e0a23907826c4e",
+        "shared_chunk_id_prefix": "doc_404e5a9672f5",
+        "reuse_plan": "One content record; both filenames are aliases."
+      },
+      "is_number_policy": {
+        "value_from_filename_heuristic": "IS 2074",
+        "metadata_status": "filename_heuristic_unverified",
+        "use_as_verified_filter": false
+      }
+    }
+  ]
+}

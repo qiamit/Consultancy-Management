@@ -18,6 +18,8 @@ from typing import Any
 
 
 COLLECTION_NAME = "bis_two_sample_usable_v1"
+# Disposable scratch only — never delete/overwrite COLLECTION_NAME (protected).
+SCRATCH_COLLECTION_NAME = "bis_vector_test_scratch_tmp"
 DEFAULT_DIAG_RUN = (
     "quality_fix_20261006T144338Z"
 )
@@ -246,13 +248,32 @@ def try_chromadb_index(
     *,
     persist_dir: Path,
     chunks: list[UsableChunk],
+    collection_name: str | None = None,
 ) -> tuple[str, Any] | None:
-    """Build/get Chroma collection; return (model_name, collection) or None."""
+    """Build/get a *scratch* Chroma collection; return (model_name, collection) or None.
+
+    Never deletes or overwrites protected collections (incl. bis_two_sample_usable_v1).
+    """
+    from knowledge_engine.pilot.collection_guards import (
+        SCRATCH_VECTOR_TEST_COLLECTION,
+        assert_collection_writable,
+        is_protected_collection,
+        safe_delete_collection,
+    )
+
     try:
         import chromadb
         from chromadb.utils import embedding_functions
     except ImportError:
         return None
+
+    target = collection_name or SCRATCH_VECTOR_TEST_COLLECTION
+    if is_protected_collection(target) or target == COLLECTION_NAME:
+        raise RuntimeError(
+            f"Refusing to build/index into protected collection {target!r}. "
+            f"Use scratch name {SCRATCH_VECTOR_TEST_COLLECTION!r}."
+        )
+    assert_collection_writable(target, operation="index_test")
 
     persist_dir.mkdir(parents=True, exist_ok=True)
     client = chromadb.PersistentClient(path=str(persist_dir))
@@ -261,17 +282,23 @@ def try_chromadb_index(
     ef = embedding_functions.DefaultEmbeddingFunction()
     model_name = "chromadb-default-onnx-minilm"
 
-    # Drop and recreate to avoid stale duplicates across test runs,
-    # but upsert by chunk_id so re-runs stay idempotent within a session.
+    # Scratch only: drop/recreate is allowed after fail-closed check.
     try:
-        client.delete_collection(COLLECTION_NAME)
+        safe_delete_collection(client, target)
     except Exception:  # noqa: BLE001
-        pass
+        # If delete fails for non-protection reasons, continue to get_or_create.
+        from knowledge_engine.pilot.collection_guards import ProtectedCollectionError
+
+        # Re-raise protection errors
+        try:
+            assert_collection_writable(target, operation="delete")
+        except ProtectedCollectionError:
+            raise
 
     collection = client.get_or_create_collection(
-        name=COLLECTION_NAME,
+        name=target,
         embedding_function=ef,
-        metadata={"purpose": "two_sample_usable_vector_search_test"},
+        metadata={"purpose": "scratch_usable_vector_search_test"},
     )
 
     ids = [c.chunk_id for c in chunks]

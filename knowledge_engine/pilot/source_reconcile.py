@@ -26,6 +26,7 @@ ScanAction = Literal[
     "moved_or_renamed",  # old path gone, same hash at new path
     "missing_stale",  # previously known, not in scan, no matching hash
     "new_document",  # new hash not seen before
+    "duplicate_hash_conflict",  # same bytes at two+ paths in one scan — no silent merge
 ]
 
 ProcessAction = Literal[
@@ -33,6 +34,7 @@ ProcessAction = Literal[
     "reprocess_content",  # extraction + OCR + chunk + embed for this doc only
     "process_new",  # full process new doc
     "mark_missing",  # no vector delete
+    "review_required",  # human policy needed (e.g. duplicate hash paths)
 ]
 
 
@@ -152,6 +154,7 @@ def reconcile_scan(
     - old path gone + same hash at new path → moved_or_renamed (skip_reuse)
     - previous doc not in scan and hash not seen → missing_stale (mark_missing)
     - new hash → new_document (process_new)
+    - same hash at two+ paths in one scan → duplicate_hash_conflict (no silent merge)
     """
     ts = now or utc_now()
     docs: dict[str, dict[str, Any]] = {
@@ -165,12 +168,59 @@ def reconcile_scan(
     seen_paths: set[str] = set()
     handled_doc_ids: set[str] = set()
 
+    # Pre-scan: identical bytes at multiple paths → review_required (no silent merge).
+    hash_to_paths: dict[str, list[str]] = {}
+    for entry in scan:
+        hash_to_paths.setdefault(entry.sha256, []).append(entry.relative_path)
+    conflict_hashes = {h for h, paths in hash_to_paths.items() if len(set(paths)) > 1}
+
     for entry in scan:
         rel = entry.relative_path
         sha = entry.sha256
         seen_paths.add(rel)
         seen_hashes.add(sha)
         did = document_id_from_sha256(sha)
+
+        if sha in conflict_hashes:
+            # Do not merge paths silently — mark for explicit alias/dedup review.
+            if did in docs:
+                rec = docs[did]
+            else:
+                rec = build_document_record(
+                    sha256=sha,
+                    source_relative_path=rel,
+                    file_size=entry.file_size,
+                    status="review_required",
+                )
+                docs[did] = rec
+            paths_for_hash = sorted(set(hash_to_paths.get(sha) or [rel]))
+            rec["status"] = "review_required"
+            rec["duplicate_paths"] = paths_for_hash
+            rec["last_seen_at"] = ts
+            event = {
+                "type": "duplicate_hash_conflict",
+                "at": ts,
+                "sha256": sha,
+                "paths": paths_for_hash,
+                "policy": "explicit_alias_or_dedup_required",
+            }
+            # Record once per document_id
+            if did not in handled_doc_ids:
+                rec.setdefault("events", []).append(event)
+                result.events.append(event)
+                result.decisions.append(
+                    ReconcileDecision(
+                        action="duplicate_hash_conflict",
+                        process="review_required",
+                        document_id=did,
+                        sha256=sha,
+                        new_path=rel,
+                        reason="same_bytes_at_multiple_paths_in_scan",
+                        duplicate_prevented=True,
+                    )
+                )
+                handled_doc_ids.add(did)
+            continue
 
         path_match_id = by_path.get(rel)
         hash_match_id = by_hash.get(sha)

@@ -60,16 +60,30 @@ def main(argv: list[str] | None = None) -> int:
         print("ERROR: KNOWLEDGE_PDF_SOURCE_DIR / KNOWLEDGE_VECTOR_DB_PATH required", file=sys.stderr)
         return 2
 
-    # Safety: confirm selection is the approved 40-file set
+    # Safety: this runner is v1-only; refuse v2 / wrong-sized selections.
     data = json.loads(selection.read_text(encoding="utf-8"))
     n = len(data.get("selected") or [])
-    if n != 40:
-        print(f"WARN: expected 40 selected files, found {n}", file=sys.stderr)
-    if data.get("proposed_collection") not in (None, PILOT_COLLECTION_NAME):
+    proposed = data.get("proposed_collection")
+    if proposed and proposed != PILOT_COLLECTION_NAME:
         print(
-            f"WARN: selection proposed_collection={data.get('proposed_collection')}",
+            f"ERROR: run_pilot_index is v1-only; got proposed_collection={proposed!r}. "
+            "Use knowledge_engine.scripts.run_second_pilot_index for v2.",
             file=sys.stderr,
         )
+        return 2
+    if n != 40:
+        print(
+            f"ERROR: v1 pilot indexing expects exactly 40 selected files, found {n}",
+            file=sys.stderr,
+        )
+        return 2
+    if PILOT_COLLECTION_NAME in PROTECTED_COLLECTIONS:
+        print(
+            f"ERROR: {PILOT_COLLECTION_NAME} is protected — refusing re-index. "
+            "Use second-pilot v2 runner for new corpora.",
+            file=sys.stderr,
+        )
+        return 2
 
     metrics = run_pilot_indexing(
         selection_path=selection,

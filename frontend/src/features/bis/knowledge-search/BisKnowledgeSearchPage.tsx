@@ -22,10 +22,12 @@ import {
 } from '@/lib/limsThemeUi'
 import {
   fetchKnowledgeHealth,
+  fetchKnowledgeStandards,
   searchKnowledge,
   type AnswerabilityState,
   type KnowledgeSearchHit,
   type KnowledgeStandardId,
+  type KnowledgeStandardOption,
 } from './bisKnowledgeSearchApi'
 import { normalizeKnowledgeDisplayText } from './normalizeKnowledgeDisplayText'
 import {
@@ -58,9 +60,15 @@ export default function BisKnowledgeSearchPage() {
   const [serviceOk, setServiceOk] = useState<boolean | null>(null)
   const [corpusBannerEn, setCorpusBannerEn] = useState<string | null>(null)
   const [corpusBannerHi, setCorpusBannerHi] = useState<string | null>(null)
+  const [standardOptions, setStandardOptions] = useState<KnowledgeStandardOption[]>([
+    { id: 'all', label: 'All standards (current corpus)' },
+  ])
 
   const t = getKnowledgeUiStrings(uiLang)
-  const corpusBanner = (uiLang === 'hi' ? corpusBannerHi : corpusBannerEn) || t.disclaimer
+  const corpusBanner =
+    serviceOk === false
+      ? t.serviceUnavailableBanner
+      : (uiLang === 'hi' ? corpusBannerHi : corpusBannerEn) || t.disclaimer
 
   useEffect(() => {
     setUiLang(loadKnowledgeUiLang())
@@ -102,12 +110,26 @@ export default function BisKnowledgeSearchPage() {
       const health = await fetchKnowledgeHealth()
       setServiceOk(true)
       applyCorpusBanners(health)
+      try {
+        const std = await fetchKnowledgeStandards()
+        applyCorpusBanners(std)
+        const opts = (std.standards || []).filter((s) => s.id && s.label)
+        if (opts.length > 0) {
+          setStandardOptions(
+            opts.map((s) =>
+              s.id === 'all' ? { id: 'all', label: t.standardAll } : s,
+            ),
+          )
+        }
+      } catch {
+        /* health ok but standards failed — keep all-only */
+      }
     } catch {
       setServiceOk(false)
       setCorpusBannerEn(null)
       setCorpusBannerHi(null)
     }
-  }, [applyCorpusBanners])
+  }, [applyCorpusBanners, t.standardAll])
 
   useEffect(() => {
     void checkHealth()
@@ -175,11 +197,9 @@ export default function BisKnowledgeSearchPage() {
     }
   }
 
-  const standards: { id: KnowledgeStandardId; label: string }[] = [
-    { id: 'all', label: t.standardAll },
-    { id: 'IS 9666', label: 'IS 9666 : 2023' },
-    { id: 'IS 2676', label: 'IS 2676 : 1981' },
-  ]
+  const standards: { id: KnowledgeStandardId; label: string }[] = standardOptions.map((s) =>
+    s.id === 'all' ? { id: 'all', label: t.standardAll } : s,
+  )
 
   return (
     <div className={cn(limsPageShellClass, 'min-h-0')}>
@@ -196,9 +216,7 @@ export default function BisKnowledgeSearchPage() {
                 <h1 className="text-lg font-bold tracking-tight sm:text-xl">{t.pageTitle}</h1>
               </div>
               <p className="mt-1 max-w-3xl text-xs text-amber-100/90 sm:text-sm">
-                {serviceOk === false
-                  ? t.serviceDown
-                  : corpusBanner}
+                {corpusBanner}
               </p>
             </div>
             <div className="flex flex-col items-stretch gap-2 sm:items-end">

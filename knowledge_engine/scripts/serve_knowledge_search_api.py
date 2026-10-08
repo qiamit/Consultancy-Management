@@ -2,8 +2,8 @@
 """
 Local-only BIS knowledge search API (127.0.0.1).
 
-Uses experimental multilingual collection when present (read-only).
-Never deletes/overwrites production bis_two_sample_usable_v1.
+Uses experimental multilingual / pilot collection when present (read-only).
+Never deletes/overwrites protected collections.
 No DeepSeek answers, no bulk indexing.
 
 Example:
@@ -24,6 +24,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 from knowledge_engine.config import load_settings
 from knowledge_engine.search_pipeline import (
+    list_verified_standards,
     open_search_collection,
     run_hybrid_search,
     standard_key,
@@ -33,6 +34,16 @@ HOST = "127.0.0.1"
 PORT = 3851
 MAX_LIMIT = 10
 DEFAULT_LIMIT = 5
+MAX_BODY_BYTES = 32_768
+MAX_QUERY_CHARS = 2_000
+ALLOWED_CORS_ORIGINS = frozenset(
+    {
+        "http://127.0.0.1:5173",
+        "http://localhost:5173",
+        "http://127.0.0.1:4173",
+        "http://localhost:4173",
+    }
+)
 
 
 class SearchState:
@@ -42,15 +53,22 @@ class SearchState:
     collection_count: int = 0
     persist_dir: str = ""
     error: str | None = None
+    standards_cache: list[dict[str, str]] | None = None
 
 
 STATE = SearchState()
 
 
+def _safe_error_message(exc: BaseException) -> str:
+    """Never leak filesystem paths, secrets, or raw model traces to clients."""
+    name = type(exc).__name__
+    return f"collection_init_failed:{name}"
+
+
 def _init_collection() -> None:
     settings = load_settings()
     if settings.vector_db_path is None:
-        STATE.error = "KNOWLEDGE_VECTOR_DB_PATH unset"
+        STATE.error = "config_incomplete"
         return
     try:
         model_name, collection, col_name, persist = open_search_collection(
@@ -60,25 +78,57 @@ def _init_collection() -> None:
         STATE.collection = collection
         STATE.collection_name = col_name
         STATE.collection_count = int(collection.count())
-        STATE.persist_dir = str(persist)
+        # Do not expose absolute private paths to API clients.
+        STATE.persist_dir = f"sample_collections/{col_name}/chroma"
         STATE.error = None
+        try:
+            STATE.standards_cache = list_verified_standards(collection)
+        except Exception:  # noqa: BLE001
+            STATE.standards_cache = []
     except Exception as exc:  # noqa: BLE001
-        STATE.error = str(exc)
+        STATE.error = _safe_error_message(exc)
         STATE.collection = None
+        STATE.standards_cache = None
 
 
-def _cors_headers() -> dict[str, str]:
-    return {
-        "Access-Control-Allow-Origin": "*",
+def _cors_headers(origin: str | None = None) -> dict[str, str]:
+    headers = {
         "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type",
         "Content-Type": "application/json; charset=utf-8",
         "Cache-Control": "no-store",
     }
+    if origin and origin in ALLOWED_CORS_ORIGINS:
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Vary"] = "Origin"
+    return headers
 
 
 def _json_bytes(payload: dict[str, Any], *, status: int = 200) -> tuple[int, bytes]:
     return status, (json.dumps(payload, ensure_ascii=False) + "\n").encode("utf-8")
+
+
+def _corpus_banners(col: str, n: int, *, is_pilot: bool) -> dict[str, str]:
+    if is_pilot:
+        return {
+            "banner_en": (
+                f"Pilot corpus: {col} — {n} usable chunks. "
+                "Not the full BIS library. Protected baseline collections are untouched."
+            ),
+            "banner_hi": (
+                f"पायलट कॉर्पस: {col} — {n} usable अंश। "
+                "पूर्ण BIS library नहीं। Protected baseline collections अछूते हैं।"
+            ),
+            "disclaimer_hi": (
+                f"पायलट खोज: {col} के {n} usable अंश। "
+                "यह पूर्ण BIS library नहीं है। Protected baseline collections अछूते हैं।"
+            ),
+        }
+    return {
+        "banner_en": f"Test corpus: {col} — {n} usable chunks.",
+        "banner_hi": f"परीक्षण कॉर्पस: {col} — {n} usable अंश।",
+        "disclaimer_hi": f"परीक्षण कॉर्पस: {col} — {n} usable अंश।",
+    }
 
 
 def run_search(*, query: str, standard: str, limit: int) -> dict[str, Any]:
@@ -87,7 +137,18 @@ def run_search(*, query: str, standard: str, limit: int) -> dict[str, Any]:
             "ok": False,
             "error_code": "service_unavailable",
             "message_hi": "स्थानीय ज्ञान खोज सेवा तैयार नहीं है।",
-            "detail": STATE.error,
+            "detail": STATE.error or "service_unavailable",
+            "answerability_state": "not_found",
+            "results": [],
+            "evidence_chunks": [],
+        }
+
+    q = (query or "").strip()
+    if len(q) > MAX_QUERY_CHARS:
+        return {
+            "ok": False,
+            "error_code": "query_too_long",
+            "message_hi": "सवाल बहुत लंबा है।",
             "answerability_state": "not_found",
             "results": [],
             "evidence_chunks": [],
@@ -97,7 +158,7 @@ def run_search(*, query: str, standard: str, limit: int) -> dict[str, Any]:
     std = standard_key(standard)
     payload = run_hybrid_search(
         collection=STATE.collection,
-        query=query,
+        query=q,
         standard=std,
         limit=limit,
     )
@@ -106,22 +167,10 @@ def run_search(*, query: str, standard: str, limit: int) -> dict[str, Any]:
     payload["model_name"] = STATE.model_name
     is_pilot = "pilot" in (STATE.collection_name or "").lower()
     payload["corpus_mode"] = "pilot" if is_pilot else "baseline_test"
-    if is_pilot:
-        col = STATE.collection_name or "pilot"
-        n = STATE.collection_count
-        payload["disclaimer_hi"] = (
-            f"पायलट खोज: {col} के {n} usable अंश। "
-            "यह पूर्ण BIS library नहीं है। Protected baseline collections अछूते हैं।"
+    if STATE.collection_name:
+        payload.update(
+            _corpus_banners(STATE.collection_name, STATE.collection_count, is_pilot=is_pilot)
         )
-        payload["banner_en"] = (
-            f"Pilot corpus: {col} — {n} usable chunks. "
-            "Not the full BIS library. Protected baseline collections are untouched."
-        )
-        payload["banner_hi"] = (
-            f"पायलट कॉर्पस: {col} — {n} usable अंश। "
-            "पूर्ण BIS library नहीं। Protected baseline collections अछूते हैं।"
-        )
-    # Ensure contract keys always present
     payload.setdefault("answerability_state", "not_found")
     payload.setdefault("evidence_reasons", [])
     payload.setdefault("evidence_chunks", [])
@@ -130,21 +179,61 @@ def run_search(*, query: str, standard: str, limit: int) -> dict[str, Any]:
     return payload
 
 
+def build_standards_payload() -> dict[str, Any]:
+    standards = [{"id": "all", "label": "All standards (current corpus)"}]
+    cached = list(STATE.standards_cache or [])
+    if not cached and STATE.collection is not None:
+        try:
+            cached = list_verified_standards(STATE.collection)
+            STATE.standards_cache = cached
+        except Exception:  # noqa: BLE001
+            cached = []
+    standards.extend(cached)
+    col = STATE.collection_name or ""
+    n = STATE.collection_count
+    is_pilot = "pilot" in col.lower()
+    banners = _corpus_banners(col, n, is_pilot=is_pilot) if col else {}
+    return {
+        "ok": True,
+        "collection": col,
+        "usable_chunk_total": n,
+        "corpus_mode": "pilot" if is_pilot else "baseline_test",
+        "standards": standards,
+        "modes_note_en": (
+            "Choosing one IS keeps other standards out of the candidate set. "
+            "“All” is a separate mode over the current corpus."
+        ),
+        "modes_note_hi": (
+            "IS चुनने पर दूसरे standards candidate set में नहीं आते। "
+            "«सभी» वर्तमान कॉर्पस पर अलग mode है।"
+        ),
+        **banners,
+    }
+
+
 class Handler(BaseHTTPRequestHandler):
-    server_version = "BisKnowledgeSearch/1.1"
+    server_version = "BisKnowledgeSearch/1.2"
 
     def log_message(self, fmt: str, *args: Any) -> None:
-        sys.stderr.write("%s - %s\n" % (self.address_string(), fmt % args))
+        # Avoid logging query text / paths.
+        sys.stderr.write("%s - %s\n" % (self.address_string(), fmt % ("*",) if args else fmt))
+
+    def _origin(self) -> str | None:
+        return self.headers.get("Origin")
 
     def _send(self, status: int, body: bytes) -> None:
         self.send_response(status)
-        for k, v in _cors_headers().items():
+        for k, v in _cors_headers(self._origin()).items():
             self.send_header(k, v)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
 
     def do_OPTIONS(self) -> None:  # noqa: N802
+        origin = self._origin()
+        if origin and origin not in ALLOWED_CORS_ORIGINS:
+            self._send(403, b'{"ok":false,"error_code":"cors_denied"}\n')
+            return
         self._send(204, b"")
 
     def do_GET(self) -> None:  # noqa: N802
@@ -171,18 +260,7 @@ class Handler(BaseHTTPRequestHandler):
                 ),
             }
             if STATE.collection is not None and col:
-                health["banner_en"] = (
-                    f"Pilot corpus: {col} — {n} usable chunks. "
-                    "Not the full BIS library. Protected baseline collections are untouched."
-                    if is_pilot
-                    else f"Test corpus: {col} — {n} usable chunks."
-                )
-                health["banner_hi"] = (
-                    f"पायलट कॉर्पस: {col} — {n} usable अंश। "
-                    "पूर्ण BIS library नहीं। Protected baseline collections अछूते हैं।"
-                    if is_pilot
-                    else f"परीक्षण कॉर्पस: {col} — {n} usable अंश।"
-                )
+                health.update(_corpus_banners(col, n, is_pilot=is_pilot))
             status, body = _json_bytes(
                 health,
                 status=200 if STATE.collection is not None else 503,
@@ -191,30 +269,20 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path in ("/standards", "/api/knowledge/standards"):
-            status, body = _json_bytes(
-                {
-                    "ok": True,
-                    "standards": [
-                        {"id": "all", "label": "सभी (दोनों परीक्षण standards)"},
-                        {"id": "IS 9666", "label": "IS 9666 : 2023"},
-                        {"id": "IS 2676", "label": "IS 2676 : 1981"},
-                    ],
-                    "modes_note_hi": (
-                        "IS 9666 या IS 2676 चुनने पर दूसरे standard के अंश candidate set में नहीं आते। "
-                        "‘सभी’ अलग mode है।"
-                    ),
-                    "disclaimer_hi": (
-                        "परीक्षण: केवल दो standards के 19 जाँचे हुए अंश उपलब्ध हैं। "
-                        "यह पूरे standard की पूर्ण खोज नहीं है।"
-                    ),
-                }
-            )
+            status, body = _json_bytes(build_standards_payload())
             self._send(status, body)
             return
 
         if path in ("/search", "/api/knowledge/search"):
             qs = parse_qs(parsed.query)
             query = (qs.get("q") or qs.get("query") or [""])[0]
+            if len(query) > MAX_QUERY_CHARS:
+                status, body = _json_bytes(
+                    {"ok": False, "error_code": "query_too_long", "message_hi": "सवाल बहुत लंबा है।"},
+                    status=400,
+                )
+                self._send(status, body)
+                return
             standard = (qs.get("standard") or ["all"])[0]
             try:
                 limit = int((qs.get("limit") or [str(DEFAULT_LIMIT)])[0])
@@ -226,7 +294,7 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         status, body = _json_bytes(
-            {"ok": False, "message_hi": "अज्ञात पथ।", "path": path},
+            {"ok": False, "message_hi": "अज्ञात पथ।", "error_code": "not_found"},
             status=404,
         )
         self._send(status, body)
@@ -236,18 +304,39 @@ class Handler(BaseHTTPRequestHandler):
         path = parsed.path.rstrip("/") or "/"
         if path not in ("/search", "/api/knowledge/search"):
             status, body = _json_bytes(
-                {"ok": False, "message_hi": "अज्ञात पथ।"}, status=404
+                {"ok": False, "message_hi": "अज्ञात पथ।", "error_code": "not_found"},
+                status=404,
             )
             self._send(status, body)
             return
 
-        length = int(self.headers.get("Content-Length") or "0")
+        try:
+            length = int(self.headers.get("Content-Length") or "0")
+        except ValueError:
+            length = -1
+        if length < 0 or length > MAX_BODY_BYTES:
+            status, body = _json_bytes(
+                {"ok": False, "error_code": "body_too_large", "message_hi": "अनुरोध बहुत बड़ा है।"},
+                status=413,
+            )
+            self._send(status, body)
+            return
+
         raw = self.rfile.read(length) if length > 0 else b"{}"
         try:
             data = json.loads(raw.decode("utf-8") or "{}")
         except json.JSONDecodeError:
             status, body = _json_bytes(
-                {"ok": False, "message_hi": "अमान्य JSON।"}, status=400
+                {"ok": False, "message_hi": "अमान्य JSON।", "error_code": "invalid_json"},
+                status=400,
+            )
+            self._send(status, body)
+            return
+
+        if not isinstance(data, dict):
+            status, body = _json_bytes(
+                {"ok": False, "error_code": "invalid_json", "message_hi": "अमान्य JSON।"},
+                status=400,
             )
             self._send(status, body)
             return

@@ -33,7 +33,10 @@ from knowledge_engine.local_vector_test import (
 
 # Multilingual, cross-lingual Hindi↔English, local Mac via fastembed ONNX (no torch).
 MULTILINGUAL_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+# Protected — open read-only only; never delete/overwrite.
 EXPERIMENTAL_COLLECTION = "bis_two_sample_usable_multilingual_exp_v1"
+# Disposable scratch for rebuild experiments (not protected).
+SCRATCH_MULTILINGUAL_COLLECTION = "bis_multilingual_test_scratch_tmp"
 # fastembed ONNX quantized package size (~0.22 GB).
 MULTILINGUAL_MODEL_SIZE_NOTE = (
     "~0.22 GB ONNX (fastembed: paraphrase-multilingual-MiniLM-L12-v2); "
@@ -149,27 +152,65 @@ def build_experimental_multilingual(
     *,
     chunks: list,
     persist_dir: Path,
+    collection_name: str | None = None,
+    allow_rebuild_scratch: bool = False,
 ) -> tuple[str, Any]:
+    """Open or rebuild multilingual collection.
+
+    Protected ``EXPERIMENTAL_COLLECTION`` is never deleted.
+    Rebuilds (if allowed) use ``SCRATCH_MULTILINGUAL_COLLECTION`` only.
+    """
     import chromadb
+
+    from knowledge_engine.pilot.collection_guards import (
+        ProtectedCollectionError,
+        assert_collection_writable,
+        is_protected_collection,
+        safe_delete_collection,
+    )
+
+    target = collection_name or (
+        SCRATCH_MULTILINGUAL_COLLECTION if allow_rebuild_scratch else EXPERIMENTAL_COLLECTION
+    )
+
+    if allow_rebuild_scratch:
+        if is_protected_collection(target) or target == EXPERIMENTAL_COLLECTION:
+            raise ProtectedCollectionError(
+                f"Refusing rebuild of protected collection {target!r}; "
+                f"use scratch {SCRATCH_MULTILINGUAL_COLLECTION!r}"
+            )
+        assert_collection_writable(target, operation="multilingual_rebuild")
+    elif is_protected_collection(target) or target == EXPERIMENTAL_COLLECTION:
+        # Read-only open of existing protected experimental collection.
+        persist_dir.mkdir(parents=True, exist_ok=True)
+        client = chromadb.PersistentClient(path=str(persist_dir))
+        ef = FastEmbedMultilingualEF(MULTILINGUAL_MODEL)
+        try:
+            collection = client.get_collection(name=target, embedding_function=ef)
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError(
+                f"Protected collection {target!r} missing; rebuild is disabled. "
+                f"Pass allow_rebuild_scratch=True with scratch name only. ({exc})"
+            ) from None
+        return f"fastembed:{MULTILINGUAL_MODEL}", collection
 
     persist_dir.mkdir(parents=True, exist_ok=True)
     client = chromadb.PersistentClient(path=str(persist_dir))
+    assert_collection_writable(target, operation="multilingual_rebuild")
 
-    # Only touch experimental collection name — never production.
     try:
-        existing = client.list_collections()
-        names = [n if isinstance(n, str) else getattr(n, "name", str(n)) for n in existing]
-        if EXPERIMENTAL_COLLECTION in names:
-            client.delete_collection(EXPERIMENTAL_COLLECTION)
+        safe_delete_collection(client, target)
+    except ProtectedCollectionError:
+        raise
     except Exception:  # noqa: BLE001
         pass
 
     ef = FastEmbedMultilingualEF(MULTILINGUAL_MODEL)
     collection = client.get_or_create_collection(
-        name=EXPERIMENTAL_COLLECTION,
+        name=target,
         embedding_function=ef,
         metadata={
-            "purpose": "experimental_multilingual_ranking_comparison",
+            "purpose": "scratch_multilingual_ranking_comparison",
             "model": MULTILINGUAL_MODEL,
             "backend": "fastembed-onnx",
         },
@@ -219,16 +260,22 @@ def main(argv: list[str] | None = None) -> int:
     if COLLECTION_NAME not in str(prod_persist):
         raise RuntimeError(f"Unexpected production persist path: {prod_persist}")
 
-    # Experimental multilingual — separate path.
+    # Protected multilingual collection — open read-only (never delete/rebuild here).
     exp_root = (
         settings.vector_db_path
         / "sample_collections"
         / EXPERIMENTAL_COLLECTION
     )
     exp_chroma = exp_root / "chroma"
-    print(f"Building experimental collection with {MULTILINGUAL_MODEL} …", file=sys.stderr)
+    print(
+        f"Opening protected multilingual collection {EXPERIMENTAL_COLLECTION!r} read-only …",
+        file=sys.stderr,
+    )
     multi_name, multi_col = build_experimental_multilingual(
-        chunks=chunks, persist_dir=exp_chroma
+        chunks=chunks,
+        persist_dir=exp_chroma,
+        collection_name=EXPERIMENTAL_COLLECTION,
+        allow_rebuild_scratch=False,
     )
 
     comparisons = []
@@ -299,8 +346,9 @@ def main(argv: list[str] | None = None) -> int:
             else "इस छोटे टेस्ट में multilingual स्पष्ट लाभ नहीं दिखा — और evaluation चाहिए।"
         ),
         "production_note": (
-            "Production collection bis_two_sample_usable_v1 को modify/delete नहीं किया गया। "
-            "अभी API उसी MiniLM collection पर चलती है। Switch अलग निर्णय है।"
+            "Protected collections (bis_two_sample_usable_v1, "
+            "bis_two_sample_usable_multilingual_exp_v1, bis_pilot_representative_v1) "
+            "को modify/delete नहीं किया गया। Multilingual comparison read-only open है।"
         ),
         "en_preserved": en_ok_multi,
         "do_not_switch_production_yet": True,

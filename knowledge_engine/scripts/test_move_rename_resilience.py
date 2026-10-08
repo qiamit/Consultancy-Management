@@ -272,18 +272,27 @@ def main() -> int:
         },
     }
 
-    settings = load_settings()
-    out_dir = default_diagnostics_dir(settings) / "pilot"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / "move_rename_resilience_test_report.json"
-    out_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-
     for r in results:
         status = "PASS" if r["pass"] else "FAIL"
         print(f"{status}  {r['name']}")
         for c in r["checks"]:
             if not c["pass"]:
                 print(f"       FAIL {c['test']}: {c.get('detail')}")
+
+    # Prefer diagnostics dir; fall back to repo-local tmp (mock-safe, no source mutation).
+    out_path: Path | None = None
+    try:
+        settings = load_settings()
+        out_dir = default_diagnostics_dir(settings) / "pilot"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = out_dir / "move_rename_resilience_test_report.json"
+        out_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    except OSError:
+        fallback = _REPO_ROOT / "knowledge_engine" / ".tmp"
+        fallback.mkdir(parents=True, exist_ok=True)
+        out_path = fallback / "move_rename_resilience_test_report.json"
+        out_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
     print(f"Wrote {out_path}")
     print("ALL PASS" if all_pass else "SOME FAILED")
     return 0 if all_pass else 1

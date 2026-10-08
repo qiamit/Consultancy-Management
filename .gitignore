@@ -84,6 +84,7 @@ knowledge_engine/.venv/
 knowledge_engine/venv/
 knowledge_engine/.conda/
 knowledge_engine/.tools/
+knowledge_engine/.tmp/
 
 # ── BIS knowledge engine (local index & secrets; never commit PDFs) ───
 knowledge_engine/.env

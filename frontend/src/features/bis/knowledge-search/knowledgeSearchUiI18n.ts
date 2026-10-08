@@ -12,12 +12,14 @@ export const KNOWLEDGE_UI_LANGS: { id: KnowledgeUiLang; label: string }[] = [
 type UiStrings = {
   pageTitle: string
   disclaimer: string
+  serviceUnavailableBanner: string
   serviceOn: string
   serviceOff: string
   serviceChecking: string
   standardLabel: string
   standardHint: string
   standardAll: string
+  standardsLoading: string
   queryLabel: string
   queryPlaceholder: string
   searchButton: string
@@ -50,13 +52,16 @@ const EN: UiStrings = {
   pageTitle: 'BIS Knowledge Search — Test',
   disclaimer:
     'Loading corpus status from the local knowledge service…',
+  serviceUnavailableBanner:
+    'Local knowledge service unavailable. Corpus status will appear when the service is online.',
   serviceOn: 'Local service: on',
   serviceOff: 'Local service: off',
   serviceChecking: 'Local service: checking…',
   standardLabel: 'Standard',
   standardHint:
-    'Choosing one IS keeps other standards out of the candidate set. “All” is a separate mode.',
-  standardAll: 'All standards (in current corpus)',
+    'Choosing one IS keeps other standards out of the candidate set. “All” is a separate mode over the current corpus.',
+  standardAll: 'All standards (current corpus)',
+  standardsLoading: 'Loading standards…',
   queryLabel: 'Question',
   queryPlaceholder: 'Example: blank granules free from extraneous material',
   searchButton: 'Search',
@@ -91,13 +96,16 @@ const HI: UiStrings = {
   pageTitle: 'BIS ज्ञान खोज — परीक्षण',
   disclaimer:
     'स्थानीय ज्ञान सेवा से कॉर्पस स्थिति लोड हो रही है…',
+  serviceUnavailableBanner:
+    'स्थानीय ज्ञान सेवा उपलब्ध नहीं। सेवा चालू होने पर कॉर्पस स्थिति दिखेगी।',
   serviceOn: 'स्थानीय सेवा: चालू',
   serviceOff: 'स्थानीय सेवा: बंद',
   serviceChecking: 'स्थानीय सेवा: जाँच…',
   standardLabel: 'Standard',
   standardHint:
-    'IS चुनने पर दूसरे standards candidate set में नहीं आते। «सभी» अलग mode है।',
+    'IS चुनने पर दूसरे standards candidate set में नहीं आते। «सभी» वर्तमान कॉर्पस पर अलग mode है।',
   standardAll: 'सभी standards (वर्तमान कॉर्पस)',
+  standardsLoading: 'Standards लोड…',
   queryLabel: 'सवाल',
   queryPlaceholder: 'उदाहरण: blank granules free from extraneous material',
   searchButton: 'खोज',
