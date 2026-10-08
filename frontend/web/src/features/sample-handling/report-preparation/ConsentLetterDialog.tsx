@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { FilterCombobox } from '@/features/sample-handling/receiving/FilterCombobox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { generateNextConsentLetterNumber } from '@/features/masters/consent-letter/consentLetterDb'
 import { buildConsentLetterHtml } from './buildConsentLetterHtml'
@@ -40,6 +41,8 @@ export function ConsentLetterDialog({
   const [formData, setFormData] = useState<ConsentLetterFormData | null>(null)
 
   const [clientId, setClientId] = useState('')
+  const [clientOpen, setClientOpen] = useState(false)
+  const [clientQuery, setClientQuery] = useState('')
   const [isCodeId, setIsCodeId] = useState('')
   const [selectedParamKeys, setSelectedParamKeys] = useState<Set<string>>(() => new Set())
   const [consentLetterNo, setConsentLetterNo] = useState('')
@@ -114,6 +117,18 @@ export function ConsentLetterDialog({
     () => formData?.clients.find((c) => c.id === clientId) ?? null,
     [formData, clientId],
   )
+  const selectedClientLabel = selectedClient?.companyName ?? ''
+  const clientPicker = useMemo(() => {
+    const all = formData?.clients ?? []
+    const query = clientQuery.trim().toLowerCase()
+    const matched = query
+      ? all.filter((c) => c.companyName.toLowerCase().includes(query))
+      : all
+    return {
+      options: matched.slice(0, 80).map((c) => ({ id: c.id, label: c.companyName })),
+      matchCount: matched.length,
+    }
+  }, [formData, clientQuery])
 
   const selectedIsCode = useMemo(
     () => formData?.isCodes.find((c) => c.id === isCodeId) ?? null,
@@ -204,18 +219,31 @@ export function ConsentLetterDialog({
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="consent-client">Client</Label>
-              <Select value={clientId} onValueChange={setClientId} disabled={!formData?.clients.length}>
-                <SelectTrigger id="consent-client">
-                  <SelectValue placeholder="Select client" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(formData?.clients ?? []).map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.companyName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <FilterCombobox
+                value={clientOpen ? clientQuery : selectedClientLabel}
+                onValueChange={(value) => {
+                  setClientQuery(value)
+                  if (!clientOpen) setClientOpen(true)
+                  if (!value.trim()) setClientId('')
+                }}
+                options={clientPicker.options}
+                matchCount={clientPicker.matchCount}
+                onSelectOption={(opt) => {
+                  setClientId(opt.id)
+                  setClientQuery(opt.label)
+                  setClientOpen(false)
+                }}
+                open={clientOpen}
+                onOpenChange={(next) => {
+                  setClientOpen(next)
+                  if (next) setClientQuery((prev) => prev || selectedClientLabel)
+                  else setClientQuery(selectedClientLabel)
+                }}
+                placeholder="Search client"
+                inputId="consent-client"
+                listId="consent-client-combobox"
+                disabled={!formData?.clients.length}
+              />
               {selectedClient?.addressBlock ? (
                 <p className="text-xs text-muted-foreground whitespace-pre-line rounded-md border border-border/60 bg-muted/30 p-2">
                   {selectedClient.addressBlock}

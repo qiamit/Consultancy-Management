@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { limsDarkBarGlowStyle, limsPageShellClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
+import { fetchAllRows } from '@/lib/fetchAllRows'
 import { supabase } from '@/lib/supabaseClient'
 import { useFormDialogOpenChange } from '@/lib/formDialogOpenChange'
 import { useMasterUiSearchState } from '@/lib/useMasterUiSearchState'
@@ -149,13 +150,16 @@ export default function QuotationMasterPage() {
   const loadClients = useCallback(async () => {
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
-        const { data, error } = await supabase
-          .from('clients')
-          .select(
-            'id, company_name, contact_person_name, email, country_code, mobile, gst_number, address, district, pin_code, state, country, opening_balance, balance_type',
-          )
-          .order('company_name', { ascending: true })
-        if (error) throw error
+        const data = await fetchAllRows<{ id: string }>((from, to) =>
+          supabase
+            .from('clients')
+            .select(
+              'id, company_name, contact_person_name, email, country_code, mobile, gst_number, address, district, pin_code, state, country, opening_balance, balance_type',
+            )
+            .order('company_name', { ascending: true })
+            .order('id', { ascending: true })
+            .range(from, to),
+        )
         const list = Array.isArray(data) ? data : []
         const options = list.map((c) => ({
           id: String((c as { id: string }).id),

@@ -280,6 +280,37 @@ async function requireUser(req) {
   return res.json()
 }
 
+async function requireFullAccess(req) {
+  const caller = await requireUser(req)
+  const callerId = String(caller?.id ?? '')
+  let designation = ''
+  let status = ''
+  let found = false
+  try {
+    const profiles = await rest(
+      `/user_profiles?id=eq.${encodeURIComponent(callerId)}&select=designation,status`,
+    )
+    const row = Array.isArray(profiles) ? profiles[0] : null
+    if (row) {
+      found = true
+      designation = String(row.designation ?? '')
+      status = row.status == null ? '' : String(row.status)
+    }
+  } catch {
+    const err = new Error('Forbidden')
+    err.statusCode = 403
+    throw err
+  }
+  const statusNorm = status.trim().toLowerCase()
+  const active = found && (statusNorm === '' || statusNorm === 'active')
+  if (!active || !hasFullAccessDesignation(designation)) {
+    const err = new Error('Forbidden')
+    err.statusCode = 403
+    throw err
+  }
+  return caller
+}
+
 async function authAdmin(path, init = {}) {
   const res = await fetch(`${AUTH_URL}${path}`, {
     ...init,
@@ -577,7 +608,7 @@ async function handleSendMrmAgenda(req, res) {
 }
 
 async function handleCreateUser(req, res) {
-  const caller = await requireUser(req)
+  const caller = await requireFullAccess(req)
   const body = await readBody(req)
 
   const email = String(body.email ?? '').trim()
@@ -648,7 +679,7 @@ async function handleCreateUser(req, res) {
 }
 
 async function handleDeleteUser(req, res) {
-  const caller = await requireUser(req)
+  const caller = await requireFullAccess(req)
   const body = await readBody(req)
   const userId = String(body.user_id ?? '').trim()
 
@@ -660,23 +691,6 @@ async function handleDeleteUser(req, res) {
   const callerId = String(caller?.id ?? '')
   if (userId === callerId) {
     json(res, 400, { error: 'You cannot delete your own account.' })
-    return
-  }
-
-  let callerDesignation = ''
-  try {
-    const profiles = await rest(
-      `/user_profiles?id=eq.${encodeURIComponent(callerId)}&select=designation`,
-    )
-    callerDesignation = String(profiles?.[0]?.designation ?? '').trim()
-  } catch {
-    /* ignore */
-  }
-  if (!callerDesignation) {
-    callerDesignation = String(caller?.user_metadata?.designation ?? '').trim()
-  }
-  if (!hasFullAccessDesignation(callerDesignation)) {
-    json(res, 403, { error: 'Forbidden' })
     return
   }
 

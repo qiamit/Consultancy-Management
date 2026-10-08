@@ -1,6 +1,7 @@
 import { formatClientAddress } from '@/features/masters/clients/types'
 import { formatIsCodeLabel } from '@/features/masters/is-codes/buildIsCodeAssistantContext'
 import { parseLabSettingsRow, resolveLabSettingsRowId } from '@/features/settings/lab-settings/labSettingsDb'
+import { fetchAllRows } from '@/lib/fetchAllRows'
 import { supabase } from '@/lib/supabaseClient'
 import { CONSENT_LETTER_DEFAULTS } from './consentLetterDefaults'
 import { fetchReportResultRowsForSample } from './reportResultRows'
@@ -80,6 +81,21 @@ async function fetchLabDetails(): Promise<ConsentLetterLabDetails> {
     bisOslCode: CONSENT_LETTER_DEFAULTS.bisOslCode,
     nablCertificateNo: CONSENT_LETTER_DEFAULTS.nablCertificateNo,
   }
+}
+
+const CONSENT_CLIENT_SELECT = 'id, company_name, address, district, pin_code, state, country'
+
+function queryConsentClients(from: number, to: number) {
+  return supabase
+    .from('clients')
+    .select(CONSENT_CLIENT_SELECT)
+    .order('company_name', { ascending: true })
+    .order('id', { ascending: true })
+    .range(from, to)
+}
+
+async function loadConsentClients(): Promise<ConsentLetterClientOption[]> {
+  return mapClientRows(await fetchAllRows(queryConsentClients))
 }
 
 function mapClientRows(data: unknown): ConsentLetterClientOption[] {
@@ -194,19 +210,15 @@ export async function refreshConsentLetterMasterLists(): Promise<{
   clients: ConsentLetterClientOption[]
   isCodes: ConsentLetterIsCodeOption[]
 }> {
-  const [clientsRes, isCodesRes] = await Promise.all([
-    supabase
-      .from('clients')
-      .select('id, company_name, address, district, pin_code, state, country')
-      .order('company_name', { ascending: true }),
+  const [clients, isCodesRes] = await Promise.all([
+    loadConsentClients(),
     supabase.from('is_codes').select('id, is_number, revision_year, title').order('is_number', { ascending: true }),
   ])
 
-  if (clientsRes.error) throw clientsRes.error
   if (isCodesRes.error) throw isCodesRes.error
 
   return {
-    clients: mapClientRows(clientsRes.data),
+    clients,
     isCodes: mapIsCodeRows(isCodesRes.data),
   }
 }
@@ -215,19 +227,13 @@ export async function fetchStandaloneConsentLetterFormData(
   defaultIsCodeId?: string | null,
   defaultClientId?: string | null,
 ): Promise<ConsentLetterFormData> {
-  const [clientsRes, isCodesRes, lab] = await Promise.all([
-    supabase
-      .from('clients')
-      .select('id, company_name, address, district, pin_code, state, country')
-      .order('company_name', { ascending: true }),
+  const [clients, isCodesRes, lab] = await Promise.all([
+    loadConsentClients(),
     supabase.from('is_codes').select('id, is_number, revision_year, title').order('is_number', { ascending: true }),
     fetchLabDetails(),
   ])
 
-  if (clientsRes.error) throw clientsRes.error
   if (isCodesRes.error) throw isCodesRes.error
-
-  const clients = mapClientRows(clientsRes.data)
   let isCodes = mapIsCodeRows(isCodesRes.data)
   const preferredIsCodeId = defaultIsCodeId?.trim() || null
   isCodes = await ensureIsCodeInList(isCodes, preferredIsCodeId)
@@ -248,30 +254,25 @@ export async function fetchConsentLetterFormData(
   sampleId: string,
   defaultIsCodeId: string | null,
 ): Promise<ConsentLetterFormData> {
-  const [sampleRes, clientsRes, isCodesRes, resultRows, lab] = await Promise.all([
+  const [sampleRes, clients, isCodesRes, resultRows, lab] = await Promise.all([
     supabase
       .from('samples')
       .select('client_id, test_report_is_code_id')
       .eq('id', sampleId)
       .maybeSingle(),
-    supabase
-      .from('clients')
-      .select('id, company_name, address, district, pin_code, state, country')
-      .order('company_name', { ascending: true }),
+    loadConsentClients(),
     supabase.from('is_codes').select('id, is_number, revision_year, title').order('is_number', { ascending: true }),
     fetchReportResultRowsForSample(sampleId),
     fetchLabDetails(),
   ])
 
   if (sampleRes.error) throw sampleRes.error
-  if (clientsRes.error) throw clientsRes.error
   if (isCodesRes.error) throw isCodesRes.error
 
   const sample = sampleRes.data as { client_id?: string | null; test_report_is_code_id?: string | null } | null
   const defaultClientId = sample?.client_id?.trim() || null
   const sampleIsCodeId = defaultIsCodeId?.trim() || sample?.test_report_is_code_id?.trim() || null
 
-  const clients = mapClientRows(clientsRes.data)
   let isCodes = mapIsCodeRows(isCodesRes.data)
   isCodes = await ensureIsCodeInList(isCodes, sampleIsCodeId)
 

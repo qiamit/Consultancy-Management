@@ -116,6 +116,7 @@ export function FilterCombobox({
   multiline = false,
   rows = 2,
   showSerialNumbers = true,
+  matchCount,
 }: {
   value: string
   onValueChange: (value: string) => void
@@ -138,6 +139,8 @@ export function FilterCombobox({
   rows?: number
   /** Show 1, 2, 3… badges beside options (default true). */
   showSerialNumbers?: boolean
+  /** Full match count when `options` is a capped slice of a larger list. */
+  matchCount?: number
 }) {
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null)
   const selectingRef = useRef(false)
@@ -296,12 +299,15 @@ export function FilterCombobox({
     }, 200)
   }
 
+  const totalMatches = matchCount ?? options.length
   const resultLabel =
     options.length === 0
       ? 'No matches'
-      : options.length === 1
-        ? '1 match'
-        : `${options.length} matches`
+      : totalMatches > options.length
+        ? `${options.length} of ${totalMatches}`
+        : options.length === 1
+          ? '1 match'
+          : `${options.length} matches`
 
   const dropdownList = showList && dropdownPosition ? (
     <div

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { fetchAllRows } from '@/lib/fetchAllRows'
 import { supabase } from '@/lib/supabaseClient'
 import { useFormDialogOpenChange } from '@/lib/formDialogOpenChange'
 import { useMasterUiSearchState } from '@/lib/useMasterUiSearchState'
@@ -235,12 +236,14 @@ export default function ClientsMasterPage() {
     setListError(null)
     setListLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('clients')
-        .select('*')
-        .order('company_name', { ascending: true })
-
-      if (error) throw error
+      const data = await fetchAllRows<ClientRow>((from, to) =>
+        supabase
+          .from('clients')
+          .select('*')
+          .order('company_name', { ascending: true })
+          .order('id', { ascending: true })
+          .range(from, to),
+      )
 
       const list = (Array.isArray(data) ? (data as ClientRow[]) : [])
         .map((r) => ({
@@ -1279,6 +1282,8 @@ export default function ClientsMasterPage() {
           message={saveMessage}
           loading={saveLoading}
           selectedCount={selectedIds.size}
+          totalCount={rows.length}
+          visibleCount={filteredRows.length}
           page={page}
           pageCount={pageCount}
           onImport={handleImport}

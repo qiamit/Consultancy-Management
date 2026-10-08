@@ -360,6 +360,13 @@ export function QuotationFormView({
   const statusOptions = statusOptionsForDocumentKind(documentKind)
   const [clientQuery, setClientQuery] = useState(form.clientName)
   const [clientOpen, setClientOpen] = useState(false)
+  const clientPicker = useMemo(() => {
+    const query = clientQuery.trim().toLowerCase()
+    const matched = query
+      ? clientOptions.filter((opt) => opt.label.toLowerCase().includes(query))
+      : clientOptions
+    return { options: matched.slice(0, 80), matchCount: matched.length }
+  }, [clientOptions, clientQuery])
   const [addClientOpen, setAddClientOpen] = useState(false)
   const [addClientInitialName, setAddClientInitialName] = useState('')
   const [descOpenByKey, setDescOpenByKey] = useState<Record<string, boolean>>({})
@@ -865,13 +872,8 @@ export function QuotationFormView({
                     const match = clientOptions.find((opt) => opt.label === v)
                     if (match) applyClientSelection(match.id, match.label)
                   }}
-                  options={
-                    !clientQuery.trim()
-                      ? clientOptions
-                      : clientOptions.filter((opt) =>
-                          opt.label.toLowerCase().includes(clientQuery.trim().toLowerCase()),
-                        )
-                  }
+                  options={clientPicker.options}
+                  matchCount={clientPicker.matchCount}
                   onSelectOption={(opt) => {
                     applyClientSelection(opt.id, opt.label)
                     setClientQuery(opt.label)

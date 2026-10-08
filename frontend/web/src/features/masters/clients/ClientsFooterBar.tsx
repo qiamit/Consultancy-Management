@@ -13,6 +13,8 @@ export function ClientsTableFooterBar({
   message,
   loading,
   selectedCount,
+  totalCount,
+  visibleCount,
   page,
   pageCount,
   onImport,
@@ -28,6 +30,8 @@ export function ClientsTableFooterBar({
   message: string | null
   loading: boolean
   selectedCount: number
+  totalCount: number
+  visibleCount: number
   page: number
   pageCount: number
   onImport: () => void
@@ -133,6 +137,11 @@ export function ClientsTableFooterBar({
           </div>
 
           <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5">
+            <span className="shrink-0 whitespace-nowrap text-[10px] font-medium text-stone-200 sm:text-xs">
+              {visibleCount === totalCount
+                ? `${totalCount.toLocaleString('en-IN')} clients`
+                : `${visibleCount.toLocaleString('en-IN')} of ${totalCount.toLocaleString('en-IN')}`}
+            </span>
             <Input
               aria-label="Jump to page"
               placeholder="Page"
