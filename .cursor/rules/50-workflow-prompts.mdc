@@ -1,0 +1,35 @@
+---
+description: Amit's prompt-driven workflow; audit files in docs/audits with item IDs (VDB-xx, MST-xx, FIN-xx), "continue" behaviour, status updates, business naming
+alwaysApply: true
+---
+
+# Workflow: audits, item IDs and "continue"
+
+Amit writes prompts in a separate assistant (Grok Bot) and pastes them here. Prompts are often short, in Hindi/Hinglish or English, e.g. "continue", "VDB-03 karo", "MST-05 fix karo", "next item".
+
+## Audit and plan files (`docs/audits/`)
+| File | Scope | ID prefix |
+|------|-------|-----------|
+| `docs/audits/vector-db-preaudit.md` | Knowledge engine / vector DB | `VDB-xx` |
+| `docs/audits/masters-gap-audit.md` | Masters (Client, IS Code, Products/Services, Test Parameter, Equipment, GST, Units ...) | `MST-xx` |
+| `docs/audits/finance-module-plan.md` (later) | Finance module | `FIN-xx` |
+
+Each item has: **ID**, title, priority (P0–P3), status (`Open` / `In progress` / `Done` / `Blocked` / `Won't fix`), affected files, problem with evidence (file:line), fix plan, acceptance criteria, and a notes/log line.
+
+## When asked to work on an ID or to "continue"
+1. Open the relevant audit file. With no ID given, take the highest-priority `Open` (or `In progress`) item in the file under discussion. If it's unclear which file is meant, ask one short question.
+2. Read the item's acceptance criteria and inspect the code it references.
+3. Post a short plan of 3–6 bullets, then implement the **smallest change** that meets the criteria. Do one ID per run unless asked for more. Split a large item into sub-IDs (`VDB-03a`, `VDB-03b`) inside the file.
+4. Verify: lint, typecheck or build for the frontend, `node --check` for functions, test modules and evals for `knowledge_engine`. A SQL migration is written but not applied unless Amit asks.
+5. Update the item in the audit file: status, date (YYYY-MM-DD), files changed, verification commands and results, follow-ups.
+   - Mark `Done` only when verification passed.
+   - Use `Blocked` with a reason when the item needs a production migration, a deploy, a business decision or data Amit must provide.
+6. Finish with the summary (see core rule) and suggest the next ID.
+
+## Creating or extending an audit
+- Back findings with evidence (file paths, line numbers, query results). Don't invent issues. Never renumber existing IDs; append new ones.
+- Domain references for BIS rules: bis.gov.in, manakonline.in, standards.bis.gov.in, lims.bis.gov.in. Use them for research. Don't add scraping of these sites to the app without asking; portal automation lives in `extensions/`.
+
+## Business naming (always)
+- Write **"Quality International Research & Laboratories Private Limited"** in full. Never use "Pvt Ltd", "Pvt. Ltd." or "P. Ltd." anywhere: UI text, seeds, templates, emails, PDFs, docs.
+- Q Engineering is the consultancy brand (`qengineering.in`). Company names in client data stay exactly as the client registered them.

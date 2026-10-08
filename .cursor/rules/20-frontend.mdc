@@ -1,0 +1,45 @@
+---
+description: Frontend conventions for the React + Vite app in frontend/ (feature folders, LIMS stone/amber theme, Supabase client via Railway gateway)
+globs: frontend/**
+alwaysApply: false
+---
+
+# Frontend conventions (frontend/)
+
+## Structure
+- The `@/` alias points to `frontend/src`. Always import with `@/...` across folders; use relative `./` imports only inside a feature folder.
+- Each module gets a feature folder: `src/features/<area>/<module>/`. The masters pattern, from `features/masters/clients/` and `features/masters/is-codes/`:
+  - `XxxMasterPage.tsx`: state, data loading, CRUD, CSV import/export
+  - `XxxHeaderBar.tsx`: dark title and actions bar. `XxxTable.tsx`: sortable table. `XxxFooterBar.tsx`: pagination and page size.
+  - `XxxForm.tsx`: add/edit form inside a `Dialog`. `XxxDetailsDialog.tsx`: read-only view.
+  - `types.ts`: `XxxRow`, `XxxForm`, `emptyXxxForm`, option constants and validators (`isValidGst`, `isValidIndianPin`, `isValidMobile`, `isValidEmail`)
+  - `xxxApi.ts`: data helpers. `buildXxxAssistantContext.ts`: page context passed to the QI Assistant.
+  - A thin wrapper page sits at `features/<area>/XxxPage.tsx` (e.g. `features/masters/ClientsPage.tsx`).
+- Routes are declared in `src/App.tsx`, with stable shells in `src/routes/routeElements.tsx`. The sidebar lives in `src/lib/appNav.ts`; the Module Access catalog is generated from it, so new pages must be added there too. Guards: `components/auth/RequireAuth`, `RequireModuleAccess`, `RequireLaboratoryDirector`, plus `lib/moduleAccess.ts`.
+- Build a new module by copying the closest existing module (Clients or IS Codes for masters, Quotation for finance documents). Don't invent a new layout.
+
+## UI and theme
+- Primitives: shadcn/ui components in `components/ui/` (button, dialog, select, table, tabs, ...). Use and extend them; don't add another UI library.
+- Theme: the classes in `lib/limsThemeUi.ts` (`limsPageShellClass`, `limsPanelClass`, `limsFieldClass`, `limsPrimaryBtnClass`, `limsOutlineBtnClass`, `limsDarkBarClass`, `limsDarkBarBtnClass`, `limsDialogClass`, ...). The look is stone/amber with square corners (`rounded-none`). Theme variables live in `styles/appThemes.css` and `lib/appTheme.ts`. Don't hard-code new colour schemes.
+- Combine classes with `cn()` from `@/lib/utils`. Icons come from `lucide-react`. Notifications use `toast` from `sonner`.
+- Reusable inputs: `components/lims/LimsDatePicker`, `LimsFieldWithAdd` / `LocationFieldWithAdd` (a lookup with inline "add new"), `GstRateSelect`, `MeasurementUnitSelect`.
+- Dates and currency go through `AppDateFormatProvider` / `appDateFormat.ts` and `AppCurrencyProvider` / `appCurrency.ts`. Use Indian number formatting and INR. Amount in words: `features/finance/sale/quotation/amountInIndianRupeesWords.ts`.
+- Layouts must work on narrow screens. Toolbars use `limsToolbarScrollClass` so buttons scroll instead of getting clipped.
+
+## Data access
+- Use the single client from `@/lib/supabaseClient`; it is PostgREST/Auth/Storage behind the Railway gateway. Select explicit columns and always handle `error`. Show `toast.error(formatSupabaseError(error))` (`lib/formatSupabaseError.ts`) and don't fail silently.
+- Most modules call `supabase.from(...)` directly with local state; `@tanstack/react-query` is available but rarely used. Follow the existing pattern of the module you're editing.
+- Call functions at `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/<name>` with the user's JWT, as `lib/sendAppEmail.ts` and `components/qi-assistant/qiAssistantApi.ts` do. Never put a service-role key or AI key in frontend code.
+- PDFs: `lib/playwrightPdfClient.ts` (pdf-service via `VITE_PDF_SERVICE_URL`, or the `/api/pdf` proxy in dev), or the browser print path.
+- Knowledge Search (`features/bis/knowledge-search/`): `/api/knowledge` is a **dev-only** Vite proxy to the local Python API (127.0.0.1:3851). Production has no knowledge service yet, so the UI must show a clear "service unavailable" state instead of failing.
+
+## Forms and masters
+- Forms are controlled, starting from `emptyXxxForm`. Trim and normalise input (see the `toProperTitleCase` / `toContinuousText` helpers in clients `types.ts`). Use `lib/validation.ts` (e.g. `EMAIL_INPUT_PATTERN`).
+- Dialogs: use `useFormDialogOpenChange` so a form isn't lost on tab switch, and `useMasterUiSearchState` to persist search, sort and paging.
+- Masters need duplicate guards in the UI that match the DB unique constraints. CSV headers must match the form fields plus `id` for round-trip, like `CLIENT_CSV_HEADERS` in `ClientsMasterPage.tsx`.
+- Hindi UI strings: follow the local strings-file pattern in `knowledgeSearchUiI18n.ts`, and only on pages that already support Hindi.
+
+## TypeScript and React
+- Strict TS with `noUnusedLocals` / `noUnusedParameters`. `verbatimModuleSyntax` is on, so use `import type` for types. Don't use `any` without a comment explaining why.
+- Function components and hooks only; follow `eslint-plugin-react-hooks`. Some files are already 50–130 KB (e.g. `QuotationForm.tsx`, `EquipmentMasterForm.tsx`, `OslSampleRequirementsModuleFields.tsx`). Put new logic in new small files and import it, rather than growing them further.
+- Verify with `npm run lint` and `npm run typecheck` from the repo root, plus `npm run build` when routes or config change.

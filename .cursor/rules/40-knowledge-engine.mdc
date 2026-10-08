@@ -1,0 +1,43 @@
+---
+description: BIS knowledge engine (Python RAG) rules; quality gating, protected collections, embedding consistency, evals, no secrets/PDFs in repo
+globs: knowledge_engine/**,frontend/src/features/bis/knowledge-search/**
+alwaysApply: false
+---
+
+# Knowledge engine (knowledge_engine/)
+
+## Environment and running
+- The Python 3.11 env with chromadb, fastembed and tesseract is at `knowledge_engine/.conda`. `knowledge_engine/.venv` covers the basic PyMuPDF extraction.
+- Always run code as modules from the repo root: `knowledge_engine/.conda/bin/python -m knowledge_engine.scripts.<script_name>`
+- Local search API: `knowledge_engine/.conda/bin/python -m knowledge_engine.scripts.serve_knowledge_search_api` (127.0.0.1:3851, read-only). The frontend reaches it through the dev-only Vite proxy `/api/knowledge`.
+
+## Data, paths and secrets
+- Read configuration only through `knowledge_engine/config.py`, which loads `knowledge_engine/.env`: `KNOWLEDGE_PDF_SOURCE_DIR`, `KNOWLEDGE_VECTOR_DB_PATH`, `KNOWLEDGE_CLIENT_DOCS_DIR`. Never print or commit `.env`. Placeholders belong in `.env.example` only.
+- BIS PDFs, client documents, Chroma stores and diagnostics live **outside the repo**. Never copy them in, and never hard-code absolute machine paths.
+- No bulk indexing, long OCR jobs, model downloads or external LLM/API calls unless Amit explicitly approves that run.
+
+## Collections and safety guards
+- `PROTECTED_COLLECTIONS` in `pilot/constants.py` (`bis_two_sample_usable_v1`, `bis_two_sample_usable_multilingual_exp_v1`, `bis_pilot_representative_v1`) must **never** be deleted, overwritten or written to.
+- Every write goes through `pilot/collection_guards.py` (`assert_collection_writable`, `safe_delete_collection`, ...) into a new versioned collection (`..._v2`, `..._v3`) or a scratch collection (`bis_vector_test_scratch_tmp`, `bis_multilingual_test_scratch_tmp`). Never weaken or bypass these guards.
+- The runtime collection is chosen in `search_pipeline.open_search_collection` (pilot → experimental → MiniLM fallback). If you change that order or the target collection, say so explicitly.
+
+## Quality gate (usable / needs_review)
+- Each chunk carries `review_status` = `usable` | `needs_review` | `skipped_blank` (`chunk_extract.py`, `QUALITY_GATE_VERSION = usable_needs_review_v1`). **Only `usable` chunks are indexed for search.**
+- Never auto-promote `needs_review` to `usable`, and never invent missing table values or garbled OCR text. A chunk can be promoted only through a real extraction fix (`layout_extract.py`, `scripts/remediate_extraction_quality.py`) backed by eval evidence, or through the human review registry (`pilot/document_identity_review_registry.py`).
+- Keep metadata on every chunk: IS number, year, clause number, pdf pages, document_id, chunk_id. Citations depend on it.
+
+## Embedding consistency
+- Ingest and query must use **the same model and backend**: `PILOT_EMBEDDING_MODEL = sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` via `fastembed_onnx` (`pilot/constants.py`). Never query a collection with a different embedding function.
+- Changing the model or chunking means a new collection name, a full re-embed, bumped version constants (`EXTRACTION_VERSION`, `CHUNK_VERSION`, `QUALITY_GATE_VERSION`, `CHUNK_ID_SCHEME_V2`), and the model name recorded in collection metadata.
+
+## Retrieval and answers
+- Retrieval code: `search_pipeline.py`, `hybrid_retrieval.py` (vector + lexical) and `answerability.py` (relevance / "not answerable" decisions). Keep standard-filtering and alias logic in `pilot/standard_filter_v2_candidate.py` and `pilot/alias_policy.py`.
+- Answers must be grounded: cite the IS number, clause and page, quote numbers verbatim, and return an explicit "not found in verified knowledge base" instead of guessing. Hindi and Hinglish queries must keep working (the model is multilingual).
+
+## Evals and tests
+- Measure every retrieval or quality change before and after with `-m knowledge_engine.scripts.run_reliability_eval` and/or `run_pilot_eval`, and report the numbers.
+- Gold labels in `knowledge_engine/eval/*.json` are hand-authored. **Never edit gold labels to make results pass**, and never derive them from query text.
+- Unit and regression checks are the `knowledge_engine/scripts/test_*.py` modules, each run as `knowledge_engine/.conda/bin/python -m knowledge_engine.scripts.test_<name>`. Each prints PASS/FAIL and exits non-zero on failure. Run the ones related to your change (always `test_collection_guards` when touching writes).
+
+## Audit tracking
+- Vector DB issues are tracked in `docs/audits/vector-db-preaudit.md` with IDs `VDB-xx`. Follow the workflow rule: implement one ID, verify, then update its status in that file.

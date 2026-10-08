@@ -1,0 +1,64 @@
+---
+description: Core context, stack, deploy target, secrets and working style for Consultancy Pro (always on)
+alwaysApply: true
+---
+
+# Consultancy Pro: project core
+
+## What this app is
+Consultancy Pro (repo `qiamit/Consultancy-Management`, branch `main`) is the BIS certification consultancy management app for **Q Engineering** (`qengineering.in`) and **Quality International Research & Laboratories Private Limited** (`qirlpl.com`).
+
+Modules (see `frontend/src/features/`):
+- **Masters**: Clients, IS Codes, Products/Services, Test Parameters, Equipment, GST rates, Measurement units
+- **BIS**: Projects, Renewals, Surveillance, Sample Failure Reply, Knowledge Search
+- **Finance (Sale)**: Quotation, Proforma Invoice, Invoice, Credit Note, Payment Receipt
+- **Tools**: Email, Website CMS. **Settings**: Lab Settings, User Management, Module Access, AI Settings
+- **QI Assistant**: the AI chat panel (`components/qi-assistant/`)
+- **Browser extension**: QE Consultancy for Manak Online and the BIS portals (`extensions/`)
+
+The app was forked from the Qirlpl LIMS stack, so some names still say "LIMS" or "lab" (`limsThemeUi`, `lab_settings`, `LabSettingsPage`). That is expected. Don't rename them unless asked.
+
+## Stack
+- `frontend/`: React 19, TypeScript 5.9, Vite 7, Tailwind 3, shadcn/ui (Radix), react-router 7, `@supabase/supabase-js` pointed at the Railway API gateway, sonner toasts, TipTap, pdf-lib
+- `backend/supabase/migrations/`: plain SQL migrations for Railway Postgres. `scripts/apply-migrations.mjs` applies them and tracks them in `public.app_schema_migrations`.
+- `backend/supabase/functions/`: Deno function sources inherited from LIMS. They are **not** the production runtime (see the railway-functions rule).
+- `railway-stack/gateway/Caddyfile`: Caddy gateway. Routes: `/auth/v1` → GoTrue, `/rest/v1` → PostgREST, `/storage/v1` → Storage, `/functions/v1` → functions service, plus `/api/osl/manak-pdf`.
+- `railway-stack/functions/`: Node 22 functions service (`server.mjs`, `qiAssistant.mjs`). This is the production functions code, including Resend email.
+- `pdf-service/`: Playwright Chromium PDF renderer. Runs locally on port 3847; Vite proxies `/api/pdf` to it.
+- `knowledge_engine/`: Python local RAG over BIS PDFs (Chroma + FastEmbed). Local API on 127.0.0.1:3851; Vite proxies `/api/knowledge` to it **in dev only**.
+- `extensions/`: QE Consultancy extension (Chrome and Safari copies)
+- `storage-service/`: MinIO helper Dockerfile
+
+## Deploy target
+Self-hosted Supabase-style stack on **Railway**, project **Consultancy Management**. Services: `frontend`, `functions`, `api` (Caddy gateway), `auth` (GoTrue), `rest` (PostgREST), `storage-api`, `pdf-service`, `Postgres`, `Resend`, `Consultancy`.
+- NEVER use hosted Supabase Cloud, `supabase link`, `supabase db push`, Vercel or Netlify. `npm run db:push` is meant to fail (`backend/scripts/refuse-hosted-cloud.cjs`). Never remove or bypass that guard.
+- Don't deploy, redeploy, apply migrations to production, or change Railway variables unless Amit explicitly asks for it in the current chat.
+
+## Secrets
+- Never open, print, paste or commit `.env`, `frontend/.env`, `knowledge_engine/.env`, `.railway-secrets.env`, API keys, JWTs or database URLs. Only `*.env.example` files may hold placeholders.
+- The frontend uses only `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` and `VITE_PDF_SERVICE_URL`. Service-role keys, `RESEND_API_KEY` and AI provider keys live only in Railway service variables, never in frontend code or the extension.
+- Never hard-code machine paths, keys or credentialed URLs.
+
+## Language
+- App UI text is in English. Some pages have an EN/हिंदी toggle backed by a small local strings file (example: `features/bis/knowledge-search/knowledgeSearchUiI18n.ts`). Follow that pattern rather than adding an i18n library, and add Hindi strings when you touch a page that already supports Hindi.
+- AI features (QI Assistant, knowledge answers) reply in the user's language, including Hindi and Hinglish.
+- Explanations to Amit in chat can be in Hindi or Hinglish. Code, identifiers, comments and commit messages stay in English.
+
+## Business naming
+- Always write "Quality International Research & Laboratories Private Limited" in full. Never write "Pvt Ltd", "Pvt. Ltd." or "P. Ltd." This applies to UI, templates, seeds, emails and PDFs.
+
+## Commands (run from the repo root; these are the scripts that exist)
+- `npm run dev`: frontend (Vite)
+- `npm run lint`: ESLint, frontend
+- `npm run typecheck`: `tsc -b`, frontend
+- `npm run build`: production build, frontend
+- `npm run pdf:install` / `npm run pdf:dev`: PDF service
+- No JS unit-test runner is configured. Don't claim JS tests ran. Python checks for `knowledge_engine` are covered in that rule.
+
+## Working style
+- Search the codebase first, then edit. Reuse existing helpers and components instead of creating parallel ones.
+- Make small, reviewable changes, one concern at a time. Apply multi-file edits directly instead of pasting long code blocks into chat.
+- Don't touch unrelated files, don't reformat whole files, and don't add dependencies without explaining why.
+- After frontend changes, run `npm run lint` and `npm run typecheck` (plus `npm run build` if routing or config changed) and fix any errors you introduced. After `knowledge_engine` changes, run the relevant test modules. After `railway-stack` changes, run `node --check` on the edited files.
+- Don't commit or push unless Amit asks. Never force-push.
+- End every task with a short summary: files changed, what changed, how you verified it (commands and results), and anything open or risky.

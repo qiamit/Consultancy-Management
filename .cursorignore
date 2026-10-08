@@ -1,0 +1,135 @@
+# .cursorignore: hides files from Cursor AI (chat/agent context) AND from indexing.
+# Gitignore syntax. Keep source code visible; hide secrets, dependencies, builds, data and binaries.
+# Files only excluded from indexing (but still readable on request) are listed in .cursorindexingignore.
+
+# ── Secrets (never in AI context) ─────────────────────────────────────
+.env
+.env.*
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.*.example
+.railway-secrets.env
+**/*secrets*.env
+.railway/
+credentials.json
+*.pem
+*.key
+*.p12
+*.pfx
+*.secret
+backend/supabase/.env.keys
+
+# ── Dependencies (all levels) ─────────────────────────────────────────
+node_modules/
+.pnpm-store/
+
+# ── Build outputs & tool caches ───────────────────────────────────────
+dist/
+dist-ssr/
+build/
+out/
+.vite/
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+*.tsbuildinfo
+.eslintcache
+.turbo/
+.cache/
+.parcel-cache/
+
+# ── Python environments & caches (knowledge_engine/.conda alone is ~940 MB) ─
+knowledge_engine/.conda/
+knowledge_engine/.venv/
+knowledge_engine/venv/
+knowledge_engine/.tools/
+knowledge_engine/.tmp/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# ── Vector DB / RAG data (stores normally live outside the repo) ──────
+knowledge_engine/data/
+knowledge_engine/diagnostics/
+knowledge_engine/vector_store/
+knowledge_engine/vector_db/
+knowledge_engine/.chroma/
+knowledge_engine/**/chroma/
+knowledge_engine/**/index/
+knowledge_engine/pdfs/
+knowledge_engine/documents/
+knowledge_engine/bis_pdfs/
+knowledge_engine/client_docs/
+**/bis_pdfs/
+**/client_docs_local/
+*.faiss
+chroma.sqlite3
+*.sqlite
+*.sqlite3
+*.parquet
+
+# ── Models & large binaries ───────────────────────────────────────────
+*.onnx
+*.safetensors
+*.pt
+*.pth
+*.bin
+*.gguf
+
+# ── PDFs, archives, media ─────────────────────────────────────────────
+*.pdf
+*.zip
+*.tar
+*.gz
+*.tgz
+*.7z
+*.dmg
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.ico
+*.icns
+*.mp4
+*.mov
+*.woff
+*.woff2
+*.ttf
+*.otf
+
+# ── Browser extension generated output ────────────────────────────────
+extensions/qe-consultancy-safari/macos-generated/
+extensions/*/_metadata/
+**/xcuserdata/
+**/DerivedData/
+*.xcarchive
+
+# ── Logs, sessions, DB dumps, OS junk ─────────────────────────────────
+logs/
+*.log
+*.ses
+*.dump
+*.backup
+*.sql.bak
+backend/supabase/baseline_from_*.sql
+.migration-tmp/
+.DS_Store
+
+# ── Hosted Supabase / Vercel leftovers (repo is Railway-only) ─────────
+**/.supabase/
+backend/supabase/.temp/
+backend/supabase/.branches/
+.vercel/
+
+# ── Cursor/agent scratch files ────────────────────────────────────────
+.deploy-*
+.invoke-*
+.mcp-*
+.tmp-*
+.run-mcp-deploy.cjs
+backend/.call-mcp-args*.json
+backend/.stdout-deploy-args.json
