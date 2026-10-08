@@ -1,4 +1,5 @@
 import type { DocumentTemplateKind } from '@/features/settings/lab-settings/documentTemplateTypes'
+import { resolveLabSettingsRowId } from '@/features/settings/lab-settings/labSettingsDb'
 import { supabase } from '@/lib/supabaseClient'
 
 export const QUOTATION_SIGNATURE_BUCKET = 'quotation-signatures'
@@ -108,21 +109,40 @@ export async function saveDefaultSignatureForKind(
   if (error) throw error
 }
 
-/** Lab company name + Seal & Sign storage path from Lab Settings. */
-export async function fetchLabCompanySignContext(): Promise<{
+export type LabCompanySignContext = {
   labName: string
   sealSignPath: string
-}> {
+  logoPath: string
+}
+
+/** Own signature image, else lab seal when the document has no signature text. */
+export function quotationSealStoragePath(
+  signatureImagePath: string | null | undefined,
+  signatureText: string | null | undefined,
+  labSealPath: string | null | undefined,
+): string {
+  const ownPath = (signatureImagePath ?? '').trim()
+  const ownText = (signatureText ?? '').trim()
+  return ownPath || (ownText ? '' : (labSealPath ?? '').trim())
+}
+
+/** Lab company name, Seal & Sign path, and logo path from the Lab Settings row. */
+export async function fetchLabCompanySignContext(): Promise<LabCompanySignContext> {
+  const rowId = await resolveLabSettingsRowId(supabase)
   const { data, error } = await supabase
     .from('lab_settings')
-    .select('lab_name, seal_sign_path')
-    .order('created_at', { ascending: false })
-    .limit(1)
+    .select('lab_name, seal_sign_path, logo_path')
+    .eq('id', rowId)
     .maybeSingle()
-  if (error || !data) return { labName: '', sealSignPath: '' }
-  const row = data as { lab_name?: string | null; seal_sign_path?: string | null }
+  if (error || !data) return { labName: '', sealSignPath: '', logoPath: '' }
+  const row = data as {
+    lab_name?: string | null
+    seal_sign_path?: string | null
+    logo_path?: string | null
+  }
   return {
     labName: String(row.lab_name ?? '').trim(),
     sealSignPath: String(row.seal_sign_path ?? '').trim(),
+    logoPath: String(row.logo_path ?? '').trim(),
   }
 }

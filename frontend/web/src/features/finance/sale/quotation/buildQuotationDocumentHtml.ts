@@ -9,7 +9,11 @@ import {
 import { fetchLabDocumentTemplates } from '@/features/settings/lab-settings/documentTemplatesConfig'
 import { supabase } from '@/lib/supabaseClient'
 import { amountInIndianRupeesWords } from './amountInIndianRupeesWords'
-import { resolveSignatureSignedUrl, fetchLabCompanySignContext } from './quotationSignatureStorage'
+import {
+  fetchLabCompanySignContext,
+  quotationSealStoragePath,
+  resolveSignatureSignedUrl,
+} from './quotationSignatureStorage'
 import {
   formatDate,
   formatMoney,
@@ -52,10 +56,6 @@ function esc(value: string | null | undefined): string {
 function cell(value: string | null | undefined): string {
   const t = String(value ?? '').trim()
   return t ? esc(t) : '—'
-}
-
-async function signedSignatureUrl(path: string | null | undefined): Promise<string | null> {
-  return resolveSignatureSignedUrl(path)
 }
 
 export async function fetchQuotationBankDetails(): Promise<QuotationBankDetails> {
@@ -209,6 +209,12 @@ function quotationStylesCss(tpl: FinanceDocumentTemplate): string {
     object-fit: fill; object-position: center; display: block;
   }
   .letter-header .ph { font-size: 12px; font-weight: 700; color: #333; }
+  .letter-header .brand {
+    display: flex; align-items: center; justify-content: center; gap: 12px; height: 100%;
+  }
+  .letter-header .brand img {
+    width: auto; max-width: 220px; max-height: 70px; height: auto; object-fit: contain; display: inline-block;
+  }
   .title-bar {
     width: 100%; border-bottom: 2px solid #000; text-align: center;
     font-size: ${Math.max(size + 4, 14)}px; font-weight: 700; letter-spacing: 1px; padding: 6px 4px;
@@ -305,6 +311,7 @@ function buildOneQuotationHtml(
   opts: {
     headerUrl: string | null
     footerUrl: string | null
+    logoUrl: string | null
     bank: QuotationBankDetails
     signatureUrl: string | null
     companyName: string
@@ -446,7 +453,11 @@ function buildOneQuotationHtml(
         ? `<table width="100%" cellspacing="0" cellpadding="0"><tr><td class="letter-header">${
             opts.headerUrl
               ? `<img src="${esc(opts.headerUrl)}" alt="Letter Header" />`
-              : `<span class="ph">Letter Header</span>`
+              : `<div class="brand">${
+                  opts.logoUrl
+                    ? `<img class="logo" src="${esc(opts.logoUrl)}" alt="" />`
+                    : ''
+                }<span class="ph">${esc(opts.companyName.trim() || 'Company Name')}</span></div>`
           }</td></tr></table>`
         : ''
     }
@@ -592,7 +603,7 @@ function buildOneQuotationHtml(
         ? `<div class="letter-footer-wrap"><table width="100%" cellspacing="0" cellpadding="0"><tr><td class="letter-footer">${
             opts.footerUrl
               ? `<img src="${esc(opts.footerUrl)}" alt="Letter Footer" />`
-              : `<span class="ph">Letter Footer</span>`
+              : ''
           }</td></tr></table></div>`
         : ''
     }
@@ -617,8 +628,13 @@ export async function prepareQuotationDocumentHtml(
     fetchLabCompanySignContext(),
   ])
 
+  const logoUrl = await resolveSignatureSignedUrl(companySign.logoPath)
   const signatureUrls = await Promise.all(
-    rows.map((r) => signedSignatureUrl(r.signature_image_path)),
+    rows.map((r) =>
+      resolveSignatureSignedUrl(
+        quotationSealStoragePath(r.signature_image_path, r.signature_text, companySign.sealSignPath),
+      ),
+    ),
   )
 
   const body = rows
@@ -626,6 +642,7 @@ export async function prepareQuotationDocumentHtml(
       buildOneQuotationHtml(row, {
         headerUrl: template.showLetterHeader ? letterhead.headerUrl : null,
         footerUrl: template.showLetterFooter ? letterhead.footerUrl : null,
+        logoUrl,
         bank,
         signatureUrl: signatureUrls[i] ?? null,
         companyName: companySign.labName,

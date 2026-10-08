@@ -20,6 +20,7 @@ import {
 } from './QuotationDocumentView'
 import {
   fetchLabCompanySignContext,
+  quotationSealStoragePath,
   resolveSignatureSignedUrl,
 } from './quotationSignatureStorage'
 import type { QuotationRow } from './types'
@@ -30,17 +31,26 @@ async function loadAssets(
 ): Promise<QuotationDocumentAssets> {
   const headerName = template.headerTemplateName || QUOTATION_LETTER_HEADER_NAME
   const footerName = template.footerTemplateName || QUOTATION_LETTER_FOOTER_NAME
-  const [letterhead, bank, companySign, signatureUrl] = await Promise.all([
+  const [letterhead, bank, companySign] = await Promise.all([
     resolveNamedLetterheadTemplates(headerName, footerName),
     fetchQuotationBankDetails(),
     fetchLabCompanySignContext(),
-    resolveSignatureSignedUrl(row.signature_image_path),
+  ])
+  const sealPath = quotationSealStoragePath(
+    row.signature_image_path,
+    row.signature_text,
+    companySign.sealSignPath,
+  )
+  const [signatureUrl, logoUrl] = await Promise.all([
+    resolveSignatureSignedUrl(sealPath),
+    resolveSignatureSignedUrl(companySign.logoPath),
   ])
   return {
     headerUrl: template.showLetterHeader ? letterhead.headerUrl : null,
     footerUrl: template.showLetterFooter ? letterhead.footerUrl : null,
     companyName: companySign.labName,
     sealSignUrl: signatureUrl,
+    logoUrl,
     bank,
   }
 }

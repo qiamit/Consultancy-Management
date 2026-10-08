@@ -28,6 +28,8 @@ export type QuotationDocumentAssets = {
   footerUrl: string | null
   companyName: string
   sealSignUrl: string | null
+  /** Signed laboratory-files URL. Used on print when no letterhead image exists. */
+  logoUrl?: string | null
   bank: QuotationBankDetails
 }
 
@@ -327,6 +329,20 @@ export function QuotationDocumentView({
                 maxWidth: `${contentWidthMm}mm`,
               }}
             />
+          ) : forOutput ? (
+            <div className="flex h-full w-full items-center justify-center gap-3 px-2">
+              {assets.logoUrl ? (
+                <img
+                  src={assets.logoUrl}
+                  alt=""
+                  className="w-auto object-contain"
+                  style={{ maxHeight: 70, height: 'auto' }}
+                />
+              ) : null}
+              <span className="text-sm font-semibold text-stone-900">
+                {assets.companyName.trim() || 'Company Name'}
+              </span>
+            </div>
           ) : (
             <span className="flex w-full items-center justify-center text-xs font-semibold text-stone-500">
               Letter Header
@@ -700,7 +716,7 @@ export function QuotationDocumentView({
                 maxWidth: `${contentWidthMm}mm`,
               }}
             />
-          ) : (
+          ) : forOutput ? null : (
             <span className="flex w-full items-center justify-center text-xs font-semibold text-stone-500">
               Letter Footer
             </span>
