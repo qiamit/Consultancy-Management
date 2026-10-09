@@ -39,6 +39,14 @@ export type IsCodeRow = {
   slab_3_rate: number | null
   created_at?: string
   archived_at?: string | null
+  standard_prefix?: string | null
+  part_no?: string | null
+  section_no?: string | null
+  technical_department?: string | null
+  technical_committee?: string | null
+  ics_code?: string | null
+  certification_category?: string | null
+  standard_status?: string | null
 }
 
 export type IsCodeFileRow = {
@@ -71,6 +79,22 @@ export type IsCodeForm = {
   slab3Quantity: string
   slab3Rate: string
   files: File[]
+  standardPrefix: string
+  partNo: string
+  sectionNo: string
+  technicalDepartment: string
+  technicalCommittee: string
+  icsCode: string
+  certificationCategory: string
+  standardStatus: string
+  amendments: IsCodeAmendmentForm[]
+}
+
+export type IsCodeAmendmentForm = {
+  id?: string
+  amendmentNo: string
+  issuedOn: string
+  summary: string
 }
 
 export const emptyIsCodeForm = (): IsCodeForm => ({
@@ -95,7 +119,27 @@ export const emptyIsCodeForm = (): IsCodeForm => ({
   slab3Quantity: DEFAULT_SLAB_3_QTY,
   slab3Rate: DEFAULT_MONEY_FIELD,
   files: [],
+  standardPrefix: '',
+  partNo: '',
+  sectionNo: '',
+  technicalDepartment: '',
+  technicalCommittee: '',
+  icsCode: '',
+  certificationCategory: '',
+  standardStatus: '',
+  amendments: [],
 })
+
+export function canonicalIsNumber(raw: string): string {
+  const compact = raw.trim().replace(/\s+/g, ' ')
+  const dual = compact
+    .replace(/^IS\s*\/\s*ISO\s*\/\s*IEC\b/i, 'IS/ISO/IEC')
+    .replace(/^IS\s*\/\s*IEC\b/i, 'IS/IEC')
+    .replace(/^IS\s*\/\s*ISO\b/i, 'IS/ISO')
+  if (/^IS\/(ISO\/IEC|ISO|IEC)\b/i.test(dual)) return dual
+  const rest = dual.replace(/^IS\s*/i, '').trim()
+  return rest ? `IS ${rest}` : ''
+}
 
 export function moneyToFormStr(n: number | null | undefined): string {
   if (n == null || !Number.isFinite(Number(n))) return DEFAULT_MONEY_FIELD

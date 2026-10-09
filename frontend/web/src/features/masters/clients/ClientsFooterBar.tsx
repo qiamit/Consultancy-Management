@@ -60,7 +60,7 @@ export function ClientsTableFooterBar({
 }) {
   const selectionDisabled = selectedCount === 0
   const actionBtn = cn(
-    'h-8 shrink-0 gap-1 px-2 text-xs sm:gap-1.5 sm:px-2.5',
+    'h-10 min-h-10 shrink-0 gap-1 px-2 text-xs sm:gap-1.5 sm:px-2.5',
     footerBtnClass,
   )
 
@@ -166,7 +166,7 @@ export function ClientsTableFooterBar({
                 type="button"
                 variant="destructive"
                 size="sm"
-                className={cn(clientDeleteBtnClass, 'h-8 shrink-0 gap-1 px-2 text-xs sm:px-2.5')}
+                className={cn(clientDeleteBtnClass, 'h-10 min-h-10 shrink-0 gap-1 px-2 text-xs sm:px-2.5')}
                 onClick={onDeleteSelected}
                 disabled={loading || selectionDisabled}
                 title="Delete permanently"

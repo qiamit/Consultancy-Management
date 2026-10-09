@@ -248,6 +248,10 @@ export async function fetchTestingLaboratoryAddressByName(
   const name = companyName.trim()
   if (!name) return ''
 
+  const { findLaboratoryAddressByName } = await import('@/features/masters/laboratories/laboratoriesApi')
+  const fromLab = await findLaboratoryAddressByName(name)
+  if (fromLab) return fromLab
+
   const selectCols = 'id, company_name, address, district, pin_code, state, country'
 
   // Case-insensitive exact match first.
@@ -328,6 +332,10 @@ export async function saveBisProject(
     kindRaw.toLowerCase() === 'license' ? 'Licence' : kindRaw
   const payload = {
     client_id: form.clientId || null,
+    factory_site_id: form.factorySiteId || null,
+    certification_scheme_id: form.certificationSchemeId || null,
+    bis_office_id: form.bisOfficeId || null,
+    licence_status_id: form.licenceStatusId || null,
     is_code_id: form.isCodeId || null,
     project_kind: projectKind,
     title: form.title.trim() || buildBisProjectTitle(form),

@@ -60,7 +60,7 @@ Self-hosted Supabase-style stack on **Railway**, project **Consultancy Managemen
 - Make small, reviewable changes, one concern at a time. Apply multi-file edits directly instead of pasting long code blocks into chat.
 - Don't touch unrelated files, don't reformat whole files, and don't add dependencies without explaining why.
 - After frontend changes, run `npm run lint` and `npm run typecheck` (plus `npm run build` if routing or config changed) and fix any errors you introduced. After `knowledge_engine` changes, run the relevant test modules. After `backend/services` changes, run `node --check` on the edited files.
-- Don't commit or push unless Amit asks. Never force-push. (Exception: the QE Coder chat executing an approved `docs/agents/plans/<ID>_coder_prompt.md`. Amit pasting that trigger is the ask; see `qe-coder.mdc`.)
+- Don't commit or push unless Amit says "commit" in the current chat. Never force-push. There is no separate coder chat and no coder-prompt exception.
 - End every task with a short summary: files changed, what changed, how you verified it (commands and results), and anything open or risky.
 
 ## Paths moved on 2026-10-08

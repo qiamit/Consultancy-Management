@@ -3,6 +3,7 @@ import { Pencil, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { LimsFieldAddButton, LimsFieldWithAdd } from '@/components/lims/LimsFieldWithAdd'
 import { FilterCombobox } from '@/features/sample-handling/receiving/FilterCombobox'
@@ -19,6 +20,7 @@ import {
   IS_CODE_UNITS,
   isValidAmendment2,
   isValidYear4,
+  canonicalIsNumber,
   toProperTitleCase,
 } from './types'
 
@@ -176,23 +178,8 @@ export function IsCodesForm({
               <Input
                 placeholder="IS 1234"
                 value={form.isNumber}
-                onChange={(e) => {
-                  const raw = e.target.value
-                  if (raw.length < 2) {
-                    onChange({ ...form, isNumber: 'IS' })
-                    return
-                  }
-                  const rest = /^is/i.test(raw) ? raw.slice(2) : raw.replace(/^is\s*/i, '')
-                  onChange({ ...form, isNumber: `IS${rest}` })
-                }}
-                onBlur={() => {
-                  const rest = form.isNumber.replace(/^is\s*/i, '').trim()
-                  if (!rest) {
-                    onChange({ ...form, isNumber: 'IS ' })
-                    return
-                  }
-                  onChange({ ...form, isNumber: `IS ${rest}` })
-                }}
+                onChange={(e) => onChange({ ...form, isNumber: e.target.value })}
+                onBlur={() => onChange({ ...form, isNumber: canonicalIsNumber(form.isNumber) || 'IS ' })}
               />
             </Field>
             <Field label="Revision Year" error={yearError} className="col-span-6 lg:col-span-3">
@@ -236,6 +223,51 @@ export function IsCodesForm({
                   })
                 }
               />
+            </Field>
+            <Field label="Part" className="col-span-12 sm:col-span-4">
+              <Input className="h-10 min-h-10" value={form.partNo} onChange={(e) => onChange({ ...form, partNo: e.target.value })} />
+            </Field>
+            <Field label="Section" className="col-span-12 sm:col-span-4">
+              <Input className="h-10 min-h-10" value={form.sectionNo} onChange={(e) => onChange({ ...form, sectionNo: e.target.value })} />
+            </Field>
+            <Field label="Prefix" className="col-span-12 sm:col-span-4">
+              <Input className="h-10 min-h-10" placeholder="IS/IEC" value={form.standardPrefix} onChange={(e) => onChange({ ...form, standardPrefix: e.target.value })} />
+            </Field>
+            <Field label="Technical department" className="col-span-12 sm:col-span-6">
+              <Input className="h-10 min-h-10" value={form.technicalDepartment} onChange={(e) => onChange({ ...form, technicalDepartment: e.target.value })} />
+            </Field>
+            <Field label="Technical committee" className="col-span-12 sm:col-span-6">
+              <Input className="h-10 min-h-10" value={form.technicalCommittee} onChange={(e) => onChange({ ...form, technicalCommittee: e.target.value })} />
+            </Field>
+            <Field label="ICS" className="col-span-12 sm:col-span-4">
+              <Input className="h-10 min-h-10" value={form.icsCode} onChange={(e) => onChange({ ...form, icsCode: e.target.value })} />
+            </Field>
+            <Field label="Certification" className="col-span-12 sm:col-span-4">
+              <Select value={form.certificationCategory || 'none'} onValueChange={(v) => onChange({ ...form, certificationCategory: v === 'none' ? '' : v })}>
+                <SelectTrigger className="h-10 min-h-10" aria-label="Certification category">
+                  <SelectValue placeholder="Certification" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Not set</SelectItem>
+                  <SelectItem value="Voluntary">Voluntary</SelectItem>
+                  <SelectItem value="Compulsory">Compulsory</SelectItem>
+                  <SelectItem value="Not certifiable">Not certifiable</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Status" className="col-span-12 sm:col-span-4">
+              <Select value={form.standardStatus || 'none'} onValueChange={(v) => onChange({ ...form, standardStatus: v === 'none' ? '' : v })}>
+                <SelectTrigger className="h-10 min-h-10" aria-label="Standard status">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Not set</SelectItem>
+                  <SelectItem value="Current">Current</SelectItem>
+                  <SelectItem value="Withdrawn">Withdrawn</SelectItem>
+                  <SelectItem value="Superseded">Superseded</SelectItem>
+                  <SelectItem value="Draft">Draft</SelectItem>
+                </SelectContent>
+              </Select>
             </Field>
             <Field label="Title of the IS Code" className="col-span-12">
               <Input
@@ -470,6 +502,33 @@ export function IsCodesForm({
                 </Field>
               </div>
             ))}
+          </div>
+        </Section>
+
+        <Section title="Amendments">
+          <div className="space-y-2">
+            {form.amendments.map((row, index) => (
+              <div key={row.id ?? `amend-${index}`} className="grid grid-cols-12 gap-2">
+                <Input className="col-span-12 h-10 min-h-10 sm:col-span-2" aria-label="Amendment number" placeholder="No." value={row.amendmentNo} onChange={(e) => {
+                  const amendments = form.amendments.map((item, i) => i === index ? { ...item, amendmentNo: e.target.value } : item)
+                  onChange({ ...form, amendments })
+                }} />
+                <Input className="col-span-12 h-10 min-h-10 sm:col-span-3" type="date" aria-label="Amendment date" value={row.issuedOn} onChange={(e) => {
+                  const amendments = form.amendments.map((item, i) => i === index ? { ...item, issuedOn: e.target.value } : item)
+                  onChange({ ...form, amendments })
+                }} />
+                <Input className="col-span-12 h-10 min-h-10 sm:col-span-6" aria-label="Amendment summary" placeholder="Summary" value={row.summary} onChange={(e) => {
+                  const amendments = form.amendments.map((item, i) => i === index ? { ...item, summary: e.target.value } : item)
+                  onChange({ ...form, amendments })
+                }} />
+                <Button type="button" variant="outline" className="col-span-12 h-10 min-h-10 sm:col-span-1" onClick={() => onChange({ ...form, amendments: form.amendments.filter((_, i) => i !== index) })}>
+                  Remove
+                </Button>
+              </div>
+            ))}
+            <Button type="button" variant="outline" className="h-10 min-h-10" onClick={() => onChange({ ...form, amendments: [...form.amendments, { amendmentNo: '', issuedOn: '', summary: '' }] })}>
+              Add amendment
+            </Button>
           </div>
         </Section>
 

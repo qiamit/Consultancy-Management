@@ -12,6 +12,9 @@ import { limsFieldAddBtnClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { ClientManageDialogContent } from './ClientManageDialogContent'
 import { clientRegistryFormClass } from './clientsFormUi'
+import { gstinStateCode, panFromGstin } from '@/lib/indiaValidators'
+import { ClientIdentitySections } from './ClientIdentitySections'
+import type { ClientCertificateFile } from './clientsApi'
 import {
   BALANCE_TYPES,
   isValidEmail,
@@ -32,6 +35,11 @@ export function ClientsForm({
   canSave,
   saveLoading,
   onSave,
+  clientSaved = false,
+  certificates = [],
+  onUploadCertificate,
+  onDeleteCertificate,
+  onOpenCertificate,
   states,
   countries,
   districts,
@@ -105,6 +113,11 @@ export function ClientsForm({
   canSave: boolean
   saveLoading: boolean
   onSave: () => void
+  clientSaved?: boolean
+  certificates?: ClientCertificateFile[]
+  onUploadCertificate?: (certName: string, file: File) => void
+  onDeleteCertificate?: (row: ClientCertificateFile) => void
+  onOpenCertificate?: (row: ClientCertificateFile) => void
   hideFooter?: boolean
   /** Tighter spacing for nested dialogs (e.g. Add Client from Quotation). */
   compact?: boolean
@@ -276,11 +289,29 @@ export function ClientsForm({
                 id="gst"
                 placeholder="22AAAFQ8256C1ZK"
                 value={form.gstNumber}
-                onChange={(e) => onChange({ ...form, gstNumber: e.target.value })}
+                onChange={(e) => onChange({ ...form, gstNumber: e.target.value, panFromGstin: false })}
+                onBlur={() => {
+                  const gst = form.gstNumber
+                  const pan = panFromGstin(gst)
+                  const code = gstinStateCode(gst)
+                  if (!pan && !code) return
+                  onChange({
+                    ...form,
+                    pan: form.pan.trim() ? form.pan : pan,
+                    gstStateCode: form.gstStateCode.trim() ? form.gstStateCode : code,
+                    panFromGstin: !form.pan.trim() && Boolean(pan),
+                  })
+                }}
                 aria-invalid={Boolean(gstError)}
                 className="h-full border-0 bg-transparent shadow-none focus-visible:border-transparent focus-visible:bg-transparent focus-visible:ring-0"
               />
-            </LimsFieldWithAdd>
+              </LimsFieldWithAdd>
+            {!compact && onUploadCertificate ? (
+              <Button type="button" variant="outline" className="mt-2 h-10 min-h-10" disabled={!clientSaved} title={clientSaved ? 'Upload GST Certificate' : 'Save the client first, then upload'} onClick={() => document.getElementById('gst-cert-file')?.click()}>
+                Upload GST Certificate
+              </Button>
+            ) : null}
+            <input id="gst-cert-file" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file && onUploadCertificate) onUploadCertificate('GST Certificate', file); e.target.value = '' }} />
           </div>
 
           <div className={cn('col-span-12 min-w-0 sm:col-span-6 xl:col-span-4', compact ? 'space-y-1' : 'space-y-2')}>
@@ -363,6 +394,12 @@ export function ClientsForm({
                 onDelete={onDeleteCompanyScale}
               />
             </Dialog>
+            {!compact && onUploadCertificate ? (
+              <Button type="button" variant="outline" className="h-10 min-h-10" disabled={!clientSaved} title={clientSaved ? 'Upload MSME Certificate' : 'Save the client first, then upload'} onClick={() => document.getElementById('msme-cert-file')?.click()}>
+                Upload MSME Certificate
+              </Button>
+            ) : null}
+            <input id="msme-cert-file" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file && onUploadCertificate) onUploadCertificate('MSME Certificate', file); e.target.value = '' }} />
           </div>
 
           <div className={cn(compact ? 'col-span-12 md:col-span-6 space-y-1' : 'col-span-12 space-y-2')}>
@@ -738,11 +775,25 @@ export function ClientsForm({
           </div>
         </div>
       </div>
+      {!compact && onUploadCertificate && onDeleteCertificate && onOpenCertificate ? (
+        <div className="mt-5">
+          <ClientIdentitySections
+            form={form}
+            onChange={onChange}
+            clientSaved={clientSaved}
+            certificates={certificates}
+            onUploadCertificate={onUploadCertificate}
+            onDeleteCertificate={onDeleteCertificate}
+            onOpenCertificate={onOpenCertificate}
+          />
+        </div>
+      ) : null}
       {!hideFooter ? (
-        <div className="mt-3 flex items-center justify-end gap-2 border-t border-stone-200 pt-2.5">
+        <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-stone-200 pt-2.5">
+          {form.panFromGstin ? <span className="mr-auto text-xs text-stone-600">PAN from GSTIN</span> : null}
           <Button
             type="button"
-            className="h-9 rounded-none bg-amber-700 px-4 text-sm text-white shadow-sm hover:bg-amber-800"
+            className="h-10 min-h-10 rounded-none bg-amber-700 px-4 text-sm text-white shadow-sm hover:bg-amber-800"
             onClick={onSave}
             disabled={!canSave || saveLoading}
           >

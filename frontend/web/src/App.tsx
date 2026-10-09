@@ -23,6 +23,7 @@ import {
   ExpiredLicensesRoute,
   HelpRoute,
   IsCodesPage,
+  LaboratoriesRoute,
   LabSettingsRoute,
   LicenseStopMarkingRoute,
   ModuleAccessRoute,
@@ -68,6 +69,7 @@ export default function App() {
           <Route path="/masters/is-codes" element={<IsCodesPage />} />
           <Route path="/masters/product-services" element={<ProductServicesPage />} />
           <Route path="/masters/test-parameter" element={<TestParameterPage />} />
+          <Route path="/masters/laboratories" element={<LaboratoriesRoute />} />
 
           <Route path="/finance/sale/quotation" element={<SaleQuotationRoute />} />
           <Route path="/finance/sale/proforma-invoice" element={<SaleProformaInvoiceRoute />} />

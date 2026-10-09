@@ -418,13 +418,13 @@ export function bisForm1DataFromPrintData(printData: BisPrintData): BisForm1Data
   return {
     applicationNumber,
     companyName: client.companyName,
-    officeAddress: client.address,
-    factoryAddress: client.address,
-    city: client.district,
-    district: client.district,
-    state: client.state,
+    officeAddress: client.officeAddress || client.address,
+    factoryAddress: client.factoryAddress || client.address,
+    city: client.factoryDistrict || client.district,
+    district: client.factoryDistrict || client.district,
+    state: client.factoryState || client.state,
     country: client.country,
-    pinCode: client.pinCode,
+    pinCode: client.factoryPin || client.pinCode,
     officeTel: tel,
     officeFax: '',
     officeEmail: client.email,
@@ -433,8 +433,12 @@ export function bisForm1DataFromPrintData(printData: BisPrintData): BisForm1Data
     factoryEmail: client.email,
     correspondenceAddress: 'Factory',
     scale: client.scale,
-    sector: 'Private',
-    topManagement: contactPerson ? [{ name: contactPerson, designation: '' }] : [],
+    sector: client.sector || 'Private',
+    topManagement: client.topManagement.length > 0
+      ? client.topManagement
+      : contactPerson
+        ? [{ name: contactPerson, designation: '' }]
+        : [],
     technicalManagement: [],
     contactPersonLine: [contactPerson, tel].filter(Boolean).join(' / '),
     productName: isCode.title,

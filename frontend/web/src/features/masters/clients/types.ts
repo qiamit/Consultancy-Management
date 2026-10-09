@@ -1,3 +1,5 @@
+import { isValidGstin } from '@/lib/indiaValidators'
+
 export type CompanyType =
   | 'Manufacturer'
   | 'Service Provider'
@@ -5,6 +7,38 @@ export type CompanyType =
   | 'Calibration Laboratory'
   | 'PT Provider'
   | 'Supplier'
+  | 'Buyer'
+  | 'Vendor'
+  | 'Both'
+  | 'Importer'
+  | 'Foreign Manufacturer'
+  | 'Trader'
+
+export type ClientStatus = 'Prospect' | 'Active' | 'Inactive' | 'Blacklisted'
+export type ClientSector = '' | 'Private' | 'Public' | 'Government' | 'Cooperative' | 'Other'
+export type SiteRole = 'Registered Office' | 'Factory' | 'Other'
+export type ContactRole = 'Primary' | 'Signatory' | 'Top Management' | 'Technical' | 'Accounts' | 'Other'
+
+export type ClientSiteForm = {
+  id?: string
+  siteRole: SiteRole
+  address: string
+  district: string
+  state: string
+  pinCode: string
+  gstNumber: string
+  isPrimary: boolean
+}
+
+export type ClientContactForm = {
+  id?: string
+  contactRole: ContactRole
+  name: string
+  designation: string
+  mobile: string
+  email: string
+  isPrimary: boolean
+}
 
 export type CompanyScale = 'Large' | 'Medium' | 'Small' | 'Micro'
 
@@ -29,8 +63,11 @@ export type ClientRow = {
   country: string | null
   opening_balance: number | null
   balance_type: BalanceType
-  payment_term: PaymentTerm
+  payment_term: string | null
   remark: string | null
+  pan?: string | null
+  sector?: string | null
+  client_status?: string | null
   created_at?: string
   archived_at?: string | null
 }
@@ -53,6 +90,25 @@ export type ClientForm = {
   balanceType: BalanceType
   paymentTerm: PaymentTerm
   remark: string
+  pan: string
+  cin: string
+  llpin: string
+  udyamNo: string
+  msmeCategory: string
+  udyamDate: string
+  constitution: string
+  sector: ClientSector
+  isStartup: boolean
+  startupDpiitNo: string
+  isWomenEntrepreneur: boolean
+  gstRegistrationType: string
+  gstStateCode: string
+  clientStatus: ClientStatus
+  leadSource: string
+  referredBy: string
+  panFromGstin: boolean
+  sites: ClientSiteForm[]
+  contacts: ClientContactForm[]
 }
 
 export const COMPANY_TYPES: CompanyType[] = [
@@ -62,7 +118,18 @@ export const COMPANY_TYPES: CompanyType[] = [
   'Calibration Laboratory',
   'PT Provider',
   'Supplier',
+  'Buyer',
+  'Vendor',
+  'Both',
+  'Importer',
+  'Foreign Manufacturer',
+  'Trader',
 ]
+
+export const CLIENT_STATUSES: ClientStatus[] = ['Prospect', 'Active', 'Inactive', 'Blacklisted']
+export const CLIENT_SECTORS: Array<Exclude<ClientSector, ''>> = ['Private', 'Public', 'Government', 'Cooperative', 'Other']
+export const SITE_ROLES: SiteRole[] = ['Registered Office', 'Factory', 'Other']
+export const CONTACT_ROLES: ContactRole[] = ['Primary', 'Signatory', 'Top Management', 'Technical', 'Accounts', 'Other']
 
 export const COMPANY_SCALES: CompanyScale[] = ['Large', 'Medium', 'Small', 'Micro']
 
@@ -105,7 +172,11 @@ export const INDIA_STATES = [
   'Delhi',
   'Jammu and Kashmir',
   'Ladakh',
+  'Chandigarh',
   'Puducherry',
+  'Dadra and Nagar Haveli and Daman and Diu',
+  'Lakshadweep',
+  'Andaman and Nicobar Islands',
 ]
 
 export const WORLD_COUNTRIES = [
@@ -140,11 +211,7 @@ export const COUNTRY_CODES = [
   { value: '+975', label: '+975 (BT)' },
 ]
 
-export const isValidGst = (value: string) => {
-  const v = value.trim().toUpperCase()
-  if (!v) return true
-  return /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(v)
-}
+export const isValidGst = (value: string) => isValidGstin(value)
 
 export const isValidIndianPin = (value: string) => {
   const v = value.trim()
@@ -162,6 +229,17 @@ export const isValidEmail = (value: string) => {
   const v = value.trim()
   if (!v) return true
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)
+}
+
+export function emptyClientSites(): ClientSiteForm[] {
+  return [
+    { siteRole: 'Registered Office', address: '', district: '', state: DEFAULT_STATE, pinCode: '', gstNumber: '', isPrimary: true },
+    { siteRole: 'Factory', address: '', district: '', state: DEFAULT_STATE, pinCode: '', gstNumber: '', isPrimary: false },
+  ]
+}
+
+export function emptyClientContacts(): ClientContactForm[] {
+  return [{ contactRole: 'Primary', name: '', designation: '', mobile: '', email: '', isPrimary: true }]
 }
 
 export const emptyClientForm = (): ClientForm => ({
@@ -182,6 +260,25 @@ export const emptyClientForm = (): ClientForm => ({
   balanceType: 'Dr',
   paymentTerm: '100 % Advance',
   remark: '',
+  pan: '',
+  cin: '',
+  llpin: '',
+  udyamNo: '',
+  msmeCategory: '',
+  udyamDate: '',
+  constitution: '',
+  sector: '',
+  isStartup: false,
+  startupDpiitNo: '',
+  isWomenEntrepreneur: false,
+  gstRegistrationType: '',
+  gstStateCode: '',
+  clientStatus: 'Active',
+  leadSource: '',
+  referredBy: '',
+  panFromGstin: false,
+  sites: emptyClientSites(),
+  contacts: emptyClientContacts(),
 })
 
 export function toContinuousText(value: string): string {

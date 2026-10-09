@@ -1,12 +1,27 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { searchClients, type ClientSearchRow } from '@/lib/clientsApi'
+import {
+  deleteClientCertificate,
+  findSimilarClients,
+  listClientCertificates,
+  listClientContacts,
+  listClientSites,
+  openClientCertificate,
+  saveClientContacts,
+  saveClientSites,
+  uploadClientCertificate,
+  type ClientCertificateFile,
+  type SimilarClient,
+} from './clientsApi'
 import { invalidateClientsCache } from '@/lib/clientsCache'
 import { supabase } from '@/lib/supabaseClient'
 import { useCanEditCurrentModule } from '@/features/settings/module-access/useCanEditCurrentModule'
 import { useFormDialogOpenChange } from '@/lib/formDialogOpenChange'
 import { useMasterUiSearchState } from '@/lib/useMasterUiSearchState'
+import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
 import { AuditHistoryDialog } from '@/components/lims/AuditHistoryDialog'
 import { ClientsTableFooterBar } from './ClientsFooterBar'
 import { ClientsForm } from './ClientsForm'
@@ -14,6 +29,7 @@ import { ClientsHeaderBar } from './ClientsHeaderBar'
 import { ClientsTable, type ClientSortDir, type ClientSortKey } from './ClientsTable'
 import { clientPageShellClass } from './clientsFormUi'
 import { buildClientsAssistantContext } from './buildClientsAssistantContext'
+import { isValidGstin, isValidIndianMobile, isValidPan } from '@/lib/indiaValidators'
 import { limsDialogClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import {
@@ -22,12 +38,13 @@ import {
   COMPANY_TYPES,
   DEFAULT_COUNTRY,
   DEFAULT_STATE,
+  emptyClientContacts,
   emptyClientForm,
+  emptyClientSites,
   formatClientAddress,
   isValidEmail,
   isValidGst,
   isValidIndianPin,
-  isValidMobile,
   PAYMENT_TERMS,
   toContinuousText,
   toProperTitleCase,
@@ -165,8 +182,24 @@ const formatSupabaseError = (err: unknown) => {
   return parts.length ? parts.join(' | ') : 'Unknown error'
 }
 
-const CLIENT_FORM_COLUMNS =
+const CLIENT_FORM_COLUMNS_LEGACY =
   'id, gst_number, company_type, company_scale, company_name, contact_person_name, country_code, mobile, email, address, pin_code, district, state, country, opening_balance, balance_type, payment_term, remark, archived_at'
+const CLIENT_FORM_COLUMNS =
+  `${CLIENT_FORM_COLUMNS_LEGACY}, pan, cin, llpin, udyam_no, msme_category, udyam_date, constitution, sector, is_startup, startup_dpiit_no, is_women_entrepreneur, gst_registration_type, gst_state_code, client_status, lead_source, referred_by`
+
+function missingColumnError(error: { code?: string; message?: string } | null) {
+  if (!error) return false
+  return error.code === '42703' || error.code === 'PGRST204' || /does not exist|schema cache/i.test(error.message ?? '')
+}
+
+async function loadClientForForm(id: string): Promise<ClientRow> {
+  const first = await supabase.from('clients').select(CLIENT_FORM_COLUMNS).eq('id', id).single()
+  if (!first.error && first.data) return first.data as ClientRow
+  if (!missingColumnError(first.error)) throw first.error ?? new Error('Client not found')
+  const second = await supabase.from('clients').select(CLIENT_FORM_COLUMNS_LEGACY).eq('id', id).single()
+  if (second.error || !second.data) throw second.error ?? new Error('Client not found')
+  return second.data as ClientRow
+}
 
 function mapSearchRow(row: ClientSearchRow): ClientRow {
   return {
@@ -186,8 +219,8 @@ function mapSearchRow(row: ClientSearchRow): ClientRow {
     country: row.country,
     opening_balance: row.opening_balance,
     balance_type: (row.balance_type ?? 'Dr') as ClientRow['balance_type'],
-    payment_term: '100 % Advance',
-    remark: null,
+    payment_term: row.payment_term,
+    remark: row.remark,
     archived_at: row.archived_at,
   }
 }
@@ -209,8 +242,27 @@ function rowToClientForm(row: ClientRow): ClientFormType {
     country: row.country ?? DEFAULT_COUNTRY,
     openingBalance: String(row.opening_balance ?? 0),
     balanceType: row.balance_type,
-    paymentTerm: row.payment_term,
+    paymentTerm: (row.payment_term as ClientFormType['paymentTerm']) || '100 % Advance',
     remark: row.remark ?? '',
+    pan: row.pan ?? '',
+    cin: String((row as { cin?: string | null }).cin ?? ''),
+    llpin: String((row as { llpin?: string | null }).llpin ?? ''),
+    udyamNo: String((row as { udyam_no?: string | null }).udyam_no ?? ''),
+    msmeCategory: String((row as { msme_category?: string | null }).msme_category ?? ''),
+    udyamDate: String((row as { udyam_date?: string | null }).udyam_date ?? '').slice(0, 10),
+    constitution: String((row as { constitution?: string | null }).constitution ?? ''),
+    sector: ((row.sector ?? '') as ClientFormType['sector']) || '',
+    isStartup: Boolean((row as { is_startup?: boolean | null }).is_startup),
+    startupDpiitNo: String((row as { startup_dpiit_no?: string | null }).startup_dpiit_no ?? ''),
+    isWomenEntrepreneur: Boolean((row as { is_women_entrepreneur?: boolean | null }).is_women_entrepreneur),
+    gstRegistrationType: String((row as { gst_registration_type?: string | null }).gst_registration_type ?? ''),
+    gstStateCode: String((row as { gst_state_code?: string | null }).gst_state_code ?? ''),
+    clientStatus: ((row.client_status as ClientFormType['clientStatus']) || 'Active'),
+    leadSource: String((row as { lead_source?: string | null }).lead_source ?? ''),
+    referredBy: String((row as { referred_by?: string | null }).referred_by ?? ''),
+    panFromGstin: false,
+    sites: emptyClientSites(),
+    contacts: emptyClientContacts(),
   }
 }
 
@@ -285,9 +337,20 @@ export default function ClientsMasterPage() {
   const [newPaymentTerm, setNewPaymentTerm] = useState('')
 
   const [form, setForm] = useState<ClientFormType>(() => emptyClientForm())
+  const [certificates, setCertificates] = useState<ClientCertificateFile[]>([])
+  const [duplicates, setDuplicates] = useState<SimilarClient[]>([])
+  const [allowDuplicateSave, setAllowDuplicateSave] = useState(false)
+  const allowDuplicateRef = useRef(false)
+  const [copySourceId, setCopySourceId] = useState<string | null>(null)
+  const [copyName, setCopyName] = useState('')
+  const [csvPreview, setCsvPreview] = useState<{ valid: Array<Record<string, unknown>>; invalid: string[][] } | null>(null)
 
   const gstError = useMemo(() => (isValidGst(form.gstNumber) ? null : 'Invalid GST Number'), [form.gstNumber])
-  const mobileError = useMemo(() => (isValidMobile(form.mobile) ? null : 'Mobile number must be 10 digits'), [form.mobile])
+  const mobileError = useMemo(
+    () => (isValidIndianMobile(form.mobile, form.countryCode) ? null : 'Mobile must be a 10-digit number starting with 6–9'),
+    [form.mobile, form.countryCode],
+  )
+  const panError = useMemo(() => (isValidPan(form.pan) ? null : 'Invalid PAN'), [form.pan])
   const emailError = useMemo(() => (isValidEmail(form.email) ? null : 'Invalid email address'), [form.email])
   const pinError = useMemo(() => (isValidIndianPin(form.pinCode) ? null : 'Invalid PIN code'), [form.pinCode])
 
@@ -295,6 +358,7 @@ export default function ClientsMasterPage() {
     !saveLoading &&
     !gstError &&
     !mobileError &&
+    !panError &&
     !emailError &&
     !pinError &&
     form.companyName.trim().length > 0
@@ -404,13 +468,27 @@ export default function ClientsMasterPage() {
 
     let cancelled = false
     void (async () => {
-      const { data, error } = await supabase.from('clients').select(CLIENT_FORM_COLUMNS).eq('id', editId).single()
-      if (cancelled) return
-      if (error || !data) {
-        setEdit(null)
+      let row: ClientRow
+      try {
+        row = await loadClientForForm(editId)
+      } catch {
+        if (!cancelled) setEdit(null)
         return
       }
-      setForm(rowToClientForm(data as ClientRow))
+      if (cancelled) return
+      const base = rowToClientForm(row)
+      const [sites, contacts, files] = await Promise.all([
+        listClientSites(editId),
+        listClientContacts(editId),
+        listClientCertificates(editId),
+      ])
+      if (cancelled) return
+      setForm({
+        ...base,
+        sites: sites.length > 0 ? sites : base.sites,
+        contacts: contacts.length > 0 ? contacts : base.contacts,
+      })
+      setCertificates(files)
       hydratedEditRef.current = editId
     })()
     return () => {
@@ -776,6 +854,16 @@ export default function ClientsMasterPage() {
       setSaveLoading(true)
       try {
         const companyName = toProperTitleCase(form.companyName)
+        if (!allowDuplicateSave && !allowDuplicateRef.current) {
+          const hits = (await findSimilarClients(companyName, form.gstNumber)).filter((hit) => hit.id !== editingId)
+          if (hits.length > 0) {
+            setDuplicates(hits)
+            return
+          }
+        }
+        setDuplicates([])
+        setAllowDuplicateSave(false)
+        allowDuplicateRef.current = false
         const payload = {
           // Production DB still has legacy NOT NULL `name` alongside `company_name`.
           name: companyName,
@@ -796,10 +884,27 @@ export default function ClientsMasterPage() {
           balance_type: form.balanceType,
           payment_term: form.paymentTerm,
           remark: form.remark.trim() || null,
+          pan: form.pan.trim().toUpperCase() || null,
+          cin: form.cin.trim() || null,
+          llpin: form.llpin.trim() || null,
+          udyam_no: form.udyamNo.trim() || null,
+          msme_category: form.msmeCategory.trim() || null,
+          udyam_date: form.udyamDate || null,
+          constitution: form.constitution.trim() || null,
+          sector: form.sector || null,
+          is_startup: form.isStartup,
+          startup_dpiit_no: form.startupDpiitNo.trim() || null,
+          is_women_entrepreneur: form.isWomenEntrepreneur,
+          gst_registration_type: form.gstRegistrationType.trim() || null,
+          gst_state_code: form.gstStateCode.trim() || null,
+          client_status: form.clientStatus,
+          lead_source: form.leadSource.trim() || null,
+          referred_by: form.referredBy.trim() || null,
         }
 
         // Prefer insert/update over upsert — avoids 42P10 when the unique index
         // on company_name is missing on some environments.
+        let savedId = editingId
         if (editingId) {
           const { data, error } = await supabase.from('clients').update(payload).eq('id', editingId).select('id')
           if (error) throw error
@@ -807,8 +912,37 @@ export default function ClientsMasterPage() {
             throw new Error('You do not have edit access for this record (view-only).')
           }
         } else {
-          const { error } = await supabase.from('clients').insert(payload)
+          const { data, error } = await supabase.from('clients').insert(payload).select('id').single()
           if (error) throw error
+          savedId = (data as { id: string } | null)?.id ?? null
+        }
+        if (savedId) {
+          const sites = (form.sites.length > 0 ? form.sites : emptyClientSites()).map((site, index) => {
+            const primaryOffice = site.siteRole === 'Registered Office' && (site.isPrimary || index === 0)
+            if (!primaryOffice) return { ...site, isPrimary: false }
+            return {
+              ...site,
+              isPrimary: true,
+              address: form.address,
+              district: form.district,
+              state: form.state,
+              pinCode: form.pinCode,
+              gstNumber: form.gstNumber,
+            }
+          })
+          const contacts = (form.contacts.length > 0 ? form.contacts : emptyClientContacts()).map((contact, index) => {
+            if (!(contact.isPrimary || index === 0)) return { ...contact, isPrimary: false }
+            return {
+              ...contact,
+              isPrimary: true,
+              contactRole: contact.contactRole === 'Other' ? 'Primary' as const : contact.contactRole,
+              name: form.contactPersonName,
+              mobile: form.mobile,
+              email: form.email,
+            }
+          })
+          await saveClientSites(savedId, sites)
+          await saveClientContacts(savedId, contacts)
         }
         invalidateClientsCache()
 
@@ -834,39 +968,52 @@ export default function ClientsMasterPage() {
   }
 
   const openClientById = async (id: string) => {
-    const { data, error } = await supabase.from('clients').select(CLIENT_FORM_COLUMNS).eq('id', id).single()
-    if (error) throw error
-    return data as ClientRow
+    return loadClientForForm(id)
+  }
+
+  const fillOpenedClient = async (id: string, mode: 'edit' | 'copy', copyLabel?: string) => {
+    const full = await openClientById(id)
+    const base = rowToClientForm(full)
+    const [sites, contacts, files] = await Promise.all([
+      listClientSites(id),
+      listClientContacts(id),
+      listClientCertificates(id),
+    ])
+    const next = {
+      ...base,
+      sites: sites.length > 0 ? sites.map((site) => (mode === 'copy' ? { ...site, id: undefined } : site)) : base.sites,
+      contacts: contacts.length > 0 ? contacts.map((contact) => (mode === 'copy' ? { ...contact, id: undefined } : contact)) : base.contacts,
+      companyName: mode === 'copy' ? (copyLabel || `${full.company_name} - Copy`) : base.companyName,
+    }
+    setForm(next)
+    setCertificates(mode === 'copy' ? [] : files)
+    hydratedEditRef.current = mode === 'copy' ? 'new' : id
+    setEdit(mode === 'copy' ? 'new' : id)
   }
 
   const handleEdit = (row: ClientRow) => {
     setSaveMessage(null)
-    void (async () => {
-      try {
-        const full = await openClientById(row.id)
-        setForm(rowToClientForm(full))
-        hydratedEditRef.current = row.id
-        setEdit(row.id)
-        window.scrollTo({ top: 0, behavior: 'smooth' })
-      } catch (err) {
-        setSaveMessage(err instanceof Error ? err.message : 'Unable to open client')
-      }
-    })()
+    setDuplicates([])
+    setAllowDuplicateSave(false)
+    void fillOpenedClient(row.id, 'edit').catch((err) => {
+      setSaveMessage(err instanceof Error ? err.message : 'Unable to open client')
+    })
   }
 
   const handleCopy = (row: ClientRow) => {
     setSaveMessage(null)
-    void (async () => {
-      try {
-        const full = await openClientById(row.id)
-        setForm({ ...rowToClientForm(full), companyName: `${full.company_name} - Copy` })
-        hydratedEditRef.current = 'new'
-        setEdit('new')
-        window.scrollTo({ top: 0, behavior: 'smooth' })
-      } catch (err) {
-        setSaveMessage(err instanceof Error ? err.message : 'Unable to copy client')
-      }
-    })()
+    setCopySourceId(row.id)
+    setCopyName(`${row.company_name} - Copy`)
+  }
+
+  const confirmCopy = () => {
+    const id = copySourceId
+    const name = copyName.trim()
+    if (!id || !name) return
+    setCopySourceId(null)
+    void fillOpenedClient(id, 'copy', name).catch((err) => {
+      setSaveMessage(err instanceof Error ? err.message : 'Unable to copy client')
+    })
   }
 
   const filteredRows = useMemo(() => {
@@ -1136,7 +1283,7 @@ export default function ClientsMasterPage() {
       email: r.email ?? '',
       opening_balance: String(r.opening_balance ?? 0),
       balance_type: r.balance_type,
-      payment_term: r.payment_term,
+      payment_term: r.payment_term ?? '',
       remark: r.remark ?? '',
       id: r.id,
     }))
@@ -1192,8 +1339,8 @@ export default function ClientsMasterPage() {
           return idx == null ? '' : String(cells[idx] ?? '')
         }
 
-        const withId: Array<Record<string, unknown>> = []
-        const byName: Array<Record<string, unknown>> = []
+        const valid: Array<Record<string, unknown>> = []
+        const invalid: string[][] = []
 
         for (const cells of rowsData) {
           const companyName = toProperTitleCase(normalizeText(get(cells, 'company_name')))
@@ -1221,41 +1368,61 @@ export default function ClientsMasterPage() {
             remark: normalizeText(get(cells, 'remark')) || null,
           }
 
-          const id = normalizeText(get(cells, 'id'))
-          if (id) {
-            withId.push({ ...payload, id })
-          } else {
-            byName.push(payload)
+          const problems: string[] = []
+          const gst = String(payload.gst_number ?? '')
+          const mobile = String(payload.mobile ?? '')
+          const pin = String(payload.pin_code ?? '')
+          const code = String(payload.country_code ?? '+91')
+          if (gst && !isValidGstin(gst)) problems.push('Invalid GSTIN')
+          if (mobile && !isValidIndianMobile(mobile, code)) problems.push('Invalid mobile')
+          if (pin && !isValidIndianPin(pin)) problems.push('Invalid PIN')
+          if (problems.length > 0) {
+            invalid.push([...cells, problems.join('; ')])
+            continue
           }
+
+          const id = normalizeText(get(cells, 'id'))
+          if (id) valid.push({ ...payload, id })
+          else valid.push(payload)
         }
 
-        const total = withId.length + byName.length
-        if (total === 0) {
+        if (valid.length === 0 && invalid.length === 0) {
           setSaveMessage('No valid rows found (company_name missing).')
           return
         }
+        setCsvPreview({ valid, invalid })
+        setSaveMessage(`${valid.length} row(s) ready. ${invalid.length} invalid row(s) held back.`)
+      } catch (err) {
+        setSaveMessage(formatSupabaseError(err))
+      } finally {
+        setSaveLoading(false)
+      }
+    })()
+  }
 
+  const commitCsvImport = () => {
+    const preview = csvPreview
+    if (!preview || preview.valid.length === 0) return
+    void (async () => {
+      setSaveLoading(true)
+      try {
+        const withId = preview.valid.filter((row) => row.id)
+        const byName = preview.valid.filter((row) => !row.id)
         if (withId.length > 0) {
           const { error } = await supabase.from('clients').upsert(withId, { onConflict: 'id' })
           if (error) throw error
-          invalidateClientsCache()
         }
         if (byName.length > 0) {
-          const { error } = await supabase
-            .from('clients')
-            .upsert(byName, { onConflict: 'company_name' })
-          // 42P10 = missing unique constraint for ON CONFLICT — fall back to insert.
+          const { error } = await supabase.from('clients').upsert(byName, { onConflict: 'company_name' })
           if (error) {
             if (String(error.code) === '42P10' || /ON CONFLICT/i.test(error.message ?? '')) {
               const { error: insertErr } = await supabase.from('clients').insert(byName)
               if (insertErr) throw insertErr
-            } else {
-              throw error
-            }
+            } else throw error
           }
         }
-
-        setSaveMessage(`Imported ${total} client(s) with all form fields.`)
+        setSaveMessage(`Imported ${preview.valid.length} valid client(s). ${preview.invalid.length} invalid row(s) were not imported.`)
+        setCsvPreview(null)
         invalidateClientsCache()
         await loadClients()
       } catch (err) {
@@ -1264,6 +1431,19 @@ export default function ClientsMasterPage() {
         setSaveLoading(false)
       }
     })()
+  }
+
+  const downloadCsvErrors = () => {
+    const preview = csvPreview
+    if (!preview) return
+    const lines = ['row,reason', ...preview.invalid.map((cells) => `"${cells.join(' | ').replace(/"/g, '""')}"`)]
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'clients-import-errors.csv'
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   return (
@@ -1322,9 +1502,42 @@ export default function ClientsMasterPage() {
                 {saveMessage}
               </p>
             ) : null}
+            {duplicates.length > 0 ? (
+              <div className="mb-4 border border-amber-600 bg-amber-50 p-3 text-sm text-stone-800">
+                <p className="font-medium">Possible duplicate</p>
+                <ul className="mt-2 space-y-1">
+                  {duplicates.map((hit) => (
+                    <li key={hit.id}>{hit.company_name} {hit.gst_number ? `(${hit.gst_number})` : ''}</li>
+                  ))}
+                </ul>
+                <Button type="button" className="mt-3 h-10 min-h-10" onClick={() => { allowDuplicateRef.current = true; setAllowDuplicateSave(true); handleSave() }}>
+                  Save anyway
+                </Button>
+              </div>
+            ) : null}
             <ClientsForm
             form={form}
-            onChange={setForm}
+            onChange={(next) => {
+              setAllowDuplicateSave(false)
+              setForm(next)
+            }}
+            clientSaved={Boolean(editingId)}
+            certificates={certificates}
+            onUploadCertificate={(certName, file) => {
+              if (!editingId) return
+              void uploadClientCertificate(editingId, certName, file)
+                .then(() => listClientCertificates(editingId))
+                .then(setCertificates)
+                .catch((err) => setSaveMessage(err instanceof Error ? err.message : 'Unable to upload certificate'))
+            }}
+            onDeleteCertificate={(row) => {
+              void deleteClientCertificate(row)
+                .then(() => setCertificates((prev) => prev.filter((item) => item.id !== row.id)))
+                .catch((err) => setSaveMessage(err instanceof Error ? err.message : 'Unable to delete certificate'))
+            }}
+            onOpenCertificate={(row) => {
+              void openClientCertificate(row).catch((err) => setSaveMessage(err instanceof Error ? err.message : 'Unable to open certificate'))
+            }}
             states={states}
             countries={countries}
             districts={districts}
@@ -1468,6 +1681,33 @@ export default function ClientsMasterPage() {
         />
       </div>
 
+      <Dialog open={copySourceId != null} onOpenChange={(open) => { if (!open) setCopySourceId(null) }}>
+        <DialogContent className={cn(limsDialogClass, 'w-[min(28rem,calc(100vw-1rem))]')}>
+          <DialogHeader>
+            <DialogTitle>Copy client</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 p-4">
+            <label className="text-sm" htmlFor="copy-client-name">New company name</label>
+            <Input id="copy-client-name" className="h-10 min-h-10" value={copyName} onChange={(e) => setCopyName(e.target.value)} />
+            <Button type="button" className="h-10 min-h-10" onClick={confirmCopy} disabled={!copyName.trim()}>Continue</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={csvPreview != null} onOpenChange={(open) => { if (!open) setCsvPreview(null) }}>
+        <DialogContent className={cn(limsDialogClass, 'w-[min(36rem,calc(100vw-1rem))]')}>
+          <DialogHeader>
+            <DialogTitle>Import preview</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 p-4 text-sm">
+            <p>{csvPreview?.valid.length ?? 0} valid row(s) will be imported.</p>
+            <p>{csvPreview?.invalid.length ?? 0} invalid row(s) will be skipped.</p>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" className="h-10 min-h-10" onClick={commitCsvImport} disabled={!csvPreview?.valid.length}>Import valid rows</Button>
+              <Button type="button" variant="outline" className="h-10 min-h-10" onClick={downloadCsvErrors} disabled={!csvPreview?.invalid.length}>Download error CSV</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
       <AuditHistoryDialog
         open={historyOpen}
         onOpenChange={setHistoryOpen}

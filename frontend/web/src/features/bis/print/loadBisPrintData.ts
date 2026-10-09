@@ -15,6 +15,13 @@ export type BisPrintClient = {
   country: string
   gstNumber: string
   scale: string
+  sector: string
+  officeAddress: string
+  factoryAddress: string
+  factoryDistrict: string
+  factoryState: string
+  factoryPin: string
+  topManagement: { name: string; designation: string }[]
 }
 
 export type BisPrintIsCode = {
@@ -82,6 +89,13 @@ async function loadClient(row: BisProjectRow): Promise<BisPrintClient> {
     country: 'India',
     gstNumber: '',
     scale: '',
+    sector: '',
+    officeAddress: '',
+    factoryAddress: '',
+    factoryDistrict: '',
+    factoryState: '',
+    factoryPin: '',
+    topManagement: [],
   }
   if (!row.client_id) return empty
 
@@ -90,7 +104,7 @@ async function loadClient(row: BisProjectRow): Promise<BisPrintClient> {
   const c = data as Record<string, unknown>
   const code = text(c.country_code)
   const mobile = text(c.mobile)
-  return {
+  const loaded: BisPrintClient = {
     companyName: text(c.company_name) || fallbackName,
     contactPerson: text(c.contact_person_name),
     mobile: mobile && code && !mobile.startsWith('+') ? `${code} ${mobile}` : mobile,
@@ -102,7 +116,43 @@ async function loadClient(row: BisProjectRow): Promise<BisPrintClient> {
     country: text(c.country) || 'India',
     gstNumber: text(c.gst_number),
     scale: text(c.company_scale),
+    sector: text(c.sector),
+    officeAddress: text(c.address),
+    factoryAddress: text(c.address),
+    factoryDistrict: text(c.district),
+    factoryState: text(c.state),
+    factoryPin: text(c.pin_code),
+    topManagement: [],
   }
+  const clientId = text(c.id) || row.client_id
+  if (!clientId) return loaded
+  const [sitesRes, contactsRes] = await Promise.all([
+    supabase.from('client_sites').select('id, site_role, address, district, state, pin_code, is_primary').eq('client_id', clientId),
+    supabase.from('client_contacts').select('name, designation, contact_role, is_primary').eq('client_id', clientId),
+  ])
+  if (!sitesRes.error && Array.isArray(sitesRes.data)) {
+    const sites = sitesRes.data as Array<Record<string, unknown>>
+    const office = sites.find((site) => site.is_primary) || sites.find((site) => site.site_role === 'Registered Office')
+    const factory = sites.find((site) => site.id === row.factory_site_id) || sites.find((site) => site.site_role === 'Factory')
+    if (office) loaded.officeAddress = text(office.address) || loaded.officeAddress
+    if (factory) {
+      loaded.factoryAddress = text(factory.address) || loaded.factoryAddress
+      loaded.factoryDistrict = text(factory.district)
+      loaded.factoryState = text(factory.state)
+      loaded.factoryPin = text(factory.pin_code)
+    }
+  }
+  if (!contactsRes.error && Array.isArray(contactsRes.data)) {
+    const people = (contactsRes.data as Array<Record<string, unknown>>).filter((person) => {
+      const role = text(person.contact_role)
+      return role === 'Signatory' || role === 'Top Management'
+    })
+    loaded.topManagement = people.map((person) => ({
+      name: text(person.name),
+      designation: text(person.designation),
+    })).filter((person) => person.name)
+  }
+  return loaded
 }
 
 async function loadIsCode(row: BisProjectRow): Promise<BisPrintIsCode> {

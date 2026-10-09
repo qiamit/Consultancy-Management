@@ -143,6 +143,12 @@ export const SIDEBAR_NAV_SECTIONS: NavSection[] = [
         icon: TestTube,
         clause: 'test-parameters',
       },
+      {
+        label: 'Laboratory Master',
+        to: '/masters/laboratories',
+        icon: TestTube,
+        clause: 'laboratories',
+      },
     ],
   },
   {

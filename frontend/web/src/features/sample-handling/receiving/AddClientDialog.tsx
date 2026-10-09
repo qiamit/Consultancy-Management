@@ -3,7 +3,8 @@ import { invalidateClientsCache } from '@/lib/clientsCache'
 import { supabase } from '@/lib/supabaseClient'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { DEFAULT_COUNTRY, DEFAULT_STATE, emptyClientForm, toContinuousText, type ClientForm } from '@/features/masters/clients/types'
+import { findSimilarClients, type SimilarClient } from '@/features/masters/clients/clientsApi'
+import { DEFAULT_COUNTRY, DEFAULT_STATE, emptyClientForm, isValidGst, toContinuousText, type ClientForm } from '@/features/masters/clients/types'
 import { ClientsForm } from '@/features/masters/clients/ClientsForm'
 import {
   limsDarkBarGlowStyle,
@@ -254,6 +255,8 @@ export function AddClientDialog({
 }) {
   const [saveLoading, setSaveLoading] = useState(false)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
+  const [duplicates, setDuplicates] = useState<SimilarClient[]>([])
+  const [allowDuplicate, setAllowDuplicate] = useState(false)
   const state = useClientDialogState(open)
   const { setForm } = state
 
@@ -264,12 +267,25 @@ export function AddClientDialog({
     setForm((prev) => ({ ...prev, companyName: name }))
   }, [open, initialCompanyName, setForm])
 
-  const handleSave = async () => {
+  const handleSave = async (force = false) => {
     setSaveMessage(null)
     setSaveLoading(true)
     try {
       const form = state.form
       const companyName = form.companyName.trim()
+      if (!isValidGst(form.gstNumber)) {
+        setSaveMessage('Invalid GST Number')
+        return
+      }
+      if (!force && !allowDuplicate) {
+        const hits = await findSimilarClients(companyName, form.gstNumber)
+        if (hits.length > 0) {
+          setDuplicates(hits)
+          return
+        }
+      }
+      setDuplicates([])
+      setAllowDuplicate(false)
       const payload = {
         name: companyName,
         gst_number: form.gstNumber.trim().toUpperCase() || null,
@@ -306,7 +322,7 @@ export function AddClientDialog({
     }
   }
 
-  const canSave = state.form.companyName.trim().length > 0 && !saveLoading
+  const canSave = state.form.companyName.trim().length > 0 && isValidGst(state.form.gstNumber) && !saveLoading
 
   if (!open) return null
 
@@ -334,6 +350,19 @@ export function AddClientDialog({
           </DialogHeader>
         </div>
 
+        {duplicates.length > 0 ? (
+          <div className="shrink-0 border border-amber-600 bg-amber-50 px-4 py-2 text-sm text-stone-800">
+            <p className="font-medium">Possible duplicate</p>
+            <ul className="mt-1">
+              {duplicates.map((hit) => (
+                <li key={hit.id}>{hit.company_name}</li>
+              ))}
+            </ul>
+            <button type="button" className="mt-2 h-10 min-h-10 border border-stone-500 px-3" onClick={() => void handleSave(true)}>
+              Save anyway
+            </button>
+          </div>
+        ) : null}
         {saveMessage ? (
           <p className="shrink-0 border-l-2 border-destructive bg-destructive/5 px-4 py-2 text-sm text-destructive sm:px-5">
             {saveMessage}
@@ -346,7 +375,7 @@ export function AddClientDialog({
             onChange={state.setForm}
             canSave={canSave}
             saveLoading={saveLoading}
-            onSave={handleSave}
+            onSave={() => void handleSave(false)}
             hideFooter
             compact
             states={state.states}
@@ -413,8 +442,8 @@ export function AddClientDialog({
           {/* Single primary action — close via header X */}
           <Button
             type="button"
-            className={cn(limsPrimaryBtnClass, 'h-9 px-4 text-sm')}
-            onClick={handleSave}
+            className={cn(limsPrimaryBtnClass, 'h-10 min-h-10 px-4 text-sm')}
+            onClick={() => void handleSave(false)}
             disabled={!canSave || saveLoading}
           >
             {saveLoading ? 'Saving…' : 'Save & Close'}

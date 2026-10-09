@@ -21,6 +21,8 @@ export type ClientSearchRow = {
   balance_type: string | null
   archived_at: string | null
   total_count: number
+  payment_term: string | null
+  remark: string | null
 }
 
 export async function searchClients(opts: {
@@ -63,6 +65,8 @@ export async function searchClients(opts: {
       balance_type: row.balance_type == null ? null : String(row.balance_type),
       archived_at: row.archived_at == null ? null : String(row.archived_at),
       total_count: Number(row.total_count ?? 0) || 0,
+      payment_term: row.payment_term == null ? null : String(row.payment_term),
+      remark: row.remark == null ? null : String(row.remark),
     } satisfies ClientSearchRow
   })
   return { rows, total: rows[0]?.total_count ?? 0 }

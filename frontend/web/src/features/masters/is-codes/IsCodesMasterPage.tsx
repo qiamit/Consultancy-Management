@@ -7,6 +7,7 @@ import { useFormDialogOpenChange } from '@/lib/formDialogOpenChange'
 import { useMasterUiSearchState } from '@/lib/useMasterUiSearchState'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { IsCodesHeaderBar } from './IsCodesHeaderBar'
+import { listIsCodeAmendments, saveIsCodeAmendments } from './isCodeAmendmentsApi'
 import { IsCodesForm } from './IsCodesForm'
 import { IsCodesTable, type IsCodeSortDir, type IsCodeSortKey } from './IsCodesTable'
 import { AuditHistoryDialog } from '@/components/lims/AuditHistoryDialog'
@@ -14,6 +15,7 @@ import { IsCodesTableFooterBar } from './IsCodesFooterBar'
 import { IsCodesFilesDialog, type IsCodeViewFile } from './IsCodesFilesDialog'
 import { buildIsCodesListAssistantContext, formatIsCodeLabel } from './buildIsCodeAssistantContext'
 import {
+  canonicalIsNumber,
   emptyIsCodeForm,
   moneyOrZero,
   moneyToFormStr,
@@ -200,6 +202,15 @@ function rowToIsCodeForm(row: IsCodeRow): IsCodeForm {
     slab2Rate: moneyToFormStr(row.slab_2_rate),
     slab3Quantity: row.slab_3_quantity?.trim() || DEFAULT_SLAB_3_QTY,
     slab3Rate: moneyToFormStr(row.slab_3_rate),
+    standardPrefix: row.standard_prefix ?? '',
+    partNo: row.part_no ?? '',
+    sectionNo: row.section_no ?? '',
+    technicalDepartment: row.technical_department ?? '',
+    technicalCommittee: row.technical_committee ?? '',
+    icsCode: row.ics_code ?? '',
+    certificationCategory: row.certification_category ?? '',
+    standardStatus: row.standard_status ?? '',
+    amendments: [],
     files: [],
   }
 }
@@ -539,6 +550,9 @@ export default function IsCodesMasterPage() {
     setForm(rowToIsCodeForm(row))
     hydratedEditRef.current = row.id
     setEdit(row.id)
+    void listIsCodeAmendments(row.id).then((amendments) => {
+      setForm((prev) => ({ ...prev, amendments }))
+    })
     void loadFormSavedFiles(row)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -1057,13 +1071,11 @@ export default function IsCodesMasterPage() {
         // Merge defaults so HMR / older in-memory form shapes never send undefined keys.
         const f: IsCodeForm = { ...emptyIsCodeForm(), ...form }
         const revisionYear = yearIntFromForm(f.revisionYear)
-        const isNumberRaw = normalizeText(f.isNumber)
-        const isNumberRest = isNumberRaw.replace(/^IS\s*/i, '').trim()
-        if (!isNumberRaw || !isNumberRest) throw new Error('IS Number is required.')
-        if (!/^IS/i.test(isNumberRaw)) {
-          throw new Error('IS Number must start with IS (e.g. IS 1234).')
+        const isNumber = canonicalIsNumber(normalizeText(f.isNumber))
+        if (!isNumber) throw new Error('IS Number is required.')
+        if (!/^IS(\/|\s)/i.test(isNumber)) {
+          throw new Error('IS Number must start with IS (e.g. IS 1234 or IS/IEC 62368).')
         }
-        const isNumber = `IS ${isNumberRest}`
         if (revisionYear == null) throw new Error('Revision Year is required (YYYY).')
         if (!normalizeText(f.title)) throw new Error('Title of the IS Code is required.')
 
@@ -1094,6 +1106,14 @@ export default function IsCodesMasterPage() {
           slab_2_rate: moneyOrZero(f.slab2Rate),
           slab_3_quantity: normalizeText(f.slab3Quantity) || DEFAULT_SLAB_3_QTY,
           slab_3_rate: moneyOrZero(f.slab3Rate),
+          standard_prefix: normalizeText(f.standardPrefix) || null,
+          part_no: normalizeText(f.partNo) || null,
+          section_no: normalizeText(f.sectionNo) || null,
+          technical_department: normalizeText(f.technicalDepartment) || null,
+          technical_committee: normalizeText(f.technicalCommittee) || null,
+          ics_code: normalizeText(f.icsCode) || null,
+          certification_category: f.certificationCategory || null,
+          standard_status: f.standardStatus || null,
           updated_at: new Date().toISOString(),
         }
 
@@ -1116,6 +1136,7 @@ export default function IsCodesMasterPage() {
 
         const id = (data as { id: string } | null)?.id ?? editingId
         if (!id) throw new Error('Unable to determine record id')
+        await saveIsCodeAmendments(id, f.amendments)
 
         if (f.files.length > 0) {
           try {

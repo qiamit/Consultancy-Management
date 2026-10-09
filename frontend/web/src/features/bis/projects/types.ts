@@ -75,6 +75,10 @@ export type BisProjectIsCodeJoin = {
 export type BisProjectRow = {
   id: string
   client_id: string | null
+  factory_site_id?: string | null
+  certification_scheme_id?: string | null
+  bis_office_id?: string | null
+  licence_status_id?: string | null
   project_kind: string | null
   title: string | null
   status: string | null
@@ -141,6 +145,10 @@ export type BisProjectForm = {
   title: string
   clientId: string
   clientLabel: string
+  factorySiteId: string
+  certificationSchemeId: string
+  bisOfficeId: string
+  licenceStatusId: string
   isCodeId: string
   isCodeLabel: string
   cmLDigits: string
@@ -335,6 +343,10 @@ export function emptyBisProjectForm(projectKind: string = DEFAULT_PROJECT_KIND):
     title: '',
     clientId: '',
     clientLabel: '',
+    factorySiteId: '',
+    certificationSchemeId: '',
+    bisOfficeId: '',
+    licenceStatusId: '',
     isCodeId: '',
     isCodeLabel: '',
     cmLDigits: '',
@@ -376,6 +388,10 @@ export function rowToBisProjectForm(row: BisProjectRow): BisProjectForm {
     title: row.title ?? '',
     clientId: row.client_id ?? '',
     clientLabel: clientDisplayName(row),
+    factorySiteId: row.factory_site_id ?? '',
+    certificationSchemeId: row.certification_scheme_id ?? '',
+    bisOfficeId: row.bis_office_id ?? '',
+    licenceStatusId: row.licence_status_id ?? '',
     isCodeId: row.is_code_id ?? '',
     isCodeLabel: isCodeDisplayLabel(row),
     cmLDigits: String(row.cm_l_digits ?? '').replace(/\D/g, '').slice(0, 10),

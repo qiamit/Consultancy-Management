@@ -10,6 +10,7 @@ import ClientsPage from '@/features/masters/ClientsPage'
 import IsCodesPage from '@/features/masters/IsCodesPage'
 import ProductServicesPage from '@/features/masters/ProductServicesPage'
 import TestParameterPage from '@/features/masters/TestParameterPage'
+import LaboratoriesMasterPage from '@/features/masters/laboratories/LaboratoriesMasterPage'
 import QuotationPage from '@/features/finance/sale/quotation/QuotationPage'
 import ProformaInvoicePage from '@/features/finance/sale/proforma-invoice/ProformaInvoicePage'
 import InvoicePage from '@/features/finance/sale/invoice/InvoicePage'
@@ -118,6 +119,10 @@ export function DueSoonLicensesRoute() {
 
 export function BisKnowledgeSearchRoute() {
   return <BisKnowledgeSearchPage />
+}
+
+export function LaboratoriesRoute() {
+  return <LaboratoriesMasterPage />
 }
 
 export function EmailToolsRoute() {

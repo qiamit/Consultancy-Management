@@ -3,6 +3,9 @@ import { Calendar, ChevronDown, ClipboardCopy, Eye, Mail, Printer } from 'lucide
 import { toast } from 'sonner'
 import { useIsLaboratoryDirector } from '@/components/lims/LaboratoryDirectorOnly'
 import { LimsFieldAddButton, LimsFieldWithAdd } from '@/components/lims/LimsFieldWithAdd'
+import { listBisOffices, listCertificationSchemes, listLicenceStatuses, type BisReferenceRow } from './bisReferenceApi'
+import { listClientSites } from '@/features/masters/clients/clientsApi'
+import type { ClientSiteForm } from '@/features/masters/clients/types'
 import { AddClientDialog } from '@/features/sample-handling/receiving/AddClientDialog'
 import { supabase } from '@/lib/supabaseClient'
 import { Button } from '@/components/ui/button'
@@ -247,8 +250,32 @@ export function BisProjectsForm({
   const validityInputRef = useRef<HTMLInputElement | null>(null)
   const grantedInputRef = useRef<HTMLInputElement | null>(null)
   const [handledByOptions, setHandledByOptions] = useState<string[]>([DEFAULT_CASE_HANDLED_BY])
+  const [factorySites, setFactorySites] = useState<ClientSiteForm[]>([])
+  const [schemes, setSchemes] = useState<BisReferenceRow[]>([])
+  const [offices, setOffices] = useState<BisReferenceRow[]>([])
+  const [licenceStatuses, setLicenceStatuses] = useState<BisReferenceRow[]>([])
   const [addClientOpen, setAddClientOpen] = useState(false)
   const [addClientInitialName, setAddClientInitialName] = useState('')
+
+  useEffect(() => {
+    void Promise.all([listCertificationSchemes(), listBisOffices(), listLicenceStatuses()]).then(([nextSchemes, nextOffices, nextStatuses]) => {
+      setSchemes(nextSchemes)
+      setOffices(nextOffices)
+      setLicenceStatuses(nextStatuses)
+    })
+  }, [])
+
+  useEffect(() => {
+    const clientId = form.clientId
+    if (!clientId) return
+    let cancelled = false
+    void listClientSites(clientId).then((sites) => {
+      if (!cancelled) setFactorySites(sites.filter((site) => site.siteRole === 'Factory'))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [form.clientId])
 
   const openAddClient = (typedName?: string) => {
     setAddClientInitialName((typedName ?? form.clientLabel).trim())
@@ -430,10 +457,24 @@ export function BisProjectsForm({
                       addLabel="Add New Client"
                       onAddNew={(typed) => openAddClient(typed)}
                       onChange={({ id, label }) =>
-                        onChange({ ...form, clientId: id, clientLabel: label })
+                        onChange({ ...form, clientId: id, clientLabel: label, factorySiteId: '' })
                       }
                     />
                   </LimsFieldWithAdd>
+                  <Label htmlFor="bis-factory-site">Factory site</Label>
+                  <Select value={form.factorySiteId || 'none'} onValueChange={(v) => onChange({ ...form, factorySiteId: v === 'none' ? '' : v })}>
+                    <SelectTrigger id="bis-factory-site" className="h-10 min-h-10" aria-label="Factory site">
+                      <SelectValue placeholder="Factory site" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Not set</SelectItem>
+                      {factorySites.filter((site) => site.id).map((site) => (
+                        <SelectItem key={site.id} value={site.id!}>
+                          {site.address || site.district || 'Factory'}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="col-span-12 space-y-2 md:col-span-6">
@@ -450,6 +491,51 @@ export function BisProjectsForm({
                       onChange({ ...form, isCodeId: id, isCodeLabel: label })
                     }
                   />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-12 gap-4">
+                <div className="col-span-12 space-y-2 md:col-span-4">
+                  <Label htmlFor="bis-scheme">Certification scheme</Label>
+                  <Select value={form.certificationSchemeId || 'none'} onValueChange={(v) => onChange({ ...form, certificationSchemeId: v === 'none' ? '' : v })}>
+                    <SelectTrigger id="bis-scheme" className="h-10 min-h-10" aria-label="Certification scheme">
+                      <SelectValue placeholder="Scheme" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Not set</SelectItem>
+                      {schemes.map((row) => (
+                        <SelectItem key={row.id} value={row.id}>{row.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="col-span-12 space-y-2 md:col-span-4">
+                  <Label htmlFor="bis-office">BIS office</Label>
+                  <Select value={form.bisOfficeId || 'none'} onValueChange={(v) => onChange({ ...form, bisOfficeId: v === 'none' ? '' : v })}>
+                    <SelectTrigger id="bis-office" className="h-10 min-h-10" aria-label="BIS office">
+                      <SelectValue placeholder="Office" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Not set</SelectItem>
+                      {offices.map((row) => (
+                        <SelectItem key={row.id} value={row.id}>{row.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="col-span-12 space-y-2 md:col-span-4">
+                  <Label htmlFor="bis-licence-status">Licence status</Label>
+                  <Select value={form.licenceStatusId || 'none'} onValueChange={(v) => onChange({ ...form, licenceStatusId: v === 'none' ? '' : v })}>
+                    <SelectTrigger id="bis-licence-status" className="h-10 min-h-10" aria-label="Licence status">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Not set</SelectItem>
+                      {licenceStatuses.map((row) => (
+                        <SelectItem key={row.id} value={row.id}>{row.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 

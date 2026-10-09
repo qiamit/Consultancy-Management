@@ -55,12 +55,27 @@ function closePlayStoreTab(tabId) {
   void settle(chrome.tabs.remove(tabId)).catch(() => {});
 }
 
+function stripPasswordFromManakUrl(url) {
+  const raw = String(url || "");
+  if (!raw || !/manakonline\.in/i.test(raw)) return raw;
+  try {
+    const u = new URL(raw);
+    u.searchParams.delete("passwd");
+    u.searchParams.delete("password");
+    return u.toString();
+  } catch {
+    return raw;
+  }
+}
+
 function safeTabUpdate(tabId, props) {
-  return settle(chrome.tabs.update(tabId, props));
+  const next = props && props.url ? { ...props, url: stripPasswordFromManakUrl(props.url) } : props;
+  return settle(chrome.tabs.update(tabId, next));
 }
 
 function safeTabCreate(props) {
-  return settle(chrome.tabs.create(props));
+  const next = props && props.url ? { ...props, url: stripPasswordFromManakUrl(props.url) } : props;
+  return settle(chrome.tabs.create(next));
 }
 
 function safeSendTab(tabId, message) {
@@ -631,6 +646,7 @@ function payloadWithoutPassword(payload) {
 
 function clearRememberedPortal() {
   lastPortal = { userId: "", password: "" };
+  fillSentAt.clear();
   if (portalForgetTimer) {
     clearTimeout(portalForgetTimer);
     portalForgetTimer = 0;

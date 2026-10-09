@@ -1,4 +1,6 @@
-# QE Planner inbox
+# Inbox
+
+Four-chat handoff ended 2026-10-09 (decision #17). New notes stay here. This chat applies them.
 
 Amit's instructions, ideas and bugs recorded while a session is running (Coder / Auditor / Tester at work).
 QE Planner merges the open items into the next plan after all three reports arrive.

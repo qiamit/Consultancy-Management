@@ -8,8 +8,7 @@ The detailed rules live in `.cursor/rules/*.mdc`, and Cursor loads them automati
 - `40-knowledge-engine.mdc` (knowledge_engine/**): usable/needs_review gate, protected collections, same embedding model, evals
 - `50-workflow-prompts.mdc` (always): docs/audits/*.md with VDB-xx / MST-xx / FIN-xx IDs, "continue" workflow
 - `60-extensions.mdc` (frontend/extensions/**): keep the Chrome and Safari copies in sync
-- `05-qe-standards.mdc` (always): Amit's standing design rules (AI/MCP-ready, responsive, futuristic), security musts, baselines, work order, 4-agent team
-- `qe-planner.mdc` / `qe-coder.mdc` / `qe-auditor.mdc` / `qe-tester.mdc` (on request, one per chat): the QE Planner / Coder / Auditor / Tester roles. Handoff files live in `docs/agents/` (start with `docs/agents/README.md`)
+- `05-qe-standards.mdc` (always): Amit's standing design rules (AI/MCP-ready, responsive, futuristic), security musts, baselines, work order. One chat plans and codes. No Planner / Coder / Auditor / Tester handoff.
 
 If `.cursor/rules` isn't loaded, follow this short version:
 
@@ -17,7 +16,7 @@ If `.cursor/rules` isn't loaded, follow this short version:
 - Search the codebase first, then edit. Edit files directly; don't dump long code blocks in chat.
 - Apply multi-file changes together. Keep changes small and reviewable, and don't touch unrelated files.
 - After changes run `npm run lint` and `npm run typecheck` (frontend), `node --check` (railway functions), and the `knowledge_engine.scripts.test_*` modules (Python). End with a summary of files changed and verification.
-- Don't commit or push unless asked.
+- Don't commit or push unless Amit says "commit". One chat does the plan and the code. If Amit pastes an outside audit or test report, apply the fixes here.
 
 ## Project structure
 - `frontend/web/`: React 19 + Vite 7 + TypeScript, shadcn/ui, LIMS stone/amber theme (`lib/limsThemeUi.ts`)
