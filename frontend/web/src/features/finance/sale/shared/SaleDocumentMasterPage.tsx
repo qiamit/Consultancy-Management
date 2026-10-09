@@ -26,6 +26,17 @@ import {
   type QuotationRow,
   type QuotationStatus,
 } from '../quotation/types'
+import { DEFAULT_CONSULTANCY_GST, DEFAULT_CONSULTANCY_SAC } from './financeRules'
+import { InvoiceAgeingStrip } from './InvoiceAgeingStrip'
+import {
+  emptyInvoiceAgeing,
+  INVOICE_AGE_BUCKETS,
+  listInvoiceAgeBucketPage,
+  listInvoiceAgeing,
+  listInvoiceOutstanding,
+  type InvoiceAgeBucket,
+  type InvoiceAgeingRow,
+} from './invoiceBalanceApi'
 import {
   deleteSaleDocuments,
   fetchNextSaleDocumentNumber,
@@ -41,7 +52,7 @@ import {
   convertInvoiceToPaymentReceiptIfNeeded,
   convertQuotationIfNeeded,
 } from './convertQuotationToSaleDocument'
-import { emailSaleDocumentToClient } from './emailSaleDocument'
+import { emailOverdueInvoiceReminders, emailSaleDocumentToClient } from './emailSaleDocument'
 import { exportSaleDocumentsCsv } from './exportSaleDocumentsCsv'
 import { fetchDefaultQuotationTerm } from '../quotation/quotationTermsApi'
 import { fetchDefaultQuotationNote } from '../quotation/quotationNotesApi'
@@ -120,6 +131,11 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
   const { editId, setEdit } = useMasterUiSearchState()
   const hydratedEditRef = useRef<string | null>(null)
   const [rows, setRows] = useState<QuotationRow[]>([])
+  const [outstandingById, setOutstandingById] = useState<Record<string, number>>({})
+  const [ageing, setAgeing] = useState<InvoiceAgeingRow[] | null>(null)
+  const [ageBucket, setAgeBucket] = useState<InvoiceAgeBucket | null>(null)
+  const [reminderAsk, setReminderAsk] = useState(false)
+  const [reminderBusy, setReminderBusy] = useState(false)
   const [total, setTotal] = useState(0)
   const [listLoading, setListLoading] = useState(false)
   const [listError, setListError] = useState<string | null>(null)
@@ -177,12 +193,19 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
   const safePage = Math.min(Math.max(1, page), pageCount)
   const pagedRows = rows
 
-  const emptyPrimary = search.trim()
-    ? `No ${config.title.toLowerCase()} records match your search.`
-    : config.emptyHint
-  const emptySecondary = search.trim()
-    ? undefined
-    : `Use "${config.addLabel}" to create your first record.`
+  const ageBucketLabel = INVOICE_AGE_BUCKETS.find((bucket) => bucket.id === ageBucket)?.label
+  const emptyPrimary = ageBucketLabel
+    ? search.trim()
+      ? `No open invoices in ${ageBucketLabel} match your search.`
+      : `No open invoices in ${ageBucketLabel}.`
+    : search.trim()
+      ? `No ${config.title.toLowerCase()} records match your search.`
+      : config.emptyHint
+  const emptySecondary = ageBucketLabel
+    ? 'Select Show all invoices to see every invoice.'
+    : search.trim()
+      ? undefined
+      : `Use "${config.addLabel}" to create your first record.`
 
   const reload = useCallback(() => setReloadKey((k) => k + 1), [])
 
@@ -203,8 +226,35 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
     setListError(null)
     void (async () => {
       try {
+        const loadList = async () => {
+          if (config.documentKind === 'invoice' && ageBucket) {
+            const bucketPage = await listInvoiceAgeBucketPage({
+              bucket: ageBucket,
+              search,
+              page,
+              pageSize,
+            })
+            if (bucketPage.ids.length === 0) return { rows: [], total: bucketPage.total }
+            const loaded = await fetchSaleDocumentsPage({
+              kind: 'invoice',
+              search: '',
+              page: 1,
+              pageSize: bucketPage.ids.length,
+              ids: bucketPage.ids,
+            })
+            const byId = new Map(loaded.rows.map((row) => [row.id, row]))
+            return {
+              rows: bucketPage.ids.flatMap((id) => {
+                const row = byId.get(id)
+                return row ? [row] : []
+              }),
+              total: bucketPage.total,
+            }
+          }
+          return fetchSaleDocumentsPage({ kind: config.documentKind, search, page, pageSize })
+        }
         const [result] = await Promise.all([
-          fetchSaleDocumentsPage({ kind: config.documentKind, search, page, pageSize }),
+          loadList(),
           isPaymentReceipt ? refreshSaleLedgerCache().catch(() => undefined) : Promise.resolve(),
         ])
         if (requestId !== requestRef.current) return
@@ -215,6 +265,20 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
         }
         setRows(result.rows)
         setTotal(result.total)
+        if (config.documentKind === 'invoice') {
+          const [balances, summary] = await Promise.all([
+            listInvoiceOutstanding(result.rows.map((row) => row.id)).catch(() => []),
+            listInvoiceAgeing().catch(() => emptyInvoiceAgeing()),
+          ])
+          if (requestId !== requestRef.current) return
+          const next: Record<string, number> = {}
+          for (const balance of balances) next[balance.invoice_id] = balance.outstanding
+          setOutstandingById(next)
+          setAgeing(summary)
+        } else if (requestId === requestRef.current) {
+          setOutstandingById({})
+          setAgeing(null)
+        }
       } catch (err) {
         if (requestId !== requestRef.current) return
         setListError(formatSaleApiError(err))
@@ -224,7 +288,7 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
         if (requestId === requestRef.current) setListLoading(false)
       }
     })()
-  }, [config.documentKind, isPaymentReceipt, search, page, pageSize, reloadKey])
+  }, [ageBucket, config.documentKind, isPaymentReceipt, search, page, pageSize, reloadKey])
 
   const loadClients = useCallback(async () => {
     for (let attempt = 1; attempt <= 3; attempt++) {
@@ -377,8 +441,17 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
         signatureImagePath: '',
       })),
     ])
+    const draft = emptyQuotationForm(next)
+    if (config.documentKind === 'invoice') {
+      draft.gstPercent = DEFAULT_CONSULTANCY_GST
+      draft.lines = draft.lines.map((line) => ({
+        ...line,
+        hsnSac: DEFAULT_CONSULTANCY_SAC,
+        gstPercent: DEFAULT_CONSULTANCY_GST,
+      }))
+    }
     setForm({
-      ...emptyQuotationForm(next),
+      ...draft,
       status: defaultStatus(config.documentKind),
       paymentTerms: defaultTerm,
       notes: defaultNote,
@@ -662,6 +735,70 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
         />
       </div>
 
+      {config.documentKind === 'invoice' && ageing ? (
+        <div className="shrink-0">
+          <InvoiceAgeingStrip
+            rows={ageing}
+            selected={ageBucket}
+            onSelect={(bucket) => {
+              setAgeBucket((current) => (current === bucket ? null : bucket))
+              setReminderAsk(false)
+              setPage(1)
+            }}
+            onClear={() => {
+              setAgeBucket(null)
+              setReminderAsk(false)
+              setPage(1)
+            }}
+            onRemind={() => setReminderAsk(true)}
+          />
+          {reminderAsk && ageBucket === 'over_90' ? (
+            <div className="mt-2 border border-amber-600 bg-amber-50 p-3">
+              <p className="text-[13px] text-[#1c1917]">
+                Send a payment reminder for each open invoice on this page? Nothing is sent until you confirm.
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="min-h-10 border border-stone-500 bg-white px-3 text-[12px] font-semibold"
+                  disabled={reminderBusy}
+                  onClick={() => setReminderAsk(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="min-h-10 border border-amber-700 bg-amber-700 px-3 text-[12px] font-semibold text-white disabled:opacity-50"
+                  disabled={reminderBusy}
+                  onClick={() => {
+                    void (async () => {
+                      setReminderBusy(true)
+                      setMessage(null)
+                      try {
+                        const note = await emailOverdueInvoiceReminders(
+                          pagedRows.map((row) => ({
+                            row,
+                            outstanding: outstandingById[row.id] ?? row.grand_total,
+                          })),
+                        )
+                        setMessage(note)
+                      } catch (err) {
+                        setMessage(formatSaleApiError(err))
+                      } finally {
+                        setReminderBusy(false)
+                        setReminderAsk(false)
+                      }
+                    })()
+                  }}
+                >
+                  {reminderBusy ? 'Sending…' : 'Confirm reminders'}
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="min-h-0 flex-1 overflow-hidden">
         <QuotationTable
           rows={pagedRows}
@@ -698,6 +835,7 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
           hideValidUntil={isPaymentReceipt}
           paymentLedger={isPaymentReceipt}
           documentKind={config.documentKind}
+          outstandingById={config.documentKind === 'invoice' ? outstandingById : undefined}
           paymentOpeningByClientId={
             isPaymentReceipt
               ? Object.fromEntries(

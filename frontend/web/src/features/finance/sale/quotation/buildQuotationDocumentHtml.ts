@@ -321,8 +321,13 @@ function buildOneQuotationHtml(
   const tpl = opts.template
   const metaLabels = documentMetaFieldLabels(tpl.documentTitle || 'Document')
   const isPaymentReceipt = isPaymentReceiptDocumentTitle(tpl.documentTitle || '')
+  const savedSupplyMode =
+    row.gst_supply_mode === 'intra' || row.gst_supply_mode === 'inter' ? row.gst_supply_mode : null
   const gstMode: 'intra' | 'inter' =
-    tpl.showIgst && !tpl.showCgst && !tpl.showSgst ? 'inter' : 'intra'
+    savedSupplyMode ?? (tpl.showIgst && !tpl.showCgst && !tpl.showSgst ? 'inter' : 'intra')
+  const showCgst = savedSupplyMode ? savedSupplyMode === 'intra' : tpl.showCgst
+  const showSgst = savedSupplyMode ? savedSupplyMode === 'intra' : tpl.showSgst
+  const showIgst = savedSupplyMode ? savedSupplyMode === 'inter' : tpl.showIgst
 
   let cgstTotal = 0
   let sgstTotal = 0
@@ -420,17 +425,17 @@ function buildOneQuotationHtml(
       `<tr><td class="k">GST Amount</td><td class="sep">:</td><td class="v">${getCurrencySymbol()} ${esc(formatMoney(row.gst_amount))}</td></tr>`,
     )
   }
-  if (tpl.showCgst) {
+  if (showCgst) {
     totalRows.push(
       `<tr><td class="k">CGST</td><td class="sep">:</td><td class="v">${getCurrencySymbol()} ${esc(formatMoney(cgstTotal))}</td></tr>`,
     )
   }
-  if (tpl.showSgst) {
+  if (showSgst) {
     totalRows.push(
       `<tr><td class="k">SGST</td><td class="sep">:</td><td class="v">${getCurrencySymbol()} ${esc(formatMoney(sgstTotal))}</td></tr>`,
     )
   }
-  if (tpl.showIgst) {
+  if (showIgst) {
     totalRows.push(
       `<tr><td class="k">IGST</td><td class="sep">:</td><td class="v">${getCurrencySymbol()} ${esc(formatMoney(igstTotal))}</td></tr>`,
     )

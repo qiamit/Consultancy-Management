@@ -192,3 +192,13 @@
     text-wrap: balance;
   }
 }
+
+/* Button, label, and column-heading text stays in proper case, not all capitals. */
+button,
+button *,
+label,
+label *,
+th,
+th * {
+  text-transform: none !important;
+}

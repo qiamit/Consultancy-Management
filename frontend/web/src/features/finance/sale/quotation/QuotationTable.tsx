@@ -12,6 +12,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { limsPanelClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { receiptLedgerSnapshot } from '../shared/clientSaleBalance'
+import { tdsAmount } from '../shared/financeRules'
+import { invoiceAgeLabel, invoiceDueLabel } from '../shared/invoiceBalanceApi'
 import {
   formatDate,
   formatMoney,
@@ -20,6 +22,20 @@ import {
   type QuotationRow,
   type QuotationStatus,
 } from './types'
+
+function againstInvoiceText(row: QuotationRow, mode: 'receipt' | 'credit' | null): string | null {
+  const number = row.reference_no?.trim()
+  if (mode === 'receipt') return number ? `Against ${number}` : 'Not Linked'
+  if (mode === 'credit' && number) return `Against ${number}`
+  return null
+}
+
+function receiptTdsText(row: QuotationRow): string | null {
+  const percent = row.tds_percent
+  if (percent !== 2 && percent !== 10) return null
+  const net = row.grand_total - tdsAmount(row.grand_total, String(percent))
+  return `TDS ${percent}% · Net ${getCurrencySymbol()} ${formatMoney(net)}`
+}
 
 /** ~10" / desktop: row table. Below that: cards. */
 const TABLE_MQ_SHOW = 'hidden lg:block'
@@ -247,6 +263,7 @@ export function QuotationTable({
   paymentLedger = false,
   paymentOpeningByClientId,
   documentKind,
+  outstandingById,
 }: {
   rows: QuotationRow[]
   loading: boolean
@@ -272,7 +289,11 @@ export function QuotationTable({
   paymentOpeningByClientId?: Record<string, { amount: number; type: 'Dr' | 'Cr' }>
   /** Filters status convert actions (e.g. Invoice → Credit Note). */
   documentKind?: string
+  /** Tax invoice list: outstanding by invoice id. */
+  outstandingById?: Record<string, number>
 }) {
+  const showDue = documentKind === 'invoice'
+  const againstMode = paymentLedger ? 'receipt' : documentKind === 'creditNote' ? 'credit' : null
   const statusOptions = statusOptionsForDocumentKind(documentKind)
   const allChecked = rows.length > 0 && rows.every((r) => selectedIds.has(r.id))
   const someChecked = rows.some((r) => selectedIds.has(r.id))
@@ -373,6 +394,11 @@ export function QuotationTable({
                           <p className="mt-1 font-mono text-[11px] font-medium text-[#b45309]">
                             {r.quotation_number}
                           </p>
+                          {againstInvoiceText(r, againstMode) ? (
+                            <p className="mt-0.5 truncate text-[11px] text-stone-600">
+                              {againstInvoiceText(r, againstMode)}
+                            </p>
+                          ) : null}
                         </div>
                         <div className="shrink-0 text-right text-[12px] font-semibold tabular-nums text-[#292524]">
                           {formatDate(r.quotation_date)}
@@ -402,6 +428,9 @@ export function QuotationTable({
                               <p className="mt-0.5 text-[12px]">
                                 <MoneyLine amount={ledger.received} />
                               </p>
+                              {receiptTdsText(r) ? (
+                                <p className="mt-0.5 text-[11px] font-semibold text-stone-600">{receiptTdsText(r)}</p>
+                              ) : null}
                             </div>
                             <div className="col-span-2 bg-[#fffcf7] px-2.5 py-2">
                               <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
@@ -434,6 +463,25 @@ export function QuotationTable({
                                 {getCurrencySymbol()} {formatMoney(r.grand_total)}
                               </p>
                             </div>
+                            {showDue ? (
+                              <div className="col-span-2 bg-[#fffcf7] px-2.5 py-2">
+                                <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
+                                  Outstanding
+                                </p>
+                                <p className="mt-0.5 text-[12px] font-semibold tabular-nums">
+                                  {getCurrencySymbol()} {formatMoney(outstandingById?.[r.id] ?? r.grand_total)}
+                                  <span className="ml-1 text-[11px] font-bold uppercase text-stone-600">
+                                    {invoiceDueLabel(r.grand_total, outstandingById?.[r.id] ?? r.grand_total)}
+                                  </span>
+                                </p>
+                                <p className="mt-0.5 text-[11px] font-semibold text-stone-600">
+                                  {invoiceAgeLabel(
+                                    r.quotation_date,
+                                    outstandingById?.[r.id] ?? r.grand_total,
+                                  )}
+                                </p>
+                              </div>
+                            ) : null}
                           </>
                         )}
                       </div>
@@ -477,6 +525,7 @@ export function QuotationTable({
                   <>
                     <col className="min-w-[10rem]" />
                     <col className="min-w-[7rem]" />
+                    {showDue ? <col className="min-w-[8rem]" /> : null}
                   </>
                 )}
                 <col className="w-[9rem]" />
@@ -507,6 +556,7 @@ export function QuotationTable({
                     <>
                       <TableHead className={thBase}>Status</TableHead>
                       <TableHead className={thBase}>Grand Total</TableHead>
+                      {showDue ? <TableHead className={thBase}>Outstanding</TableHead> : null}
                     </>
                   )}
                   <TableHead className={thBase}>Actions</TableHead>
@@ -546,6 +596,9 @@ export function QuotationTable({
                           <p className="truncate font-mono text-[11px] font-medium text-[#b45309]">
                             {r.quotation_number}
                           </p>
+                          {againstInvoiceText(r, againstMode) ? (
+                            <p className="truncate text-[11px] text-stone-600">{againstInvoiceText(r, againstMode)}</p>
+                          ) : null}
                         </div>
                       </TableCell>
                       <TableCell className={tdClass}>
@@ -563,6 +616,9 @@ export function QuotationTable({
                           </TableCell>
                           <TableCell className={tdClass}>
                             <MoneyLine amount={ledger.received} />
+                            {receiptTdsText(r) ? (
+                              <p className="mt-0.5 text-[11px] font-semibold text-stone-600">{receiptTdsText(r)}</p>
+                            ) : null}
                           </TableCell>
                           <TableCell className={tdClass}>
                             <MoneyLine amount={ledger.after.amount} type={ledger.after.type} />
@@ -582,6 +638,20 @@ export function QuotationTable({
                           <TableCell className={cn(tdClass, 'font-semibold tabular-nums')}>
                             {getCurrencySymbol()} {formatMoney(r.grand_total)}
                           </TableCell>
+                          {showDue ? (
+                            <TableCell className={cn(tdClass, 'font-semibold tabular-nums')}>
+                              {getCurrencySymbol()} {formatMoney(outstandingById?.[r.id] ?? r.grand_total)}
+                              <span className="mt-0.5 block text-[11px] font-bold uppercase text-stone-600">
+                                {invoiceDueLabel(r.grand_total, outstandingById?.[r.id] ?? r.grand_total)}
+                              </span>
+                              <span className="mt-0.5 block text-[11px] font-semibold text-stone-600">
+                                {invoiceAgeLabel(
+                                  r.quotation_date,
+                                  outstandingById?.[r.id] ?? r.grand_total,
+                                )}
+                              </span>
+                            </TableCell>
+                          ) : null}
                         </>
                       )}
                       <TableCell className={tdClass}>

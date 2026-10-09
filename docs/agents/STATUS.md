@@ -5,14 +5,14 @@ Decision #17 (2026-10-09): one chat plans and codes. Do not hand work to a Plann
 ## Current
 | Field | Value |
 |---|---|
-| Session | S10 |
-| Stage | MIGRATED |
+| Session | F10 |
+| Stage | CODED |
 | Owner | This chat |
-| Repo HEAD | `6da1adb` until this commit. Migrations S7–S10 applied. |
-| Plan | S7 client, S8 BIS reference, S9 IS identity, S10 laboratories |
+| Repo HEAD | `0bd4e35` (S7–S10 live). F1–F7 and F10 migrations are not applied. F8 and F9 have no migration. |
+| Plan | `docs/agents/plans/F10_plan.md` |
 | Coder prompt | Retired. |
-| Next action | Commit and push so Railway deploys the frontend. No audit yet. |
-| Updated | 2026-10-09 08:20 IST |
+| Next action | Commit F1–F10, then migrate and push. F11 purchase bill starts in this chat after that. |
+| Updated | 2026-10-09 12:15 IST |
 
 ### S6 known scope (from Amit, 2026-10-08; to be confirmed in the plan)
 - Encrypt client Manak passwords (approved; reverses the MST-07 exclusion). Never return them to list views or the browser by default.
@@ -32,6 +32,17 @@ Decision #17 (2026-10-09): one chat plans and codes. Do not hand work to a Plann
 ## Log
 | When (IST) | Session | Agent | Stage → | Note |
 |---|---|---|---|---|
+| 2026-10-09 12:10 | F10 | This chat | CODED | Finance books roadmap written from the GimBooks menu. No new code. F11 waits. No migrate, no commit. |
+| 2026-10-09 12:00 | F10 | This chat | CODED | Tax invoice form lists the receipts and credit notes that name it. Migration file only. No migrate, no commit. |
+| 2026-10-09 11:50 | F9 | This chat | CODED | Receipt list shows the named invoice and the net after TDS. No migration. No commit. |
+| 2026-10-09 11:35 | F8 | This chat | CODED | Buttons, labels, and table headings use proper text. No migration. No commit. |
+| 2026-10-09 11:20 | F7 | This chat | CODED | Over 90 payment reminder, only after confirm. Migration file only. No migrate, no commit. |
+| 2026-10-09 09:50 | F6 | This chat | CODED | Tax invoice ageing buckets filter the list. Migration file only. No migrate, no commit. |
+| 2026-10-09 09:40 | F5 | This chat | CODED | Open tax invoices grouped by age: 0–30, 31–60, 61–90, Over 90. Migration file only. No migrate, no commit. |
+| 2026-10-09 09:30 | F4 | This chat | CODED | Tax invoice list shows outstanding and Paid, Part, or Unpaid. Migration file only. No migrate, no commit. |
+| 2026-10-09 09:20 | F3 | This chat | CODED | Invoice outstanding from linked receipts and credit notes. Migration file only. No migrate, no commit. |
+| 2026-10-09 09:10 | F2 | This chat | CODED | Place of supply on tax invoice and credit note. Migration file only. No migrate, no commit. |
+| 2026-10-09 09:00 | F1 | This chat | CODED | Document series, invoice GST, receipt TDS. Migration file only. No migrate, no commit. |
 | 2026-10-09 07:57 | S7 | This chat | CODED | Client Master v2 coded. Migration file only. Verify 122 / 352 / build pass. No migrate, no commit. Report: `docs/agents/reports/coding/S7_coding.md`. |
 | 2026-10-09 06:08 | S7 | This chat | PAUSED | Decision #17. Four role files removed. S7 code not started. No commit. |
 | 2026-10-09 05:55 | S7 | QE Planner | APPROVED | Start check 3 unblocked (decision #16). Four rule files stay uncommitted and must not be edited. Product scope unchanged. Owner is QE Coder. |

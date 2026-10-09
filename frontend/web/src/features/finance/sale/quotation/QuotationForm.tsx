@@ -62,6 +62,7 @@ import {
   computeQuotationTotals,
   defaultValidUntil,
   emptyQuotationLine,
+  formatDate,
   formatMoney,
   lineGstSplit,
   lineTaxableAmount,
@@ -77,10 +78,28 @@ import {
   type PaymentMethod,
 } from './types'
 import { amountInIndianRupeesWords } from './amountInIndianRupeesWords'
+import { gstSupplyMode, tdsAmount } from '@/features/finance/sale/shared/financeRules'
+import {
+  listClientInvoiceBalances,
+  listInvoiceSettlements,
+  type InvoiceBalance,
+  type InvoiceSettlement,
+} from '@/features/finance/sale/shared/invoiceBalanceApi'
 import { parseLabSettingsRow } from '@/features/settings/lab-settings/labSettingsDb'
 import { computeClientSaleBalance } from '@/features/finance/sale/shared/clientSaleBalance'
 import { refreshSaleLedgerCache } from '@/features/finance/sale/shared/saleDocumentsApi'
 import { supabase } from '@/lib/supabaseClient'
+
+function ReceiptTdsSummary({ gross, percent }: { gross: string; percent: string }) {
+  const deducted = tdsAmount(parseMoney(gross), percent)
+  const net = Math.round((parseMoney(gross) - deducted) * 100) / 100
+  return (
+    <div className="flex min-w-0 flex-col justify-end space-y-1 text-sm text-stone-800">
+      <span>TDS amount: {getCurrencySymbol()} {formatMoney(deducted)}</span>
+      <span>Net received: {getCurrencySymbol()} {formatMoney(net)}</span>
+    </div>
+  )
+}
 
 export type QuotationClientContact = {
   contactPerson: string
@@ -388,6 +407,41 @@ export function QuotationFormView({
   const [notesOpen, setNotesOpen] = useState(false)
   const [convertedInvoiceTotal, setConvertedInvoiceTotal] = useState(0)
   const [ledgerVersion, setLedgerVersion] = useState(0)
+  const [invoiceBalances, setInvoiceBalances] = useState<InvoiceBalance[]>([])
+  const [settlements, setSettlements] = useState<InvoiceSettlement[]>([])
+
+  useEffect(() => {
+    if (!form.clientId || (documentKind !== 'invoice' && documentKind !== 'creditNote' && !isPaymentReceipt)) {
+      return
+    }
+    let cancelled = false
+    void listClientInvoiceBalances(form.clientId)
+      .then((rows) => {
+        if (!cancelled) setInvoiceBalances(rows)
+      })
+      .catch(() => {
+        if (!cancelled) setInvoiceBalances([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [documentKind, form.clientId, isPaymentReceipt])
+
+  useEffect(() => {
+    const invoiceNumber = form.quotationNumber.trim()
+    if (documentKind !== 'invoice' || !form.clientId || !invoiceNumber) return
+    let cancelled = false
+    void listInvoiceSettlements(form.clientId, invoiceNumber)
+      .then((rows) => {
+        if (!cancelled) setSettlements(rows)
+      })
+      .catch(() => {
+        if (!cancelled) setSettlements([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [documentKind, form.clientId, form.quotationNumber])
 
   useEffect(() => {
     let cancelled = false
@@ -416,11 +470,26 @@ export function QuotationFormView({
     ifsc: '',
     upi: '',
   })
+  const [companyGstin, setCompanyGstin] = useState('')
 
-  const gstMode: 'intra' | 'inter' =
-    showIgstRow && !showCgstRow && !showSgstRow ? 'inter' : 'intra'
-  const totals = computeQuotationTotals(form, gstMode)
-  const showGstBreakdown = showCgstRow || showSgstRow || showIgstRow
+  const placeOfSupply = documentKind === 'invoice' || documentKind === 'creditNote'
+  const supplyMode: 'intra' | 'inter' = placeOfSupply
+    ? gstSupplyMode(companyGstin, form.clientGstNumber)
+    : showIgstRow && !showCgstRow && !showSgstRow
+      ? 'inter'
+      : 'intra'
+  const showCgst = placeOfSupply ? supplyMode === 'intra' : showCgstRow
+  const showSgst = placeOfSupply ? supplyMode === 'intra' : showSgstRow
+  const showIgst = placeOfSupply ? supplyMode === 'inter' : showIgstRow
+  const totals = computeQuotationTotals(form, supplyMode)
+  const showGstBreakdown = showCgst || showSgst || showIgst
+  const visibleInvoiceBalances = form.clientId ? invoiceBalances : []
+  const matchedInvoiceBalance = visibleInvoiceBalances.find(
+    (row) => row.invoice_number === form.quotationNumber.trim(),
+  )
+  const outstandingNow = matchedInvoiceBalance ? matchedInvoiceBalance.outstanding : totals.grandTotal
+  const visibleSettlements =
+    documentKind === 'invoice' && form.clientId && form.quotationNumber.trim() ? settlements : []
   const amountInWords = amountInIndianRupeesWords(totals.grandTotal)
 
   useEffect(() => {
@@ -538,13 +607,14 @@ export function QuotationFormView({
       try {
         const { data, error } = await supabase
           .from('lab_settings')
-          .select('bank_name, branch_name, account_number, ifsc, upi')
+          .select('bank_name, branch_name, account_number, ifsc, upi, gst_number')
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle()
         if (error) throw error
         if (cancelled) return
         const parsed = parseLabSettingsRow((data ?? {}) as Record<string, unknown>)
+        setCompanyGstin(parsed.gstNumber)
         setBankDetails({
           bankName: parsed.bankName,
           branchName: parsed.branchName,
@@ -928,6 +998,40 @@ export function QuotationFormView({
         </section>
       </div>
 
+      {isPaymentReceipt || documentKind === 'creditNote' ? (
+        <section className="space-y-3 rounded-none border border-stone-500 bg-stone-50/60 p-3">
+          <h3 className={sectionTitleClass}>Against invoice</h3>
+          <div className="flex min-w-0 max-w-xl flex-col space-y-2">
+            <Label htmlFor="against-invoice">Tax invoice</Label>
+            <Select
+              value={form.referenceNo.trim() || 'none'}
+              onValueChange={(value) => set('referenceNo', value === 'none' ? '' : value)}
+            >
+              <SelectTrigger id="against-invoice" className={cn(fieldClass, 'w-full min-h-10')}>
+                <SelectValue placeholder="Not linked to an invoice" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Not linked to an invoice</SelectItem>
+                {form.referenceNo.trim() &&
+                !visibleInvoiceBalances.some((row) => row.invoice_number === form.referenceNo.trim()) ? (
+                  <SelectItem value={form.referenceNo.trim()}>{form.referenceNo.trim()}</SelectItem>
+                ) : null}
+                {visibleInvoiceBalances.map((row) => (
+                  <SelectItem key={row.invoice_id || row.invoice_number} value={row.invoice_number}>
+                    {row.invoice_number} — due {getCurrencySymbol()} {formatMoney(row.outstanding)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-stone-600">
+              {form.clientId
+                ? 'The gross amount reduces this invoice. TDS stays on the receipt.'
+                : 'Select a client to see open invoices.'}
+            </p>
+          </div>
+        </section>
+      ) : null}
+
       {isPaymentReceipt ? (
         <section className="space-y-3 rounded-none border border-stone-500 bg-stone-50/60 p-3">
           <h3 className={sectionTitleClass}>Payment</h3>
@@ -958,10 +1062,27 @@ export function QuotationFormView({
             </div>
             <CurrencyInrField
               id="payment-amount"
-              label="Payment Amount"
+              label="Gross amount"
               value={form.paymentAmount}
               onChange={(v) => set('paymentAmount', v)}
             />
+            <div className="flex min-w-0 flex-col space-y-2">
+              <Label htmlFor="payment-tds">TDS</Label>
+              <Select
+                value={form.tdsPercent === '2' || form.tdsPercent === '10' ? form.tdsPercent : '0'}
+                onValueChange={(v) => set('tdsPercent', v === '0' ? '' : v)}
+              >
+                <SelectTrigger id="payment-tds" className={cn(fieldClass, 'w-full min-h-10')}>
+                  <SelectValue placeholder="No TDS" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">No TDS</SelectItem>
+                  <SelectItem value="2">2%</SelectItem>
+                  <SelectItem value="10">10%</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <ReceiptTdsSummary gross={form.paymentAmount} percent={form.tdsPercent} />
             <CurrencyBalanceField
               label="Balance After Payment"
               amount={balanceAfterPayment.amount}
@@ -997,7 +1118,7 @@ export function QuotationFormView({
             const descOpen = Boolean(descOpenByKey[line.key])
             const combined = joinLineItemText(line.description, line.details)
             const descValue = descOpen ? (descQueryByKey[line.key] ?? combined) : combined
-            const gstSplit = lineGstSplit(line, 'intra')
+            const gstSplit = lineGstSplit(line, supplyMode)
             return (
               <article
                 key={`card-${line.key}`}
@@ -1501,7 +1622,7 @@ export function QuotationFormView({
                 const descValue = descOpen ? (descQueryByKey[line.key] ?? combined) : combined
                 const cellTextClass =
                   'align-middle px-2 py-1.5 text-center text-sm text-stone-800'
-                const gstSplit = lineGstSplit(line, 'intra')
+                const gstSplit = lineGstSplit(line, supplyMode)
                 const moneyCellClass =
                   'align-middle px-2 py-1.5 text-center tabular-nums font-medium text-stone-900'
                 return (
@@ -1984,7 +2105,7 @@ export function QuotationFormView({
                   Packaging Charge
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  disabled={showCgstRow}
+                  disabled={placeOfSupply || showCgst}
                   onSelect={() => {
                     setShowIgstRow(false)
                     setShowCgstRow(true)
@@ -1993,7 +2114,7 @@ export function QuotationFormView({
                   CGST
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  disabled={showSgstRow}
+                  disabled={placeOfSupply || showSgst}
                   onSelect={() => {
                     setShowIgstRow(false)
                     setShowSgstRow(true)
@@ -2002,7 +2123,7 @@ export function QuotationFormView({
                   SGST
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  disabled={showIgstRow}
+                  disabled={placeOfSupply || showIgst}
                   onSelect={() => {
                     setShowCgstRow(false)
                     setShowSgstRow(false)
@@ -2114,11 +2235,19 @@ export function QuotationFormView({
             </div>
           ) : null}
 
-          {showCgstRow ? (
+          {placeOfSupply ? (
+            <p className="text-xs text-stone-600">
+              Place of supply: {supplyMode === 'inter' ? 'other state, IGST' : 'same state, CGST + SGST'}.
+              {!companyGstin.trim() || !form.clientGstNumber.trim() ? ' GSTIN missing, so this stays intra-state.' : ''}
+            </p>
+          ) : null}
+
+          {showCgst ? (
             <div className="flex items-center justify-between gap-2">
               <span className="text-stone-600">CGST</span>
               <div className="flex items-center gap-1">
                 <span className="tabular-nums">{getCurrencySymbol()} {formatMoney(totals.cgstAmount)}</span>
+                {placeOfSupply ? null : (
                 <button
                   type="button"
                   className="inline-flex h-7 w-7 items-center justify-center text-stone-500 hover:text-red-700"
@@ -2128,15 +2257,17 @@ export function QuotationFormView({
                 >
                   <X size={14} aria-hidden />
                 </button>
+                )}
               </div>
             </div>
           ) : null}
 
-          {showSgstRow ? (
+          {showSgst ? (
             <div className="flex items-center justify-between gap-2">
               <span className="text-stone-600">SGST</span>
               <div className="flex items-center gap-1">
                 <span className="tabular-nums">{getCurrencySymbol()} {formatMoney(totals.sgstAmount)}</span>
+                {placeOfSupply ? null : (
                 <button
                   type="button"
                   className="inline-flex h-7 w-7 items-center justify-center text-stone-500 hover:text-red-700"
@@ -2146,15 +2277,17 @@ export function QuotationFormView({
                 >
                   <X size={14} aria-hidden />
                 </button>
+                )}
               </div>
             </div>
           ) : null}
 
-          {showIgstRow ? (
+          {showIgst ? (
             <div className="flex items-center justify-between gap-2">
               <span className="text-stone-600">IGST</span>
               <div className="flex items-center gap-1">
                 <span className="tabular-nums">{getCurrencySymbol()} {formatMoney(totals.igstAmount)}</span>
+                {placeOfSupply ? null : (
                 <button
                   type="button"
                   className="inline-flex h-7 w-7 items-center justify-center text-stone-500 hover:text-red-700"
@@ -2164,6 +2297,7 @@ export function QuotationFormView({
                 >
                   <X size={14} aria-hidden />
                 </button>
+                )}
               </div>
             </div>
           ) : null}
@@ -2178,6 +2312,34 @@ export function QuotationFormView({
             <span>Grand Total</span>
             <span className="tabular-nums text-amber-900">{getCurrencySymbol()} {formatMoney(totals.grandTotal)}</span>
           </div>
+          {documentKind === 'invoice' ? (
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <span className="text-stone-600">Outstanding</span>
+              <span className="tabular-nums">{getCurrencySymbol()} {formatMoney(outstandingNow)}</span>
+            </div>
+          ) : null}
+          {documentKind === 'invoice' && form.clientId && form.quotationNumber.trim() ? (
+            <div className="space-y-1 border-t border-stone-300 pt-2 text-sm">
+              <p className="text-stone-600">Settlements</p>
+              {visibleSettlements.length === 0 ? (
+                <p className="text-xs text-stone-500">No receipt or credit note is linked.</p>
+              ) : (
+                <ul className="max-h-40 space-y-1 overflow-y-auto">
+                  {visibleSettlements.map((row) => (
+                    <li key={`${row.kind}-${row.document_id}`} className="flex items-center justify-between gap-2">
+                      <span className="min-w-0 truncate">
+                        {row.kind === 'credit_note' ? 'Credit Note' : 'Receipt'} {row.document_number}
+                        {row.document_date ? ` · ${formatDate(row.document_date)}` : ''}
+                      </span>
+                      <span className="shrink-0 tabular-nums">
+                        {getCurrencySymbol()} {formatMoney(row.amount)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ) : null}
         </div>
       </section>
         </>

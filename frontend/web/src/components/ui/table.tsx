@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { mapProperLabelChildren } from '@/lib/properLabelText'
 import { cn } from '@/lib/utils'
 
 const Table = React.forwardRef<
@@ -68,15 +69,17 @@ TableRow.displayName = 'TableRow'
 const TableHead = React.forwardRef<
   HTMLTableCellElement,
   React.ThHTMLAttributes<HTMLTableCellElement>
->(({ className, ...props }, ref) => (
+>(({ className, children, ...props }, ref) => (
   <th
     ref={ref}
     className={cn(
-      'h-10 px-3 text-left align-middle font-bold uppercase tracking-[0.12em] text-amber-200 bg-stone-800 [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]',
+      'h-10 px-3 text-left align-middle font-bold tracking-[0.12em] text-amber-200 bg-stone-800 [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]',
       className,
     )}
     {...props}
-  />
+  >
+    {mapProperLabelChildren(children)}
+  </th>
 ))
 TableHead.displayName = 'TableHead'
 

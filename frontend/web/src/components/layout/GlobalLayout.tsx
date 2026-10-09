@@ -39,16 +39,9 @@ import {
   type NavSection,
 } from '@/lib/appNav'
 import { QiAssistant } from '@/components/qi-assistant/QiAssistant'
+import { toProperLabelText } from '@/lib/properLabelText'
 
-const formatNavLabel = (value: string) =>
-  value
-    .split(' ')
-    .map((word) => {
-      if (word.length === 0) return ''
-      if (word === word.toUpperCase()) return word
-      return `${word[0]?.toUpperCase() ?? ''}${word.slice(1).toLowerCase()}`
-    })
-    .join(' ')
+const formatNavLabel = (value: string) => toProperLabelText(value)
 
 function navItemAccessible(
   item: NavItem,

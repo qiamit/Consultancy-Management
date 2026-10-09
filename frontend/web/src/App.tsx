@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useEnterTogglesCheckbox } from '@/hooks/useEnterTogglesCheckbox'
+import { useProperLabelText } from '@/hooks/useProperLabelText'
 import { RoutePersistence } from '@/components/routing/RoutePersistence'
 import AuthPage from '@/features/auth/AuthPage'
 import PublicSiteLayout from '@/features/public-site/PublicSiteLayout'
@@ -40,6 +41,7 @@ import {
 
 export default function App() {
   useEnterTogglesCheckbox()
+  useProperLabelText()
   return (
     <BrowserRouter>
       <RoutePersistence />

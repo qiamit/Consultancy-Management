@@ -177,8 +177,13 @@ export function QuotationDocumentView({
         : 0),
   )
 
+  const savedSupplyMode =
+    row.gst_supply_mode === 'intra' || row.gst_supply_mode === 'inter' ? row.gst_supply_mode : null
   const gstMode: 'intra' | 'inter' =
-    tpl.showIgst && !tpl.showCgst && !tpl.showSgst ? 'inter' : 'intra'
+    savedSupplyMode ?? (tpl.showIgst && !tpl.showCgst && !tpl.showSgst ? 'inter' : 'intra')
+  const showCgst = savedSupplyMode ? savedSupplyMode === 'intra' : tpl.showCgst
+  const showSgst = savedSupplyMode ? savedSupplyMode === 'intra' : tpl.showSgst
+  const showIgst = savedSupplyMode ? savedSupplyMode === 'inter' : tpl.showIgst
   const metaLabels = documentMetaFieldLabels(tpl.documentTitle || 'Document')
   const isPaymentReceipt = isPaymentReceiptDocumentTitle(tpl.documentTitle || '')
   const metaRows: Array<[string, string]> = isPaymentReceipt
@@ -251,7 +256,7 @@ export function QuotationDocumentView({
       bold: true,
     })
   }
-  if (tpl.showCgst && cgstTotal > 0) {
+  if (showCgst && cgstTotal > 0) {
     totalRows.push({
       key: 'cgst',
       label: 'CGST',
@@ -259,7 +264,7 @@ export function QuotationDocumentView({
       bold: true,
     })
   }
-  if (tpl.showSgst && sgstTotal > 0) {
+  if (showSgst && sgstTotal > 0) {
     totalRows.push({
       key: 'sgst',
       label: 'SGST',
@@ -267,7 +272,7 @@ export function QuotationDocumentView({
       bold: true,
     })
   }
-  if (tpl.showIgst && igstTotal > 0) {
+  if (showIgst && igstTotal > 0) {
     totalRows.push({
       key: 'igst',
       label: 'IGST',

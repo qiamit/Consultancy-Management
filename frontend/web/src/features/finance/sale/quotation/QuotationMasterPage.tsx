@@ -30,6 +30,8 @@ import {
   type QuotationStatus,
 } from './types'
 import { fetchQuotationPrefix } from './quotationNumberPrefix'
+import { allocateDocumentNumber } from '../shared/documentSeriesApi'
+import { linesForDocumentKind } from '../shared/financeRules'
 import { fetchDefaultQuotationTerm } from './quotationTermsApi'
 import { fetchDefaultQuotationNote } from './quotationNotesApi'
 import { downloadQuotationPdfWithTemplate, printQuotationsWithTemplate } from './outputQuotationDocument'
@@ -388,6 +390,8 @@ export default function QuotationMasterPage() {
   }, [filteredRows, safePage, pageSize])
 
   const allocateNextQuotationNumber = async () => {
+    const allocated = await allocateDocumentNumber('quotation')
+    if (allocated) return allocated
     const prefix = await fetchQuotationPrefix()
     return nextQuotationNumber(
       rows.map((r) => r.quotation_number),
@@ -477,7 +481,8 @@ export default function QuotationMasterPage() {
     setSaveLoading(true)
     setSaveMessage(null)
     try {
-      const totals = computeQuotationTotals(form)
+      const linesToSave = linesForDocumentKind('quotation', form.lines)
+      const totals = computeQuotationTotals({ ...form, lines: linesToSave, gstPercent: '0' })
       const payload = {
         quotation_number: form.quotationNumber.trim(),
         quotation_date: form.quotationDate || null,
@@ -528,7 +533,7 @@ export default function QuotationMasterPage() {
 
       if (!quotationId) throw new Error('Quotation id missing after save')
 
-      const linePayloads = form.lines
+      const linePayloads = linesToSave
         .filter((l) => l.description.trim().length > 0)
         .map((l, index) => ({
           quotation_id: quotationId,

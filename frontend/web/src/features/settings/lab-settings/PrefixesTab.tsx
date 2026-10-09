@@ -22,6 +22,7 @@ import {
 } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import type { PrefixItem } from './types'
+import { DocumentSeriesPanel } from './DocumentSeriesPanel'
 import { LabSettingsPanel } from './labSettingsUi'
 
 type PrefixesTabProps = {
@@ -49,6 +50,7 @@ export function PrefixesTab(props: PrefixesTabProps) {
   return (
     <LabSettingsPanel>
       <div className="space-y-4">
+        <DocumentSeriesPanel />
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-sm font-semibold text-stone-800">Prefix&apos;s</h3>
           <Dialog open={props.prefixDialogOpen} onOpenChange={props.setPrefixDialogOpen}>

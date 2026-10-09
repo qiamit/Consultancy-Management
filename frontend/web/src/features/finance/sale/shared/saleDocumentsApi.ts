@@ -14,6 +14,8 @@ import {
   type QuotationStatus,
 } from '../quotation/types'
 import { setSaleDocumentCache } from './clientSaleBalance'
+import { allocateDocumentNumber } from './documentSeriesApi'
+import { gstSupplyMode, linesForDocumentKind, type GstSupplyMode } from './financeRules'
 
 /** Sale modules persisted in Postgres through the finance_* tables / transactions. */
 export type SaleDocumentKind = Exclude<DocumentTemplateKind, 'quotation'>
@@ -201,6 +203,10 @@ function headerFromRaw(
     contact_mobile: strOrNull(extra.contact_mobile),
     client_address: strOrNull(extra.client_address),
     client_gst_number: strOrNull(extra.client_gst_number),
+    gst_supply_mode:
+      extra.gst_supply_mode === 'intra' || extra.gst_supply_mode === 'inter'
+        ? extra.gst_supply_mode
+        : null,
     subject: strOrNull(raw.scope_of_work),
     reference_no: strOrNull(extra.reference_no),
     status: uiStatusFor(kind, dbStatus, extra.status_label),
@@ -263,6 +269,10 @@ function receiptFromRaw(raw: RawRow): QuotationRow {
     transportation_charges: 0,
     packaging_charges: 0,
     gst_percent: 0,
+    tds_percent: (() => {
+      const tdsRaw = raw.tds_percent ?? extra.tds_percent
+      return tdsRaw == null || tdsRaw === '' ? null : num(tdsRaw)
+    })(),
     gst_amount: 0,
     subtotal: amount,
     grand_total: amount,
@@ -277,6 +287,8 @@ export type FetchSaleDocumentsParams = {
   search: string
   page: number
   pageSize: number
+  /** When set, the page is exactly these ids. An empty list returns no rows. */
+  ids?: string[]
 }
 
 export async function fetchSaleDocumentsPage({
@@ -284,8 +296,10 @@ export async function fetchSaleDocumentsPage({
   search,
   page,
   pageSize,
+  ids,
 }: FetchSaleDocumentsParams): Promise<{ rows: QuotationRow[]; total: number }> {
-  const term = sanitizeSearchTerm(search)
+  if (ids && ids.length === 0) return { rows: [], total: 0 }
+  const term = ids ? '' : sanitizeSearchTerm(search)
   const from = (Math.max(1, page) - 1) * pageSize
   const to = from + pageSize - 1
 
@@ -317,6 +331,7 @@ export async function fetchSaleDocumentsPage({
   let query = supabase
     .from(cfg.table)
     .select(`*, ${CLIENT_JOIN}, lines:${cfg.linesTable}(*)`, { count: 'exact' })
+  if (ids && ids.length > 0) query = query.in('id', ids)
   if (term) {
     const parts = [`${cfg.numberCol}.ilike.*${term}*`]
     if (clientIds.length > 0) parts.push(`client_id.in.(${clientIds.join(',')})`)
@@ -337,6 +352,8 @@ export async function fetchNextSaleDocumentNumber(
   kind: SaleDocumentKind,
   prefix: string,
 ): Promise<string> {
+  const allocated = await allocateDocumentNumber(kind)
+  if (allocated) return allocated
   const numberCol =
     kind === 'paymentReceipt' ? 'receipt_number' : HEADER_TABLES[kind].numberCol
   const table = kind === 'paymentReceipt' ? 'transactions' : HEADER_TABLES[kind].table
@@ -390,6 +407,21 @@ function buildLines(
     })
 }
 
+async function resolveGstSupplyMode(recipientGstin: string): Promise<GstSupplyMode> {
+  const { data } = await supabase
+    .from('lab_settings')
+    .select('gst_number')
+    .eq('id', '00000000-0000-0000-0000-000000000001')
+    .maybeSingle()
+  const supplier = String((data as { gst_number?: string | null } | null)?.gst_number ?? '')
+  const { data: mode, error } = await supabase.rpc('sale_gst_supply_mode', {
+    p_supplier_gstin: supplier,
+    p_recipient_gstin: recipientGstin,
+  })
+  if (!error && (mode === 'intra' || mode === 'inter')) return mode
+  return gstSupplyMode(supplier, recipientGstin)
+}
+
 function clientSnapshot(form: QuotationForm): Extra {
   return {
     client_name: form.clientName.trim() || null,
@@ -407,7 +439,14 @@ async function saveHeaderDocument(
   editingId: string | null,
 ): Promise<void> {
   const cfg = HEADER_TABLES[kind]
-  const totals = computeQuotationTotals(form)
+  const prepared: QuotationForm = {
+    ...form,
+    lines: linesForDocumentKind(kind, form.lines),
+    gstPercent: kind === 'invoice' || kind === 'creditNote' ? form.gstPercent : '0',
+  }
+  const supplyMode: GstSupplyMode =
+    kind === 'invoice' || kind === 'creditNote' ? await resolveGstSupplyMode(form.clientGstNumber) : 'intra'
+  const totals = computeQuotationTotals(prepared, supplyMode)
   const date = form.quotationDate || new Date().toISOString().slice(0, 10)
   const id = editingId ?? crypto.randomUUID()
 
@@ -435,6 +474,7 @@ async function saveHeaderDocument(
       transportation_charges: totals.transportationCharges,
       packaging_charges: totals.packagingCharges,
       gst_percent: totals.effectiveGstPercent,
+      gst_supply_mode: kind === 'invoice' || kind === 'creditNote' ? supplyMode : null,
     },
     updated_at: new Date().toISOString(),
   }
@@ -449,7 +489,7 @@ async function saveHeaderDocument(
     if (error) throw error
   }
 
-  const lines = buildLines(form, cfg.parentFk, id)
+  const lines = buildLines(prepared, cfg.parentFk, id)
   if (lines.length > 0) {
     const { error } = await supabase.from(cfg.linesTable).insert(lines)
     if (error) throw error
@@ -465,6 +505,7 @@ async function saveHeaderDocument(
 async function saveReceipt(form: QuotationForm, editingId: string | null): Promise<void> {
   const amount = Math.max(0, parseMoney(String(form.paymentAmount ?? '')))
   const method = normalizePaymentMethod(form.paymentMethod)
+  const tdsPercent = form.tdsPercent === '2' || form.tdsPercent === '10' ? Number(form.tdsPercent) : null
   const againstInvoice = form.referenceNo.trim() || null
   const payload: Record<string, unknown> = {
     payment_flow: 'in',
@@ -477,6 +518,7 @@ async function saveReceipt(form: QuotationForm, editingId: string | null): Promi
     mode_of_payment: MODE_TO_DB[method],
     description: form.subject.trim() || null,
     notes: form.notes.trim() || null,
+    tds_percent: tdsPercent,
     extra: {
       ...clientSnapshot(form),
       remarks: form.remarks.trim() || null,
@@ -489,20 +531,24 @@ async function saveReceipt(form: QuotationForm, editingId: string | null): Promi
       invoice_reference_no: againstInvoice,
       against_invoice_no: againstInvoice,
       allocated_amount: amount,
+      tds_percent: tdsPercent,
     },
     updated_at: new Date().toISOString(),
   }
-  if (editingId) {
-    const { error } = await supabase
-      .from('transactions')
-      .update(payload)
-      .eq('id', editingId)
-      .eq('payment_flow', 'in')
-    if (error) throw error
-    return
+  const write = async (body: Record<string, unknown>) => {
+    if (editingId) {
+      return supabase.from('transactions').update(body).eq('id', editingId).eq('payment_flow', 'in')
+    }
+    return supabase.from('transactions').insert(body)
   }
-  const { error } = await supabase.from('transactions').insert(payload)
-  if (error) throw error
+  const first = await write(payload)
+  if (!first.error) return
+  const missingColumn = first.error.code === 'PGRST204' || /tds_percent/.test(first.error.message)
+  if (!missingColumn) throw first.error
+  const withoutColumn = { ...payload }
+  delete withoutColumn.tds_percent
+  const second = await write(withoutColumn)
+  if (second.error) throw second.error
 }
 
 export async function saveSaleDocument(
