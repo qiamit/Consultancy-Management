@@ -15,11 +15,39 @@ import { clientRegistryFormClass } from './clientsFormUi'
 import { gstinStateCode, panFromGstin } from '@/lib/indiaValidators'
 import { ClientIdentitySections } from './ClientIdentitySections'
 import type { ClientCertificateFile } from './clientsApi'
+
+function parseCoordinatePaste(raw: string): { latitude: string; longitude: string } | null {
+  const text = raw.replace(/\u2212/g, '-').trim()
+  const patterns = [
+    /@(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/,
+    /!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/,
+    /(-?\d+(?:\.\d+)?)\s*[,;\s/]+\s*(-?\d+(?:\.\d+)?)/,
+  ]
+  for (const pattern of patterns) {
+    const match = text.match(pattern)
+    if (!match?.[1] || !match[2]) continue
+    const latitude = Number(match[1])
+    const longitude = Number(match[2])
+    if (Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180) return { latitude: match[1], longitude: match[2] }
+  }
+  // Some clipboard handlers strip the comma between Google's two decimal values.
+  for (let i = 1; i < text.length; i += 1) {
+    if (!/\d/.test(text[i - 1] ?? '') || !/\d/.test(text[i] ?? '')) continue
+    const latitude = text.slice(0, i)
+    const longitude = text.slice(i)
+    if (!/^-?\d+\.\d+$/.test(latitude) || !/^-?\d+\.\d+$/.test(longitude)) continue
+    if (Math.abs(Number(latitude)) <= 90 && Math.abs(Number(longitude)) <= 180) return { latitude, longitude }
+  }
+  return null
+}
+
 import {
   BALANCE_TYPES,
   isValidEmail,
   isValidGst,
   isValidIndianPin,
+  isValidLatitude,
+  isValidLongitude,
   isValidMobile,
   toProperTitleCase,
   type BalanceType,
@@ -196,6 +224,8 @@ export function ClientsForm({
   const mobileError = isValidMobile(form.mobile) ? null : 'Mobile number must be 10 digits'
   const emailError = isValidEmail(form.email) ? null : 'Invalid email address'
   const pinError = isValidIndianPin(form.pinCode) ? null : 'Invalid PIN code'
+  const longitudeError = isValidLongitude(form.longitude) ? null : 'Longitude must be between -180 and 180'
+  const latitudeError = isValidLatitude(form.latitude) ? null : 'Latitude must be between -90 and 90'
 
   const pinOptions = useMemo(() => {
     const all = Array.from(
@@ -760,6 +790,44 @@ export function ClientsForm({
                   onDelete={onDeletePaymentTerm}
                 />
               </Dialog>
+            </div>
+
+            <div className={cn('flex min-w-0 flex-col', compact ? 'space-y-1' : 'space-y-2')}>
+              <Label htmlFor="client-longitude">Longitude</Label>
+              <Input
+                id="client-longitude"
+                inputMode="decimal"
+                value={form.longitude}
+                aria-invalid={Boolean(longitudeError)}
+                onChange={(e) => onChange({ ...form, longitude: e.target.value.replace(/[^0-9.-]/g, '') })}
+                onPaste={(e) => {
+                  const parsed = parseCoordinatePaste(e.clipboardData.getData('text/plain'))
+                  if (!parsed) return
+                  e.preventDefault()
+                  onChange({ ...form, ...parsed })
+                }}
+                className="h-10"
+              />
+              {longitudeError ? <p className="text-xs text-destructive">{longitudeError}</p> : null}
+            </div>
+
+            <div className={cn('flex min-w-0 flex-col', compact ? 'space-y-1' : 'space-y-2')}>
+              <Label htmlFor="client-latitude">Latitude</Label>
+              <Input
+                id="client-latitude"
+                inputMode="decimal"
+                value={form.latitude}
+                aria-invalid={Boolean(latitudeError)}
+                onChange={(e) => onChange({ ...form, latitude: e.target.value.replace(/[^0-9.-]/g, '') })}
+                onPaste={(e) => {
+                  const parsed = parseCoordinatePaste(e.clipboardData.getData('text/plain'))
+                  if (!parsed) return
+                  e.preventDefault()
+                  onChange({ ...form, ...parsed })
+                }}
+                className="h-10"
+              />
+              {latitudeError ? <p className="text-xs text-destructive">{latitudeError}</p> : null}
             </div>
 
             <div className={cn('flex min-w-0 flex-col', compact ? 'space-y-1' : 'space-y-2')}>

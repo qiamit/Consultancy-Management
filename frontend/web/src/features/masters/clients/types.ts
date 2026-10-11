@@ -64,6 +64,8 @@ export type ClientRow = {
   opening_balance: number | null
   balance_type: BalanceType
   payment_term: string | null
+  longitude?: string | null
+  latitude?: string | null
   remark: string | null
   pan?: string | null
   sector?: string | null
@@ -89,6 +91,8 @@ export type ClientForm = {
   openingBalance: string
   balanceType: BalanceType
   paymentTerm: PaymentTerm
+  longitude: string
+  latitude: string
   remark: string
   pan: string
   cin: string
@@ -225,6 +229,15 @@ export const isValidMobile = (value: string) => {
   return /^[0-9]{10}$/.test(v)
 }
 
+function isCoordinateInRange(value: string, min: number, max: number) {
+  if (!value.trim()) return true
+  const number = Number(value)
+  return Number.isFinite(number) && number >= min && number <= max
+}
+
+export const isValidLongitude = (value: string) => isCoordinateInRange(value, -180, 180)
+export const isValidLatitude = (value: string) => isCoordinateInRange(value, -90, 90)
+
 export const isValidEmail = (value: string) => {
   const v = value.trim()
   if (!v) return true
@@ -259,6 +272,8 @@ export const emptyClientForm = (): ClientForm => ({
   openingBalance: '',
   balanceType: 'Dr',
   paymentTerm: '100 % Advance',
+  longitude: '',
+  latitude: '',
   remark: '',
   pan: '',
   cin: '',

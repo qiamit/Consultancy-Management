@@ -45,6 +45,8 @@ import {
   isValidEmail,
   isValidGst,
   isValidIndianPin,
+  isValidLatitude,
+  isValidLongitude,
   PAYMENT_TERMS,
   toContinuousText,
   toProperTitleCase,
@@ -185,7 +187,7 @@ const formatSupabaseError = (err: unknown) => {
 const CLIENT_FORM_COLUMNS_LEGACY =
   'id, gst_number, company_type, company_scale, company_name, contact_person_name, country_code, mobile, email, address, pin_code, district, state, country, opening_balance, balance_type, payment_term, remark, archived_at'
 const CLIENT_FORM_COLUMNS =
-  `${CLIENT_FORM_COLUMNS_LEGACY}, pan, cin, llpin, udyam_no, msme_category, udyam_date, constitution, sector, is_startup, startup_dpiit_no, is_women_entrepreneur, gst_registration_type, gst_state_code, client_status, lead_source, referred_by`
+  `${CLIENT_FORM_COLUMNS_LEGACY}, pan, cin, llpin, udyam_no, msme_category, udyam_date, constitution, sector, is_startup, startup_dpiit_no, is_women_entrepreneur, gst_registration_type, gst_state_code, client_status, lead_source, referred_by, longitude, latitude`
 
 function missingColumnError(error: { code?: string; message?: string } | null) {
   if (!error) return false
@@ -243,6 +245,8 @@ function rowToClientForm(row: ClientRow): ClientFormType {
     openingBalance: String(row.opening_balance ?? 0),
     balanceType: row.balance_type,
     paymentTerm: (row.payment_term as ClientFormType['paymentTerm']) || '100 % Advance',
+    longitude: row.longitude ?? '',
+    latitude: row.latitude ?? '',
     remark: row.remark ?? '',
     pan: row.pan ?? '',
     cin: String((row as { cin?: string | null }).cin ?? ''),
@@ -353,6 +357,8 @@ export default function ClientsMasterPage() {
   const panError = useMemo(() => (isValidPan(form.pan) ? null : 'Invalid PAN'), [form.pan])
   const emailError = useMemo(() => (isValidEmail(form.email) ? null : 'Invalid email address'), [form.email])
   const pinError = useMemo(() => (isValidIndianPin(form.pinCode) ? null : 'Invalid PIN code'), [form.pinCode])
+  const longitudeError = useMemo(() => (isValidLongitude(form.longitude) ? null : 'Invalid longitude'), [form.longitude])
+  const latitudeError = useMemo(() => (isValidLatitude(form.latitude) ? null : 'Invalid latitude'), [form.latitude])
 
   const canSave =
     !saveLoading &&
@@ -361,6 +367,8 @@ export default function ClientsMasterPage() {
     !panError &&
     !emailError &&
     !pinError &&
+    !longitudeError &&
+    !latitudeError &&
     form.companyName.trim().length > 0
 
   const pageLimit = Math.min(Math.max(pageSize, 1), 200)
@@ -883,6 +891,8 @@ export default function ClientsMasterPage() {
           opening_balance: form.openingBalance ? Number(form.openingBalance) : 0,
           balance_type: form.balanceType,
           payment_term: form.paymentTerm,
+          longitude: form.longitude.trim() || null,
+          latitude: form.latitude.trim() || null,
           remark: form.remark.trim() || null,
           pan: form.pan.trim().toUpperCase() || null,
           cin: form.cin.trim() || null,
