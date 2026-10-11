@@ -167,8 +167,8 @@ export function Cmpf305ModuleFields({
           <TableHeader>
             <TableRow className="border-stone-700 hover:bg-transparent">
               <TableHead className={cn(thClass, 'w-[28%]')}>Machinery Name</TableHead>
-              <TableHead className={cn(thClass, 'w-[14%]')}>Make</TableHead>
-              <TableHead className={cn(thClass, 'w-[18%]')}>Capacity / Day</TableHead>
+              <TableHead className={cn(thClass, 'w-[14%]')}>Make / Identification No.</TableHead>
+              <TableHead className={cn(thClass, 'w-[18%]')}>Production Capacity / Day</TableHead>
               <TableHead className={cn(thClass, 'w-[10%]')}>Number</TableHead>
               <TableHead className={cn(thClass, 'w-[20%]')}>Remarks</TableHead>
               <TableHead className={cn(thClass, 'w-[10%]')}>Action</TableHead>
@@ -187,7 +187,7 @@ export function Cmpf305ModuleFields({
                   onKeyDown={onDraftKeyDown}
                 />
               </TableCell>
-              <TableCell className="px-1 py-1">{stickySuggest('make', 'Make')}</TableCell>
+              <TableCell className="px-1 py-1">{stickySuggest('make', 'Make / ID No.')}</TableCell>
               <TableCell className="px-1 py-1">
                 {stickySuggest('capacityPerDay', 'If Applicable')}
               </TableCell>
@@ -229,8 +229,8 @@ export function Cmpf305ModuleFields({
                 <TableRow className="border-stone-700 hover:bg-transparent">
                   <TableHead className={cn(thClass, 'w-[5%]')}>Sr</TableHead>
                   <TableHead className={cn(thClass, 'w-[26%]')}>Machinery Name</TableHead>
-                  <TableHead className={cn(thClass, 'w-[14%]')}>Make</TableHead>
-                  <TableHead className={cn(thClass, 'w-[16%]')}>Capacity / Day</TableHead>
+                  <TableHead className={cn(thClass, 'w-[14%]')}>Make / Identification No.</TableHead>
+                  <TableHead className={cn(thClass, 'w-[16%]')}>Production Capacity / Day</TableHead>
                   <TableHead className={cn(thClass, 'w-[10%]')}>Number</TableHead>
                   <TableHead className={cn(thClass, 'w-[19%]')}>Remarks</TableHead>
                   <TableHead className={cn(thClass, 'w-[10%]')}>Action</TableHead>

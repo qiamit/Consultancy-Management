@@ -66,7 +66,7 @@ function buildBody(data: Cmpf305Data): string {
   const bisDesig = data.inspectionOfficerDesignation.trim() || '----'
 
   return `
-<div class="pd-sheet">
+<div class="pd-sheet c305-page-one">
   ${letterheadHtml(data)}
   <div class="c305-form-id">Form - I</div>
   <h1 class="pd-title">Declaration Regarding Manufacturing Machinery</h1>
@@ -85,17 +85,29 @@ function buildBody(data: Cmpf305Data): string {
   </table>
 
   <div class="c305-to">${toBlockHtml(data.bisBranchName, data.bisBranchState)}</div>
+</div>
+
+<div class="pd-sheet c305-page-two">
+  ${letterheadHtml(data)}
+  <div class="c305-form-id">Form - I (Continued)</div>
+  <h1 class="pd-title">Declaration Regarding Manufacturing Machinery</h1>
+  <p class="c305-no-cross">No entry to be crossed</p>
+
+  <table class="pd-meta c305-reference">
+    <tr><td class="pd-lbl">Application/Licence No.</td><td>${esc(appNo)}</td></tr>
+    <tr><td class="pd-lbl">Name/Address</td><td><strong>${esc(data.applicantName || '—')}</strong><br/>${esc(addressWithIndia(data.applicantAddress))}</td></tr>
+  </table>
 
   <table class="pd-table c305-table">
     <colgroup>
-      <col style="width:6%"/><col style="width:30%"/><col style="width:16%"/><col style="width:20%"/><col style="width:10%"/><col style="width:18%"/>
+      <col style="width:7%"/><col style="width:25%"/><col style="width:20%"/><col style="width:20%"/><col style="width:10%"/><col style="width:18%"/>
     </colgroup>
     <thead>
       <tr>
-        <th>Sr<br/>No</th>
-        <th>Machinery Name</th>
-        <th>Make</th>
-        <th>Production Capacity / Day<br/>(If Applicable)</th>
+        <th>Sr.<br/>No.</th>
+        <th>Machinery</th>
+        <th>Make /<br/>Identification No.</th>
+        <th>Production capacity per day,<br/>if applicable</th>
         <th>Number</th>
         <th>Remarks</th>
       </tr>
@@ -107,24 +119,24 @@ function buildBody(data: Cmpf305Data): string {
   <table class="c305-decl">
     <tr>
       <td>
-        <p>I hereby declare that the machinery of which details are given above is owned by me and is actually installed in the premises.*</p>
-        <p>I also declare that in case of grant of licence, I will send prior intimation to BIS whenever any machinery is taken out of the premises of the firm due to any reason.</p>
+        <p>I hereby declare that the machinery details given above are available with us.</p>
+        <p>I also declare that I will send prior intimation to Bureau of Indian Standards whenever any machinery is not available due to any reason.</p>
         <div class="c305-sig">
-          <div>Sig. of Firm's Representative :-</div>
+          <div>Signature of Firm's Representative</div>
           <div class="c305-sig-gap"></div>
-          <div>Name :- ${esc(repName)}</div>
-          <div>Designation :- ${esc(repDesig)}</div>
-          <div>Date :- ${esc(dateInsp)}</div>
+          <div>Name: ${esc(repName)}</div>
+          <div>Designation: ${esc(repDesig)}</div>
+          <div>Date: ${esc(dateApp)}</div>
         </div>
       </td>
       <td>
-        <p style="text-align:right">I have checked and found that the machinery of which details are given above was available during my inspection.</p>
-        <div class="c305-sig" style="text-align:right">
-          <div>Sig. of BIS Certification Officer :-</div>
+        <p>I have verified the availability of the above mentioned machinery during my inspection.</p>
+        <div class="c305-sig">
+          <div>Signature of BIS Certification Officer</div>
           <div class="c305-sig-gap"></div>
-          <div>Name :- ${esc(bisName)}</div>
-          <div>Designation :- ${esc(bisDesig)}</div>
-          <div>Date :- ${esc(dateInsp)}</div>
+          <div>Name: ${esc(bisName)}</div>
+          <div>Designation: ${esc(bisDesig)}</div>
+          <div>Date of verification: ${esc(dateInsp)}</div>
         </div>
       </td>
     </tr>
@@ -137,6 +149,8 @@ function buildBody(data: Cmpf305Data): string {
 const STYLES = `
   .c305-form-id { text-align: right; font-weight: 700; font-size: 11px; margin-bottom: 4px; }
   .c305-to { font-size: 11.5px; line-height: 1.45; margin: 6px 0 4px; }
+  .c305-no-cross { text-align: center; font-size: 11px; font-weight: 700; margin: -6px 0 6px; }
+  .c305-reference { margin-bottom: 6px; }
   .c305-table td { height: 7mm; }
   .c305-decl { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 6px; page-break-inside: avoid; break-inside: avoid; }
   .c305-decl > tbody > tr > td, .c305-decl > tr > td { border: 1px solid #111; vertical-align: top; padding: 6px 8px; width: 50%; font-size: 11px; line-height: 1.4; }
