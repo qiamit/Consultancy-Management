@@ -73,7 +73,7 @@ export function BisProjectsHeaderBar({
           <SelectTrigger
             className={cn(
               limsDarkBarFieldClass,
-              'h-8 w-[min(100%,11.5rem)] shrink-0 px-2 text-[11px] sm:w-[12.5rem] sm:text-xs',
+              'bis-projects-filter-trigger h-8 w-[min(100%,11.5rem)] shrink-0 px-2 text-[11px] sm:w-[12.5rem] sm:text-xs',
             )}
             aria-label="Filter by QE management"
             title="Managed by QE / Not Managed by QE"
@@ -94,7 +94,7 @@ export function BisProjectsHeaderBar({
           <SelectTrigger
             className={cn(
               limsDarkBarFieldClass,
-              'h-8 w-[min(100%,9.5rem)] shrink-0 px-2 text-[11px] sm:w-[10.5rem] sm:text-xs',
+              'bis-projects-filter-trigger h-8 w-[min(100%,9.5rem)] shrink-0 px-2 text-[11px] sm:w-[10.5rem] sm:text-xs',
             )}
             aria-label="Filter by type of project"
             title="Application / License"
@@ -115,7 +115,7 @@ export function BisProjectsHeaderBar({
           <SelectTrigger
             className={cn(
               limsDarkBarFieldClass,
-              'h-8 w-[min(100%,9.5rem)] shrink-0 px-2 text-[11px] sm:w-[10.5rem] sm:text-xs',
+              'bis-projects-filter-trigger h-8 w-[min(100%,9.5rem)] shrink-0 px-2 text-[11px] sm:w-[10.5rem] sm:text-xs',
             )}
             aria-label="Filter by license status"
             title="Operative / Renewal / Deferred / Expired"
@@ -143,8 +143,8 @@ export function BisProjectsHeaderBar({
         <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
 
         {/* lg+ (~10″): one row. Below lg: filters wrap to a second line. */}
-        <div className="relative flex min-w-0 flex-col gap-1.5 lg:flex-row lg:items-center lg:gap-2.5">
-          <div className="flex min-w-0 flex-nowrap items-center gap-1 sm:gap-1.5 md:gap-2.5 lg:min-w-0 lg:flex-1">
+        <div className="bis-projects-toolbar relative flex min-w-0 flex-col gap-1.5 lg:flex-row lg:items-center lg:gap-2.5">
+          <div className="bis-projects-toolbar-main flex min-w-0 flex-nowrap items-center gap-1 sm:gap-1.5 md:gap-2.5 lg:min-w-0 lg:flex-1">
             <h1
               className="shrink-0 max-w-[4.5rem] truncate text-sm font-semibold tracking-tight text-white sm:max-w-[9rem] sm:text-base md:max-w-none md:text-lg"
               title={title}
@@ -152,7 +152,7 @@ export function BisProjectsHeaderBar({
               {title}
             </h1>
 
-            <div className="relative min-w-0 flex-1 basis-0">
+            <div className="bis-projects-search relative min-w-0 flex-1 basis-0">
               <Search
                 className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-stone-400 sm:left-3 sm:h-4 sm:w-4"
                 aria-hidden
@@ -196,13 +196,13 @@ export function BisProjectsHeaderBar({
               title={addLabel}
             >
               <Plus size={14} className="shrink-0" />
-              <span className="hidden lg:inline">{addLabel}</span>
-              <span className="hidden sm:inline lg:hidden">Add</span>
+              <span className="bis-projects-add-label hidden lg:inline">{addLabel}</span>
+              <span className="bis-projects-add-label hidden sm:inline lg:hidden">Add</span>
             </Button>
           </div>
 
           {filterSelects ? (
-            <div className="flex min-w-0 flex-wrap items-center gap-1 sm:gap-1.5 lg:shrink-0">
+            <div className="bis-projects-toolbar-filters flex min-w-0 flex-wrap items-center gap-1 sm:gap-1.5 lg:shrink-0">
               {filterSelects}
             </div>
           ) : null}

@@ -390,6 +390,57 @@ export function applyBisDocumentPrintPageSettings(
     align-self: stretch !important;
   }
 `
+  const continuousFormCss = /class=["']f1-continuous["']/.test(html)
+    ? `
+.f1-continuous {
+  display: block !important;
+  align-self: ${hAlign} !important;
+  width: ${widthMm}mm !important;
+  min-width: ${widthMm}mm !important;
+  max-width: ${widthMm}mm !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  margin: 0 auto !important;
+  padding: ${mt + pad}mm ${mr + pad}mm ${mb + pad}mm ${ml + pad}mm !important;
+  overflow: visible !important;
+  position: relative !important;
+  box-sizing: border-box !important;
+  background: #fff !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.22), 0 10px 28px rgba(0,0,0,0.16) !important;
+  text-align: ${textAlign} !important;
+  ${borderCss}
+}
+.f1-continuous > * { max-width: 100% !important; box-sizing: border-box !important; }
+.f1-continuous .f1-box { width: 100% !important; max-width: 100% !important; }
+@media print {
+  body.f1-print-document {
+    display: block !important;
+    width: auto !important;
+    min-width: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+    transform: none !important;
+  }
+  .f1-continuous {
+    display: block !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+  .f1-continuous > * { break-inside: auto; page-break-inside: auto; }
+  .f1-continuous .f1-box { break-inside: avoid; page-break-inside: avoid; }
+  .f1-continuous + .pd-sheet { break-before: page; page-break-before: always; }
+}`
+    : ''
 
   const override = `<style id="bis-print-preview-override">
 @page { size: ${settings.pageSize} ${settings.orientation}; margin: ${margin} !important; }
@@ -577,6 +628,7 @@ export function applyBisDocumentPrintPageSettings(
     bottom: ${pageNumBottom}mm !important;
   }
   ${alignChildCss}
+  ${continuousFormCss}
   .pd-sheet + .pd-sheet,
   .pd-sheet + .al-sheet,
   .al-sheet + .pd-sheet,

@@ -11,7 +11,7 @@ import {
   resolveSignatureSignedUrl,
   saveDefaultSignatureForKind,
 } from './quotationSignatureStorage'
-import type { DocumentTemplateKind } from '@/features/settings/lab-settings/documentTemplateTypes'
+import type { BookDocumentKind } from '@/features/settings/lab-settings/documentTemplateTypes'
 
 export { QUOTATION_SIGNATURE_BUCKET } from './quotationSignatureStorage'
 
@@ -58,7 +58,7 @@ export function QuotationSignatureField({
   onTextChange: (value: string) => void
   onImagePathChange: (path: string) => void
   className?: string
-  documentKind?: DocumentTemplateKind
+  documentKind?: BookDocumentKind
   documentLabel?: string
 }) {
   const fileRef = useRef<HTMLInputElement | null>(null)

@@ -1,272 +1,440 @@
+import { useEffect, useRef, useState } from 'react'
+import { Calendar, Eye, Plus, Trash2, Upload } from 'lucide-react'
+import { LimsFieldAddButton, LimsFieldWithAdd } from '@/components/lims/LimsFieldWithAdd'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogTrigger } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import type { ClientCertificateFile } from './clientsApi'
-import {
-  CLIENT_SECTORS,
-  CLIENT_STATUSES,
-  CONTACT_ROLES,
-  INDIA_STATES,
-  SITE_ROLES,
-  emptyClientContacts,
-  emptyClientSites,
-  type ClientContactForm,
-  type ClientForm,
-  type ClientSiteForm,
-} from './types'
+import { FilterCombobox } from '@/features/sample-handling/receiving/FilterCombobox'
+import { limsFieldAddBtnClass } from '@/lib/limsThemeUi'
+import { supabase } from '@/lib/supabaseClient'
+import { ClientManageDialogContent } from './ClientManageDialogContent'
+import type { ClientCertificateFile, ClientCertificateInput } from './clientsApi'
 
-function fieldClass() {
-  return 'col-span-12 min-w-0 space-y-2 sm:col-span-6'
+type DraftDocument = {
+  key: string
+  name: string
+  issuedOn: string
+  documentNumber: string
+}
+
+const documentIconBtnClass =
+  'inline-flex !h-8 !w-8 shrink-0 items-center justify-center rounded-none border-stone-500 bg-stone-50 p-0 text-amber-900 hover:bg-amber-100 hover:text-amber-950'
+
+const issueDateInputClass =
+  'min-w-0 border-0 bg-transparent pr-1 tabular-nums shadow-none focus-visible:ring-0 [&::-webkit-calendar-picker-indicator]:pointer-events-none [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:h-0 [&::-webkit-calendar-picker-indicator]:w-0 [&::-webkit-calendar-picker-indicator]:opacity-0'
+
+function openIssueDatePicker(id: string) {
+  const el = document.getElementById(id)
+  if (!(el instanceof HTMLInputElement) || el.disabled) return
+  try {
+    if (typeof el.showPicker === 'function') {
+      el.showPicker()
+      return
+    }
+  } catch {
+    // The browser blocks showPicker outside a user gesture.
+  }
+  el.focus()
+}
+
+const DOCUMENT_NAME_CATEGORY = 'document_name'
+
+type NameOption = { id: string; label: string }
+
+function sortDocumentNames(rows: NameOption[]): NameOption[] {
+  const uniq = new Map<string, NameOption>()
+  for (const item of rows) {
+    const key = item.label.trim().toLowerCase()
+    if (key) uniq.set(key, item)
+  }
+  return Array.from(uniq.values()).sort((a, b) => a.label.localeCompare(b.label))
+}
+
+function todayIsoDate() {
+  const now = new Date()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${now.getFullYear()}-${month}-${day}`
+}
+
+function blankDraft(): DraftDocument {
+  return { key: crypto.randomUUID(), name: '', issuedOn: todayIsoDate(), documentNumber: '' }
+}
+
+function isGstCertificate(name: string) {
+  return name.trim().toLowerCase() === 'gst certificate'
 }
 
 export function ClientIdentitySections({
-  form,
-  onChange,
-  clientSaved,
   certificates,
+  gstNumber,
+  onGstNumberChange,
   onUploadCertificate,
+  onUpdateCertificate,
   onDeleteCertificate,
   onOpenCertificate,
 }: {
-  form: ClientForm
-  onChange: (next: ClientForm) => void
-  clientSaved: boolean
   certificates: ClientCertificateFile[]
-  onUploadCertificate: (certName: string, file: File) => void
+  gstNumber: string
+  onGstNumberChange: (value: string) => void
+  onUploadCertificate: (input: ClientCertificateInput) => Promise<void>
+  onUpdateCertificate: (row: ClientCertificateFile, input: Pick<ClientCertificateInput, 'certName' | 'documentNumber' | 'issuedOn'>) => Promise<void>
   onDeleteCertificate: (row: ClientCertificateFile) => void
   onOpenCertificate: (row: ClientCertificateFile) => void
 }) {
-  const setSite = (index: number, patch: Partial<ClientSiteForm>) => {
-    const sites = form.sites.map((site, i) => (i === index ? { ...site, ...patch } : site))
-    onChange({ ...form, sites })
+  const [drafts, setDrafts] = useState<DraftDocument[]>([blankDraft()])
+  const [selected, setSelected] = useState<string[]>([])
+  const [savedEdits, setSavedEdits] = useState<Record<string, { name?: string; documentNumber?: string }>>({})
+  const [documentNames, setDocumentNames] = useState<NameOption[]>([])
+  const [openNameKey, setOpenNameKey] = useState<string | null>(null)
+  const [nameDialogOpen, setNameDialogOpen] = useState(false)
+  const [nameDialogRowKey, setNameDialogRowKey] = useState<string | null>(null)
+  const [newDocumentName, setNewDocumentName] = useState('')
+  const typedNameRef = useRef<Record<string, string>>({})
+
+  useEffect(() => {
+    let cancelled = false
+    void supabase
+      .from('client_master_options')
+      .select('id, label')
+      .eq('category', DOCUMENT_NAME_CATEGORY)
+      .order('label', { ascending: true })
+      .then(({ data }) => {
+        if (cancelled || !Array.isArray(data)) return
+        setDocumentNames(sortDocumentNames(data as NameOption[]))
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+  const rows = [
+    ...certificates.map((row) => ({ kind: 'saved' as const, key: row.id, row })),
+    ...drafts.map((draft) => ({ kind: 'draft' as const, key: draft.key, draft })),
+  ]
+  const allSelected = rows.length > 0 && rows.every((row) => selected.includes(row.key))
+
+  const toggle = (key: string) => {
+    setSelected((prev) => (prev.includes(key) ? prev.filter((item) => item !== key) : [...prev, key]))
   }
-  const setContact = (index: number, patch: Partial<ClientContactForm>) => {
-    const contacts = form.contacts.map((contact, i) => (i === index ? { ...contact, ...patch } : contact))
-    onChange({ ...form, contacts })
+
+  const addDraft = () => setDrafts((prev) => [...prev, blankDraft()])
+
+  const removeDraft = (key: string) => {
+    setDrafts((prev) => {
+      const next = prev.filter((draft) => draft.key !== key)
+      return next.length > 0 ? next : [blankDraft()]
+    })
+    setSelected((prev) => prev.filter((item) => item !== key))
   }
-  const names = Array.from(new Set(certificates.map((row) => row.cert_name)))
+
+  const patchDraft = (key: string, patch: Partial<DraftDocument>) => {
+    setDrafts((prev) => prev.map((draft) => (draft.key === key ? { ...draft, ...patch } : draft)))
+  }
+
+  const applyDocumentName = (key: string, label: string) => {
+    const saved = certificates.find((row) => row.id === key)
+    const currentNumber = saved
+      ? (savedEdits[saved.id]?.documentNumber ?? saved.document_number)
+      : (drafts.find((draft) => draft.key === key)?.documentNumber ?? '')
+    const linked = isGstCertificate(label)
+    if (linked && !gstNumber.trim() && currentNumber.trim()) onGstNumberChange(currentNumber)
+    const documentNumber = linked && gstNumber.trim() ? gstNumber : currentNumber
+    if (!saved) {
+      patchDraft(key, { name: label, ...(linked ? { documentNumber } : {}) })
+      return
+    }
+    setSavedEdits((prev) => ({ ...prev, [saved.id]: { ...prev[saved.id], name: label, ...(linked ? { documentNumber } : {}) } }))
+    if (label.trim() === saved.cert_name && (!linked || documentNumber === saved.document_number)) return
+    void onUpdateCertificate(saved, { certName: label, documentNumber, issuedOn: saved.issued_on }).then(() => {
+      setSavedEdits((prev) => {
+        const copy = { ...prev }
+        delete copy[saved.id]
+        return copy
+      })
+    })
+  }
+
+  const rememberDocumentName = async (label: string, id?: string, close = true) => {
+    const name = label.trim()
+    if (!name) return
+    if (id) {
+      const { error } = await supabase.from('client_master_options').update({ label: name, value: name }).eq('id', id)
+      if (error) return
+      setDocumentNames((prev) => sortDocumentNames(prev.map((item) => (item.id === id ? { ...item, label: name } : item))))
+    } else {
+      const { data, error } = await supabase
+        .from('client_master_options')
+        .insert({ category: DOCUMENT_NAME_CATEGORY, label: name, value: name })
+        .select('id')
+        .single()
+      if (error) return
+      const nextId = (data as { id: string } | null)?.id ?? `tmp-${name}`
+      setDocumentNames((prev) => sortDocumentNames([...prev, { id: nextId, label: name }]))
+    }
+    if (nameDialogRowKey) applyDocumentName(nameDialogRowKey, name)
+    setNewDocumentName('')
+    if (close) setNameDialogOpen(false)
+  }
+
+  const uploadFile = (input: ClientCertificateInput, draftKey?: string) => {
+    void onUploadCertificate(input).then(() => {
+      if (!draftKey) return
+      setDrafts((prev) => {
+        const next = prev.filter((draft) => draft.key !== draftKey)
+        return next.length > 0 ? next : [blankDraft()]
+      })
+    }).catch(() => undefined)
+  }
 
   return (
     <div className="space-y-5">
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-stone-800">Statutory</h2>
-        <div className="grid grid-cols-12 gap-3">
-          <div className={fieldClass()}>
-            <Label htmlFor="client-pan">PAN</Label>
-            <Input id="client-pan" className="h-10 min-h-10" value={form.pan} onChange={(e) => onChange({ ...form, pan: e.target.value.toUpperCase(), panFromGstin: false })} />
-          </div>
-          <div className={fieldClass()}>
-            <Label htmlFor="client-gst-state">GST state code</Label>
-            <Input id="client-gst-state" className="h-10 min-h-10" value={form.gstStateCode} onChange={(e) => onChange({ ...form, gstStateCode: e.target.value })} />
-          </div>
-          <div className={fieldClass()}>
-            <Label htmlFor="client-cin">CIN</Label>
-            <Input id="client-cin" className="h-10 min-h-10" value={form.cin} onChange={(e) => onChange({ ...form, cin: e.target.value })} />
-          </div>
-          <div className={fieldClass()}>
-            <Label htmlFor="client-llpin">LLPIN</Label>
-            <Input id="client-llpin" className="h-10 min-h-10" value={form.llpin} onChange={(e) => onChange({ ...form, llpin: e.target.value })} />
-          </div>
-          <div className={fieldClass()}>
-            <Label htmlFor="client-udyam">Udyam number</Label>
-            <Input id="client-udyam" className="h-10 min-h-10" value={form.udyamNo} onChange={(e) => onChange({ ...form, udyamNo: e.target.value })} />
-          </div>
-          <div className={fieldClass()}>
-            <Label htmlFor="client-constitution">Constitution</Label>
-            <Input id="client-constitution" className="h-10 min-h-10" value={form.constitution} onChange={(e) => onChange({ ...form, constitution: e.target.value })} />
-          </div>
-          <div className={fieldClass()}>
-            <Label>Sector</Label>
-            <Select value={form.sector || 'none'} onValueChange={(v) => onChange({ ...form, sector: v === 'none' ? '' : (v as ClientForm['sector']) })}>
-              <SelectTrigger className="h-10 min-h-10" aria-label="Sector">
-                <SelectValue placeholder="Sector" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Not set</SelectItem>
-                {CLIENT_SECTORS.map((sector) => (
-                  <SelectItem key={sector} value={sector}>{sector}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className={fieldClass()}>
-            <Label htmlFor="client-gst-type">GST registration type</Label>
-            <Input id="client-gst-type" className="h-10 min-h-10" value={form.gstRegistrationType} onChange={(e) => onChange({ ...form, gstRegistrationType: e.target.value })} />
-          </div>
-          <div className={fieldClass()}>
-            <Label htmlFor="client-msme-category">MSME category</Label>
-            <Input id="client-msme-category" className="h-10 min-h-10" value={form.msmeCategory} onChange={(e) => onChange({ ...form, msmeCategory: e.target.value })} />
-          </div>
-          <div className={fieldClass()}>
-            <Label htmlFor="client-udyam-date">Udyam date</Label>
-            <Input id="client-udyam-date" className="h-10 min-h-10" type="date" value={form.udyamDate} onChange={(e) => onChange({ ...form, udyamDate: e.target.value })} />
-          </div>
-          <div className={fieldClass()}>
-            <Label htmlFor="client-dpiit">Startup DPIIT number</Label>
-            <Input id="client-dpiit" className="h-10 min-h-10" value={form.startupDpiitNo} onChange={(e) => onChange({ ...form, startupDpiitNo: e.target.value })} />
-          </div>
-          <label className="col-span-12 flex h-10 min-h-10 items-center gap-2 text-sm text-stone-800 sm:col-span-6">
-            <input id="client-startup" type="checkbox" className="h-4 w-4" checked={form.isStartup} onChange={(e) => onChange({ ...form, isStartup: e.target.checked })} />
-            Startup
+        <h2 className="text-sm font-semibold text-stone-800">Legal Documents</h2>
+        <Dialog open={nameDialogOpen} onOpenChange={setNameDialogOpen}>
+        <div className="w-full min-w-0">
+          <label className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-stone-600 xl:hidden">
+            <input
+              type="checkbox"
+              className="h-4 w-4"
+              checked={allSelected}
+              aria-label="Select all documents"
+              onChange={() => setSelected(allSelected ? [] : rows.map((row) => row.key))}
+            />
+            Select all
           </label>
-          <label className="col-span-12 flex h-10 min-h-10 items-center gap-2 text-sm text-stone-800 sm:col-span-6">
-            <input id="client-women" type="checkbox" className="h-4 w-4" checked={form.isWomenEntrepreneur} onChange={(e) => onChange({ ...form, isWomenEntrepreneur: e.target.checked })} />
-            Women entrepreneur
-          </label>
-        </div>
-      </section>
-
-      <section className="space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-stone-800">Sites</h2>
-          <Button type="button" variant="outline" className="h-10 min-h-10" onClick={() => onChange({ ...form, sites: [...form.sites, { ...emptyClientSites()[1]!, isPrimary: false }] })}>
-            Add site
-          </Button>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {form.sites.map((site, index) => (
-            <div key={site.id ?? `site-${index}`} className="space-y-2 border border-stone-300 p-3">
-              <Label>Site role</Label>
-              <Select value={site.siteRole} onValueChange={(v) => setSite(index, { siteRole: v as ClientSiteForm['siteRole'] })}>
-                <SelectTrigger className="h-10 min-h-10" aria-label="Site role">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {SITE_ROLES.map((role) => (
-                    <SelectItem key={role} value={role}>{role}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Input className="h-10 min-h-10" aria-label="Site address" placeholder="Address" value={site.address} onChange={(e) => setSite(index, { address: e.target.value })} />
-              <Input className="h-10 min-h-10" aria-label="Site district" placeholder="District" value={site.district} onChange={(e) => setSite(index, { district: e.target.value })} />
-              <Select value={site.state || INDIA_STATES[0]} onValueChange={(v) => setSite(index, { state: v })}>
-                <SelectTrigger className="h-10 min-h-10" aria-label="Site state">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {INDIA_STATES.map((name) => (
-                    <SelectItem key={name} value={name}>{name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Input className="h-10 min-h-10" aria-label="Site PIN" placeholder="PIN" value={site.pinCode} onChange={(e) => setSite(index, { pinCode: e.target.value })} />
-              <Button type="button" variant="outline" className="h-10 min-h-10" onClick={() => onChange({ ...form, sites: form.sites.filter((_, i) => i !== index) })}>
-                Remove site
-              </Button>
+          <div className="hidden grid-cols-[2.5rem_minmax(0,1.5fr)_11rem_minmax(0,1fr)_7.25rem_5rem] bg-stone-800 text-center text-[11px] font-bold uppercase leading-tight tracking-wide text-amber-200 xl:grid">
+            <div className="flex items-center justify-center border border-stone-700 px-1 py-2">
+              <input
+                type="checkbox"
+                className="h-4 w-4"
+                checked={allSelected}
+                aria-label="Select all documents"
+                onChange={() => setSelected(allSelected ? [] : rows.map((row) => row.key))}
+              />
             </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-stone-800">Contacts</h2>
-          <Button type="button" variant="outline" className="h-10 min-h-10" onClick={() => onChange({ ...form, contacts: [...form.contacts, { ...emptyClientContacts()[0]!, contactRole: 'Other', isPrimary: false }] })}>
-            Add contact
-          </Button>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {form.contacts.map((contact, index) => (
-            <div key={contact.id ?? `contact-${index}`} className="space-y-2 border border-stone-300 p-3">
-              <Select value={contact.contactRole} onValueChange={(v) => setContact(index, { contactRole: v as ClientContactForm['contactRole'] })}>
-                <SelectTrigger className="h-10 min-h-10" aria-label="Contact role">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {CONTACT_ROLES.map((role) => (
-                    <SelectItem key={role} value={role}>{role}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Input className="h-10 min-h-10" aria-label="Contact name" placeholder="Name" value={contact.name} onChange={(e) => setContact(index, { name: e.target.value })} />
-              <Input className="h-10 min-h-10" aria-label="Designation" placeholder="Designation" value={contact.designation} onChange={(e) => setContact(index, { designation: e.target.value })} />
-              <Input className="h-10 min-h-10" aria-label="Contact mobile" placeholder="Mobile" value={contact.mobile} onChange={(e) => setContact(index, { mobile: e.target.value })} />
-              <Input className="h-10 min-h-10" aria-label="Contact email" placeholder="Email" value={contact.email} onChange={(e) => setContact(index, { email: e.target.value })} />
-              <Button type="button" variant="outline" className="h-10 min-h-10" onClick={() => onChange({ ...form, contacts: form.contacts.filter((_, i) => i !== index) })}>
-                Remove contact
-              </Button>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-stone-800">Lifecycle</h2>
-        <div className="grid grid-cols-12 gap-3">
-          <div className={fieldClass()}>
-            <Label>Status</Label>
-            <Select value={form.clientStatus} onValueChange={(v) => onChange({ ...form, clientStatus: v as ClientForm['clientStatus'] })}>
-              <SelectTrigger className="h-10 min-h-10" aria-label="Client status">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {CLIENT_STATUSES.map((status) => (
-                  <SelectItem key={status} value={status}>{status}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="border border-stone-700 px-1.5 py-2">Name of the Document</div>
+            <div className="border border-stone-700 px-1.5 py-2">Date of Issue</div>
+            <div className="border border-stone-700 px-1.5 py-2">Documents Number</div>
+            <div className="border border-stone-700 px-1 py-2">Documents</div>
+            <div className="border border-stone-700 px-1 py-2">Action</div>
           </div>
-          <div className={fieldClass()}>
-            <Label htmlFor="client-lead">Lead source</Label>
-            <Input id="client-lead" className="h-10 min-h-10" value={form.leadSource} onChange={(e) => onChange({ ...form, leadSource: e.target.value })} />
-          </div>
-          <div className={fieldClass()}>
-            <Label htmlFor="client-referred">Referred by</Label>
-            <Input id="client-referred" className="h-10 min-h-10" value={form.referredBy} onChange={(e) => onChange({ ...form, referredBy: e.target.value })} />
+          <div className="space-y-2 xl:space-y-0">
+              {rows.map((entry) => {
+                const saved = entry.kind === 'saved' ? entry.row : null
+                const draft = entry.kind === 'draft' ? entry.draft : null
+                const name = saved ? (savedEdits[saved.id]?.name ?? saved.cert_name) : (draft?.name ?? '')
+                const issuedOn = saved?.issued_on ?? draft?.issuedOn ?? ''
+                const ownDocumentNumber = saved ? (savedEdits[saved.id]?.documentNumber ?? saved.document_number) : (draft?.documentNumber ?? '')
+                const linkedGst = isGstCertificate(name)
+                const documentNumber = linkedGst ? gstNumber : ownDocumentNumber
+                const hasFile = Boolean(saved?.storage_path)
+                return (
+                  <div key={entry.key} className="grid grid-cols-[2.5rem_minmax(0,1fr)] items-center gap-2 border border-stone-300 bg-white p-2 xl:grid-cols-[2.5rem_minmax(0,1.5fr)_11rem_minmax(0,1fr)_7.25rem_5rem] xl:gap-0 xl:border-0 xl:p-0">
+                    <div className="flex items-center justify-center xl:h-full xl:border xl:border-stone-300">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4"
+                        checked={selected.includes(entry.key)}
+                        aria-label={`Select ${name || 'document'}`}
+                        onChange={() => toggle(entry.key)}
+                      />
+                    </div>
+                    <div className="min-w-0 xl:border xl:border-stone-300 xl:px-1.5 xl:py-1.5">
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-stone-500 xl:hidden">Name of the Document</p>
+                      <LimsFieldWithAdd
+                        addButton={
+                          <DialogTrigger asChild>
+                            <LimsFieldAddButton
+                              aria-label="Add document name"
+                              title="Add document name"
+                              onClick={() => {
+                                setNameDialogRowKey(entry.key)
+                                setNewDocumentName(name)
+                              }}
+                            />
+                          </DialogTrigger>
+                        }
+                      >
+                        <FilterCombobox
+                          value={name}
+                          onValueChange={(next) => {
+                            typedNameRef.current[entry.key] = next
+                            const linked = isGstCertificate(next)
+                            if (draft) patchDraft(draft.key, { name: next, ...(linked ? { documentNumber: gstNumber } : {}) })
+                            if (saved) setSavedEdits((prev) => ({ ...prev, [saved.id]: { ...prev[saved.id], name: next, ...(linked ? { documentNumber: gstNumber } : {}) } }))
+                          }}
+                          options={documentNames
+                            .filter((item) => {
+                              const query = name.trim().toLowerCase()
+                              return !query || item.label.toLowerCase().includes(query)
+                            })
+                            .map((item) => ({ id: item.id, label: item.label }))}
+                          onSelectOption={(option) => applyDocumentName(entry.key, option.label)}
+                          open={openNameKey === entry.key}
+                          onOpenChange={(open) => {
+                            setOpenNameKey(open ? entry.key : null)
+                            if (open || !saved) return
+                            const next = (typedNameRef.current[entry.key] ?? saved.cert_name).trim()
+                            if (!next || next === saved.cert_name) return
+                            void onUpdateCertificate(saved, { certName: next, documentNumber, issuedOn }).then(() => {
+                              setSavedEdits((prev) => {
+                                const copy = { ...prev }
+                                delete copy[saved.id]
+                                return copy
+                              })
+                            })
+                          }}
+                          placeholder="Name of the Document"
+                          showSerialNumbers={false}
+                          listId={`document-name-${entry.key}`}
+                          inputId={`document-name-${entry.key}`}
+                          inputClassName="h-8 border-0 bg-transparent px-3 shadow-none focus-visible:ring-0"
+                        />
+                      </LimsFieldWithAdd>
+                    </div>
+                    <div className="col-span-2 min-w-0 xl:col-span-1 xl:border xl:border-stone-300 xl:px-1.5 xl:py-1.5">
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-stone-500 xl:hidden">Date of Issue</p>
+                      <LimsFieldWithAdd
+                        addButton={
+                          <button
+                            type="button"
+                            className={limsFieldAddBtnClass}
+                            aria-label="Open calendar"
+                            title="Pick date"
+                            onClick={() => openIssueDatePicker(`document-issued-${entry.key}`)}
+                          >
+                            <Calendar size={14} strokeWidth={2.25} aria-hidden />
+                          </button>
+                        }
+                      >
+                        <Input
+                          id={`document-issued-${entry.key}`}
+                          type="date"
+                          value={issuedOn}
+                          aria-label="Date of Issue"
+                          className={issueDateInputClass}
+                          onChange={(event) => {
+                            const next = event.target.value
+                            if (draft) patchDraft(draft.key, { issuedOn: next })
+                            if (saved) void onUpdateCertificate(saved, { certName: name, documentNumber, issuedOn: next })
+                          }}
+                        />
+                      </LimsFieldWithAdd>
+                    </div>
+                    <div className="col-span-2 min-w-0 xl:col-span-1 xl:border xl:border-stone-300 xl:px-1.5 xl:py-1.5">
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-stone-500 xl:hidden">Documents Number</p>
+                      <Input
+                        value={documentNumber}
+                        aria-label="Documents Number"
+                        placeholder="Documents Number"
+                        maxLength={linkedGst ? 15 : undefined}
+                        onChange={(event) => {
+                          if (linkedGst) {
+                            const next = event.target.value.toUpperCase().replace(/\s/g, '').slice(0, 15)
+                            onGstNumberChange(next)
+                            if (draft) patchDraft(draft.key, { documentNumber: next })
+                            if (saved) setSavedEdits((prev) => ({ ...prev, [saved.id]: { ...prev[saved.id], documentNumber: next } }))
+                            return
+                          }
+                          const next = event.target.value
+                          if (draft) patchDraft(draft.key, { documentNumber: next })
+                          if (saved) setSavedEdits((prev) => ({ ...prev, [saved.id]: { ...prev[saved.id], documentNumber: next } }))
+                        }}
+                        onBlur={(event) => {
+                          if (!saved) return
+                          const next = linkedGst ? gstNumber : event.target.value
+                          if (next === saved.document_number) return
+                          void onUpdateCertificate(saved, { certName: name, documentNumber: next, issuedOn }).then(() => {
+                            setSavedEdits((prev) => {
+                              const copy = { ...prev }
+                              delete copy[saved.id]
+                              return copy
+                            })
+                          })
+                        }}
+                      />
+                    </div>
+                    <div className="col-span-2 grid grid-cols-2 gap-3 xl:contents">
+                    <div className="min-w-0 xl:border xl:border-stone-300 xl:px-0.5 xl:py-1.5">
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-stone-500 xl:hidden">Documents</p>
+                      <div className="flex w-full items-center justify-start gap-1 xl:justify-center xl:gap-0.5">
+                        <input
+                          id={`document-file-${entry.key}`}
+                          type="file"
+                          accept="application/pdf,image/jpeg,image/png,image/webp"
+                          className="sr-only"
+                          onChange={(event) => {
+                            const file = event.target.files?.[0]
+                            event.target.value = ''
+                            if (!file || !name.trim()) return
+                            uploadFile(
+                              { certName: name, documentNumber, issuedOn, file, existing: saved ?? undefined },
+                              draft?.key,
+                            )
+                          }}
+                        />
+                        <Button type="button" variant="outline" className={documentIconBtnClass} title="Upload" aria-label="Upload document" disabled={!name.trim()} onClick={() => document.getElementById(`document-file-${entry.key}`)?.click()}>
+                          <Upload size={15} aria-hidden />
+                        </Button>
+                        <Button type="button" variant="outline" className={documentIconBtnClass} title="View" aria-label="View document" disabled={!hasFile || !saved} onClick={() => saved && onOpenCertificate(saved)}>
+                          <Eye size={15} aria-hidden />
+                        </Button>
+                        <Button type="button" variant="outline" className={documentIconBtnClass} title="Delete" aria-label="Delete document" disabled={!hasFile || !saved} onClick={() => saved && onDeleteCertificate(saved)}>
+                          <Trash2 size={15} aria-hidden />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="min-w-0 xl:border xl:border-stone-300 xl:px-0.5 xl:py-1.5">
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-stone-500 xl:hidden">Action</p>
+                      <div className="flex w-full items-center justify-start gap-1 xl:justify-center xl:gap-0.5">
+                        <Button type="button" variant="outline" className={documentIconBtnClass} title="Add row" aria-label="Add document row" onClick={addDraft}>
+                          <Plus size={15} aria-hidden />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className={`${documentIconBtnClass} text-red-700 hover:bg-red-50 hover:text-red-800`}
+                          title="Delete"
+                          aria-label="Delete row"
+                          onClick={() => {
+                            if (saved) onDeleteCertificate(saved)
+                            else if (draft) removeDraft(draft.key)
+                          }}
+                        >
+                          <Trash2 size={15} aria-hidden />
+                        </Button>
+                      </div>
+                    </div>
+                    </div>
+                  </div>
+                )
+              })}
           </div>
         </div>
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-stone-800">Certificates</h2>
-        <p className="text-xs text-stone-600">
-          {clientSaved ? 'Files are stored once on this client.' : 'Save the client first, then upload certificates.'}
-        </p>
-        {names.length === 0 ? <p className="text-sm text-stone-500">No certificate files yet.</p> : null}
-        {names.map((name) => (
-          <div key={name} className="border border-stone-300 p-3">
-            <p className="mb-2 text-sm font-medium">{name}</p>
-            <ul className="space-y-2">
-              {certificates.filter((row) => row.cert_name === name).map((row) => (
-                <li key={row.id} className="flex flex-wrap items-center gap-2">
-                  <span className="min-w-0 flex-1 truncate text-sm">{row.file_name}</span>
-                  <Button type="button" variant="outline" className="h-10 min-h-10" onClick={() => onOpenCertificate(row)}>View</Button>
-                  <Button type="button" variant="outline" className="h-10 min-h-10" onClick={() => onDeleteCertificate(row)}>Delete</Button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-        <ExtraCertificateUpload disabled={!clientSaved} onUpload={onUploadCertificate} />
+        <ClientManageDialogContent
+          open={nameDialogOpen}
+          title="Manage Document Names"
+          addLabel="Add Document Name"
+          inputId="new-document-name"
+          placeholder="e.g., GST Certificate"
+          value={newDocumentName}
+          onValueChange={setNewDocumentName}
+          inlineAdd
+          onInlineAdd={() => void rememberDocumentName(newDocumentName, undefined, false)}
+          onSave={() => void rememberDocumentName(newDocumentName)}
+          onUpdate={(id) => void rememberDocumentName(newDocumentName, id)}
+          saveDisabled={!newDocumentName.trim()}
+          items={documentNames}
+          canDelete={() => true}
+          onDelete={(id) => {
+            void supabase.from('client_master_options').delete().eq('id', id).then(({ error }) => {
+              if (error) return
+              setDocumentNames((prev) => prev.filter((item) => item.id !== id))
+            })
+          }}
+        />
+        </Dialog>
       </section>
     </div>
-  )
-}
-
-function ExtraCertificateUpload({
-  disabled,
-  onUpload,
-}: {
-  disabled: boolean
-  onUpload: (certName: string, file: File) => void
-}) {
-  return (
-    <form
-      className="flex flex-col gap-2 sm:flex-row sm:items-end"
-      onSubmit={(event) => {
-        event.preventDefault()
-        const formEl = event.currentTarget
-        const name = String(new FormData(formEl).get('certName') ?? '').trim()
-        const file = formEl.querySelector<HTMLInputElement>('input[type=file]')?.files?.[0]
-        if (!name || !file) return
-        onUpload(name, file)
-        formEl.reset()
-      }}
-    >
-      <Input name="certName" className="h-10 min-h-10" placeholder="New certificate name" aria-label="New certificate name" disabled={disabled} />
-      <Input className="h-10 min-h-10" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" aria-label="Certificate file" disabled={disabled} />
-      <Button type="submit" className="h-10 min-h-10" disabled={disabled}>Add certificate</Button>
-    </form>
   )
 }

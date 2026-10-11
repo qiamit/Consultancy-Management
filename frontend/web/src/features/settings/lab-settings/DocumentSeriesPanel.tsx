@@ -14,6 +14,14 @@ const LABELS: Record<string, string> = {
   TAX_INVOICE: 'Tax Invoice',
   CREDIT_NOTE: 'Credit Note',
   PAYMENT_RECEIPT: 'Payment Receipt',
+  PURCHASE: 'Purchase Bill',
+  PAYMENT_MADE: 'Payment Made',
+  DEBIT_NOTE: 'Debit Note',
+  PURCHASE_ORDER: 'Purchase Order',
+  EXPENSE: 'Expense',
+  REFUND: 'Refund Voucher',
+  SALES_DEBIT_NOTE: 'Sales Debit Note',
+  JOURNAL: 'Journal',
 }
 
 export function DocumentSeriesPanel() {

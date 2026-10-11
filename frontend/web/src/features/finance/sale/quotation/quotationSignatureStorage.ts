@@ -1,4 +1,4 @@
-import type { DocumentTemplateKind } from '@/features/settings/lab-settings/documentTemplateTypes'
+import type { BookDocumentKind } from '@/features/settings/lab-settings/documentTemplateTypes'
 import { resolveLabSettingsRowId } from '@/features/settings/lab-settings/labSettingsDb'
 import { supabase } from '@/lib/supabaseClient'
 
@@ -75,7 +75,7 @@ export type SaleDocumentSignatureDefault = {
 }
 
 export async function fetchDefaultSignatureForKind(
-  documentKind: DocumentTemplateKind,
+  documentKind: BookDocumentKind,
 ): Promise<SaleDocumentSignatureDefault> {
   const { data, error } = await supabase
     .from('sale_document_signature_defaults')
@@ -94,7 +94,7 @@ export async function fetchDefaultSignatureForKind(
 }
 
 export async function saveDefaultSignatureForKind(
-  documentKind: DocumentTemplateKind,
+  documentKind: BookDocumentKind,
   signatureText: string,
   signatureImagePath: string,
 ): Promise<void> {

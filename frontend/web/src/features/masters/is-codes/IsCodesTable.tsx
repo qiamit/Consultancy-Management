@@ -8,7 +8,7 @@ import { formatInr } from './types'
 import { limsPanelClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 
-export type IsCodeSortKey = 'isDetails' | 'slabRate' | 'title' | 'markingFee' | 'aspectCharges'
+export type IsCodeSortKey = 'licenceCount' | 'isDetails' | 'slabRate' | 'title' | 'markingFee' | 'aspectCharges'
 export type IsCodeSortDir = 'asc' | 'desc'
 
 function SortableHeader({
@@ -229,9 +229,7 @@ export function IsCodesTable({
                     selected && 'ring-2 ring-amber-500/40',
                   )}
                 >
-                  <div className="flex items-stretch">
-                    <div className="w-1 shrink-0 bg-gradient-to-b from-amber-500 via-amber-600 to-stone-700" />
-                    <div className="min-w-0 flex-1">
+                  <div className="min-w-0">
                       <div className="flex items-start gap-2 border-b border-[#e7e0d4] px-2.5 py-2.5">
                         <input
                           type="checkbox"
@@ -324,7 +322,6 @@ export function IsCodesTable({
                           onAssistantDataChanged={onAssistantDataChanged}
                         />
                       </div>
-                    </div>
                   </div>
                 </article>
               )

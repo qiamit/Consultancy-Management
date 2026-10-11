@@ -57,6 +57,7 @@ export function LocationMapModuleFields({
   disabled = false,
   firmName,
   bisOfficeName,
+  routeDirection = 'firm-to-bis',
 }: {
   value: LocationMapModulePayload
   onChange: (next: LocationMapModulePayload) => void
@@ -64,6 +65,7 @@ export function LocationMapModuleFields({
   firmName: string
   /** Branch name from Application Details (used for To Location auto default). */
   bisOfficeName: string
+  routeDirection?: 'firm-to-bis' | 'bis-to-firm'
 }) {
   const firmReady = isValidLatLng(value.firmLatitude, value.firmLongitude)
   const bisReady = isValidLatLng(value.bisLatitude, value.bisLongitude)
@@ -77,10 +79,10 @@ export function LocationMapModuleFields({
   const openMapsUrl = useMemo(() => {
     if (routeReady) {
       return googleMapsDirectionsLink(
-        value.firmLatitude,
-        value.firmLongitude,
-        value.bisLatitude,
-        value.bisLongitude,
+        routeDirection === 'bis-to-firm' ? value.bisLatitude : value.firmLatitude,
+        routeDirection === 'bis-to-firm' ? value.bisLongitude : value.firmLongitude,
+        routeDirection === 'bis-to-firm' ? value.firmLatitude : value.bisLatitude,
+        routeDirection === 'bis-to-firm' ? value.firmLongitude : value.bisLongitude,
       )
     }
     if (firmReady) return googleMapsPinLink(value.firmLatitude, value.firmLongitude)
@@ -94,6 +96,7 @@ export function LocationMapModuleFields({
     value.firmLongitude,
     value.bisLatitude,
     value.bisLongitude,
+    routeDirection,
   ])
 
   const setFirmCoord = (which: 'lat' | 'lng', raw: string) => {
@@ -254,6 +257,7 @@ export function LocationMapModuleFields({
               bisLongitude={value.bisLongitude}
               firmLabel={firmName}
               bisLabel={toLocationValue}
+              routeDirection={routeDirection}
               interactive={mapInteractive}
             />
             {!mapInteractive ? (

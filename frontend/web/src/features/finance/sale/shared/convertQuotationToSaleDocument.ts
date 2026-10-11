@@ -1,3 +1,4 @@
+import { supabase } from '@/lib/supabaseClient'
 import {
   fetchNextSaleDocumentNumber,
   formatSaleApiError,
@@ -124,6 +125,71 @@ export async function convertInvoiceToPaymentReceiptIfNeeded(
     }
     await saveSaleDocument('paymentReceipt', form, null)
     return `Created Payment Receipt ${documentNumber} from ${row.quotation_number}.`
+  } catch (err) {
+    throw new Error(formatSaleApiError(err))
+  }
+}
+
+/** Purchase order → purchase bill. The order itself stores no GST; the bill starts at 18%. */
+export async function convertPurchaseOrderToBillIfNeeded(
+  row: QuotationRow,
+  status: QuotationStatus,
+): Promise<string | null> {
+  if (status !== 'Converted') return null
+  try {
+    if (!row.client_id && !row.client_name?.trim()) {
+      throw new Error('Vendor is required before converting this order.')
+    }
+    const year = new Date().getFullYear()
+    const documentNumber = await fetchNextSaleDocumentNumber('purchase', `PU-${year}-`)
+    const form = {
+      ...rowToForm(row, true, documentNumber),
+      status: 'Draft' as QuotationStatus,
+      referenceNo: row.quotation_number,
+      gstPercent: '18',
+      lines: rowToForm(row, true, documentNumber).lines.map((line) => ({
+        ...line,
+        gstPercent: Number(line.gstPercent) > 0 ? line.gstPercent : '18',
+      })),
+    }
+    if (!form.lines.some((line) => line.description.trim())) {
+      const { data, error } = await supabase
+        .from('finance_purchase_order_lines')
+        .select('item_description, qty, unit_rate, unit_of_item, gst_rate, extra')
+        .eq('purchase_order_id', row.id)
+        .order('sort_order', { ascending: true })
+      if (error) throw error
+      form.lines = (data ?? []).map((raw, index) => {
+        const line = raw as {
+          item_description?: string | null
+          qty?: number | null
+          unit_rate?: number | null
+          unit_of_item?: string | null
+          gst_rate?: string | null
+          extra?: { hsn_sac?: string | null } | null
+        }
+        return {
+          key: `po-${index}`,
+          description: String(line.item_description ?? ''),
+          details: '',
+          make: '',
+          hsnSac: String(line.extra?.hsn_sac ?? ''),
+          itemCode: '',
+          quantity: String(line.qty ?? 1),
+          unit: String(line.unit_of_item ?? ''),
+          rate: String(line.unit_rate ?? 0),
+          discountPercent: '',
+          gstPercent: Number(line.gst_rate) > 0 ? String(line.gst_rate) : '18',
+          lineRemarks: '',
+          deliveryPeriod: '',
+        }
+      })
+    }
+    if (!form.lines.some((line) => line.description.trim())) {
+      throw new Error('Add at least one line item before converting.')
+    }
+    await saveSaleDocument('purchase', form, null)
+    return `Created Purchase Bill ${documentNumber} from ${row.quotation_number}.`
   } catch (err) {
     throw new Error(formatSaleApiError(err))
   }

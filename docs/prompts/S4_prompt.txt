@@ -1,0 +1,437 @@
+S4 — Masters + Lab Settings + User module: enforce module access in the DATABASE, admin-only settings, hide AI keys, block inactive users, faster Client Directory
+===================================================================================================================================================
+
+Repo: /Users/amitkumar/Documents/Softwares/Consultancy Management   (branch main, HEAD must be 5fd7f49 — S3)
+Stack: self-hosted Supabase on Railway (PostgREST 12.2, GoTrue v2.174, Caddy gateway). Frontend: frontend/web (Vite + React + TS).
+
+WHY (live facts, verified read-only on 08-Oct-2026)
+- Module Access (Settings → Module Access) is enforced only in the UI. "View" is just a CSS class
+  (components/auth/RequireModuleAccess.tsx), and the DB still has USING(true) write policies on 58 tables.
+  Any logged-in user can edit/delete clients, IS codes, test parameters, products, company settings,
+  lab prefixes/documents/accreditations, AI settings and the website CMS straight through the REST API.
+- ai_models (it has an api_key column) can be read by every logged-in user.
+- user_profiles.status = 'Inactive' changes nothing: the user can still log in and use the app.
+- The laboratory-files bucket (logo, seal, letterheads, lab documents) can be written by any logged-in user.
+- The Client Directory takes about 18 s for 17,902 clients. PostgREST time is small (18 × 1000-row pages, 45–100 ms each,
+  about 5–6 s in parallel). Most of the time goes on downloading about 14 MB of UNCOMPRESSED JSON: the gateway Caddyfile
+  has no `encode` directive. A redundant client-side sort of 17.9k rows adds more.
+- Excluded permanently (DO NOT touch): MST-07 (Manak portal passwords), MST-84 (client scale default 'Medium').
+
+WHAT S4 DOES
+- Part A: new migration backend/database/migrations/20261008180000_s4_masters_settings_rls.sql (content below, VERBATIM).
+  - DB-level module access: app_module_level(path) / app_can_edit(paths...) mirror resolveModuleAccess.ts.
+  - Masters (clients, is_codes, test_parameters, products_services_master):
+    - INSERT is allowed for editors of that master, and for editors of the BIS/Finance modules (quick-add dialogs).
+    - UPDATE is allowed only for editors of that master.
+    - DELETE is admin-only (the UI already shows Delete only to Laboratory Director/Admin).
+  - Option lists / attachments: editors of the owning master.
+  - Settings (company_settings, lab_prefixes, lab_documents, lab_accreditations, accreditation_bodies,
+    ai_settings, ai_skills, app_settings, ai_models): admin-only writes. ai_models is admin-only for SELECT too (api_key).
+    ai_settings/ai_skills stay readable (Qi assistant needs them).
+  - Website CMS tables: editors of /tools/cms.
+  - Storage laboratory-files: admin-only insert/update/delete (reads unchanged).
+  - Trigger: status ≠ Active → auth.users.banned_until = now()+100y and that user's auth.sessions are deleted.
+    Back to Active → ban lifted.
+  - anon can no longer EXECUTE list_team_users / update_team_user / current_user_is_admin / the new helpers.
+  - NOT touched in S4 (left for S5+): finance_*, quotation*, bis_*, license_surveillance, transactions, legacy tables.
+- Part B: small frontend changes so the UI tells the truth (0-row writes, inactive users, row Delete button).
+- Part C: gzip/zstd on REST responses in the gateway + remove the redundant 17.9k-row sort.
+
+ALREADY TESTED: this exact SQL was applied TWICE (idempotent) on the LIVE DB inside BEGIN…ROLLBACK, with 36/36 scenario
+checks passing (IE edit allowed, IE delete → 0 rows, settings blocked, ai_models hidden, CMS by rule, laboratory-files upload
+blocked for IE/allowed for admin, view-only rule → 0-row update, inactive → banned + module level none, anon RPC denied, public
+brand/website RPCs still OK, S1–S3 guards intact). Live state was unchanged afterwards (snapshot hash equal).
+
+HOUSE RULES
+- Do NOT edit any already-applied migration. Do NOT change the SQL below (copy it byte-for-byte).
+- Do NOT open/print .env, .railway-secrets.env or any secret. No Railway variable changes.
+- NEVER `git add` docs/prompts/, .env*, .railway-secrets.env, any *backup*.json. No `git add -A` / `git add .`.
+- Keep changes minimal; no refactors, no new dependencies, no formatting churn in untouched code.
+
+=====================================================================
+PART A — create this file EXACTLY:
+backend/database/migrations/20261008180000_s4_masters_settings_rls.sql
+=====================================================================
+-- S4: Masters / Settings / CMS write rules in the database (module-level), admin-only
+--     settings, ai_models secret, inactive users blocked, anon EXECUTE hygiene.
+-- Idempotent: safe to run twice. Runs as the migration superuser (POSTGRES_URL).
+-- Mirrors frontend/web/src/features/settings/module-access/resolveModuleAccess.ts
+-- (priority user > designation > department > division; longest module_key prefix wins;
+--  a subject with any rows but no match = none ('/' = view); no matrix at all = edit).
+
+-- =====================================================================
+-- 1) Helpers
+-- =====================================================================
+CREATE OR REPLACE FUNCTION public.app_module_level(p_path text)
+RETURNS text
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_uid   uuid := auth.uid();
+  v_path  text := COALESCE(NULLIF(rtrim(trim(COALESCE(p_path, '')), '/'), ''), '/');
+  v_des   text;
+  v_dep   text;
+  v_div   text;
+  v_st    text;
+  v_type  text;
+  v_key   text;
+  v_level text;
+BEGIN
+  IF v_uid IS NULL THEN
+    RETURN 'none';
+  END IF;
+  IF public.app_is_admin() THEN
+    RETURN 'edit';
+  END IF;
+
+  SELECT lower(trim(COALESCE(designation, ''))), lower(trim(COALESCE(department_name, ''))),
+         lower(trim(COALESCE(division, ''))), lower(trim(COALESCE(status, 'Active')))
+    INTO v_des, v_dep, v_div, v_st
+    FROM public.user_profiles WHERE id = v_uid;
+  IF NOT FOUND OR v_st <> 'active' THEN
+    RETURN 'none';
+  END IF;
+
+  FOREACH v_type IN ARRAY ARRAY['user', 'designation', 'department', 'division'] LOOP
+    v_key := CASE v_type WHEN 'user' THEN v_uid::text WHEN 'designation' THEN v_des
+                         WHEN 'department' THEN v_dep ELSE v_div END;
+    CONTINUE WHEN v_key = '';
+    CONTINUE WHEN NOT EXISTS (
+      SELECT 1 FROM public.module_access_rules r
+       WHERE r.subject_type = v_type
+         AND CASE WHEN v_type = 'user' THEN trim(r.subject_key) = v_key
+                  ELSE lower(trim(r.subject_key)) = v_key END);
+
+    SELECT lower(trim(r.access_level)) INTO v_level
+      FROM public.module_access_rules r
+      CROSS JOIN LATERAL (SELECT COALESCE(NULLIF(rtrim(trim(r.module_key), '/'), ''), '/') AS k) n
+     WHERE r.subject_type = v_type
+       AND CASE WHEN v_type = 'user' THEN trim(r.subject_key) = v_key
+                ELSE lower(trim(r.subject_key)) = v_key END
+       AND CASE WHEN n.k = '/' THEN v_path = '/'
+                ELSE v_path = n.k OR left(v_path, length(n.k) + 1) = n.k || '/' END
+     ORDER BY length(n.k) DESC
+     LIMIT 1;
+
+    IF v_level IS NOT NULL THEN
+      RETURN v_level;
+    END IF;
+    RETURN CASE WHEN v_path = '/' THEN 'view' ELSE 'none' END;
+  END LOOP;
+
+  RETURN 'edit';
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.app_can_edit(VARIADIC p_paths text[])
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (SELECT 1 FROM unnest(p_paths) AS x(p) WHERE public.app_module_level(x.p) = 'edit');
+$$;
+
+REVOKE ALL ON FUNCTION public.app_module_level(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.app_can_edit(text[]) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.app_module_level(text) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.app_can_edit(text[]) TO authenticated, service_role;
+REVOKE EXECUTE ON FUNCTION public.app_module_level(text) FROM anon;
+REVOKE EXECUTE ON FUNCTION public.app_can_edit(text[]) FROM anon;
+
+-- =====================================================================
+-- 2) Replace USING(true) policies. Every existing policy on these tables is
+--    dropped first (permissive policies are OR-ed, so leftovers would re-open writes).
+--    SELECT stays open to authenticated (except ai_models).
+--    Each check is wrapped in (SELECT ...) so it runs once per statement.
+-- =====================================================================
+DO $$
+DECLARE
+  -- module paths (= module_access_rules.module_key values from lib/appNav.ts)
+  mc  text := '''/masters/clients''';
+  mi  text := '''/masters/is-codes''';
+  mp  text := '''/masters/product-services''';
+  mt  text := '''/masters/test-parameter''';
+  cms text := '''/tools/cms''';
+  bis text := '''/bis/projects'',''/bis/new-applications'',''/bis/new-inclusion'',''/bis/license-renewals'',''/bis/stop-marking'',''/bis/our-licenses'',''/bis/expired-licenses'',''/bis/due-soon''';
+  fin text := '''/finance/sale/quotation'',''/finance/sale/proforma-invoice'',''/finance/sale/invoice'',''/finance/sale/credit-note'',''/finance/sale/payment-receipt''';
+  adm text := '(SELECT public.app_is_admin())';
+  -- table => [insert check, update check, delete check]; NULL select = keep open
+  spec jsonb;
+  t text;
+  p record;
+  ins text; upd text; del text; sel text;
+BEGIN
+  spec := jsonb_build_object(
+    -- masters (records): quick-add from BIS / sale forms may INSERT; only the master's editors UPDATE; only admins DELETE
+    'clients',                  jsonb_build_array(format('(SELECT public.app_can_edit(%s,%s,%s))', mc, bis, fin), format('(SELECT public.app_can_edit(%s))', mc), adm),
+    'is_codes',                 jsonb_build_array(format('(SELECT public.app_can_edit(%s,%s,%s,%s))', mi, mt, bis, fin), format('(SELECT public.app_can_edit(%s,%s))', mi, mt), adm),
+    'test_parameters',          jsonb_build_array(format('(SELECT public.app_can_edit(%s,%s))', mt, bis), format('(SELECT public.app_can_edit(%s))', mt), adm),
+    'products_services_master', jsonb_build_array(format('(SELECT public.app_can_edit(%s,%s))', mp, fin), format('(SELECT public.app_can_edit(%s))', mp), adm),
+    -- attachments / option lists: editors of the owning master
+    'is_code_files',            jsonb_build_array(format('(SELECT public.app_can_edit(%s))', mi), format('(SELECT public.app_can_edit(%s))', mi), format('(SELECT public.app_can_edit(%s))', mi)),
+    'client_master_options',    jsonb_build_array(format('(SELECT public.app_can_edit(%s,%s,%s))', mc, bis, fin), format('(SELECT public.app_can_edit(%s))', mc), format('(SELECT public.app_can_edit(%s))', mc)),
+    'is_code_master_options',   jsonb_build_array(format('(SELECT public.app_can_edit(%s,%s))', mi, mt), format('(SELECT public.app_can_edit(%s,%s))', mi, mt), format('(SELECT public.app_can_edit(%s,%s))', mi, mt)),
+    'product_item_categories',  jsonb_build_array(format('(SELECT public.app_can_edit(%s,%s))', mp, fin), format('(SELECT public.app_can_edit(%s))', mp), format('(SELECT public.app_can_edit(%s))', mp)),
+    'product_makes',            jsonb_build_array(format('(SELECT public.app_can_edit(%s,%s))', mp, fin), format('(SELECT public.app_can_edit(%s))', mp), format('(SELECT public.app_can_edit(%s))', mp)),
+    'gst_rates',                jsonb_build_array(format('(SELECT public.app_can_edit(%s,%s))', mp, fin), format('(SELECT public.app_can_edit(%s))', mp), format('(SELECT public.app_can_edit(%s))', mp)),
+    'test_parameter_units',     jsonb_build_array(format('(SELECT public.app_can_edit(%s))', mt), format('(SELECT public.app_can_edit(%s))', mt), format('(SELECT public.app_can_edit(%s))', mt)),
+    'lab_master_options',       jsonb_build_array(format('(SELECT public.app_can_edit(%s))', bis), format('(SELECT public.app_can_edit(%s))', bis), format('(SELECT public.app_can_edit(%s))', bis)),
+    -- settings: admin-only writes
+    'accreditation_bodies',     jsonb_build_array(adm, adm, adm),
+    'company_settings',         jsonb_build_array(adm, adm, adm),
+    'lab_prefixes',             jsonb_build_array(adm, adm, adm),
+    'lab_documents',            jsonb_build_array(adm, adm, adm),
+    'lab_accreditations',       jsonb_build_array(adm, adm, adm),
+    'ai_settings',              jsonb_build_array(adm, adm, adm),
+    'ai_skills',                jsonb_build_array(adm, adm, adm),
+    'app_settings',             jsonb_build_array(adm, adm, adm),
+    'ai_models',                jsonb_build_array(adm, adm, adm),
+    -- website CMS: editors of /tools/cms
+    'website_news',             jsonb_build_array(format('(SELECT public.app_can_edit(%s))', cms), format('(SELECT public.app_can_edit(%s))', cms), format('(SELECT public.app_can_edit(%s))', cms)),
+    'website_services',         jsonb_build_array(format('(SELECT public.app_can_edit(%s))', cms), format('(SELECT public.app_can_edit(%s))', cms), format('(SELECT public.app_can_edit(%s))', cms)),
+    'website_settings',         jsonb_build_array(format('(SELECT public.app_can_edit(%s))', cms), format('(SELECT public.app_can_edit(%s))', cms), format('(SELECT public.app_can_edit(%s))', cms))
+  );
+
+  FOR t IN SELECT jsonb_object_keys(spec) LOOP
+    IF to_regclass('public.' || t) IS NULL THEN
+      RAISE NOTICE 'S4: table public.% missing, skipped', t;
+      CONTINUE;
+    END IF;
+    FOR p IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = t LOOP
+      EXECUTE format('DROP POLICY %I ON public.%I', p.policyname, t);
+    END LOOP;
+    EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t);
+    ins := spec->t->>0; upd := spec->t->>1; del := spec->t->>2;
+    sel := CASE WHEN t = 'ai_models' THEN adm ELSE 'true' END;
+    EXECUTE format('CREATE POLICY %I ON public.%I FOR SELECT TO authenticated USING (%s)', t || '_select', t, sel);
+    EXECUTE format('CREATE POLICY %I ON public.%I FOR INSERT TO authenticated WITH CHECK (%s)', t || '_insert', t, ins);
+    EXECUTE format('CREATE POLICY %I ON public.%I FOR UPDATE TO authenticated USING (%s) WITH CHECK (%s)', t || '_update', t, upd, upd);
+    EXECUTE format('CREATE POLICY %I ON public.%I FOR DELETE TO authenticated USING (%s)', t || '_delete', t, del);
+  END LOOP;
+END $$;
+
+-- =====================================================================
+-- 3) Storage: laboratory-files (logo, seal, letterheads, lab documents) is
+--    written only from Lab Settings (admin route). Reads stay open.
+-- =====================================================================
+DO $$
+BEGIN
+  IF to_regclass('storage.objects') IS NULL THEN
+    RAISE NOTICE 'S4: storage.objects missing, skipped';
+    RETURN;
+  END IF;
+  EXECUTE 'DROP POLICY IF EXISTS lims_laboratory_files_insert ON storage.objects';
+  EXECUTE 'CREATE POLICY lims_laboratory_files_insert ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = ''laboratory-files'' AND (SELECT public.app_is_admin()))';
+  EXECUTE 'DROP POLICY IF EXISTS lims_laboratory_files_update ON storage.objects';
+  EXECUTE 'CREATE POLICY lims_laboratory_files_update ON storage.objects FOR UPDATE TO authenticated USING (bucket_id = ''laboratory-files'' AND (SELECT public.app_is_admin())) WITH CHECK (bucket_id = ''laboratory-files'' AND (SELECT public.app_is_admin()))';
+  EXECUTE 'DROP POLICY IF EXISTS lims_laboratory_files_delete ON storage.objects';
+  EXECUTE 'CREATE POLICY lims_laboratory_files_delete ON storage.objects FOR DELETE TO authenticated USING (bucket_id = ''laboratory-files'' AND (SELECT public.app_is_admin()))';
+END $$;
+
+-- =====================================================================
+-- 4) Inactive users: setting user_profiles.status to anything but 'Active'
+--    bans the GoTrue user (no login, no token refresh) and ends their sessions.
+--    Setting it back to 'Active' lifts the ban.
+-- =====================================================================
+CREATE OR REPLACE FUNCTION public.user_profiles_sync_auth_ban()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF lower(trim(COALESCE(NEW.status, 'Active'))) = 'active' THEN
+    UPDATE auth.users SET banned_until = NULL WHERE id = NEW.id AND banned_until IS NOT NULL;
+  ELSE
+    UPDATE auth.users SET banned_until = now() + interval '100 years' WHERE id = NEW.id;
+    DELETE FROM auth.sessions WHERE user_id = NEW.id;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.user_profiles_sync_auth_ban() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS user_profiles_sync_auth_ban ON public.user_profiles;
+CREATE TRIGGER user_profiles_sync_auth_ban
+  AFTER UPDATE OF status ON public.user_profiles
+  FOR EACH ROW
+  WHEN (OLD.status IS DISTINCT FROM NEW.status)
+  EXECUTE FUNCTION public.user_profiles_sync_auth_ban();
+
+-- Backfill: users already inactive get banned now (no-op when everyone is Active).
+UPDATE auth.users u SET banned_until = now() + interval '100 years'
+  FROM public.user_profiles p
+ WHERE p.id = u.id
+   AND lower(trim(COALESCE(p.status, 'Active'))) <> 'active'
+   AND (u.banned_until IS NULL OR u.banned_until < now());
+
+-- =====================================================================
+-- 5) anon must not execute team/admin helpers (they already refuse, this is hygiene).
+-- =====================================================================
+DO $$
+DECLARE f record;
+BEGIN
+  FOR f IN
+    SELECT p.oid::regprocedure AS sig
+      FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+     WHERE n.nspname = 'public' AND p.proname IN ('list_team_users', 'update_team_user', 'current_user_is_admin')
+  LOOP
+    EXECUTE format('REVOKE EXECUTE ON FUNCTION %s FROM PUBLIC, anon', f.sig);
+    EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO authenticated, service_role', f.sig);
+  END LOOP;
+END $$;
+
+NOTIFY pgrst, 'reload schema';
+
+-- =====================================================================
+-- MANUAL TEST (run by hand in psql against POSTGRES_URL; everything is rolled back)
+-- Replace <IE_UID> with a non-admin user id and <ADMIN_UID> with an admin user id.
+-- =====================================================================
+-- BEGIN;
+--   -- non-admin with edit on /masters/clients
+--   SET LOCAL ROLE authenticated;
+--   SELECT set_config('request.jwt.claims', '{"sub":"<IE_UID>","role":"authenticated"}', true);
+--   SELECT public.app_module_level('/masters/clients');                       -- expect edit
+--   SELECT public.app_module_level('/settings/lab');                          -- expect none
+--   UPDATE public.clients SET company_name = company_name
+--    WHERE id = (SELECT id FROM public.clients LIMIT 1) RETURNING id;          -- expect 1 row
+--   DELETE FROM public.clients WHERE id = (SELECT id FROM public.clients LIMIT 1) RETURNING id;  -- expect 0 rows
+--   SELECT count(*) FROM public.ai_models;                                     -- expect 0
+--   SAVEPOINT a;
+--   INSERT INTO public.lab_prefixes (name, prefix) VALUES ('t', 'T');          -- expect RLS error
+--   ROLLBACK TO SAVEPOINT a;
+--   SAVEPOINT b;
+--   INSERT INTO storage.objects (bucket_id, name) VALUES ('laboratory-files', 'company/t.png');  -- expect RLS error
+--   ROLLBACK TO SAVEPOINT b;
+--   -- admin
+--   SELECT set_config('request.jwt.claims', '{"sub":"<ADMIN_UID>","role":"authenticated"}', true);
+--   SELECT count(*) FROM public.ai_models;                                     -- expect >= 1
+--   UPDATE public.user_profiles SET status = 'Inactive' WHERE id = '<IE_UID>';
+--   RESET ROLE;
+--   SELECT banned_until > now() AS banned FROM auth.users WHERE id = '<IE_UID>';  -- expect true
+--   SELECT count(*) FROM auth.sessions WHERE user_id = '<IE_UID>';             -- expect 0
+-- ROLLBACK;
+===================================================================== (end of migration file)
+
+=====================================================================
+PART B — frontend (frontend/web/src)
+=====================================================================
+B1. Inactive users are signed out — hooks/useAuth.ts
+  - fetchProfile (line ~213): change the select at line 216 to
+      .select('designation, department_name, division, full_name, status')
+  - After `if (canceled) return` and the error branch: if the row exists and
+      String(row.status ?? 'Active').trim().toLowerCase() !== 'active'
+    then:
+      - try { sessionStorage.setItem('authNotice', 'Your account is inactive. Contact the Laboratory Director.') } catch {}
+      - await supabase.auth.signOut()
+      - return
+    (add `status?: unknown` to the row type at ~line 233).
+  - On the login page, show sessionStorage 'authNotice' once (read + remove) above the form, if a message area exists.
+    signInWithPassword lives only in hooks/useAuth.ts. Find the login page that calls it with:
+      grep -rln "useAuth\|signIn" frontend/web/src --include=*.tsx | grep -i login
+    If there is no simple place for it, skip this part. Signing out is the required bit.
+
+B2. Do not report success when RLS silently blocked an UPDATE/DELETE (PostgREST returns no error, 0 rows).
+  Append `.select('id')` and treat an empty result as "no permission":
+    const { data, error } = await supabase.from(T).update(payload).eq('id', X).select('id')
+    if (error) throw error
+    if (!data || data.length === 0) throw new Error('You do not have edit access for this record (view-only).')
+  Apply at:
+    - features/masters/clients/ClientsMasterPage.tsx:723 (clients update)
+    - features/masters/test-parameter/TestParameterMasterPage.tsx:638 (test_parameters update)
+    - features/masters/is-codes/IsCodesMasterPage.tsx:1056-1064 already does `.select('id').single()`. A blocked update gives
+      error code 'PGRST116' there, so only map `error.code === 'PGRST116'` (when editingId is set) to the same friendly message.
+    - features/masters/products-services/ProductsServicesMasterPage.tsx:438 (products_services_master update chain)
+  Deletes (admin-only in the DB now): compare the deleted count with the ids requested, and show a message on a mismatch:
+    - ClientsMasterPage.tsx:960 → message at 963
+    - IsCodesMasterPage.tsx:1118 → message at 1122
+    - TestParameterMasterPage.tsx:912/933 → messages at 914/935
+    - ProductsServicesMasterPage.tsx:482 → message at 485
+    Use `.delete().in('id', ids).select('id')`. If the count is 0, show:
+      'Delete not allowed — only Laboratory Director/Admin can delete.'
+    If the count is partial, show: `Deleted N of M.`
+    In IsCodesMasterPage, run the is_code_files delete (1116) only AFTER the is_codes delete succeeds with count > 0
+    (reorder lines 1116/1118). Otherwise a non-admin would strip the files and leave the codes.
+
+B3. Row-level Delete icon in Test Parameter table — features/masters/test-parameter/TestParameterTable.tsx:850-861
+  - Render the Delete <Button> only when useIsLaboratoryDirector() (from '@/components/lims/LaboratoryDirectorOnly') is true.
+  - The hook must be called at the top of the RowActions component (line ~832), not inside JSX.
+  (Footer Delete buttons in all 4 master footers are already wrapped in <LaboratoryDirectorOnly>; leave them as they are.)
+
+B4. View-only UX (optional, do only if small): in the 4 master pages, use
+  `useCanEditCurrentModule()` (features/settings/module-access/useCanEditCurrentModule.ts) to disable Save/Import
+  when it returns false. If a page needs more than a few lines, skip it. The DB enforces this anyway.
+
+=====================================================================
+PART C — performance
+=====================================================================
+C1. backend/services/gateway/Caddyfile — inside `handle @rest {` (line 54), add as the FIRST line:
+        encode zstd gzip
+    Add it only to @rest. Do not change @auth/@storage/@functions or the CORS headers.
+    Expected: Client Directory payload goes from about 14 MB to about 1.5–2 MB.
+C2. features/masters/clients/ClientsMasterPage.tsx loadClients (236–290):
+  - Remove the `.sort(...)` at line 264. The rows already come back ordered by company_name, id from the DB, and
+    filteredRows (≈768–800) sorts again for display.
+  - In the district/pin-code dedupe (270–283), and in the filteredRows sort, replace repeated
+    `a.localeCompare(b, undefined, {...})` calls with ONE module-level collator:
+      const nameCollator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true })
+    then `nameCollator.compare(a, b)`. Keep the existing ordering semantics.
+  - Do NOT change fetchAllRows, the page size, or the select list in S4. Server-side pagination is planned for later (R14).
+
+=====================================================================
+ORDER + STOP RULES (follow exactly)
+=====================================================================
+1. VERIFY (after Parts A–C are written, before anything touches the DB):
+     npm run typecheck   → must not exceed baseline 122 errors (no NEW errors in files you touched)
+     npm run lint        → must not exceed baseline 353 problems (no NEW problems in files you touched)
+     npm run build       → must succeed
+   If any check gets worse: fix it. If you cannot fix it, STOP, do not migrate or commit, and REPORT.
+2. npm run db:migrate
+   - ONLY 20261008180000_s4_masters_settings_rls.sql may be applied. If the runner tries to apply any other file,
+     or this file fails: STOP. Do not commit. REPORT the full error output.
+3. git add ONLY these paths (whichever you actually changed):
+     backend/database/migrations/20261008180000_s4_masters_settings_rls.sql
+     backend/services/gateway/Caddyfile
+     frontend/web/src/hooks/useAuth.ts
+     frontend/web/src/features/masters/clients/ClientsMasterPage.tsx
+     frontend/web/src/features/masters/is-codes/IsCodesMasterPage.tsx
+     frontend/web/src/features/masters/test-parameter/TestParameterMasterPage.tsx
+     frontend/web/src/features/masters/test-parameter/TestParameterTable.tsx
+     frontend/web/src/features/masters/products-services/ProductsServicesMasterPage.tsx
+     (+ the login page file, only if you did the B1 notice)
+   Run `git status --short` and confirm nothing else is staged (docs/prompts/ must stay untracked).
+4. git commit -m "S4: DB-enforced module access for masters/settings/CMS, admin-only settings + laboratory-files, hide ai_models keys, ban inactive users, gzip REST, faster client list"
+5. git push origin main
+6. REPORT (below).
+
+=====================================================================
+REPORT (paste back)
+=====================================================================
+- typecheck / lint / build numbers vs baseline (122 / 353 / ok)
+- db:migrate output (which files applied; NOTICE lines)
+- commit hash, push result
+- list of changed files with a 1-line summary each
+- anything skipped (B1 notice, B4) and why
+
+=====================================================================
+POST-DEPLOY CHECKS FOR AMIT (after Railway redeploys frontend + api gateway)
+=====================================================================
+1. Admin login → Masters → Clients: edit + save a client works; Delete works.
+2. Log in as an IE (non-admin) with Edit on Clients:
+   - edit + save works
+   - Delete button is hidden
+   - Settings → Lab is not reachable
+3. Settings → Module Access: set that IE to View on /masters/clients → IE tries to save →
+   "You do not have edit access…" appears (no false "Saved"). Set it back to Edit.
+4. BIS project / Quotation "Add client" quick-add still works for the IE.
+5. Users: set a test IE to Inactive → that IE gets signed out on the next page load/refresh and cannot log in again.
+   Set Active → login works.
+6. Client Directory: open DevTools → Network → a /rest/v1/clients request shows `content-encoding: zstd` (or gzip),
+   and the page loads clearly faster.
+7. Settings → AI (admin) still lists models. Qi assistant still answers for an IE.
+8. Settings → Lab: logo/seal upload still works for admin.

@@ -7,7 +7,6 @@ import { useFormDialogOpenChange } from '@/lib/formDialogOpenChange'
 import { useMasterUiSearchState } from '@/lib/useMasterUiSearchState'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import type { FilterComboboxOption } from '@/features/sample-handling/receiving/FilterCombobox'
-import type { DocumentTemplateKind } from '@/features/settings/lab-settings/documentTemplateTypes'
 import { QuotationTemplatesDialog } from '../quotation/QuotationTemplatesDialog'
 import { QuotationFooterBar } from '../quotation/QuotationFooterBar'
 import { QuotationHeaderBar } from '../quotation/QuotationHeaderBar'
@@ -34,6 +33,7 @@ import {
   listInvoiceAgeBucketPage,
   listInvoiceAgeing,
   listInvoiceOutstanding,
+  listPurchaseOutstanding,
   type InvoiceAgeBucket,
   type InvoiceAgeingRow,
 } from './invoiceBalanceApi'
@@ -50,6 +50,7 @@ import {
 import {
   convertInvoiceToCreditNoteIfNeeded,
   convertInvoiceToPaymentReceiptIfNeeded,
+  convertPurchaseOrderToBillIfNeeded,
   convertQuotationIfNeeded,
 } from './convertQuotationToSaleDocument'
 import { emailOverdueInvoiceReminders, emailSaleDocumentToClient } from './emailSaleDocument'
@@ -70,7 +71,7 @@ export type SaleDocumentModuleConfig = {
   numberColumnLabel: string
 }
 
-function defaultNumberPrefix(kind: DocumentTemplateKind): string {
+function defaultNumberPrefix(kind: SaleDocumentKind): string {
   const year = new Date().getFullYear()
   switch (kind) {
     case 'proformaInvoice':
@@ -81,17 +82,31 @@ function defaultNumberPrefix(kind: DocumentTemplateKind): string {
       return `CN-${year}-`
     case 'paymentReceipt':
       return `PR-${year}-`
+    case 'purchase':
+      return `PU-${year}-`
+    case 'paymentMade':
+      return `PM-${year}-`
+    case 'debitNote':
+      return `DN-${year}-`
+    case 'purchaseOrder':
+      return `PO-${year}-`
+    case 'refund':
+      return `RF-${year}-`
+    case 'salesDebitNote':
+      return `SD-${year}-`
     default:
       return `DOC-${year}-`
   }
 }
 
-function defaultStatus(kind: DocumentTemplateKind): QuotationStatus {
+function defaultStatus(kind: SaleDocumentKind): QuotationStatus {
   switch (kind) {
     case 'proformaInvoice':
       return 'Proforma'
     case 'invoice':
       return 'Invoice'
+    case 'purchase':
+      return 'Draft'
     default:
       return 'Draft'
   }
@@ -165,13 +180,24 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
   const [emailBusyId, setEmailBusyId] = useState<string | null>(null)
 
   const [pickerRows, setPickerRows] = useState<PickerClientRow[]>([])
+  const isVendorParty =
+    config.documentKind === 'purchase' ||
+    config.documentKind === 'paymentMade' ||
+    config.documentKind === 'debitNote' ||
+    config.documentKind === 'purchaseOrder'
   const clientOptions = useMemo(
     () =>
-      activePickerClients(pickerRows, form.clientId).map((c) => ({
-        id: String(c.id),
-        label: String(c.company_name ?? '').trim() || 'Unnamed',
-      })),
-    [pickerRows, form.clientId],
+      activePickerClients(pickerRows, form.clientId)
+        .filter((c) => {
+          if (!isVendorParty) return true
+          if (c.id === form.clientId) return true
+          return c.company_type === 'Vendor' || c.company_type === 'Both'
+        })
+        .map((c) => ({
+          id: String(c.id),
+          label: String(c.company_name ?? '').trim() || 'Unnamed',
+        })),
+    [form.clientId, isVendorParty, pickerRows],
   )
   const [clientContactById, setClientContactById] = useState<Record<string, QuotationClientContact>>(
     {},
@@ -180,12 +206,21 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
   const [productById, setProductById] = useState<Record<string, QuotationProductDetails>>({})
 
   const isPaymentReceipt = config.documentKind === 'paymentReceipt'
+  const isMoneyForm =
+    config.documentKind === 'paymentReceipt' ||
+    config.documentKind === 'paymentMade' ||
+    config.documentKind === 'refund'
+  const hasTemplates =
+    config.documentKind === 'proformaInvoice' ||
+    config.documentKind === 'invoice' ||
+    config.documentKind === 'creditNote' ||
+    config.documentKind === 'paymentReceipt'
 
   const canSave =
     !saveLoading &&
     form.quotationNumber.trim().length > 0 &&
     (form.clientName.trim().length > 0 || form.clientId.trim().length > 0) &&
-    (isPaymentReceipt
+    (isMoneyForm
       ? parseMoney(String(form.paymentAmount ?? '')) > 0
       : form.lines.some((l) => l.description.trim().length > 0))
 
@@ -255,7 +290,7 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
         }
         const [result] = await Promise.all([
           loadList(),
-          isPaymentReceipt ? refreshSaleLedgerCache().catch(() => undefined) : Promise.resolve(),
+          isMoneyForm ? refreshSaleLedgerCache().catch(() => undefined) : Promise.resolve(),
         ])
         if (requestId !== requestRef.current) return
         const lastPage = Math.max(1, Math.ceil(result.total / pageSize))
@@ -275,20 +310,35 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
           for (const balance of balances) next[balance.invoice_id] = balance.outstanding
           setOutstandingById(next)
           setAgeing(summary)
+        } else if (config.documentKind === 'purchase') {
+          const balances = await listPurchaseOutstanding(result.rows.map((row) => row.id)).catch(() => [])
+          if (requestId !== requestRef.current) return
+          const next: Record<string, number> = {}
+          for (const balance of balances) next[balance.bill_id] = balance.outstanding
+          setOutstandingById(next)
+          setAgeing(null)
         } else if (requestId === requestRef.current) {
           setOutstandingById({})
           setAgeing(null)
         }
       } catch (err) {
         if (requestId !== requestRef.current) return
-        setListError(formatSaleApiError(err))
-        setRows([])
-        setTotal(0)
+        const missingBook = /PGRST205|42P01|schema cache/i.test(formatSaleApiError(err))
+        if (missingBook) {
+          setRows([])
+          setTotal(0)
+          setOutstandingById({})
+          setAgeing(null)
+        } else {
+          setListError(formatSaleApiError(err))
+          setRows([])
+          setTotal(0)
+        }
       } finally {
         if (requestId === requestRef.current) setListLoading(false)
       }
     })()
-  }, [ageBucket, config.documentKind, isPaymentReceipt, search, page, pageSize, reloadKey])
+  }, [ageBucket, config.documentKind, isMoneyForm, search, page, pageSize, reloadKey])
 
   const loadClients = useCallback(async () => {
     for (let attempt = 1; attempt <= 3; attempt++) {
@@ -449,6 +499,22 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
         hsnSac: DEFAULT_CONSULTANCY_SAC,
         gstPercent: DEFAULT_CONSULTANCY_GST,
       }))
+    } else if (config.documentKind === 'purchase' || config.documentKind === 'debitNote') {
+      draft.gstPercent = DEFAULT_CONSULTANCY_GST
+      draft.lines = draft.lines.map((line) => ({
+        ...line,
+        gstPercent: DEFAULT_CONSULTANCY_GST,
+      }))
+    } else if (config.documentKind === 'salesDebitNote') {
+      draft.gstPercent = DEFAULT_CONSULTANCY_GST
+      draft.lines = draft.lines.map((line) => ({
+        ...line,
+        hsnSac: DEFAULT_CONSULTANCY_SAC,
+        gstPercent: DEFAULT_CONSULTANCY_GST,
+      }))
+    } else if (config.documentKind === 'purchaseOrder') {
+      draft.gstPercent = '0'
+      draft.lines = draft.lines.map((line) => ({ ...line, gstPercent: '0' }))
     }
     setForm({
       ...draft,
@@ -517,7 +583,7 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
       return
     }
     if (!form.clientName.trim() && !form.clientId.trim()) {
-      setSaveMessage('Select a client.')
+      setSaveMessage(isVendorParty ? 'Select a vendor.' : 'Select a client.')
       return
     }
     if (isPaymentReceipt && parseMoney(String(form.paymentAmount ?? '')) <= 0) {
@@ -654,10 +720,13 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
           (await convertInvoiceToPaymentReceiptIfNeeded(row, status))
       } else if (config.documentKind === 'proformaInvoice') {
         convertMsg = await convertQuotationIfNeeded(row, status)
+      } else if (config.documentKind === 'purchaseOrder') {
+        convertMsg = await convertPurchaseOrderToBillIfNeeded(row, status)
       }
       const persistStatus: QuotationStatus =
         ((status === 'CreditNote' || status === 'Payment') && config.documentKind === 'invoice') ||
-        (status === 'Invoice' && config.documentKind === 'proformaInvoice')
+        (status === 'Invoice' && config.documentKind === 'proformaInvoice') ||
+        (status === 'Converted' && config.documentKind === 'purchaseOrder')
           ? 'Finalized'
           : status
       await updateSaleDocumentStatus(config.documentKind, row, persistStatus)
@@ -832,10 +901,14 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
           onStatusChange={(row, status) => void handleStatusChange(row, status)}
           emptyPrimary={emptyPrimary}
           emptySecondary={emptySecondary}
-          hideValidUntil={isPaymentReceipt}
+          hideValidUntil={isMoneyForm}
           paymentLedger={isPaymentReceipt}
           documentKind={config.documentKind}
-          outstandingById={config.documentKind === 'invoice' ? outstandingById : undefined}
+          outstandingById={
+            config.documentKind === 'invoice' || config.documentKind === 'purchase'
+              ? outstandingById
+              : undefined
+          }
           paymentOpeningByClientId={
             isPaymentReceipt
               ? Object.fromEntries(
@@ -856,6 +929,7 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
           selectedCount={selectedIds.size}
           page={safePage}
           pageCount={pageCount}
+          showTemplates={hasTemplates}
           onTemplates={() => setShowTemplates(true)}
           onExport={handleExport}
           onPrintSelected={handlePrintSelected}
@@ -871,11 +945,16 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
         />
       </div>
 
-      <QuotationTemplatesDialog
-        open={showTemplates}
-        onOpenChange={setShowTemplates}
-        documentKind={config.documentKind}
-      />
+      {config.documentKind === 'proformaInvoice' ||
+      config.documentKind === 'invoice' ||
+      config.documentKind === 'creditNote' ||
+      config.documentKind === 'paymentReceipt' ? (
+        <QuotationTemplatesDialog
+          open={showTemplates}
+          onOpenChange={setShowTemplates}
+          documentKind={config.documentKind}
+        />
+      ) : null}
 
       <Dialog open={showForm} onOpenChange={handleFormOpenChange}>
         <DialogContent
@@ -919,7 +998,7 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
               saveLoading={saveLoading}
               onSave={() => void handleSave()}
               documentLabel={config.title}
-              formMode={isPaymentReceipt ? 'paymentReceipt' : 'standard'}
+              formMode={isMoneyForm ? 'paymentReceipt' : 'standard'}
               documentKind={config.documentKind}
               excludeReceiptId={editingId}
             />

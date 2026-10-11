@@ -1,7 +1,7 @@
 import { formatCmL, formatDisplayDate, todayIsoDate } from '../projects/types'
 import type { BisPrintData } from './loadBisPrintData'
 import { escapeHtml as esc } from './openPrintHtml'
-import { PRINT_PAGE_FRAME_CSS } from './printDocumentShared'
+import { PRINT_PAGE_FRAME_CSS, toBlockHtml } from './printDocumentShared'
 
 export const AUTH_LETTER_REPRESENTATION_PARAGRAPH =
   'The said authorized representative is duly empowered to submit all requisite documents and correspondence, furnish complete and truthful information as may be required by the Bureau of Indian Standards, attend meetings and discussions with BIS officials, offer product samples for verification and independent testing, and to affix signature on behalf of the firm in respect of all matters pertaining to the above application, licence grant proceedings, factory inspection, surveillance visits, and related compliance requirements under the BIS Conformity Assessment Scheme.'
@@ -90,10 +90,7 @@ function buildBody(data: AuthorizationLetterData): string {
 
   <div class="al-to-row">
     <div class="al-to-block">
-      To<br/>
-      The Director &amp; Head<br/>
-      Bureau of Indian Standards<br/>
-      ${esc(data.bisBranchName.trim() || '________________')}, ${esc(data.bisBranchState.trim() || '________________')}, INDIA
+      ${toBlockHtml(data.bisBranchName, data.bisBranchState)}
     </div>
     <div class="al-date-block">
       <div><strong>Date:</strong> ${esc(formatDisplayDate(data.letterDate))}</div>
@@ -256,8 +253,10 @@ export function authorizationLetterDataFromPrintData(printData: BisPrintData): A
     applicantEmail: client.email,
     applicantPhone: client.mobile,
     applicantGst: client.gstNumber,
-    bisBranchName: '',
-    bisBranchState: client.state,
+    // The application form already stores the selected BIS branch. Reuse it
+    // here so the recipient address matches the branch chosen for the project.
+    bisBranchName: (row.branch_name ?? '').trim(),
+    bisBranchState: (row.branch_state ?? '').trim() || client.state,
     applicationNumber: (row.license_number ?? '').trim() || (row.cm_l_digits ? formatCmL(row.cm_l_digits) : ''),
     letterDate: todayIsoDate(),
     isNumber: isCode.label,

@@ -34,6 +34,7 @@ export function LocationRouteMapPreview({
   firmLabel,
   bisLabel,
   interactive,
+  routeDirection = 'firm-to-bis',
   className,
 }: {
   firmLatitude: string
@@ -43,6 +44,7 @@ export function LocationRouteMapPreview({
   firmLabel: string
   bisLabel: string
   interactive: boolean
+  routeDirection?: 'firm-to-bis' | 'bis-to-firm'
   className?: string
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -71,7 +73,7 @@ export function LocationRouteMapPreview({
       boxZoom: false,
       keyboard: false,
     }).setView([20.5937, 78.9629], 5)
-    L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+    L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&scale=2', {
       maxZoom: 20,
       subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
       attribution: '&copy; Google',
@@ -136,19 +138,29 @@ export function LocationRouteMapPreview({
           setRouteStatus('loading')
           try {
             const route = await fetchDrivingRoute(
-              firmLatitude,
-              firmLongitude,
-              bisLatitude,
-              bisLongitude,
+              routeDirection === 'bis-to-firm' ? bisLatitude : firmLatitude,
+              routeDirection === 'bis-to-firm' ? bisLongitude : firmLongitude,
+              routeDirection === 'bis-to-firm' ? firmLatitude : bisLatitude,
+              routeDirection === 'bis-to-firm' ? firmLongitude : bisLongitude,
               ac.signal,
             )
             if (cancelled) return
             if (route) {
               L.polyline(route.coords, {
-                color: route.isRoadRoute ? '#b45309' : '#a8a29e',
-                weight: route.isRoadRoute ? 5 : 3,
-                opacity: 0.9,
-                dashArray: route.isRoadRoute ? undefined : '6 6',
+                color: '#fff',
+                weight: 10,
+                opacity: 0.98,
+                lineCap: 'round',
+                lineJoin: 'round',
+                dashArray: route.isRoadRoute ? undefined : '8 7',
+              }).addTo(layers)
+              L.polyline(route.coords, {
+                color: route.isRoadRoute ? '#0757c8' : '#b42318',
+                weight: route.isRoadRoute ? 5 : 4,
+                opacity: 1,
+                lineCap: 'round',
+                lineJoin: 'round',
+                dashArray: route.isRoadRoute ? undefined : '8 7',
               }).addTo(layers)
               points.push(...route.coords)
               setRouteMeta({
@@ -191,6 +203,7 @@ export function LocationRouteMapPreview({
     bisLongitude,
     firmLabel,
     bisLabel,
+    routeDirection,
   ])
 
   // Dialog resize / unlock — keep tiles sized correctly
@@ -205,7 +218,7 @@ export function LocationRouteMapPreview({
     <div className={cn('relative w-full', className)}>
       {(firmOk || bisOk) && (
         <div className="mb-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 px-0.5 text-[11px] text-stone-700">
-          {firmOk ? (
+          {firmOk && routeDirection === 'firm-to-bis' ? (
             <span>
               <span className="font-bold text-amber-800">From (A)</span>{' '}
               <span className="font-medium">{firmLabel.trim() || 'Company'}</span>
@@ -216,7 +229,7 @@ export function LocationRouteMapPreview({
             </span>
           ) : null}
           {firmOk && bisOk ? <span className="text-stone-400">→</span> : null}
-          {bisOk ? (
+          {bisOk && routeDirection === 'firm-to-bis' ? (
             <span>
               <span className="font-bold text-stone-800">To (B)</span>{' '}
               <span className="font-medium">{bisLabel.trim() || 'BIS Branch'}</span>
@@ -224,6 +237,20 @@ export function LocationRouteMapPreview({
                 {' '}
                 · {bisLatitude.trim()}, {bisLongitude.trim()}
               </span>
+            </span>
+          ) : null}
+          {bisOk && routeDirection === 'bis-to-firm' ? (
+            <span>
+              <span className="font-bold text-stone-800">From (A)</span>{' '}
+              <span className="font-medium">{bisLabel.trim() || 'BIS Branch'}</span>
+              <span className="tabular-nums text-stone-500"> · {bisLatitude.trim()}, {bisLongitude.trim()}</span>
+            </span>
+          ) : null}
+          {firmOk && routeDirection === 'bis-to-firm' ? (
+            <span>
+              <span className="font-bold text-amber-800">To (B)</span>{' '}
+              <span className="font-medium">{firmLabel.trim() || 'Company'}</span>
+              <span className="tabular-nums text-stone-500"> · {firmLatitude.trim()}, {firmLongitude.trim()}</span>
             </span>
           ) : null}
           {routeStatus === 'loading' ? (

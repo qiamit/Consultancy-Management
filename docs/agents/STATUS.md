@@ -5,14 +5,14 @@ Decision #17 (2026-10-09): one chat plans and codes. Do not hand work to a Plann
 ## Current
 | Field | Value |
 |---|---|
-| Session | F10 |
+| Session | F12–F21 |
 | Stage | CODED |
 | Owner | This chat |
-| Repo HEAD | `0bd4e35` (S7–S10 live). F1–F7 and F10 migrations are not applied. F8 and F9 have no migration. |
-| Plan | `docs/agents/plans/F10_plan.md` |
+| Repo HEAD | `11f9a29` (F1–F10 live). F11–F21 migrations are not applied. |
+| Plan | `docs/agents/plans/FINANCE_BOOKS_plan.md` |
 | Coder prompt | Retired. |
-| Next action | Commit F1–F10, then migrate and push. F11 purchase bill starts in this chat after that. |
-| Updated | 2026-10-09 12:15 IST |
+| Next action | Amit says "commit" before migrate and deploy of F11–F21. |
+| Updated | 2026-10-09 13:30 IST |
 
 ### S6 known scope (from Amit, 2026-10-08; to be confirmed in the plan)
 - Encrypt client Manak passwords (approved; reverses the MST-07 exclusion). Never return them to list views or the browser by default.
@@ -32,7 +32,9 @@ Decision #17 (2026-10-09): one chat plans and codes. Do not hand work to a Plann
 ## Log
 | When (IST) | Session | Agent | Stage → | Note |
 |---|---|---|---|---|
-| 2026-10-09 12:10 | F10 | This chat | CODED | Finance books roadmap written from the GimBooks menu. No new code. F11 waits. No migrate, no commit. |
+| 2026-10-09 13:30 | F12–F21 | This chat | CODED | Purchase payments, debit notes, orders, expenses, ledger, refunds, sales debit notes, inventory, accounts, journal, statements, and reports. Migration files only. No migrate, no commit. |
+| 2026-10-09 12:45 | F11 | This chat | CODED | Purchase bill list and form. Vendor is Vendor or Both. Migration file only. No migrate, no commit. |
+| 2026-10-09 12:20 | F1–F10 | This chat | LIVE | Commit `11f9a29` pushed. Migrations F1–F7 and F10 applied. |
 | 2026-10-09 12:00 | F10 | This chat | CODED | Tax invoice form lists the receipts and credit notes that name it. Migration file only. No migrate, no commit. |
 | 2026-10-09 11:50 | F9 | This chat | CODED | Receipt list shows the named invoice and the net after TDS. No migration. No commit. |
 | 2026-10-09 11:35 | F8 | This chat | CODED | Buttons, labels, and table headings use proper text. No migration. No commit. |

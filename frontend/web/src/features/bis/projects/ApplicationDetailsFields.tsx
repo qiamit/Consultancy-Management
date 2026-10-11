@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Calendar } from 'lucide-react'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
@@ -12,7 +12,11 @@ import {
 import { LimsFieldWithAdd } from '@/components/lims/LimsFieldWithAdd'
 import { limsFieldAddBtnClass, limsFieldClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
+import { getCurrencyCode, getCurrencySymbol } from '@/lib/appCurrency'
+import { formatMoneyInput, sanitizeMoneyInput } from '@/features/masters/products-services/types'
 import { MasterOptionFieldWithAdd } from './MasterOptionFieldWithAdd'
+import { FilterCombobox, type FilterComboboxOption } from '@/features/sample-handling/receiving/FilterCombobox'
+import type { BisBranchOfficeRow } from '@/features/masters/bis-branch-offices/bisBranchOfficesApi'
 import type { BisApplicationDetailsForm, BisApplicationProcess } from './types'
 
 function openDatePicker(el: HTMLInputElement | null) {
@@ -36,25 +40,58 @@ const dateInputClass = cn(
   '[&::-webkit-calendar-picker-indicator]:opacity-0',
 )
 
-/** Top row: Process + 3 kind fields = 4 equal columns. */
-const topColClass = 'col-span-12 space-y-0.5 sm:col-span-3'
+function branchOfficeDisplayName(raw: string): string {
+  return raw.trim().replace(/^Bureau of Indian Standards\s*[-–—:]\s*/i, '')
+}
+
+function calculatedProductionValue(actual: string, rate: string): string {
+  if (!actual.trim() || !rate.trim()) return ''
+  const value = Number(actual) * Number(rate)
+  return Number.isFinite(value) ? value.toFixed(2) : ''
+}
+
+function sanitizeCapacity(value: string): string {
+  const cleaned = value.replace(/,/g, '').replace(/[^\d.]/g, '')
+  const [whole = '', ...fraction] = cleaned.split('.')
+  return fraction.length ? `${whole}.${fraction.join('')}` : whole
+}
 
 export function ApplicationDetailsFields({
   form,
   onChange,
   disabled = false,
   projectKind,
+  branchOffices = [],
 }: {
   form: BisApplicationDetailsForm
   onChange: (next: BisApplicationDetailsForm) => void
   disabled?: boolean
   /** When Application: show app number/dates. When License: show license number/dates. */
   projectKind?: string | null
+  branchOffices?: BisBranchOfficeRow[]
 }) {
   const applicationDateRef = useRef<HTMLInputElement | null>(null)
   const inspectionDateRef = useRef<HTMLInputElement | null>(null)
   const grantedDateRef = useRef<HTMLInputElement | null>(null)
   const validityDateRef = useRef<HTMLInputElement | null>(null)
+  const [branchDropdownOpen, setBranchDropdownOpen] = useState(false)
+  const [branchQuery, setBranchQuery] = useState('')
+  const branchOptions = useMemo<FilterComboboxOption[]>(
+    () =>
+      branchOffices.map((office) => ({
+        id: office.id,
+        label: branchOfficeDisplayName(office.name),
+        secondaryLabel: [office.city, office.state].filter(Boolean).join(', '),
+      })),
+    [branchOffices],
+  )
+  const filteredBranchOptions = useMemo(() => {
+    const query = branchQuery.trim().toLocaleLowerCase()
+    if (!query) return branchOptions
+    return branchOptions.filter((option) =>
+      `${option.label} ${option.secondaryLabel ?? ''}`.toLocaleLowerCase().includes(query),
+    )
+  }, [branchOptions, branchQuery])
 
   const kind = (projectKind ?? '').trim().toLowerCase()
   const isApplicationProject = kind === 'application'
@@ -73,8 +110,9 @@ export function ApplicationDetailsFields({
         Application / Licence Details
       </p>
 
-      <div className="grid grid-cols-12 gap-2 sm:gap-3">
-        <div className={topColClass}>
+      <div className="space-y-2.5">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-5 sm:gap-3">
+        <div className="min-w-0 space-y-0.5">
           <Label htmlFor="app-process">Application Process</Label>
           <Select
             value={form.applicationProcess}
@@ -91,10 +129,10 @@ export function ApplicationDetailsFields({
           </Select>
         </div>
 
-        {/* Application: Process | Number | App Date | Inspection Date */}
+        {/* Keep the process, identifier, dates and inspection type together in one row on wide screens. */}
         {showApplicationNumberFields ? (
           <>
-            <div className={topColClass}>
+            <div className="min-w-0 space-y-0.5">
               <Label htmlFor="app-number">Application Number</Label>
               <div className="flex items-stretch">
                 <span className="inline-flex h-8 items-center border border-r-0 border-stone-500 bg-stone-100 px-2 text-xs font-semibold text-stone-700 sm:px-3">
@@ -112,7 +150,7 @@ export function ApplicationDetailsFields({
               </div>
             </div>
 
-            <div className={topColClass}>
+            <div className="min-w-0 space-y-0.5">
               <Label htmlFor="app-date">Application Date</Label>
               <LimsFieldWithAdd
                 addButton={
@@ -140,7 +178,7 @@ export function ApplicationDetailsFields({
               </LimsFieldWithAdd>
             </div>
 
-            <div className={topColClass}>
+            <div className="min-w-0 space-y-0.5">
               <Label htmlFor="app-inspection-date">Inspection Date</Label>
               <LimsFieldWithAdd
                 addButton={
@@ -173,7 +211,7 @@ export function ApplicationDetailsFields({
         {/* License: Process | License Number | Granted Date | Validity Date */}
         {showLicenseFields ? (
           <>
-            <div className={topColClass}>
+            <div className="min-w-0 space-y-0.5">
               <Label htmlFor="app-license">License Number</Label>
               <div className="flex items-stretch">
                 <span className="inline-flex h-8 items-center border border-r-0 border-stone-500 bg-stone-100 px-2 text-xs font-semibold text-stone-700 sm:px-3">
@@ -194,7 +232,7 @@ export function ApplicationDetailsFields({
               </div>
             </div>
 
-            <div className={topColClass}>
+            <div className="min-w-0 space-y-0.5">
               <Label htmlFor="app-granted">Granted Date</Label>
               <LimsFieldWithAdd
                 addButton={
@@ -222,7 +260,7 @@ export function ApplicationDetailsFields({
               </LimsFieldWithAdd>
             </div>
 
-            <div className={topColClass}>
+            <div className="min-w-0 space-y-0.5">
               <Label htmlFor="app-validity">Validity Date</Label>
               <LimsFieldWithAdd
                 addButton={
@@ -252,33 +290,7 @@ export function ApplicationDetailsFields({
           </>
         ) : null}
 
-        <div className="col-span-12 sm:col-span-4">
-          <MasterOptionFieldWithAdd
-            category="bis_branch_name"
-            label="Branch Name"
-            inputId="app-branch-name"
-            listId="app-branch-name-list"
-            value={form.branchName}
-            onChange={(v) => set('branchName', v)}
-            disabled={disabled}
-            placeholder="Select Branch"
-          />
-        </div>
-
-        <div className="col-span-12 sm:col-span-4">
-          <MasterOptionFieldWithAdd
-            category="state"
-            label="Branch State"
-            inputId="app-branch-state"
-            listId="app-branch-state-list"
-            value={form.branchState}
-            onChange={(v) => set('branchState', v)}
-            disabled={disabled}
-            placeholder="Select State"
-          />
-        </div>
-
-        <div className="col-span-12 sm:col-span-4">
+        <div className="min-w-0 space-y-0.5">
           <MasterOptionFieldWithAdd
             category="bis_type_of_inspection"
             label="Type of Inspection"
@@ -290,8 +302,118 @@ export function ApplicationDetailsFields({
             placeholder="Select or Add"
           />
         </div>
+        </div>
 
-        <div className="col-span-12 sm:col-span-4">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-5 sm:gap-3">
+          <MasterOptionFieldWithAdd
+            category="unit_of_is"
+            label="Production Unit"
+            manageTitle="Unit of IS"
+            inputId="app-production-unit"
+            listId="app-production-unit-list"
+            value={form.productionUnit}
+            onChange={(value) => set('productionUnit', value)}
+            disabled={disabled}
+            placeholder="Select or Add Unit"
+          />
+          <div className="min-w-0 space-y-0.5">
+            <Label htmlFor="app-installed-capacity">Installed Capacity</Label>
+            <Input id="app-installed-capacity" type="text" inputMode="decimal" className={limsFieldClass} value={form.installedCapacity} disabled={disabled} onChange={(e) => {
+              const installed = sanitizeCapacity(e.target.value)
+              const actual = Number(form.actualCapacity)
+              const actualCapacity = installed && Number.isFinite(actual) && actual >= Number(installed) ? '' : !installed ? '' : form.actualCapacity
+              onChange({
+                ...form,
+                installedCapacity: installed,
+                actualCapacity,
+                productionValue: calculatedProductionValue(actualCapacity, form.productionRate),
+              })
+            }} />
+          </div>
+          <div className="min-w-0 space-y-0.5">
+            <Label htmlFor="app-actual-capacity">Actual Capacity</Label>
+            <Input id="app-actual-capacity" type="text" inputMode="decimal" className={limsFieldClass} value={form.actualCapacity} disabled={disabled || !form.installedCapacity} onChange={(e) => {
+              const actual = sanitizeCapacity(e.target.value)
+              if (actual && Number(actual) >= Number(form.installedCapacity)) return
+              onChange({
+                ...form,
+                actualCapacity: actual,
+                productionValue: calculatedProductionValue(actual, form.productionRate),
+              })
+            }} />
+          </div>
+          <div className="min-w-0 space-y-0.5">
+            <Label htmlFor="app-production-rate">Rate / Unit</Label>
+            <div className="flex h-8 min-w-0 overflow-hidden border border-stone-500 bg-stone-50 focus-within:border-amber-600 focus-within:bg-white focus-within:ring-2 focus-within:ring-amber-500/20">
+              <span className="inline-flex shrink-0 items-center border-r border-stone-500 bg-stone-100 px-2 text-sm font-semibold text-stone-700" aria-hidden>{getCurrencySymbol()}</span>
+              <Input
+                id="app-production-rate"
+                type="text"
+                inputMode="decimal"
+                value={form.productionRate}
+                disabled={disabled}
+                onChange={(e) => {
+                  const productionRate = sanitizeMoneyInput(e.target.value)
+                  onChange({ ...form, productionRate, productionValue: calculatedProductionValue(form.actualCapacity, productionRate) })
+                }}
+                onBlur={() => {
+                  if (form.productionRate) {
+                    const productionRate = formatMoneyInput(form.productionRate)
+                    onChange({ ...form, productionRate, productionValue: calculatedProductionValue(form.actualCapacity, productionRate) })
+                  }
+                }}
+                className="h-full min-w-0 flex-1 rounded-none border-0 bg-transparent text-right tabular-nums shadow-none focus-visible:ring-0"
+                aria-label={`Rate per unit in ${getCurrencyCode()}`}
+              />
+            </div>
+          </div>
+          <div className="min-w-0 space-y-0.5">
+            <Label htmlFor="app-production-value">Production Value</Label>
+            <div className="flex h-8 min-w-0 overflow-hidden border border-stone-500 bg-stone-100">
+              <span className="inline-flex shrink-0 items-center border-r border-stone-500 bg-stone-100 px-2 text-sm font-semibold text-stone-700" aria-hidden>{getCurrencySymbol()}</span>
+              <Input id="app-production-value" className="h-full min-w-0 flex-1 rounded-none border-0 bg-transparent text-right tabular-nums shadow-none" value={form.productionValue} readOnly disabled={disabled} aria-label={`Calculated production value in ${getCurrencyCode()}`} />
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4 sm:gap-3">
+        <div className="min-w-0">
+          <div className="min-w-0 space-y-0.5">
+            <Label htmlFor="app-branch-name">Branch Name</Label>
+            <FilterCombobox
+              inputId="app-branch-name"
+              listId="app-branch-name-list"
+              value={branchDropdownOpen ? branchQuery : branchOfficeDisplayName(form.branchName)}
+              onValueChange={(value) => {
+                setBranchQuery(value)
+              }}
+              options={filteredBranchOptions}
+              onSelectOption={(option) => {
+                const office = branchOffices.find((candidate) => candidate.id === option.id)
+                if (!office) return
+                onChange({ ...form, branchName: office.name, branchState: office.state ?? '' })
+                setBranchQuery(branchOfficeDisplayName(office.name))
+                setBranchDropdownOpen(false)
+              }}
+              open={branchDropdownOpen}
+              onOpenChange={setBranchDropdownOpen}
+              onInputFocus={() => setBranchQuery(form.branchName)}
+              placeholder={branchOffices.length ? 'Type to search BIS branch offices' : 'No BIS branch offices available'}
+              disabled={disabled || branchOffices.length === 0}
+              showSerialNumbers={false}
+              inputClassName={limsFieldClass}
+            />
+          </div>
+        </div>
+
+        <div className="min-w-0">
+          <div className="min-w-0 space-y-0.5">
+            <Label htmlFor="app-branch-state">Branch State</Label>
+            <Input id="app-branch-state" className={limsFieldClass} value={form.branchState} readOnly disabled={disabled} placeholder="Auto-selected from branch" />
+          </div>
+        </div>
+
+        <div className="min-w-0">
           <MasterOptionFieldWithAdd
             category="bis_officer_name"
             label="Branch Head Name"
@@ -305,7 +427,7 @@ export function ApplicationDetailsFields({
           />
         </div>
 
-        <div className="col-span-12 sm:col-span-4">
+        <div className="min-w-0">
           <MasterOptionFieldWithAdd
             category="designation"
             label="Branch Head Designation"
@@ -318,8 +440,10 @@ export function ApplicationDetailsFields({
             placeholder="Select or Add"
           />
         </div>
+        </div>
 
-        <div className="col-span-12 sm:col-span-4">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4 sm:gap-3">
+        <div className="min-w-0">
           <MasterOptionFieldWithAdd
             category="bis_officer_name"
             label="Inspection Officer Name"
@@ -333,7 +457,7 @@ export function ApplicationDetailsFields({
           />
         </div>
 
-        <div className="col-span-12 sm:col-span-4">
+        <div className="min-w-0">
           <MasterOptionFieldWithAdd
             category="designation"
             label="Inspection Officer Designation"
@@ -347,7 +471,7 @@ export function ApplicationDetailsFields({
           />
         </div>
 
-        <div className="col-span-12 sm:col-span-4">
+        <div className="min-w-0">
           <MasterOptionFieldWithAdd
             category="bis_officer_name"
             label="Dealing Officer Name"
@@ -361,7 +485,7 @@ export function ApplicationDetailsFields({
           />
         </div>
 
-        <div className="col-span-12 sm:col-span-4">
+        <div className="min-w-0">
           <MasterOptionFieldWithAdd
             category="designation"
             label="Dealing Officer Designation"
@@ -373,6 +497,7 @@ export function ApplicationDetailsFields({
             disabled={disabled}
             placeholder="Select or Add"
           />
+        </div>
         </div>
       </div>
     </div>

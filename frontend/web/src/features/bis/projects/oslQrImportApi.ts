@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabaseClient'
-import { formatIsCodeLabelFromParts } from '@/features/masters/is-codes/formatIsCodeLabel'
+import { isCodeDisplayLabel } from './types'
 import { fetchBisModulePayload, saveBisModulePayload } from './bisModuleDataApi'
 import {
   availableImportedQrCodes,
@@ -12,10 +12,7 @@ import type { BisProjectRow } from './types'
 /** Firm — IS number: year — CM/L or CM/A (unused count appended in the UI). */
 function formatOslQrSourceLabel(row: BisProjectRow): string {
   const firm = (row.client?.company_name ?? '').trim() || '—'
-  const isCode = formatIsCodeLabelFromParts(
-    row.is_code?.is_number,
-    row.is_code?.revision_year,
-  )
+  const isCode = isCodeDisplayLabel(row)
   const cmL = String(row.cm_l_digits ?? '').replace(/\D/g, '')
   const appNo = String(row.application_number ?? '').replace(/\D/g, '')
   const ref = cmL ? `CM/L-${cmL}` : appNo ? `CM/A-${appNo}` : ''
@@ -26,7 +23,7 @@ function formatOslQrSourceLabel(row: BisProjectRow): string {
 const OSL_MODULE_KIND = 'osl-sample-requirements' as const
 
 const PROJECT_SELECT =
-  '*, client:clients(company_name), is_code:is_codes(is_number, title, revision_year)'
+  '*, client:clients(company_name), is_code:is_codes(is_number, title, revision_year, part_no, section_no, standard_prefix, unit_of_is)'
 
 export type OslQrSourceProject = {
   projectId: string

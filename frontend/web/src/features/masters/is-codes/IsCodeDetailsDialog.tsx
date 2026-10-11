@@ -10,7 +10,7 @@ import {
   limsOutlineBtnClass,
 } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
-import { formatIsCodeLabelFromParts } from './formatIsCodeLabel'
+import { formatIsCodeLabel } from './formatIsCodeLabel'
 import { loadIsCodeFileLinks, type IsCodeFileLink } from './loadIsCodeFileLinks'
 import type { IsCodeRow } from './types'
 
@@ -128,7 +128,7 @@ export function IsCodeDetailsDialog({
   const title =
     row == null
       ? 'IS Code Details'
-      : formatIsCodeLabelFromParts(row.is_number, row.revision_year) || 'IS Code Details'
+      : formatIsCodeLabel(row) || 'IS Code Details'
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -167,7 +167,7 @@ export function IsCodeDetailsDialog({
                   Code details
                 </h3>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                  <DetailCard label="IS Number" value={display(row.is_number)} />
+                  <DetailCard label="IS Number" value={display(formatIsCodeLabel(row))} />
                   <DetailCard label="Revision Year" value={display(row.revision_year)} />
                   <DetailCard label="Reaffirmation Year" value={display(row.reaffirmation_year)} />
                   <DetailCard label="Amendment Number" value={display(row.amendment_number)} />

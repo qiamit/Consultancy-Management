@@ -17,6 +17,9 @@ const fmt = (v: string | null | undefined) => (v && v.trim() ? v.trim() : '—')
 type IsCodeDetails = {
   isNumber: string | null
   revisionYear: string | null
+  partNo: string | null
+  sectionNo: string | null
+  standardPrefix: string | null
   reaffirmationYear: string | null
   amendmentNumber: string | null
   title: string | null
@@ -26,7 +29,15 @@ type IsCodeDetails = {
 
 function formatIsCodeLabel(d: IsCodeDetails | null, fallback: string | null | undefined): string {
   if (d?.isNumber?.trim()) {
-    return formatIsCodeLabelFromParts(d.isNumber, d.revisionYear) || d.isNumber.trim()
+    return (
+      formatIsCodeLabelFromParts(
+        d.isNumber,
+        d.revisionYear,
+        d.partNo,
+        d.sectionNo,
+        d.standardPrefix,
+      ) || d.isNumber.trim()
+    )
   }
   const normalized = normalizeIsCodeLabel(fallback)
   return normalized || '—'
@@ -165,7 +176,7 @@ export function SectionSampleDescViewDialog({
           supabase
             .from('is_codes')
             .select(
-              'is_number, revision_year, reaffirmation_year, amendment_number, title, aspect, remarks',
+              'is_number, revision_year, part_no, section_no, standard_prefix, reaffirmation_year, amendment_number, title, aspect, remarks',
             )
             .eq('id', isCodeId)
             .maybeSingle(),
@@ -177,6 +188,9 @@ export function SectionSampleDescViewDialog({
         const d = detailsResult.data as {
           is_number?: string | null
           revision_year?: string | null
+          part_no?: string | null
+          section_no?: string | null
+          standard_prefix?: string | null
           reaffirmation_year?: string | null
           amendment_number?: string | null
           title?: string | null
@@ -189,6 +203,9 @@ export function SectionSampleDescViewDialog({
             ? {
                 isNumber: d.is_number ?? null,
                 revisionYear: d.revision_year ?? null,
+                partNo: d.part_no ?? null,
+                sectionNo: d.section_no ?? null,
+                standardPrefix: d.standard_prefix ?? null,
                 reaffirmationYear: d.reaffirmation_year ?? null,
                 amendmentNumber: d.amendment_number ?? null,
                 title: d.title ?? null,

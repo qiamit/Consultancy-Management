@@ -13,7 +13,7 @@ import {
 } from './TestReportReferbackToReviewDialog'
 import { referbackSectionFromReportPreparation, syncSampleStageAfterReportPrepReferback } from './referbackFromReportPreparation'
 import { getSampleWorkflowStatusLabel } from '@/features/sample-handling/sampleWorkflowStatus'
-import { formatIsCodeLabelFromParts } from '@/features/masters/is-codes/formatIsCodeLabel'
+import { formatIsCodeLabel } from '@/features/masters/is-codes/formatIsCodeLabel'
 import type { SampleStage } from '@/features/sample-handling/types'
 import { isSupabaseMissingColumnError } from '@/lib/supabaseErrors'
 import { cn, formatDate } from '@/lib/utils'
@@ -223,14 +223,18 @@ export default function TestReportPreparationMasterPage() {
       if (isIds.length > 0) {
         const { data: isData } = await supabase
           .from('is_codes')
-          .select('id, is_number, revision_year')
+          .select('id, is_number, revision_year, part_no, section_no, standard_prefix')
           .in('id', isIds)
         for (const c of Array.isArray(isData) ? isData : []) {
-          const row = c as { id: string; is_number?: string; revision_year?: string | null }
-          const label =
-            formatIsCodeLabelFromParts(row.is_number, row.revision_year) ||
-            row.is_number ||
-            row.id
+          const row = c as {
+            id: string
+            is_number?: string
+            revision_year?: string | null
+            part_no?: string | null
+            section_no?: string | null
+            standard_prefix?: string | null
+          }
+          const label = formatIsCodeLabel(row) || row.is_number || row.id
           isMap.set(row.id, label)
         }
       }

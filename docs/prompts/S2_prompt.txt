@@ -1,0 +1,331 @@
+Session S2: Fix user creation (Part 0), make lab_settings admin-only (Part A), fix the quotation 400s and the empty list (Part B), and speed up the Client Directory (Part C). Then verify, apply the migration, commit and push.
+Repo: Consultancy Management. frontend/web is the Vite React app. backend/database/migrations holds SQL for the self-hosted Railway Postgres behind GoTrue v2.174 and PostgREST 12.2. backend/services/functions/server.mjs is the Node functions service. backend/services/gateway/Caddyfile is the API gateway. Read .cursorrules and .cursor/rules/10-database-migrations.mdc first.
+Baseline: HEAD 7c0c63f (S1). The newest migration is 20261008130000_emergency_auth_lockdown.sql. Every repo migration is already recorded in public.app_schema_migrations, so `npm run db:migrate` should apply ONLY the new S2 file.
+
+ORDER: Part 0 → A → B → C, then VERIFY → MIGRATE → COMMIT/PUSH. Obey every STOP rule.
+
+==================== LIVE FACTS (verified read-only on production today; trust these over old migrations) ====================
+P0. Admin → User Management → "Add user" fails with "Database error creating new user" (GoTrue 500). From the Postgres log at 14:57 IST: `insert or update on table "identities" violates foreign key constraint "identities_user_id_app_users_fkey" ... Key (user_id)=(…) is not present in table "app_users"`.
+    - All GoTrue tables have FKs to the legacy table public.app_users(id), ON DELETE CASCADE: identities, sessions, mfa_factors, one_time_tokens, oauth_consents, oauth_authorizations, webauthn_credentials, webauthn_challenges.
+    - 18 public tables also reference it: profiles.id, email_accounts, clients.created_by, transactions, project_documents (SET NULL), finance_*, is_codes, is_code_files, product_master_items, bis_* applications, bis_projects, iso_projects, test_parameters.
+    - These FKs predate the repo; no repo migration creates them. GoTrue never writes app_users, so every NEW user fails.
+    - Existing users still work only because app_users ids equal auth.users ids (5/5 match, 0 orphans).
+    - This is NOT caused by S1. The S1 guard trigger is fine (SECURITY DEFINER, owner supabase_admin).
+    - Even if a user row got in, login would fail on the sessions FK.
+PA. lab_settings (1 row; id is NOT the singleton 00000000-…-0001) has exactly one policy left: consultancy_lab_settings_all (ALL, USING true, authenticated). Any signed-in user can change bank details, logo and so on.
+    The app's writers:
+    - features/settings/LabSettingsPage.tsx:1217-1226 (upsertLabSettings). The /settings/lab route is director-only (GlobalLayout.tsx:91 DIRECTOR_ONLY_PROFILE_PATHS).
+    - features/settings/lab-settings/documentTemplatesConfig.ts:39-70 (saveLabDocumentTemplates), called from features/finance/sale/quotation/QuotationTemplatesDialog.tsx:212/229. That dialog opens from QuotationMasterPage and SaleDocumentMasterPage, which non-admin staff use.
+      It writes lab_settings.document_templates, but that column does NOT exist live, so templates load/save fail for everyone today.
+      Its error fallback upserts id = LAB_SETTINGS_SINGLETON_ID, which would create a SECOND row.
+    - features/settings/lab-settings/printSettingsConfig.ts:140-230 and features/sample-handling/report-preparation/reportScopeConfig.ts:200 (upsert with the singleton id). Their callers (sample-handling report preparation) are not routed in this app.
+    - Note: get_public_company_brand() reads `lab_settings ORDER BY created_at DESC LIMIT 1`. A second row would hijack the public brand and logo.
+PB1. New quotation (/finance/sale/quotation?edit=new) returns 400 on quotation_terms_conditions and quotation_notes.
+    - Postgres log: `column quotation_terms_conditions.document_kind does not exist` (same for quotation_notes).
+    - Live columns: id, label, content, sort_order, is_default, created_at. Both tables have 0 rows.
+    - The code filters by document_kind: quotationTermsApi.ts:36/49 and quotationNotesApi.ts:36/49, including insert/update. Callers: QuotationMasterPage.tsx:398-399, QuotationForm.tsx:467-468, SaleDocumentMasterPage.tsx:374-375, ManageQuotationTermsDialog/ManageQuotationNotesDialog:62.
+    - The column came from LIMS migration 20260811000001_sale_document_kind_defaults.sql, which apply-migrations SKIPS.
+    - sale_document_signature_defaults already exists live in a shape that works (GET 200, 0 rows). Do NOT recreate or alter it.
+PB2. The signature 400 is a storage call: `POST /storage/v1/object/sign/quotation-signatures/<adminUid>/company/seal_sign/…_Seal___Sign.png → 400`, then the same path in laboratory-files → 400.
+    - lab_settings.seal_sign_path and logo_path look like `<uid>/company/...`. file-upload.tsx:77 builds `${pathPrefix}/...`, and pathPrefix includes the uid.
+    - quotationSignatureStorage.ts:8 isLabSealStoragePath only recognises paths starting with `company/`, `letterheads/` or `laboratory-files:`. So the lab seal is looked up in the wrong bucket first, and removeQuotationOwnedSignature() would treat a lab seal as quotation-owned.
+    - storage.objects has NO objects in laboratory-files or quotation-signatures (only bis-project-files 70 and is-code-files 6). The Seal & Sign and logo files are missing from storage, so those signs keep returning 400 until Amit re-uploads them (the logo 400 has repeated since 6 Oct).
+    - The quotation-signatures bucket exists, but its storage.objects policies (lims_quotation_signatures_*, from skipped 20260809000016) do not. The live lims_laboratory_files_* policies have the same shape.
+PB3. Quotation list shows "No quotations added yet" while the dashboard counts 1. The data is fine: public.quotations has 1 row (QT/2600001, status 'pending', RLS open to authenticated), and DashboardPage.tsx:111 counts the same table.
+    - Cause: QuotationMasterPage.tsx:338-350 bootstraps SEQUENTIALLY (loadClients, then loadProducts, then loadRows). loadClients pages through 17,902 clients (18 requests, about 27 s in the logs, 09:23:21–09:23:48 UTC), so GET /rest/v1/quotations only runs at 09:23:50.
+    - listLoading starts as useState(false) (line 114), so the empty state shows for those ~30 s.
+    - The showForm effect (352-358) calls loadClients AGAIN in parallel, which is why the client picker found Zydus only after ~8 s.
+    - Status 'pending' is lowercase and not a QuotationStatus value.
+PC. fetchAllRows (frontend/web/src/lib/fetchAllRows.ts, from S1) is a sequential loop, 1000 rows per page.
+    - Each page URL differs (offset/limit), so the browser sends an OPTIONS preflight per page even though the Caddyfile sets Access-Control-Max-Age 86400. That is about 0.65 s per page from India, so 18 pages ≈ 25–30 s.
+    - ClientsMasterPage.tsx:239 selects '*'. The Quotation/Sale pickers (QuotationMasterPage.tsx:153, SaleDocumentMasterPage.tsx:224) select 14 columns. fetchConsentLetterFormData.ts:98 also uses it.
+    - The comment at QuotationMasterPage.tsx:341 says "Bootstrap sequentially so auth session lock is not contended" (supabase-js ^2.98 auth lock).
+
+==================== PART 0 (HIGHEST PRIORITY): repoint legacy FKs to auth.users ====================
+Create backend/database/migrations/20261008150000_s2_auth_fk_quotation_lab_settings.sql with EXACTLY the SQL below (the "MIGRATION SQL" block at the end of this prompt). The whole file was tested in a Postgres stub harness that copies the live roles, policies, triggers and FK wiring:
+- Before: a GoTrue-style user insert fails with the exact live error.
+- After: it succeeds. The profile designation is '' and the service-role upsert sets it. Deleting the user cascades identities and sessions and sets clients.created_by to NULL.
+- All 27 S1 security scenarios still pass, and 18 new S2 scenarios pass.
+- The file runs twice without error.
+Part 0 is the first block of that file. It finds every single-column FK that references public.app_users and recreates it against auth.users(id) with the same ON DELETE rule. Names change from `<x>_app_users_fkey` to `<x>_fkey`. It leaves the app_users table in place.
+No frontend or functions change is needed for Part 0: UserManagementMasterPage → functions /create-user → GoTrue admin API keeps working.
+
+==================== PART A: lab_settings, everyone reads, only admins write ====================
+DB (in the same migration, already included):
+- Drop every policy on lab_settings. Create lab_settings_select (SELECT, authenticated, true) and lab_settings_admin_insert/update/delete using public.app_is_admin().
+- ADD COLUMN IF NOT EXISTS document_templates jsonb.
+- Leave get_public_company_brand() unchanged in S2. Its logo_path begins with the admin uid; that is low impact and is tracked for R4.
+Frontend (frontend/web/src):
+1. documentTemplatesConfig.ts saveLabDocumentTemplates:
+   - Always update the row from resolveLabSettingsRowId(). Remove the singleton-id upsert fallback, so a second row is never created.
+   - A blocked UPDATE returns 0 rows with no error. If `.select()` returns no row, throw Error('Only Admin can change document templates.').
+2. printSettingsConfig.ts (saveLabPrintSettings / saveTestReportPrintSettings) and reportScopeConfig.ts saveReportScopeTemplatesConfig: same rule. Update the resolveLabSettingsRowId() row, never upsert with LAB_SETTINGS_SINGLETON_ID, and throw a clear error on 0 rows.
+3. LabSettingsPage.tsx upsertLabSettings (~1217): make sure the payload id is the resolved existing row id (resolveLabSettingsRowId), never the singleton constant. Show the 0-row error as a toast.
+4. QuotationTemplatesDialog.tsx: non-admins (use the existing isLaboratoryDirector(designation) from useAuth; its list matches app_is_admin()) see the templates read-only, with the Save buttons disabled and a short note "Only Admin can change templates". Admins save as before. Show errors as toasts.
+5. Grep for any other `.from('lab_settings')` write (.insert/.update/.upsert/.delete) and apply the same rule. List them in the report.
+
+==================== PART B: quotation 400s and the empty list ====================
+DB (in the same migration, already included):
+- document_kind text NOT NULL DEFAULT 'quotation' on quotation_terms_conditions and quotation_notes, with the check constraints and the partial unique indexes "one default per kind" from 20260811000001.
+- The 4 lims_quotation_signatures_* storage policies.
+- NOTIFY pgrst, 'reload schema'.
+Do NOT touch sale_document_signature_defaults.
+Frontend:
+1. quotationSignatureStorage.ts isLabSealStoragePath: also return true for `<uuid>/company/...` and `<uuid>/letterheads/...`, using the regex /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/(company|letterheads)\//i, so lab seals resolve in laboratory-files first and are never deleted by removeQuotationOwnedSignature().
+   - resolveSignatureSignedUrl already returns null on failure. Keep it quiet: no toast and no thrown error when the object is missing. QuotationSignatureField shows the "no image" state.
+2. QuotationMasterPage.tsx:
+   a. listLoading initial state = true.
+   b. The bootstrap effect starts loadRows() immediately, without waiting for clients or products. Then load products and clients after it, or in parallel (Promise.allSettled). The list must appear in about 1–2 s.
+   c. Remove the duplicate client load. The showForm effect must reuse the cached or in-flight client list (Part C cache), not start a second full fetch.
+   d. Status display: map unknown or lowercase status values case-insensitively to the nearest QuotationStatus label (e.g. 'pending' → 'Pending' if that exists; otherwise show the raw value capitalised). Do not migrate data.
+3. SaleDocumentMasterPage.tsx already loads its list independently. Only switch its client loading to the Part C cache.
+4. Errors from fetchQuotationTerms/Notes in bootstrapNewForm (QuotationMasterPage.tsx:398) and QuotationForm.tsx:467 are currently swallowed by .catch. Keep the form usable, but log once with console.warn (no toast spam).
+
+==================== PART C: faster Client Directory and client pickers ====================
+1. frontend/web/src/lib/fetchAllRows.ts, keeping the same exported signature plus an optional count builder:
+   - New options: `{ pageSize = 1000, max = 100000, concurrency = 4, count?: () => PromiseLike<{ count: number | null; error: unknown }> }`.
+   - When `count` is given:
+     - Call it first; callers pass `supabase.from('clients').select('id', { count: 'exact', head: true })` with the same filters as the main query.
+     - Compute the pages and fetch them with at most `concurrency` requests in flight (a small worker pool, no new dependency).
+     - Put the pages back in page order, then run the existing dedupeById.
+     - If the last page comes back full (rows were added meanwhile), keep fetching sequentially until a short page arrives.
+   - When `count` is missing or returns null, fall back to the current sequential loop.
+   - Throw on the first error.
+   - Before starting the pool, `await supabase.auth.getSession()` once, so the auth lock is not contended. Pass the client in, or do it in the callers; don't import supabase into lib if it creates a cycle.
+   - Keep the stable order requirement (company_name, id) and the DEV warn above 20,000.
+2. New frontend/web/src/lib/clientsCache.ts:
+   - getPickerClients(): Promise<PickerClientRow[]> for the 14-column picker select used by QuotationMasterPage/SaleDocumentMasterPage. In-memory module cache, TTL 10 min, in-flight promise dedupe (concurrent callers share one fetch). Use fetchAllRows with count and concurrency 4.
+   - invalidateClientsCache(): call it after every client write: ClientsMasterPage.tsx ~716/719 (save), ~952 (delete), ~1083-1093 (import/upsert), ClientDetailsDialog.tsx ~84 if it writes. Grep for other `.from('clients')` writes.
+   - Use it in QuotationMasterPage.loadClients and SaleDocumentMasterPage.loadClients, keeping the 3-attempt retry and the same mapping to options and contacts.
+   - Use it in fetchConsentLetterFormData.ts if its select is compatible; otherwise give it the parallel fetchAllRows only.
+3. ClientsMasterPage.loadClients keeps select('*'). Use parallel fetchAllRows with count, and show the existing loading state. No cache for the full directory, or reuse a separate cache entry only if it is trivial.
+4. Target: Client Directory loads in about 5–8 s instead of 25–30 s, and the pickers are instant on the second open.
+
+==================== HOUSE RULES ====================
+- Schema changes only in the NEW migration file. Never edit, rename or delete an applied migration. Do not add the new file to SKIP_FILES.
+- Never open, print or copy .env, .railway-secrets.env or any secret value. Never paste DB URLs or keys into output.
+- Keep existing data, Hindi labels and the current look. Grep every usage before changing a function signature.
+- No other Railway changes: no variables, no service settings, no redeploy commands. Railway redeploys frontend and functions automatically on push.
+
+==================== VERIFY → MIGRATE → COMMIT/PUSH (Amit has approved this flow for S2) ====================
+1. From the repo root: `npm run typecheck` (≤ 122 errors, baseline 122), `npm run lint` (≤ 353 problems, baseline 353), `npm run build` (must pass), `npm run functions:check` (must pass). Record the before and after counts.
+   STOP RULE 1: if any of these is worse than baseline or fails, fix it. If you can't, STOP. Do not migrate, commit or push; report.
+2. `git status --short`: confirm the only changes are the new migration file and the intended frontend files. STOP if any .env*, *.bak, *backup*, *.orig, dump or secret file shows up as new or modified (do not stage it; report it).
+3. `npm run db:migrate`. Expect `APPLY 20261008150000_s2_auth_fk_quotation_lab_settings.sql` followed by `OK ...`. NOTICE lines like "repointed auth.identities.user_id …" are expected. Every other file should be SKIP.
+   STOP RULE 2: if it prints FAIL for any file, or tries to APPLY any file other than the S2 one, STOP immediately. Do NOT commit or push. Paste the error line(s) (no secrets) and report. The script runs each file in its own transaction, so a failed file is rolled back.
+4. Only after OK:
+   - `git add` with explicit paths only: the migration file and each changed or new frontend file. Never `git add -A` or `git add .`.
+   - `git commit -m "S2: fix user creation (repoint app_users FKs to auth.users), lab_settings admin-only writes, quotation terms/notes document_kind + signature storage policies, faster client loading"`
+   - `git push origin main`. Report the commit hash.
+   STOP RULE 3: if the push is rejected (non-fast-forward), do NOT force-push or rebase. Report and stop.
+
+==================== REPORT ====================
+- Before and after counts for typecheck, lint, build and functions:check.
+- The db:migrate output lines for the S2 file (APPLY/OK and the NOTICE count).
+- Commit hash and the list of files committed.
+- The lab_settings writers you changed and any others you found.
+- Short root causes in one line each: user creation; terms/notes 400; signature 400; empty quotation list; slow directory.
+- Anything uncertain or not done.
+- POST-DEPLOY STEPS FOR AMIT (after Railway redeploys the frontend, ~2–3 min):
+  (1) User Management → add the test user (S1 Test User, s1-test-delete@qengineering.in, Inspection Engineer, Consultancy/Management, 9999900001). It must succeed and the count becomes 6. Log in as it once, then delete it; the count goes back to 5.
+  (2) As that Inspection Engineer (before deleting): Lab Settings is not reachable, and the Quotation Templates dialog is read-only.
+  (3) New quotation: no 400 on terms/notes in DevTools. The client picker finds "Zydus" immediately on a second open.
+  (4) The quotation list shows QT/2600001 within ~2 s.
+  (5) Client Directory loads all ~17,902 clients in well under 10 s.
+  (6) Lab Settings → re-upload "Seal & Sign" and the Logo. The files are missing from storage, so the seal/logo 400s stop only after re-upload.
+  (7) Optional: run the commented MANUAL TEST block at the end of the migration in psql (every block rolls back).
+
+==================== MIGRATION SQL (create this file byte-for-byte; it is tested) ====================
+File: backend/database/migrations/20261008150000_s2_auth_fk_quotation_lab_settings.sql
+-- S2: (0) fix "Database error creating new user" by repointing legacy FKs from
+--     public.app_users to auth.users; (A) lab_settings writes admin-only;
+--     (B) quotation terms/notes document_kind + quotation-signatures storage policies.
+-- Idempotent: safe to run twice. Runs as the migration superuser (POSTGRES_URL).
+
+-- =====================================================================
+-- PART 0 (highest priority): legacy FKs -> auth.users
+-- Every GoTrue table (identities, sessions, mfa_*, one_time_tokens, oauth_*,
+-- webauthn_*) and ~18 public tables reference public.app_users(id), a legacy
+-- table that GoTrue never writes. Creating a user inserts auth.identities
+-- with the new id -> FK violation "identities_user_id_app_users_fkey" ->
+-- GoTrue 500 "Database error creating new user".
+-- Repoint each single-column FK to auth.users(id), keeping its ON DELETE rule.
+-- app_users ids == auth.users ids for all existing users (verified), so
+-- validation passes. The app_users table itself is left in place.
+-- =====================================================================
+-- Part 0: repoint every FK that still references the legacy public.app_users to auth.users(id).
+-- Root cause of "Database error creating new user": auth.identities.user_id (and sessions, mfa_factors,
+-- one_time_tokens, oauth_*, webauthn_*) reference public.app_users, so any NEW GoTrue user fails.
+DO $$
+DECLARE
+  r record;
+  new_name text;
+BEGIN
+  IF to_regclass('public.app_users') IS NULL OR to_regclass('auth.users') IS NULL THEN
+    RETURN;
+  END IF;
+  FOR r IN
+    SELECT c.oid,
+           c.conrelid,
+           c.conrelid::regclass::text AS tbl,
+           c.conname,
+           a.attname AS col,
+           CASE c.confdeltype
+             WHEN 'c' THEN 'CASCADE'
+             WHEN 'n' THEN 'SET NULL'
+             WHEN 'd' THEN 'SET DEFAULT'
+             WHEN 'r' THEN 'RESTRICT'
+             ELSE 'NO ACTION'
+           END AS on_delete
+    FROM pg_constraint c
+    JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = c.conkey[1]
+    WHERE c.contype = 'f'
+      AND c.confrelid = 'public.app_users'::regclass
+      AND array_length(c.conkey, 1) = 1
+  LOOP
+    new_name := regexp_replace(r.conname, '_app_users_fkey$', '_fkey');
+    IF new_name = r.conname
+       OR EXISTS (SELECT 1 FROM pg_constraint x WHERE x.conrelid = r.conrelid AND x.conname = new_name) THEN
+      new_name := left(r.conname, 50) || '_auth_users_fkey';
+    END IF;
+    EXECUTE format('ALTER TABLE %s DROP CONSTRAINT %I', r.tbl, r.conname);
+    EXECUTE format(
+      'ALTER TABLE %s ADD CONSTRAINT %I FOREIGN KEY (%I) REFERENCES auth.users(id) ON DELETE %s',
+      r.tbl, new_name, r.col, r.on_delete
+    );
+    RAISE NOTICE 'repointed %.% (%) -> auth.users as %', r.tbl, r.col, r.conname, new_name;
+  END LOOP;
+END $$;
+
+-- =====================================================================
+-- PART A: lab_settings — every signed-in user can read, only admins write.
+-- Writers in the app: Settings > Lab (director-only route), Quotation
+-- "Templates" dialog (document_templates), report-prep print/scope settings
+-- (route not mounted). Non-admin writes now affect 0 rows (UPDATE) or fail
+-- (INSERT); the UI handles that (see frontend part).
+-- =====================================================================
+ALTER TABLE public.lab_settings ENABLE ROW LEVEL SECURITY;
+
+-- Column used by QuotationTemplatesDialog / documentTemplatesConfig.ts but
+-- missing live (every load/save currently errors).
+ALTER TABLE public.lab_settings ADD COLUMN IF NOT EXISTS document_templates jsonb;
+
+DO $$
+DECLARE p record;
+BEGIN
+  -- Drop every existing policy on lab_settings (live: consultancy_lab_settings_all
+  -- = ALL/true/authenticated). Permissive policies are OR-ed, so any leftover
+  -- would re-open writes.
+  FOR p IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'lab_settings'
+  LOOP
+    EXECUTE format('DROP POLICY %I ON public.lab_settings', p.policyname);
+  END LOOP;
+END $$;
+
+CREATE POLICY lab_settings_select ON public.lab_settings
+  FOR SELECT TO authenticated USING (true);
+CREATE POLICY lab_settings_admin_insert ON public.lab_settings
+  FOR INSERT TO authenticated WITH CHECK (public.app_is_admin());
+CREATE POLICY lab_settings_admin_update ON public.lab_settings
+  FOR UPDATE TO authenticated USING (public.app_is_admin()) WITH CHECK (public.app_is_admin());
+CREATE POLICY lab_settings_admin_delete ON public.lab_settings
+  FOR DELETE TO authenticated USING (public.app_is_admin());
+
+-- =====================================================================
+-- PART B1: quotation_terms_conditions / quotation_notes.document_kind
+-- (from skipped LIMS migration 20260811000001; live tables lack the column,
+-- so every request with document_kind=eq.quotation returns 400).
+-- Do NOT touch sale_document_signature_defaults (live shape already works).
+-- =====================================================================
+ALTER TABLE public.quotation_terms_conditions
+  ADD COLUMN IF NOT EXISTS document_kind text NOT NULL DEFAULT 'quotation';
+ALTER TABLE public.quotation_notes
+  ADD COLUMN IF NOT EXISTS document_kind text NOT NULL DEFAULT 'quotation';
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint
+                 WHERE conrelid = 'public.quotation_terms_conditions'::regclass
+                   AND conname = 'quotation_terms_conditions_document_kind_chk') THEN
+    ALTER TABLE public.quotation_terms_conditions
+      ADD CONSTRAINT quotation_terms_conditions_document_kind_chk
+      CHECK (document_kind IN ('quotation','proformaInvoice','invoice','creditNote','paymentReceipt'));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint
+                 WHERE conrelid = 'public.quotation_notes'::regclass
+                   AND conname = 'quotation_notes_document_kind_chk') THEN
+    ALTER TABLE public.quotation_notes
+      ADD CONSTRAINT quotation_notes_document_kind_chk
+      CHECK (document_kind IN ('quotation','proformaInvoice','invoice','creditNote','paymentReceipt'));
+  END IF;
+END $$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS quotation_terms_conditions_one_default_per_kind
+  ON public.quotation_terms_conditions (document_kind) WHERE is_default;
+CREATE UNIQUE INDEX IF NOT EXISTS quotation_notes_one_default_per_kind
+  ON public.quotation_notes (document_kind) WHERE is_default;
+
+-- =====================================================================
+-- PART B2: storage policies for the quotation-signatures bucket
+-- (bucket exists live; its policies from skipped 20260809000016 do not).
+-- Same shape as the live lims_laboratory_files_* policies.
+-- =====================================================================
+DO $$
+BEGIN
+  IF to_regclass('storage.objects') IS NULL THEN
+    RAISE NOTICE 'storage.objects missing, skipping quotation-signatures policies';
+    RETURN;
+  END IF;
+  EXECUTE 'DROP POLICY IF EXISTS lims_quotation_signatures_select ON storage.objects';
+  EXECUTE 'CREATE POLICY lims_quotation_signatures_select ON storage.objects FOR SELECT TO authenticated USING (bucket_id = ''quotation-signatures'')';
+  EXECUTE 'DROP POLICY IF EXISTS lims_quotation_signatures_insert ON storage.objects';
+  EXECUTE 'CREATE POLICY lims_quotation_signatures_insert ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = ''quotation-signatures'')';
+  EXECUTE 'DROP POLICY IF EXISTS lims_quotation_signatures_update ON storage.objects';
+  EXECUTE 'CREATE POLICY lims_quotation_signatures_update ON storage.objects FOR UPDATE TO authenticated USING (bucket_id = ''quotation-signatures'') WITH CHECK (bucket_id = ''quotation-signatures'')';
+  EXECUTE 'DROP POLICY IF EXISTS lims_quotation_signatures_delete ON storage.objects';
+  EXECUTE 'CREATE POLICY lims_quotation_signatures_delete ON storage.objects FOR DELETE TO authenticated USING (bucket_id = ''quotation-signatures'')';
+END $$;
+
+NOTIFY pgrst, 'reload schema';
+
+-- =====================================================================
+-- MANUAL TEST (run by hand in psql AFTER applying; every block rolls back)
+-- Replace <ADMIN_UID> / <NON_ADMIN_UID> with real auth.users ids.
+-- =====================================================================
+-- 0) No FK left pointing at app_users (expect 0 rows):
+-- SELECT conrelid::regclass, conname FROM pg_constraint
+--  WHERE contype = 'f' AND confrelid = 'public.app_users'::regclass;
+--
+-- 0b) GoTrue-style user insert works (expect no error):
+-- BEGIN;
+--   INSERT INTO auth.users (id, aud, role, email, created_at, updated_at)
+--   VALUES ('11111111-1111-1111-1111-111111111111', 'authenticated', 'authenticated', 's2-manual@example.invalid', now(), now());
+--   INSERT INTO auth.identities (provider_id, user_id, identity_data, provider, created_at, updated_at)
+--   VALUES ('11111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111111',
+--           '{"sub":"11111111-1111-1111-1111-111111111111"}', 'email', now(), now());
+--   SELECT designation FROM public.user_profiles WHERE id = '11111111-1111-1111-1111-111111111111';  -- ''
+-- ROLLBACK;
+--
+-- A) Non-admin cannot write lab_settings, can read it:
+-- BEGIN;
+--   SELECT set_config('request.jwt.claims', '{"sub":"<NON_ADMIN_UID>","role":"authenticated"}', true);
+--   SET LOCAL ROLE authenticated;
+--   SELECT count(*) FROM public.lab_settings;                                   -- 1
+--   UPDATE public.lab_settings SET lab_name = 'hack' RETURNING id;              -- 0 rows
+--   INSERT INTO public.lab_settings (lab_name) VALUES ('x');                    -- ERROR row-level security
+-- ROLLBACK;
+-- BEGIN;
+--   SELECT set_config('request.jwt.claims', '{"sub":"<ADMIN_UID>","role":"authenticated"}', true);
+--   SET LOCAL ROLE authenticated;
+--   UPDATE public.lab_settings SET lab_name = lab_name RETURNING id;            -- 1 row
+-- ROLLBACK;
+--
+-- B) document_kind works for the app's query shape:
+-- BEGIN;
+--   SET LOCAL ROLE authenticated;
+--   SELECT id, label, content, is_default, sort_order FROM public.quotation_terms_conditions
+--    WHERE document_kind = 'quotation' ORDER BY sort_order, label;              -- no error
+--   SELECT content FROM public.quotation_notes WHERE document_kind = 'quotation' AND is_default; -- no error
+-- ROLLBACK;
+-- SELECT policyname FROM pg_policies WHERE schemaname = 'storage' AND policyname LIKE 'lims_quotation_signatures_%'; -- 4 rows
+==================== END OF MIGRATION SQL ====================

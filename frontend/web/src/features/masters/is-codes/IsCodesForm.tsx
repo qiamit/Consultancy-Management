@@ -1,28 +1,126 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Pencil, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogTrigger } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { LimsFieldAddButton, LimsFieldWithAdd } from '@/components/lims/LimsFieldWithAdd'
+import { ClientManageDialogContent } from '@/features/masters/clients/ClientManageDialogContent'
 import { FilterCombobox } from '@/features/sample-handling/receiving/FilterCombobox'
-import {
-  limsDarkBarGlowStyle,
-  limsDialogClass,
-  limsPrimaryBtnClass,
-  limsRegistryFormClass,
-} from '@/lib/limsThemeUi'
+import { supabase } from '@/lib/supabaseClient'
+import { limsPrimaryBtnClass, limsRegistryFormClass } from '@/lib/limsThemeUi'
+import { getCurrencyCode, getCurrencySymbol } from '@/lib/appCurrency'
+import { formatMoneyInput, sanitizeMoneyInput } from '@/features/masters/products-services/types'
 import { cn } from '@/lib/utils'
 import { IsCodeFilesTable, type IsCodeViewFile } from './IsCodeFilesTable'
-import type { IsAspect, IsCodeForm } from './types'
 import {
-  IS_CODE_UNITS,
+  isCodeNumberDigits,
+  isCodeFileDocumentKind,
   isValidAmendment2,
   isValidYear4,
-  canonicalIsNumber,
+  amendmentToFormStr,
+  amendmentWhileTyping,
+  partToFormStr,
+  partWhileTyping,
+  sectionToFormStr,
+  sectionWhileTyping,
+  reaffirmationToFormStr,
+  setIsCodeFileDocumentKind,
   toProperTitleCase,
+  type IsAspect,
+  type IsCodeForm,
 } from './types'
+
+type IdentityOptionCategory =
+  | 'standard_prefix'
+  | 'part_no'
+  | 'section_no'
+  | 'revision_year'
+  | 'amendment_number'
+  | 'reaffirmation_year'
+  | 'unit_of_is'
+
+const IDENTITY_OPTION_CATEGORIES: IdentityOptionCategory[] = [
+  'standard_prefix',
+  'part_no',
+  'section_no',
+  'revision_year',
+  'amendment_number',
+  'reaffirmation_year',
+  'unit_of_is',
+]
+
+const IDENTITY_OPTION_META: Record<
+  IdentityOptionCategory,
+  { title: string; addLabel: string; placeholder: string }
+> = {
+  standard_prefix: { title: 'Manage Prefixes', addLabel: 'Add Prefix', placeholder: 'e.g., IS' },
+  part_no: { title: 'Manage Parts', addLabel: 'Add Part', placeholder: 'e.g., Part-0' },
+  section_no: { title: 'Manage Sections', addLabel: 'Add Section', placeholder: 'e.g., Sec-0' },
+  revision_year: { title: 'Manage Revision Years', addLabel: 'Add Revision Year', placeholder: 'e.g., 2026' },
+  amendment_number: { title: 'Manage Amendments', addLabel: 'Add Amendment', placeholder: 'e.g., 00' },
+  reaffirmation_year: { title: 'Manage Reaffirmations', addLabel: 'Add Reaffirmation', placeholder: 'e.g., RA-2026' },
+  unit_of_is: { title: 'Manage Units', addLabel: 'Add Unit', placeholder: 'e.g., Tonne' },
+}
+
+function normalizeIdentityOption(category: IdentityOptionCategory, raw: string): string {
+  const text = raw.trim()
+  if (category === 'revision_year') return text.replace(/\D/g, '').slice(0, 4)
+  if (category === 'amendment_number') {
+    const next = amendmentToFormStr(text)
+    return next === '00' ? '' : next
+  }
+  if (category === 'part_no') {
+    const next = partToFormStr(text)
+    return next === 'Part-0' ? '' : next
+  }
+  if (category === 'section_no') {
+    const next = sectionToFormStr(text)
+    return next === 'Sec-0' ? '' : next
+  }
+  if (category === 'reaffirmation_year') {
+    const next = reaffirmationToFormStr(text)
+    return next === 'RA-' ? '' : next
+  }
+  return text
+}
+
+function CurrencyAmountField({
+  value,
+  onChange,
+  name,
+}: {
+  value: string
+  onChange: (value: string) => void
+  name: string
+}) {
+  const [focused, setFocused] = useState(false)
+  const displayValue = focused ? value : formatMoneyInput(value || '0')
+
+  return (
+    <div className="flex h-8 w-full min-w-0 overflow-hidden rounded-none border border-stone-500 bg-stone-50 focus-within:border-amber-600 focus-within:bg-white focus-within:ring-2 focus-within:ring-amber-500/20">
+      <span
+        className="inline-flex shrink-0 items-center border-r border-stone-500 bg-stone-100 px-2.5 text-sm font-semibold text-stone-700"
+        aria-hidden
+      >
+        {getCurrencySymbol()}
+      </span>
+      <Input
+        type="text"
+        inputMode="decimal"
+        value={displayValue}
+        onFocus={() => setFocused(true)}
+        onChange={(e) => onChange(sanitizeMoneyInput(e.target.value))}
+        onBlur={(e) => {
+          setFocused(false)
+          onChange(formatMoneyInput(e.target.value || '0'))
+        }}
+        placeholder="0.00"
+        className="h-full min-w-0 flex-1 rounded-none !border-0 !bg-transparent text-right tabular-nums shadow-none focus-visible:!ring-0"
+        aria-label={`${name} in ${getCurrencyCode()}`}
+      />
+    </div>
+  )
+}
 
 function Field({
   label,
@@ -83,6 +181,7 @@ export function IsCodesForm({
   onAddSavedFiles,
   onReplaceSavedFile,
   onDeleteSavedFile,
+  onDocumentKindChange,
   filesResetKey = null,
   hideFooter = false,
 }: {
@@ -106,35 +205,11 @@ export function IsCodesForm({
   onAddSavedFiles?: (files: File[]) => void
   onReplaceSavedFile?: (existing: IsCodeViewFile, next: File) => void
   onDeleteSavedFile?: (file: IsCodeViewFile) => void
+  onDocumentKindChange?: (file: IsCodeViewFile, kind: string) => void
   filesResetKey?: string | null
   hideFooter?: boolean
 }) {
-  const [editingAspectId, setEditingAspectId] = useState<string | null>(null)
   const [aspectOpen, setAspectOpen] = useState(false)
-  const [unitOpen, setUnitOpen] = useState(false)
-
-  useEffect(() => {
-    if (!aspectDialogOpen) setEditingAspectId(null)
-  }, [aspectDialogOpen])
-
-  const aspectComboboxOptions = useMemo(() => {
-    const labels = Array.from(
-      new Set(
-        ['Specification', form.aspect, ...aspectOptions.map((x) => x.label)].filter(
-          (v) => String(v ?? '').trim().length > 0,
-        ),
-      ),
-    )
-    return labels.map((label) => ({ id: label, label }))
-  }, [aspectOptions, form.aspect])
-
-  const isNumberRest = form.isNumber.replace(/^is\s*/i, '').trim()
-  const isNumberError =
-    isNumberRest.length === 0
-      ? 'Enter number after IS (e.g. IS 1234)'
-      : /^is/i.test(form.isNumber.trim())
-        ? null
-        : 'Must start with IS'
 
   const pendingFiles = useMemo(() => {
     const urls: string[] = []
@@ -145,6 +220,7 @@ export function IsCodesForm({
         id: `pending:${index}:${file.name}`,
         file_name: file.name,
         storage_path: '',
+        document_kind: isCodeFileDocumentKind(file) || null,
         viewUrl: url,
         downloadUrl: url,
         url,
@@ -168,108 +244,263 @@ export function IsCodesForm({
   const reaffirmationDisplay =
     form.reaffirmationYear === 'RA' ? 'RA-' : form.reaffirmationYear
   const amendError = isValidAmendment2(form.amendmentNumber) ? null : 'Up to 2 digits'
+  const [identityOptions, setIdentityOptions] = useState<
+    Record<IdentityOptionCategory, Array<{ id: string; label: string }>>
+  >({
+    standard_prefix: [],
+    part_no: [],
+    section_no: [],
+    revision_year: [],
+    amendment_number: [],
+    reaffirmation_year: [],
+    unit_of_is: [],
+  })
+  const [openIdentityKey, setOpenIdentityKey] = useState<IdentityOptionCategory | null>(null)
+  const [identityDialogOpen, setIdentityDialogOpen] = useState(false)
+  const [identityDialogCategory, setIdentityDialogCategory] = useState<IdentityOptionCategory>('standard_prefix')
+  const [newIdentityOption, setNewIdentityOption] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    void supabase
+      .from('is_code_master_options')
+      .select('id, label, category')
+      .in('category', IDENTITY_OPTION_CATEGORIES)
+      .order('label', { ascending: true })
+      .then(({ data }) => {
+        if (cancelled || !Array.isArray(data)) return
+        const next: Record<IdentityOptionCategory, Array<{ id: string; label: string }>> = {
+          standard_prefix: [],
+          part_no: [],
+          section_no: [],
+          revision_year: [],
+          amendment_number: [],
+          reaffirmation_year: [],
+          unit_of_is: [],
+        }
+        for (const row of data as Array<{ id: string; label: string; category: string }>) {
+          const category = row.category as IdentityOptionCategory
+          if (!next[category] || !row.label.trim()) continue
+          next[category].push({ id: row.id, label: row.label.trim() })
+        }
+        for (const category of IDENTITY_OPTION_CATEGORIES) {
+          next[category].sort((a, b) => a.label.localeCompare(b.label))
+        }
+        setIdentityOptions(next)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const applyIdentityOption = (category: IdentityOptionCategory, label: string) => {
+    const next = normalizeIdentityOption(category, label)
+    if (category === 'standard_prefix') onChange({ ...form, standardPrefix: next || 'IS' })
+    else if (category === 'part_no') onChange({ ...form, partNo: partWhileTyping(label) })
+    else if (category === 'section_no') onChange({ ...form, sectionNo: sectionWhileTyping(label) })
+    else if (category === 'revision_year') onChange({ ...form, revisionYear: next })
+    else if (category === 'amendment_number') onChange({ ...form, amendmentNumber: amendmentWhileTyping(form.amendmentNumber, label) })
+    else if (category === 'unit_of_is') onChange({ ...form, unitOfIs: next })
+    else onChange({ ...form, reaffirmationYear: next || 'RA-' })
+  }
+
+  const identityValue = (category: IdentityOptionCategory) => {
+    if (category === 'standard_prefix') return form.standardPrefix.trim() || 'IS'
+    if (category === 'part_no') return form.partNo || 'Part-0'
+    if (category === 'section_no') return form.sectionNo || 'Sec-0'
+    if (category === 'revision_year') return form.revisionYear
+    if (category === 'amendment_number') return form.amendmentNumber
+    if (category === 'unit_of_is') return form.unitOfIs
+    return reaffirmationDisplay
+  }
+
+  const rememberIdentityOption = async (label: string, id?: string, close = true) => {
+    const name = normalizeIdentityOption(identityDialogCategory, label)
+    if (!name) return
+    const list = identityOptions[identityDialogCategory]
+    const previous = id ? list.find((item) => item.id === id)?.label ?? '' : ''
+    if (id) {
+      const { error } = await supabase
+        .from('is_code_master_options')
+        .update({ label: name, value: name })
+        .eq('id', id)
+      if (error) return
+      setIdentityOptions((prev) => ({
+        ...prev,
+        [identityDialogCategory]: prev[identityDialogCategory]
+          .map((item) => (item.id === id ? { ...item, label: name } : item))
+          .sort((a, b) => a.label.localeCompare(b.label)),
+      }))
+      if (previous && previous !== name && identityValue(identityDialogCategory) === previous) {
+        applyIdentityOption(identityDialogCategory, name)
+      }
+    } else {
+      const existing = list.find((item) => item.label.toLowerCase() === name.toLowerCase())
+      if (!existing) {
+        const { data, error } = await supabase
+          .from('is_code_master_options')
+          .insert({ category: identityDialogCategory, label: name, value: name })
+          .select('id')
+          .single()
+        if (error) return
+        const nextId = (data as { id: string } | null)?.id ?? `tmp-${name}`
+        setIdentityOptions((prev) => ({
+          ...prev,
+          [identityDialogCategory]: [...prev[identityDialogCategory], { id: nextId, label: name }].sort((a, b) =>
+            a.label.localeCompare(b.label),
+          ),
+        }))
+      }
+    }
+    applyIdentityOption(identityDialogCategory, name)
+    setNewIdentityOption('')
+    if (close) setIdentityDialogOpen(false)
+  }
+
+  const identityDialogMeta = IDENTITY_OPTION_META[identityDialogCategory]
+
+  const renderIdentityOption = (
+    category: IdentityOptionCategory,
+    label: string,
+    placeholder: string,
+    error?: string | null,
+  ) => {
+    const value = identityValue(category)
+    const query = value.trim().toLowerCase()
+    return (
+      <Field key={category} label={label} error={error}>
+        <LimsFieldWithAdd
+          addButton={
+            <DialogTrigger asChild>
+              <LimsFieldAddButton
+                aria-label={`Add ${label}`}
+                title={`Add ${label}`}
+                onClick={() => {
+                  setIdentityDialogCategory(category)
+                  setNewIdentityOption(normalizeIdentityOption(category, value))
+                }}
+              />
+            </DialogTrigger>
+          }
+        >
+          <FilterCombobox
+            value={value}
+            onValueChange={(next) => applyIdentityOption(category, next)}
+            options={identityOptions[category]
+              .map((item) => ({
+                id: item.id,
+                label:
+                  category === 'part_no'
+                    ? partToFormStr(item.label)
+                    : category === 'section_no'
+                      ? sectionToFormStr(item.label)
+                      : item.label,
+              }))
+              .filter((item) => !query || item.label.toLowerCase().includes(query))}
+            onSelectOption={(option) => applyIdentityOption(category, option.label)}
+            open={openIdentityKey === category}
+            onOpenChange={(open) => {
+              setOpenIdentityKey(open ? category : null)
+              if (open) return
+              if (category === 'standard_prefix') {
+                onChange({ ...form, standardPrefix: form.standardPrefix.trim() || 'IS' })
+                return
+              }
+              if (category === 'part_no') {
+                onChange({ ...form, partNo: partToFormStr(form.partNo) })
+                return
+              }
+              if (category === 'section_no') {
+                onChange({ ...form, sectionNo: sectionToFormStr(form.sectionNo) })
+                return
+              }
+              if (category === 'amendment_number') {
+                onChange({ ...form, amendmentNumber: amendmentToFormStr(form.amendmentNumber) })
+                return
+              }
+              if (category !== 'reaffirmation_year') return
+              if (!form.reaffirmationYear.trim() || form.reaffirmationYear === 'RA') {
+                onChange({ ...form, reaffirmationYear: 'RA-' })
+              }
+            }}
+            placeholder={placeholder}
+            showSerialNumbers={false}
+            listId={`is-identity-${category}`}
+            inputId={`is-identity-${category}`}
+            inputClassName="h-8 border-0 bg-transparent px-2 shadow-none focus-visible:ring-0"
+          />
+        </LimsFieldWithAdd>
+      </Field>
+    )
+  }
 
   return (
     <div className={cn(limsRegistryFormClass, 'flex min-h-0 flex-1 flex-col gap-0')}>
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overflow-x-hidden border border-stone-400 bg-[#f7f3eb] p-3 sm:p-4">
-        <Section title="Identity">
-          <div className="grid grid-cols-12 gap-3">
-            <Field label="IS Number" error={isNumberError} className="col-span-12 sm:col-span-6 lg:col-span-3">
+        <Dialog open={identityDialogOpen} onOpenChange={setIdentityDialogOpen}>
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2 xl:grid-cols-7">
+            {renderIdentityOption('standard_prefix', 'Prefix', 'IS')}
+            <Field label="IS Number">
               <Input
-                placeholder="IS 1234"
+                inputMode="numeric"
+                placeholder="12345"
                 value={form.isNumber}
-                onChange={(e) => onChange({ ...form, isNumber: e.target.value })}
-                onBlur={() => onChange({ ...form, isNumber: canonicalIsNumber(form.isNumber) || 'IS ' })}
-              />
-            </Field>
-            <Field label="Revision Year" error={yearError} className="col-span-6 lg:col-span-3">
-              <Input
-                inputMode="numeric"
-                placeholder="YYYY"
-                value={form.revisionYear}
                 onChange={(e) =>
-                  onChange({
-                    ...form,
-                    revisionYear: e.target.value.replace(/[^0-9]/g, '').slice(0, 4),
-                  })
+                  onChange({ ...form, isNumber: isCodeNumberDigits(e.target.value) })
                 }
               />
             </Field>
-            <Field label="Reaffirmation" className="col-span-6 lg:col-span-3">
-              <Input
-                placeholder="RA-2026"
-                value={reaffirmationDisplay}
-                onChange={(e) => {
-                  const raw = e.target.value.toUpperCase()
-                  const digits = raw.replace(/^RA-?/, '').replace(/\D/g, '').slice(0, 4)
-                  onChange({ ...form, reaffirmationYear: digits ? `RA-${digits}` : 'RA-' })
-                }}
-                onBlur={() => {
-                  if (!form.reaffirmationYear.trim() || form.reaffirmationYear === 'RA') {
-                    onChange({ ...form, reaffirmationYear: 'RA-' })
-                  }
-                }}
-              />
-            </Field>
-            <Field label="Amendment" error={amendError} className="col-span-12 sm:col-span-6 lg:col-span-3">
-              <Input
-                inputMode="numeric"
-                placeholder="01"
-                value={form.amendmentNumber}
-                onChange={(e) =>
-                  onChange({
-                    ...form,
-                    amendmentNumber: e.target.value.replace(/[^0-9]/g, '').slice(0, 2),
-                  })
-                }
-              />
-            </Field>
-            <Field label="Part" className="col-span-12 sm:col-span-4">
-              <Input className="h-10 min-h-10" value={form.partNo} onChange={(e) => onChange({ ...form, partNo: e.target.value })} />
-            </Field>
-            <Field label="Section" className="col-span-12 sm:col-span-4">
-              <Input className="h-10 min-h-10" value={form.sectionNo} onChange={(e) => onChange({ ...form, sectionNo: e.target.value })} />
-            </Field>
-            <Field label="Prefix" className="col-span-12 sm:col-span-4">
-              <Input className="h-10 min-h-10" placeholder="IS/IEC" value={form.standardPrefix} onChange={(e) => onChange({ ...form, standardPrefix: e.target.value })} />
-            </Field>
-            <Field label="Technical department" className="col-span-12 sm:col-span-6">
-              <Input className="h-10 min-h-10" value={form.technicalDepartment} onChange={(e) => onChange({ ...form, technicalDepartment: e.target.value })} />
-            </Field>
-            <Field label="Technical committee" className="col-span-12 sm:col-span-6">
-              <Input className="h-10 min-h-10" value={form.technicalCommittee} onChange={(e) => onChange({ ...form, technicalCommittee: e.target.value })} />
-            </Field>
-            <Field label="ICS" className="col-span-12 sm:col-span-4">
-              <Input className="h-10 min-h-10" value={form.icsCode} onChange={(e) => onChange({ ...form, icsCode: e.target.value })} />
-            </Field>
-            <Field label="Certification" className="col-span-12 sm:col-span-4">
-              <Select value={form.certificationCategory || 'none'} onValueChange={(v) => onChange({ ...form, certificationCategory: v === 'none' ? '' : v })}>
-                <SelectTrigger className="h-10 min-h-10" aria-label="Certification category">
-                  <SelectValue placeholder="Certification" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Not set</SelectItem>
-                  <SelectItem value="Voluntary">Voluntary</SelectItem>
-                  <SelectItem value="Compulsory">Compulsory</SelectItem>
-                  <SelectItem value="Not certifiable">Not certifiable</SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field label="Status" className="col-span-12 sm:col-span-4">
-              <Select value={form.standardStatus || 'none'} onValueChange={(v) => onChange({ ...form, standardStatus: v === 'none' ? '' : v })}>
-                <SelectTrigger className="h-10 min-h-10" aria-label="Standard status">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Not set</SelectItem>
-                  <SelectItem value="Current">Current</SelectItem>
-                  <SelectItem value="Withdrawn">Withdrawn</SelectItem>
-                  <SelectItem value="Superseded">Superseded</SelectItem>
-                  <SelectItem value="Draft">Draft</SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field label="Title of the IS Code" className="col-span-12">
+            {renderIdentityOption('part_no', 'Part', 'Part-0')}
+            {renderIdentityOption('section_no', 'Section', 'Sec-0')}
+            {renderIdentityOption('revision_year', 'Revision Year', 'YYYY', yearError)}
+            {renderIdentityOption('amendment_number', 'Amendment', '00', amendError)}
+            {renderIdentityOption('reaffirmation_year', 'Reaffirmation', 'RA-2026')}
+          </div>
+          <ClientManageDialogContent
+            open={identityDialogOpen}
+            title={identityDialogMeta.title}
+            addLabel={identityDialogMeta.addLabel}
+            inputId={`new-is-identity-${identityDialogCategory}`}
+            placeholder={identityDialogMeta.placeholder}
+            value={newIdentityOption}
+            onValueChange={setNewIdentityOption}
+            inlineAdd
+            onInlineAdd={() => void rememberIdentityOption(newIdentityOption, undefined, false)}
+            onSave={() => void rememberIdentityOption(newIdentityOption)}
+            onUpdate={(id) => void rememberIdentityOption(newIdentityOption, id)}
+            saveDisabled={!normalizeIdentityOption(identityDialogCategory, newIdentityOption)}
+            items={identityOptions[identityDialogCategory].map((item) =>
+              identityDialogCategory === 'part_no'
+                ? { ...item, label: partToFormStr(item.label) }
+                : identityDialogCategory === 'section_no'
+                  ? { ...item, label: sectionToFormStr(item.label) }
+                  : item,
+            )}
+            canDelete={() => true}
+            onDelete={(id) => {
+              if (id.startsWith('tmp-')) {
+                setIdentityOptions((prev) => ({
+                  ...prev,
+                  [identityDialogCategory]: prev[identityDialogCategory].filter((item) => item.id !== id),
+                }))
+                return
+              }
+              void supabase
+                .from('is_code_master_options')
+                .delete()
+                .eq('id', id)
+                .then(({ error }) => {
+                  if (error) return
+                  setIdentityOptions((prev) => ({
+                    ...prev,
+                    [identityDialogCategory]: prev[identityDialogCategory].filter((item) => item.id !== id),
+                  }))
+                })
+            }}
+          />
+          <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2 xl:grid-cols-7">
+            <Field label="Title of the IS Code" className="sm:col-span-2 xl:col-span-5">
               <Input
                 placeholder="Enter IS Code Title"
                 value={form.title}
@@ -280,12 +511,19 @@ export function IsCodesForm({
                 }}
               />
             </Field>
+            <Field label="Product Manual No." className="sm:col-span-2 xl:col-span-2">
+              <Input
+                placeholder="PM / IS 17425 / 1 / Apr 2026"
+                value={form.productManualNumber}
+                onChange={(e) => onChange({ ...form, productManualNumber: e.target.value })}
+              />
+            </Field>
           </div>
-        </Section>
+        </div>
 
-        <Section title="Classification & Charges">
-          <div className="grid grid-cols-12 gap-3">
-            <Field label="Aspect of IS" className="col-span-12 sm:col-span-6 lg:col-span-3">
+        <div>
+          <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2 xl:grid-cols-7">
+            <Field label="Aspect of IS">
               <Dialog open={aspectDialogOpen} onOpenChange={setAspectDialogOpen}>
                 <LimsFieldWithAdd
                   addButton={
@@ -295,144 +533,52 @@ export function IsCodesForm({
                   }
                 >
                   <FilterCombobox
-                    value={form.aspect || 'Specification'}
+                    value={form.aspect.trim() || 'Specification'}
                     onValueChange={(v) =>
-                      onChange({ ...form, aspect: (v || 'Specification') as IsAspect })
+                      onChange({ ...form, aspect: (v.trim() || 'Specification') as IsAspect })
                     }
-                    options={aspectComboboxOptions}
-                    onSelectOption={(opt) => onChange({ ...form, aspect: opt.label as IsAspect })}
+                    options={aspectOptions.map((item) => ({ id: item.id, label: item.label }))}
+                    onSelectOption={(opt) => onChange({ ...form, aspect: opt.label })}
                     open={aspectOpen}
-                    onOpenChange={setAspectOpen}
+                    onOpenChange={(open) => {
+                      setAspectOpen(open)
+                      if (open || form.aspect.trim()) return
+                      onChange({ ...form, aspect: 'Specification' })
+                    }}
                     placeholder="Type or select Aspect"
                     listId="is-code-aspect-combobox"
                     inputId="aspect-of-is"
-                    inputClassName="h-10"
+                    inputClassName="h-8 border-0 bg-transparent px-2 shadow-none focus-visible:ring-0"
                   />
                 </LimsFieldWithAdd>
-                <DialogContent
-                  persistOnFocusLoss
+                <ClientManageDialogContent
+                  open={aspectDialogOpen}
+                  title="Manage Aspects"
+                  addLabel="Add Aspect"
+                  inputId="new-aspect"
+                  placeholder="e.g., Specification"
+                  value={newAspect}
+                  onValueChange={setNewAspect}
+                  inlineAdd
+                  onInlineAdd={onAddAspect}
+                  onSave={onAddAspect}
+                  onUpdate={onUpdateAspect}
+                  saveDisabled={!newAspect.trim()}
+                  items={aspectOptions}
+                  canDelete={() => true}
+                  onDelete={onDeleteAspect}
                   layer="nested"
-                  aria-describedby={undefined}
-                  className={cn(limsDialogClass, 'max-w-lg')}
-                >
-                  <div className="relative overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white">
-                    <div
-                      className="pointer-events-none absolute inset-0 opacity-[0.18]"
-                      style={limsDarkBarGlowStyle}
-                    />
-                    <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
-                    <DialogHeader className="relative pr-10 text-left">
-                      <DialogTitle className="text-base font-semibold tracking-tight text-white">
-                        Manage Aspects
-                      </DialogTitle>
-                    </DialogHeader>
-                  </div>
-                  <div className="space-y-4 bg-gradient-to-b from-stone-100/80 to-white px-4 py-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="new-aspect">
-                        {editingAspectId ? 'Edit Aspect' : 'Add Aspect'}
-                      </Label>
-                      <Input
-                        id="new-aspect"
-                        placeholder="e.g., Specification"
-                        value={newAspect}
-                        onChange={(e) => setNewAspect(e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-stone-600">
-                        Existing
-                      </p>
-                      <div className="max-h-40 space-y-1 overflow-auto">
-                        {aspectOptions.map((a) => (
-                          <div
-                            key={a.id}
-                            className="flex items-center justify-between rounded-none border border-stone-500 bg-stone-50 px-3 py-1.5 text-sm text-black"
-                          >
-                            <span className="min-w-0 truncate">{a.label}</span>
-                            <div className="flex shrink-0 items-center gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEditingAspectId(a.id)
-                                  setNewAspect(a.label)
-                                  window.requestAnimationFrame(() => {
-                                    document.getElementById('new-aspect')?.focus()
-                                  })
-                                }}
-                                className="text-amber-800 hover:text-amber-950"
-                                aria-label={`Edit ${a.label}`}
-                              >
-                                <Pencil size={14} />
-                              </button>
-                              {aspectOptions.length > 1 ? (
-                                <button
-                                  type="button"
-                                  onClick={() => onDeleteAspect(a.id)}
-                                  className="text-red-600 hover:text-red-800"
-                                  aria-label={`Delete ${a.label}`}
-                                >
-                                  <Trash2 size={14} />
-                                </button>
-                              ) : null}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                  <DialogFooter className="border-t border-stone-200 bg-stone-50 px-4 py-3 sm:justify-end">
-                    <Button
-                      type="button"
-                      className={limsPrimaryBtnClass}
-                      onClick={() => {
-                        if (editingAspectId) onUpdateAspect(editingAspectId)
-                        else onAddAspect()
-                      }}
-                      disabled={!newAspect.trim()}
-                    >
-                      Save & Close
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
+                />
               </Dialog>
             </Field>
-            <Field label="Unit of IS" className="col-span-12 sm:col-span-6 lg:col-span-3">
-              <FilterCombobox
-                value={form.unitOfIs || 'Tonne'}
-                onValueChange={(v) => onChange({ ...form, unitOfIs: v || 'Tonne' })}
-                options={IS_CODE_UNITS.map((u) => ({ id: u, label: u }))}
-                onSelectOption={(opt) => onChange({ ...form, unitOfIs: opt.label })}
-                open={unitOpen}
-                onOpenChange={setUnitOpen}
-                placeholder="Type or select Unit"
-                listId="is-code-unit-combobox"
-                inputId="unit-of-is"
-                inputClassName="h-10"
-              />
-            </Field>
-            <Field label="Product Manual No." className="col-span-12 sm:col-span-6 lg:col-span-3">
-              <Input
-                placeholder="e.g. PM/ IS 17425/ 1"
-                value={form.productManualNumber}
-                onChange={(e) => onChange({ ...form, productManualNumber: e.target.value })}
-              />
-            </Field>
-            <Field label="Testing Charges (₹)" className="col-span-12 sm:col-span-6 lg:col-span-3">
-              <Input
-                inputMode="decimal"
-                placeholder="0.00"
+            {renderIdentityOption('unit_of_is', 'Unit of IS', 'Type or select Unit')}
+            <Field label="Testing Charges">
+              <CurrencyAmountField
+                name="Testing Charges"
                 value={form.testingCharges}
-                onChange={(e) =>
-                  onChange({ ...form, testingCharges: e.target.value.replace(/[^0-9.]/g, '') })
-                }
+                onChange={(testingCharges) => onChange({ ...form, testingCharges })}
               />
             </Field>
-          </div>
-        </Section>
-
-        <Section title="Minimum Marking Fee (₹)">
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             {(
               [
                 { key: 'mmfLargeScale' as const, label: 'Large Scale' },
@@ -442,20 +588,18 @@ export function IsCodesForm({
               ] as const
             ).map(({ key, label }) => (
               <Field key={key} label={label}>
-                <Input
-                  inputMode="decimal"
-                  placeholder="0.00"
+                <CurrencyAmountField
+                  name={label}
                   value={form[key] ?? ''}
-                  onChange={(e) =>
-                    onChange({ ...form, [key]: e.target.value.replace(/[^0-9.]/g, '') })
-                  }
+                  onChange={(next) => onChange({ ...form, [key]: next })}
                 />
               </Field>
             ))}
           </div>
-        </Section>
+        </div>
+          </Dialog>
 
-        <Section title="Quantity Slabs">
+        <div>
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
             {(
               [
@@ -480,7 +624,7 @@ export function IsCodesForm({
                 key={qtyKey}
                 className="grid grid-cols-2 gap-2 rounded-none border border-stone-300 bg-stone-50/80 p-2.5"
               >
-                <p className="col-span-2 text-[10px] font-bold uppercase tracking-[0.12em] text-amber-900/80">
+                <p className="col-span-2 text-center text-[10px] font-bold uppercase tracking-[0.12em] text-amber-900/80">
                   {title}
                 </p>
                 <Field label="Quantity">
@@ -491,46 +635,16 @@ export function IsCodesForm({
                   />
                 </Field>
                 <Field label="Rate">
-                  <Input
-                    inputMode="decimal"
-                    placeholder="0.00"
+                  <CurrencyAmountField
+                    name={`${title} Rate`}
                     value={form[rateKey] ?? ''}
-                    onChange={(e) =>
-                      onChange({ ...form, [rateKey]: e.target.value.replace(/[^0-9.]/g, '') })
-                    }
+                    onChange={(next) => onChange({ ...form, [rateKey]: next })}
                   />
                 </Field>
               </div>
             ))}
           </div>
-        </Section>
-
-        <Section title="Amendments">
-          <div className="space-y-2">
-            {form.amendments.map((row, index) => (
-              <div key={row.id ?? `amend-${index}`} className="grid grid-cols-12 gap-2">
-                <Input className="col-span-12 h-10 min-h-10 sm:col-span-2" aria-label="Amendment number" placeholder="No." value={row.amendmentNo} onChange={(e) => {
-                  const amendments = form.amendments.map((item, i) => i === index ? { ...item, amendmentNo: e.target.value } : item)
-                  onChange({ ...form, amendments })
-                }} />
-                <Input className="col-span-12 h-10 min-h-10 sm:col-span-3" type="date" aria-label="Amendment date" value={row.issuedOn} onChange={(e) => {
-                  const amendments = form.amendments.map((item, i) => i === index ? { ...item, issuedOn: e.target.value } : item)
-                  onChange({ ...form, amendments })
-                }} />
-                <Input className="col-span-12 h-10 min-h-10 sm:col-span-6" aria-label="Amendment summary" placeholder="Summary" value={row.summary} onChange={(e) => {
-                  const amendments = form.amendments.map((item, i) => i === index ? { ...item, summary: e.target.value } : item)
-                  onChange({ ...form, amendments })
-                }} />
-                <Button type="button" variant="outline" className="col-span-12 h-10 min-h-10 sm:col-span-1" onClick={() => onChange({ ...form, amendments: form.amendments.filter((_, i) => i !== index) })}>
-                  Remove
-                </Button>
-              </div>
-            ))}
-            <Button type="button" variant="outline" className="h-10 min-h-10" onClick={() => onChange({ ...form, amendments: [...form.amendments, { amendmentNo: '', issuedOn: '', summary: '' }] })}>
-              Add amendment
-            </Button>
-          </div>
-        </Section>
+        </div>
 
         <Section title="IS Code Files">
           <IsCodeFilesTable
@@ -557,6 +671,17 @@ export function IsCodesForm({
                 return
               }
               onReplaceSavedFile?.(existing, next)
+            }}
+            onDocumentKindChange={(file, kind) => {
+              if (file.id.startsWith('pending:')) {
+                const idx = Number(file.id.split(':')[1] ?? -1)
+                const target = form.files[idx]
+                if (!target) return
+                setIsCodeFileDocumentKind(target, kind)
+                onPickFiles(form.files.slice())
+                return
+              }
+              onDocumentKindChange?.(file, kind)
             }}
             onDeleteFile={(file) => {
               if (file.id.startsWith('pending:')) {

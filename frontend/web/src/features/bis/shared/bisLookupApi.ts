@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabaseClient'
-import { formatIsCodeLabelFromParts } from '@/features/masters/is-codes/formatIsCodeLabel'
+import { formatIsCodeLabel } from '@/features/masters/is-codes/formatIsCodeLabel'
 import type { FilterComboboxOption } from '@/features/sample-handling/receiving/FilterCombobox'
 
 export type BisLicenseOption = {
@@ -13,6 +13,9 @@ type IsCodeJoin = {
   is_number: string | null
   title: string | null
   revision_year: string | null
+  part_no?: string | null
+  section_no?: string | null
+  standard_prefix?: string | null
 }
 
 /** IS codes that already have a (non-application) BIS project for this client. */
@@ -23,7 +26,7 @@ export async function searchClientIsCodeOptions(
   if (!clientId) return []
   const { data, error } = await supabase
     .from('bis_projects')
-    .select('is_code_id, project_kind, is_code:is_codes(is_number, title, revision_year)')
+    .select('is_code_id, project_kind, is_code:is_codes(is_number, title, revision_year, part_no, section_no, standard_prefix)')
     .eq('client_id', clientId)
     .not('is_code_id', 'is', null)
     .order('created_at', { ascending: false })
@@ -42,7 +45,7 @@ export async function searchClientIsCodeOptions(
     if (!row.is_code_id || seen.has(row.is_code_id)) continue
     if ((row.project_kind ?? '').trim().toLowerCase() === 'application') continue
     const code = Array.isArray(row.is_code) ? row.is_code[0] : row.is_code
-    const label = formatIsCodeLabelFromParts(code?.is_number, code?.revision_year) || 'Unnamed'
+    const label = (code ? formatIsCodeLabel(code) : '') || 'Unnamed'
     const title = (code?.title ?? '').trim()
     if (needle && !`${label} ${title}`.toLowerCase().includes(needle)) continue
     seen.add(row.is_code_id)

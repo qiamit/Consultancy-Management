@@ -444,8 +444,27 @@ export async function listInvoiceOutstanding(ids: string[]): Promise<InvoiceBala
   return listInvoiceOutstandingLocal(unique)
 }
 
+export type PurchaseOutstanding = {
+  bill_id: string
+  outstanding: number
+}
+
+/** Bill total until payments made and debit notes exist. A missing function returns no rows. */
+export async function listPurchaseOutstanding(ids: string[]): Promise<PurchaseOutstanding[]> {
+  const unique = [...new Set(ids.map((id) => id.trim()).filter(Boolean))].slice(0, 200)
+  if (unique.length === 0) return []
+  const { data, error } = await supabase.rpc('purchase_outstanding_for', { p_bill_ids: unique })
+  if (error || !Array.isArray(data)) return []
+  return data.flatMap((raw) => {
+    const row = raw as Record<string, unknown>
+    const billId = String(row.bill_id ?? '').trim()
+    if (!billId) return []
+    return [{ bill_id: billId, outstanding: money(row.outstanding) }]
+  })
+}
+
 export type InvoiceSettlement = {
-  kind: 'receipt' | 'credit_note'
+  kind: 'receipt' | 'credit_note' | 'sales_debit_note'
   document_id: string
   document_number: string
   document_date: string
@@ -453,7 +472,10 @@ export type InvoiceSettlement = {
 }
 
 function mapSettlement(raw: Record<string, unknown>): InvoiceSettlement | null {
-  const kind = raw.kind === 'credit_note' || raw.kind === 'receipt' ? raw.kind : null
+  const kind =
+    raw.kind === 'credit_note' || raw.kind === 'receipt' || raw.kind === 'sales_debit_note'
+      ? raw.kind
+      : null
   const documentNumber = String(raw.document_number ?? '').trim()
   if (!kind || !documentNumber) return null
   return {
@@ -545,6 +567,91 @@ export async function listInvoiceSettlements(clientId: string, invoiceNumber: st
       .slice(0, 50)
   }
   return listInvoiceSettlementsLocal(id, number)
+}
+
+export type PurchaseBillOption = {
+  bill_id: string
+  bill_number: string
+  outstanding: number
+}
+
+export async function listOpenPurchaseBills(clientId: string): Promise<PurchaseBillOption[]> {
+  const id = clientId.trim()
+  if (!id) return []
+  const { data, error } = await supabase
+    .from('finance_purchase_bills')
+    .select('id, purchase_bill_number, grand_total, purchase_status')
+    .eq('client_id', id)
+    .neq('purchase_status', 'cancelled')
+    .order('purchase_date', { ascending: false })
+    .limit(200)
+  if (error || !Array.isArray(data)) return []
+  const rows = data as Array<{ id?: string; purchase_bill_number?: string; grand_total?: unknown }>
+  const balances = await listPurchaseOutstanding(rows.map((row) => String(row.id ?? '')))
+  const byId = new Map(balances.map((row) => [row.bill_id, row.outstanding]))
+  return rows.flatMap((row) => {
+    const billId = String(row.id ?? '').trim()
+    const billNumber = String(row.purchase_bill_number ?? '').trim()
+    if (!billId || !billNumber) return []
+    const outstanding = byId.has(billId) ? byId.get(billId)! : money(row.grand_total)
+    return outstanding > 0.009 ? [{ bill_id: billId, bill_number: billNumber, outstanding }] : []
+  })
+}
+
+export type PurchaseSettlement = {
+  kind: 'payment_made' | 'debit_note'
+  document_id: string
+  document_number: string
+  document_date: string
+  amount: number
+}
+
+export async function listPurchaseSettlements(clientId: string, billNumber: string): Promise<PurchaseSettlement[]> {
+  const id = clientId.trim()
+  const number = billNumber.trim()
+  if (!id || !number) return []
+  const { data, error } = await supabase.rpc('purchase_settlements', {
+    p_client_id: id,
+    p_bill_number: number,
+  })
+  if (error || !Array.isArray(data)) return []
+  return data.flatMap((raw) => {
+    const row = raw as Record<string, unknown>
+    const kind = row.kind === 'payment_made' || row.kind === 'debit_note' ? row.kind : null
+    const documentNumber = String(row.document_number ?? '').trim()
+    if (!kind || !documentNumber) return []
+    const settlement: PurchaseSettlement = {
+      kind,
+      document_id: String(row.document_id ?? ''),
+      document_number: documentNumber,
+      document_date: String(row.document_date ?? '').slice(0, 10),
+      amount: money(row.amount),
+    }
+    return [settlement]
+  }).slice(0, 50)
+}
+
+export type ReceiptOption = {
+  receipt_number: string
+  amount: number
+}
+
+export async function listClientReceipts(clientId: string): Promise<ReceiptOption[]> {
+  const id = clientId.trim()
+  if (!id) return []
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('receipt_number, amount')
+    .eq('client_id', id)
+    .eq('payment_flow', 'in')
+    .order('txn_date', { ascending: false })
+    .limit(50)
+  if (error || !Array.isArray(data)) return []
+  return (data as Array<{ receipt_number?: string | null; amount?: unknown }>).flatMap((row) => {
+    const receiptNumber = String(row.receipt_number ?? '').trim()
+    if (!receiptNumber) return []
+    return [{ receipt_number: receiptNumber, amount: money(row.amount) }]
+  })
 }
 
 export async function listClientInvoiceBalances(clientId: string): Promise<InvoiceBalance[]> {

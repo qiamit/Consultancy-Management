@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabaseClient'
-import { formatIsCodeLabelFromParts } from '@/features/masters/is-codes/formatIsCodeLabel'
+import { formatIsCodeLabel } from '@/features/masters/is-codes/formatIsCodeLabel'
 import type { FilterComboboxOption } from '@/features/sample-handling/receiving/FilterCombobox'
 import { formatBisApiError } from '../projects/bisProjectsApi'
 import {
@@ -11,7 +11,7 @@ import {
 export { formatBisApiError }
 
 const PROJECT_JOIN =
-  'project:bis_projects(id, title, cm_l_digits, license_validity_date, status, client_id, is_code:is_codes(is_number, title, revision_year))'
+  'project:bis_projects(id, title, cm_l_digits, license_validity_date, status, client_id, is_code:is_codes(is_number, title, revision_year, part_no, section_no, standard_prefix))'
 const SELECT_WITH_JOINS = `*, client:clients(company_name), ${PROJECT_JOIN}`
 
 const LOOKUP_ID_LIMIT = 100
@@ -128,7 +128,7 @@ export async function fetchRenewalProjectSummary(
   const { data, error } = await supabase
     .from('bis_projects')
     .select(
-      'id, title, client_id, cm_l_digits, license_validity_date, client:clients(company_name), is_code:is_codes(is_number, revision_year)',
+      'id, title, client_id, cm_l_digits, license_validity_date, client:clients(company_name), is_code:is_codes(is_number, revision_year, part_no, section_no, standard_prefix)',
     )
     .eq('id', projectId)
     .maybeSingle()
@@ -140,7 +140,13 @@ export async function fetchRenewalProjectSummary(
     cm_l_digits: string | null
     license_validity_date: string | null
     client: { company_name: string | null } | null
-    is_code: { is_number: string | null; revision_year: string | null } | null
+    is_code: {
+      is_number: string | null
+      revision_year: string | null
+      part_no?: string | null
+      section_no?: string | null
+      standard_prefix?: string | null
+    } | null
   }
   const cmLDigits = String(row.cm_l_digits ?? '').replace(/\D/g, '')
   return {
@@ -150,7 +156,7 @@ export async function fetchRenewalProjectSummary(
     currentValidity: row.license_validity_date ?? '',
     cmLDigits,
     isCodeLabel: row.is_code
-      ? formatIsCodeLabelFromParts(row.is_code.is_number, row.is_code.revision_year)
+      ? formatIsCodeLabel(row.is_code)
       : '',
   }
 }

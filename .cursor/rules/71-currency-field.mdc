@@ -1,0 +1,23 @@
+---
+description: When Amit says "currency field", generate the Opening Balance amount box — currency symbol on the left, right-aligned amount, two decimals.
+alwaysApply: true
+---
+
+# Currency field
+
+Trigger: Amit says **currency field**, **करंसी फील्ड**, or **currency amount**. Build that amount box. Do not invent a second money input.
+
+Copy `OpeningBalanceField` in `frontend/web/src/features/masters/clients/ClientsForm.tsx`.
+
+The box is one `h-8` control:
+
+- Square corners, `border-stone-500`, `bg-stone-50`. Focus uses an amber border and `ring-amber-500/20`.
+- Left cell: the active currency symbol from `getCurrencySymbol()` in `frontend/web/src/lib/appCurrency.ts`. Stone background, right border. Do not hard-code `₹`.
+- Right cell: the amount, right-aligned, `tabular-nums`, transparent background, no inner border.
+- `inputMode="decimal"`. While typing, keep `sanitizeMoneyInput`. On blur, and when the field is not focused, show `formatMoneyInput` (`0.00` when empty). Both helpers live in `frontend/web/src/features/masters/products-services/types.ts`.
+- Accessible name includes `getCurrencyCode()`, for example `Opening Balance in INR`.
+- Placeholder is `0.00`.
+
+The Cr/Dr select beside Opening Balance is only for a debit/credit balance. A plain currency field is the symbol plus the amount. Do not add Cr/Dr unless Amit asks for a balance type.
+
+Store the amount as a number or numeric string in that screen's existing column. Do not add a currency-code column. The symbol always follows the app currency setting.

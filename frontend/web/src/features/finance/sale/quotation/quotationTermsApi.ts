@@ -1,4 +1,4 @@
-import type { DocumentTemplateKind } from '@/features/settings/lab-settings/documentTemplateTypes'
+import type { BookDocumentKind } from '@/features/settings/lab-settings/documentTemplateTypes'
 import { supabase } from '@/lib/supabaseClient'
 
 export type QuotationTermRow = {
@@ -30,7 +30,7 @@ function mapRow(row: DbRow): QuotationTermRow {
 }
 
 export async function fetchQuotationTerms(
-  documentKind: DocumentTemplateKind = 'quotation',
+  documentKind: BookDocumentKind = 'quotation',
 ): Promise<QuotationTermRow[]> {
   const { data, error } = await supabase
     .from('quotation_terms_conditions')
@@ -43,7 +43,7 @@ export async function fetchQuotationTerms(
 }
 
 export async function fetchDefaultQuotationTerm(
-  documentKind: DocumentTemplateKind = 'quotation',
+  documentKind: BookDocumentKind = 'quotation',
 ): Promise<string> {
   const { data, error } = await supabase
     .from('quotation_terms_conditions')
@@ -60,7 +60,7 @@ export async function insertQuotationTerm(
   label: string,
   content: string,
   asDefault = false,
-  documentKind: DocumentTemplateKind = 'quotation',
+  documentKind: BookDocumentKind = 'quotation',
 ): Promise<QuotationTermRow> {
   const trimmedLabel = label.trim()
   const trimmedContent = content.trim()
@@ -108,7 +108,7 @@ export async function updateQuotationTerm(
 
 export async function setDefaultQuotationTerm(
   id: string,
-  documentKind: DocumentTemplateKind = 'quotation',
+  documentKind: BookDocumentKind = 'quotation',
 ): Promise<void> {
   const { error: clearErr } = await supabase
     .from('quotation_terms_conditions')

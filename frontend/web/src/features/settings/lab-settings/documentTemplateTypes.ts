@@ -7,6 +7,29 @@ export type DocumentTemplateKind =
   | 'creditNote'
   | 'paymentReceipt'
 
+/** Sale print kinds, plus later finance books that reuse those layouts. */
+export type BookDocumentKind =
+  | DocumentTemplateKind
+  | 'purchase'
+  | 'paymentMade'
+  | 'debitNote'
+  | 'purchaseOrder'
+  | 'refund'
+  | 'salesDebitNote'
+
+export function templateForBook(
+  docs: LabDocumentTemplates,
+  kind: BookDocumentKind,
+): FinanceDocumentTemplate {
+  if (kind === 'purchase') return { ...docs.invoice, documentTitle: 'Purchase Bill' }
+  if (kind === 'purchaseOrder') return { ...docs.invoice, documentTitle: 'Purchase Order', showGstAmount: false, showCgst: false, showSgst: false, showIgst: false }
+  if (kind === 'debitNote') return { ...docs.invoice, documentTitle: 'Debit Note' }
+  if (kind === 'salesDebitNote') return { ...docs.invoice, documentTitle: 'Sales Debit Note' }
+  if (kind === 'paymentMade') return { ...docs.paymentReceipt, documentTitle: 'Payment Made' }
+  if (kind === 'refund') return { ...docs.paymentReceipt, documentTitle: 'Refund Voucher' }
+  return docs[kind] ?? docs.quotation
+}
+
 export const DOCUMENT_TEMPLATE_KIND_OPTIONS: ReadonlyArray<{
   kind: DocumentTemplateKind
   label: string

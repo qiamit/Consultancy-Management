@@ -1,4 +1,5 @@
-import { formatIsCodeLabelFromParts } from '@/features/masters/is-codes/formatIsCodeLabel'
+import { formatIsCodeLabel } from '@/features/masters/is-codes/formatIsCodeLabel'
+import { isCodeDisplayLabel } from './types'
 import { supabase } from '@/lib/supabaseClient'
 import {
   ALL_BIS_PRINT_KINDS,
@@ -27,7 +28,7 @@ import {
 export type BisImportLookupOption = { id: string; label: string }
 
 const IMPORT_PROJECT_SELECT =
-  '*, client:clients(company_name), is_code:is_codes(is_number, title, revision_year)'
+  '*, client:clients(company_name), is_code:is_codes(is_number, title, revision_year, part_no, section_no, standard_prefix, unit_of_is)'
 
 const STRUCTURED_MODULE_KINDS: BisPrintDocumentKind[] = [
   'top-management',
@@ -204,10 +205,7 @@ export function formatImportSourceLabel(row: BisProjectRow): string {
   const cmL = String(row.cm_l_digits ?? '').replace(/\D/g, '')
   const appNo = String(row.application_number ?? '').replace(/\D/g, '')
   const ref = cmL ? `CM/L-${cmL}` : appNo ? `CM/A-${appNo}` : ''
-  const isCode = [row.is_code?.is_number, row.is_code?.revision_year]
-    .map((p) => String(p ?? '').trim())
-    .filter(Boolean)
-    .join(': ')
+  const isCode = isCodeDisplayLabel(row)
   return [kind, client, ref, isCode].filter(Boolean).join(' · ')
 }
 
@@ -265,7 +263,7 @@ export async function fetchImportIsCodeOptions(
 
   const { data, error } = await supabase
     .from('bis_projects')
-    .select('is_code_id, is_code:is_codes(is_number, revision_year, title)')
+    .select('is_code_id, is_code:is_codes(is_number, revision_year, title, part_no, section_no, standard_prefix)')
     .eq('client_id', cId)
     .not('is_code_id', 'is', null)
     .limit(800)
@@ -284,7 +282,7 @@ export async function fetchImportIsCodeOptions(
     const id = String(row.is_code_id ?? '').trim()
     if (!id || byId.has(id)) continue
     const label =
-      formatIsCodeLabelFromParts(row.is_code?.is_number, row.is_code?.revision_year) ||
+      (row.is_code ? formatIsCodeLabel(row.is_code) : '') ||
       (row.is_code?.title ?? '').trim() ||
       'IS Code'
     byId.set(id, { id, label })

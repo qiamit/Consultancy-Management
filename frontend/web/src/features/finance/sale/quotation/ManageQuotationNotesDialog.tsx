@@ -13,7 +13,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { limsDialogClass, limsPrimaryBtnClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
-import type { DocumentTemplateKind } from '@/features/settings/lab-settings/documentTemplateTypes'
+import type { BookDocumentKind } from '@/features/settings/lab-settings/documentTemplateTypes'
 import {
   deleteQuotationNote,
   fetchQuotationNotes,
@@ -35,7 +35,7 @@ export function ManageQuotationNotesDialog({
   onOpenChange: (open: boolean) => void
   onChanged?: (notes: QuotationNoteRow[], defaultContent: string) => void
   onDefaultSet?: (content: string) => void
-  documentKind?: DocumentTemplateKind
+  documentKind?: BookDocumentKind
   documentLabel?: string
 }) {
   const [notes, setNotes] = useState<QuotationNoteRow[]>([])

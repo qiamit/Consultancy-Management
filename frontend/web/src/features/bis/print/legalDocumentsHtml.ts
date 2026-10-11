@@ -10,6 +10,7 @@ import {
   letterheadHtml,
   preparedByHtml,
   signatoryHtml,
+  toBlockHtml,
   type PrintApplicantContext,
 } from './printDocumentShared'
 import { formatCmL, formatDisplayDate } from '../projects/types'
@@ -42,9 +43,9 @@ const FIRM_PACK_CONFIGS: Record<string, FirmPackModuleConfig> = {
     ],
   },
   application: {
-    title: 'Application Details',
+    title: 'Application Copy',
     subject: 'Submission / record of Application, Licence and Branch Details',
-    packLabel: 'Application Details Pack',
+    packLabel: 'Application Copy',
     items: [
       'BIS application form / covering papers',
       'Product / IS scope particulars',
@@ -73,12 +74,7 @@ function buildBody(data: LegalDocumentsData, config: FirmPackModuleConfig): stri
   <h1 class="pd-title">${esc(config.title)}</h1>
 
   <div class="pd-to-row">
-    <div class="pd-to-block">
-      To,<br/>
-      The Bureau of Indian Standards<br/>
-      ${data.bisBranchName ? esc(data.bisBranchName) : 'Concerned Branch Office'}
-      ${data.bisBranchState ? `<br/>${esc(data.bisBranchState)}` : ''}
-    </div>
+    <div class="pd-to-block">${toBlockHtml(data.bisBranchName || 'Concerned Branch Office', data.bisBranchState)}</div>
     <div class="pd-date-block">
       <div><strong>Date:</strong> ${esc(letterDate)}</div>
       <div><strong>Application / Licence No.:</strong> ${esc(applicationNoDisplay(data.applicationNumber))}</div>

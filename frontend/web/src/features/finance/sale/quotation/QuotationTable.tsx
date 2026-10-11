@@ -292,8 +292,21 @@ export function QuotationTable({
   /** Tax invoice list: outstanding by invoice id. */
   outstandingById?: Record<string, number>
 }) {
-  const showDue = documentKind === 'invoice'
-  const againstMode = paymentLedger ? 'receipt' : documentKind === 'creditNote' ? 'credit' : null
+  const showDue = documentKind === 'invoice' || documentKind === 'purchase'
+  const showAge = documentKind === 'invoice'
+  const partyLabel =
+    documentKind === 'purchase' ||
+    documentKind === 'paymentMade' ||
+    documentKind === 'debitNote' ||
+    documentKind === 'purchaseOrder'
+      ? 'Vendor'
+      : 'Client'
+  const againstMode =
+    paymentLedger || documentKind === 'paymentMade' || documentKind === 'refund'
+      ? 'receipt'
+      : documentKind === 'creditNote' || documentKind === 'debitNote' || documentKind === 'salesDebitNote'
+        ? 'credit'
+        : null
   const statusOptions = statusOptionsForDocumentKind(documentKind)
   const allChecked = rows.length > 0 && rows.every((r) => selectedIds.has(r.id))
   const someChecked = rows.some((r) => selectedIds.has(r.id))
@@ -474,12 +487,14 @@ export function QuotationTable({
                                     {invoiceDueLabel(r.grand_total, outstandingById?.[r.id] ?? r.grand_total)}
                                   </span>
                                 </p>
-                                <p className="mt-0.5 text-[11px] font-semibold text-stone-600">
-                                  {invoiceAgeLabel(
-                                    r.quotation_date,
-                                    outstandingById?.[r.id] ?? r.grand_total,
-                                  )}
-                                </p>
+                                {showAge ? (
+                                  <p className="mt-0.5 text-[11px] font-semibold text-stone-600">
+                                    {invoiceAgeLabel(
+                                      r.quotation_date,
+                                      outstandingById?.[r.id] ?? r.grand_total,
+                                    )}
+                                  </p>
+                                ) : null}
                               </div>
                             ) : null}
                           </>
@@ -544,7 +559,7 @@ export function QuotationTable({
                       onChange={(e) => onToggleAll(e.target.checked)}
                     />
                   </TableHead>
-                  <TableHead className={cn(thBase, 'text-left')}>Client</TableHead>
+                  <TableHead className={cn(thBase, 'text-left')}>{partyLabel}</TableHead>
                   <TableHead className={thBase}>Date</TableHead>
                   {paymentLedger ? (
                     <>
@@ -644,12 +659,14 @@ export function QuotationTable({
                               <span className="mt-0.5 block text-[11px] font-bold uppercase text-stone-600">
                                 {invoiceDueLabel(r.grand_total, outstandingById?.[r.id] ?? r.grand_total)}
                               </span>
-                              <span className="mt-0.5 block text-[11px] font-semibold text-stone-600">
-                                {invoiceAgeLabel(
-                                  r.quotation_date,
-                                  outstandingById?.[r.id] ?? r.grand_total,
-                                )}
-                              </span>
+                              {showAge ? (
+                                <span className="mt-0.5 block text-[11px] font-semibold text-stone-600">
+                                  {invoiceAgeLabel(
+                                    r.quotation_date,
+                                    outstandingById?.[r.id] ?? r.grand_total,
+                                  )}
+                                </span>
+                              ) : null}
                             </TableCell>
                           ) : null}
                         </>

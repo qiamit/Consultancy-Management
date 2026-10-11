@@ -1,4 +1,5 @@
 import type { BisProjectRow } from '../projects/types'
+import { listBisBranchOffices } from '@/features/masters/bis-branch-offices/bisBranchOfficesApi'
 import {
   appointmentLetterDataForTechnicalStaff,
   appointmentLetterDataFromPrintData,
@@ -140,7 +141,7 @@ export type BisPrintDocumentKind =
 
 export const BIS_PRINT_DOCUMENT_LABEL: Record<BisPrintDocumentKind, string> = {
   'legal-documents': 'Legal Documents',
-  'application-details': 'Application Details',
+  'application-details': 'Application Copy',
   'license-details': 'License Details',
   'branch-details': 'Branch Details',
   form1: 'BIS Form-I',
@@ -267,7 +268,7 @@ export const MORE_PRINTS_TOOLTIP =
 
 const HTML_BUILDERS: Record<BisPrintDocumentKind, (data: BisPrintData) => string> = {
   'legal-documents': (d) => buildLegalDocumentsHtml(legalDocumentsDataFromPrintData(d)),
-  'application-details': (d) => buildApplicationDetailsHtml(legalDocumentsDataFromPrintData(d)),
+  'application-details': (d) => buildBisForm1Html(bisForm1DataFromPrintData(d)),
   // Kept for typed builders / legacy callers; UI list uses Application Details only.
   'license-details': (d) => buildApplicationDetailsHtml(legalDocumentsDataFromPrintData(d)),
   'branch-details': (d) => buildApplicationDetailsHtml(legalDocumentsDataFromPrintData(d)),
@@ -321,12 +322,15 @@ export async function buildBisDocumentHtml(
       : kind === 'osl-sample-test-request' || kind === 'osl-courier-labels'
         ? 'osl-sample-requirements'
         : kind
-  const [printData, modulePayload, topManagementPayload] = await Promise.all([
+  const [printData, modulePayload, topManagementPayload, technicalManagementPayload] = await Promise.all([
     loadBisPrintData(row),
     fetchBisModulePayload(row.id, modulePayloadKind).catch(() => null),
     kind === 'top-management'
       ? Promise.resolve(null)
       : fetchBisModulePayload(row.id, 'top-management').catch(() => null),
+    kind === 'application-details'
+      ? fetchBisModulePayload(row.id, 'technical-staff').catch(() => null)
+      : Promise.resolve(null),
   ])
 
   const tm =
@@ -334,7 +338,37 @@ export async function buildBisDocumentHtml(
       ? modulePayload
       : topManagementPayload
 
-  let data: BisPrintData = { ...printData, modulePayload, topManagement: tm }
+  let data: BisPrintData = {
+    ...printData,
+    modulePayload,
+    topManagement: tm,
+    technicalManagement: technicalManagementPayload,
+  }
+
+  if (kind === 'location-map') {
+    const offices = await listBisBranchOffices().catch(() => [])
+    const normalize = (value: string | null | undefined) =>
+      String(value ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
+    const branchName = normalize(row.branch_name)
+    const branchState = normalize(row.branch_state)
+    const office = offices.find((candidate) => candidate.id === row.bis_office_id) ??
+      offices.find((candidate) => normalize(candidate.name) === branchName &&
+        (!branchState || normalize(candidate.state) === branchState))
+    if (office) {
+      data = {
+        ...data,
+        modulePayload: {
+          ...(modulePayload ?? {}),
+          bisLatitude: office.latitude || modulePayload?.bisLatitude,
+          bisLongitude: office.longitude || modulePayload?.bisLongitude,
+          toLocation: row.branch_name || modulePayload?.toLocation,
+          toLocationAddress: [office.address, office.city, office.state, office.pinCode, office.country]
+            .filter(Boolean)
+            .join(', '),
+        },
+      }
+    }
+  }
 
   if (kind === 'factory-test-report') {
     const techRaw = await fetchBisModulePayload(row.id, 'technical-staff').catch(() => null)

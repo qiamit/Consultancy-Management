@@ -49,11 +49,38 @@ export type IsCodeRow = {
   standard_status?: string | null
 }
 
+type KindFile = File & { documentKind?: string }
+
+export function isCodeFileDocumentKind(file: File): string {
+  return (file as KindFile).documentKind ?? ''
+}
+
+/** `PM IS 2062.pdf` and `PM 15911 2010.pdf` are product manuals. */
+export function inferIsCodeFileDocumentKind(fileName: string | null | undefined): string {
+  const name = String(fileName ?? '').trim()
+  if (/^PM([\s._-]|$)/i.test(name) || /product\s+manual/i.test(name)) return 'Product Manual'
+  return 'Specification'
+}
+
+export function resolveIsCodeFileDocumentKind(
+  stored: string | null | undefined,
+  fileName: string | null | undefined,
+): string {
+  const text = String(stored ?? '').trim()
+  if (text) return text
+  return inferIsCodeFileDocumentKind(fileName)
+}
+
+export function setIsCodeFileDocumentKind(file: File, kind: string) {
+  Object.defineProperty(file, 'documentKind', { value: kind, writable: true, configurable: true })
+}
+
 export type IsCodeFileRow = {
   id: string
   is_code_id: string
   file_name: string
   storage_path: string
+  document_kind?: string | null
   created_at?: string
 }
 
@@ -98,10 +125,10 @@ export type IsCodeAmendmentForm = {
 }
 
 export const emptyIsCodeForm = (): IsCodeForm => ({
-  isNumber: 'IS ',
+  isNumber: '',
   revisionYear: '',
   reaffirmationYear: 'RA-',
-  amendmentNumber: '',
+  amendmentNumber: '00',
   title: '',
   aspect: 'Specification',
   testingCharges: DEFAULT_MONEY_FIELD,
@@ -119,9 +146,9 @@ export const emptyIsCodeForm = (): IsCodeForm => ({
   slab3Quantity: DEFAULT_SLAB_3_QTY,
   slab3Rate: DEFAULT_MONEY_FIELD,
   files: [],
-  standardPrefix: '',
-  partNo: '',
-  sectionNo: '',
+  standardPrefix: 'IS',
+  partNo: 'Part-0',
+  sectionNo: 'Sec-0',
   technicalDepartment: '',
   technicalCommittee: '',
   icsCode: '',
@@ -129,6 +156,15 @@ export const emptyIsCodeForm = (): IsCodeForm => ({
   standardStatus: '',
   amendments: [],
 })
+
+/** IS Number box: digits only, at most 5. */
+export function isCodeNumberDigits(raw: string): string {
+  return String(raw ?? '').replace(/\D/g, '').slice(0, 5)
+}
+
+export function isValidIsNumberDigits(value: string): boolean {
+  return /^[0-9]{1,5}$/.test(value.trim())
+}
 
 export function canonicalIsNumber(raw: string): string {
   const compact = raw.trim().replace(/\s+/g, ' ')
@@ -167,6 +203,69 @@ export function yearIntFromForm(raw: string | null | undefined): number | null {
   if (!digits) return null
   const n = Number(digits)
   return Number.isFinite(n) ? n : null
+}
+
+/** While typing, keep "Part-" so the user can replace the number. Blur restores "Part-0". */
+export function partWhileTyping(raw: string | null | undefined): string {
+  const text = String(raw ?? '')
+  if (!text.trim() || /^part-?$/i.test(text.trim())) return 'Part-'
+  if (/^part-/i.test(text)) {
+    const rest = text.replace(/^part-/i, '')
+    return rest ? `Part-${rest}` : 'Part-'
+  }
+  if (/^part\s+/i.test(text)) {
+    const rest = text.replace(/^part\s+/i, '').trim()
+    return rest ? `Part-${rest}` : 'Part-'
+  }
+  if (/^part/i.test(text)) return text
+  return `Part-${text.trim()}`
+}
+
+/** Form display: empty or "Part-" → "Part-0". "24" → "Part-24". */
+export function partToFormStr(raw: string | null | undefined): string {
+  const text = String(raw ?? '').trim()
+  if (!text || /^part-?$/i.test(text)) return 'Part-0'
+  const rest = text.replace(/^part-?\s*/i, '').trim()
+  return rest ? `Part-${rest}` : 'Part-0'
+}
+
+/** While typing, keep "Sec-" so the user can replace the number. Blur restores "Sec-0". */
+export function sectionWhileTyping(raw: string | null | undefined): string {
+  const text = String(raw ?? '')
+  if (!text.trim() || /^sec-?$/i.test(text.trim())) return 'Sec-'
+  if (/^sec-/i.test(text)) {
+    const rest = text.replace(/^sec-/i, '')
+    return rest ? `Sec-${rest}` : 'Sec-'
+  }
+  if (/^sec\s+/i.test(text)) {
+    const rest = text.replace(/^sec\s+/i, '').trim()
+    return rest ? `Sec-${rest}` : 'Sec-'
+  }
+  if (/^sec/i.test(text)) return text
+  return `Sec-${text.trim()}`
+}
+
+/** Form display: empty or "Sec-" → "Sec-0". "10" → "Sec-10". */
+export function sectionToFormStr(raw: string | null | undefined): string {
+  const text = String(raw ?? '').trim()
+  if (!text || /^sec-?$/i.test(text)) return 'Sec-0'
+  const rest = text.replace(/^sec-\s*/i, '').replace(/^sec\s+/i, '').trim()
+  return rest ? `Sec-${rest}` : 'Sec-0'
+}
+
+/** While typing, keep a short digit draft. "00" plus a new digit keeps the new digit. Blur restores "00". */
+export function amendmentWhileTyping(previous: string, raw: string | null | undefined): string {
+  const digits = String(raw ?? '').replace(/\D/g, '')
+  if (previous === '00' && digits.startsWith('00') && digits.length > 2) return digits.slice(2, 4)
+  if (previous === '00' && (digits === '0' || digits === '')) return digits
+  return digits.slice(0, 2)
+}
+
+/** Form display: empty, "0", or "00" → "00". "10" stays "10". */
+export function amendmentToFormStr(raw: string | number | null | undefined): string {
+  const digits = String(raw ?? '').replace(/\D/g, '').slice(0, 2)
+  if (!digits || digits === '0' || digits === '00') return '00'
+  return digits
 }
 
 /** Form display: null → "RA-"; 2026 → "RA-2026". */

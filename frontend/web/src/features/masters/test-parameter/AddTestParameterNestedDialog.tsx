@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils'
 import { formatSupabaseError } from '@/lib/formatSupabaseError'
 import { supabase } from '@/lib/supabaseClient'
 import {
-  formatIsCodeLabelFromParts,
+  formatIsCodeLabel,
   formatTestMethodWithYear,
 } from '@/features/masters/is-codes/formatIsCodeLabel'
 import { fetchDesignationAndDepartmentLabels } from '@/features/settings/lab-settings/labMasterOptions'
@@ -77,17 +77,25 @@ export function AddTestParameterNestedDialog({
     void (async () => {
       try {
         const [{ data: isData }, labels] = await Promise.all([
-          supabase.from('is_codes').select('id, is_number, title, revision_year').order('created_at', { ascending: false }),
+          supabase.from('is_codes').select('id, is_number, title, revision_year, part_no, section_no, standard_prefix').order('created_at', { ascending: false }),
           fetchDesignationAndDepartmentLabels(),
         ])
 
         const isList = Array.isArray(isData)
-          ? (isData as Array<{ id: string; is_number: string; title: string; revision_year: string | null }>)
+          ? (isData as Array<{
+              id: string
+              is_number: string
+              title: string
+              revision_year: string | null
+              part_no: string | null
+              section_no: string | null
+              standard_prefix: string | null
+            }>)
           : []
         setIsCodes(
           isList
             .map((r) => {
-              const displayCode = formatIsCodeLabelFromParts(r.is_number, r.revision_year)
+              const displayCode = formatIsCodeLabel(r)
               return {
                 id: r.id,
                 displayCode,

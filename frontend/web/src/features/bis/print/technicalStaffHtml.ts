@@ -161,6 +161,11 @@ function isImageFileName(fileName: string): boolean {
 }
 
 const ATTACH_STYLES = `
+  .ts-attach-sheet {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
   .ts-attach-sheet .ts-attach-heading {
     margin: 0 0 4px;
     font-size: 13px;
@@ -176,17 +181,34 @@ const ATTACH_STYLES = `
   }
   .ts-attach-sheet .ts-attach-img {
     display: block;
+    width: 100%;
+    height: 230mm;
     max-width: 100%;
     max-height: 230mm;
     margin: 0 auto;
     object-fit: contain;
+    object-position: center;
   }
   .ts-attach-sheet .ts-attach-frame {
     display: block;
     width: 100%;
-    height: 230mm;
+    height: 235mm;
+    max-height: 235mm;
+    flex: 0 1 235mm;
     border: 1px solid #cbd5e1;
     background: #fff;
+  }
+  @media print {
+    .ts-attach-sheet { break-inside: avoid; page-break-inside: avoid; }
+    .ts-attach-sheet .ts-attach-img {
+      height: 230mm;
+      max-height: 230mm;
+      object-fit: contain;
+    }
+    .ts-attach-sheet .ts-attach-frame {
+      height: 235mm;
+      max-height: 235mm;
+    }
   }
 `
 

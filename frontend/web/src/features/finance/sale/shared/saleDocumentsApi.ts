@@ -18,7 +18,27 @@ import { allocateDocumentNumber } from './documentSeriesApi'
 import { gstSupplyMode, linesForDocumentKind, type GstSupplyMode } from './financeRules'
 
 /** Sale modules persisted in Postgres through the finance_* tables / transactions. */
-export type SaleDocumentKind = Exclude<DocumentTemplateKind, 'quotation'>
+export type SaleDocumentKind =
+  | Exclude<DocumentTemplateKind, 'quotation'>
+  | 'purchase'
+  | 'paymentMade'
+  | 'debitNote'
+  | 'purchaseOrder'
+  | 'refund'
+  | 'salesDebitNote'
+
+const MONEY_BOOK: Partial<Record<SaleDocumentKind, { flow: 'in' | 'out'; book: string }>> = {
+  paymentReceipt: { flow: 'in', book: '' },
+  paymentMade: { flow: 'out', book: 'payment_made' },
+  refund: { flow: 'out', book: 'refund' },
+}
+
+type MoneyKind = 'paymentReceipt' | 'paymentMade' | 'refund'
+type HeaderKind = Exclude<SaleDocumentKind, MoneyKind>
+
+function isMoneyKind(kind: SaleDocumentKind): kind is MoneyKind {
+  return kind === 'paymentReceipt' || kind === 'paymentMade' || kind === 'refund'
+}
 
 type DbStatus = 'pending' | 'accepted' | 'cancelled'
 
@@ -31,7 +51,7 @@ type HeaderTableConfig = {
   statusCol: string
 }
 
-const HEADER_TABLES: Record<Exclude<SaleDocumentKind, 'paymentReceipt'>, HeaderTableConfig> = {
+const HEADER_TABLES: Record<HeaderKind, HeaderTableConfig> = {
   proformaInvoice: {
     table: 'finance_proforma_invoices',
     linesTable: 'finance_proforma_invoice_lines',
@@ -55,6 +75,38 @@ const HEADER_TABLES: Record<Exclude<SaleDocumentKind, 'paymentReceipt'>, HeaderT
     numberCol: 'credit_note_number',
     dateCol: 'credit_note_date',
     statusCol: 'credit_note_status',
+  },
+  purchase: {
+    table: 'finance_purchase_bills',
+    linesTable: 'finance_purchase_bill_lines',
+    parentFk: 'purchase_bill_id',
+    numberCol: 'purchase_bill_number',
+    dateCol: 'purchase_date',
+    statusCol: 'purchase_status',
+  },
+  debitNote: {
+    table: 'finance_debit_notes',
+    linesTable: 'finance_debit_note_lines',
+    parentFk: 'debit_note_id',
+    numberCol: 'debit_note_number',
+    dateCol: 'debit_note_date',
+    statusCol: 'debit_note_status',
+  },
+  purchaseOrder: {
+    table: 'finance_purchase_orders',
+    linesTable: 'finance_purchase_order_lines',
+    parentFk: 'purchase_order_id',
+    numberCol: 'purchase_order_number',
+    dateCol: 'purchase_order_date',
+    statusCol: 'purchase_order_status',
+  },
+  salesDebitNote: {
+    table: 'finance_sales_debit_notes',
+    linesTable: 'finance_sales_debit_note_lines',
+    parentFk: 'sales_debit_note_id',
+    numberCol: 'sales_debit_note_number',
+    dateCol: 'sales_debit_note_date',
+    statusCol: 'sales_debit_note_status',
   },
 }
 
@@ -182,10 +234,7 @@ function lineFromRaw(parentId: string, raw: RawLine): QuotationLineRow {
   }
 }
 
-function headerFromRaw(
-  kind: Exclude<SaleDocumentKind, 'paymentReceipt'>,
-  raw: RawRow,
-): QuotationRow {
+function headerFromRaw(kind: HeaderKind, raw: RawRow): QuotationRow {
   const cfg = HEADER_TABLES[kind]
   const extra = raw.extra ?? {}
   const dbStatus = str(raw[cfg.statusCol])
@@ -237,12 +286,16 @@ function receiptFromRaw(raw: RawRow): QuotationRow {
     MODE_FROM_DB[str(raw.mode_of_payment)] ??
     (strOrNull(extra.payment_method) as PaymentMethod | null) ??
     'Bank'
+  const book = str(extra.book)
   const invoiceRef =
-    strOrNull(extra.invoice_reference_no) ??
-    strOrNull(extra.against_invoice_no) ??
-    strOrNull(extra.tax_invoice_number) ??
-    // Older rows may have stored the invoice number in extra.reference_no
-    strOrNull(extra.reference_no)
+    book === 'payment_made'
+      ? strOrNull(extra.purchase_bill_number)
+      : book === 'refund'
+        ? strOrNull(extra.receipt_number)
+        : strOrNull(extra.invoice_reference_no) ??
+          strOrNull(extra.against_invoice_no) ??
+          strOrNull(extra.tax_invoice_number) ??
+          strOrNull(extra.reference_no)
   return {
     id: raw.id,
     quotation_number: receiptNumber,
@@ -306,11 +359,13 @@ export async function fetchSaleDocumentsPage({
   let clientIds: string[] = []
   if (term) clientIds = await matchingClientIds(term)
 
-  if (kind === 'paymentReceipt') {
+  if (isMoneyKind(kind)) {
+    const money = MONEY_BOOK[kind]!
     let query = supabase
       .from('transactions')
       .select(`*, ${CLIENT_JOIN}`, { count: 'exact' })
-      .eq('payment_flow', 'in')
+      .eq('payment_flow', money.flow)
+    if (money.book) query = query.eq('extra->>book', money.book)
     if (term) {
       const parts = [`receipt_number.ilike.*${term}*`, `description.ilike.*${term}*`]
       if (clientIds.length > 0) parts.push(`client_id.in.(${clientIds.join(',')})`)
@@ -354,14 +409,14 @@ export async function fetchNextSaleDocumentNumber(
 ): Promise<string> {
   const allocated = await allocateDocumentNumber(kind)
   if (allocated) return allocated
-  const numberCol =
-    kind === 'paymentReceipt' ? 'receipt_number' : HEADER_TABLES[kind].numberCol
-  const table = kind === 'paymentReceipt' ? 'transactions' : HEADER_TABLES[kind].table
+  const money = isMoneyKind(kind)
+  const numberCol = money ? 'receipt_number' : HEADER_TABLES[kind].numberCol
+  const table = money ? 'transactions' : HEADER_TABLES[kind].table
   let query = supabase
     .from(table)
     .select(numberCol)
     .ilike(numberCol, `${prefix.replace(/[\\%_]/g, (c) => `\\${c}`)}%`)
-  if (kind === 'paymentReceipt') query = query.eq('payment_flow', 'in')
+  if (money) query = query.eq('payment_flow', MONEY_BOOK[kind]!.flow)
   const { data, error } = await query.order(numberCol, { ascending: false }).limit(500)
   if (error) throw error
   const numbers = ((data ?? []) as unknown as Array<Record<string, unknown>>).map((r) =>
@@ -407,19 +462,22 @@ function buildLines(
     })
 }
 
-async function resolveGstSupplyMode(recipientGstin: string): Promise<GstSupplyMode> {
+async function labGstin(): Promise<string> {
   const { data } = await supabase
     .from('lab_settings')
     .select('gst_number')
     .eq('id', '00000000-0000-0000-0000-000000000001')
     .maybeSingle()
-  const supplier = String((data as { gst_number?: string | null } | null)?.gst_number ?? '')
+  return String((data as { gst_number?: string | null } | null)?.gst_number ?? '')
+}
+
+async function resolveGstSupplyMode(supplierGstin: string, recipientGstin: string): Promise<GstSupplyMode> {
   const { data: mode, error } = await supabase.rpc('sale_gst_supply_mode', {
-    p_supplier_gstin: supplier,
+    p_supplier_gstin: supplierGstin,
     p_recipient_gstin: recipientGstin,
   })
   if (!error && (mode === 'intra' || mode === 'inter')) return mode
-  return gstSupplyMode(supplier, recipientGstin)
+  return gstSupplyMode(supplierGstin, recipientGstin)
 }
 
 function clientSnapshot(form: QuotationForm): Extra {
@@ -434,7 +492,7 @@ function clientSnapshot(form: QuotationForm): Extra {
 }
 
 async function saveHeaderDocument(
-  kind: Exclude<SaleDocumentKind, 'paymentReceipt'>,
+  kind: HeaderKind,
   form: QuotationForm,
   editingId: string | null,
 ): Promise<void> {
@@ -442,10 +500,19 @@ async function saveHeaderDocument(
   const prepared: QuotationForm = {
     ...form,
     lines: linesForDocumentKind(kind, form.lines),
-    gstPercent: kind === 'invoice' || kind === 'creditNote' ? form.gstPercent : '0',
+    gstPercent:
+      kind === 'invoice' || kind === 'creditNote' || kind === 'purchase' || kind === 'debitNote' || kind === 'salesDebitNote'
+        ? form.gstPercent
+        : '0',
   }
-  const supplyMode: GstSupplyMode =
-    kind === 'invoice' || kind === 'creditNote' ? await resolveGstSupplyMode(form.clientGstNumber) : 'intra'
+  const purchaseSide = kind === 'purchase' || kind === 'debitNote'
+  const saleSide = kind === 'invoice' || kind === 'creditNote' || kind === 'salesDebitNote'
+  const companyGstin = purchaseSide || saleSide ? await labGstin() : ''
+  const supplyMode: GstSupplyMode = purchaseSide
+    ? await resolveGstSupplyMode(form.clientGstNumber, companyGstin)
+    : saleSide
+      ? await resolveGstSupplyMode(companyGstin, form.clientGstNumber)
+      : 'intra'
   const totals = computeQuotationTotals(prepared, supplyMode)
   const date = form.quotationDate || new Date().toISOString().slice(0, 10)
   const id = editingId ?? crypto.randomUUID()
@@ -474,7 +541,7 @@ async function saveHeaderDocument(
       transportation_charges: totals.transportationCharges,
       packaging_charges: totals.packagingCharges,
       gst_percent: totals.effectiveGstPercent,
-      gst_supply_mode: kind === 'invoice' || kind === 'creditNote' ? supplyMode : null,
+      gst_supply_mode: purchaseSide || saleSide ? supplyMode : null,
     },
     updated_at: new Date().toISOString(),
   }
@@ -502,13 +569,16 @@ async function saveHeaderDocument(
   if (cleanupError) throw cleanupError
 }
 
-async function saveReceipt(form: QuotationForm, editingId: string | null): Promise<void> {
+async function saveReceipt(kind: SaleDocumentKind, form: QuotationForm, editingId: string | null): Promise<void> {
+  const money = MONEY_BOOK[kind] ?? { flow: 'in' as const, book: '' }
   const amount = Math.max(0, parseMoney(String(form.paymentAmount ?? '')))
   const method = normalizePaymentMethod(form.paymentMethod)
-  const tdsPercent = form.tdsPercent === '2' || form.tdsPercent === '10' ? Number(form.tdsPercent) : null
-  const againstInvoice = form.referenceNo.trim() || null
+  const tdsPercent = kind === 'paymentReceipt' && (form.tdsPercent === '2' || form.tdsPercent === '10')
+    ? Number(form.tdsPercent)
+    : null
+  const against = form.referenceNo.trim() || null
   const payload: Record<string, unknown> = {
-    payment_flow: 'in',
+    payment_flow: money.flow,
     receipt_number: form.quotationNumber.trim(),
     client_id: form.clientId || null,
     amount,
@@ -521,15 +591,17 @@ async function saveReceipt(form: QuotationForm, editingId: string | null): Promi
     tds_percent: tdsPercent,
     extra: {
       ...clientSnapshot(form),
+      book: money.book || null,
       remarks: form.remarks.trim() || null,
       payment_terms: form.paymentTerms.trim() || null,
       signature_text: form.signatureText.trim() || null,
       signature_image_path: form.signatureImagePath.trim() || null,
       status_label: form.status,
       payment_method: method,
-      /** Invoice / document this receipt is against (kept separate from mode_of_payment). */
-      invoice_reference_no: againstInvoice,
-      against_invoice_no: againstInvoice,
+      invoice_reference_no: kind === 'paymentReceipt' ? against : null,
+      against_invoice_no: kind === 'paymentReceipt' ? against : null,
+      purchase_bill_number: kind === 'paymentMade' ? against : null,
+      receipt_number: kind === 'refund' ? against : null,
       allocated_amount: amount,
       tds_percent: tdsPercent,
     },
@@ -537,7 +609,7 @@ async function saveReceipt(form: QuotationForm, editingId: string | null): Promi
   }
   const write = async (body: Record<string, unknown>) => {
     if (editingId) {
-      return supabase.from('transactions').update(body).eq('id', editingId).eq('payment_flow', 'in')
+      return supabase.from('transactions').update(body).eq('id', editingId).eq('payment_flow', money.flow)
     }
     return supabase.from('transactions').insert(body)
   }
@@ -556,18 +628,17 @@ export async function saveSaleDocument(
   form: QuotationForm,
   editingId: string | null,
 ): Promise<void> {
-  if (kind === 'paymentReceipt') return saveReceipt(form, editingId)
+  if (isMoneyKind(kind)) return saveReceipt(kind, form, editingId)
   return saveHeaderDocument(kind, form, editingId)
 }
 
 export async function deleteSaleDocuments(kind: SaleDocumentKind, ids: string[]): Promise<void> {
   if (ids.length === 0) return
-  if (kind === 'paymentReceipt') {
-    const { error } = await supabase
-      .from('transactions')
-      .delete()
-      .in('id', ids)
-      .eq('payment_flow', 'in')
+  if (isMoneyKind(kind)) {
+    const money = MONEY_BOOK[kind]!
+    let query = supabase.from('transactions').delete().in('id', ids).eq('payment_flow', money.flow)
+    if (money.book) query = query.eq('extra->>book', money.book)
+    const { error } = await query
     if (error) throw error
     return
   }
@@ -580,7 +651,7 @@ export async function updateSaleDocumentStatus(
   row: QuotationRow,
   status: QuotationStatus,
 ): Promise<void> {
-  if (kind === 'paymentReceipt') {
+  if (isMoneyKind(kind)) {
     const { data, error: readError } = await supabase
       .from('transactions')
       .select('extra')
@@ -615,10 +686,12 @@ export async function updateSaleDocumentStatus(
 }
 
 type LedgerSource = {
-  kind: 'invoice' | 'creditNote' | 'paymentReceipt'
+  kind: 'invoice' | 'creditNote' | 'paymentReceipt' | 'salesDebitNote' | 'refund'
   table: string
   amountCol: string
   statusCol?: string
+  flow?: 'in' | 'out'
+  book?: string
 }
 
 const LEDGER_SOURCES: LedgerSource[] = [
@@ -629,7 +702,14 @@ const LEDGER_SOURCES: LedgerSource[] = [
     amountCol: 'grand_total',
     statusCol: 'credit_note_status',
   },
-  { kind: 'paymentReceipt', table: 'transactions', amountCol: 'amount' },
+  {
+    kind: 'salesDebitNote',
+    table: 'finance_sales_debit_notes',
+    amountCol: 'grand_total',
+    statusCol: 'sales_debit_note_status',
+  },
+  { kind: 'paymentReceipt', table: 'transactions', amountCol: 'amount', flow: 'in' },
+  { kind: 'refund', table: 'transactions', amountCol: 'amount', flow: 'out', book: 'refund' },
 ]
 
 async function fetchLedgerRows(source: LedgerSource): Promise<QuotationRow[]> {
@@ -639,7 +719,8 @@ async function fetchLedgerRows(source: LedgerSource): Promise<QuotationRow[]> {
       .from(source.table)
       .select(`id, client_id, ${source.amountCol}, ${CLIENT_JOIN}`)
     if (source.statusCol) query = query.neq(source.statusCol, 'cancelled')
-    if (source.kind === 'paymentReceipt') query = query.eq('payment_flow', 'in')
+    if (source.flow) query = query.eq('payment_flow', source.flow)
+    if (source.book) query = query.eq('extra->>book', source.book)
     const { data, error } = await query
       .order('id', { ascending: true })
       .range(from, from + LEDGER_PAGE - 1)
@@ -661,10 +742,13 @@ async function fetchLedgerRows(source: LedgerSource): Promise<QuotationRow[]> {
 /** Reloads invoice / credit note / receipt totals used for client outstanding balances. */
 export async function refreshSaleLedgerCache(): Promise<void> {
   const results = await Promise.all(
-    LEDGER_SOURCES.map(async (source) => ({
-      kind: source.kind,
-      rows: await fetchLedgerRows(source),
-    })),
+    LEDGER_SOURCES.map(async (source) => {
+      try {
+        return { kind: source.kind, rows: await fetchLedgerRows(source) }
+      } catch {
+        return { kind: source.kind, rows: [] as QuotationRow[] }
+      }
+    }),
   )
   for (const { kind, rows } of results) setSaleDocumentCache(kind, rows)
 }

@@ -13,6 +13,7 @@ export type BisMasterOptionCategory =
   | 'bis_inspection_officer_name'
   | 'bis_dealing_officer_name'
   | 'bis_type_of_inspection'
+  | 'unit_of_is'
 
 /** Legacy name categories are merged into one shared officer-name list. */
 const OFFICER_NAME_CATEGORIES: BisMasterOptionCategory[] = [
@@ -41,6 +42,8 @@ export function isBuiltinBisMasterOption(
   _category: BisMasterOptionCategory,
   _labelOrValue: string,
 ): boolean {
+  void _category
+  void _labelOrValue
   return false
 }
 
@@ -89,6 +92,19 @@ export function getCachedBisMasterOptions(
 export async function fetchBisMasterOptions(
   category: BisMasterOptionCategory,
 ): Promise<BisMasterOption[]> {
+  if (category === 'unit_of_is') {
+    const { data, error } = await supabase
+      .from('is_code_master_options')
+      .select('id, label')
+      .eq('category', 'unit_of_is')
+      .order('label', { ascending: true })
+    if (error) throw error
+    const rows = (Array.isArray(data) ? data : []).map((row) => ({
+      value: String((row as { id?: unknown }).id ?? '').trim(),
+      label: String((row as { label?: unknown }).label ?? '').trim(),
+    }))
+    return sortMasterOptions(rows.filter((row) => row.value && row.label))
+  }
   const categories = fetchCategoriesFor(category)
   let query = supabase.from('lab_master_options').select('label, value').order('label', {
     ascending: true,
@@ -126,6 +142,15 @@ export async function ensureBisMasterOption(
 ): Promise<void> {
   const trimmed = label.trim()
   if (!trimmed) return
+  if (category === 'unit_of_is') {
+    const existing = await fetchBisMasterOptions(category)
+    if (existing.some((option) => option.label.toLowerCase() === trimmed.toLowerCase())) return
+    const { error } = await supabase
+      .from('is_code_master_options')
+      .insert({ category, label: trimmed, value: trimmed })
+    if (error) throw error
+    return
+  }
   const writeCategory = writeCategoryFor(category)
   const existing = await fetchBisMasterOptions(writeCategory)
   if (existing.some((o) => o.label.toLowerCase() === trimmed.toLowerCase())) return
@@ -145,6 +170,14 @@ export async function updateBisMasterOption(
 ): Promise<void> {
   const trimmed = label.trim()
   if (!trimmed) return
+  if (category === 'unit_of_is') {
+    const { error } = await supabase
+      .from('is_code_master_options')
+      .update({ label: trimmed, value: trimmed })
+      .eq('id', oldValue)
+    if (error) throw error
+    return
+  }
   const categories = fetchCategoriesFor(category)
   const writeCategory = writeCategoryFor(category)
   const { data, error } = await supabase
@@ -170,6 +203,14 @@ export async function deleteBisMasterOption(
   category: BisMasterOptionCategory,
   value: string,
 ): Promise<void> {
+  if (category === 'unit_of_is') {
+    const { error } = await supabase
+      .from('is_code_master_options')
+      .delete()
+      .eq('id', value)
+    if (error) throw error
+    return
+  }
   const categories = fetchCategoriesFor(category)
   const { error } = await supabase
     .from('lab_master_options')

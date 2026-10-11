@@ -3,9 +3,10 @@ import { createElement } from 'react'
 import { resolveNamedLetterheadTemplates } from '@/features/sample-handling/report-preparation/reportScopeConfig'
 import { waitForPrintDocumentReady } from '@/features/sample-handling/report-preparation/waitForPrintDocumentReady'
 import { fetchLabDocumentTemplates } from '@/features/settings/lab-settings/documentTemplatesConfig'
-import type {
-  DocumentTemplateKind,
-  FinanceDocumentTemplate,
+import {
+  templateForBook,
+  type BookDocumentKind,
+  type FinanceDocumentTemplate,
 } from '@/features/settings/lab-settings/documentTemplateTypes'
 import {
   fetchQuotationBankDetails,
@@ -57,14 +58,14 @@ async function loadAssets(
 
 async function mountQuotationPages(
   rows: QuotationRow[],
-  documentKind: DocumentTemplateKind = 'quotation',
+  documentKind: BookDocumentKind = 'quotation',
 ): Promise<{
   host: HTMLDivElement
   root: Root
   template: FinanceDocumentTemplate
 }> {
   const docs = await fetchLabDocumentTemplates()
-  const template = docs[documentKind] ?? docs.quotation
+  const template = templateForBook(docs, documentKind)
   const assetsList = await Promise.all(rows.map((row) => loadAssets(template, row)))
 
   const host = document.createElement('div')
@@ -146,7 +147,7 @@ function collectAppCssText(): string {
  */
 async function openTemplatePrintDialog(
   rows: QuotationRow[],
-  opts?: { documentTitle?: string; documentKind?: DocumentTemplateKind },
+  opts?: { documentTitle?: string; documentKind?: BookDocumentKind },
 ): Promise<void> {
   if (rows.length === 0) throw new Error('No document selected to print.')
   const { host, root, template } = await mountQuotationPages(
@@ -205,7 +206,7 @@ async function openTemplatePrintDialog(
 /** Print using the exact same React Templates layout (vector / printer quality). */
 export async function printQuotationsWithTemplate(
   rows: QuotationRow[],
-  documentKind: DocumentTemplateKind = 'quotation',
+  documentKind: BookDocumentKind = 'quotation',
 ): Promise<void> {
   await openTemplatePrintDialog(rows, { documentKind })
 }
@@ -217,7 +218,7 @@ export async function printQuotationsWithTemplate(
 export async function downloadQuotationPdfWithTemplate(
   row: QuotationRow,
   filename?: string,
-  documentKind: DocumentTemplateKind = 'quotation',
+  documentKind: BookDocumentKind = 'quotation',
 ): Promise<void> {
   const title =
     (filename ?? '').replace(/\.pdf$/i, '') || row.quotation_number || documentKind

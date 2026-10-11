@@ -11,6 +11,8 @@ const footerFieldClass = limsDarkBarFieldClass
 
 export function ClientsTableFooterBar({
   message,
+  responsiveWrap = false,
+  responsiveClassName,
   loading,
   selectedCount,
   totalCount,
@@ -21,6 +23,7 @@ export function ClientsTableFooterBar({
   onImport,
   onExport,
   onPrintSelected,
+  printTitle = 'Print half-A4 courier slip for selected clients',
   onDeleteSelected,
   onHistory,
   canEdit,
@@ -35,6 +38,8 @@ export function ClientsTableFooterBar({
   onJumpToGo,
 }: {
   message: string | null
+  responsiveWrap?: boolean
+  responsiveClassName?: string
   loading: boolean
   selectedCount: number
   totalCount: number
@@ -45,6 +50,7 @@ export function ClientsTableFooterBar({
   onImport: () => void
   onExport: () => void
   onPrintSelected: () => void
+  printTitle?: string
   onDeleteSelected: () => void
   onHistory: () => void
   canEdit?: boolean
@@ -65,7 +71,7 @@ export function ClientsTableFooterBar({
   )
 
   return (
-    <div className={cn(clientPanelClass)}>
+    <div className={cn(clientPanelClass, responsiveWrap && 'laboratories-responsive-footer', responsiveClassName)}>
       <div className="relative overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-2 py-2 text-white sm:px-4 md:px-5">
         <div
           className="pointer-events-none absolute inset-0 opacity-[0.18]"
@@ -76,8 +82,11 @@ export function ClientsTableFooterBar({
         />
         <div className="absolute top-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
 
-        <div className="relative flex min-w-0 flex-nowrap items-center gap-1 overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch] sm:gap-1.5 md:gap-2.5">
-          <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
+        <div className={cn(
+          'relative flex min-w-0 gap-1 sm:gap-1.5 md:gap-2.5',
+          responsiveWrap ? 'max-w-full flex-wrap items-center justify-between overflow-visible' : 'flex-nowrap items-center overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch]',
+        )}>
+          <div className={cn('flex items-center gap-1 sm:gap-1.5', responsiveWrap ? 'min-w-0 max-w-full flex-wrap' : 'shrink-0')}>
             {onToggleShowArchived ? (
               <label className="flex h-8 shrink-0 items-center gap-1 px-1 text-[10px] text-stone-200 sm:text-xs">
                 <input type="checkbox" checked={Boolean(showArchived)} onChange={() => onToggleShowArchived()} />
@@ -95,7 +104,7 @@ export function ClientsTableFooterBar({
                 title="Archive selected"
               >
                 <Archive size={14} />
-                <span className="hidden md:inline">Archive</span>
+                <span className="laboratories-footer-label hidden md:inline">Archive</span>
               </Button>
             ) : null}
             {canEdit && showArchived ? (
@@ -109,7 +118,7 @@ export function ClientsTableFooterBar({
                 title="Restore selected"
               >
                 <ArchiveRestore size={14} />
-                <span className="hidden md:inline">Restore</span>
+                <span className="laboratories-footer-label hidden md:inline">Restore</span>
               </Button>
             ) : null}
             <LaboratoryDirectorOnly>
@@ -124,7 +133,7 @@ export function ClientsTableFooterBar({
                 title="Change history"
               >
                 <History size={14} />
-                <span className="hidden sm:inline">History</span>
+                <span className="laboratories-footer-label hidden sm:inline">History</span>
               </Button>
               <Button
                 type="button"
@@ -136,7 +145,7 @@ export function ClientsTableFooterBar({
                 title="Import"
               >
                 <FileUp size={14} />
-                <span className="hidden md:inline">Import</span>
+                <span className="laboratories-footer-label hidden md:inline">Import</span>
               </Button>
               <Button
                 type="button"
@@ -148,7 +157,7 @@ export function ClientsTableFooterBar({
                 title="Export"
               >
                 <Download size={14} />
-                <span className="hidden md:inline">Export</span>
+                <span className="laboratories-footer-label hidden md:inline">Export</span>
               </Button>
               <Button
                 type="button"
@@ -157,10 +166,10 @@ export function ClientsTableFooterBar({
                 className={actionBtn}
                 onClick={onPrintSelected}
                 disabled={loading || selectionDisabled}
-                title="Print half-A4 courier slip for selected clients"
+                title={printTitle}
               >
                 <Printer size={14} />
-                <span className="hidden md:inline">Print</span>
+                <span className="laboratories-footer-label hidden md:inline">Print</span>
               </Button>
               <Button
                 type="button"
@@ -172,7 +181,7 @@ export function ClientsTableFooterBar({
                 title="Delete permanently"
               >
                 <Trash2 size={14} />
-                <span className="hidden md:inline">Delete permanently</span>
+                <span className="laboratories-footer-label hidden md:inline">Delete permanently</span>
               </Button>
             </LaboratoryDirectorOnly>
             {selectedCount > 0 ? (
@@ -199,7 +208,7 @@ export function ClientsTableFooterBar({
             ) : null}
           </div>
 
-          <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5">
+          <div className={cn('flex items-center gap-1 sm:gap-1.5', responsiveWrap ? 'ml-auto max-w-full flex-wrap justify-end' : 'ml-auto shrink-0')}>
             <span className="shrink-0 whitespace-nowrap text-[10px] font-medium text-stone-200 sm:text-xs">
               {`Showing ${rangeFrom.toLocaleString('en-IN')}–${rangeTo.toLocaleString('en-IN')} of ${totalCount.toLocaleString('en-IN')}`}
             </span>

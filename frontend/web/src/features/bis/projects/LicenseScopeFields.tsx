@@ -46,18 +46,10 @@ function pickIsCodeFile(
     /product[_\s-]*manual|\bmanual\b|\bpm\b|^pm[_\s-]/i.test(name)
 
   if (kind === 'manual') {
-    return (
-      pool.find((f) => isManualName(f.file_name)) ??
-      (pool.length === 1 ? pool[0]! : null)
-    )
+    return pool.find((f) => isManualName(f.file_name)) ?? null
   }
 
-  return (
-    pool.find((f) => !isManualName(f.file_name)) ??
-    pool.find((f) => /\bis[\s._-]?\d/i.test(f.file_name)) ??
-    pool[0] ??
-    null
-  )
+  return pool.find((f) => !isManualName(f.file_name)) ?? null
 }
 
 function openFileInBrowser(file: IsCodeFileLink | null, label: string) {
@@ -89,14 +81,14 @@ export function LicenseScopeFields({
   label?: string
   inputId?: string
   className?: string
-  /** When set, shows View buttons for Indian Standard + Product Manual of this IS Code. */
+  /** When set, shows View buttons for the Specification + Product Manual of this IS Code. */
   isCodeId?: string | null
 }) {
   // parseBisNotesScope already strips imported checklist JSON for display.
   const notesScope = parseBisNotesScope(value)
-  const notesColumnCount = bisNotesScopeColumnCount(value)
+  const notesColumnCount = value.trim() ? bisNotesScopeColumnCount(value) : 2
   const [columnDialogOpen, setColumnDialogOpen] = useState(false)
-  const [draftColumnCount, setDraftColumnCount] = useState('1')
+  const [draftColumnCount, setDraftColumnCount] = useState('2')
   const [isFiles, setIsFiles] = useState<IsCodeFileLink[]>([])
   const [filesLoading, setFilesLoading] = useState(false)
 
@@ -176,7 +168,6 @@ export function LicenseScopeFields({
   const standardFile = pickIsCodeFile(isFiles, 'standard')
   const manualFile = pickIsCodeFile(isFiles, 'manual')
   const showIsFileButtons = Boolean((isCodeId ?? '').trim())
-  const filesReady = !filesLoading && isFiles.length > 0
   const filesMissing =
     showIsFileButtons && !filesLoading && isFiles.length === 0
 
@@ -196,13 +187,13 @@ export function LicenseScopeFields({
                 title={
                   standardFile?.file_name
                     ? `View ${standardFile.file_name}`
-                    : 'Indian Standard file not attached on this IS Code'
+                  : 'Specification file not attached on this IS Code'
                 }
-                onClick={() => openFileInBrowser(standardFile, 'Indian Standard')}
+                onClick={() => openFileInBrowser(standardFile, 'Specification')}
               >
                 <BookOpen className="h-3.5 w-3.5" aria-hidden />
                 <Eye className="h-3.5 w-3.5" aria-hidden />
-                IS Standard
+                View Specification
               </Button>
               <Button
                 type="button"
@@ -219,7 +210,7 @@ export function LicenseScopeFields({
               >
                 <FileText className="h-3.5 w-3.5" aria-hidden />
                 <Eye className="h-3.5 w-3.5" aria-hidden />
-                Product Manual
+                View Product Manual
               </Button>
             </>
           ) : null}
@@ -245,28 +236,8 @@ export function LicenseScopeFields({
           ) : null}
           {filesMissing ? (
             <span className="text-amber-800">
-              No files on this IS Code — attach IS Standard / Product Manual in IS Code Master.
+              No specification or product manual is attached to this IS Code.
             </span>
-          ) : null}
-          {filesReady ? (
-            <>
-              <span className="min-w-0 truncate" title={standardFile?.file_name}>
-                <span className="font-semibold text-stone-700">IS:</span>{' '}
-                {standardFile?.url
-                  ? standardFile.file_name
-                  : standardFile?.file_name
-                    ? `${standardFile.file_name} (unavailable)`
-                    : '—'}
-              </span>
-              <span className="min-w-0 truncate" title={manualFile?.file_name}>
-                <span className="font-semibold text-stone-700">PM:</span>{' '}
-                {manualFile?.url
-                  ? manualFile.file_name
-                  : manualFile?.file_name
-                    ? `${manualFile.file_name} (unavailable)`
-                    : '—'}
-              </span>
-            </>
           ) : null}
         </div>
       ) : null}
@@ -284,7 +255,12 @@ export function LicenseScopeFields({
       ) : (
         <div className="space-y-2">
           <div className="overflow-x-auto rounded-none border border-stone-500 bg-stone-50">
-            <table className="w-full min-w-[28rem] border-collapse text-sm">
+            <table
+              className={cn(
+                'w-full min-w-[28rem] border-collapse text-sm',
+                notesScope.headers.length === 2 && 'bis-notes-scope-two-column-table',
+              )}
+            >
               <thead>
                 <tr className="bg-stone-800">
                   <th className="w-[4.5rem] border border-stone-700 bg-stone-800 px-1 text-center text-[10px] font-bold uppercase tracking-wide text-amber-200">
@@ -429,13 +405,16 @@ export function LicenseScopeFields({
             <div className="space-y-2">
               <Label htmlFor={`${inputId}-column-count`}>Number of columns</Label>
               <Select value={draftColumnCount} onValueChange={setDraftColumnCount}>
-                <SelectTrigger id={`${inputId}-column-count`} className="h-8 rounded-none">
+                <SelectTrigger
+                  id={`${inputId}-column-count`}
+                  className="h-9 rounded-none text-sm font-medium"
+                >
                   <SelectValue placeholder="Select columns" />
                 </SelectTrigger>
                 <SelectContent>
                   {BIS_NOTES_COLUMN_COUNT_OPTIONS.map((n) => (
-                    <SelectItem key={n} value={String(n)}>
-                      {n === 1 ? '1 column (plain text)' : `${n} columns (table)`}
+                    <SelectItem key={n} value={String(n)} className="text-sm">
+                      {n === 1 ? '1 Column — Plain Text' : `${n} Columns — Table Layout`}
                     </SelectItem>
                   ))}
                 </SelectContent>

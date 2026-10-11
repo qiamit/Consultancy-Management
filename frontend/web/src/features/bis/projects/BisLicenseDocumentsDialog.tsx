@@ -80,7 +80,7 @@ const rowOddClass = 'bg-[#fffcf7] hover:bg-[#f3e9d8]'
 const rowSelectedClass = 'bg-[#fde68a]/80 hover:bg-[#fde68a]/80'
 
 const actionBtnClass =
-  'h-8 w-8 rounded-none p-0 text-amber-800 hover:bg-amber-100 hover:text-amber-950'
+  'h-8 w-8 rounded-none border border-stone-400 bg-white/70 p-0 text-amber-800 shadow-sm hover:border-amber-600 hover:bg-amber-50 hover:text-amber-950 focus-visible:ring-2 focus-visible:ring-amber-500/40'
 
 /** ~10″ / desktop: row table. Below that: cards. */
 const TABLE_MQ_SHOW = 'hidden lg:block'
@@ -107,6 +107,7 @@ function triggerBlobDownload(blob: Blob, filename: string) {
 
 function DocRowActions({
   kind,
+  labelOverride,
   disabled,
   onModuleEdit,
   onView,
@@ -118,6 +119,7 @@ function DocRowActions({
   onPdf,
 }: {
   kind: BisPrintDocumentKind
+  labelOverride?: string
   disabled?: boolean
   onModuleEdit: (kind: BisPrintDocumentKind) => void
   onView: (kind: BisPrintDocumentKind) => void
@@ -128,7 +130,7 @@ function DocRowActions({
   onWord: (kind: BisPrintDocumentKind) => void
   onPdf: (kind: BisPrintDocumentKind) => void
 }) {
-  const label = BIS_PRINT_DOCUMENT_LABEL[kind]
+  const label = labelOverride ?? BIS_PRINT_DOCUMENT_LABEL[kind]
   const importEnabled = isImportableBisModuleKind(kind)
   return (
     <div className="inline-flex shrink-0 items-center justify-center gap-0.5">
@@ -291,9 +293,12 @@ export function BisLicenseDocumentsDialog({
 
   const filteredKinds = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return ALL_BIS_PRINT_KINDS
-    return ALL_BIS_PRINT_KINDS.filter((kind) =>
-      BIS_PRINT_DOCUMENT_LABEL[kind].toLowerCase().includes(q),
+    const kinds = ALL_BIS_PRINT_KINDS.filter((kind) => kind !== 'legal-documents')
+    if (!q) return kinds
+    return kinds.filter((kind) =>
+      (kind === 'location-map' ? 'legal documents & location map' : BIS_PRINT_DOCUMENT_LABEL[kind])
+        .toLowerCase()
+        .includes(q),
     )
   }, [search])
 
@@ -360,7 +365,9 @@ export function BisLicenseDocumentsDialog({
   const activeModuleTitle =
     activeModuleKind === 'process-flow-chart' ||
     activeModuleKind === 'process-description'
-      ? 'Process Flow Chart & Description'
+        ? 'Process Flow Chart & Description'
+      : activeModuleKind === 'location-map'
+        ? 'Legal Documents & Location Map'
       : activeModuleKind
         ? BIS_PRINT_DOCUMENT_LABEL[activeModuleKind]
         : 'Documents'
@@ -688,7 +695,9 @@ export function BisLicenseDocumentsDialog({
                       <TableBody>
                         {pageKinds.map((kind, index) => {
                           const selected = selectedKinds.has(kind)
-                          const label = BIS_PRINT_DOCUMENT_LABEL[kind]
+                          const label = kind === 'location-map'
+                            ? 'Legal Documents & Location Map'
+                            : BIS_PRINT_DOCUMENT_LABEL[kind]
                           return (
                             <TableRow
                               key={kind}
@@ -725,6 +734,7 @@ export function BisLicenseDocumentsDialog({
                               <TableCell className="px-2 py-2 text-center align-middle">
                                 <DocRowActions
                                   kind={kind}
+                                  labelOverride={label}
                                   disabled={actionsDisabled}
                                   onModuleEdit={handleModuleEdit}
                                   onView={handleView}
@@ -842,6 +852,10 @@ export function BisLicenseDocumentsDialog({
       docKind={activeDocKind}
       printKind={activeModuleKind}
       onProjectSaved={onProjectSaved}
+      onLocationMapPreview={() => handlePreview('location-map')}
+      onLocationMapWord={() => void runDownload('location-map', 'word')}
+      onLocationMapPdf={() => void runDownload('location-map', 'pdf')}
+      onLocationMapPrint={() => handlePrint('location-map')}
     />
 
     <BisDocumentPrintPreviewDialog

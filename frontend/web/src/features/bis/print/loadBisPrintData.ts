@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabaseClient'
-import { formatIsCodeLabelFromParts } from '@/features/masters/is-codes/formatIsCodeLabel'
+import { formatIsCodeLabel } from '@/features/masters/is-codes/formatIsCodeLabel'
 import { clientDisplayName, type BisProjectRow } from '../projects/types'
 import { loadCompanyPrintContext, type CompanyPrintContext } from './loadCompanyPrintContext'
 
@@ -21,14 +21,19 @@ export type BisPrintClient = {
   factoryDistrict: string
   factoryState: string
   factoryPin: string
+  latitude: string
+  longitude: string
   topManagement: { name: string; designation: string }[]
 }
 
 export type BisPrintIsCode = {
   isNumber: string
   revisionYear: string
+  partNo: string
+  sectionNo: string
   title: string
   label: string
+  unitOfIs: string
 }
 
 /** Authorized signatory overlay applied to all BIS print documents when enabled. */
@@ -47,6 +52,8 @@ export type BisPrintData = {
   modulePayload?: Record<string, unknown> | null
   /** Top Management module payload (for signatory / authorization letter fields). */
   topManagement?: Record<string, unknown> | null
+  /** Technical Staff module payload (used by Form 1 technical management). */
+  technicalManagement?: Record<string, unknown> | null
   /** When set, print builders should prefer this signatory on documents. */
   documentSignatory?: BisPrintDocumentSignatory | null
 }
@@ -95,6 +102,8 @@ async function loadClient(row: BisProjectRow): Promise<BisPrintClient> {
     factoryDistrict: '',
     factoryState: '',
     factoryPin: '',
+    latitude: '',
+    longitude: '',
     topManagement: [],
   }
   if (!row.client_id) return empty
@@ -122,6 +131,8 @@ async function loadClient(row: BisProjectRow): Promise<BisPrintClient> {
     factoryDistrict: text(c.district),
     factoryState: text(c.state),
     factoryPin: text(c.pin_code),
+    latitude: text(c.latitude),
+    longitude: text(c.longitude),
     topManagement: [],
   }
   const clientId = text(c.id) || row.client_id
@@ -159,27 +170,47 @@ async function loadIsCode(row: BisProjectRow): Promise<BisPrintIsCode> {
   const joined = row.is_code
   let isNumber = text(joined?.is_number)
   let revisionYear = text(joined?.revision_year)
+  let partNo = text(joined?.part_no)
+  let sectionNo = text(joined?.section_no)
+  let standardPrefix = text(joined?.standard_prefix)
   let title = text(joined?.title)
+  let unitOfIs = text(joined?.unit_of_is)
 
-  if (row.is_code_id && (!isNumber || !title)) {
+  if (row.is_code_id && (!isNumber || !title || !unitOfIs)) {
     const { data } = await supabase
       .from('is_codes')
-      .select('is_number, revision_year, title')
+      .select('is_number, revision_year, part_no, section_no, standard_prefix, title, unit_of_is')
       .eq('id', row.is_code_id)
       .maybeSingle()
     if (data) {
       const r = data as Record<string, unknown>
       isNumber = text(r.is_number) || isNumber
       revisionYear = text(r.revision_year) || revisionYear
+      partNo = text(r.part_no) || partNo
+      sectionNo = text(r.section_no) || sectionNo
+      standardPrefix = text(r.standard_prefix) || standardPrefix
       title = text(r.title) || title
+      unitOfIs = text(r.unit_of_is) || unitOfIs
     }
   }
+
+  const label =
+    formatIsCodeLabel({
+      is_number: isNumber,
+      revision_year: revisionYear,
+      part_no: partNo,
+      section_no: sectionNo,
+      standard_prefix: standardPrefix,
+    }) || isNumber
 
   return {
     isNumber,
     revisionYear,
+    partNo,
+    sectionNo,
     title,
-    label: formatIsCodeLabelFromParts(isNumber, revisionYear) || isNumber,
+    label,
+    unitOfIs,
   }
 }
 

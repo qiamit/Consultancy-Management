@@ -2,13 +2,14 @@ import { fetchAllRows } from '@/lib/fetchAllRows'
 import { supabase } from '@/lib/supabaseClient'
 
 const PICKER_SELECT =
-  'id, company_name, contact_person_name, email, country_code, mobile, gst_number, address, district, pin_code, state, country, opening_balance, balance_type, archived_at'
+  'id, company_name, company_type, contact_person_name, email, country_code, mobile, gst_number, address, district, pin_code, state, country, opening_balance, balance_type, archived_at'
 
 const TTL_MS = 10 * 60 * 1000
 
 export type PickerClientRow = {
   id: string
   company_name?: string | null
+  company_type?: string | null
   contact_person_name?: string | null
   email?: string | null
   country_code?: string | null

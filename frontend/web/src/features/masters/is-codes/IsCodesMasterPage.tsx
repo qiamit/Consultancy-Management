@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { limsDarkBarGlowStyle, limsDialogClass, limsPageShellClass } from '@/lib/limsThemeUi'
+import { limsDarkBarGlowStyle, limsPageShellClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabaseClient'
 import { useCanEditCurrentModule } from '@/features/settings/module-access/useCanEditCurrentModule'
@@ -7,7 +7,6 @@ import { useFormDialogOpenChange } from '@/lib/formDialogOpenChange'
 import { useMasterUiSearchState } from '@/lib/useMasterUiSearchState'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { IsCodesHeaderBar } from './IsCodesHeaderBar'
-import { listIsCodeAmendments, saveIsCodeAmendments } from './isCodeAmendmentsApi'
 import { IsCodesForm } from './IsCodesForm'
 import { IsCodesTable, type IsCodeSortDir, type IsCodeSortKey } from './IsCodesTable'
 import { AuditHistoryDialog } from '@/components/lims/AuditHistoryDialog'
@@ -15,11 +14,17 @@ import { IsCodesTableFooterBar } from './IsCodesFooterBar'
 import { IsCodesFilesDialog, type IsCodeViewFile } from './IsCodesFilesDialog'
 import { buildIsCodesListAssistantContext, formatIsCodeLabel } from './buildIsCodeAssistantContext'
 import {
+  isCodeFileDocumentKind,
   canonicalIsNumber,
+  isCodeNumberDigits,
+  isValidIsNumberDigits,
   emptyIsCodeForm,
   moneyOrZero,
   moneyToFormStr,
   normalizeText,
+  amendmentToFormStr,
+  partToFormStr,
+  sectionToFormStr,
   reaffirmationToFormStr,
   toProperTitleCase,
   yearIntFromForm,
@@ -38,6 +43,16 @@ const IS_CODE_MAX_FILE_BYTES = 50 * 1024 * 1024
 const IS_CODE_ALLOWED_EXT = new Set(['pdf', 'png', 'jpg', 'jpeg', 'doc', 'docx'])
 
 const VIEW_ONLY_MSG = 'View-only access — ask the Laboratory Director for Edit access.'
+
+function isMissingDocumentKindColumn(error: { code?: string; message?: string } | null) {
+  if (!error) return false
+  const msg = error.message ?? ''
+  return (
+    error.code === '42703' ||
+    error.code === 'PGRST204' ||
+    (/document_kind/i.test(msg) && /does not exist|schema cache/i.test(msg))
+  )
+}
 
 type MasterDeleteResult = {
   deleted?: string[] | null
@@ -104,6 +119,154 @@ const formatSupabaseError = (err: unknown) => {
   const anyErr = err as { message?: string; details?: string; hint?: string; code?: string }
   const parts = [anyErr.message, anyErr.details, anyErr.hint, anyErr.code].filter(Boolean)
   return parts.length ? parts.join(' | ') : 'Unknown error'
+}
+
+/** Form fields only. Id is never exported. */
+const IS_CODE_CSV_HEADERS = [
+  'standard_prefix',
+  'is_number',
+  'part_no',
+  'section_no',
+  'revision_year',
+  'amendment_number',
+  'reaffirmation_year',
+  'title',
+  'product_manual_number',
+  'aspect',
+  'unit_of_is',
+  'testing_charges',
+  'mmf_large_scale',
+  'mmf_medium_scale',
+  'mmf_small_scale',
+  'mmf_micro_scale',
+  'slab_1_quantity',
+  'slab_1_rate',
+  'slab_2_quantity',
+  'slab_2_rate',
+  'slab_3_quantity',
+  'slab_3_rate',
+  'remarks',
+] as const
+
+const IS_CODE_CSV_HEADER_ALIASES: Record<(typeof IS_CODE_CSV_HEADERS)[number], string[]> = {
+  standard_prefix: ['standard_prefix', 'prefix'],
+  is_number: ['is_number', 'is number', 'is no'],
+  part_no: ['part_no', 'part', 'part number'],
+  section_no: ['section_no', 'section', 'sec'],
+  revision_year: ['revision_year', 'revision year', 'year'],
+  amendment_number: ['amendment_number', 'amendment'],
+  reaffirmation_year: ['reaffirmation_year', 'reaffirmation', 'ra'],
+  title: ['title', 'title of the is code', 'is_code_title'],
+  product_manual_number: ['product_manual_number', 'product manual', 'product manual no'],
+  aspect: ['aspect', 'aspect of is', 'aspect_of_is'],
+  unit_of_is: ['unit_of_is', 'unit of is', 'unit'],
+  testing_charges: ['testing_charges', 'testing charges'],
+  mmf_large_scale: ['mmf_large_scale', 'large scale'],
+  mmf_medium_scale: ['mmf_medium_scale', 'medium scale'],
+  mmf_small_scale: ['mmf_small_scale', 'small scale'],
+  mmf_micro_scale: ['mmf_micro_scale', 'micro scale'],
+  slab_1_quantity: ['slab_1_quantity', 'slab 1 quantity'],
+  slab_1_rate: ['slab_1_rate', 'slab 1 rate'],
+  slab_2_quantity: ['slab_2_quantity', 'slab 2 quantity'],
+  slab_2_rate: ['slab_2_rate', 'slab 2 rate'],
+  slab_3_quantity: ['slab_3_quantity', 'slab 3 quantity'],
+  slab_3_rate: ['slab_3_rate', 'slab 3 rate'],
+  remarks: ['remarks', 'remark'],
+}
+
+function normalizeIsCodeCsvHeader(value: string) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+}
+
+function resolveIsCodeCsvHeaderIndex(header: string[]) {
+  const normalized = header.map(normalizeIsCodeCsvHeader)
+  const map: Record<string, number> = {}
+  for (const field of IS_CODE_CSV_HEADERS) {
+    const aliases = IS_CODE_CSV_HEADER_ALIASES[field].map(normalizeIsCodeCsvHeader)
+    const idx = normalized.findIndex((name) => aliases.includes(name) || name === field)
+    if (idx >= 0) map[field] = idx
+  }
+  const titleIdx = normalized.findIndex((name) => name === 'is_code_title')
+  if (map.title == null && titleIdx >= 0) map.title = titleIdx
+  const aspectIdx = normalized.findIndex((name) => name === 'aspect_of_is')
+  if (map.aspect == null && aspectIdx >= 0) map.aspect = aspectIdx
+  return map
+}
+
+function missingIsCodeColumnName(error: { message?: string } | null) {
+  const message = error?.message ?? ''
+  return (
+    message.match(/'([a-z0-9_]+)' column/i)?.[1]
+    ?? message.match(/column (?:[a-z0-9_]+\.)?([a-z0-9_]+) does not exist/i)?.[1]
+    ?? message.match(/column "([a-z0-9_]+)"/i)?.[1]
+    ?? null
+  )
+}
+
+function missingIsCodeColumnError(error: { code?: string; message?: string } | null) {
+  if (!error) return false
+  return error.code === '42703' || error.code === 'PGRST204' || /does not exist|schema cache/i.test(error.message ?? '')
+}
+
+function isCodeIdentityKey(row: Record<string, unknown>) {
+  return [
+    String(row.is_number ?? '').trim().toLowerCase(),
+    String(row.revision_year ?? ''),
+    String(row.part_no ?? '').trim().toLowerCase(),
+    String(row.section_no ?? '').trim().toLowerCase(),
+  ].join('|')
+}
+
+async function writeIsCodeImportRows(rows: Array<Record<string, unknown>>) {
+  let pending = rows.map((row) => ({ ...row }))
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const { data: existing, error: loadError } = await supabase
+      .from('is_codes')
+      .select('id, is_number, revision_year, part_no, section_no')
+    if (loadError) throw loadError
+    const idByKey = new Map<string, string>()
+    for (const row of existing ?? []) {
+      const id = String((row as { id?: string }).id ?? '')
+      if (id) idByKey.set(isCodeIdentityKey(row as Record<string, unknown>), id)
+    }
+    const inserts: Array<Record<string, unknown>> = []
+    const updates: Array<{ id: string; row: Record<string, unknown> }> = []
+    for (const row of pending) {
+      const id = idByKey.get(isCodeIdentityKey(row))
+      if (id) updates.push({ id, row })
+      else inserts.push(row)
+    }
+    const inserted = inserts.length
+      ? await supabase.from('is_codes').insert(inserts)
+      : { error: null }
+    if (inserted.error) {
+      const column = missingIsCodeColumnName(inserted.error)
+      if (!missingIsCodeColumnError(inserted.error) || !column) throw inserted.error
+      pending = pending.map((row) => {
+        const next = { ...row }
+        delete next[column]
+        return next
+      })
+      continue
+    }
+    let droppedColumn = false
+    for (const item of updates) {
+      const { error } = await supabase.from('is_codes').update(item.row).eq('id', item.id)
+      if (!error) continue
+      const column = missingIsCodeColumnName(error)
+      if (!missingIsCodeColumnError(error) || !column) throw error
+      pending = pending.map((row) => {
+        const next = { ...row }
+        delete next[column]
+        return next
+      })
+      droppedColumn = true
+      break
+    }
+    if (droppedColumn) continue
+    return
+  }
+  throw new Error('Unable to import IS codes')
 }
 
 function toCsv(headers: string[], rows: Array<Record<string, string>>) {
@@ -182,10 +345,10 @@ function rowToIsCodeForm(row: IsCodeRow): IsCodeForm {
   const title = (row.title || (row as { is_code_title?: string | null }).is_code_title || '').trim()
   const aspect = (row.aspect || (row as { aspect_of_is?: string | null }).aspect_of_is || 'Specification').trim()
   return {
-    isNumber: row.is_number,
+    isNumber: isCodeNumberDigits(row.is_number),
     revisionYear: row.revision_year == null ? '' : String(row.revision_year),
     reaffirmationYear: reaffirmationToFormStr(row.reaffirmation_year),
-    amendmentNumber: row.amendment_number ?? '',
+    amendmentNumber: amendmentToFormStr(row.amendment_number),
     title,
     aspect,
     testingCharges: moneyToFormStr(row.testing_charges),
@@ -202,9 +365,9 @@ function rowToIsCodeForm(row: IsCodeRow): IsCodeForm {
     slab2Rate: moneyToFormStr(row.slab_2_rate),
     slab3Quantity: row.slab_3_quantity?.trim() || DEFAULT_SLAB_3_QTY,
     slab3Rate: moneyToFormStr(row.slab_3_rate),
-    standardPrefix: row.standard_prefix ?? '',
-    partNo: row.part_no ?? '',
-    sectionNo: row.section_no ?? '',
+    standardPrefix: row.standard_prefix?.trim() || 'IS',
+    partNo: partToFormStr(row.part_no),
+    sectionNo: sectionToFormStr(row.section_no),
     technicalDepartment: row.technical_department ?? '',
     technicalCommittee: row.technical_committee ?? '',
     icsCode: row.ics_code ?? '',
@@ -254,14 +417,13 @@ export default function IsCodesMasterPage() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [jumpTo, setJumpTo] = useState('')
-  const [sortKey, setSortKey] = useState<IsCodeSortKey>('isDetails')
-  const [sortDir, setSortDir] = useState<IsCodeSortDir>('asc')
+  const [sortKey, setSortKey] = useState<IsCodeSortKey>('licenceCount')
+  const [sortDir, setSortDir] = useState<IsCodeSortDir>('desc')
+  const [licenceCounts, setLicenceCounts] = useState<Map<string, number>>(() => new Map())
 
   const [form, setForm] = useState<IsCodeForm>(() => emptyIsCodeForm())
 
-  const [aspects, setAspects] = useState<Array<{ id: string; label: string }>>([
-    { id: 'default-spec', label: 'Specification' },
-  ])
+  const [aspects, setAspects] = useState<Array<{ id: string; label: string }>>([])
   const [aspectDialogOpen, setAspectDialogOpen] = useState(false)
   const [newAspect, setNewAspect] = useState('')
 
@@ -274,11 +436,16 @@ export default function IsCodesMasterPage() {
         .order('label', { ascending: true })
       if (error) throw error
       const db = (Array.isArray(data) ? data : []) as Array<{ id: string; label: string }>
-      const merged = [{ id: 'default-spec', label: 'Specification' }, ...db]
-      const uniq = new Map(merged.map((x) => [x.label.toLowerCase(), x]))
+      const uniq = new Map<string, { id: string; label: string }>()
+      for (const row of db) {
+        const label = row.label.trim()
+        if (!label || row.id.startsWith('default-')) continue
+        const key = label.toLowerCase()
+        if (!uniq.has(key)) uniq.set(key, { id: row.id, label })
+      }
       setAspects(Array.from(uniq.values()).sort((a, b) => a.label.localeCompare(b.label)))
     } catch {
-      setAspects([{ id: 'default-spec', label: 'Specification' }])
+      setAspects([])
     }
   }
 
@@ -306,13 +473,39 @@ export default function IsCodesMasterPage() {
     })
   }
 
+  const loadLicenceCounts = async () => {
+    const counts = new Map<string, number>()
+    const pageSize = 1000
+    for (let from = 0; ; from += pageSize) {
+      const { data, error } = await supabase
+        .from('bis_projects')
+        .select('is_code_id')
+        .eq('project_kind', 'Licence')
+        .not('is_code_id', 'is', null)
+        .range(from, from + pageSize - 1)
+      if (error) throw error
+      const batch = Array.isArray(data) ? data : []
+      for (const row of batch) {
+        const id = typeof row?.is_code_id === 'string' ? row.is_code_id : ''
+        if (!id) continue
+        counts.set(id, (counts.get(id) ?? 0) + 1)
+      }
+      if (batch.length < pageSize) break
+    }
+    return counts
+  }
+
   const loadIsCodes = async () => {
     setListLoading(true)
     setListError(null)
     try {
-      const { data, error } = await supabase.from('is_codes').select('*').order('created_at', { ascending: false })
-      if (error) throw error
-      setRows((Array.isArray(data) ? (data as IsCodeRow[]) : []).map((r) => ({
+      const [codesResult, counts] = await Promise.all([
+        supabase.from('is_codes').select('*').order('created_at', { ascending: false }),
+        loadLicenceCounts().catch(() => new Map<string, number>()),
+      ])
+      if (codesResult.error) throw codesResult.error
+      setLicenceCounts(counts)
+      setRows((Array.isArray(codesResult.data) ? (codesResult.data as IsCodeRow[]) : []).map((r) => ({
         ...r,
         is_number: r.is_number ?? '',
         title: r.title ?? '',
@@ -455,6 +648,9 @@ export default function IsCodesMasterPage() {
     return list.sort((a, b) => {
       let primary = 0
       switch (sortKey) {
+        case 'licenceCount':
+          primary = ((licenceCounts.get(a.id) ?? 0) - (licenceCounts.get(b.id) ?? 0)) * dir
+          break
         case 'isDetails':
           primary = cmpText(formatIsCodeLabel(a), formatIsCodeLabel(b))
           break
@@ -482,9 +678,9 @@ export default function IsCodesMasterPage() {
           primary = cmpText(formatIsCodeLabel(a), formatIsCodeLabel(b))
       }
       if (primary !== 0) return primary
-      return cmpText(formatIsCodeLabel(a), formatIsCodeLabel(b))
+      return formatIsCodeLabel(a).localeCompare(formatIsCodeLabel(b), undefined, { sensitivity: 'base', numeric: true })
     })
-  }, [rows, search, sortKey, sortDir, showArchived])
+  }, [rows, search, sortKey, sortDir, showArchived, licenceCounts])
 
   const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize))
 
@@ -531,8 +727,7 @@ export default function IsCodesMasterPage() {
 
   const canSave =
     !saveLoading &&
-    normalizeText(form.isNumber).replace(/^IS\s*/i, '').length > 0 &&
-    /^IS/i.test(normalizeText(form.isNumber)) &&
+    isValidIsNumberDigits(form.isNumber) &&
     normalizeText(form.title).length > 0
 
   const handleNew = () => {
@@ -550,16 +745,13 @@ export default function IsCodesMasterPage() {
     setForm(rowToIsCodeForm(row))
     hydratedEditRef.current = row.id
     setEdit(row.id)
-    void listIsCodeAmendments(row.id).then((amendments) => {
-      setForm((prev) => ({ ...prev, amendments }))
-    })
     void loadFormSavedFiles(row)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const handleCopy = (row: IsCodeRow) => {
     setSaveMessage(null)
-    setForm({ ...rowToIsCodeForm(row), isNumber: `${row.is_number} - Copy` })
+    setForm(rowToIsCodeForm(row))
     setFormSavedFiles([])
     setFormFilesStatus(null)
     hydratedEditRef.current = 'new'
@@ -569,6 +761,25 @@ export default function IsCodesMasterPage() {
 
   const handlePickFiles = (files: File[]) => {
     setForm((prev) => ({ ...prev, files }))
+  }
+
+  const handleDocumentKindChange = (file: IsCodeViewFile, kind: string) => {
+    if (!file.id || file.id.startsWith('pending:') || file.id.startsWith('storage:') || file.id === 'err') {
+      return
+    }
+    const next = kind || null
+    const patch = (list: IsCodeViewFile[]) =>
+      list.map((row) => (row.id === file.id ? { ...row, document_kind: next } : row))
+    setFormSavedFiles(patch)
+    setFilesDialogFiles(patch)
+    void (async () => {
+      const { error } = await supabase
+        .from('is_code_files')
+        .update({ document_kind: next })
+        .eq('id', file.id)
+      if (!error || isMissingDocumentKindColumn(error)) return
+      setSaveMessage(formatSupabaseError(error))
+    })()
   }
 
   const handleFormAddSavedFiles = (picked: File[]) => {
@@ -701,6 +912,12 @@ export default function IsCodesMasterPage() {
   const handleAddAspect = () => {
     const name = normalizeText(newAspect)
     if (!name) return
+    const existing = aspects.find((row) => row.label.toLowerCase() === name.toLowerCase())
+    if (existing) {
+      setForm((prev) => ({ ...prev, aspect: existing.label }))
+      setNewAspect('')
+      return
+    }
     void (async () => {
       try {
         const { data, error } = await supabase
@@ -716,11 +933,9 @@ export default function IsCodesMasterPage() {
           return Array.from(uniq.values()).sort((a, b) => a.label.localeCompare(b.label))
         })
         setForm((prev) => ({ ...prev, aspect: name }))
+        setNewAspect('')
       } catch (err) {
         setSaveMessage(formatSupabaseError(err))
-      } finally {
-        setNewAspect('')
-        setAspectDialogOpen(false)
       }
     })()
   }
@@ -731,13 +946,12 @@ export default function IsCodesMasterPage() {
     void (async () => {
       try {
         const oldLabel = aspects.find((x) => x.id === id)?.label ?? ''
-        if (!id.startsWith('default-')) {
-          const { error } = await supabase
-            .from('is_code_master_options')
-            .update({ label: name, value: name })
-            .eq('id', id)
-          if (error) throw error
-        }
+        if (id.startsWith('default-') || id.startsWith('tmp-')) return
+        const { error } = await supabase
+          .from('is_code_master_options')
+          .update({ label: name, value: name })
+          .eq('id', id)
+        if (error) throw error
 
         setAspects((prev) =>
           [...prev.map((x) => (x.id === id ? { ...x, label: name } : x))].sort((a, b) =>
@@ -756,11 +970,9 @@ export default function IsCodesMasterPage() {
         } else {
           setForm((prev) => ({ ...prev, aspect: name }))
         }
+        setNewAspect('')
       } catch (err) {
         setSaveMessage(formatSupabaseError(err))
-      } finally {
-        setNewAspect('')
-        setAspectDialogOpen(false)
       }
     })()
   }
@@ -772,7 +984,10 @@ export default function IsCodesMasterPage() {
     }
     void (async () => {
       try {
-        if (!id || id.startsWith('default-')) return
+        if (!id || id.startsWith('default-') || id.startsWith('tmp-')) {
+          setAspects((prev) => prev.filter((x) => x.id !== id))
+          return
+        }
         const { error } = await supabase.from('is_code_master_options').delete().eq('id', id)
         if (error) throw error
         setAspects((prev) => prev.filter((x) => x.id !== id))
@@ -811,11 +1026,22 @@ export default function IsCodesMasterPage() {
         throw upErr
       }
 
-      const { error: metaErr } = await supabase.from('is_code_files').insert({
+      const documentKind = isCodeFileDocumentKind(file)
+      const row = {
         is_code_id: isCodeId,
         file_name: file.name,
         storage_path: path,
-      })
+        ...(documentKind ? { document_kind: documentKind } : {}),
+      }
+      let { error: metaErr } = await supabase.from('is_code_files').insert(row)
+      if (metaErr && documentKind && isMissingDocumentKindColumn(metaErr)) {
+        const retry = await supabase.from('is_code_files').insert({
+          is_code_id: isCodeId,
+          file_name: file.name,
+          storage_path: path,
+        })
+        metaErr = retry.error
+      }
       if (metaErr) throw metaErr
     }
   }
@@ -872,6 +1098,7 @@ export default function IsCodesMasterPage() {
           id: f.id,
           file_name: f.file_name,
           storage_path: f.storage_path,
+          document_kind: f.document_kind ?? null,
           ...(viewUrl
             ? { viewUrl, url: viewUrl }
             : { error: 'Signed URL blocked by storage policy' }),
@@ -1071,11 +1298,11 @@ export default function IsCodesMasterPage() {
         // Merge defaults so HMR / older in-memory form shapes never send undefined keys.
         const f: IsCodeForm = { ...emptyIsCodeForm(), ...form }
         const revisionYear = yearIntFromForm(f.revisionYear)
-        const isNumber = canonicalIsNumber(normalizeText(f.isNumber))
-        if (!isNumber) throw new Error('IS Number is required.')
-        if (!/^IS(\/|\s)/i.test(isNumber)) {
-          throw new Error('IS Number must start with IS (e.g. IS 1234 or IS/IEC 62368).')
+        const isNumberDigits = isCodeNumberDigits(f.isNumber)
+        if (!isValidIsNumberDigits(isNumberDigits)) {
+          throw new Error('IS Number must be 1 to 5 digits.')
         }
+        const isNumber = canonicalIsNumber(isNumberDigits)
         if (revisionYear == null) throw new Error('Revision Year is required (YYYY).')
         if (!normalizeText(f.title)) throw new Error('Title of the IS Code is required.')
 
@@ -1087,7 +1314,8 @@ export default function IsCodesMasterPage() {
           is_number: isNumber,
           revision_year: revisionYear,
           reaffirmation_year: yearIntFromForm(f.reaffirmationYear),
-          amendment_number: normalizeText(f.amendmentNumber) || null,
+          amendment_number:
+            amendmentToFormStr(f.amendmentNumber) === '00' ? null : amendmentToFormStr(f.amendmentNumber),
           title,
           is_code_title: title,
           aspect,
@@ -1106,9 +1334,9 @@ export default function IsCodesMasterPage() {
           slab_2_rate: moneyOrZero(f.slab2Rate),
           slab_3_quantity: normalizeText(f.slab3Quantity) || DEFAULT_SLAB_3_QTY,
           slab_3_rate: moneyOrZero(f.slab3Rate),
-          standard_prefix: normalizeText(f.standardPrefix) || null,
-          part_no: normalizeText(f.partNo) || null,
-          section_no: normalizeText(f.sectionNo) || null,
+          standard_prefix: normalizeText(f.standardPrefix) || 'IS',
+          part_no: partToFormStr(f.partNo) === 'Part-0' ? null : partToFormStr(f.partNo),
+          section_no: sectionToFormStr(f.sectionNo) === 'Sec-0' ? null : sectionToFormStr(f.sectionNo),
           technical_department: normalizeText(f.technicalDepartment) || null,
           technical_committee: normalizeText(f.technicalCommittee) || null,
           ics_code: normalizeText(f.icsCode) || null,
@@ -1136,7 +1364,6 @@ export default function IsCodesMasterPage() {
 
         const id = (data as { id: string } | null)?.id ?? editingId
         if (!id) throw new Error('Unable to determine record id')
-        await saveIsCodeAmendments(id, f.amendments)
 
         if (f.files.length > 0) {
           try {
@@ -1272,64 +1499,65 @@ export default function IsCodesMasterPage() {
   }
 
   const handleExport = () => {
-    const exportRows = selectedRows.length > 0 ? selectedRows : filteredRows
-    const headers = [
-      'id',
-      'is_number',
-      'revision_year',
-      'reaffirmation_year',
-      'amendment_number',
-      'title',
-      'aspect',
-      'product_manual_number',
-      'unit_of_is',
-      'testing_charges',
-      'mmf_large_scale',
-      'mmf_medium_scale',
-      'mmf_small_scale',
-      'mmf_micro_scale',
-      'slab_1_quantity',
-      'slab_1_rate',
-      'slab_2_quantity',
-      'slab_2_rate',
-      'slab_3_quantity',
-      'slab_3_rate',
-      'remarks',
-      'created_at',
-    ]
+    void (async () => {
+    const pageSize = 1000
+    const exportRows: IsCodeRow[] = []
+    for (let from = 0; ; from += pageSize) {
+      const { data, error } = await supabase
+        .from('is_codes')
+        .select('*')
+        .order('is_number', { ascending: true })
+        .order('revision_year', { ascending: true })
+        .range(from, from + pageSize - 1)
+      if (error) {
+        setSaveMessage(formatSupabaseError(error))
+        return
+      }
+      const batch = (Array.isArray(data) ? data : []) as IsCodeRow[]
+      exportRows.push(...batch)
+      if (batch.length < pageSize) break
+    }
+    if (exportRows.length === 0) {
+      setSaveMessage('No IS codes to export.')
+      return
+    }
     const lines = exportRows.map((r) => ({
-      id: r.id,
-      is_number: r.is_number,
+      standard_prefix: r.standard_prefix?.trim() || 'IS',
+      is_number: r.is_number ?? '',
+      part_no: partToFormStr(r.part_no),
+      section_no: sectionToFormStr(r.section_no),
       revision_year: r.revision_year == null ? '' : String(r.revision_year),
-      reaffirmation_year: r.reaffirmation_year == null ? '' : String(r.reaffirmation_year),
-      amendment_number: r.amendment_number == null ? '' : String(r.amendment_number),
-      title: r.title,
-      aspect: r.aspect,
+      amendment_number: amendmentToFormStr(r.amendment_number),
+      reaffirmation_year: reaffirmationToFormStr(r.reaffirmation_year),
+      title: r.title ?? '',
       product_manual_number: r.product_manual_number ?? '',
+      aspect: r.aspect ?? '',
       unit_of_is: r.unit_of_is ?? '',
-      testing_charges: String(r.testing_charges ?? ''),
-      mmf_large_scale: String(r.mmf_large_scale ?? ''),
-      mmf_medium_scale: String(r.mmf_medium_scale ?? ''),
-      mmf_small_scale: String(r.mmf_small_scale ?? ''),
-      mmf_micro_scale: String(r.mmf_micro_scale ?? ''),
+      testing_charges: moneyToFormStr(r.testing_charges),
+      mmf_large_scale: moneyToFormStr(r.mmf_large_scale),
+      mmf_medium_scale: moneyToFormStr(r.mmf_medium_scale),
+      mmf_small_scale: moneyToFormStr(r.mmf_small_scale),
+      mmf_micro_scale: moneyToFormStr(r.mmf_micro_scale),
       slab_1_quantity: r.slab_1_quantity ?? '',
-      slab_1_rate: String(r.slab_1_rate ?? ''),
+      slab_1_rate: moneyToFormStr(r.slab_1_rate),
       slab_2_quantity: r.slab_2_quantity ?? '',
-      slab_2_rate: String(r.slab_2_rate ?? ''),
+      slab_2_rate: moneyToFormStr(r.slab_2_rate),
       slab_3_quantity: r.slab_3_quantity ?? '',
-      slab_3_rate: String(r.slab_3_rate ?? ''),
+      slab_3_rate: moneyToFormStr(r.slab_3_rate),
       remarks: r.remarks ?? '',
-      created_at: r.created_at ?? '',
     }))
-    const csv = toCsv(headers, lines)
+    const csv = `\uFEFF${toCsv([...IS_CODE_CSV_HEADERS], lines)}`
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
+    const stamp = new Date()
+    const day = `${stamp.getFullYear()}-${String(stamp.getMonth() + 1).padStart(2, '0')}-${String(stamp.getDate()).padStart(2, '0')}`
     a.href = url
-    a.download = 'is_codes.csv'
+    a.download = `is-codes-export-${day}.csv`
     a.click()
     URL.revokeObjectURL(url)
-    setSaveMessage('Exported.')
+    setSaveMessage(`Exported ${exportRows.length} IS code(s).`)
+    })()
   }
 
   const handleImport = () => {
@@ -1357,21 +1585,26 @@ export default function IsCodesMasterPage() {
           return
         }
         const header = records[0].map((h) => h.trim())
+        const col = resolveIsCodeCsvHeaderIndex(header)
         const rowsData = records.slice(1).filter((r) => r.some((c) => String(c ?? '').trim().length > 0))
 
         const payloads = rowsData.map((cells) => {
           const get = (key: string) => {
-            const idx = header.indexOf(key)
-            return idx >= 0 ? (cells[idx] ?? '') : ''
+            const idx = col[key]
+            return idx == null ? '' : String(cells[idx] ?? '')
           }
+          const has = (key: string) => col[key] != null
+          const rawNumber = normalizeText(get('is_number'))
+          const isNumber = /^\d{1,5}$/.test(rawNumber) ? canonicalIsNumber(rawNumber) : rawNumber
           const title = toProperTitleCase(normalizeText(get('title') || get('is_code_title')))
           const aspect = (normalizeText(get('aspect') || get('aspect_of_is')) ||
             'Specification') as IsCodeRow['aspect']
-          return {
-            is_number: normalizeText(get('is_number')),
+          const payload: Record<string, unknown> = {
+            is_number: isNumber,
             revision_year: yearIntFromForm(get('revision_year')),
             reaffirmation_year: yearIntFromForm(get('reaffirmation_year')),
-            amendment_number: normalizeText(get('amendment_number')) || null,
+            amendment_number:
+              amendmentToFormStr(get('amendment_number')) === '00' ? null : amendmentToFormStr(get('amendment_number')),
             title,
             is_code_title: title,
             aspect,
@@ -1391,32 +1624,27 @@ export default function IsCodesMasterPage() {
             slab_3_rate: moneyOrZero(get('slab_3_rate')),
             remarks: normalizeText(get('remarks')) || null,
           }
+          if (has('standard_prefix')) payload.standard_prefix = normalizeText(get('standard_prefix')) || 'IS'
+          if (has('part_no')) {
+            payload.part_no = partToFormStr(get('part_no')) === 'Part-0' ? null : partToFormStr(get('part_no'))
+          }
+          if (has('section_no')) {
+            payload.section_no = sectionToFormStr(get('section_no')) === 'Sec-0' ? null : sectionToFormStr(get('section_no'))
+          }
+          return payload
         })
 
-        const cleanPayloads = payloads.filter(
-          (p) =>
-            p.is_number.trim().length > 0 &&
-            p.title.trim().length > 0 &&
-            p.revision_year != null,
-        )
+        const cleanPayloads = payloads.filter((p) => {
+          const isNumber = String(p.is_number ?? '').trim()
+          const title = String(p.title ?? '').trim()
+          return isNumber.length > 0 && title.length > 0 && p.revision_year != null
+        })
         if (cleanPayloads.length === 0) {
           setSaveMessage('No valid rows found (is_number / revision_year / title missing).')
           return
         }
 
-        // Upsert by natural key when unique index exists; otherwise insert-or-update per row.
-        const { error } = await supabase
-          .from('is_codes')
-          .upsert(cleanPayloads, { onConflict: 'is_number,revision_year' })
-        if (error) {
-          // 42P10 = missing unique constraint for ON CONFLICT — fall back to insert.
-          if (String(error.code) === '42P10' || /ON CONFLICT/i.test(error.message ?? '')) {
-            const { error: insertErr } = await supabase.from('is_codes').insert(cleanPayloads)
-            if (insertErr) throw insertErr
-          } else {
-            throw error
-          }
-        }
+        await writeIsCodeImportRows(cleanPayloads)
 
         setSaveMessage(`Imported ${cleanPayloads.length} record(s).`)
         await loadIsCodes()
@@ -1520,9 +1748,11 @@ export default function IsCodesMasterPage() {
           persistOnFocusLoss
           aria-describedby={undefined}
           className={cn(
-            limsDialogClass,
-            'flex !h-[min(94dvh,920px)] !max-h-[min(94dvh,920px)] !flex-col gap-0 overflow-hidden',
-            'w-[min(68rem,calc(100vw-1.5rem))] max-w-6xl bg-stone-100 p-0',
+            '!flex z-50 h-[100dvh] max-h-[100dvh] translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 bg-white p-0 shadow-none sm:rounded-none',
+            'left-[var(--app-dialog-overlay-left,0px)] top-0 right-0 bottom-0',
+            'w-[calc(100vw-var(--app-dialog-overlay-left,0px))] max-w-none',
+            'border-stone-600 ring-1 ring-amber-700/20',
+            '[&>button]:!rounded-none [&>button]:opacity-100',
           )}
         >
           <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white sm:px-5 sm:py-3">
@@ -1563,6 +1793,7 @@ export default function IsCodesMasterPage() {
               onAddSavedFiles={handleFormAddSavedFiles}
               onReplaceSavedFile={handleFormReplaceSavedFile}
               onDeleteSavedFile={handleFormDeleteSavedFile}
+              onDocumentKindChange={handleDocumentKindChange}
             />
           </div>
         </DialogContent>
@@ -1586,6 +1817,7 @@ export default function IsCodesMasterPage() {
         onAddFiles={handleFilesDialogAdd}
         onReplaceFile={handleFilesDialogReplace}
         onDeleteFile={handleFilesDialogDelete}
+        onDocumentKindChange={handleDocumentKindChange}
       />
 
       <div className="min-h-0 flex-1 overflow-hidden">

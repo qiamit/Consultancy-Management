@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { Download, Eye, Plus, Trash2, Upload } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Check, Download, Eye, FileDown, FileType, Pencil, Plus, Printer, Trash2, Upload, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
@@ -18,6 +18,18 @@ import {
   limsPrimaryBtnClass,
 } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
+import { supabase } from '@/lib/supabaseClient'
+import {
+  listClientCertificates,
+  deleteClientCertificate,
+  openClientCertificate,
+  updateClientCertificateDetails,
+  type ClientCertificateFile,
+} from '@/features/masters/clients/clientsApi'
+import {
+  listBisBranchOffices,
+  type BisBranchOfficeRow,
+} from '@/features/masters/bis-branch-offices/bisBranchOfficesApi'
 import {
   deleteBisProjectFile,
   formatBisProjectFilesError,
@@ -44,6 +56,7 @@ import {
   saveBisProjectNotes,
 } from './bisProjectsApi'
 import { ApplicationDetailsFields } from './ApplicationDetailsFields'
+import { formatCoordinate } from './locationMapModel'
 import { LicenseScopeFields } from './LicenseScopeFields'
 import { FactoryTestReportModuleFields } from './FactoryTestReportModuleFields'
 import {
@@ -108,6 +121,7 @@ import {
   emptyBisApplicationDetailsForm,
   formatCmL,
   isCodeDisplayLabel,
+  manakLoginFromProject,
   rowToBisApplicationDetailsForm,
   sanitizeBisLicenseScopeNotes,
   type BisApplicationDetailsForm,
@@ -141,6 +155,51 @@ type TableEntry =
   | { key: string; kind: 'file'; file: BisProjectViewFile }
   | { key: string; kind: 'draft'; draft: DraftRow }
 
+type ClientMasterLocation = {
+  company_name: string
+  address: string
+  pin_code: string
+  district: string
+  state: string
+  country: string
+  latitude: string
+  longitude: string
+}
+
+async function loadClientMasterLocation(clientId: string): Promise<ClientMasterLocation | null> {
+  const baseColumns = 'company_name, address, pin_code, district, state, country'
+  let result = await supabase
+    .from('clients')
+    .select(`${baseColumns}, latitude, longitude`)
+    .eq('id', clientId)
+    .maybeSingle()
+  if (
+    result.error &&
+    (['42703', 'PGRST204'].includes(result.error.code ?? '') ||
+      (/column/i.test(result.error.message) && /does not exist|schema cache/i.test(result.error.message)))
+  ) {
+    result = await supabase
+      .from('clients')
+      .select(baseColumns)
+      .eq('id', clientId)
+      .maybeSingle()
+  }
+  if (result.error) throw result.error
+  const data = result.data as Record<string, unknown> | null
+  if (!data) return null
+  const text = (value: unknown) => String(value ?? '').trim()
+  return {
+    company_name: text(data.company_name),
+    address: text(data.address),
+    pin_code: text(data.pin_code),
+    district: text(data.district),
+    state: text(data.state),
+    country: text(data.country),
+    latitude: text(data.latitude),
+    longitude: text(data.longitude),
+  }
+}
+
 function newDraft(): DraftRow {
   return { id: crypto.randomUUID(), name: '' }
 }
@@ -153,6 +212,10 @@ export function LegalDocumentsModuleDialog({
   docKind = 'legal',
   printKind = null,
   onProjectSaved,
+  onLocationMapPreview,
+  onLocationMapWord,
+  onLocationMapPdf,
+  onLocationMapPrint,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -164,6 +227,10 @@ export function LegalDocumentsModuleDialog({
   printKind?: BisPrintDocumentKind | null
   /** Called after Application Details / structured module fields are saved. */
   onProjectSaved?: () => void
+  onLocationMapPreview?: () => void
+  onLocationMapWord?: () => void
+  onLocationMapPdf?: () => void
+  onLocationMapPrint?: () => void
 }) {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const uploadTargetRef = useRef<{ type: 'draft' | 'file'; id: string } | null>(null)
@@ -187,6 +254,7 @@ export function LegalDocumentsModuleDialog({
     showManufacturingScopeFields
   /** Full main-area sheet (sidebar left clear via --app-dialog-overlay-left). */
   const fullPageModule =
+    showApplicationFields ||
     showOslSampleFields ||
     showFactoryTestFields ||
     showLocationMapFields ||
@@ -236,6 +304,15 @@ export function LegalDocumentsModuleDialog({
   const [locationMap, setLocationMap] = useState<LocationMapModulePayload>(() =>
     emptyLocationMapPayload(),
   )
+  const [clientLegalDocuments, setClientLegalDocuments] = useState<ClientCertificateFile[]>([])
+  const [selectedClientDocumentIds, setSelectedClientDocumentIds] = useState<Set<string>>(() => new Set())
+  const [editingClientDocument, setEditingClientDocument] = useState<ClientCertificateFile | null>(null)
+  const [clientDocumentEdit, setClientDocumentEdit] = useState({ name: '', issuedOn: '', number: '' })
+  const [applicationReferenceLoading, setApplicationReferenceLoading] = useState(false)
+  const [applicationBranchOffices, setApplicationBranchOffices] = useState<BisBranchOfficeRow[]>([])
+  const [applicationClientLocation, setApplicationClientLocation] = useState<ClientMasterLocation | null>(null)
+  const [applicationSavedLocationMap, setApplicationSavedLocationMap] =
+    useState<LocationMapModulePayload>(() => emptyLocationMapPayload())
   const [plantLayout, setPlantLayout] = useState<PlantLayoutModulePayload>(() =>
     emptyPlantLayoutPayload(),
   )
@@ -252,6 +329,41 @@ export function LegalDocumentsModuleDialog({
         .filter(Boolean)
         .join(' · ')
     : '—'
+
+  const applicationDisplayLocation = useMemo(() => {
+    const normalizeOfficeLabel = (value: string) =>
+      value.toLowerCase().replace(/[^a-z0-9]/g, '')
+    const branchName = normalizeOfficeLabel(appDetails.branchName)
+    const branchState = normalizeOfficeLabel(appDetails.branchState)
+    const matchesOriginalBranch =
+      branchName === normalizeOfficeLabel(row?.branch_name ?? '') &&
+      branchState === normalizeOfficeLabel(row?.branch_state ?? '')
+    const office =
+      applicationBranchOffices.find(
+        (candidate) =>
+          normalizeOfficeLabel(candidate.name) === branchName &&
+          (!branchState || normalizeOfficeLabel(candidate.state ?? '') === branchState),
+      ) ??
+      (matchesOriginalBranch
+        ? applicationBranchOffices.find((candidate) => candidate.id === row?.bis_office_id)
+        : undefined)
+    return {
+      office,
+      firmLatitude: applicationClientLocation?.latitude || applicationSavedLocationMap.firmLatitude,
+      firmLongitude: applicationClientLocation?.longitude || applicationSavedLocationMap.firmLongitude,
+      bisLatitude: office?.latitude ?? (matchesOriginalBranch ? applicationSavedLocationMap.bisLatitude : ''),
+      bisLongitude: office?.longitude ?? (matchesOriginalBranch ? applicationSavedLocationMap.bisLongitude : ''),
+    }
+  }, [
+    appDetails.branchName,
+    appDetails.branchState,
+    row?.branch_name,
+    row?.branch_state,
+    row?.bis_office_id,
+    applicationBranchOffices,
+    applicationClientLocation,
+    applicationSavedLocationMap,
+  ])
 
   const entries: TableEntry[] = [
     ...files.map((file) => ({ key: file.id, kind: 'file' as const, file })),
@@ -300,6 +412,14 @@ export function LegalDocumentsModuleDialog({
       setFactoryTestReports(emptyFactoryTestReportPayload())
       setFactorySampleOptions([])
       setLocationMap(emptyLocationMapPayload())
+      setClientLegalDocuments([])
+      setSelectedClientDocumentIds(new Set())
+      setEditingClientDocument(null)
+      setClientDocumentEdit({ name: '', issuedOn: '', number: '' })
+      setApplicationReferenceLoading(false)
+      setApplicationBranchOffices([])
+      setApplicationClientLocation(null)
+      setApplicationSavedLocationMap(emptyLocationMapPayload())
       setPlantLayout(emptyPlantLayoutPayload())
       setCmpf305(emptyCmpf305Payload())
       setCmpf306(emptyCmpf306Payload())
@@ -315,11 +435,52 @@ export function LegalDocumentsModuleDialog({
         : emptyBisApplicationDetailsForm(),
     )
     setLicenseScopeNotes(sanitizeBisLicenseScopeNotes(row.notes ?? ''))
+    if (showLocationMapFields) setClientLegalDocuments([])
 
     if (showApplicationFields) {
       setFiles([])
       setFileNames({})
-      setLoading(false)
+      setApplicationReferenceLoading(true)
+      setStatus(null)
+      void (async () => {
+        try {
+          const [certificates, clientLocation, branchOffices, savedMapPayload, isCodeUnit] =
+            await Promise.all([
+              row.client_id ? listClientCertificates(row.client_id) : Promise.resolve([]),
+              row.client_id
+                ? loadClientMasterLocation(row.client_id)
+                : Promise.resolve(null),
+              listBisBranchOffices(),
+              fetchBisModulePayload(row.id, 'location-map').catch(() => null),
+              row.production_unit?.trim() || row.is_code?.unit_of_is?.trim()
+                ? Promise.resolve(row.production_unit?.trim() || row.is_code?.unit_of_is?.trim() || '')
+                : row.is_code_id
+                  ? supabase
+                      .from('is_codes')
+                      .select('unit_of_is')
+                      .eq('id', row.is_code_id)
+                      .maybeSingle()
+                      .then(({ data }) => String((data as { unit_of_is?: string | null } | null)?.unit_of_is ?? '').trim())
+                  : Promise.resolve(''),
+            ])
+          if (isCodeUnit) {
+            setAppDetails((current) => current.productionUnit
+              ? current
+              : { ...current, productionUnit: isCodeUnit })
+          }
+          setClientLegalDocuments(certificates)
+          setSelectedClientDocumentIds(new Set())
+          setApplicationClientLocation(clientLocation)
+          setApplicationBranchOffices(branchOffices)
+          setApplicationSavedLocationMap(parseLocationMapPayload(savedMapPayload))
+        } catch (err) {
+          setClientLegalDocuments([])
+          setApplicationBranchOffices([])
+          setStatus(formatBisApiError(err))
+        } finally {
+          setApplicationReferenceLoading(false)
+        }
+      })()
       return
     }
 
@@ -409,7 +570,30 @@ export function LegalDocumentsModuleDialog({
             )
           }
           if (showLocationMapFields) {
-            setLocationMap(parseLocationMapPayload(payload))
+            const [certificates, clientGeoResult, branchOffices] = await Promise.all([
+              row.client_id ? listClientCertificates(row.client_id) : Promise.resolve([]),
+              row.client_id
+                ? supabase.from('clients').select('latitude, longitude').eq('id', row.client_id).maybeSingle()
+                : Promise.resolve({ data: null, error: null }),
+              listBisBranchOffices().catch(() => []),
+            ])
+            const savedMap = parseLocationMapPayload(payload)
+            const clientGeo = clientGeoResult.data as { latitude?: unknown; longitude?: unknown } | null
+            const normalizeOfficeLabel = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '')
+            const branchName = normalizeOfficeLabel(row.branch_name ?? '')
+            const branchState = normalizeOfficeLabel(row.branch_state ?? '')
+            const officeGeo = branchOffices.find((office) =>
+              normalizeOfficeLabel(office.name) === branchName &&
+              (!branchState || normalizeOfficeLabel(office.state ?? '') === branchState),
+            ) ?? branchOffices.find((office) => office.id === row.bis_office_id)
+            setClientLegalDocuments(certificates)
+            setLocationMap({
+              ...savedMap,
+              firmLatitude: String(clientGeo?.latitude ?? '').trim() || savedMap.firmLatitude,
+              firmLongitude: String(clientGeo?.longitude ?? '').trim() || savedMap.firmLongitude,
+              bisLatitude: officeGeo?.latitude || savedMap.bisLatitude,
+              bisLongitude: officeGeo?.longitude || savedMap.bisLongitude,
+            })
           }
           if (showPlantLayoutFields) {
             setPlantLayout(parsePlantLayoutPayload(payload))
@@ -500,9 +684,40 @@ export function LegalDocumentsModuleDialog({
     showCmpf306Fields,
     showProcessFlowFields,
     row?.notes,
+    row?.client_id,
     row?.inspection_officer_name,
     row?.inspection_officer_designation,
   ])
+
+  useEffect(() => {
+    const clientId = row?.client_id
+    if (!open || !showApplicationFields || !clientId) return
+
+    let active = true
+    let loadingLatest = false
+    const refreshClientLocation = async () => {
+      if (document.visibilityState === 'hidden' || loadingLatest) return
+      loadingLatest = true
+      try {
+        const location = await loadClientMasterLocation(clientId)
+        if (active) setApplicationClientLocation(location)
+      } catch {
+        // The main load path reports data errors; focus refresh remains best-effort.
+      } finally {
+        loadingLatest = false
+      }
+    }
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') void refreshClientLocation()
+    }
+    window.addEventListener('focus', refreshClientLocation)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      active = false
+      window.removeEventListener('focus', refreshClientLocation)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }, [open, row?.client_id, showApplicationFields])
 
   const resolveRowDocumentName = (target: { type: 'draft' | 'file'; id: string }): string => {
     if (target.type === 'file') {
@@ -657,7 +872,7 @@ export function LegalDocumentsModuleDialog({
 
       if (showTopManagementFields && printKind) {
         const rows = topManagement.rows.filter((r) =>
-          Object.values(r).some((v) => v.trim().length > 0),
+          Object.values(r).some((v) => typeof v === 'string' && v.trim().length > 0),
         )
         await saveBisModulePayload(row.id, printKind, {
           rows: rows.length > 0 ? rows : topManagement.rows.slice(0, 1),
@@ -1083,6 +1298,58 @@ export function LegalDocumentsModuleDialog({
     )
   }
 
+  const beginClientDocumentEdit = (document: ClientCertificateFile) => {
+    setEditingClientDocument(document)
+    setClientDocumentEdit({
+      name: document.cert_name,
+      issuedOn: document.issued_on,
+      number: document.document_number,
+    })
+  }
+
+  const saveClientDocumentEdit = async () => {
+    if (!editingClientDocument) return
+    try {
+      await updateClientCertificateDetails(editingClientDocument.id, {
+        certName: clientDocumentEdit.name,
+        issuedOn: clientDocumentEdit.issuedOn,
+        documentNumber: clientDocumentEdit.number,
+      })
+      setClientLegalDocuments((current) =>
+        current.map((document) =>
+          document.id === editingClientDocument.id
+            ? {
+                ...document,
+                cert_name: clientDocumentEdit.name.trim(),
+                issued_on: clientDocumentEdit.issuedOn,
+                document_number: clientDocumentEdit.number.trim(),
+              }
+            : document,
+        ),
+      )
+      setEditingClientDocument(null)
+      toast.success('Client document updated.')
+    } catch (err) {
+      toast.error(formatBisApiError(err))
+    }
+  }
+
+  const removeClientDocument = async (document: ClientCertificateFile) => {
+    if (!window.confirm(`Delete ${document.cert_name} from Client Master?`)) return
+    try {
+      await deleteClientCertificate(document)
+      setClientLegalDocuments((current) => current.filter((item) => item.id !== document.id))
+      setSelectedClientDocumentIds((current) => {
+        const next = new Set(current)
+        next.delete(document.id)
+        return next
+      })
+      toast.success('Client document deleted.')
+    } catch (err) {
+      toast.error(formatBisApiError(err))
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -1151,7 +1418,132 @@ export function LegalDocumentsModuleDialog({
                 onChange={setAppDetails}
                 disabled={busy || saving}
                 projectKind={row?.project_kind}
+                branchOffices={applicationBranchOffices}
               />
+              <section className="mx-3 mb-[2mm] mt-[2mm] space-y-2 border border-stone-300 bg-white p-3 sm:mx-4">
+                <div>
+                  <h2 className="text-sm font-semibold text-stone-800">Client Master Legal Documents</h2>
+                </div>
+                {applicationReferenceLoading ? (
+                  <p className="text-sm text-stone-500">Loading client documents…</p>
+                ) : clientLegalDocuments.length ? (
+                  <div className="overflow-hidden border border-stone-300 max-[640px]:overflow-visible max-[640px]:border-0">
+                    <Table className="table-fixed max-[640px]:block max-[640px]:w-full">
+                      <TableHeader className="max-[640px]:hidden">
+                        <TableRow className="bg-stone-800 hover:bg-stone-800">
+                          <TableHead className="w-9 border border-stone-700 px-1 text-center">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4"
+                              aria-label="Select all client documents"
+                              checked={clientLegalDocuments.length > 0 && selectedClientDocumentIds.size === clientLegalDocuments.length}
+                              onChange={(event) => setSelectedClientDocumentIds(event.target.checked ? new Set(clientLegalDocuments.map((document) => document.id)) : new Set())}
+                            />
+                          </TableHead>
+                          <TableHead className="border border-stone-700 px-2 text-center text-[11px] font-bold uppercase tracking-wide text-amber-200">Document Name</TableHead>
+                          <TableHead className="w-32 border border-stone-700 px-2 text-center text-[11px] font-bold uppercase tracking-wide text-amber-200">Date of Issue</TableHead>
+                          <TableHead className="border border-stone-700 px-2 text-center text-[11px] font-bold uppercase tracking-wide text-amber-200">Document Number</TableHead>
+                          <TableHead className="w-32 border border-stone-700 px-1 text-center text-[11px] font-bold uppercase tracking-wide text-amber-200">Action</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody className="max-[640px]:block">
+                        {clientLegalDocuments.map((document) => {
+                          const isEditing = editingClientDocument?.id === document.id
+                          return (
+                            <TableRow key={document.id} className="even:bg-[#f7f3eb] max-[640px]:mb-2 max-[640px]:grid max-[640px]:grid-cols-1 max-[640px]:overflow-hidden max-[640px]:border max-[640px]:border-stone-400">
+                              <TableCell className="border border-stone-300 px-1 text-center max-[640px]:flex max-[640px]:items-center max-[640px]:justify-between max-[640px]:gap-3 max-[640px]:text-left">
+                                <span className="text-xs font-semibold text-stone-600 sm:hidden">Select document</span>
+                                <input
+                                  type="checkbox"
+                                  className="h-4 w-4"
+                                  aria-label={`Select ${document.cert_name}`}
+                                  checked={selectedClientDocumentIds.has(document.id)}
+                                  onChange={() => setSelectedClientDocumentIds((current) => {
+                                    const next = new Set(current)
+                                    if (next.has(document.id)) next.delete(document.id)
+                                    else next.add(document.id)
+                                    return next
+                                  })}
+                                />
+                              </TableCell>
+                              <TableCell className="border border-stone-300 px-2 py-1.5 max-[640px]:flex max-[640px]:items-start max-[640px]:justify-between max-[640px]:gap-3">
+                                <span className="shrink-0 text-xs font-semibold text-stone-600 sm:hidden">Document Name</span>
+                                {isEditing ? <Input className="h-8 min-w-0" value={clientDocumentEdit.name} onChange={(event) => setClientDocumentEdit((current) => ({ ...current, name: event.target.value }))} /> : <span className="min-w-0 break-words text-right text-sm font-medium [overflow-wrap:anywhere]">{document.cert_name}</span>}
+                              </TableCell>
+                              <TableCell className="border border-stone-300 px-1 py-1.5 max-[640px]:flex max-[640px]:items-center max-[640px]:justify-between max-[640px]:gap-3">
+                                <span className="text-xs font-semibold text-stone-600 sm:hidden">Date of Issue</span>
+                                {isEditing ? <Input type="date" className="h-8 min-w-0 px-1" value={clientDocumentEdit.issuedOn} onChange={(event) => setClientDocumentEdit((current) => ({ ...current, issuedOn: event.target.value }))} /> : <span className="block break-words text-right text-sm [overflow-wrap:anywhere]">{document.issued_on || '—'}</span>}
+                              </TableCell>
+                              <TableCell className="border border-stone-300 px-2 py-1.5 text-center max-[640px]:flex max-[640px]:items-start max-[640px]:justify-between max-[640px]:gap-3">
+                                <span className="shrink-0 text-xs font-semibold text-stone-600 sm:hidden">Document Number</span>
+                                {isEditing ? <Input className="h-8 min-w-0 text-right sm:text-center" value={clientDocumentEdit.number} onChange={(event) => setClientDocumentEdit((current) => ({ ...current, number: event.target.value }))} /> : <span className="block min-w-0 break-words text-right text-sm [overflow-wrap:anywhere] sm:text-center">{document.document_number || '—'}</span>}
+                              </TableCell>
+                              <TableCell className="border border-stone-300 px-1 py-1.5 max-[640px]:flex max-[640px]:items-center max-[640px]:justify-between max-[640px]:gap-3">
+                                <span className="text-xs font-semibold text-stone-600 sm:hidden">Action</span>
+                                <div className="flex flex-wrap items-center justify-center gap-1">
+                                  {isEditing ? (
+                                    <>
+                                      <Button type="button" variant="outline" size="icon" className="h-8 w-8" title="Save changes" aria-label="Save changes" onClick={() => void saveClientDocumentEdit()}><Check size={14} /></Button>
+                                      <Button type="button" variant="outline" size="icon" className="h-8 w-8" title="Cancel edit" aria-label="Cancel edit" onClick={() => setEditingClientDocument(null)}><X size={14} /></Button>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Button type="button" variant="outline" size="icon" className="h-8 w-8" title="View document" aria-label={`View ${document.cert_name}`} onClick={() => void openClientCertificate(document).catch((err: unknown) => toast.error(err instanceof Error ? err.message : 'Unable to open client document.'))}><Eye size={14} /></Button>
+                                      <Button type="button" variant="outline" size="icon" className="h-8 w-8" title="Edit document details" aria-label={`Edit ${document.cert_name}`} onClick={() => beginClientDocumentEdit(document)}><Pencil size={14} /></Button>
+                                      <Button type="button" variant="outline" size="icon" className="h-8 w-8 text-red-700" title="Delete document" aria-label={`Delete ${document.cert_name}`} onClick={() => void removeClientDocument(document)}><Trash2 size={14} /></Button>
+                                    </>
+                                  )}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : (
+                  <p className="border border-dashed border-stone-300 p-3 text-sm text-stone-500">No legal documents are saved for this client.</p>
+                )}
+              </section>
+              <section className="mx-3 mb-[2mm] mt-[2mm] space-y-2 border border-stone-300 bg-white p-3 sm:mx-4">
+                <h2 className="text-sm font-semibold text-stone-800">Location Map</h2>
+                <div className="overflow-hidden border border-stone-300 max-[640px]:overflow-visible max-[640px]:border-0">
+                  <Table className="table-fixed max-[640px]:block max-[640px]:w-full">
+                    <TableHeader className="max-[640px]:hidden">
+                      <TableRow className="bg-stone-800 hover:bg-stone-800">
+                        <TableHead className="w-[42%] border border-stone-700 px-2 text-center text-[11px] font-bold uppercase tracking-wide text-amber-200">Location From</TableHead>
+                        <TableHead className="w-[42%] border border-stone-700 px-2 text-center text-[11px] font-bold uppercase tracking-wide text-amber-200">Location To</TableHead>
+                        <TableHead className="border border-stone-700 px-1 text-center text-[11px] font-bold uppercase tracking-wide text-amber-200">Action</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody className="max-[640px]:block">
+                      <TableRow className="max-[640px]:grid max-[640px]:grid-cols-1 max-[640px]:overflow-hidden max-[640px]:border max-[640px]:border-stone-400">
+                        <TableCell className="border border-stone-300 px-2 py-2 align-top max-[640px]:block">
+                          <p className="mb-1 text-xs font-bold uppercase tracking-wide text-stone-600 sm:hidden">Location From</p>
+                          <p className="font-semibold text-stone-900">{applicationDisplayLocation.office?.name || appDetails.branchName || '—'}</p>
+                          <p className="mt-1 break-words text-xs text-stone-600">{[applicationDisplayLocation.office?.address, applicationDisplayLocation.office?.city, applicationDisplayLocation.office?.state, applicationDisplayLocation.office?.pinCode, applicationDisplayLocation.office?.country].filter(Boolean).join(', ') || 'Address unavailable'}</p>
+                          <p className="mt-1 font-mono text-xs text-stone-600">Lat: {formatCoordinate(applicationDisplayLocation.bisLatitude) || '—'} · Long: {formatCoordinate(applicationDisplayLocation.bisLongitude) || '—'}</p>
+                        </TableCell>
+                        <TableCell className="border border-stone-300 px-2 py-2 align-top max-[640px]:block">
+                          <p className="mb-1 text-xs font-bold uppercase tracking-wide text-stone-600 sm:hidden">Location To</p>
+                          <p className="font-semibold text-stone-900">{applicationClientLocation?.company_name || row?.client?.company_name || '—'}</p>
+                          <p className="mt-1 break-words text-xs text-stone-600">{[applicationClientLocation?.address, applicationClientLocation?.district, applicationClientLocation?.state, applicationClientLocation?.pin_code, applicationClientLocation?.country].filter(Boolean).join(', ') || 'Address unavailable'}</p>
+                          <p className="mt-1 font-mono text-xs text-stone-600">Lat: {formatCoordinate(applicationDisplayLocation.firmLatitude) || '—'} · Long: {formatCoordinate(applicationDisplayLocation.firmLongitude) || '—'}</p>
+                        </TableCell>
+                        <TableCell className="border border-stone-300 px-1 py-2 align-middle max-[640px]:flex max-[640px]:items-center max-[640px]:justify-between max-[640px]:gap-3">
+                          <span className="pl-2 text-xs font-bold uppercase tracking-wide text-stone-600 sm:hidden">Actions</span>
+                          <div className="flex flex-wrap items-center justify-center gap-1">
+                            <Button type="button" variant="outline" size="icon" className="h-8 w-8" title="Preview location map" aria-label="Preview location map" disabled={!onLocationMapPreview} onClick={onLocationMapPreview}><Eye size={14} /></Button>
+                            <Button type="button" variant="outline" size="icon" className="h-8 w-8" title="Download location map as Word" aria-label="Download location map as Word" disabled={!onLocationMapWord} onClick={onLocationMapWord}><FileType size={14} /></Button>
+                            <Button type="button" variant="outline" size="icon" className="h-8 w-8" title="Download location map as PDF" aria-label="Download location map as PDF" disabled={!onLocationMapPdf} onClick={onLocationMapPdf}><FileDown size={14} /></Button>
+                            <Button type="button" variant="outline" size="icon" className="h-8 w-8" title="Print location map" aria-label="Print location map" disabled={!onLocationMapPrint} onClick={onLocationMapPrint}><Printer size={14} /></Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </div>
+              </section>
             </div>
           ) : showTopManagementFields ? (
             <div className="shrink-0">
@@ -1213,8 +1605,8 @@ export function LegalDocumentsModuleDialog({
                   isCodeRevisionYear={
                     row ? String(row.is_code?.revision_year ?? '').trim() || null : null
                   }
-                  portalUserId={row?.portal_user_id}
-                  hasPortalPassword={Boolean(row?.portal_password_set)}
+                  portalUserId={row ? manakLoginFromProject(row).userId : null}
+                  hasPortalPassword={row ? manakLoginFromProject(row).hasPassword : false}
                   onPrintTestRequest={() => {
                     if (!row) return
                     void printBisDocument(row, 'osl-sample-test-request').then((err) => {
@@ -1294,6 +1686,32 @@ export function LegalDocumentsModuleDialog({
                 <p className="py-6 text-center text-sm text-stone-500">Loading…</p>
               ) : (
                 <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3 sm:px-4 [-webkit-overflow-scrolling:touch]">
+                  <section className="mb-4 space-y-2 border border-stone-300 bg-white p-3">
+                    <div>
+                      <h2 className="text-sm font-semibold text-stone-800">Client Master Legal Documents</h2>
+                      <p className="text-xs text-stone-500">Documents are linked from Client Master and are not copied.</p>
+                    </div>
+                    {clientLegalDocuments.length ? (
+                      <ul className="divide-y divide-stone-200 border border-stone-200">
+                        {clientLegalDocuments.map((document) => (
+                          <li key={document.id} className="flex min-w-0 items-center justify-between gap-3 px-2.5 py-2 text-sm">
+                            <span className="min-w-0 truncate font-medium text-stone-800" title={document.cert_name}>{document.cert_name}</span>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-8 shrink-0"
+                              onClick={() => void openClientCertificate(document).catch((err: unknown) => toast.error(err instanceof Error ? err.message : 'Unable to open client document.'))}
+                            >
+                              <Eye className="mr-1.5 h-4 w-4" /> Open
+                            </Button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="border border-dashed border-stone-300 p-3 text-sm text-stone-500">No legal documents are saved for this client.</p>
+                    )}
+                  </section>
                   <LocationMapModuleFields
                     value={locationMap}
                     onChange={setLocationMap}
@@ -1357,7 +1775,7 @@ export function LegalDocumentsModuleDialog({
                   onChange={setProcessFlow}
                   disabled={busy || saving}
                   applicantName={row ? clientDisplayName(row) : ''}
-                  isNumber={(row?.is_code?.is_number ?? '').trim()}
+                  isNumber={row ? isCodeDisplayLabel(row) : ''}
                   isTitle={(row?.is_code?.title ?? '').trim()}
                   productName={(row?.is_code?.title ?? '').trim()}
                   licenseScope={licenseScopeNotes}

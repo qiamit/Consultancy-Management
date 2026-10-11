@@ -14,7 +14,7 @@ export function gstSupplyMode(supplierGstin: string, recipientGstin: string): Gs
 export const DEFAULT_CONSULTANCY_SAC = '998393'
 export const DEFAULT_CONSULTANCY_GST = '18'
 
-/** GST is charged when the tax invoice is issued. Quotations, proforma invoices, and receipts stay without GST. */
+/** GST is charged when the tax invoice is issued. A purchase bill keeps the HSN and GST the user entered. Quotations, proforma invoices, and receipts stay without GST. */
 export function linesForDocumentKind(kind: string, lines: QuotationLineForm[]): QuotationLineForm[] {
   if (kind === 'invoice') {
     return lines.map((line) => ({
@@ -23,7 +23,15 @@ export function linesForDocumentKind(kind: string, lines: QuotationLineForm[]): 
       gstPercent: Number(line.gstPercent) > 0 ? line.gstPercent : DEFAULT_CONSULTANCY_GST,
     }))
   }
-  if (kind === 'quotation' || kind === 'proformaInvoice' || kind === 'paymentReceipt') {
+  if (kind === 'purchase' || kind === 'debitNote') return lines
+  if (kind === 'salesDebitNote') {
+    return lines.map((line) => ({
+      ...line,
+      hsnSac: line.hsnSac.trim() || DEFAULT_CONSULTANCY_SAC,
+      gstPercent: Number(line.gstPercent) > 0 ? line.gstPercent : DEFAULT_CONSULTANCY_GST,
+    }))
+  }
+  if (kind === 'quotation' || kind === 'proformaInvoice' || kind === 'paymentReceipt' || kind === 'purchaseOrder') {
     return lines.map((line) => ({ ...line, gstPercent: '0' }))
   }
   return lines

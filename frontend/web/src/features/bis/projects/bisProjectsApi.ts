@@ -1,7 +1,6 @@
 import { searchClients } from '@/lib/clientsApi'
 import { supabase } from '@/lib/supabaseClient'
-import { setPortalPassword } from './bisPortalSecretApi'
-import { formatIsCodeLabelFromParts } from '@/features/masters/is-codes/formatIsCodeLabel'
+import { formatIsCodeLabel } from '@/features/masters/is-codes/formatIsCodeLabel'
 import { formatClientAddress } from '@/features/masters/clients/types'
 import type { FilterComboboxOption } from '@/features/sample-handling/receiving/FilterCombobox'
 import {
@@ -21,7 +20,15 @@ import {
 } from './types'
 
 const SELECT_WITH_JOINS =
-  '*, client:clients(company_name), is_code:is_codes(is_number, title, revision_year)'
+  '*, client:clients(company_name, manak_user_id, manak_password_set), is_code:is_codes(is_number, title, revision_year, part_no, section_no, standard_prefix, unit_of_is)'
+const SELECT_WITH_JOINS_LEGACY =
+  '*, client:clients(company_name), is_code:is_codes(is_number, title, revision_year, part_no, section_no, standard_prefix, unit_of_is)'
+
+function missingManakColumn(error: { code?: string; message?: string } | null) {
+  if (!error) return false
+  const message = error.message ?? ''
+  return error.code === '42703' || error.code === 'PGRST204' || /manak_user_id|manak_password_set|does not exist|schema cache/i.test(message)
+}
 
 const LOOKUP_ID_LIMIT = 100
 const LOOKUP_OPTION_LIMIT = 30
@@ -97,17 +104,21 @@ export type FetchBisProjectsParams = {
   sortDir?: BisProjectSortDir
 }
 
-export async function fetchBisProjectsPage({
-  listMode,
-  search,
-  page,
-  pageSize,
-  qeManagedFilter = 'all',
-  projectKindFilter = 'all',
-  licenseStatusFilter = 'all',
-  sortKey = 'validity',
-  sortDir = 'asc',
-}: FetchBisProjectsParams): Promise<{ rows: BisProjectRow[]; total: number }> {
+export async function fetchBisProjectsPage(
+  params: FetchBisProjectsParams,
+  selectColumns = SELECT_WITH_JOINS,
+): Promise<{ rows: BisProjectRow[]; total: number }> {
+  const {
+    listMode,
+    search,
+    page,
+    pageSize,
+    qeManagedFilter = 'all',
+    projectKindFilter = 'all',
+    licenseStatusFilter = 'all',
+    sortKey = 'validity',
+    sortDir = 'asc',
+  } = params
   const term = sanitizeSearchTerm(search)
 
   let orFilter: string | null = null
@@ -129,7 +140,7 @@ export async function fetchBisProjectsPage({
     orFilter = parts.join(',')
   }
 
-  let query = supabase.from('bis_projects').select(SELECT_WITH_JOINS, { count: 'exact' })
+  let query = supabase.from('bis_projects').select(selectColumns, { count: 'exact' })
 
   const today = todayIsoDate()
   if (listMode === 'our') query = query.eq('is_qe_managed', true)
@@ -195,6 +206,9 @@ export async function fetchBisProjectsPage({
 
   const from = (Math.max(1, page) - 1) * pageSize
   const { data, error, count } = await query.range(from, from + pageSize - 1)
+  if (error && selectColumns !== SELECT_WITH_JOINS_LEGACY && missingManakColumn(error)) {
+    return fetchBisProjectsPage(params, SELECT_WITH_JOINS_LEGACY)
+  }
   if (error) throw error
 
   return {
@@ -289,7 +303,7 @@ export async function searchIsCodeOptions(term: string): Promise<FilterComboboxO
   const clean = sanitizeSearchTerm(term)
   let query = supabase
     .from('is_codes')
-    .select('id, is_number, revision_year, title')
+    .select('id, is_number, revision_year, part_no, section_no, standard_prefix, title')
     .is('archived_at', null)
     .order('is_number', { ascending: true })
   if (clean) query = query.or(`is_number.ilike.*${clean}*,title.ilike.*${clean}*`)
@@ -300,11 +314,13 @@ export async function searchIsCodeOptions(term: string): Promise<FilterComboboxO
       id: string
       is_number: string | null
       revision_year: string | null
+      part_no: string | null
+      section_no: string | null
+      standard_prefix: string | null
     }
     return {
       id: String(row.id),
-      // Dropdown shows only `IS 10748: 2024` (number + revision year).
-      label: formatIsCodeLabelFromParts(row.is_number, row.revision_year) || 'Unnamed',
+      label: formatIsCodeLabel(row) || 'Unnamed',
     }
   })
 }
@@ -312,13 +328,20 @@ export async function searchIsCodeOptions(term: string): Promise<FilterComboboxO
 export async function fetchBisProjectById(id: string): Promise<BisProjectRow | null> {
   const trimmed = id.trim()
   if (!trimmed) return null
-  const { data, error } = await supabase
+  let result = await supabase
     .from('bis_projects')
     .select(SELECT_WITH_JOINS)
     .eq('id', trimmed)
     .maybeSingle()
-  if (error) throw error
-  return (data as BisProjectRow | null) ?? null
+  if (result.error && missingManakColumn(result.error)) {
+    result = await supabase
+      .from('bis_projects')
+      .select(SELECT_WITH_JOINS_LEGACY)
+      .eq('id', trimmed)
+      .maybeSingle()
+  }
+  if (result.error) throw result.error
+  return (result.data as BisProjectRow | null) ?? null
 }
 
 export async function saveBisProject(
@@ -352,7 +375,6 @@ export async function saveBisProject(
     billing_amount: Number.isFinite(billing) ? billing : 0,
     billing_frequency:
       form.billingFrequency.trim() || DEFAULT_BILLING_FREQUENCY,
-    portal_user_id: form.portalUserId.trim() || null,
     notes: sanitizeBisLicenseScopeNotes(form.notes).trim() || null,
   }
 
@@ -367,11 +389,6 @@ export async function saveBisProject(
     id = String((data as { id?: string } | null)?.id ?? '')
   }
   if (!id) throw new Error('BIS project was saved but its id was missing.')
-  if (form.clearPortalPassword) {
-    await setPortalPassword(id, null)
-  } else if (form.portalPassword.trim()) {
-    await setPortalPassword(id, form.portalPassword)
-  }
   return id
 }
 
@@ -416,6 +433,11 @@ export async function saveBisApplicationDetails(
     dealing_officer_name: form.dealingOfficerName.trim() || null,
     dealing_officer_designation: form.dealingOfficerDesignation.trim() || null,
     type_of_inspection: form.typeOfInspection.trim() || null,
+    production_unit: form.productionUnit.trim() || null,
+    installed_capacity: form.installedCapacity.trim() || null,
+    actual_capacity: form.actualCapacity.trim() || null,
+    production_rate: form.productionRate.trim() || null,
+    production_value: form.productionValue.trim() || null,
   }
   const { error } = await supabase.from('bis_projects').update(payload).eq('id', projectId)
   if (error) throw error

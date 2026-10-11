@@ -12,7 +12,7 @@ export { formatBisApiError } from '../projects/bisProjectsApi'
 const BUCKET = 'bis-sample-failure-files'
 
 const SELECT_WITH_JOINS =
-  '*, client:clients(company_name), is_code:is_codes(is_number, title, revision_year), bis_project:bis_projects(title, license_number)'
+  '*, client:clients(company_name), is_code:is_codes(is_number, title, revision_year, part_no, section_no, standard_prefix), bis_project:bis_projects(title, license_number)'
 
 const ATTACHMENT_COLUMNS: Record<
   SampleFailureAttachmentKind,

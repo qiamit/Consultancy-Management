@@ -13,6 +13,14 @@ const DOC_TYPE_BY_KIND: Record<string, string> = {
   invoice: 'TAX_INVOICE',
   creditNote: 'CREDIT_NOTE',
   paymentReceipt: 'PAYMENT_RECEIPT',
+  purchase: 'PURCHASE',
+  paymentMade: 'PAYMENT_MADE',
+  debitNote: 'DEBIT_NOTE',
+  purchaseOrder: 'PURCHASE_ORDER',
+  expense: 'EXPENSE',
+  refund: 'REFUND',
+  salesDebitNote: 'SALES_DEBIT_NOTE',
+  journal: 'JOURNAL',
 }
 
 export function seriesDocType(kind: string): string | null {

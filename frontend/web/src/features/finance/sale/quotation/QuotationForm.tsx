@@ -81,9 +81,15 @@ import { amountInIndianRupeesWords } from './amountInIndianRupeesWords'
 import { gstSupplyMode, tdsAmount } from '@/features/finance/sale/shared/financeRules'
 import {
   listClientInvoiceBalances,
+  listClientReceipts,
   listInvoiceSettlements,
+  listOpenPurchaseBills,
+  listPurchaseSettlements,
   type InvoiceBalance,
   type InvoiceSettlement,
+  type PurchaseBillOption,
+  type PurchaseSettlement,
+  type ReceiptOption,
 } from '@/features/finance/sale/shared/invoiceBalanceApi'
 import { parseLabSettingsRow } from '@/features/settings/lab-settings/labSettingsDb'
 import { computeClientSaleBalance } from '@/features/finance/sale/shared/clientSaleBalance'
@@ -372,7 +378,7 @@ export function QuotationFormView({
   documentLabel?: string
   /** Payment Receipt uses balance + amount instead of line items / totals. */
   formMode?: 'standard' | 'paymentReceipt'
-  documentKind?: import('@/features/settings/lab-settings/documentTemplateTypes').DocumentTemplateKind
+  documentKind?: import('@/features/settings/lab-settings/documentTemplateTypes').BookDocumentKind
   excludeReceiptId?: string | null
 }) {
   const isPaymentReceipt = formMode === 'paymentReceipt'
@@ -409,9 +415,17 @@ export function QuotationFormView({
   const [ledgerVersion, setLedgerVersion] = useState(0)
   const [invoiceBalances, setInvoiceBalances] = useState<InvoiceBalance[]>([])
   const [settlements, setSettlements] = useState<InvoiceSettlement[]>([])
+  const [purchaseBills, setPurchaseBills] = useState<PurchaseBillOption[]>([])
+  const [purchaseSettlements, setPurchaseSettlements] = useState<PurchaseSettlement[]>([])
+  const [clientReceipts, setClientReceipts] = useState<ReceiptOption[]>([])
+  const linksInvoice =
+    documentKind === 'paymentReceipt' || documentKind === 'creditNote' || documentKind === 'salesDebitNote'
+  const linksPurchase = documentKind === 'paymentMade' || documentKind === 'debitNote'
+  const linksReceipt = documentKind === 'refund'
+  const showReceiptTds = documentKind === 'paymentReceipt' || (isPaymentReceipt && !documentKind)
 
   useEffect(() => {
-    if (!form.clientId || (documentKind !== 'invoice' && documentKind !== 'creditNote' && !isPaymentReceipt)) {
+    if (!form.clientId || (documentKind !== 'invoice' && !linksInvoice)) {
       return
     }
     let cancelled = false
@@ -425,7 +439,53 @@ export function QuotationFormView({
     return () => {
       cancelled = true
     }
-  }, [documentKind, form.clientId, isPaymentReceipt])
+  }, [documentKind, form.clientId, linksInvoice])
+
+  useEffect(() => {
+    if (!form.clientId || !linksPurchase) return
+    let cancelled = false
+    void listOpenPurchaseBills(form.clientId)
+      .then((rows) => {
+        if (!cancelled) setPurchaseBills(rows)
+      })
+      .catch(() => {
+        if (!cancelled) setPurchaseBills([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [form.clientId, linksPurchase])
+
+  useEffect(() => {
+    if (!form.clientId || !linksReceipt) return
+    let cancelled = false
+    void listClientReceipts(form.clientId)
+      .then((rows) => {
+        if (!cancelled) setClientReceipts(rows)
+      })
+      .catch(() => {
+        if (!cancelled) setClientReceipts([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [form.clientId, linksReceipt])
+
+  useEffect(() => {
+    const billNumber = form.quotationNumber.trim()
+    if (documentKind !== 'purchase' || !form.clientId || !billNumber) return
+    let cancelled = false
+    void listPurchaseSettlements(form.clientId, billNumber)
+      .then((rows) => {
+        if (!cancelled) setPurchaseSettlements(rows)
+      })
+      .catch(() => {
+        if (!cancelled) setPurchaseSettlements([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [documentKind, form.clientId, form.quotationNumber])
 
   useEffect(() => {
     const invoiceNumber = form.quotationNumber.trim()
@@ -472,9 +532,19 @@ export function QuotationFormView({
   })
   const [companyGstin, setCompanyGstin] = useState('')
 
-  const placeOfSupply = documentKind === 'invoice' || documentKind === 'creditNote'
+  const isVendorParty =
+    documentKind === 'purchase' ||
+    documentKind === 'paymentMade' ||
+    documentKind === 'debitNote' ||
+    documentKind === 'purchaseOrder'
+  const purchaseGst = documentKind === 'purchase' || documentKind === 'debitNote'
+  const saleGst =
+    documentKind === 'invoice' || documentKind === 'creditNote' || documentKind === 'salesDebitNote'
+  const placeOfSupply = purchaseGst || saleGst
   const supplyMode: 'intra' | 'inter' = placeOfSupply
-    ? gstSupplyMode(companyGstin, form.clientGstNumber)
+    ? purchaseGst
+      ? gstSupplyMode(form.clientGstNumber, companyGstin)
+      : gstSupplyMode(companyGstin, form.clientGstNumber)
     : showIgstRow && !showCgstRow && !showSgstRow
       ? 'inter'
       : 'intra'
@@ -490,6 +560,8 @@ export function QuotationFormView({
   const outstandingNow = matchedInvoiceBalance ? matchedInvoiceBalance.outstanding : totals.grandTotal
   const visibleSettlements =
     documentKind === 'invoice' && form.clientId && form.quotationNumber.trim() ? settlements : []
+  const visiblePurchaseSettlements =
+    documentKind === 'purchase' && form.clientId && form.quotationNumber.trim() ? purchaseSettlements : []
   const amountInWords = amountInIndianRupeesWords(totals.grandTotal)
 
   useEffect(() => {
@@ -918,15 +990,15 @@ export function QuotationFormView({
 
         {/* Client */}
         <section className="min-w-0 space-y-3 rounded-none border border-stone-500 bg-stone-50/60 p-3">
-          <h3 className={sectionTitleClass}>Client Details</h3>
+          <h3 className={sectionTitleClass}>{isVendorParty ? 'Vendor Details' : 'Client Details'}</h3>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="flex min-w-0 flex-col space-y-2 sm:col-span-2">
-              <Label htmlFor="quotation-client">Client</Label>
+              <Label htmlFor="quotation-client">{isVendorParty ? 'Vendor' : 'Client'}</Label>
               <LimsFieldWithAdd
                 addButton={
                   <LimsFieldAddButton
-                    aria-label="Add new client"
-                    title="Add New Client"
+                    aria-label={isVendorParty ? 'Add new vendor' : 'Add new client'}
+                    title={isVendorParty ? 'Add New Vendor' : 'Add New Client'}
                     onClick={() => openAddClient()}
                   />
                 }
@@ -956,19 +1028,22 @@ export function QuotationFormView({
                     if (open) setClientQuery((prev) => prev || selectedClientLabel)
                     else setClientQuery(selectedClientLabel)
                   }}
-                  placeholder="Search Client"
+                  placeholder={isVendorParty ? 'Search Vendor' : 'Search Client'}
                   listId="quotation-client-combobox"
                   inputId="quotation-client"
                   inputClassName="h-10 border-0 bg-transparent shadow-none focus-visible:border-transparent focus-visible:bg-transparent focus-visible:ring-0"
                   extraActions={[
                     {
                       key: 'add-client',
-                      label: 'Add New Client',
+                      label: isVendorParty ? 'Add New Vendor' : 'Add New Client',
                       onSelect: () => openAddClient(clientQuery),
                     },
                   ]}
                 />
               </LimsFieldWithAdd>
+              {isVendorParty ? (
+                <p className="text-xs text-stone-600">Only clients marked Vendor or Both are listed.</p>
+              ) : null}
             </div>
             {(form.clientId ||
               form.clientAddress ||
@@ -998,7 +1073,7 @@ export function QuotationFormView({
         </section>
       </div>
 
-      {isPaymentReceipt || documentKind === 'creditNote' ? (
+      {linksInvoice ? (
         <section className="space-y-3 rounded-none border border-stone-500 bg-stone-50/60 p-3">
           <h3 className={sectionTitleClass}>Against invoice</h3>
           <div className="flex min-w-0 max-w-xl flex-col space-y-2">
@@ -1025,8 +1100,78 @@ export function QuotationFormView({
             </Select>
             <p className="text-xs text-stone-600">
               {form.clientId
-                ? 'The gross amount reduces this invoice. TDS stays on the receipt.'
+                ? documentKind === 'salesDebitNote'
+                  ? 'This extra charge increases the invoice outstanding.'
+                  : documentKind === 'creditNote'
+                    ? 'This credit note reduces the invoice outstanding.'
+                    : 'The gross amount reduces this invoice. TDS stays on the receipt.'
                 : 'Select a client to see open invoices.'}
+            </p>
+          </div>
+        </section>
+      ) : null}
+
+      {linksPurchase ? (
+        <section className="space-y-3 rounded-none border border-stone-500 bg-stone-50/60 p-3">
+          <h3 className={sectionTitleClass}>Against purchase bill</h3>
+          <div className="flex min-w-0 max-w-xl flex-col space-y-2">
+            <Label htmlFor="against-bill">Purchase bill</Label>
+            <Select
+              value={form.referenceNo.trim() || 'none'}
+              onValueChange={(value) => set('referenceNo', value === 'none' ? '' : value)}
+            >
+              <SelectTrigger id="against-bill" className={cn(fieldClass, 'w-full min-h-10')}>
+                <SelectValue placeholder="Not linked to a purchase bill" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Not linked to a purchase bill</SelectItem>
+                {form.referenceNo.trim() &&
+                !purchaseBills.some((row) => row.bill_number === form.referenceNo.trim()) ? (
+                  <SelectItem value={form.referenceNo.trim()}>{form.referenceNo.trim()}</SelectItem>
+                ) : null}
+                {purchaseBills.map((row) => (
+                  <SelectItem key={row.bill_id} value={row.bill_number}>
+                    {row.bill_number} — due {getCurrencySymbol()} {formatMoney(row.outstanding)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-stone-600">
+              {form.clientId
+                ? 'The gross amount reduces this purchase bill. TDS is not deducted on purchase.'
+                : 'Select a vendor to see open purchase bills.'}
+            </p>
+          </div>
+        </section>
+      ) : null}
+
+      {linksReceipt ? (
+        <section className="space-y-3 rounded-none border border-stone-500 bg-stone-50/60 p-3">
+          <h3 className={sectionTitleClass}>Against receipt</h3>
+          <div className="flex min-w-0 max-w-xl flex-col space-y-2">
+            <Label htmlFor="against-receipt">Payment receipt</Label>
+            <Select
+              value={form.referenceNo.trim() || 'none'}
+              onValueChange={(value) => set('referenceNo', value === 'none' ? '' : value)}
+            >
+              <SelectTrigger id="against-receipt" className={cn(fieldClass, 'w-full min-h-10')}>
+                <SelectValue placeholder="Not linked to a receipt" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Not linked to a receipt</SelectItem>
+                {form.referenceNo.trim() &&
+                !clientReceipts.some((row) => row.receipt_number === form.referenceNo.trim()) ? (
+                  <SelectItem value={form.referenceNo.trim()}>{form.referenceNo.trim()}</SelectItem>
+                ) : null}
+                {clientReceipts.map((row) => (
+                  <SelectItem key={row.receipt_number} value={row.receipt_number}>
+                    {row.receipt_number} — {getCurrencySymbol()} {formatMoney(row.amount)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-stone-600">
+              A refund returns money to the client. It is not a GST document.
             </p>
           </div>
         </section>
@@ -1036,14 +1181,18 @@ export function QuotationFormView({
         <section className="space-y-3 rounded-none border border-stone-500 bg-stone-50/60 p-3">
           <h3 className={sectionTitleClass}>Payment</h3>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {showReceiptTds ? (
             <CurrencyBalanceField
               label="Current Balance"
               amount={selectedClientBalance.amount}
               balanceType={selectedClientBalance.type}
               emptyText={form.clientId ? undefined : 'Select a client'}
             />
+            ) : null}
             <div className="flex min-w-0 flex-col space-y-2">
-              <Label htmlFor="payment-method">Payment In</Label>
+              <Label htmlFor="payment-method">
+                {documentKind === 'paymentMade' ? 'Payment Out' : documentKind === 'refund' ? 'Refund Mode' : 'Payment In'}
+              </Label>
               <Select
                 value={form.paymentMethod || 'Bank'}
                 onValueChange={(v) => set('paymentMethod', v as PaymentMethod)}
@@ -1066,6 +1215,7 @@ export function QuotationFormView({
               value={form.paymentAmount}
               onChange={(v) => set('paymentAmount', v)}
             />
+            {showReceiptTds ? (
             <div className="flex min-w-0 flex-col space-y-2">
               <Label htmlFor="payment-tds">TDS</Label>
               <Select
@@ -1082,7 +1232,9 @@ export function QuotationFormView({
                 </SelectContent>
               </Select>
             </div>
-            <ReceiptTdsSummary gross={form.paymentAmount} percent={form.tdsPercent} />
+            ) : null}
+            {showReceiptTds ? <ReceiptTdsSummary gross={form.paymentAmount} percent={form.tdsPercent} /> : null}
+            {showReceiptTds ? (
             <CurrencyBalanceField
               label="Balance After Payment"
               amount={balanceAfterPayment.amount}
@@ -1090,6 +1242,7 @@ export function QuotationFormView({
               emptyText={form.clientId ? undefined : '—'}
               highlight
             />
+            ) : null}
           </div>
         </section>
       ) : (
@@ -2312,10 +2465,32 @@ export function QuotationFormView({
             <span>Grand Total</span>
             <span className="tabular-nums text-amber-900">{getCurrencySymbol()} {formatMoney(totals.grandTotal)}</span>
           </div>
-          {documentKind === 'invoice' ? (
+          {documentKind === 'invoice' || documentKind === 'purchase' ? (
             <div className="flex items-center justify-between gap-3 text-sm">
               <span className="text-stone-600">Outstanding</span>
               <span className="tabular-nums">{getCurrencySymbol()} {formatMoney(outstandingNow)}</span>
+            </div>
+          ) : null}
+          {documentKind === 'purchase' && form.clientId && form.quotationNumber.trim() ? (
+            <div className="space-y-1 border-t border-stone-300 pt-2 text-sm">
+              <p className="text-stone-600">Settlements</p>
+              {visiblePurchaseSettlements.length === 0 ? (
+                <p className="text-xs text-stone-500">No payment or debit note is linked.</p>
+              ) : (
+                <ul className="max-h-40 space-y-1 overflow-y-auto">
+                  {visiblePurchaseSettlements.map((row) => (
+                    <li key={`${row.kind}-${row.document_id}`} className="flex items-center justify-between gap-2">
+                      <span className="min-w-0 truncate">
+                        {row.kind === 'debit_note' ? 'Debit Note' : 'Payment Made'} {row.document_number}
+                        {row.document_date ? ` · ${formatDate(row.document_date)}` : ''}
+                      </span>
+                      <span className="shrink-0 tabular-nums">
+                        {getCurrencySymbol()} {formatMoney(row.amount)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           ) : null}
           {documentKind === 'invoice' && form.clientId && form.quotationNumber.trim() ? (
@@ -2328,7 +2503,12 @@ export function QuotationFormView({
                   {visibleSettlements.map((row) => (
                     <li key={`${row.kind}-${row.document_id}`} className="flex items-center justify-between gap-2">
                       <span className="min-w-0 truncate">
-                        {row.kind === 'credit_note' ? 'Credit Note' : 'Receipt'} {row.document_number}
+                        {row.kind === 'credit_note'
+                          ? 'Credit Note'
+                          : row.kind === 'sales_debit_note'
+                            ? 'Sales Debit Note'
+                            : 'Receipt'}{' '}
+                        {row.document_number}
                         {row.document_date ? ` · ${formatDate(row.document_date)}` : ''}
                       </span>
                       <span className="shrink-0 tabular-nums">

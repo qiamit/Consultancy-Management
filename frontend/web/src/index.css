@@ -202,3 +202,308 @@ th,
 th * {
   text-transform: none !important;
 }
+
+/* BIS Branch Offices compacts controls before switching from its table to
+   plain cards. The container width excludes the application sidebar. */
+.bis-branch-offices-page-container {
+  container-name: bis-branch;
+  container-type: inline-size;
+}
+
+.bis-projects-responsive-page {
+  container-name: bis-projects;
+  container-type: inline-size;
+}
+
+.bis-notes-scope-two-column-table {
+  display: grid !important;
+  grid-template-columns: 4.5rem minmax(0, 3fr) minmax(0, 7fr) 4.5rem;
+  width: 100%;
+}
+.bis-notes-scope-two-column-table thead,
+.bis-notes-scope-two-column-table tbody { display: contents; }
+.bis-notes-scope-two-column-table tr {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: 4.5rem minmax(0, 3fr) minmax(0, 7fr) 4.5rem;
+}
+.bis-notes-scope-two-column-table th,
+.bis-notes-scope-two-column-table td { min-width: 0; }
+
+.bis-projects-card-view { display: none; }
+.bis-projects-table-view { display: block; }
+.bis-projects-table-view > div { overflow-x: clip !important; }
+.bis-projects-table-view th,
+.bis-projects-table-view td { overflow-wrap: anywhere; }
+.bis-projects-action-column {
+  width: 9.5rem;
+  min-width: 9.5rem;
+  max-width: 9.5rem;
+}
+
+@container bis-projects (max-width: 1300px) {
+  .bis-projects-toolbar-main > button,
+  .bis-projects-toolbar-main > button[aria-label] {
+    height: 2rem !important;
+    min-height: 2rem !important;
+    gap: 0.25rem !important;
+    padding-inline: 0.5rem !important;
+    font-size: 0.75rem !important;
+  }
+
+  .bis-project-row-actions button {
+    width: 1.4375rem !important;
+    height: 1.4375rem !important;
+    min-height: 1.4375rem !important;
+    padding: 0 !important;
+  }
+
+  .bis-project-row-actions svg {
+    width: 0.934rem !important;
+    height: 0.934rem !important;
+  }
+
+  .bis-projects-action-column {
+    width: 7rem !important;
+    min-width: 7rem !important;
+    max-width: 7rem !important;
+  }
+
+  .bis-projects-footer-track button,
+  .bis-projects-footer-track input {
+    height: 1.875rem !important;
+    min-height: 1.875rem !important;
+  }
+
+  .bis-projects-footer-track button {
+    gap: 0.25rem !important;
+    padding-inline: 0.4rem !important;
+    font-size: 0.7rem !important;
+  }
+}
+
+@container bis-projects (max-width: 1120px) {
+  /* The app sidebar reduces the usable panel width before the viewport hits
+     Tailwind's lg breakpoint. Keep the search controls and filters on separate
+     rows so they cannot collide in the remaining desktop-width content area. */
+  .bis-projects-toolbar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  .bis-projects-toolbar-main {
+    width: 100%;
+  }
+
+  .bis-projects-toolbar-filters {
+    width: 100%;
+  }
+
+  .bis-projects-add-label,
+  .bis-projects-footer-track button > span:not(.sr-only) { display: none !important; }
+  .bis-projects-toolbar-filters .bis-projects-filter-trigger {
+    flex: 1 1 8rem;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    padding-inline: 0.375rem !important;
+    font-size: 0.75rem !important;
+  }
+
+  .bis-project-row-actions button {
+    width: 1.29375rem !important;
+    height: 1.29375rem !important;
+    min-height: 1.29375rem !important;
+  }
+
+  .bis-project-row-actions svg {
+    width: 0.8625rem !important;
+    height: 0.8625rem !important;
+  }
+
+  .bis-projects-action-column {
+    width: 5.75rem !important;
+    min-width: 5.75rem !important;
+    max-width: 5.75rem !important;
+    padding-inline: 0.25rem !important;
+  }
+}
+
+@container bis-projects (max-width: 949px) {
+  .bis-projects-toolbar-main { flex-wrap: wrap; }
+  .bis-projects-search { flex-basis: calc(100% - 6rem); }
+  .bis-projects-toolbar-filters { width: 100%; }
+  .bis-projects-toolbar-filters .bis-projects-filter-trigger {
+    flex: 1 1 5rem;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    color: inherit !important;
+  }
+}
+
+/* Keep the license table through the app's 1024px sidebar breakpoint.
+   Switch to cards only when the viewport is narrower than that. */
+@media (max-width: 1023px) {
+  .bis-projects-table-view { display: none !important; }
+  .bis-projects-card-view { display: block !important; }
+}
+
+@media (min-width: 1024px) {
+  .bis-projects-table-view { display: block !important; }
+  .bis-projects-card-view { display: none !important; }
+}
+
+@container bis-projects (min-width: 850px) {
+  .bis-projects-table-view th:nth-child(1),
+  .bis-projects-table-view td:nth-child(1) { width: 3rem; }
+  .bis-projects-table-view th:nth-child(3),
+  .bis-projects-table-view td:nth-child(3),
+  .bis-projects-table-view th:nth-child(4),
+  .bis-projects-table-view td:nth-child(4),
+  .bis-projects-table-view th:nth-child(5),
+  .bis-projects-table-view td:nth-child(5),
+  .bis-projects-table-view th:nth-child(6),
+  .bis-projects-table-view td:nth-child(6) { width: 13%; }
+  .bis-projects-table-view th:nth-child(7),
+  .bis-projects-table-view td:nth-child(7) { width: 14%; }
+}
+
+.bis-branch-card-view { display: none; }
+.bis-branch-table-view { display: block; }
+.bis-branch-table-view > div { overflow-x: clip !important; }
+.bis-branch-table-view th,
+.bis-branch-table-view td { overflow-wrap: anywhere; }
+
+@container bis-branch (max-width: 1300px) {
+  .bis-branch-add-button {
+    height: 2rem !important;
+    min-height: 2rem !important;
+    padding-inline: 0.5rem !important;
+    font-size: 0.75rem !important;
+  }
+
+  .bis-branch-responsive-footer button,
+  .bis-branch-responsive-footer input {
+    height: 2rem !important;
+    min-height: 2rem !important;
+  }
+
+  .bis-branch-responsive-footer button {
+    gap: 0.25rem !important;
+    padding-inline: 0.4rem !important;
+    font-size: 0.7rem !important;
+  }
+}
+
+@container bis-branch (max-width: 1120px) {
+  .bis-branch-add-label,
+  .bis-branch-responsive-footer .laboratories-footer-label { display: none !important; }
+  .bis-branch-responsive-footer button[class~='w-10'] { width: 2rem !important; }
+}
+
+@container bis-branch (max-width: 849px) {
+  .bis-branch-table-view { display: none; }
+  .bis-branch-card-view { display: block; }
+}
+
+@container bis-branch (min-width: 850px) {
+  .bis-branch-table-view th:nth-child(1),
+  .bis-branch-table-view td:nth-child(1) { width: 3rem; }
+  .bis-branch-table-view th:nth-child(2),
+  .bis-branch-table-view td:nth-child(2) { width: 26%; }
+  .bis-branch-table-view th:nth-child(3),
+  .bis-branch-table-view td:nth-child(3) { width: 9%; }
+  .bis-branch-table-view th:nth-child(4),
+  .bis-branch-table-view td:nth-child(4) { width: 15%; }
+  .bis-branch-table-view th:nth-child(5),
+  .bis-branch-table-view td:nth-child(5) { width: 30%; }
+  .bis-branch-table-view th:nth-child(6),
+  .bis-branch-table-view td:nth-child(6) { width: 8%; }
+  .bis-branch-table-view th:nth-child(7),
+  .bis-branch-table-view td:nth-child(7) { width: 8%; }
+}
+
+/* Laboratory Master switches from its dense table to cards using the usable
+   content width (after the sidebar), and never relies on horizontal scrolling. */
+.laboratories-page-container {
+  container-name: lab-list;
+  container-type: inline-size;
+}
+
+.laboratories-table-view {
+  display: none;
+}
+
+.laboratories-table-view > div {
+  overflow-x: clip !important;
+}
+
+@container lab-list (max-width: 1300px) {
+  .laboratories-add-button {
+    height: 2rem !important;
+    min-height: 2rem !important;
+    padding-inline: 0.5rem !important;
+    font-size: 0.75rem !important;
+  }
+
+  .laboratories-responsive-footer button,
+  .laboratories-responsive-footer input {
+    height: 2rem !important;
+    min-height: 2rem !important;
+  }
+
+  .laboratories-responsive-footer button {
+    gap: 0.25rem !important;
+    padding-inline: 0.4rem !important;
+    font-size: 0.7rem !important;
+  }
+}
+
+@container lab-list (max-width: 1120px) {
+  .laboratories-add-label,
+  .laboratories-footer-label {
+    display: none !important;
+  }
+}
+
+@container lab-list (min-width: 850px) {
+  .laboratories-card-view {
+    display: none;
+  }
+
+  .laboratories-table-view {
+    display: block;
+  }
+
+  .laboratories-table-view th:nth-child(1),
+  .laboratories-table-view td:nth-child(1) {
+    width: 3rem;
+  }
+
+  .laboratories-table-view th:nth-child(2),
+  .laboratories-table-view td:nth-child(2) {
+    width: 19%;
+  }
+
+  .laboratories-table-view th:nth-child(3),
+  .laboratories-table-view td:nth-child(3) {
+    width: 7%;
+  }
+
+  .laboratories-table-view th:nth-child(4),
+  .laboratories-table-view td:nth-child(4) {
+    width: 20%;
+  }
+
+  .laboratories-table-view th:nth-child(6),
+  .laboratories-table-view td:nth-child(6) {
+    width: 6rem;
+  }
+}
+
+@container lab-list (max-width: 1120px) {
+  .laboratories-responsive-footer button[class~='w-10'] {
+    width: 2rem !important;
+  }
+}

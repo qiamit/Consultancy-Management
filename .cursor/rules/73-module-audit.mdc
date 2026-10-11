@@ -1,0 +1,40 @@
+---
+description: When Amit says "audit and testing" for a module, exercise every function locally with dummy data, including dependencies and every place the module is used, then write a fix-ready report.
+alwaysApply: true
+---
+
+# Module audit and testing
+
+Trigger: Amit says **audit and testing**, **ऑडिट एंड टेस्टिंग**, or **is module ka audit** and points at a module. Audit that module. Do not fix failures in this run. The report is what the next chat uses.
+
+## Scope
+
+Cover the whole module. Nothing is skipped because it is rare, admin-only, or only reached from another screen.
+
+- Every user action: add, edit, delete, search, filter, sort, paging, import, export, print, upload, and each + / currency / date field the module has.
+- Every option the module stores, including company type and company scale when those fields exist.
+- Every caller: other pages, dialogs, and finance or BIS screens that open or save this module.
+- Every dependency: the `xxxApi.ts` helpers, RPCs, tables, and shared components this module uses.
+- The API path, not only the click path. Drive each action through the typed API or RPC under the logged-in user's permissions. If the page has a QI Assistant context, confirm a dummy row shows up there.
+- Widths 360, 390, 768, and 1280. Buttons stay usable. Tables scroll or become cards. No horizontal overflow on a dialog that was built to fit.
+
+## How to test
+
+Test on local `http://localhost:5173` only. Do not commit, push, deploy, or run `npm run db:migrate`. Post-commit testing is a separate request after Amit says commit.
+
+- Create rows named `ZZ TEST …`. Do not edit real clients, users, or licences.
+- Delete every `ZZ TEST` row before the report is finished. If one remains, list its id in the report and nothing else about it.
+- Do not print secrets, GSTINs, emails, phones, or addresses. Real directory rows are not test data.
+- A live database write that is not a `ZZ TEST` row is out of scope. No DDL and no rollback test on the live database.
+
+## Report
+
+Write `docs/audits/module-audits/<module>-YYYY-MM-DD.md`. Use ids `AUD-01`, `AUD-02`, … Do not renumber them later.
+
+Each item has: **ID**, title, priority (P0–P3), status, where it was checked (this module and each caller), evidence (file:line or the local action), and for a failure the fix plan and acceptance criteria.
+
+- Failure: status `Open`.
+- Pass: status `Pass`, with the action that passed. Do not mark a pass as `Done`.
+- `continue` in a later chat takes the highest-priority `Open` item in this file and fixes it here. Do not write a NEXT handoff.
+
+End the chat with the report path, the Open count, and the Pass count.

@@ -1,4 +1,4 @@
-import { formatIsCodeLabelFromParts } from '@/features/masters/is-codes/formatIsCodeLabel'
+import { formatIsCodeLabel } from '@/features/masters/is-codes/formatIsCodeLabel'
 
 export type BisProjectsListMode =
   | 'all'
@@ -64,12 +64,29 @@ export const DEFAULT_APPLICATION_STAGE = 'Under Preparation'
 
 export type BisProjectClientJoin = {
   company_name: string | null
+  manak_user_id?: string | null
+  manak_password_set?: boolean | null
+}
+
+/** Firm credentials win. A licence row still has them until the client migration runs. */
+export function manakLoginFromProject(row: {
+  portal_user_id?: string | null
+  portal_password_set?: boolean | null
+  client?: BisProjectClientJoin | null
+}): { userId: string; hasPassword: boolean } {
+  const userId = String(row.client?.manak_user_id ?? row.portal_user_id ?? '').trim()
+  const hasPassword = Boolean(row.client?.manak_password_set) || Boolean(row.portal_password_set)
+  return { userId, hasPassword }
 }
 
 export type BisProjectIsCodeJoin = {
   is_number: string | null
   title: string | null
   revision_year: string | null
+  part_no?: string | null
+  section_no?: string | null
+  standard_prefix?: string | null
+  unit_of_is?: string | null
 }
 
 export type BisProjectRow = {
@@ -113,6 +130,11 @@ export type BisProjectRow = {
   dealing_officer_name: string | null
   dealing_officer_designation: string | null
   type_of_inspection: string | null
+  production_unit?: string | null
+  installed_capacity?: string | null
+  actual_capacity?: string | null
+  production_rate?: string | null
+  production_value?: string | null
   created_at?: string | null
   updated_at?: string | null
   client: BisProjectClientJoin | null
@@ -122,6 +144,11 @@ export type BisProjectRow = {
 export type BisApplicationProcess = 'simplified' | 'normal'
 
 export type BisApplicationDetailsForm = {
+  productionUnit: string
+  installedCapacity: string
+  actualCapacity: string
+  productionRate: string
+  productionValue: string
   applicationProcess: BisApplicationProcess
   applicationNumber: string
   applicationDate: string
@@ -363,7 +390,11 @@ export function emptyBisProjectForm(projectKind: string = DEFAULT_PROJECT_KIND):
     portalPassword: '',
     portalPasswordSet: false,
     clearPortalPassword: false,
-    notes: '',
+    notes: serializeBisNotesScope({
+      mode: 'table',
+      headers: defaultHeaders(2),
+      rows: [emptyRow(2)],
+    }),
   }
 }
 
@@ -374,7 +405,7 @@ export function clientDisplayName(row: Pick<BisProjectRow, 'client'>): string {
 export function isCodeDisplayLabel(row: Pick<BisProjectRow, 'is_code'>): string {
   const code = row.is_code
   if (!code) return ''
-  return formatIsCodeLabelFromParts(code.is_number, code.revision_year)
+  return formatIsCodeLabel(code)
 }
 
 export function rowToBisProjectForm(row: BisProjectRow): BisProjectForm {
@@ -457,6 +488,11 @@ export function formatCmA(digits: string | null | undefined): string {
 
 export function emptyBisApplicationDetailsForm(): BisApplicationDetailsForm {
   return {
+    productionUnit: '',
+    installedCapacity: '',
+    actualCapacity: '',
+    productionRate: '',
+    productionValue: '',
     applicationProcess: 'simplified',
     applicationNumber: '',
     applicationDate: '',
@@ -483,7 +519,17 @@ export function rowToBisApplicationDetailsForm(
   const licenseDigits = String(row.cm_l_digits ?? row.license_number ?? '')
     .replace(/\D/g, '')
     .slice(0, 10)
+  const actualCapacity = String(row.actual_capacity ?? '')
+  const productionRate = String(row.production_rate ?? '')
+  const calculatedProductionValue = actualCapacity && productionRate
+    ? (Number(actualCapacity) * Number(productionRate)).toFixed(2)
+    : ''
   return {
+    productionUnit: String(row.production_unit ?? row.is_code?.unit_of_is ?? ''),
+    installedCapacity: String(row.installed_capacity ?? ''),
+    actualCapacity,
+    productionRate,
+    productionValue: row.production_value ?? calculatedProductionValue,
     applicationProcess: processRaw === 'normal' ? 'normal' : 'simplified',
     applicationNumber: String(row.application_number ?? '').replace(/\D/g, ''),
     applicationDate: row.application_date ?? '',

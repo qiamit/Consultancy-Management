@@ -1,0 +1,697 @@
+S5 — Masters: audit log + Archive/Restore + safe permanent delete, view-only UI, anon/legacy hygiene, QE Assistant entry point
+================================================================================================================================
+
+Repo: /Users/amitkumar/Documents/Softwares/Consultancy Management   (branch main, HEAD must be 4f3a10d — S4)
+Stack: self-hosted Supabase on Railway (PostgREST 12.2, GoTrue, Caddy gateway, Node functions service). Frontend: frontend/web.
+
+WHY (live facts, verified read-only on 08-Oct-2026 after S4)
+- No history: nobody can see who changed or deleted a client, IS code, test parameter, product, lab setting, access rule or user.
+- Delete is permanent and dangerous.
+  - Clients: 17,114 of 17,902 have BIS projects.
+    - Deleting one sets bis_projects.client_id to NULL (orphan licences).
+    - It also CASCADE-deletes license_surveillance and bis_sample_failure_replies rows.
+  - IS codes: IsCodesMasterPage deletes is_codes and then looks up is_code_files. Those rows are already gone through the
+    CASCADE, so the storage PDFs are left behind as orphans.
+- There is no Archive. Old clients and IS codes can only be kept, or destroyed for good.
+- View-only (Module Access = View) is enforced in the DB since S4, but the UI still shows "Add New", Save, etc.
+  (S4 B4 was skipped.)
+- anon (logged-out) role:
+  - It still has SELECT/INSERT/UPDATE/DELETE/TRUNCATE grants on 65 public tables and EXECUTE on 63 functions.
+    RLS blocks it today.
+  - Default privileges auto-grant anon FULL rights on every NEW table and function in public. A future table created
+    without RLS would be open to the internet.
+  - authenticated has TRUNCATE (bypasses RLS) on all tables.
+- Legacy:
+  - current_user_is_admin() reads the old public.profiles.role (a second admin system).
+  - 8 old Consultancy Pro tables still have USING(true) write policies. No code uses them.
+- QE Assistant (Settings → AI): users cannot find it.
+  - The only entry points are unlabeled ✨ icons in the header bars of Clients / IS Codes / Test Parameter.
+  - There is no global button.
+  - The UI calls it "QI Assistant".
+  - The welcome text promises "create/update/delete records" and "read a business card and save the client". The Node
+    backend (backend/services/functions/qiAssistant.mjs) only returns a text reply: no actions, and images are ignored.
+    The CRUD code was the Deno version, deleted in commit d6d47e6.
+- Excluded permanently: MST-07, MST-84. Finance tables (finance_*, quotation*, transactions) are NOT touched (they belong to F1).
+
+WHAT S5 DOES
+- Part A: new migration backend/database/migrations/20261008190000_s5_audit_archive_hygiene.sql (content below, VERBATIM).
+  1. public.audit_log + trigger zz_audit_row_change on:
+     clients, is_codes, is_code_files, test_parameters, products_services_master, lab_settings, lab_letterheads,
+     lab_prefixes, company_settings, module_access_rules, user_profiles.
+     - Stores who (JWT sub), when, and what changed: changed columns only for updates, full row for insert/delete.
+     - Secret columns are stripped. No-op updates are skipped.
+     - SELECT is admin-only; nobody can write it directly.
+  2. Archive columns on the 4 masters (clients, is_codes, test_parameters, products_services_master):
+     archived_at, archived_by, updated_by, created_by.
+     Trigger master_row_stamp fills created_by / updated_by / updated_at / archived_by automatically.
+  3. FK safety: BIS children → RESTRICT (was CASCADE / SET NULL):
+     license_surveillance.client_id, bis_sample_failure_replies.client_id, bis_projects.client_id/is_code_id,
+     bis_new_applications.client_id/is_code_id, bis_renewal_applications.client_id.
+  4. RPCs:
+     - master_reference_counts(p_table, p_ids uuid[]): any logged-in user.
+     - delete_master_rows(p_table, p_ids uuid[]): admin only.
+       - Deletes only rows nothing points to. Returns {deleted:[ids], blocked:[{id, refs:{table:count}}], storage_paths:[...]}.
+       - For is_codes, storage_paths lists the PDF paths to remove from the bucket.
+  5. current_user_is_admin() now = app_is_admin(). The 8 legacy tables get admin-only writes.
+  6. Privilege hygiene:
+     - anon loses all table/sequence grants and all function EXECUTE except get_public_company_brand and
+       get_public_website_content.
+     - TRUNCATE/REFERENCES/TRIGGER are revoked from anon/authenticated.
+     - Default privileges no longer auto-grant anon.
+- Part B: Archive / Restore / "Delete permanently" (via RPC) in the 4 master pages. Fix the IS-code PDF orphan bug.
+- Part C: view-only UI (S4's skipped B4).
+- Part D: QE Assistant: global labelled entry point, rename QI→QE, remove false promises.
+
+ALREADY TESTED: this exact SQL was applied TWICE (idempotent, ~1 s each) on the LIVE DB inside BEGIN…ROLLBACK, with 43/43 checks passing:
+- anon is denied tables and functions; the public brand/website RPCs still work.
+- A new table gets no anon grant and no TRUNCATE.
+- S1/S4 regressions are intact.
+- No-op update → no audit row. Update → audit row with only the changed column and changed_by = the user.
+- Archive/restore stamps archived_by. Inserts stamp created_by.
+- User status change is audited and the S4 ban still works.
+- An IE calling delete_master_rows is refused.
+- Admin delete: unreferenced rows are deleted, referenced ones are blocked with counts (e.g. bis_projects: 2;
+  test_parameters: 23 + bis_projects: 119). The IS code's storage path is returned.
+- Direct client delete now fails on the FK instead of orphaning/cascading.
+- current_user_is_admin() is correct. Legacy writes are blocked for IE.
+- After the rollback, live policies, grants, function ACLs, default ACLs, FKs, columns, triggers and client data were byte-identical (snapshot hash).
+
+HOUSE RULES
+- Do NOT edit any applied migration. Do NOT change the SQL below (copy it byte-for-byte).
+- Do NOT open/print .env, .railway-secrets.env or any secret. No Railway changes.
+- NEVER `git add` docs/prompts/, .env*, .railway-secrets.env, any *backup*.json. No `git add -A` / `git add .`.
+- Minimal, focused changes; no new dependencies; no refactors outside what is listed.
+- Pickers (BIS / Quotation / quick-add) are NOT changed in S5. Archived clients/IS codes still appear there (planned for S6).
+
+=====================================================================
+PART A — create this file EXACTLY:
+backend/database/migrations/20261008190000_s5_audit_archive_hygiene.sql
+=====================================================================
+-- S5: audit log, archive (soft delete) + safe permanent delete for masters,
+--     FK safety for BIS children, anon/default-privilege hygiene, legacy role cleanup.
+-- Idempotent: safe to run twice. Runs as the migration superuser (supabase_admin).
+-- Does NOT touch finance_* / quotation* / transactions (Finance F1) or the BIS policies.
+
+-- =====================================================================
+-- 1) Audit log (who changed what, when) — admin-readable, written only by trigger
+-- =====================================================================
+CREATE TABLE IF NOT EXISTS public.audit_log (
+  id          bigserial PRIMARY KEY,
+  table_name  text        NOT NULL,
+  row_id      text,
+  action      text        NOT NULL CHECK (action IN ('I', 'U', 'D')),
+  changed_by  uuid,
+  changed_via text,
+  changed_at  timestamptz NOT NULL DEFAULT now(),
+  old_data    jsonb,
+  new_data    jsonb
+);
+CREATE INDEX IF NOT EXISTS audit_log_table_row_idx ON public.audit_log (table_name, row_id, changed_at DESC);
+CREATE INDEX IF NOT EXISTS audit_log_changed_at_idx ON public.audit_log (changed_at DESC);
+CREATE INDEX IF NOT EXISTS audit_log_changed_by_idx ON public.audit_log (changed_by, changed_at DESC);
+COMMENT ON TABLE public.audit_log IS 'S5: row-level change history for masters/settings/users. Written only by public.audit_row_change(); readable by admins only.';
+
+ALTER TABLE public.audit_log ENABLE ROW LEVEL SECURITY;
+DO $$
+DECLARE p record;
+BEGIN
+  FOR p IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'audit_log' LOOP
+    EXECUTE format('DROP POLICY %I ON public.audit_log', p.policyname);
+  END LOOP;
+END $$;
+CREATE POLICY audit_log_select_admin ON public.audit_log FOR SELECT TO authenticated USING ((SELECT public.app_is_admin()));
+REVOKE ALL ON public.audit_log FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON public.audit_log TO authenticated;
+GRANT ALL ON public.audit_log TO service_role;
+REVOKE ALL ON SEQUENCE public.audit_log_id_seq FROM PUBLIC, anon, authenticated;
+
+CREATE OR REPLACE FUNCTION public.audit_row_change()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_strip  text[] := ARRAY['api_key', 'portal_password', 'password', 'secret_enc', 'encrypted_password'];
+  v_ignore text[] := ARRAY['updated_at', 'updated_by'];
+  v_claims jsonb;
+  v_uid    uuid;
+  v_via    text;
+  v_old    jsonb;
+  v_new    jsonb;
+  v_o      jsonb := '{}'::jsonb;
+  v_n      jsonb := '{}'::jsonb;
+  v_id     text;
+  k        text;
+BEGIN
+  BEGIN
+    v_claims := NULLIF(current_setting('request.jwt.claims', true), '')::jsonb;
+  EXCEPTION WHEN others THEN
+    v_claims := NULL;
+  END;
+  BEGIN
+    v_uid := NULLIF(v_claims ->> 'sub', '')::uuid;
+  EXCEPTION WHEN others THEN
+    v_uid := NULL;
+  END;
+  v_via := COALESCE(v_claims ->> 'role', session_user::text);
+
+  IF TG_OP IN ('UPDATE', 'DELETE') THEN v_old := to_jsonb(OLD) - v_strip; END IF;
+  IF TG_OP IN ('UPDATE', 'INSERT') THEN v_new := to_jsonb(NEW) - v_strip; END IF;
+  v_id := COALESCE(v_new ->> 'id', v_old ->> 'id');
+
+  IF TG_OP = 'UPDATE' THEN
+    FOR k IN SELECT jsonb_object_keys(v_new) LOOP
+      CONTINUE WHEN k = ANY (v_ignore);
+      IF (v_old -> k) IS DISTINCT FROM (v_new -> k) THEN
+        v_o := v_o || jsonb_build_object(k, v_old -> k);
+        v_n := v_n || jsonb_build_object(k, v_new -> k);
+      END IF;
+    END LOOP;
+    IF v_n = '{}'::jsonb THEN
+      RETURN NULL;  -- nothing meaningful changed
+    END IF;
+    v_old := v_o;
+    v_new := v_n;
+  END IF;
+
+  INSERT INTO public.audit_log (table_name, row_id, action, changed_by, changed_via, old_data, new_data)
+  VALUES (TG_TABLE_NAME, v_id, left(TG_OP, 1), v_uid, v_via, v_old, v_new);
+  RETURN NULL;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.audit_row_change() FROM PUBLIC, anon, authenticated;
+
+DO $$
+DECLARE t text;
+BEGIN
+  FOREACH t IN ARRAY ARRAY['clients', 'is_codes', 'is_code_files', 'test_parameters', 'products_services_master',
+                           'lab_settings', 'lab_letterheads', 'lab_prefixes', 'company_settings',
+                           'module_access_rules', 'user_profiles'] LOOP
+    IF to_regclass('public.' || t) IS NULL THEN
+      RAISE NOTICE 'S5: table public.% missing, audit trigger skipped', t;
+      CONTINUE;
+    END IF;
+    EXECUTE format('DROP TRIGGER IF EXISTS zz_audit_row_change ON public.%I', t);
+    EXECUTE format('CREATE TRIGGER zz_audit_row_change AFTER INSERT OR UPDATE OR DELETE ON public.%I FOR EACH ROW EXECUTE FUNCTION public.audit_row_change()', t);
+  END LOOP;
+END $$;
+
+-- =====================================================================
+-- 2) Archive (soft delete) + who-changed columns on the 4 masters
+--    archived_at IS NULL = active. archived_by / updated_by / created_by are set by trigger.
+-- =====================================================================
+CREATE OR REPLACE FUNCTION public.master_row_stamp()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+DECLARE v_uid uuid;
+BEGIN
+  BEGIN
+    v_uid := auth.uid();
+  EXCEPTION WHEN others THEN
+    v_uid := NULL;
+  END;
+  IF TG_OP = 'INSERT' THEN
+    NEW.created_by := COALESCE(NEW.created_by, v_uid);
+    IF NEW.archived_at IS NOT NULL THEN
+      NEW.archived_by := COALESCE(NEW.archived_by, v_uid);
+    END IF;
+    RETURN NEW;
+  END IF;
+  NEW.updated_at := now();
+  NEW.updated_by := COALESCE(v_uid, NEW.updated_by);
+  IF NEW.archived_at IS DISTINCT FROM OLD.archived_at THEN
+    NEW.archived_by := CASE WHEN NEW.archived_at IS NULL THEN NULL ELSE v_uid END;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.master_row_stamp() FROM PUBLIC, anon, authenticated;
+
+DO $$
+DECLARE t text;
+BEGIN
+  FOREACH t IN ARRAY ARRAY['clients', 'is_codes', 'test_parameters', 'products_services_master'] LOOP
+    IF to_regclass('public.' || t) IS NULL THEN
+      RAISE NOTICE 'S5: table public.% missing, archive columns skipped', t;
+      CONTINUE;
+    END IF;
+    EXECUTE format('ALTER TABLE public.%I
+                      ADD COLUMN IF NOT EXISTS created_by  uuid,
+                      ADD COLUMN IF NOT EXISTS updated_at  timestamptz DEFAULT now(),
+                      ADD COLUMN IF NOT EXISTS updated_by  uuid,
+                      ADD COLUMN IF NOT EXISTS archived_at timestamptz,
+                      ADD COLUMN IF NOT EXISTS archived_by uuid', t);
+    EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON public.%I (archived_at) WHERE archived_at IS NOT NULL', t || '_archived_at_idx', t);
+    EXECUTE format('DROP TRIGGER IF EXISTS master_row_stamp ON public.%I', t);
+    EXECUTE format('CREATE TRIGGER master_row_stamp BEFORE INSERT OR UPDATE ON public.%I FOR EACH ROW EXECUTE FUNCTION public.master_row_stamp()', t);
+    EXECUTE format('COMMENT ON COLUMN public.%I.archived_at IS %L', t, 'S5: NULL = active; set = archived (hidden from lists, restorable).');
+  END LOOP;
+END $$;
+
+-- =====================================================================
+-- 3) FK safety: a client / IS code that BIS records point to can no longer be
+--    deleted silently (CASCADE wiped surveillance/SFR rows; SET NULL orphaned licences).
+--    Finance/quotation/legacy FKs are left for F1; delete_master_rows() refuses them anyway.
+-- =====================================================================
+DO $$
+DECLARE
+  s   text[];
+  pairs text[][] := ARRAY[
+    ARRAY['license_surveillance',       'client_id',  'clients'],
+    ARRAY['bis_sample_failure_replies', 'client_id',  'clients'],
+    ARRAY['bis_projects',               'client_id',  'clients'],
+    ARRAY['bis_projects',               'is_code_id', 'is_codes'],
+    ARRAY['bis_new_applications',       'client_id',  'clients'],
+    ARRAY['bis_new_applications',       'is_code_id', 'is_codes'],
+    ARRAY['bis_renewal_applications',   'client_id',  'clients']
+  ];
+  v_con text;
+BEGIN
+  FOREACH s SLICE 1 IN ARRAY pairs LOOP
+    IF to_regclass('public.' || s[1]) IS NULL OR to_regclass('public.' || s[3]) IS NULL THEN
+      RAISE NOTICE 'S5: %.% skipped (table missing)', s[1], s[2];
+      CONTINUE;
+    END IF;
+    SELECT c.conname INTO v_con
+      FROM pg_constraint c
+      JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = c.conkey[1]
+     WHERE c.contype = 'f'
+       AND c.conrelid = ('public.' || s[1])::regclass
+       AND c.confrelid = ('public.' || s[3])::regclass
+       AND array_length(c.conkey, 1) = 1
+       AND a.attname = s[2]
+       AND c.confdeltype <> 'r'
+     LIMIT 1;
+    IF v_con IS NULL THEN
+      CONTINUE;  -- already RESTRICT (or no FK): nothing to do
+    END IF;
+    EXECUTE format('ALTER TABLE public.%I DROP CONSTRAINT %I', s[1], v_con);
+    EXECUTE format('ALTER TABLE public.%I ADD CONSTRAINT %I FOREIGN KEY (%I) REFERENCES public.%I(id) ON DELETE RESTRICT NOT VALID',
+                   s[1], v_con, s[2], s[3]);
+    EXECUTE format('ALTER TABLE public.%I VALIDATE CONSTRAINT %I', s[1], v_con);
+    v_con := NULL;
+  END LOOP;
+END $$;
+
+-- =====================================================================
+-- 4) Reference counts + safe permanent delete (admin only)
+-- =====================================================================
+CREATE OR REPLACE FUNCTION public.master_reference_counts(p_table text, p_ids uuid[])
+RETURNS TABLE (row_id uuid, ref_table text, ref_count bigint)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE c record;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'Not signed in' USING ERRCODE = '42501';
+  END IF;
+  IF p_table IS NULL OR p_table NOT IN ('clients', 'is_codes', 'test_parameters', 'products_services_master') THEN
+    RAISE EXCEPTION 'Not a master table: %', p_table USING ERRCODE = '22023';
+  END IF;
+  FOR c IN
+    SELECT con.conrelid::regclass::text AS child, a.attname AS col
+      FROM pg_constraint con
+      JOIN pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = con.conkey[1]
+     WHERE con.contype = 'f'
+       AND con.confrelid = ('public.' || p_table)::regclass
+       AND array_length(con.conkey, 1) = 1
+       AND NOT (p_table = 'is_codes' AND con.conrelid = 'public.is_code_files'::regclass)
+  LOOP
+    RETURN QUERY EXECUTE format(
+      'SELECT %I::uuid, %L::text, count(*)::bigint FROM %s WHERE %I = ANY ($1) GROUP BY 1',
+      c.col, c.child, c.child, c.col) USING p_ids;
+  END LOOP;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.delete_master_rows(p_table text, p_ids uuid[])
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_blocked jsonb;
+  v_ok      uuid[];
+  v_paths   text[];
+  v_deleted uuid[];
+BEGIN
+  IF auth.uid() IS NULL OR NOT public.app_is_admin() THEN
+    RAISE EXCEPTION 'Only Laboratory Director/Admin can permanently delete records.' USING ERRCODE = '42501';
+  END IF;
+  IF p_table IS NULL OR p_table NOT IN ('clients', 'is_codes', 'test_parameters', 'products_services_master') THEN
+    RAISE EXCEPTION 'Not a master table: %', p_table USING ERRCODE = '22023';
+  END IF;
+  IF p_ids IS NULL OR cardinality(p_ids) = 0 THEN
+    RETURN jsonb_build_object('deleted', '[]'::jsonb, 'blocked', '[]'::jsonb, 'storage_paths', '[]'::jsonb);
+  END IF;
+
+  SELECT COALESCE(jsonb_agg(jsonb_build_object('id', b.row_id, 'refs', b.refs)), '[]'::jsonb)
+    INTO v_blocked
+    FROM (SELECT r.row_id, jsonb_object_agg(r.ref_table, r.ref_count) AS refs
+            FROM public.master_reference_counts(p_table, p_ids) r
+           WHERE r.ref_count > 0
+           GROUP BY r.row_id) b;
+
+  SELECT array_agg(x) INTO v_ok
+    FROM unnest(p_ids) AS x
+   WHERE NOT EXISTS (SELECT 1 FROM jsonb_array_elements(v_blocked) e WHERE (e ->> 'id')::uuid = x);
+
+  IF v_ok IS NOT NULL THEN
+    IF p_table = 'is_codes' THEN
+      SELECT array_agg(f.storage_path) INTO v_paths
+        FROM public.is_code_files f
+       WHERE f.is_code_id = ANY (v_ok) AND COALESCE(f.storage_path, '') <> '';
+    END IF;
+    EXECUTE format('WITH d AS (DELETE FROM public.%I WHERE id = ANY ($1) RETURNING id) SELECT array_agg(id) FROM d', p_table)
+      INTO v_deleted USING v_ok;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'deleted',       COALESCE(to_jsonb(v_deleted), '[]'::jsonb),
+    'blocked',       v_blocked,
+    'storage_paths', COALESCE(to_jsonb(v_paths), '[]'::jsonb));
+END;
+$$;
+
+-- =====================================================================
+-- 5) Legacy role cleanup (MST-86): one admin definition everywhere
+-- =====================================================================
+CREATE OR REPLACE FUNCTION public.current_user_is_admin()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT public.app_is_admin();
+$$;
+COMMENT ON FUNCTION public.current_user_is_admin() IS 'LEGACY alias (old Consultancy Pro). S5: now delegates to public.app_is_admin().';
+
+-- Old Consultancy Pro tables (no code reads or writes them): read-only for staff, admin-only writes.
+DO $$
+DECLARE t text; p record;
+BEGIN
+  FOREACH t IN ARRAY ARRAY['app_dropdown_options', 'company_notes', 'company_scope_of_work', 'company_terms',
+                           'iso_projects', 'project_documents', 'service_offerings', 'product_master_items'] LOOP
+    IF to_regclass('public.' || t) IS NULL THEN
+      CONTINUE;
+    END IF;
+    FOR p IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = t LOOP
+      EXECUTE format('DROP POLICY %I ON public.%I', p.policyname, t);
+    END LOOP;
+    EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t);
+    EXECUTE format('CREATE POLICY %I ON public.%I FOR SELECT TO authenticated USING (true)', t || '_select', t);
+    EXECUTE format('CREATE POLICY %I ON public.%I FOR INSERT TO authenticated WITH CHECK ((SELECT public.app_is_admin()))', t || '_insert', t);
+    EXECUTE format('CREATE POLICY %I ON public.%I FOR UPDATE TO authenticated USING ((SELECT public.app_is_admin())) WITH CHECK ((SELECT public.app_is_admin()))', t || '_update', t);
+    EXECUTE format('CREATE POLICY %I ON public.%I FOR DELETE TO authenticated USING ((SELECT public.app_is_admin()))', t || '_delete', t);
+    EXECUTE format('COMMENT ON TABLE public.%I IS %L', t, 'LEGACY (old Consultancy Pro) — not used by the app. S5: admin-only writes.');
+  END LOOP;
+  IF to_regclass('public.profiles') IS NOT NULL THEN
+    COMMENT ON TABLE public.profiles IS 'LEGACY (old Consultancy Pro) — the app uses public.user_profiles. Do not use.';
+  END IF;
+END $$;
+
+-- =====================================================================
+-- 6) Privilege hygiene (MST-06):
+--    anon keeps ONLY the two public website RPCs. No table/sequence grants.
+--    TRUNCATE/REFERENCES/TRIGGER (TRUNCATE bypasses RLS) removed from anon/authenticated.
+--    Future objects created by supabase_admin/postgres in public no longer auto-grant anon.
+-- =====================================================================
+REVOKE ALL ON ALL TABLES IN SCHEMA public FROM anon;
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM anon;
+REVOKE TRUNCATE, REFERENCES, TRIGGER ON ALL TABLES IN SCHEMA public FROM authenticated;
+
+DO $$
+DECLARE f record;
+BEGIN
+  FOR f IN
+    SELECT p.oid::regprocedure AS sig, p.proname, p.prorettype = 'trigger'::regtype AS is_trigger
+      FROM pg_proc p
+     WHERE p.pronamespace = 'public'::regnamespace
+       AND p.prokind IN ('f', 'p')
+       AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.objid = p.oid AND d.deptype = 'e')
+  LOOP
+    IF f.proname IN ('get_public_company_brand', 'get_public_website_content') THEN
+      EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO anon, authenticated, service_role', f.sig);
+      CONTINUE;
+    END IF;
+    IF NOT f.is_trigger
+       AND f.proname NOT IN ('user_profiles_sync_auth_ban', 'audit_row_change', 'master_row_stamp') THEN
+      EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO authenticated, service_role', f.sig);
+    END IF;
+    EXECUTE format('REVOKE EXECUTE ON FUNCTION %s FROM PUBLIC, anon', f.sig);
+  END LOOP;
+END $$;
+
+DO $$
+DECLARE r text;
+BEGIN
+  FOREACH r IN ARRAY ARRAY['supabase_admin', 'postgres'] LOOP
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) THEN
+      CONTINUE;
+    END IF;
+    EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public REVOKE ALL ON TABLES FROM anon', r);
+    EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public REVOKE ALL ON SEQUENCES FROM anon', r);
+    EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public REVOKE ALL ON FUNCTIONS FROM anon', r);
+    EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public REVOKE TRUNCATE, REFERENCES, TRIGGER ON TABLES FROM authenticated', r);
+  END LOOP;
+END $$;
+-- NOTE: PostgreSQL still grants EXECUTE on NEW functions to PUBLIC by default.
+-- Every future SECURITY DEFINER function must end with:
+--   REVOKE ALL ON FUNCTION ... FROM PUBLIC, anon; GRANT EXECUTE ON FUNCTION ... TO authenticated, service_role;
+
+NOTIFY pgrst, 'reload schema';
+
+-- =====================================================================
+-- MANUAL TEST (psql against POSTGRES_URL; everything is rolled back)
+-- <IE_UID> = a non-admin user id, <ADMIN_UID> = an admin user id
+-- =====================================================================
+-- BEGIN;
+--   SET LOCAL ROLE anon;
+--   SAVEPOINT a; SELECT count(*) FROM public.clients;                 -- expect: permission denied
+--   ROLLBACK TO SAVEPOINT a;
+--   SELECT company_name FROM public.get_public_company_brand();        -- expect 1 row
+--   RESET ROLE;
+--   SET LOCAL ROLE authenticated;
+--   SELECT set_config('request.jwt.claims', '{"sub":"<IE_UID>","role":"authenticated"}', true);
+--   UPDATE public.clients SET remark = 'S5 manual test'
+--    WHERE id = (SELECT id FROM public.clients ORDER BY company_name LIMIT 1) RETURNING updated_by;  -- expect <IE_UID>
+--   UPDATE public.clients SET archived_at = now()
+--    WHERE id = (SELECT id FROM public.clients ORDER BY company_name LIMIT 1) RETURNING archived_by;  -- expect <IE_UID>
+--   SELECT count(*) FROM public.audit_log;                              -- expect 0 (admin only)
+--   SAVEPOINT b; SELECT public.delete_master_rows('clients', ARRAY[gen_random_uuid()]);  -- expect: Only Laboratory Director/Admin
+--   ROLLBACK TO SAVEPOINT b;
+--   SELECT set_config('request.jwt.claims', '{"sub":"<ADMIN_UID>","role":"authenticated"}', true);
+--   SELECT action, changed_by, new_data FROM public.audit_log ORDER BY id DESC LIMIT 3;  -- expect the 2 updates above
+--   SELECT public.delete_master_rows('clients',
+--     ARRAY(SELECT client_id FROM public.bis_projects WHERE client_id IS NOT NULL LIMIT 1));  -- expect deleted [], blocked [{refs:{bis_projects:n}}]
+--   RESET ROLE;
+-- ROLLBACK;
+===================================================================== (end of migration file)
+
+=====================================================================
+PART B — Archive / Restore / Delete permanently (frontend/web/src/features/masters)
+=====================================================================
+Line numbers are from HEAD 4f3a10d. Re-check them before editing.
+
+B0. Row types: add `archived_at?: string | null` to
+    - ClientRow (clients/types.ts)
+    - IsCodeRow (is-codes/types.ts)
+    - TestParameterRow (test-parameter/types.ts)
+    - ProductServiceRow (products-services/types.ts)
+    In TestParameterMasterPage.tsx loadRows (253-~295), rows are mapped field by field: add
+    `archived_at: (r.archived_at ? String(r.archived_at) : null)`.
+    The other three pages use select('*') and pick the column up automatically.
+
+B1. In each page add `const [showArchived, setShowArchived] = useState(false)` and filter at the top of filteredRows:
+      const base = showArchived ? rows : rows.filter((r) => !r.archived_at)
+    - clients/ClientsMasterPage.tsx filteredRows ≈772
+    - is-codes/IsCodesMasterPage.tsx ≈374
+    - test-parameter/TestParameterMasterPage.tsx ≈458
+    - products-services/ProductsServicesMasterPage.tsx ≈289
+    Keep everything else in filteredRows as it is (search, sort, pagination use the filtered list).
+    In each table, show a small "Archived" badge (stone/grey) next to the main name cell when row.archived_at is set,
+    if that is a one-line change. Otherwise skip the badge.
+
+B2. Footer bars:
+    - clients/ClientsFooterBar.tsx
+    - is-codes/IsCodesFooterBar.tsx
+    - test-parameter/TestParameterFooterBar.tsx
+    - products-services/ProductsServicesFooterBar.tsx
+    Add optional props:
+      canEdit?: boolean
+      showArchived?: boolean
+      onToggleShowArchived?: () => void
+      onArchiveSelected?: () => void
+      onRestoreSelected?: () => void
+    Render, OUTSIDE <LaboratoryDirectorOnly>:
+      - a small "Show archived" checkbox/toggle (always visible when onToggleShowArchived is passed)
+      - an "Archive" button (lucide Archive icon), shown when canEdit; disabled when nothing is selected
+      - a "Restore" button (lucide ArchiveRestore icon), shown when canEdit && showArchived; disabled when nothing is selected
+    Inside <LaboratoryDirectorOnly>:
+      - rename the existing Delete button's text/title to "Delete permanently".
+
+B3. Handlers in each page (T = table name):
+    archive:
+      const { data, error } = await supabase.from(T).update({ archived_at: new Date().toISOString() })
+        .in('id', ids).is('archived_at', null).select('id')
+      - 0 rows → 'You do not have edit access (view-only).'
+      - otherwise → `Archived ${n}.`
+      - Clear the selection, reload (Clients: also call invalidateClientsCache()).
+    restore: same, with .update({ archived_at: null }).in('id', ids).not('archived_at', 'is', null) → `Restored ${n}.`
+    Confirm with window.confirm before archive. (Restore needs no confirm.)
+
+B4. "Delete permanently" goes through the RPC. Replace the direct deletes:
+    - ClientsMasterPage.tsx handleDeleteSelected 943-~985 (direct delete at 963)
+    - IsCodesMasterPage.tsx handleDeleteSelected 1102-~1150 (delete at 1111-1115)
+    - TestParameterMasterPage.tsx handleDeleteSelected 910-~930 (919) and handleDeleteRow 937-~955 (945)
+    - ProductsServicesMasterPage.tsx handleDeleteSelected 479-~495 (486)
+    Call:
+      const { data, error } = await supabase.rpc('delete_master_rows', { p_table: T, p_ids: ids })
+      if (error) throw error
+      const res = data as { deleted: string[]; blocked: { id: string; refs: Record<string, number> }[]; storage_paths: string[] }
+    Message:
+      `Deleted ${res.deleted.length}.`
+      If res.blocked.length > 0, append:
+        ` Not deleted (still used): ` + up to 5 entries like `${name} (bis_projects 2, test_parameters 23)` + ` — use Archive instead.`
+      Look up the name from the page's rows by id.
+    Update the confirm text: "Permanently delete N record(s)? Records still used elsewhere will be skipped. This cannot be undone."
+    IS codes:
+      - After the RPC, if res.storage_paths.length > 0 → supabase.storage.from(BUCKET).remove(res.storage_paths).
+        BUCKET is 'is-code-files', IsCodesMasterPage.tsx:31. On a remove error, show a warning; don't throw.
+      - DELETE the old post-delete block (≈1122-1135: select is_code_files … remove … delete is_code_files).
+        The RPC plus the FK CASCADE handle the DB rows.
+    Then clear the selection and reload (Clients: invalidateClientsCache()).
+    Wire the new props from each page into its footer bar:
+      canEdit, showArchived, onToggleShowArchived, onArchiveSelected, onRestoreSelected.
+
+=====================================================================
+PART C — view-only UI (S4 B4)
+=====================================================================
+C1. In each of the 4 pages add:
+      const canEdit = useCanEditCurrentModule()
+    (from '@/features/settings/module-access/useCanEditCurrentModule'). Define:
+      const VIEW_ONLY_MSG = 'View-only access — ask the Laboratory Director for Edit access.'
+C2. Hide the add buttons when !canEdit. Pass `canEdit` into each header bar and render the button only when it is true:
+    - "Add New Client": clients/ClientsHeaderBar.tsx:106-118
+    - IS codes "New": is-codes/IsCodesHeaderBar.tsx:~112-122
+    - products New: products-services/ProductsServicesHeaderBar.tsx:~97-107
+    - test-parameter/TestParameterHeaderBar.tsx onAddSymbol button ≈85-100
+C3. Guard the save/insert handlers. Start each with:
+      if (!canEdit) { setSaveMessage(VIEW_ONLY_MSG); return }
+    Handlers:
+    - ClientsMasterPage handleSave 693, handleImport 1028, and the master-option add/rename/delete handlers (~470-600)
+    - IsCodesMasterPage handleSave 1006, handleImport 1211, handleDeleteAspect 720, file upload (~740)
+    - TestParameterMasterPage handleInlineEditSave (~630), handleSaveIsCode 851, handleImport 1071, the add/insert
+      handler (~1148), handleDeleteIsAspect 828
+    - ProductsServicesMasterPage handleSave 412 and its import (~561)
+    Edit/Copy may still open the form so users can VIEW details. Save is what gets blocked.
+C4. Pass canEdit to the footer (Part B2), so Archive/Restore are hidden for view-only users.
+
+=====================================================================
+PART D — QE Assistant (frontend/web/src/components/qi-assistant + GlobalLayout + backend chat prompt)
+=====================================================================
+D1. Rename the user-visible "QI Assistant" to "QE Assistant". Identifiers and file names stay the same.
+    - components/qi-assistant/QiAssistant.tsx: line 52 (fallback title), 285 (welcome), 676/679 (button aria + label),
+      1070 (aria)
+    - components/qi-assistant/QiAssistantChatPanel.tsx: 32 (placeholder), 247
+    - components/qi-assistant/qiAssistantApi.ts: 86 (error text)
+    - features/settings/ai-settings/AiGeneralPanel.tsx: 243
+    - backend/services/functions/qiAssistant.mjs: 82, 141, 203 ("You are QE Assistant, …")
+    - lib/limsThemeUi.ts:47 is a comment; update it too.
+D2. Icon trigger (QiAssistant.tsx ≈656-668): add a title={`QE Assistant — ${pageTitle}`} to the icon Button, so the
+    ✨ icon has a tooltip. Change aria-label to `Open QE Assistant (${pageTitle})`.
+D3. Global entry point: components/layout/GlobalLayout.tsx header, right-hand group (≈line 695, just BEFORE the user
+    <DropdownMenu> at ≈696).
+    - Render:
+        <QiAssistant page="global" pageTitle={<current section label or 'Q Engineering'>}
+                     contextSummary={`The user is on the app route ${location.pathname}.`}
+                     triggerVariant="default" triggerClassName="h-8" />
+      (import from '@/components/qi-assistant/QiAssistant').
+    - The header is inside `export default function GlobalLayout()`, which already has `const location = useLocation()`
+      at line 422. Use that.
+    - Do NOT render it on /masters/clients, /masters/is-codes or /masters/test-parameter. Those pages already have the
+      contextual ✨ assistant.
+    - On narrow screens (< sm), use triggerVariant="icon" instead. Two conditional renders with Tailwind hidden/sm:flex
+      wrappers are fine.
+    - It already hides itself when Settings → AI → "Show / Hide All AI Buttons" is off (useShowAiAssistant).
+D4. Remove the false promises. The backend has no actions and no vision.
+    - QiAssistant.tsx ≈275-277: crudNote → always '' (keep the agentCrudEnabled state; only the text is removed).
+    - QiAssistant.tsx ≈271-273: imageNote → '' .
+    - clients/ClientsHeaderBar.tsx:100-101: remove `enableImageImport` and `imageAttachHint`, so the Clients assistant
+      no longer offers "attach business card".
+    - features/settings/ai-settings/AiGeneralPanel.tsx:240-245:
+      - label → "Allow QE Assistant to Edit Data (coming later)"
+      - ToggleRow (line 61) has no disabled prop: add an optional `disabled?: boolean`, pass it to the input, and use
+        disabled on this row.
+
+=====================================================================
+ORDER + STOP RULES (follow exactly)
+=====================================================================
+1. VERIFY (after Parts A–D are written, before anything touches the DB):
+     npm run typecheck   → must not exceed baseline 122 errors (no NEW errors in files you touched)
+     npm run lint        → must not exceed baseline 352 problems (no NEW problems in files you touched)
+     npm run build       → must succeed
+   If anything gets worse, fix it. If you cannot fix it, STOP: do not migrate, do not commit, REPORT.
+2. npm run db:migrate
+   - ONLY 20261008190000_s5_audit_archive_hygiene.sql may be applied. If any other file is attempted, or this file fails:
+     STOP. Do not commit. REPORT the full error output.
+3. git add ONLY these paths (whichever you actually changed):
+     backend/database/migrations/20261008190000_s5_audit_archive_hygiene.sql
+     backend/services/functions/qiAssistant.mjs
+     frontend/web/src/components/layout/GlobalLayout.tsx
+     frontend/web/src/components/qi-assistant/QiAssistant.tsx
+     frontend/web/src/components/qi-assistant/QiAssistantChatPanel.tsx
+     frontend/web/src/components/qi-assistant/qiAssistantApi.ts
+     frontend/web/src/lib/limsThemeUi.ts
+     frontend/web/src/features/settings/ai-settings/AiGeneralPanel.tsx
+     frontend/web/src/features/masters/clients/{ClientsMasterPage.tsx,ClientsFooterBar.tsx,ClientsHeaderBar.tsx,types.ts,ClientsTable.tsx}
+     frontend/web/src/features/masters/is-codes/{IsCodesMasterPage.tsx,IsCodesFooterBar.tsx,IsCodesHeaderBar.tsx,types.ts,IsCodesTable.tsx}
+     frontend/web/src/features/masters/test-parameter/{TestParameterMasterPage.tsx,TestParameterFooterBar.tsx,TestParameterHeaderBar.tsx,TestParameterTable.tsx,types.ts}
+     frontend/web/src/features/masters/products-services/{ProductsServicesMasterPage.tsx,ProductsServicesFooterBar.tsx,ProductsServicesHeaderBar.tsx,ProductsServicesTable.tsx,types.ts}
+   (List the files explicitly, without brace expansion if your shell doesn't support it. Table files only if you added
+   the badge.)
+   Run `git status --short` and confirm nothing else is staged (docs/prompts/ must stay untracked).
+4. git commit -m "S5: audit log, archive/restore + safe permanent delete for masters, BIS FK safety, view-only UI, anon/default-privilege hygiene, legacy admin alias, QE Assistant global entry"
+5. git push origin main
+6. REPORT (below).
+
+=====================================================================
+REPORT (paste back)
+=====================================================================
+- typecheck / lint / build numbers vs baseline (122 / 352 / ok)
+- db:migrate output (files applied; NOTICE lines)
+- commit hash, push result
+- changed files, 1 line each
+- anything skipped (badge, toggle disabled, mobile icon variant) and why
+
+=====================================================================
+POST-DEPLOY CHECKS FOR AMIT (after Railway redeploys frontend + functions)
+=====================================================================
+1. Admin → Masters → Clients:
+   - select a test client → Archive → it disappears
+   - tick "Show archived" → it is back with the badge → Restore
+2. Admin → "Delete permanently" on a client that has BIS projects → message "Not deleted (still used): … bis_projects N
+   — use Archive instead". On a brand-new test client → deleted.
+3. IS Codes: create a test IS, upload a PDF, Delete permanently → the row is gone AND the PDF is gone from storage
+   (re-open: no file).
+4. IE with View on /masters/clients:
+   - no "Add New Client", no Archive button
+   - Save shows "View-only access…"
+   Set it back to Edit → buttons return.
+5. IE with Edit: Archive/Restore works; "Delete permanently" is hidden.
+6. A QE Assistant button is visible in the top header on Dashboard / BIS / Help.
+   - It opens a chat and answers.
+   - On Clients/IS Codes/Test Parameter, the ✨ icon shows the tooltip "QE Assistant — …".
+   - Settings → AI → "Show / Hide All AI Buttons" off → all assistant buttons disappear.
+7. Logged-out home page (/home) and the login page still show the logo/website content.
+8. (SQL, read-only, for whoever verifies)
+     select table_name, action, changed_by, changed_at from public.audit_log order by id desc limit 20;
+   → shows the actions above, with the user ids.

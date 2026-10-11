@@ -29,7 +29,10 @@ export function ClientManageDialogContent({
   canDelete,
   onDelete,
   getEditValue,
+  inlineAdd = false,
+  onInlineAdd,
   layer = 'stacked',
+  message,
 }: {
   open: boolean
   title: string
@@ -46,8 +49,12 @@ export function ClientManageDialogContent({
   canDelete: (item: ManageItem) => boolean
   onDelete: (id: string) => void
   getEditValue?: (item: ManageItem) => string
+  /** Button on the right end of the name field. Adds without closing. */
+  inlineAdd?: boolean
+  onInlineAdd?: () => void
   /** Raise above an already-open parent dialog (Allot Tests → Add Test Parameter, etc.) */
   layer?: 'default' | 'nested' | 'stacked' | 'top'
+  message?: string | null
 }) {
   const [editingId, setEditingId] = useState<string | null>(null)
 
@@ -83,14 +90,44 @@ export function ClientManageDialogContent({
           <Label htmlFor={inputId} className="text-[11px] font-semibold uppercase tracking-wide text-stone-600">
             {fieldLabel}
           </Label>
-          <Input
-            id={inputId}
-            inputMode={inputMode}
-            placeholder={placeholder}
-            value={value}
-            onChange={(e) => onValueChange(e.target.value)}
-            className={clientFieldClass}
-          />
+          {inlineAdd ? (
+            <div className="flex h-8 min-w-0 items-stretch overflow-hidden rounded-none border border-stone-500 bg-stone-50 focus-within:border-amber-600 focus-within:bg-white focus-within:ring-2 focus-within:ring-amber-500/20">
+              <Input
+                id={inputId}
+                inputMode={inputMode}
+                placeholder={placeholder}
+                value={value}
+                onChange={(e) => onValueChange(e.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter' || saveDisabled) return
+                  event.preventDefault()
+                  if (editingId) onUpdate(editingId)
+                  else (onInlineAdd ?? onSave)()
+                }}
+                className="h-full min-w-0 flex-1 rounded-none border-0 bg-transparent px-3 shadow-none focus-visible:ring-0"
+              />
+              <button
+                type="button"
+                className="inline-flex h-full shrink-0 items-center border-l border-stone-500 bg-amber-700 px-3 text-sm font-semibold text-white hover:bg-amber-800 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={saveDisabled}
+                onClick={() => {
+                  if (editingId) onUpdate(editingId)
+                  else (onInlineAdd ?? onSave)()
+                }}
+              >
+                Add
+              </button>
+            </div>
+          ) : (
+            <Input
+              id={inputId}
+              inputMode={inputMode}
+              placeholder={placeholder}
+              value={value}
+              onChange={(e) => onValueChange(e.target.value)}
+              className={clientFieldClass}
+            />
+          )}
         </div>
         <div>
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-stone-600">Existing</p>
@@ -108,19 +145,21 @@ export function ClientManageDialogContent({
                         document.getElementById(inputId)?.focus()
                       })
                     }}
-                    className="text-amber-800 hover:text-amber-950"
+                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-none border border-amber-700 bg-white p-0 text-amber-800 hover:bg-amber-50 hover:text-amber-950"
                     aria-label={`Edit ${item.label}`}
+                    title="Edit"
                   >
-                    <Pencil size={14} />
+                    <Pencil size={15} aria-hidden />
                   </button>
                   {canDelete(item) ? (
                     <button
                       type="button"
                       onClick={() => onDelete(item.id)}
-                      className="text-red-600 hover:text-red-800"
+                      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-none border border-red-600 bg-white p-0 text-red-700 hover:bg-red-50 hover:text-red-800"
                       aria-label={`Delete ${item.label}`}
+                      title="Delete"
                     >
-                      <Trash2 size={14} />
+                      <Trash2 size={15} aria-hidden />
                     </button>
                   ) : null}
                 </div>
@@ -128,21 +167,24 @@ export function ClientManageDialogContent({
             ))}
           </div>
         </div>
+        {message ? <p className="text-xs text-red-700" role="alert">{message}</p> : null}
       </div>
 
-      <DialogFooter className="border-t border-stone-200 bg-stone-50 px-4 py-3 sm:justify-end">
-        <Button
-          type="button"
-          className={clientPrimaryBtnClass}
-          onClick={() => {
-            if (editingId) onUpdate(editingId)
-            else onSave()
-          }}
-          disabled={saveDisabled}
-        >
-          Save & Close
-        </Button>
-      </DialogFooter>
+      {inlineAdd ? null : (
+        <DialogFooter className="border-t border-stone-200 bg-stone-50 px-4 py-3 sm:justify-end">
+          <Button
+            type="button"
+            className={clientPrimaryBtnClass}
+            onClick={() => {
+              if (editingId) onUpdate(editingId)
+              else onSave()
+            }}
+            disabled={saveDisabled}
+          >
+            Save & Close
+          </Button>
+        </DialogFooter>
+      )}
     </DialogContent>
   )
 }

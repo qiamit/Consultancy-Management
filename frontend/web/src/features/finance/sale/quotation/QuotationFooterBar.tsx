@@ -17,6 +17,7 @@ export function QuotationFooterBar({
   selectedCount,
   page,
   pageCount,
+  showTemplates = true,
   onTemplates,
   onExport,
   onPrintSelected,
@@ -32,6 +33,7 @@ export function QuotationFooterBar({
   selectedCount: number
   page: number
   pageCount: number
+  showTemplates?: boolean
   onTemplates: () => void
   onExport?: () => void
   onPrintSelected: () => void
@@ -53,18 +55,20 @@ export function QuotationFooterBar({
 
         <div className="relative flex min-w-0 flex-nowrap items-center gap-1 overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch] sm:gap-1.5 md:gap-2.5">
           <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className={actionBtnClass}
-              onClick={onTemplates}
-              disabled={loading}
-              title="Templates"
-            >
-              <LayoutTemplate size={14} />
-              <span className="hidden md:inline">Templates</span>
-            </Button>
+            {showTemplates ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className={actionBtnClass}
+                onClick={onTemplates}
+                disabled={loading}
+                title="Templates"
+              >
+                <LayoutTemplate size={14} />
+                <span className="hidden md:inline">Templates</span>
+              </Button>
+            ) : null}
             {onExport ? (
               <Button
                 type="button"

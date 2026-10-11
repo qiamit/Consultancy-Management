@@ -115,7 +115,7 @@ export function FilterCombobox({
   onInputFocus,
   multiline = false,
   rows = 2,
-  showSerialNumbers = true,
+  showSerialNumbers = false,
   matchCount,
 }: {
   value: string
@@ -143,6 +143,7 @@ export function FilterCombobox({
   matchCount?: number
 }) {
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
   const selectingRef = useRef(false)
   const [highlightIndex, setHighlightIndex] = useState(-1)
   const [dropdownPosition, setDropdownPosition] = useState<DropdownPosition | null>(null)
@@ -230,7 +231,11 @@ export function FilterCombobox({
 
     updateDropdownPosition()
 
-    const handleReposition = () => updateDropdownPosition()
+    const handleReposition = (event: Event) => {
+      const target = event.target
+      if (target instanceof Node && dropdownRef.current?.contains(target)) return
+      updateDropdownPosition()
+    }
     window.addEventListener('resize', handleReposition)
     window.addEventListener('scroll', handleReposition, true)
 
@@ -239,6 +244,22 @@ export function FilterCombobox({
       window.removeEventListener('scroll', handleReposition, true)
     }
   }, [showList, itemCount, dropdownPlacement, value])
+
+  useEffect(() => {
+    const node = dropdownRef.current
+    if (!node) return
+    // The list is portaled to document.body, outside the dialog scroll lock.
+    // Stop the wheel/touch here so react-remove-scroll does not cancel it.
+    const keepListScroll = (event: Event) => {
+      event.stopPropagation()
+    }
+    node.addEventListener('wheel', keepListScroll, { passive: true })
+    node.addEventListener('touchmove', keepListScroll, { passive: true })
+    return () => {
+      node.removeEventListener('wheel', keepListScroll)
+      node.removeEventListener('touchmove', keepListScroll)
+    }
+  }, [showList, dropdownPosition])
 
   const handleOptionPointerDown = (index: number) => (e: PointerEvent) => {
     e.preventDefault()
@@ -311,6 +332,7 @@ export function FilterCombobox({
 
   const dropdownList = showList && dropdownPosition ? (
     <div
+      ref={dropdownRef}
       {...{ [FILTER_COMBOBOX_DROPDOWN_ATTR]: '' }}
       className="pointer-events-auto fixed z-[10000] overflow-hidden rounded-none border-2 border-stone-600 bg-[#fffcf7] shadow-2xl ring-1 ring-amber-700/30"
       style={{

@@ -33,6 +33,7 @@ import {
   type BisPrintPageSize,
 } from '../print/bisDocumentPrintPageSettings'
 import { openPendingPrintWindow, openPrintHtml } from '../print/openPrintHtml'
+import { appendPrintHtmlDocument } from '../print/printDocumentShared'
 import {
   ALL_BIS_PRINT_KINDS,
   BIS_PRINT_DOCUMENT_LABEL,
@@ -50,7 +51,7 @@ import {
 import { buildMergedBisModulePdf } from './mergeBisProjectFilesPdf'
 import type { BisProjectRow } from './types'
 
-type PreviewSource = 'attachments' | 'generated'
+type PreviewSource = 'attachments' | 'generated' | 'application-pack'
 
 /**
  * Prefer merged module uploads when present.
@@ -65,6 +66,12 @@ function clampMm(raw: string, fallback: number, max = 40): number {
   const n = Number.parseFloat(raw)
   if (!Number.isFinite(n)) return fallback
   return Math.min(max, Math.max(0, Math.round(n * 10) / 10))
+}
+
+function applicationPdfBlob(bytes: Uint8Array): Blob {
+  const ownedBytes = new Uint8Array(bytes.byteLength)
+  ownedBytes.set(bytes)
+  return new Blob([ownedBytes.buffer], { type: 'application/pdf' })
 }
 
 function SettingToggle({
@@ -133,6 +140,7 @@ export function BisDocumentPrintPreviewDialog({
     originY: number
   } | null>(null)
   const [baseHtml, setBaseHtml] = useState<string | null>(null)
+  const [locationMapHtml, setLocationMapHtml] = useState<string | null>(null)
   const [pdfUrl, setPdfUrl] = useState<string | null>(null)
   const [previewSource, setPreviewSource] = useState<PreviewSource | null>(null)
   const [loading, setLoading] = useState(false)
@@ -168,6 +176,7 @@ export function BisDocumentPrintPreviewDialog({
       }
       pendingSaveRef.current = null
       setBaseHtml(null)
+      setLocationMapHtml(null)
       revokePdfUrl()
       setPreviewSource(null)
       setError(null)
@@ -190,6 +199,7 @@ export function BisDocumentPrintPreviewDialog({
     setLoading(true)
     setError(null)
     setBaseHtml(null)
+    setLocationMapHtml(null)
     setPreviewSource(null)
     revokePdfUrl()
 
@@ -230,12 +240,24 @@ export function BisDocumentPrintPreviewDialog({
           throw new Error('Project is required for preview.')
         }
 
+        if (kind === 'application-details') {
+          const [applicationHtml, mapHtml] = await Promise.all([
+            buildBisDocumentHtml(row, 'application-details'),
+            buildBisDocumentHtml(row, 'location-map'),
+          ])
+          if (cancelled) return
+          setBaseHtml(applicationHtml)
+          setLocationMapHtml(mapHtml)
+          setPreviewSource('application-pack')
+          return
+        }
+
         // 1) Prefer attached module files when present.
         if (canTryAttachedFiles(kind)) {
           try {
             const bytes = await buildMergedBisModulePdf(row.id, printKindToStorageDocKind(kind))
             if (cancelled) return
-            const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }))
+            const url = URL.createObjectURL(applicationPdfBlob(bytes))
             pdfUrlRef.current = url
             setPdfUrl(url)
             setPreviewSource('attachments')
@@ -338,10 +360,18 @@ export function BisDocumentPrintPreviewDialog({
     }
   }, [settingsFormOpen])
 
-  const previewHtml = useMemo(() => {
+  const combinedHtml = useMemo(() => {
     if (!baseHtml) return null
-    return applyBisDocumentPrintPageSettings(baseHtml, settings)
-  }, [baseHtml, settings])
+    if (kind === 'application-details' && locationMapHtml) {
+      return appendPrintHtmlDocument(baseHtml, locationMapHtml)
+    }
+    return baseHtml
+  }, [baseHtml, kind, locationMapHtml])
+
+  const previewHtml = useMemo(() => {
+    if (!combinedHtml) return null
+    return applyBisDocumentPrintPageSettings(combinedHtml, settings)
+  }, [combinedHtml, settings])
 
   const hasPreview = Boolean(pdfUrl || previewHtml)
 
@@ -456,6 +486,11 @@ export function BisDocumentPrintPreviewDialog({
                   Generated document
                 </span>
               ) : null}
+              {previewSource === 'application-pack' ? (
+                <span className="rounded-none border border-amber-400/50 bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-100">
+                  Application Pack
+                </span>
+              ) : null}
             </DialogTitle>
           </DialogHeader>
         </div>
@@ -465,9 +500,6 @@ export function BisDocumentPrintPreviewDialog({
             <div className="space-y-1">
               <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-stone-600">
                 Page &amp; Print Settings
-              </p>
-              <p className="text-[10px] leading-snug text-stone-500">
-                Applies to all modules in this Application / Licence.
               </p>
             </div>
 

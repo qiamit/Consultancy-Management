@@ -25,6 +25,7 @@ import {
   HelpRoute,
   IsCodesPage,
   LaboratoriesRoute,
+  BisBranchOfficesRoute,
   LabSettingsRoute,
   LicenseStopMarkingRoute,
   ModuleAccessRoute,
@@ -34,6 +35,19 @@ import {
   SaleInvoiceRoute,
   SalePaymentReceiptRoute,
   SaleProformaInvoiceRoute,
+  PurchaseBillRoute,
+  PaymentMadeRoute,
+  DebitNoteRoute,
+  PurchaseOrderRoute,
+  RefundRoute,
+  SalesDebitNoteRoute,
+  ExpenseRoute,
+  LedgerRoute,
+  InventoryRoute,
+  AccountsRoute,
+  JournalRoute,
+  StatementsRoute,
+  ReportsRoute,
   SaleQuotationRoute,
   TestParameterPage,
   UserManagementRoute,
@@ -72,12 +86,26 @@ export default function App() {
           <Route path="/masters/product-services" element={<ProductServicesPage />} />
           <Route path="/masters/test-parameter" element={<TestParameterPage />} />
           <Route path="/masters/laboratories" element={<LaboratoriesRoute />} />
+          <Route path="/masters/bis-branch-offices" element={<BisBranchOfficesRoute />} />
 
           <Route path="/finance/sale/quotation" element={<SaleQuotationRoute />} />
           <Route path="/finance/sale/proforma-invoice" element={<SaleProformaInvoiceRoute />} />
           <Route path="/finance/sale/invoice" element={<SaleInvoiceRoute />} />
           <Route path="/finance/sale/credit-note" element={<SaleCreditNoteRoute />} />
           <Route path="/finance/sale/payment-receipt" element={<SalePaymentReceiptRoute />} />
+          <Route path="/finance/purchase/bill" element={<PurchaseBillRoute />} />
+          <Route path="/finance/purchase/payment" element={<PaymentMadeRoute />} />
+          <Route path="/finance/purchase/debit-note" element={<DebitNoteRoute />} />
+          <Route path="/finance/purchase/order" element={<PurchaseOrderRoute />} />
+          <Route path="/finance/sale/refund" element={<RefundRoute />} />
+          <Route path="/finance/sale/debit-note" element={<SalesDebitNoteRoute />} />
+          <Route path="/finance/expense" element={<ExpenseRoute />} />
+          <Route path="/finance/ledger" element={<LedgerRoute />} />
+          <Route path="/finance/inventory" element={<InventoryRoute />} />
+          <Route path="/finance/accounts" element={<AccountsRoute />} />
+          <Route path="/finance/journal" element={<JournalRoute />} />
+          <Route path="/finance/statements" element={<StatementsRoute />} />
+          <Route path="/finance/reports" element={<ReportsRoute />} />
 
           <Route path="/tools/email" element={<EmailToolsRoute />} />
           <Route path="/tools/cms" element={<CmsToolsRoute />} />

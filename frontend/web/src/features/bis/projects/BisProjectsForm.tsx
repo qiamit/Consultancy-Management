@@ -1,21 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { Calendar, ChevronDown, ClipboardCopy, Eye, Mail, Printer } from 'lucide-react'
-import { toast } from 'sonner'
-import { useIsLaboratoryDirector } from '@/components/lims/LaboratoryDirectorOnly'
+import { Calendar } from 'lucide-react'
 import { LimsFieldAddButton, LimsFieldWithAdd } from '@/components/lims/LimsFieldWithAdd'
-import { listBisOffices, listCertificationSchemes, listLicenceStatuses, type BisReferenceRow } from './bisReferenceApi'
-import { listClientSites } from '@/features/masters/clients/clientsApi'
-import type { ClientSiteForm } from '@/features/masters/clients/types'
 import { AddClientDialog } from '@/features/sample-handling/receiving/AddClientDialog'
 import { supabase } from '@/lib/supabaseClient'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import {
-  BIS_PRINT_DOCUMENT_LABEL,
-  EXTRA_PRINT_KINDS,
-  MORE_PRINTS_TOOLTIP,
-  type BisPrintDocumentKind } from '../print/printBisDocument'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -34,14 +23,12 @@ import {
   limsDarkBarGlowStyle,
   limsDialogClass,
   limsFieldAddBtnClass,
-  limsOutlineBtnClass,
   limsPrimaryBtnClass,
   limsRegistryFormClass,
 } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { fetchEmployeeNames } from '../shared/bisLookupApi'
 import { searchClientOptions, searchIsCodeOptions } from './bisProjectsApi'
-import { revealPortalPassword } from './bisPortalSecretApi'
 import { LicenseScopeFields } from './LicenseScopeFields'
 import {
   BIS_BILLING_FREQUENCIES,
@@ -144,18 +131,12 @@ export function BisProjectsForm({
   open,
   onOpenChange,
   editing,
-  projectId = null,
   form,
   onChange,
   canSave,
   saving,
   errorMessage,
   onSave,
-  onPrintForm1,
-  onPrintAuthLetter,
-  onPrintDocument,
-  onEmailDocument,
-  printBusy = false,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -167,11 +148,6 @@ export function BisProjectsForm({
   saving: boolean
   errorMessage: string | null
   onSave: () => void
-  onPrintForm1?: () => void
-  onPrintAuthLetter?: () => void
-  onPrintDocument?: (kind: BisPrintDocumentKind) => void
-  onEmailDocument?: (kind: BisPrintDocumentKind) => void
-  printBusy?: boolean
 }) {
   const frequencyOptions: string[] = BIS_BILLING_FREQUENCIES.includes(
     form.billingFrequency as (typeof BIS_BILLING_FREQUENCIES)[number],
@@ -181,68 +157,6 @@ export function BisProjectsForm({
 
   const set = <K extends keyof BisProjectForm>(key: K, value: BisProjectForm[K]) =>
     onChange({ ...form, [key]: value })
-  const isAdmin = useIsLaboratoryDirector()
-  const [changingPassword, setChangingPassword] = useState(false)
-  const [revealedPassword, setRevealedPassword] = useState<string | null>(null)
-  const [revealSeconds, setRevealSeconds] = useState(0)
-  const passwordResetKey = `${open ? 'open' : 'closed'}:${projectId ?? ''}`
-  const [seenPasswordKey, setSeenPasswordKey] = useState(passwordResetKey)
-  if (seenPasswordKey !== passwordResetKey) {
-    setSeenPasswordKey(passwordResetKey)
-    setChangingPassword(false)
-    setRevealedPassword(null)
-    setRevealSeconds(0)
-  }
-  const savedPassword = Boolean(form.portalPasswordSet) && !form.clearPortalPassword
-  const showSavedBox = Boolean(projectId) && savedPassword && !changingPassword
-
-  useEffect(() => {
-    if (!revealedPassword) return
-    const id = window.setInterval(() => {
-      setRevealSeconds((seconds) => {
-        if (seconds <= 1) {
-          setRevealedPassword(null)
-          return 0
-        }
-        return seconds - 1
-      })
-    }, 1000)
-    return () => window.clearInterval(id)
-  }, [revealedPassword])
-
-  const passwordBtnClass = 'h-10 min-h-10 rounded-none border-stone-500 px-3'
-
-  const revealPassword = () => {
-    if (!projectId) return
-    void revealPortalPassword(projectId)
-      .then((value) => {
-        if (!value) {
-          toast.error('No password saved')
-          return
-        }
-        setRevealedPassword(value)
-        setRevealSeconds(20)
-      })
-      .catch((err: unknown) => {
-        toast.error(err instanceof Error ? err.message : 'No permission')
-      })
-  }
-
-  const copyPassword = () => {
-    if (!projectId) return
-    void revealPortalPassword(projectId)
-      .then(async (value) => {
-        if (!value) {
-          toast.error('No password saved')
-          return
-        }
-        await navigator.clipboard.writeText(value)
-        toast.success('Password copied')
-      })
-      .catch((err: unknown) => {
-        toast.error(err instanceof Error ? err.message : 'No permission')
-      })
-  }
 
   const isApplicationProject =
     form.projectKind.trim().toLowerCase() === 'application'
@@ -250,32 +164,8 @@ export function BisProjectsForm({
   const validityInputRef = useRef<HTMLInputElement | null>(null)
   const grantedInputRef = useRef<HTMLInputElement | null>(null)
   const [handledByOptions, setHandledByOptions] = useState<string[]>([DEFAULT_CASE_HANDLED_BY])
-  const [factorySites, setFactorySites] = useState<ClientSiteForm[]>([])
-  const [schemes, setSchemes] = useState<BisReferenceRow[]>([])
-  const [offices, setOffices] = useState<BisReferenceRow[]>([])
-  const [licenceStatuses, setLicenceStatuses] = useState<BisReferenceRow[]>([])
   const [addClientOpen, setAddClientOpen] = useState(false)
   const [addClientInitialName, setAddClientInitialName] = useState('')
-
-  useEffect(() => {
-    void Promise.all([listCertificationSchemes(), listBisOffices(), listLicenceStatuses()]).then(([nextSchemes, nextOffices, nextStatuses]) => {
-      setSchemes(nextSchemes)
-      setOffices(nextOffices)
-      setLicenceStatuses(nextStatuses)
-    })
-  }, [])
-
-  useEffect(() => {
-    const clientId = form.clientId
-    if (!clientId) return
-    let cancelled = false
-    void listClientSites(clientId).then((sites) => {
-      if (!cancelled) setFactorySites(sites.filter((site) => site.siteRole === 'Factory'))
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [form.clientId])
 
   const openAddClient = (typedName?: string) => {
     setAddClientInitialName((typedName ?? form.clientLabel).trim())
@@ -360,8 +250,10 @@ export function BisProjectsForm({
         aria-describedby={undefined}
         className={cn(
           limsDialogClass,
-          'max-h-[92vh] max-w-[51.2rem] bg-white',
-          'w-[min(51.2rem,calc(100vw-1.5rem))]',
+          '!flex z-50 h-[100dvh] max-h-[100dvh] translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 bg-white p-0 shadow-none sm:rounded-none',
+          'left-[var(--app-dialog-overlay-left,0px)] top-0 right-0 bottom-0',
+          'w-[calc(100vw-var(--app-dialog-overlay-left,0px))] max-w-none',
+          'border-stone-600 ring-1 ring-amber-700/20',
           '[&>button]:!rounded-none [&>button]:text-white [&>button]:opacity-100 [&>button]:hover:bg-white/10',
         )}
       >
@@ -461,20 +353,6 @@ export function BisProjectsForm({
                       }
                     />
                   </LimsFieldWithAdd>
-                  <Label htmlFor="bis-factory-site">Factory site</Label>
-                  <Select value={form.factorySiteId || 'none'} onValueChange={(v) => onChange({ ...form, factorySiteId: v === 'none' ? '' : v })}>
-                    <SelectTrigger id="bis-factory-site" className="h-10 min-h-10" aria-label="Factory site">
-                      <SelectValue placeholder="Factory site" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Not set</SelectItem>
-                      {factorySites.filter((site) => site.id).map((site) => (
-                        <SelectItem key={site.id} value={site.id!}>
-                          {site.address || site.district || 'Factory'}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
                 </div>
 
                 <div className="col-span-12 space-y-2 md:col-span-6">
@@ -491,51 +369,6 @@ export function BisProjectsForm({
                       onChange({ ...form, isCodeId: id, isCodeLabel: label })
                     }
                   />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-12 gap-4">
-                <div className="col-span-12 space-y-2 md:col-span-4">
-                  <Label htmlFor="bis-scheme">Certification scheme</Label>
-                  <Select value={form.certificationSchemeId || 'none'} onValueChange={(v) => onChange({ ...form, certificationSchemeId: v === 'none' ? '' : v })}>
-                    <SelectTrigger id="bis-scheme" className="h-10 min-h-10" aria-label="Certification scheme">
-                      <SelectValue placeholder="Scheme" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Not set</SelectItem>
-                      {schemes.map((row) => (
-                        <SelectItem key={row.id} value={row.id}>{row.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="col-span-12 space-y-2 md:col-span-4">
-                  <Label htmlFor="bis-office">BIS office</Label>
-                  <Select value={form.bisOfficeId || 'none'} onValueChange={(v) => onChange({ ...form, bisOfficeId: v === 'none' ? '' : v })}>
-                    <SelectTrigger id="bis-office" className="h-10 min-h-10" aria-label="BIS office">
-                      <SelectValue placeholder="Office" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Not set</SelectItem>
-                      {offices.map((row) => (
-                        <SelectItem key={row.id} value={row.id}>{row.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="col-span-12 space-y-2 md:col-span-4">
-                  <Label htmlFor="bis-licence-status">Licence status</Label>
-                  <Select value={form.licenceStatusId || 'none'} onValueChange={(v) => onChange({ ...form, licenceStatusId: v === 'none' ? '' : v })}>
-                    <SelectTrigger id="bis-licence-status" className="h-10 min-h-10" aria-label="Licence status">
-                      <SelectValue placeholder="Status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Not set</SelectItem>
-                      {licenceStatuses.map((row) => (
-                        <SelectItem key={row.id} value={row.id}>{row.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
                 </div>
               </div>
 
@@ -710,119 +543,6 @@ export function BisProjectsForm({
               </div>
 
               <div className="grid grid-cols-12 gap-4">
-                <div className="col-span-12 space-y-2 md:col-span-6">
-                  <Label htmlFor="bis-portal-user">Portal User ID</Label>
-                  <Input
-                    id="bis-portal-user"
-                    autoComplete="off"
-                    value={form.portalUserId}
-                    onChange={(e) => set('portalUserId', e.target.value)}
-                  />
-                </div>
-
-                <div className="col-span-12 space-y-2 md:col-span-6">
-                  <Label htmlFor="bis-portal-pass">Portal Password</Label>
-                  {form.clearPortalPassword ? (
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                      <p className="min-h-10 flex-1 border border-amber-600 bg-amber-50 px-3 py-2 text-sm text-amber-950">
-                        Will be removed on Save
-                      </p>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className={passwordBtnClass}
-                        onClick={() =>
-                          onChange({ ...form, clearPortalPassword: false, portalPassword: '' })
-                        }
-                      >
-                        Undo
-                      </Button>
-                    </div>
-                  ) : showSavedBox ? (
-                    <div className="space-y-2">
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                        <Input
-                          id="bis-portal-pass"
-                          readOnly
-                          value={revealedPassword ?? '•••••••• Saved (encrypted)'}
-                          className="min-h-10"
-                          aria-label={revealedPassword ? 'Revealed portal password' : 'Saved encrypted password'}
-                        />
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className={passwordBtnClass}
-                            onClick={() => {
-                              setRevealedPassword(null)
-                              setRevealSeconds(0)
-                              setChangingPassword(true)
-                              onChange({ ...form, portalPassword: '', clearPortalPassword: false })
-                            }}
-                          >
-                            Change
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className={passwordBtnClass}
-                            onClick={() =>
-                              onChange({
-                                ...form,
-                                clearPortalPassword: true,
-                                portalPassword: '',
-                              })
-                            }
-                          >
-                            Clear
-                          </Button>
-                          {isAdmin ? (
-                            <>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                className={passwordBtnClass}
-                                onClick={revealPassword}
-                              >
-                                <Eye className="mr-1.5 h-3.5 w-3.5" aria-hidden />
-                                Reveal
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                className={passwordBtnClass}
-                                onClick={copyPassword}
-                              >
-                                <ClipboardCopy className="mr-1.5 h-3.5 w-3.5" aria-hidden />
-                                Copy
-                              </Button>
-                            </>
-                          ) : null}
-                        </div>
-                      </div>
-                      {revealedPassword ? (
-                        <p className="text-xs font-medium text-amber-900">
-                          Hides in {revealSeconds}s
-                        </p>
-                      ) : (
-                        <p className="text-xs font-medium text-emerald-800">Password saved • encrypted</p>
-                      )}
-                    </div>
-                  ) : (
-                    <Input
-                      id="bis-portal-pass"
-                      type="password"
-                      autoComplete="new-password"
-                      className="min-h-10"
-                      placeholder={projectId ? 'Not set' : ''}
-                      value={form.portalPassword}
-                      onChange={(e) => set('portalPassword', e.target.value)}
-                    />
-                  )}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-12 gap-4">
                 <div className="col-span-12">
                   <LicenseScopeFields
                     value={form.notes}
@@ -837,112 +557,24 @@ export function BisProjectsForm({
           </div>
         </div>
 
-        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t-2 border-stone-500 bg-stone-100 px-4 py-3 sm:px-6">
-          <div className="flex flex-wrap items-center gap-2">
-            {editing && onPrintForm1 ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-8 rounded-none border-stone-500"
-                onClick={onPrintForm1}
-                disabled={saving || printBusy}
-                title="Print BIS Form-I from the saved record"
-              >
-                <Printer className="mr-1.5 h-3.5 w-3.5" aria-hidden />
-                Print Form-I
-              </Button>
-            ) : null}
-            {editing && onPrintAuthLetter ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-8 rounded-none border-stone-500"
-                onClick={onPrintAuthLetter}
-                disabled={saving || printBusy}
-                title="Print Authorization Letter from the saved record"
-              >
-                <Printer className="mr-1.5 h-3.5 w-3.5" aria-hidden />
-                Print Authorization Letter
-              </Button>
-            ) : null}
-            {editing && onPrintDocument ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-8 rounded-none border-stone-500"
-                    disabled={saving || printBusy}
-                    title={`Print from the saved record: ${MORE_PRINTS_TOOLTIP}`}
-                  >
-                    <Printer className="mr-1.5 h-3.5 w-3.5" aria-hidden />
-                    More prints
-                    <ChevronDown className="ml-1 h-3 w-3" aria-hidden />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  {EXTRA_PRINT_KINDS.map((kind) => (
-                    <DropdownMenuItem key={kind} onSelect={() => onPrintDocument(kind)}>
-                      {BIS_PRINT_DOCUMENT_LABEL[kind]}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : null}
-            {editing && onEmailDocument ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-8 rounded-none border-stone-500"
-                    disabled={saving || printBusy}
-                    title="Email BIS documents to the client from the saved record"
-                  >
-                    <Mail className="mr-1.5 h-3.5 w-3.5" aria-hidden />
-                    Email docs
-                    <ChevronDown className="ml-1 h-3 w-3" aria-hidden />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto">
-                  <DropdownMenuItem onSelect={() => onEmailDocument('form1')}>
-                    {BIS_PRINT_DOCUMENT_LABEL.form1}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => onEmailDocument('authorization-letter')}>
-                    {BIS_PRINT_DOCUMENT_LABEL['authorization-letter']}
-                  </DropdownMenuItem>
-                  {EXTRA_PRINT_KINDS.map((kind) => (
-                    <DropdownMenuItem key={`email-${kind}`} onSelect={() => onEmailDocument(kind)}>
-                      {BIS_PRINT_DOCUMENT_LABEL[kind]}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : null}
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              className="h-8 rounded-none border-stone-500"
-              onClick={() => onOpenChange(false)}
-              disabled={saving}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              className={limsPrimaryBtnClass}
-              onClick={onSave}
-              disabled={!canSave || saving}
-            >
-              {saving ? 'Saving…' : editing ? 'Update License' : 'Save License'}
-            </Button>
-          </div>
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t-2 border-stone-500 bg-stone-100 px-4 py-3 sm:px-6">
+          <Button
+            type="button"
+            variant="outline"
+            className="h-8 rounded-none border-stone-500"
+            onClick={() => onOpenChange(false)}
+            disabled={saving}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            className={limsPrimaryBtnClass}
+            onClick={onSave}
+            disabled={!canSave || saving}
+          >
+            {saving ? 'Saving…' : editing ? 'Update License' : 'Save License'}
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

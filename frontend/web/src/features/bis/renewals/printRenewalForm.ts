@@ -1,4 +1,4 @@
-import { formatIsCodeLabelFromParts } from '@/features/masters/is-codes/formatIsCodeLabel'
+import { formatIsCodeLabel } from '@/features/masters/is-codes/formatIsCodeLabel'
 import { loadCompanyPrintContext } from '../print/loadCompanyPrintContext'
 import { escapeHtml as esc, openPendingPrintWindow, openPrintHtml } from '../print/openPrintHtml'
 import { emailHtmlDocumentToClient } from '../shared/emailHtmlToClient'
@@ -24,7 +24,7 @@ export async function buildRenewalFormHtml(row: BisRenewalRow): Promise<string> 
   const project = row.project
   const isCode = project?.is_code
   const isLabel =
-    formatIsCodeLabelFromParts(isCode?.is_number, isCode?.revision_year) ||
+    (isCode ? formatIsCodeLabel(isCode) : '') ||
     (isCode?.is_number ?? '').trim() ||
     '—'
   const isTitle = (isCode?.title ?? '').trim() || '—'

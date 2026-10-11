@@ -5,7 +5,6 @@ import { Label } from '@/components/ui/label'
 import { AddIsCodeDialog } from '@/features/sample-handling/receiving/AddIsCodeDialog'
 import {
   formatIsCodeLabel,
-  formatIsCodeLabelFromParts,
   normalizeIsCodeLabel,
 } from '@/features/masters/is-codes/formatIsCodeLabel'
 import { supabase } from '@/lib/supabaseClient'
@@ -21,7 +20,7 @@ type IsCodeOption = {
 async function fetchIsCodeOptions(): Promise<IsCodeOption[]> {
   const { data, error } = await supabase
     .from('is_codes')
-    .select('id, is_number, title, revision_year')
+    .select('id, is_number, title, revision_year, part_no, section_no, standard_prefix')
     .order('is_number', { ascending: true })
 
   if (error) throw error
@@ -31,12 +30,15 @@ async function fetchIsCodeOptions(): Promise<IsCodeOption[]> {
         is_number: string
         title: string
         revision_year: string | null
+        part_no: string | null
+        section_no: string | null
+        standard_prefix: string | null
       }>)
     : []
 
   return list
     .map((r) => {
-      const displayCode = formatIsCodeLabelFromParts(r.is_number, r.revision_year)
+      const displayCode = formatIsCodeLabel(r)
       const title = (r.title ?? '').trim()
       return {
         id: r.id,
@@ -274,13 +276,16 @@ export function NablTestMethodSelect({
             try {
               const { data, error } = await supabase
                 .from('is_codes')
-                .select('id, is_number, title, revision_year')
+                .select('id, is_number, title, revision_year, part_no, section_no, standard_prefix')
                 .eq('id', newId)
                 .single()
               if (error) throw error
               const row = data as {
                 is_number: string
                 revision_year: string | null
+                part_no: string | null
+                section_no: string | null
+                standard_prefix: string | null
               }
               onChange(formatIsCodeLabel(row))
               await refresh()

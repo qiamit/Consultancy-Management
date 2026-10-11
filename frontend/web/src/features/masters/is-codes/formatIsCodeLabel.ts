@@ -1,25 +1,69 @@
-/** Canonical IS Code display: `IS 10773: 2025` (no space before colon). */
+/** Canonical IS Code display: `IS 10773: 2025`, or `IS 10773 (Part 2/Sec 2): 2025`. */
 
 function asText(value: unknown): string {
   if (value == null) return ''
   return String(value).trim()
 }
 
+/** "Part-2" / "2" → "Part 2". "Part-0", "0", and blank stay empty. */
+function partOrSectionPiece(kind: 'Part' | 'Sec', raw: unknown): string | null {
+  const text = asText(raw)
+  if (!text) return null
+  const rest = text.replace(/^(part|sec)[-\s]*/i, '').trim()
+  if (!rest || /^0+$/.test(rest)) return null
+  return `${kind} ${rest}`
+}
+
+function partSectionClause(partNo: unknown, sectionNo: unknown): string {
+  const part = partOrSectionPiece('Part', partNo)
+  const section = partOrSectionPiece('Sec', sectionNo)
+  if (part && section) return `(${part}/${section})`
+  return part || section ? `(${part || section})` : ''
+}
+
+function prefixAndNumber(isNumber: string, standardPrefix?: string | null): string {
+  const stored = asText(isNumber)
+  const explicit = asText(standardPrefix)
+  const match = stored.match(/^(IS\/ISO\/IEC|IS\/ISO|IS\/IEC|IS)\s+(.*)$/i)
+  const number = match ? match[2].trim() : stored.replace(/^(IS\/ISO\/IEC|IS\/ISO|IS\/IEC|IS)\s*/i, '').trim()
+  const prefix = explicit || (match ? match[1] : '') || (number ? 'IS' : '')
+  const digits = number || stored
+  if (!prefix) return digits
+  if (!digits) return prefix
+  const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  if (new RegExp(`^${escaped}\\b`, 'i').test(digits)) return digits
+  return `${prefix} ${digits}`
+}
+
 export function formatIsCodeLabelFromParts(
   isNumber?: string | number | null,
   revisionYear?: string | number | null,
+  partNo?: string | number | null,
+  sectionNo?: string | number | null,
+  standardPrefix?: string | null,
 ): string {
-  const num = asText(isNumber)
-  if (!num) return ''
+  const headBase = prefixAndNumber(asText(isNumber), standardPrefix)
+  if (!headBase) return ''
+  const clause = partSectionClause(partNo, sectionNo)
+  const head = clause ? `${headBase} ${clause}` : headBase
   const rev = asText(revisionYear)
-  return rev ? `${num}: ${rev}` : num
+  return rev ? `${head}: ${rev}` : head
 }
 
 export function formatIsCodeLabel(row: {
   is_number?: string | number | null
   revision_year?: string | number | null
+  part_no?: string | number | null
+  section_no?: string | number | null
+  standard_prefix?: string | null
 }): string {
-  return formatIsCodeLabelFromParts(row.is_number, row.revision_year)
+  return formatIsCodeLabelFromParts(
+    row.is_number,
+    row.revision_year,
+    row.part_no,
+    row.section_no,
+    row.standard_prefix,
+  )
 }
 
 /** Normalize legacy labels like `IS 10773 : 2025` → `IS 10773: 2025`. */

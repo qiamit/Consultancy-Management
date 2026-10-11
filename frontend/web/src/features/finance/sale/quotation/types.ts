@@ -44,7 +44,14 @@ export function statusOptionsForDocumentKind(
       ]
     case 'creditNote':
     case 'paymentReceipt':
+    case 'purchase':
+    case 'paymentMade':
+    case 'debitNote':
+    case 'refund':
+    case 'salesDebitNote':
       return BASE_STATUS_OPTIONS
+    case 'purchaseOrder':
+      return [...BASE_STATUS_OPTIONS, { value: 'Converted', label: 'Convert to Purchase Bill' }]
     default:
       return QUOTATION_STATUS_OPTIONS
   }

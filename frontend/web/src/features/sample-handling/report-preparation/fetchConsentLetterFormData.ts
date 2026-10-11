@@ -143,7 +143,7 @@ async function ensureIsCodeInList(
   if (!isCodeId || isCodes.some((c) => c.id === isCodeId)) return isCodes
   const { data: extra } = await supabase
     .from('is_codes')
-    .select('id, is_number, revision_year, title')
+    .select('id, is_number, revision_year, part_no, section_no, standard_prefix, title')
     .eq('id', isCodeId)
     .maybeSingle()
   if (!extra) return isCodes
@@ -218,7 +218,7 @@ export async function refreshConsentLetterMasterLists(): Promise<{
 }> {
   const [clients, isCodesRes] = await Promise.all([
     loadConsentClients(),
-    supabase.from('is_codes').select('id, is_number, revision_year, title').order('is_number', { ascending: true }),
+    supabase.from('is_codes').select('id, is_number, revision_year, part_no, section_no, standard_prefix, title').order('is_number', { ascending: true }),
   ])
 
   if (isCodesRes.error) throw isCodesRes.error
@@ -235,7 +235,7 @@ export async function fetchStandaloneConsentLetterFormData(
 ): Promise<ConsentLetterFormData> {
   const [clients, isCodesRes, lab] = await Promise.all([
     loadConsentClients(),
-    supabase.from('is_codes').select('id, is_number, revision_year, title').order('is_number', { ascending: true }),
+    supabase.from('is_codes').select('id, is_number, revision_year, part_no, section_no, standard_prefix, title').order('is_number', { ascending: true }),
     fetchLabDetails(),
   ])
 
@@ -267,7 +267,7 @@ export async function fetchConsentLetterFormData(
       .eq('id', sampleId)
       .maybeSingle(),
     loadConsentClients(),
-    supabase.from('is_codes').select('id, is_number, revision_year, title').order('is_number', { ascending: true }),
+    supabase.from('is_codes').select('id, is_number, revision_year, part_no, section_no, standard_prefix, title').order('is_number', { ascending: true }),
     fetchReportResultRowsForSample(sampleId),
     fetchLabDetails(),
   ])

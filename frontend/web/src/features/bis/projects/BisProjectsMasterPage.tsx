@@ -430,12 +430,6 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
   }
 
   const selectedRow = selectedIds.size === 1 ? rows.find((r) => selectedIds.has(r.id)) : undefined
-  const editingRow =
-    editingId != null
-      ? (rows.find((r) => r.id === editingId) ??
-        (documentsRow?.id === editingId ? documentsRow : undefined))
-      : undefined
-
   const handleStartRenewal = () => {
     if (!selectedRow) {
       setMessage('Select exactly one license to start renewal.')
@@ -464,7 +458,7 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
       data-master-scroll="table"
       className={cn(
         limsPageShellClass,
-        'flex h-full min-h-0 flex-col overflow-hidden !space-y-0 gap-2 sm:gap-3 md:gap-3',
+        'bis-projects-responsive-page flex h-full min-h-0 flex-col overflow-hidden !space-y-0 gap-2 sm:gap-3 md:gap-3',
       )}
     >
       <div className="shrink-0">
@@ -559,21 +553,6 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
         saving={saving}
         errorMessage={formError}
         onSave={() => void handleSave()}
-        onPrintForm1={
-          canPrintBisForms ? () => void handlePrintDocument(editingRow, 'form1') : undefined
-        }
-        onPrintAuthLetter={
-          canPrintBisForms
-            ? () => void handlePrintDocument(editingRow, 'authorization-letter')
-            : undefined
-        }
-        onPrintDocument={
-          canPrintBisForms ? (kind) => void handlePrintDocument(editingRow, kind) : undefined
-        }
-        onEmailDocument={
-          canPrintBisForms ? (kind) => void handleEmailDocument(editingRow, kind) : undefined
-        }
-        printBusy={printDocsBusy}
       />
 
       <BisLicenseDocumentsDialog

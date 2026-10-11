@@ -54,6 +54,14 @@ export function parseLocationMapPayload(
 
 export type LatLng = { lat: string; lng: string }
 
+/** Display coordinates at six decimal places without changing their stored precision. */
+export function formatCoordinate(raw: string | number | null | undefined): string {
+  const value = String(raw ?? '').trim()
+  const numeric = Number(value)
+  if (!value || !Number.isFinite(numeric)) return value
+  return numeric.toFixed(6).replace(/\.?0+$/, '')
+}
+
 /** Parse Google Maps paste: "lat, lng", URL @lat,lng, q=, !3d/!4d, etc. */
 export function parseLatLngPaste(raw: string): LatLng | null {
   const text = String(raw ?? '')
@@ -95,6 +103,7 @@ function normalizePair(latRaw: string, lngRaw: string): LatLng | null {
 }
 
 export function isValidLatLng(lat: string, lng: string): boolean {
+  if (!String(lat ?? '').trim() || !String(lng ?? '').trim()) return false
   const a = Number(lat)
   const b = Number(lng)
   return (
@@ -462,8 +471,11 @@ function finishRouteMapSvg(args: {
     for (let tx = tMinX; tx <= tMaxX; tx++) {
       if (tx < 0 || ty < 0 || tx >= maxIndex || ty >= maxIndex) continue
       const sub = (tx + ty) % 4
-      // Google Maps roadmap tiles (street background for print).
-      const href = `https://mt${sub}.google.com/vt/lyrs=m&hl=en&x=${tx}&y=${ty}&z=${zoom}`
+      // Google Maps standard road tiles (light background, no satellite imagery).
+      // Google serves 512px @2x tiles for the same 256px map coordinate.
+      // Keeping the SVG tile footprint unchanged makes the raster background
+      // sharper in the document preview and when printed.
+      const href = `https://mt${sub}.google.com/vt/lyrs=m&hl=en&x=${tx}&y=${ty}&z=${zoom}&scale=2`
       const imgX = ox + (tx * tileSize - worldLeft) * scale
       const imgY = oy + (ty * tileSize - worldTop) * scale
       const imgW = tileSize * scale
@@ -513,8 +525,8 @@ function finishRouteMapSvg(args: {
     ${tiles.join('\n    ')}
     ${
       firmOkBoth
-        ? `<path d="${pathD}" fill="none" stroke="#b45309" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" opacity="0.95"/>
-    <path d="${pathD}" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.55"/>`
+        ? `<path d="${pathD}" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" opacity="0.98"/>
+    <path d="${pathD}" fill="none" stroke="#0757c8" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" opacity="1"/>`
         : ''
     }
     ${firmPt ? pin(firmPt, 'A', '#b45309') : ''}

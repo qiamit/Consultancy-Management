@@ -13,7 +13,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { limsDialogClass, limsPrimaryBtnClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
-import type { DocumentTemplateKind } from '@/features/settings/lab-settings/documentTemplateTypes'
+import type { BookDocumentKind } from '@/features/settings/lab-settings/documentTemplateTypes'
 import {
   deleteQuotationTerm,
   fetchQuotationTerms,
@@ -35,7 +35,7 @@ export function ManageQuotationTermsDialog({
   onOpenChange: (open: boolean) => void
   onChanged?: (terms: QuotationTermRow[], defaultContent: string) => void
   onDefaultSet?: (content: string) => void
-  documentKind?: DocumentTemplateKind
+  documentKind?: BookDocumentKind
   documentLabel?: string
 }) {
   const [terms, setTerms] = useState<QuotationTermRow[]>([])

@@ -1,17 +1,16 @@
-import type { DocumentTemplateKind } from '@/features/settings/lab-settings/documentTemplateTypes'
 import type { QuotationRow } from '../quotation/types'
 
 /**
  * In-memory snapshot of invoice / credit note / receipt totals loaded from Postgres
  * (see `refreshSaleLedgerCache`). Keeps balance helpers synchronous.
  */
-const documentCache: Partial<Record<DocumentTemplateKind, QuotationRow[]>> = {}
+const documentCache: Partial<Record<string, QuotationRow[]>> = {}
 
-export function setSaleDocumentCache(kind: DocumentTemplateKind, rows: QuotationRow[]): void {
+export function setSaleDocumentCache(kind: string, rows: QuotationRow[]): void {
   documentCache[kind] = rows
 }
 
-export function loadSaleDocumentRows(kind: DocumentTemplateKind): QuotationRow[] {
+export function loadSaleDocumentRows(kind: string): QuotationRow[] {
   return documentCache[kind] ?? []
 }
 
@@ -34,7 +33,7 @@ export type ClientLedgerBalance = {
 }
 
 /**
- * Client outstanding = opening (Masters) + Invoices − Credit Notes − Payment Receipts.
+ * Client outstanding = opening + invoices + sales debit notes + refunds − credit notes − receipts.
  * Proforma is excluded (not booked).
  */
 export function computeClientSaleBalance(opts: {
@@ -53,8 +52,14 @@ export function computeClientSaleBalance(opts: {
   for (const row of loadSaleDocumentRows('invoice')) {
     if (sameClient(row, opts.clientId, opts.clientName)) signed += rowAmount(row)
   }
+  for (const row of loadSaleDocumentRows('salesDebitNote')) {
+    if (sameClient(row, opts.clientId, opts.clientName)) signed += rowAmount(row)
+  }
   for (const row of loadSaleDocumentRows('creditNote')) {
     if (sameClient(row, opts.clientId, opts.clientName)) signed -= rowAmount(row)
+  }
+  for (const row of loadSaleDocumentRows('refund')) {
+    if (sameClient(row, opts.clientId, opts.clientName)) signed += rowAmount(row)
   }
   for (const row of loadSaleDocumentRows('paymentReceipt')) {
     if (opts.excludeReceiptId && row.id === opts.excludeReceiptId) continue

@@ -11,11 +11,25 @@ import IsCodesPage from '@/features/masters/IsCodesPage'
 import ProductServicesPage from '@/features/masters/ProductServicesPage'
 import TestParameterPage from '@/features/masters/TestParameterPage'
 import LaboratoriesMasterPage from '@/features/masters/laboratories/LaboratoriesMasterPage'
+import BisBranchOfficesMasterPage from '@/features/masters/bis-branch-offices/BisBranchOfficesMasterPage'
 import QuotationPage from '@/features/finance/sale/quotation/QuotationPage'
 import ProformaInvoicePage from '@/features/finance/sale/proforma-invoice/ProformaInvoicePage'
 import InvoicePage from '@/features/finance/sale/invoice/InvoicePage'
 import CreditNotePage from '@/features/finance/sale/credit-note/CreditNotePage'
 import PaymentReceiptPage from '@/features/finance/sale/payment-receipt/PaymentReceiptPage'
+import PurchaseBillPage from '@/features/finance/purchase/bill/PurchaseBillPage'
+import PaymentMadePage from '@/features/finance/purchase/payment/PaymentMadePage'
+import DebitNotePage from '@/features/finance/purchase/debit-note/DebitNotePage'
+import PurchaseOrderPage from '@/features/finance/purchase/order/PurchaseOrderPage'
+import RefundPage from '@/features/finance/sale/refund/RefundPage'
+import SalesDebitNotePage from '@/features/finance/sale/debit-note/SalesDebitNotePage'
+import ExpensePage from '@/features/finance/expense/ExpensePage'
+import LedgerPage from '@/features/finance/ledger/LedgerPage'
+import InventoryPage from '@/features/finance/inventory/InventoryPage'
+import AccountsPage from '@/features/finance/accounts/AccountsPage'
+import JournalPage from '@/features/finance/journal/JournalPage'
+import StatementsPage from '@/features/finance/statements/StatementsPage'
+import ReportsPage from '@/features/finance/reports/ReportsPage'
 import BisProjectsMasterPage from '@/features/bis/projects/BisProjectsMasterPage'
 import BisRenewalsMasterPage from '@/features/bis/renewals/BisRenewalsMasterPage'
 import BisSurveillanceMasterPage from '@/features/bis/surveillance/BisSurveillanceMasterPage'
@@ -75,6 +89,19 @@ export {
   InvoicePage as SaleInvoiceRoute,
   CreditNotePage as SaleCreditNoteRoute,
   PaymentReceiptPage as SalePaymentReceiptRoute,
+  PurchaseBillPage as PurchaseBillRoute,
+  PaymentMadePage as PaymentMadeRoute,
+  DebitNotePage as DebitNoteRoute,
+  PurchaseOrderPage as PurchaseOrderRoute,
+  RefundPage as RefundRoute,
+  SalesDebitNotePage as SalesDebitNoteRoute,
+  ExpensePage as ExpenseRoute,
+  LedgerPage as LedgerRoute,
+  InventoryPage as InventoryRoute,
+  AccountsPage as AccountsRoute,
+  JournalPage as JournalRoute,
+  StatementsPage as StatementsRoute,
+  ReportsPage as ReportsRoute,
 }
 
 export function BisNewApplicationsRoute() {
@@ -123,6 +150,10 @@ export function BisKnowledgeSearchRoute() {
 
 export function LaboratoriesRoute() {
   return <LaboratoriesMasterPage />
+}
+
+export function BisBranchOfficesRoute() {
+  return <BisBranchOfficesMasterPage />
 }
 
 export function EmailToolsRoute() {

@@ -23,6 +23,8 @@ import {
 import { cn } from '@/lib/utils'
 import type { PrefixItem } from './types'
 import { DocumentSeriesPanel } from './DocumentSeriesPanel'
+import { ExpenseCategoriesPanel } from './ExpenseCategoriesPanel'
+import { InventorySettingsPanel } from '@/features/finance/inventory/InventorySettingsPanel'
 import { LabSettingsPanel } from './labSettingsUi'
 
 type PrefixesTabProps = {
@@ -51,6 +53,8 @@ export function PrefixesTab(props: PrefixesTabProps) {
     <LabSettingsPanel>
       <div className="space-y-4">
         <DocumentSeriesPanel />
+        <ExpenseCategoriesPanel />
+        <InventorySettingsPanel />
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-sm font-semibold text-stone-800">Prefix&apos;s</h3>
           <Dialog open={props.prefixDialogOpen} onOpenChange={props.setPrefixDialogOpen}>

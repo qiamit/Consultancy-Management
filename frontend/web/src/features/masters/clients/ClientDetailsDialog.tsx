@@ -109,10 +109,11 @@ export function ClientDetailsDialog({
   }, [open, clientId])
 
   const title = row?.company_name?.trim() || 'Client Details'
+  const mobileNumber = (row?.mobile ?? '').trim()
   const mobile =
-    row == null
+    row == null || !mobileNumber
       ? '—'
-      : [row.country_code, row.mobile].map((p) => (p ?? '').trim()).filter(Boolean).join(' ') || '—'
+      : [(row.country_code ?? '').trim(), mobileNumber].filter(Boolean).join(' ')
   const openingBalance =
     row == null
       ? '—'

@@ -1,7 +1,7 @@
 import { getCurrencySymbol } from '@/lib/appCurrency'
 import { blobToBase64, sendAppEmail } from '@/lib/sendAppEmail'
 import { supabase } from '@/lib/supabaseClient'
-import type { DocumentTemplateKind } from '@/features/settings/lab-settings/documentTemplateTypes'
+import type { BookDocumentKind } from '@/features/settings/lab-settings/documentTemplateTypes'
 import { prepareQuotationDocumentHtml } from '../quotation/buildQuotationDocumentHtml'
 import { formatDate, formatMoney, type QuotationRow } from '../quotation/types'
 import { invoiceNeedsReminder } from './invoiceBalanceApi'
@@ -22,7 +22,7 @@ async function resolveRecipientEmail(row: QuotationRow): Promise<string> {
 
 async function sendDocumentMail(
   row: QuotationRow,
-  documentKind: DocumentTemplateKind,
+  documentKind: BookDocumentKind,
   subject: string,
   introHtml: string,
   text: string,
@@ -52,7 +52,7 @@ async function sendDocumentMail(
  */
 export async function emailSaleDocumentToClient(
   row: QuotationRow,
-  documentKind: DocumentTemplateKind = 'quotation',
+  documentKind: BookDocumentKind = 'quotation',
 ): Promise<string> {
   const to = await resolveRecipientEmail(row)
   if (!to) {

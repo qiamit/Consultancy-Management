@@ -9,6 +9,10 @@ The detailed rules live in `.cursor/rules/*.mdc`, and Cursor loads them automati
 - `50-workflow-prompts.mdc` (always): docs/audits/*.md with VDB-xx / MST-xx / FIN-xx IDs, "continue" workflow
 - `60-extensions.mdc` (frontend/extensions/**): keep the Chrome and Safari copies in sync
 - `05-qe-standards.mdc` (always): Amit's standing design rules (AI/MCP-ready, responsive, futuristic), security musts, baselines, work order. One chat plans and codes. No Planner / Coder / Auditor / Tester handoff.
+- `70-plus-button.mdc` (always): when Amit says "plus button function", copy the Client Master + field (same UI, database options, Add, Edit, Delete).
+- `71-currency-field.mdc` (always): when Amit says "currency field", copy the Opening Balance amount box (symbol on the left, right-aligned amount, two decimals).
+- `72-date-field.mdc` (always): when Amit says "date field", copy the Date of Issue control (date on the left, calendar button on the right, native picker, default today).
+- `73-module-audit.mdc` (always): when Amit says "audit and testing", exercise the whole module locally with ZZ TEST data, including dependencies and every caller, then write docs/audits/module-audits/. Do not fix in that run.
 
 If `.cursor/rules` isn't loaded, follow this short version:
 

@@ -1,5 +1,7 @@
-import { useMemo, useState } from 'react'
-import { Search } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Eye, Search } from 'lucide-react'
+import { toast } from 'sonner'
+import { useIsLaboratoryDirector } from '@/components/lims/LaboratoryDirectorOnly'
 import { LimsFieldAddButton, LimsFieldWithAdd } from '@/components/lims/LimsFieldWithAdd'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogTrigger } from '@/components/ui/dialog'
@@ -8,46 +10,25 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { FilterCombobox } from '@/features/sample-handling/receiving/FilterCombobox'
+import { getCurrencyCode, getCurrencySymbol } from '@/lib/appCurrency'
 import { limsFieldAddBtnClass } from '@/lib/limsThemeUi'
+import { formatMoneyInput, sanitizeMoneyInput } from '@/features/masters/products-services/types'
 import { cn } from '@/lib/utils'
 import { ClientManageDialogContent } from './ClientManageDialogContent'
 import { clientRegistryFormClass } from './clientsFormUi'
-import { gstinStateCode, panFromGstin } from '@/lib/indiaValidators'
+import { gstinStateCode, isValidPan } from '@/lib/indiaValidators'
 import { ClientIdentitySections } from './ClientIdentitySections'
-import type { ClientCertificateFile } from './clientsApi'
-
-function parseCoordinatePaste(raw: string): { latitude: string; longitude: string } | null {
-  const text = raw.replace(/\u2212/g, '-').trim()
-  const patterns = [
-    /@(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/,
-    /!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/,
-    /(-?\d+(?:\.\d+)?)\s*[,;\s/]+\s*(-?\d+(?:\.\d+)?)/,
-  ]
-  for (const pattern of patterns) {
-    const match = text.match(pattern)
-    if (!match?.[1] || !match[2]) continue
-    const latitude = Number(match[1])
-    const longitude = Number(match[2])
-    if (Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180) return { latitude: match[1], longitude: match[2] }
-  }
-  // Some clipboard handlers strip the comma between Google's two decimal values.
-  for (let i = 1; i < text.length; i += 1) {
-    if (!/\d/.test(text[i - 1] ?? '') || !/\d/.test(text[i] ?? '')) continue
-    const latitude = text.slice(0, i)
-    const longitude = text.slice(i)
-    if (!/^-?\d+\.\d+$/.test(latitude) || !/^-?\d+\.\d+$/.test(longitude)) continue
-    if (Math.abs(Number(latitude)) <= 90 && Math.abs(Number(longitude)) <= 180) return { latitude, longitude }
-  }
-  return null
-}
-
+import { revealClientPortalPassword } from './clientPortalSecretApi'
+import type { ClientAddressDirectory, ClientCertificateFile, ClientCertificateInput } from './clientsApi'
 import {
   BALANCE_TYPES,
+  CLIENT_SECTORS,
   isValidEmail,
   isValidGst,
   isValidIndianPin,
   isValidLatitude,
   isValidLongitude,
+  emptyClientSites,
   isValidMobile,
   toProperTitleCase,
   type BalanceType,
@@ -57,15 +38,144 @@ import {
   type PaymentTerm,
 } from './types'
 
+function parsePastedClientCoordinates(raw: string): { latitude: string; longitude: string } | null {
+  const text = raw.replace(/\u2212/g, '-').trim()
+  const candidates: Array<[string, string]> = []
+  const urlPatterns = [
+    /@(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/,
+    /!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/,
+    /[?&](?:q|query|ll)=(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/i,
+  ]
+  for (const pattern of urlPatterns) {
+    const match = text.match(pattern)
+    if (match?.[1] && match[2]) candidates.push([match[1], match[2]])
+  }
+
+  const pair = text.match(/(-?\d+(?:\.\d+)?)\s*[,;\s/]+\s*(-?\d+(?:\.\d+)?)/)
+  if (pair?.[1] && pair[2]) candidates.push([pair[1], pair[2]])
+
+  // Some clipboard handlers remove the comma between Google's two decimal values.
+  // Test possible digit boundaries and choose the split with the closest precision.
+  if (/^-?\d+\.\d+-?\d+\.\d+$/.test(text)) {
+    for (let index = 1; index < text.length; index += 1) {
+      if (!/\d/.test(text[index - 1] ?? '') || !/\d/.test(text[index] ?? '')) continue
+      const left = text.slice(0, index)
+      const right = text.slice(index)
+      if (/^-?\d+\.\d+$/.test(left) && /^-?\d+\.\d+$/.test(right)) {
+        candidates.push([left, right])
+      }
+    }
+  }
+
+  const valid = candidates
+    .map(([latitude, longitude]) => ({ latitude, longitude }))
+    .filter(({ latitude, longitude }) => isValidLatitude(latitude) && isValidLongitude(longitude))
+  if (!valid.length) return null
+  const fractionDigits = (value: string) => value.split('.')[1]?.length ?? 0
+  return valid.sort((a, b) => {
+    const score = ({ latitude, longitude }: { latitude: string; longitude: string }) => {
+      const latPrecision = fractionDigits(latitude)
+      const longPrecision = fractionDigits(longitude)
+      return Math.abs(latPrecision - longPrecision) * 100 + Math.abs(latPrecision - 14) + Math.abs(longPrecision - 14)
+    }
+    return score(a) - score(b)
+  })[0] ?? null
+}
+
+function googleMapsSearchUrl(companyName: string) {
+  const query = companyName.trim()
+  if (!query) return 'https://www.google.com/maps'
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`
+}
+
+function MapsSearchLink({ companyName }: { companyName: string }) {
+  return (
+    <a
+      className={limsFieldAddBtnClass}
+      href={googleMapsSearchUrl(companyName)}
+      target="_blank"
+      rel="noreferrer"
+      aria-label="Search on Google Maps"
+      title="Search on Google Maps"
+    >
+      <Search size={14} strokeWidth={2.25} aria-hidden />
+    </a>
+  )
+}
+
+const EMPTY_KNOWN_PLACES: Pick<ClientAddressDirectory, 'districts' | 'states' | 'countries'> = {
+  districts: [],
+  states: [],
+  countries: [],
+}
+
+function withSiteAddress(form: ClientForm, role: 'Registered Office' | 'Factory', address: string): ClientForm {
+  const sites = form.sites.length > 0 ? form.sites.map((site) => ({ ...site })) : emptyClientSites()
+  const index = sites.findIndex((site) => site.siteRole === role)
+  if (index >= 0) sites[index] = { ...sites[index], address }
+  else {
+    sites.push({
+      siteRole: role,
+      address,
+      district: form.district,
+      state: form.state,
+      pinCode: form.pinCode,
+      gstNumber: form.gstNumber,
+      isPrimary: role === 'Registered Office',
+    })
+  }
+  const next = role === 'Registered Office' ? { ...form, address, sites } : { ...form, sites }
+  if (role === 'Registered Office' && next.factorySameAsOffice !== false) return withSiteAddress(next, 'Factory', address)
+  return next
+}
+
+function OpeningBalanceField({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange: (value: string) => void
+}) {
+  const [focused, setFocused] = useState(false)
+  const displayValue = focused ? value : formatMoneyInput(value || '0')
+
+  return (
+    <div className="flex h-8 min-w-0 flex-1 overflow-hidden rounded-none border border-stone-500 bg-stone-50 focus-within:border-amber-600 focus-within:bg-white focus-within:ring-2 focus-within:ring-amber-500/20">
+      <span
+        className="inline-flex shrink-0 items-center border-r border-stone-500 bg-stone-100 px-2.5 text-sm font-semibold text-stone-700"
+        aria-hidden
+      >
+        {getCurrencySymbol()}
+      </span>
+      <Input
+        id="opening-balance"
+        type="text"
+        inputMode="decimal"
+        value={displayValue}
+        onFocus={() => setFocused(true)}
+        onChange={(e) => onChange(sanitizeMoneyInput(e.target.value))}
+        onBlur={(e) => {
+          setFocused(false)
+          onChange(formatMoneyInput(e.target.value || '0'))
+        }}
+        placeholder="0.00"
+        className="h-full min-w-0 flex-1 rounded-none !border-0 !bg-transparent text-right tabular-nums shadow-none focus-visible:!ring-0"
+        aria-label={`Opening Balance in ${getCurrencyCode()}`}
+      />
+    </div>
+  )
+}
+
 export function ClientsForm({
   form,
   onChange,
+  recordId = null,
   canSave,
   saveLoading,
   onSave,
-  clientSaved = false,
   certificates = [],
   onUploadCertificate,
+  onUpdateCertificate,
   onDeleteCertificate,
   onOpenCertificate,
   states,
@@ -73,9 +183,12 @@ export function ClientsForm({
   districts,
   pinCodes,
   pinAutoFill,
+  knownPlaces = EMPTY_KNOWN_PLACES,
   countryCodes,
   companyTypes,
   companyScales,
+  womenOptions,
+  startupOptions,
   paymentTerms,
   stateDialogOpen,
   setStateDialogOpen,
@@ -126,6 +239,20 @@ export function ClientsForm({
   onAddCompanyScale,
   onUpdateCompanyScale,
   onDeleteCompanyScale,
+  womenDialogOpen,
+  setWomenDialogOpen,
+  newWomenOption,
+  setNewWomenOption,
+  onAddWomenOption,
+  onUpdateWomenOption,
+  onDeleteWomenOption,
+  startupDialogOpen,
+  setStartupDialogOpen,
+  newStartupOption,
+  setNewStartupOption,
+  onAddStartupOption,
+  onUpdateStartupOption,
+  onDeleteStartupOption,
   paymentTermDialogOpen,
   setPaymentTermDialogOpen,
   newPaymentTerm,
@@ -138,12 +265,15 @@ export function ClientsForm({
 }: {
   form: ClientForm
   onChange: (next: ClientForm) => void
+  /** Saved client id. View uses it. A new client has none until the first save. */
+  recordId?: string | null
   canSave: boolean
   saveLoading: boolean
   onSave: () => void
   clientSaved?: boolean
   certificates?: ClientCertificateFile[]
-  onUploadCertificate?: (certName: string, file: File) => void
+  onUploadCertificate?: (input: ClientCertificateInput) => Promise<void>
+  onUpdateCertificate?: (row: ClientCertificateFile, input: Pick<ClientCertificateInput, 'certName' | 'documentNumber' | 'issuedOn'>) => Promise<void>
   onDeleteCertificate?: (row: ClientCertificateFile) => void
   onOpenCertificate?: (row: ClientCertificateFile) => void
   hideFooter?: boolean
@@ -154,64 +284,82 @@ export function ClientsForm({
   districts: Array<{ id: string; label: string }>
   pinCodes: Array<{ id: string; label: string }>
   pinAutoFill: Map<string, { district?: string; state?: string; country?: string }>
+  /** District, state, and country names already stored on clients. The + dialog stays on master options. */
+  knownPlaces?: Pick<ClientAddressDirectory, 'districts' | 'states' | 'countries'>
   countryCodes: Array<{ id: string; value: string; label: string }>
   companyTypes: Array<{ id: string; label: string }>
   companyScales: Array<{ id: string; label: string }>
+  womenOptions: Array<{ id: string; label: string }>
+  startupOptions: Array<{ id: string; label: string }>
   paymentTerms: Array<{ id: string; label: string }>
   stateDialogOpen: boolean
   setStateDialogOpen: (open: boolean) => void
   newStateName: string
   setNewStateName: (value: string) => void
-  onAddState: () => void
+  onAddState: (close?: boolean) => void
   onUpdateState: (id: string) => void
   onDeleteState: (id: string) => void
   countryDialogOpen: boolean
   setCountryDialogOpen: (open: boolean) => void
   newCountryName: string
   setNewCountryName: (value: string) => void
-  onAddCountry: () => void
+  onAddCountry: (close?: boolean) => void
   onUpdateCountry: (id: string) => void
   onDeleteCountry: (id: string) => void
   districtDialogOpen: boolean
   setDistrictDialogOpen: (open: boolean) => void
   newDistrictName: string
   setNewDistrictName: (value: string) => void
-  onAddDistrict: () => void
+  onAddDistrict: (close?: boolean) => void
   onUpdateDistrict: (id: string) => void
   onDeleteDistrict: (id: string) => void
   pinCodeDialogOpen: boolean
   setPinCodeDialogOpen: (open: boolean) => void
   newPinCode: string
   setNewPinCode: (value: string) => void
-  onAddPinCode: () => void
+  onAddPinCode: (close?: boolean) => void
   onUpdatePinCode: (id: string) => void
   onDeletePinCode: (id: string) => void
   countryCodeDialogOpen: boolean
   setCountryCodeDialogOpen: (open: boolean) => void
   newCountryCode: string
   setNewCountryCode: (value: string) => void
-  onAddCountryCode: () => void
+  onAddCountryCode: (close?: boolean) => void
   onUpdateCountryCode: (id: string) => void
   onDeleteCountryCode: (id: string) => void
   companyTypeDialogOpen: boolean
   setCompanyTypeDialogOpen: (open: boolean) => void
   newCompanyType: string
   setNewCompanyType: (value: string) => void
-  onAddCompanyType: () => void
+  onAddCompanyType: (close?: boolean) => void
   onUpdateCompanyType: (id: string) => void
   onDeleteCompanyType: (id: string) => void
   companyScaleDialogOpen: boolean
   setCompanyScaleDialogOpen: (open: boolean) => void
   newCompanyScale: string
   setNewCompanyScale: (value: string) => void
-  onAddCompanyScale: () => void
+  onAddCompanyScale: (close?: boolean) => void
   onUpdateCompanyScale: (id: string) => void
   onDeleteCompanyScale: (id: string) => void
+  womenDialogOpen: boolean
+  setWomenDialogOpen: (open: boolean) => void
+  newWomenOption: string
+  setNewWomenOption: (value: string) => void
+  onAddWomenOption: (close?: boolean) => void
+  onUpdateWomenOption: (id: string) => void
+  onDeleteWomenOption: (id: string) => void
+  startupDialogOpen: boolean
+  setStartupDialogOpen: (open: boolean) => void
+  newStartupOption: string
+  setNewStartupOption: (value: string) => void
+  onAddStartupOption: (close?: boolean) => void
+  onUpdateStartupOption: (id: string) => void
+  onDeleteStartupOption: (id: string) => void
   paymentTermDialogOpen: boolean
   setPaymentTermDialogOpen: (open: boolean) => void
   newPaymentTerm: string
   setNewPaymentTerm: (value: string) => void
-  onAddPaymentTerm: () => void
+  onAddPaymentTerm: (close?: boolean) => void
   onUpdatePaymentTerm: (id: string) => void
   onDeletePaymentTerm: (id: string) => void
 }) {
@@ -221,38 +369,131 @@ export function ClientsForm({
   const [countryCodeOpen, setCountryCodeOpen] = useState(false)
   const [paymentTermOpen, setPaymentTermOpen] = useState(false)
   const gstError = isValidGst(form.gstNumber) ? null : 'Invalid GST Number'
+  const applyGstNumber = (raw: string) => {
+    const gstNumber = raw.toUpperCase().replace(/\s/g, '').slice(0, 15)
+    const derivedPan = gstNumber.length === 15 ? gstNumber.slice(2, 12) : ''
+    const code = gstinStateCode(gstNumber)
+    onChange({
+      ...form,
+      gstNumber,
+      ...(derivedPan ? { pan: derivedPan, panFromGstin: true } : {}),
+      ...(code && !form.gstStateCode.trim() ? { gstStateCode: code } : {}),
+    })
+  }
+  const panError = isValidPan(form.pan) ? null : 'Invalid PAN'
   const mobileError = isValidMobile(form.mobile) ? null : 'Mobile number must be 10 digits'
   const emailError = isValidEmail(form.email) ? null : 'Invalid email address'
   const pinError = isValidIndianPin(form.pinCode) ? null : 'Invalid PIN code'
   const longitudeError = isValidLongitude(form.longitude) ? null : 'Longitude must be between -180 and 180'
   const latitudeError = isValidLatitude(form.latitude) ? null : 'Latitude must be between -90 and 90'
+  const isAdmin = useIsLaboratoryDirector()
+  const [changingPassword, setChangingPassword] = useState(false)
+  const [revealedPassword, setRevealedPassword] = useState<string | null>(null)
+  const [revealSeconds, setRevealSeconds] = useState(0)
+  const passwordResetKey = `${recordId ?? 'new'}:${form.manakPasswordSet}:${form.clearManakPassword}`
+  const [seenPasswordKey, setSeenPasswordKey] = useState(passwordResetKey)
+  if (seenPasswordKey !== passwordResetKey) {
+    setSeenPasswordKey(passwordResetKey)
+    setChangingPassword(false)
+    setRevealedPassword(null)
+    setRevealSeconds(0)
+  }
+  const savedPassword = Boolean(form.manakPasswordSet) && !form.clearManakPassword
+  const showSavedPassword = Boolean(recordId) && savedPassword && !changingPassword
+
+  useEffect(() => {
+    if (!revealedPassword) return
+    const id = window.setInterval(() => {
+      setRevealSeconds((seconds) => {
+        if (seconds <= 1) {
+          setRevealedPassword(null)
+          return 0
+        }
+        return seconds - 1
+      })
+    }, 1000)
+    return () => window.clearInterval(id)
+  }, [revealedPassword])
+
+  const blockPasswordCopy = (event: { preventDefault: () => void; metaKey?: boolean; ctrlKey?: boolean; key?: string }) => {
+    if ('key' in event && event.key) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'c') event.preventDefault()
+      return
+    }
+    event.preventDefault()
+  }
+
+  const viewPassword = () => {
+    if (!recordId || !isAdmin) return
+    void revealClientPortalPassword(recordId)
+      .then((value) => {
+        if (!value) {
+          toast.error('No password saved')
+          return
+        }
+        setRevealedPassword(value)
+        setRevealSeconds(20)
+      })
+      .catch((err: unknown) => {
+        toast.error(err instanceof Error ? err.message : 'No permission')
+      })
+  }
 
   const pinOptions = useMemo(() => {
     const all = Array.from(
-      new Set(pinCodes.map((x) => x.label).filter((v) => String(v ?? '').trim().length > 0)),
-    )
+      new Set(
+        [...pinCodes.map((x) => x.label), ...pinAutoFill.keys()].filter((v) => String(v ?? '').trim().length > 0),
+      ),
+    ).sort((a, b) => a.localeCompare(b))
     const q = form.pinCode.trim()
     const filtered = q ? all.filter((p) => p.includes(q)) : all
     return filtered.map((p) => ({ id: p, label: p }))
-  }, [pinCodes, form.pinCode])
+  }, [pinCodes, pinAutoFill, form.pinCode])
 
   const districtOptions = useMemo(() => {
     const all = Array.from(
-      new Set(districts.map((x) => x.label).filter((v) => String(v ?? '').trim().length > 0)),
-    )
+      new Set(
+        [...districts.map((x) => x.label), ...knownPlaces.districts, ...Array.from(pinAutoFill.values(), (place) => place.district ?? '')]
+          .map((v) => String(v ?? '').trim())
+          .filter((v) => v.length > 0),
+      ),
+    ).sort((a, b) => a.localeCompare(b))
     const q = form.district.trim().toLowerCase()
     const filtered = q ? all.filter((d) => d.toLowerCase().includes(q)) : all
     return filtered.map((d) => ({ id: d, label: d }))
-  }, [districts, form.district])
+  }, [districts, knownPlaces.districts, pinAutoFill, form.district])
 
   const stateOptions = useMemo(() => {
     const all = Array.from(
-      new Set(states.map((x) => x.label).filter((v) => String(v ?? '').trim().length > 0)),
-    )
+      new Set(
+        [...states.map((x) => x.label), ...knownPlaces.states, ...Array.from(pinAutoFill.values(), (place) => place.state ?? '')]
+          .map((v) => String(v ?? '').trim())
+          .filter((v) => v.length > 0),
+      ),
+    ).sort((a, b) => a.localeCompare(b))
     const q = form.state.trim().toLowerCase()
     const filtered = q ? all.filter((s) => s.toLowerCase().includes(q)) : all
     return filtered.map((s) => ({ id: s, label: s }))
-  }, [states, form.state])
+  }, [states, knownPlaces.states, pinAutoFill, form.state])
+
+  const countryChoices = useMemo(() => {
+    const labels = new Map<string, string>()
+    for (const item of countries) {
+      const label = item.label.trim()
+      if (label) labels.set(label.toLowerCase(), label)
+    }
+    for (const name of knownPlaces.countries) {
+      const label = name.trim()
+      if (label && !labels.has(label.toLowerCase())) labels.set(label.toLowerCase(), label)
+    }
+    for (const place of pinAutoFill.values()) {
+      const label = (place.country ?? '').trim()
+      if (label && !labels.has(label.toLowerCase())) labels.set(label.toLowerCase(), label)
+    }
+    const current = form.country.trim()
+    if (current && !labels.has(current.toLowerCase())) labels.set(current.toLowerCase(), current)
+    return Array.from(labels.values()).sort((a, b) => a.localeCompare(b))
+  }, [countries, knownPlaces.countries, pinAutoFill, form.country])
 
   const countryCodeOptions = useMemo(() => {
     const q = form.countryCode.trim().toLowerCase()
@@ -285,9 +526,9 @@ export function ClientsForm({
     onChange({
       ...form,
       pinCode: key,
-      district: hit?.district ?? form.district,
-      state: hit?.state ?? form.state,
-      country: hit?.country ?? form.country,
+      district: hit?.district?.trim() || form.district,
+      state: hit?.state?.trim() || form.state,
+      country: hit?.country?.trim() || form.country,
     })
   }
 
@@ -295,7 +536,8 @@ export function ClientsForm({
     <div className={clientRegistryFormClass}>
       <div className={cn(compact ? 'space-y-2' : 'space-y-5')}>
         <div className={cn('grid grid-cols-12', compact ? 'gap-2' : 'gap-x-4 gap-y-3 sm:gap-y-4')}>
-          <div className={cn('col-span-12 min-w-0 sm:col-span-6 xl:col-span-4', compact ? 'space-y-1' : 'space-y-2')}>
+          <div className={cn('col-span-12 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5', compact ? 'gap-2' : 'gap-x-4 gap-y-3')}>
+          <div className={cn('min-w-0', compact ? 'space-y-1' : 'space-y-2')}>
             <Label htmlFor="gst">GST Number</Label>
             <LimsFieldWithAdd
               className={cn(
@@ -318,33 +560,44 @@ export function ClientsForm({
               <Input
                 id="gst"
                 placeholder="22AAAFQ8256C1ZK"
+                maxLength={15}
                 value={form.gstNumber}
-                onChange={(e) => onChange({ ...form, gstNumber: e.target.value, panFromGstin: false })}
-                onBlur={() => {
-                  const gst = form.gstNumber
-                  const pan = panFromGstin(gst)
-                  const code = gstinStateCode(gst)
-                  if (!pan && !code) return
-                  onChange({
-                    ...form,
-                    pan: form.pan.trim() ? form.pan : pan,
-                    gstStateCode: form.gstStateCode.trim() ? form.gstStateCode : code,
-                    panFromGstin: !form.pan.trim() && Boolean(pan),
-                  })
-                }}
+                onChange={(e) => applyGstNumber(e.target.value)}
                 aria-invalid={Boolean(gstError)}
                 className="h-full border-0 bg-transparent shadow-none focus-visible:border-transparent focus-visible:bg-transparent focus-visible:ring-0"
               />
               </LimsFieldWithAdd>
-            {!compact && onUploadCertificate ? (
-              <Button type="button" variant="outline" className="mt-2 h-10 min-h-10" disabled={!clientSaved} title={clientSaved ? 'Upload GST Certificate' : 'Save the client first, then upload'} onClick={() => document.getElementById('gst-cert-file')?.click()}>
-                Upload GST Certificate
-              </Button>
-            ) : null}
-            <input id="gst-cert-file" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file && onUploadCertificate) onUploadCertificate('GST Certificate', file); e.target.value = '' }} />
           </div>
 
-          <div className={cn('col-span-12 min-w-0 sm:col-span-6 xl:col-span-4', compact ? 'space-y-1' : 'space-y-2')}>
+          <div className={cn('min-w-0', compact ? 'space-y-1' : 'space-y-2')}>
+            <Label htmlFor="client-pan">PAN</Label>
+            <Input
+              id="client-pan"
+              maxLength={10}
+              value={form.pan}
+              onChange={(e) => onChange({ ...form, pan: e.target.value.toUpperCase().replace(/\s/g, '').slice(0, 10), panFromGstin: false })}
+              aria-invalid={Boolean(panError)}
+              className={cn(panError && '!border-red-600 !bg-red-50')}
+            />
+            {panError ? <p className="text-xs text-destructive">{panError}</p> : null}
+          </div>
+
+          <div className={cn('min-w-0', compact ? 'space-y-1' : 'space-y-2')}>
+            <Label htmlFor="client-sector">Sector</Label>
+            <Select value={form.sector || 'none'} onValueChange={(v) => onChange({ ...form, sector: v === 'none' ? '' : (v as ClientForm['sector']) })}>
+              <SelectTrigger id="client-sector">
+                <SelectValue placeholder="Not set" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Not set</SelectItem>
+                {CLIENT_SECTORS.map((sector) => (
+                  <SelectItem key={sector} value={sector}>{sector}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className={cn('min-w-0', compact ? 'space-y-1' : 'space-y-2')}>
             <Label htmlFor="company-type" className="text-xs">Company Type</Label>
             <Dialog open={companyTypeDialogOpen} onOpenChange={setCompanyTypeDialogOpen}>
               <LimsFieldWithAdd
@@ -375,17 +628,19 @@ export function ClientsForm({
                 placeholder="e.g., Distributor"
                 value={newCompanyType}
                 onValueChange={setNewCompanyType}
-                onSave={onAddCompanyType}
+                inlineAdd
+                onInlineAdd={() => onAddCompanyType(false)}
+                onSave={() => onAddCompanyType(true)}
                 onUpdate={onUpdateCompanyType}
                 saveDisabled={!newCompanyType.trim()}
                 items={companyTypes}
-                canDelete={() => companyTypes.length > 1}
+                canDelete={() => true}
                 onDelete={onDeleteCompanyType}
               />
             </Dialog>
           </div>
 
-          <div className={cn('col-span-12 min-w-0 sm:col-span-6 xl:col-span-4', compact ? 'space-y-1' : 'space-y-2')}>
+          <div className={cn('min-w-0', compact ? 'space-y-1' : 'space-y-2')}>
             <Label htmlFor="company-scale" className="text-xs">Company Scale</Label>
             <Dialog open={companyScaleDialogOpen} onOpenChange={setCompanyScaleDialogOpen}>
               <LimsFieldWithAdd
@@ -416,49 +671,176 @@ export function ClientsForm({
                 placeholder="e.g., Nano"
                 value={newCompanyScale}
                 onValueChange={setNewCompanyScale}
-                onSave={onAddCompanyScale}
+                inlineAdd
+                onInlineAdd={() => onAddCompanyScale(false)}
+                onSave={() => onAddCompanyScale(true)}
                 onUpdate={onUpdateCompanyScale}
                 saveDisabled={!newCompanyScale.trim()}
                 items={companyScales}
-                canDelete={() => companyScales.length > 1}
+                canDelete={() => true}
                 onDelete={onDeleteCompanyScale}
               />
             </Dialog>
-            {!compact && onUploadCertificate ? (
-              <Button type="button" variant="outline" className="h-10 min-h-10" disabled={!clientSaved} title={clientSaved ? 'Upload MSME Certificate' : 'Save the client first, then upload'} onClick={() => document.getElementById('msme-cert-file')?.click()}>
-                Upload MSME Certificate
-              </Button>
-            ) : null}
-            <input id="msme-cert-file" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file && onUploadCertificate) onUploadCertificate('MSME Certificate', file); e.target.value = '' }} />
+          </div>
           </div>
 
-          <div className={cn(compact ? 'col-span-12 md:col-span-6 space-y-1' : 'col-span-12 space-y-2')}>
-            <Label htmlFor="company-name" className="text-xs">Name of the Company</Label>
-            <Input
-              id="company-name"
-              placeholder="Enter Company Name"
-              value={form.companyName}
-              onChange={(e) => onChange({ ...form, companyName: e.target.value })}
-              onBlur={() => {
-                const next = toProperTitleCase(form.companyName)
-                if (next !== form.companyName) onChange({ ...form, companyName: next })
-              }}
-            />
+          <div className={cn('col-span-12 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5', compact ? 'gap-2' : 'gap-x-4 gap-y-3')}>
+            <div className={cn('min-w-0 sm:col-span-2 xl:col-span-3', compact ? 'space-y-1' : 'space-y-2')}>
+              <Label htmlFor="company-name" className="text-xs">Name of the Company</Label>
+              <Input
+                id="company-name"
+                placeholder="Enter Company Name"
+                value={form.companyName}
+                onChange={(e) => onChange({ ...form, companyName: e.target.value })}
+                onBlur={() => {
+                  const next = toProperTitleCase(form.companyName)
+                  if (next !== form.companyName) onChange({ ...form, companyName: next })
+                }}
+              />
+            </div>
+            <div className={cn('min-w-0', compact ? 'space-y-1' : 'space-y-2')}>
+              <Label htmlFor="client-women">Women entrepreneur</Label>
+              <Dialog open={womenDialogOpen} onOpenChange={setWomenDialogOpen}>
+                <LimsFieldWithAdd
+                  addButton={
+                    <DialogTrigger asChild>
+                      <LimsFieldAddButton aria-label="Add women entrepreneur option" />
+                    </DialogTrigger>
+                  }
+                >
+                  <Select
+                    value={form.womenEntrepreneur || 'No'}
+                    onValueChange={(v) => onChange({
+                      ...form,
+                      womenEntrepreneur: v,
+                      isWomenEntrepreneur: v.trim().toLowerCase() === 'yes',
+                    })}
+                  >
+                    <SelectTrigger id="client-women">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from(new Set([form.womenEntrepreneur, ...womenOptions.map((x) => x.label)].filter((v) => String(v ?? '').trim().length > 0))).map((t) => (
+                        <SelectItem key={t} value={t}>{t}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </LimsFieldWithAdd>
+                <ClientManageDialogContent
+                  open={womenDialogOpen}
+                  title="Manage Women Entrepreneur"
+                  addLabel="Add Women Entrepreneur"
+                  inputId="new-women-entrepreneur"
+                  placeholder="e.g., Yes"
+                  value={newWomenOption}
+                  onValueChange={setNewWomenOption}
+                  inlineAdd
+                  onInlineAdd={() => onAddWomenOption(false)}
+                  onSave={() => onAddWomenOption(true)}
+                  onUpdate={onUpdateWomenOption}
+                  saveDisabled={!newWomenOption.trim()}
+                  items={womenOptions}
+                  canDelete={() => true}
+                  onDelete={onDeleteWomenOption}
+                />
+              </Dialog>
+            </div>
+            <div className={cn('min-w-0', compact ? 'space-y-1' : 'space-y-2')}>
+              <Label htmlFor="client-startup">Startup</Label>
+              <Dialog open={startupDialogOpen} onOpenChange={setStartupDialogOpen}>
+                <LimsFieldWithAdd
+                  addButton={
+                    <DialogTrigger asChild>
+                      <LimsFieldAddButton aria-label="Add startup option" />
+                    </DialogTrigger>
+                  }
+                >
+                  <Select
+                    value={form.startupStatus || 'No'}
+                    onValueChange={(v) => onChange({
+                      ...form,
+                      startupStatus: v,
+                      isStartup: v.trim().toLowerCase() === 'yes',
+                    })}
+                  >
+                    <SelectTrigger id="client-startup">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from(new Set([form.startupStatus, ...startupOptions.map((x) => x.label)].filter((v) => String(v ?? '').trim().length > 0))).map((t) => (
+                        <SelectItem key={t} value={t}>{t}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </LimsFieldWithAdd>
+                <ClientManageDialogContent
+                  open={startupDialogOpen}
+                  title="Manage Startup"
+                  addLabel="Add Startup"
+                  inputId="new-startup-option"
+                  placeholder="e.g., Yes"
+                  value={newStartupOption}
+                  onValueChange={setNewStartupOption}
+                  inlineAdd
+                  onInlineAdd={() => onAddStartupOption(false)}
+                  onSave={() => onAddStartupOption(true)}
+                  onUpdate={onUpdateStartupOption}
+                  saveDisabled={!newStartupOption.trim()}
+                  items={startupOptions}
+                  canDelete={() => true}
+                  onDelete={onDeleteStartupOption}
+                />
+              </Dialog>
+            </div>
           </div>
 
-          <div className={cn(compact ? 'col-span-12 md:col-span-6 space-y-1' : 'col-span-12 space-y-2')}>
-            <Label htmlFor="address" className="text-xs">Address of the Company</Label>
+          <div className={cn('col-span-12 md:col-span-6', compact ? 'space-y-1' : 'space-y-2')}>
+            <div className="flex h-8 items-center">
+              <Label htmlFor="office-address" className="text-xs">Office Address</Label>
+            </div>
             <Textarea
-              id="address"
-              rows={1}
-              placeholder="Enter Company Address"
+              id="office-address"
+              rows={2}
+              placeholder="Enter Office Address"
               value={form.address}
-              onChange={(e) => onChange({ ...form, address: e.target.value })}
+              onChange={(e) => onChange(withSiteAddress(form, 'Registered Office', e.target.value))}
               onBlur={() => {
                 const next = toProperTitleCase(form.address)
-                if (next !== form.address) onChange({ ...form, address: next })
+                if (next !== form.address) onChange(withSiteAddress(form, 'Registered Office', next))
               }}
-              className="!h-8 !min-h-8 resize-none rounded-none border border-stone-500 bg-stone-50 px-3 py-1 shadow-none focus-visible:border-amber-600 focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-amber-500/20 focus-visible:ring-offset-0"
+              className="!h-16 !min-h-16 resize-none rounded-none border border-stone-500 bg-stone-50 px-3 py-1.5 shadow-none focus-visible:border-amber-600 focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-amber-500/20 focus-visible:ring-offset-0"
+            />
+          </div>
+          <div className={cn('col-span-12 md:col-span-6', compact ? 'space-y-1' : 'space-y-2')}>
+            <div className="flex h-8 items-center justify-between gap-2">
+              <Label htmlFor="factory-address" className="text-xs">Factory Address</Label>
+              <label className="inline-flex h-8 shrink-0 items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-stone-600">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4"
+                  checked={form.factorySameAsOffice !== false}
+                  onChange={(e) => {
+                    if (e.target.checked) onChange(withSiteAddress({ ...form, factorySameAsOffice: true }, 'Factory', form.address))
+                    else onChange({ ...form, factorySameAsOffice: false })
+                  }}
+                />
+                Same as Office Address
+              </label>
+            </div>
+            <Textarea
+              id="factory-address"
+              rows={2}
+              placeholder="Enter Factory Address"
+              disabled={form.factorySameAsOffice !== false}
+              value={form.factorySameAsOffice !== false ? form.address : (form.sites.find((site) => site.siteRole === 'Factory')?.address ?? '')}
+              onChange={(e) => onChange(withSiteAddress(form, 'Factory', e.target.value))}
+              onBlur={() => {
+                if (form.factorySameAsOffice !== false) return
+                const current = form.sites.find((site) => site.siteRole === 'Factory')?.address ?? ''
+                const next = toProperTitleCase(current)
+                if (next !== current) onChange(withSiteAddress(form, 'Factory', next))
+              }}
+              className="!h-16 !min-h-16 resize-none rounded-none border border-stone-500 bg-stone-50 px-3 py-1.5 shadow-none focus-visible:border-amber-600 focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-amber-500/20 focus-visible:ring-offset-0"
             />
           </div>
 
@@ -486,7 +868,7 @@ export function ClientsForm({
                   onSelectOption={(opt) => applyPinAutoFill(opt.label)}
                   open={pinOpen}
                   onOpenChange={setPinOpen}
-                  placeholder="Type or select PIN"
+                  placeholder="PIN Code"
                   listId="client-pin-combobox"
                   inputClassName="h-10"
                 />
@@ -500,11 +882,13 @@ export function ClientsForm({
                 value={newPinCode}
                 onValueChange={(v) => setNewPinCode(v.replace(/[^0-9]/g, '').slice(0, 6))}
                 inputMode="numeric"
-                onSave={onAddPinCode}
+                inlineAdd
+                onInlineAdd={() => onAddPinCode(false)}
+                onSave={() => onAddPinCode(true)}
                 onUpdate={onUpdatePinCode}
                 saveDisabled={newPinCode.trim().length !== 6}
                 items={pinCodes}
-                canDelete={() => pinCodes.length > 1}
+                canDelete={() => true}
                 onDelete={onDeletePinCode}
               />
             </Dialog>
@@ -542,11 +926,13 @@ export function ClientsForm({
                 placeholder="Enter District"
                 value={newDistrictName}
                 onValueChange={setNewDistrictName}
-                onSave={onAddDistrict}
+                inlineAdd
+                onInlineAdd={() => onAddDistrict(false)}
+                onSave={() => onAddDistrict(true)}
                 onUpdate={onUpdateDistrict}
                 saveDisabled={!newDistrictName.trim()}
                 items={districts}
-                canDelete={() => districts.length > 1}
+                canDelete={() => true}
                 onDelete={onDeleteDistrict}
               />
             </Dialog>
@@ -583,11 +969,13 @@ export function ClientsForm({
                 placeholder="Enter state"
                 value={newStateName}
                 onValueChange={setNewStateName}
-                onSave={onAddState}
+                inlineAdd
+                onInlineAdd={() => onAddState(false)}
+                onSave={() => onAddState(true)}
                 onUpdate={onUpdateState}
                 saveDisabled={!newStateName.trim()}
                 items={states}
-                canDelete={(s) => states.length > 1 && s.label !== 'Chhattisgarh'}
+                canDelete={() => true}
                 onDelete={onDeleteState}
               />
             </Dialog>
@@ -608,9 +996,9 @@ export function ClientsForm({
                     <SelectValue placeholder="Select country" />
                   </SelectTrigger>
                   <SelectContent>
-                    {countries.map((c) => (
-                      <SelectItem key={c.id} value={c.label}>
-                        {c.label}
+                    {countryChoices.map((label) => (
+                      <SelectItem key={label} value={label}>
+                        {label}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -624,11 +1012,13 @@ export function ClientsForm({
                 placeholder="Enter country"
                 value={newCountryName}
                 onValueChange={setNewCountryName}
-                onSave={onAddCountry}
+                inlineAdd
+                onInlineAdd={() => onAddCountry(false)}
+                onSave={() => onAddCountry(true)}
                 onUpdate={onUpdateCountry}
                 saveDisabled={!newCountryName.trim()}
                 items={countries}
-                canDelete={(c) => countries.length > 1 && c.label !== 'India'}
+                canDelete={() => true}
                 onDelete={onDeleteCountry}
               />
             </Dialog>
@@ -693,14 +1083,13 @@ export function ClientsForm({
                   placeholder="e.g., +44"
                   value={newCountryCode}
                   onValueChange={setNewCountryCode}
-                  onSave={onAddCountryCode}
+                  inlineAdd
+                  onInlineAdd={() => onAddCountryCode(false)}
+                  onSave={() => onAddCountryCode(true)}
                   onUpdate={onUpdateCountryCode}
                   saveDisabled={!newCountryCode.trim()}
                   items={countryCodes}
-                  canDelete={(c) => {
-                    const row = countryCodes.find((x) => x.id === c.id)
-                    return countryCodes.length > 1 && row?.value !== '+91'
-                  }}
+                  canDelete={() => true}
                   onDelete={onDeleteCountryCode}
                   getEditValue={(c) => countryCodes.find((x) => x.id === c.id)?.value ?? c.label}
                 />
@@ -722,17 +1111,13 @@ export function ClientsForm({
             </div>
           </div>
 
-          <div className={cn('col-span-12 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3', compact ? 'gap-2' : 'gap-x-4 gap-y-3 sm:gap-y-4')}>
+          <div className={cn('col-span-12 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4', compact ? 'gap-2' : 'gap-x-4 gap-y-3 sm:gap-y-4')}>
             <div className={cn('flex min-w-0 flex-col', compact ? 'space-y-1' : 'space-y-2')}>
               <Label htmlFor="opening-balance">Opening Balance</Label>
               <div className="flex h-10 gap-2">
-                <Input
-                  id="opening-balance"
-                  inputMode="decimal"
-                  placeholder="0.00"
+                <OpeningBalanceField
                   value={form.openingBalance}
-                  onChange={(e) => onChange({ ...form, openingBalance: e.target.value.replace(/[^0-9.]/g, '') })}
-                  className="min-w-0 flex-1"
+                  onChange={(openingBalance) => onChange({ ...form, openingBalance })}
                 />
                 <div className="w-24 shrink-0">
                   <Select value={form.balanceType} onValueChange={(v) => onChange({ ...form, balanceType: v as BalanceType })}>
@@ -782,11 +1167,13 @@ export function ClientsForm({
                   placeholder="e.g., 90 Days"
                   value={newPaymentTerm}
                   onValueChange={setNewPaymentTerm}
-                  onSave={onAddPaymentTerm}
+                  inlineAdd
+                  onInlineAdd={() => onAddPaymentTerm(false)}
+                  onSave={() => onAddPaymentTerm(true)}
                   onUpdate={onUpdatePaymentTerm}
                   saveDisabled={!newPaymentTerm.trim()}
                   items={paymentTerms}
-                  canDelete={() => paymentTerms.length > 1}
+                  canDelete={() => true}
                   onDelete={onDeletePaymentTerm}
                 />
               </Dialog>
@@ -794,63 +1181,179 @@ export function ClientsForm({
 
             <div className={cn('flex min-w-0 flex-col', compact ? 'space-y-1' : 'space-y-2')}>
               <Label htmlFor="client-longitude">Longitude</Label>
-              <Input
-                id="client-longitude"
-                inputMode="decimal"
-                value={form.longitude}
-                aria-invalid={Boolean(longitudeError)}
-                onChange={(e) => onChange({ ...form, longitude: e.target.value.replace(/[^0-9.-]/g, '') })}
-                onPaste={(e) => {
-                  const parsed = parseCoordinatePaste(e.clipboardData.getData('text/plain'))
-                  if (!parsed) return
-                  e.preventDefault()
-                  onChange({ ...form, ...parsed })
-                }}
-                className="h-10"
-              />
+              <LimsFieldWithAdd
+                className={cn(longitudeError && '!border-red-600 !bg-red-50 focus-within:!border-red-600 focus-within:!ring-red-500/30')}
+                addButton={<MapsSearchLink companyName={form.companyName} />}
+              >
+                <Input
+                  id="client-longitude"
+                  inputMode="decimal"
+                  placeholder="Longitude"
+                  value={form.longitude}
+                  onChange={(e) => {
+                    const coordinates = parsePastedClientCoordinates(e.target.value)
+                    onChange(coordinates ? { ...form, ...coordinates } : { ...form, longitude: e.target.value.replace(/[^0-9.-]/g, '') })
+                  }}
+                  onPaste={(event) => {
+                    const clipboard = event.clipboardData
+                    const coordinates = parsePastedClientCoordinates(
+                      clipboard.getData('text/plain') || clipboard.getData('text'),
+                    )
+                    if (!coordinates) return
+                    event.preventDefault()
+                    onChange({ ...form, ...coordinates })
+                  }}
+                  aria-invalid={Boolean(longitudeError)}
+                  className="h-full border-0 bg-transparent shadow-none focus-visible:border-transparent focus-visible:bg-transparent focus-visible:ring-0"
+                />
+              </LimsFieldWithAdd>
               {longitudeError ? <p className="text-xs text-destructive">{longitudeError}</p> : null}
             </div>
 
             <div className={cn('flex min-w-0 flex-col', compact ? 'space-y-1' : 'space-y-2')}>
               <Label htmlFor="client-latitude">Latitude</Label>
-              <Input
-                id="client-latitude"
-                inputMode="decimal"
-                value={form.latitude}
-                aria-invalid={Boolean(latitudeError)}
-                onChange={(e) => onChange({ ...form, latitude: e.target.value.replace(/[^0-9.-]/g, '') })}
-                onPaste={(e) => {
-                  const parsed = parseCoordinatePaste(e.clipboardData.getData('text/plain'))
-                  if (!parsed) return
-                  e.preventDefault()
-                  onChange({ ...form, ...parsed })
-                }}
-                className="h-10"
-              />
+              <LimsFieldWithAdd
+                className={cn(latitudeError && '!border-red-600 !bg-red-50 focus-within:!border-red-600 focus-within:!ring-red-500/30')}
+                addButton={<MapsSearchLink companyName={form.companyName} />}
+              >
+                <Input
+                  id="client-latitude"
+                  inputMode="decimal"
+                  placeholder="Latitude"
+                  value={form.latitude}
+                  onChange={(e) => {
+                    const coordinates = parsePastedClientCoordinates(e.target.value)
+                    onChange(coordinates ? { ...form, ...coordinates } : { ...form, latitude: e.target.value.replace(/[^0-9.-]/g, '') })
+                  }}
+                  onPaste={(event) => {
+                    const clipboard = event.clipboardData
+                    const coordinates = parsePastedClientCoordinates(
+                      clipboard.getData('text/plain') || clipboard.getData('text'),
+                    )
+                    if (!coordinates) return
+                    event.preventDefault()
+                    onChange({ ...form, ...coordinates })
+                  }}
+                  aria-invalid={Boolean(latitudeError)}
+                  className="h-full border-0 bg-transparent shadow-none focus-visible:border-transparent focus-visible:bg-transparent focus-visible:ring-0"
+                />
+              </LimsFieldWithAdd>
               {latitudeError ? <p className="text-xs text-destructive">{latitudeError}</p> : null}
             </div>
+          </div>
 
+          <div className={cn('col-span-12 grid grid-cols-1 sm:grid-cols-2', compact ? 'gap-2' : 'gap-x-4 gap-y-3 sm:gap-y-4')}>
             <div className={cn('flex min-w-0 flex-col', compact ? 'space-y-1' : 'space-y-2')}>
-              <Label htmlFor="remark">Remark</Label>
+              <Label htmlFor="client-manak-user">Manak Online User ID</Label>
               <Input
-                id="remark"
-                placeholder="Enter Remark"
-                value={form.remark}
-                onChange={(e) => onChange({ ...form, remark: e.target.value })}
+                id="client-manak-user"
+                autoComplete="off"
+                placeholder="Email ID or Other User ID"
+                value={form.manakUserId}
+                onChange={(e) => onChange({ ...form, manakUserId: e.target.value })}
                 className="h-10"
               />
+            </div>
+            <div className={cn('flex min-w-0 flex-col', compact ? 'space-y-1' : 'space-y-2')}>
+              <Label htmlFor="client-manak-pass">Password</Label>
+              {form.clearManakPassword ? (
+                <div className="flex h-10 min-w-0 items-stretch overflow-hidden border border-amber-600 bg-amber-50 text-amber-950 focus-within:ring-2 focus-within:ring-amber-500/20">
+                  <p className="flex min-w-0 flex-1 items-center px-3 text-sm">
+                    Will be removed on Save
+                  </p>
+                  <button
+                    type="button"
+                    className="shrink-0 border-l border-amber-600 bg-amber-100 px-3 text-sm hover:bg-amber-200"
+                    onClick={() => onChange({ ...form, clearManakPassword: false, manakPassword: '' })}
+                  >
+                    Undo
+                  </button>
+                </div>
+              ) : showSavedPassword ? (
+                <div className="space-y-1">
+                  <div className="flex h-10 min-w-0 items-stretch overflow-hidden border border-stone-500 bg-stone-50 text-foreground focus-within:border-amber-600 focus-within:ring-2 focus-within:ring-amber-500/20">
+                    <Input
+                      id="client-manak-pass"
+                      readOnly
+                      type={revealedPassword ? 'text' : 'password'}
+                      value={revealedPassword ?? 'saved-encrypted'}
+                      autoComplete="off"
+                      spellCheck={false}
+                      aria-label={revealedPassword ? 'Viewed Manak password' : 'Saved encrypted password'}
+                      className="h-full min-w-0 flex-1 select-none rounded-none border-0 bg-transparent shadow-none focus-visible:ring-0"
+                      onCopy={blockPasswordCopy}
+                      onCut={blockPasswordCopy}
+                      onKeyDown={blockPasswordCopy}
+                      onContextMenu={blockPasswordCopy}
+                    />
+                    <div className="flex shrink-0 items-stretch">
+                      <button
+                        type="button"
+                        disabled={!isAdmin}
+                        title={isAdmin ? 'Change saved password' : 'Only an administrator can change the saved password'}
+                        className="border-l border-stone-500 bg-stone-100 px-2 text-xs font-medium hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-stone-100"
+                        onClick={() => {
+                          setRevealedPassword(null)
+                          setRevealSeconds(0)
+                          setChangingPassword(true)
+                          onChange({ ...form, manakPassword: '', clearManakPassword: false })
+                        }}
+                      >
+                        Change
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!isAdmin}
+                        title={isAdmin ? 'Clear saved password' : 'Only an administrator can clear the saved password'}
+                        className="border-l border-stone-500 bg-stone-100 px-2 text-xs font-medium hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-stone-100"
+                        onClick={() => onChange({ ...form, clearManakPassword: true, manakPassword: '' })}
+                      >
+                        Clear
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!isAdmin}
+                        title={isAdmin ? 'View saved password' : 'Only an administrator can view the saved password'}
+                        className="inline-flex items-center gap-1 border-l border-stone-500 bg-stone-100 px-2 text-xs font-medium hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-stone-100"
+                        onClick={viewPassword}
+                      >
+                        <Eye className="h-3.5 w-3.5" aria-hidden />
+                        View
+                      </button>
+                    </div>
+                  </div>
+                  {revealedPassword ? (
+                    <p className="text-xs font-medium text-amber-900">Hides in {revealSeconds}s</p>
+                  ) : null}
+                </div>
+              ) : (
+                <Input
+                  id="client-manak-pass"
+                  type="password"
+                  autoComplete="new-password"
+                  spellCheck={false}
+                  placeholder={recordId ? 'Not set' : ''}
+                  value={form.manakPassword}
+                  onChange={(e) => onChange({ ...form, manakPassword: e.target.value })}
+                  className="h-10 select-none"
+                  onCopy={blockPasswordCopy}
+                  onCut={blockPasswordCopy}
+                  onKeyDown={blockPasswordCopy}
+                  onContextMenu={blockPasswordCopy}
+                />
+              )}
             </div>
           </div>
         </div>
       </div>
-      {!compact && onUploadCertificate && onDeleteCertificate && onOpenCertificate ? (
+      {!compact && onUploadCertificate && onUpdateCertificate && onDeleteCertificate && onOpenCertificate ? (
         <div className="mt-5">
           <ClientIdentitySections
-            form={form}
-            onChange={onChange}
-            clientSaved={clientSaved}
             certificates={certificates}
+            gstNumber={form.gstNumber}
+            onGstNumberChange={applyGstNumber}
             onUploadCertificate={onUploadCertificate}
+            onUpdateCertificate={onUpdateCertificate}
             onDeleteCertificate={onDeleteCertificate}
             onOpenCertificate={onOpenCertificate}
           />

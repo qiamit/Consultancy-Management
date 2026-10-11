@@ -19,7 +19,7 @@ import { IsCodesForm } from '@/features/masters/is-codes/IsCodesForm'
 import { fetchDesignationAndDepartmentLabels } from '@/features/settings/lab-settings/labMasterOptions'
 import { emptyIsCodeForm, normalizeText as normalizeIsText, type IsCodeForm, type IsAspect } from '@/features/masters/is-codes/types'
 import {
-  formatIsCodeLabelFromParts,
+  formatIsCodeLabel,
   formatTestMethodWithYear,
   normalizeIsCodeLabel,
 } from '@/features/masters/is-codes/formatIsCodeLabel'
@@ -332,19 +332,27 @@ export default function TestParameterMasterPage() {
     try {
       const { data: isData, error: isErr } = await supabase
         .from('is_codes')
-        .select('id, is_number, title, revision_year')
+        .select('id, is_number, title, revision_year, part_no, section_no, standard_prefix')
         .order('created_at', { ascending: false })
 
       if (isErr) throw isErr
 
       const isList = Array.isArray(isData)
-        ? (isData as Array<{ id: string; is_number: string; title: string; revision_year: string | null }>)
+        ? (isData as Array<{
+            id: string
+            is_number: string
+            title: string
+            revision_year: string | null
+            part_no: string | null
+            section_no: string | null
+            standard_prefix: string | null
+          }>)
         : []
 
       setIsCodes(
         isList
           .map((r) => {
-            const displayCode = formatIsCodeLabelFromParts(r.is_number, r.revision_year)
+            const displayCode = formatIsCodeLabel(r)
             const searchLabel = r.title ? `${displayCode} — ${r.title}` : displayCode
             return {
               id: r.id,
@@ -917,12 +925,20 @@ export default function TestParameterMasterPage() {
         const { data, error } = await supabase
           .from('is_codes')
           .upsert(payload, { onConflict: 'is_number,revision_year' })
-          .select('id, is_number, revision_year, title')
+          .select('id, is_number, revision_year, part_no, section_no, standard_prefix, title')
           .single()
         if (error) throw error
 
-        const row = data as { id: string; is_number: string; revision_year: string | null; title: string }
-        const displayCode = formatIsCodeLabelFromParts(row.is_number, row.revision_year)
+        const row = data as {
+          id: string
+          is_number: string
+          revision_year: string | null
+          part_no: string | null
+          section_no: string | null
+          standard_prefix: string | null
+          title: string
+        }
+        const displayCode = formatIsCodeLabel(row)
 
         setIsCodeDialogOpen(false)
         setIsCodeForm(emptyIsCodeForm())

@@ -1,0 +1,32 @@
+---
+description: When Amit says "plus button function", copy the Client Master + field exactly — same UI, database options, Add, Edit, and Delete.
+alwaysApply: true
+---
+
+# Plus button function
+
+Trigger: Amit says **plus button function** or **प्लस बटन फंक्शन**, and points at a field. Load this pattern on that field. Do not invent a second dialog or a hardcoded list.
+
+Copy these files. Do not restyle them.
+
+- Field: `LimsFieldWithAdd` + `LimsFieldAddButton` in `frontend/web/src/components/lims/LimsFieldWithAdd.tsx`
+- Dialog: `ClientManageDialogContent` in `frontend/web/src/features/masters/clients/ClientManageDialogContent.tsx`
+- Working example: Women Entrepreneur in `ClientsForm.tsx`
+
+The field must work like that example:
+
+1. The `+` sits on the right edge of the input, select, or combobox.
+2. `+` opens the same manage dialog (stone header, amber line, Existing list).
+3. The dialog name field has the amber **Add** button on its right (`inlineAdd`). Add inserts the option and stays open. Enter does the same. `onInlineAdd` passes `close = false`. There is no **Save & Close** button. The dialog X closes it. An edit uses that same Add button (`onUpdate`) and stays open.
+4. Every Existing row has Edit and Delete, including built-in rows. Edit is the amber bordered pencil (`h-8 w-8`, `Pencil` size 15). Delete is the red bordered trash (`h-8 w-8`, `Trash2` size 15). Pass `canDelete={() => true}`. No text Delete button.
+5. The dropdown reads only the saved rows. Edit loads that label into the input. Delete removes the row from the database and from the list in the same action. A deleted option must not come back from a code fallback.
+
+Options live in the database, not in the app code.
+
+- Client fields use `public.client_master_options` (`category`, `label`, `value`). Unique key is `(category, label)`.
+- Another master that already has an options table (laboratory, IS code) uses that table with this same dialog. Do not copy its rows into `client_master_options`.
+- Do not merge `default-*` ids or in-code lists such as India, Chhattisgarh, +91, or Yes/No. Those rows are real database rows.
+- A new category is seeded in a **new** migration with `WHERE NOT EXISTS`, `SET LOCAL lock_timeout = '5s'`, and `NOTIFY pgrst`. Do not edit an applied migration. Do not run `npm run db:migrate` until Amit says commit or migrate.
+- Add, update, and delete go through the existing master-option helpers for that screen. A new RPC is added to `docs/agents/api-catalog.md`.
+
+While checking the screen, do not click Add. That inserts a live options row.

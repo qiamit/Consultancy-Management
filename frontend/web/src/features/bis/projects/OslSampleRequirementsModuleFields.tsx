@@ -652,7 +652,7 @@ export function OslSampleRequirementsModuleFields({
     const userId = String(portalUserId ?? '').trim()
     if (!userId || !hasPortalPassword) {
       toast.error(
-        'Portal User ID / Password missing on this BIS project. Save them on the project form, then retry Extension.',
+        'Manak Online User ID / Password missing on this client. Save them on the client, then retry Extension.',
       )
       return
     }

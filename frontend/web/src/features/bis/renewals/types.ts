@@ -1,4 +1,4 @@
-import { formatIsCodeLabelFromParts } from '@/features/masters/is-codes/formatIsCodeLabel'
+import { formatIsCodeLabel } from '@/features/masters/is-codes/formatIsCodeLabel'
 
 export {
   formatCmL,
@@ -41,6 +41,9 @@ export type RenewalProjectJoin = {
     is_number: string | null
     title: string | null
     revision_year: string | null
+    part_no?: string | null
+    section_no?: string | null
+    standard_prefix?: string | null
   } | null
 }
 
@@ -158,7 +161,7 @@ export function renewalClientName(row: Pick<BisRenewalRow, 'client'>): string {
 export function renewalIsCodeLabel(row: Pick<BisRenewalRow, 'project'>): string {
   const code = row.project?.is_code
   if (!code) return ''
-  return formatIsCodeLabelFromParts(code.is_number, code.revision_year)
+  return formatIsCodeLabel(code)
 }
 
 function moneyToString(value: number | string | null | undefined): string {

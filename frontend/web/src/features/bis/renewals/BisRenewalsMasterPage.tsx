@@ -23,7 +23,7 @@ import {
 import { downloadCsv } from '../shared/downloadCsv'
 import { formatCmL } from '../projects/types'
 import { emailRenewalFormToClient, printRenewalForm } from './printRenewalForm'
-import { formatIsCodeLabelFromParts } from '@/features/masters/is-codes/formatIsCodeLabel'
+import { formatIsCodeLabel } from '@/features/masters/is-codes/formatIsCodeLabel'
 
 const SEARCH_DEBOUNCE_MS = 350
 
@@ -288,10 +288,7 @@ export default function BisRenewalsMasterPage() {
       source.map((r) => ({
         firm: (r.client?.company_name ?? '').trim(),
         cm_l: formatCmL(r.project?.cm_l_digits),
-        is_code: formatIsCodeLabelFromParts(
-          r.project?.is_code?.is_number,
-          r.project?.is_code?.revision_year,
-        ),
+        is_code: r.project?.is_code ? formatIsCodeLabel(r.project.is_code) : '',
         status: r.renewal_status ?? '',
         application_date: r.application_date ?? '',
         new_validity_to: r.new_validity_to ?? '',

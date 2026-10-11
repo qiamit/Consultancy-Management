@@ -11,6 +11,7 @@ import {
   letterheadHtml,
   preparedByHtml,
   signatoryHtml,
+  toBlockHtml,
   type PrintApplicantContext,
 } from './printDocumentShared'
 
@@ -35,9 +36,7 @@ const DEFAULT_ANNEX_HEADERS = [
 const TABLE_BLANK_ROWS = 14
 
 function toBlock(ctx: PrintApplicantContext): string {
-  const branch = ctx.bisBranchName.trim() || 'Branch Office'
-  const state = ctx.bisBranchState.trim() || '________________'
-  return `To<br/>The Director &amp; Head<br/>Bureau of Indian Standards<br/>${esc(branch)}, ${esc(state)}, India`
+  return toBlockHtml(ctx.bisBranchName || 'Branch Office', ctx.bisBranchState)
 }
 
 function metaRow(data: UpdatedSchemeOfInspectionData): string {

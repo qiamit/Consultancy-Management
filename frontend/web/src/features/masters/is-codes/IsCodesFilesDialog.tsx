@@ -16,6 +16,7 @@ export function IsCodesFilesDialog({
   onAddFiles,
   onReplaceFile,
   onDeleteFile,
+  onDocumentKindChange,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -27,6 +28,7 @@ export function IsCodesFilesDialog({
   onAddFiles: (files: File[]) => void
   onReplaceFile?: (existing: IsCodeViewFile, next: File) => void
   onDeleteFile: (file: IsCodeViewFile) => void
+  onDocumentKindChange?: (file: IsCodeViewFile, kind: string) => void
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -63,6 +65,7 @@ export function IsCodesFilesDialog({
             onAddFiles={onAddFiles}
             onReplaceFile={onReplaceFile}
             onDeleteFile={onDeleteFile}
+            onDocumentKindChange={onDocumentKindChange}
             resetKey={open}
             scrollClassName="max-h-[min(56vh,520px)]"
           />

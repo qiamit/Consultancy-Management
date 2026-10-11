@@ -62,8 +62,13 @@ export function bisBranchLine(branchName: string, state: string): string {
   return `${esc(branch)}, ${esc(st)}, INDIA`
 }
 
-export function toBlockHtml(branchName: string, state: string): string {
-  return `To<br/>The Director &amp; Head<br/>Bureau of Indian Standards<br/>${bisBranchLine(branchName, state)}`
+export function toBlockHtml(branchName: string, state: string, opts?: { omitDepartmentLine?: boolean }): string {
+  const normalizedBranch = branchName
+    .trim()
+    .replace(/^Bureau of Indian Standards\s*[-–—:]\s*/i, '')
+    .trim()
+  const departmentLine = opts?.omitDepartmentLine ? '' : '<br/>Bureau of Indian Standards'
+  return `To<br/>The Director &amp; Head${departmentLine}<br/>${bisBranchLine(normalizedBranch, state)}`
 }
 
 export function isStandardRefHtml(isNumber: string, isTitle: string): string {
@@ -310,6 +315,11 @@ export const PRINT_SCAN_FRIENDLY_CSS = `
     font-size: 13px !important;
     line-height: 1.45 !important;
     text-rendering: geometricPrecision;
+  }
+  .pd-sheet img, .al-sheet img, .f1-sheet img {
+    max-width: 100%;
+    height: auto;
+    object-fit: contain;
   }
   .pd-firm, .al-firm {
     font-family: "Times New Roman", Times, "Liberation Serif", serif !important;

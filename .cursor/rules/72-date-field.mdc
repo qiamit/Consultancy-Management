@@ -1,0 +1,23 @@
+---
+description: When Amit says "date field", copy the Date of Issue control — date text on the left, calendar button on the right, native picker.
+alwaysApply: true
+---
+
+# Date field
+
+Trigger: Amit says **date field**, **डेट फील्ड**, or **calendar field**. Build that control. Do not use `LimsDatePicker` and do not invent a second calendar popup.
+
+Copy the Date of Issue field in `frontend/web/src/features/masters/clients/ClientIdentitySections.tsx` (`LimsFieldWithAdd`, `issueDateInputClass`, `openIssueDatePicker`).
+
+The control is one `h-8` box:
+
+- Shell is `limsFieldWithAddShellClass` from `frontend/web/src/lib/limsThemeUi.ts`: square corners, `border-stone-500`, `bg-stone-50`, amber focus ring.
+- Left side is `<input type="date">`. Hide the browser’s own calendar icon (`::-webkit-calendar-picker-indicator` is zero size and not clickable). Text is `tabular-nums`. The input has no inner border.
+- Right side is a button with `limsFieldAddBtnClass` and the Lucide `Calendar` icon (`size={14}`, `strokeWidth={2.25}`). `aria-label` is `Open calendar`. `title` is `Pick date`.
+- That button calls `showPicker()` on the date input. If the browser blocks it, focus the input. The click must be a real user gesture.
+
+Value is a local `YYYY-MM-DD` string. The visible text is the browser’s date format, such as `09/10/2026`. Do not format the string yourself inside the input.
+
+A new empty date field starts as today, using the local calendar date (`todayIsoDate` in that same file). An existing saved date stays as stored. The user can clear or change it.
+
+Store the date in that screen’s existing date column. Do not add a display-format column.

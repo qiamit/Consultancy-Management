@@ -1,4 +1,4 @@
-import { formatIsCodeLabelFromParts } from '@/features/masters/is-codes/formatIsCodeLabel'
+import { formatIsCodeLabel } from '@/features/masters/is-codes/formatIsCodeLabel'
 import {
   EMPTY_CLIENT_IS_LICENSE,
   type ClientIsLicenseValue,
@@ -16,7 +16,14 @@ export type SurveillanceRow = {
   created_at?: string | null
   updated_at?: string | null
   client: { company_name: string | null } | null
-  is_code: { is_number: string | null; title: string | null; revision_year: string | null } | null
+  is_code: {
+    is_number: string | null
+    title: string | null
+    revision_year: string | null
+    part_no?: string | null
+    section_no?: string | null
+    standard_prefix?: string | null
+  } | null
   bis_project: { title: string | null; license_number: string | null } | null
 }
 
@@ -50,5 +57,5 @@ export function surveillanceClientName(row: Pick<SurveillanceRow, 'client'>): st
 export function surveillanceIsCodeLabel(row: Pick<SurveillanceRow, 'is_code'>): string {
   const code = row.is_code
   if (!code) return ''
-  return formatIsCodeLabelFromParts(code.is_number, code.revision_year)
+  return formatIsCodeLabel(code)
 }

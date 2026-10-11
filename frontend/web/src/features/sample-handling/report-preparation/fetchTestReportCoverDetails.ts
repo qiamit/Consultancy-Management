@@ -7,7 +7,7 @@ import { stripReceivingReportTypeFromCode } from '@/features/sample-handling/rec
 import type { ReportScopeKind } from './reportScope'
 import { buildTestReportPartBDetails, type TestReportPartBDetails } from './testReportPartB'
 import { resolveReferenceReportNo } from './testReportReferenceReportNo'
-import { formatIsCodeLabelFromParts } from '@/features/masters/is-codes/formatIsCodeLabel'
+import { formatIsCodeLabel } from '@/features/masters/is-codes/formatIsCodeLabel'
 
 export type { TestReportPartBDetails }
 
@@ -328,13 +328,19 @@ export async function fetchTestReportCoverDetails(
   if (isCodeId) {
     const { data: isRow } = await supabase
       .from('is_codes')
-      .select('is_number, revision_year, title')
+      .select('is_number, revision_year, part_no, section_no, standard_prefix, title')
       .eq('id', isCodeId)
       .maybeSingle()
     if (isRow) {
-      const r = isRow as { is_number?: string; revision_year?: string | null; title?: string | null }
-      isNumber =
-        formatIsCodeLabelFromParts(r.is_number, r.revision_year) || r.is_number || isCodeId
+      const r = isRow as {
+        is_number?: string
+        revision_year?: string | null
+        part_no?: string | null
+        section_no?: string | null
+        standard_prefix?: string | null
+        title?: string | null
+      }
+      isNumber = formatIsCodeLabel(r) || r.is_number || isCodeId
       productTitleFromIs = fmt(r.title)
     }
   }

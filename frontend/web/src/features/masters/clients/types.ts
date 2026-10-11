@@ -64,8 +64,6 @@ export type ClientRow = {
   opening_balance: number | null
   balance_type: BalanceType
   payment_term: string | null
-  longitude?: string | null
-  latitude?: string | null
   remark: string | null
   pan?: string | null
   sector?: string | null
@@ -93,6 +91,11 @@ export type ClientForm = {
   paymentTerm: PaymentTerm
   longitude: string
   latitude: string
+  manakUserId: string
+  /** New password typed in this session. Never the stored secret. */
+  manakPassword: string
+  manakPasswordSet: boolean
+  clearManakPassword: boolean
   remark: string
   pan: string
   cin: string
@@ -103,14 +106,17 @@ export type ClientForm = {
   constitution: string
   sector: ClientSector
   isStartup: boolean
+  startupStatus: string
   startupDpiitNo: string
   isWomenEntrepreneur: boolean
+  womenEntrepreneur: string
   gstRegistrationType: string
   gstStateCode: string
   clientStatus: ClientStatus
   leadSource: string
   referredBy: string
   panFromGstin: boolean
+  factorySameAsOffice: boolean
   sites: ClientSiteForm[]
   contacts: ClientContactForm[]
 }
@@ -229,14 +235,16 @@ export const isValidMobile = (value: string) => {
   return /^[0-9]{10}$/.test(v)
 }
 
-function isCoordinateInRange(value: string, min: number, max: number) {
-  if (!value.trim()) return true
-  const number = Number(value)
-  return Number.isFinite(number) && number >= min && number <= max
+function isCoordInRange(value: string, min: number, max: number) {
+  const v = value.trim()
+  if (!v) return true
+  const n = Number(v)
+  return Number.isFinite(n) && n >= min && n <= max
 }
 
-export const isValidLongitude = (value: string) => isCoordinateInRange(value, -180, 180)
-export const isValidLatitude = (value: string) => isCoordinateInRange(value, -90, 90)
+export const isValidLongitude = (value: string) => isCoordInRange(value, -180, 180)
+
+export const isValidLatitude = (value: string) => isCoordInRange(value, -90, 90)
 
 export const isValidEmail = (value: string) => {
   const v = value.trim()
@@ -274,6 +282,10 @@ export const emptyClientForm = (): ClientForm => ({
   paymentTerm: '100 % Advance',
   longitude: '',
   latitude: '',
+  manakUserId: '',
+  manakPassword: '',
+  manakPasswordSet: false,
+  clearManakPassword: false,
   remark: '',
   pan: '',
   cin: '',
@@ -282,16 +294,19 @@ export const emptyClientForm = (): ClientForm => ({
   msmeCategory: '',
   udyamDate: '',
   constitution: '',
-  sector: '',
+  sector: 'Private',
   isStartup: false,
+  startupStatus: 'No',
   startupDpiitNo: '',
   isWomenEntrepreneur: false,
+  womenEntrepreneur: 'No',
   gstRegistrationType: '',
   gstStateCode: '',
   clientStatus: 'Active',
   leadSource: '',
   referredBy: '',
   panFromGstin: false,
+  factorySameAsOffice: true,
   sites: emptyClientSites(),
   contacts: emptyClientContacts(),
 })
@@ -438,7 +453,9 @@ export function formatClientContact(
 export function formatClientContactLines(
   row: Pick<ClientRow, 'contact_person_name' | 'email' | 'country_code' | 'mobile'>,
 ): { name: string; email: string; mobile: string } {
-  const phone = toContinuousText(`${row.country_code || ''} ${row.mobile || ''}`)
+  const mobile = (row.mobile ?? '').trim()
+  const code = (row.country_code ?? '').trim()
+  const phone = mobile ? toContinuousText(`${code} ${mobile}`.trim()) : ''
   return {
     name: row.contact_person_name?.trim() ? toContinuousText(row.contact_person_name) : '',
     email: row.email?.trim() ? toContinuousText(row.email) : '',

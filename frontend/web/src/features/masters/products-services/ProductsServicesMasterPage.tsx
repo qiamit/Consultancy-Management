@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getCurrencySymbol } from '@/lib/appCurrency'
-import { limsDarkBarGlowStyle, limsDialogClass, limsPageShellClass } from '@/lib/limsThemeUi'
+import { limsDarkBarGlowStyle, limsPageShellClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabaseClient'
 import { useCanEditCurrentModule } from '@/features/settings/module-access/useCanEditCurrentModule'
@@ -731,13 +731,12 @@ export default function ProductsServicesMasterPage() {
         <DialogContent
           persistOnFocusLoss
           aria-describedby={undefined}
-          overlayClassName="lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto"
-          portalClassName="lg:left-[268px] lg:right-0 lg:w-auto"
           className={cn(
-            limsDialogClass,
-            '!flex max-h-[92vh] w-[calc(100%-1.5rem)] max-w-3xl flex-col overflow-hidden sm:w-full',
-            // Center in main content area (sidebar 268px stays clear)
-            'lg:left-[calc(268px+(100vw-268px)/2)] md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2',
+            '!flex z-50 h-[100dvh] max-h-[100dvh] translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 bg-white p-0 shadow-none sm:rounded-none',
+            'left-[var(--app-dialog-overlay-left,0px)] top-0 right-0 bottom-0',
+            'w-[calc(100vw-var(--app-dialog-overlay-left,0px))] max-w-none',
+            'border-stone-600 ring-1 ring-amber-700/20',
+            '[&>button]:!rounded-none [&>button]:opacity-100',
           )}
         >
           <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white sm:px-5 sm:py-3">

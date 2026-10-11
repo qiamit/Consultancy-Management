@@ -3,7 +3,8 @@ import { getCurrencySymbol } from '@/lib/appCurrency'
 import {
   documentMetaFieldLabels,
   isPaymentReceiptDocumentTitle,
-  type DocumentTemplateKind,
+  templateForBook,
+  type BookDocumentKind,
   type FinanceDocumentTemplate,
 } from '@/features/settings/lab-settings/documentTemplateTypes'
 import { fetchLabDocumentTemplates } from '@/features/settings/lab-settings/documentTemplatesConfig'
@@ -619,10 +620,10 @@ function buildOneQuotationHtml(
 /** Full document HTML using Lab document_templates for the given kind. */
 export async function prepareQuotationDocumentHtml(
   rows: QuotationRow[],
-  documentKind: DocumentTemplateKind = 'quotation',
+  documentKind: BookDocumentKind = 'quotation',
 ): Promise<PreparedQuotationDocument> {
   const docs = await fetchLabDocumentTemplates()
-  const template = docs[documentKind] ?? docs.quotation
+  const template = templateForBook(docs, documentKind)
 
   const headerName = template.headerTemplateName || QUOTATION_LETTER_HEADER_NAME
   const footerName = template.footerTemplateName || QUOTATION_LETTER_FOOTER_NAME

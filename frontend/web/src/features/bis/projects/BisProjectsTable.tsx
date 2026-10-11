@@ -34,6 +34,7 @@ import {
   formatInr,
   isCodeDisplayLabel,
   licenseValidityState,
+  manakLoginFromProject,
   todayIsoDate,
   type BisProjectRow,
   type LicenseValidityState,
@@ -87,12 +88,8 @@ function SortableHeader({
 const EXTENSION_MISSING_MSG =
   'QE Consultancy extension is not loaded. Open this app in Chrome or Edge, then reload the extension from chrome://extensions.'
 
-/** ~10" / desktop: row table. Below that: cards. */
-const TABLE_MQ_SHOW = 'hidden lg:block'
-const CARDS_MQ_SHOW = 'lg:hidden'
-
 const GRID_TABLE =
-  'w-full min-w-[820px] table-fixed border-collapse font-jakarta [&_th]:border [&_td]:border [&_th]:border-stone-700 [&_td]:border-[#e7e0d4] [&_th]:p-[1mm] [&_td]:!p-[1mm] [&_th]:sticky [&_th]:top-0 [&_th]:z-[1]'
+  'w-full min-w-0 table-fixed border-collapse font-jakarta [&_th]:border [&_td]:border [&_th]:border-stone-700 [&_td]:border-[#e7e0d4] [&_th]:p-[1mm] [&_td]:!p-[1mm] [&_th]:sticky [&_th]:top-0 [&_th]:z-[1] [&_td]:break-words'
 
 const thBase =
   'bg-stone-800 text-center text-[11px] font-bold uppercase tracking-[0.14em] text-amber-200'
@@ -112,7 +109,7 @@ const LICENSE_STATE_STYLES: Record<LicenseValidityState, { label: string; classN
 }
 
 const actionGhostBtnClass =
-  'h-8 w-8 rounded-none p-0 text-amber-800 hover:bg-amber-100 hover:text-amber-950'
+  'h-[2.3rem] w-[2.3rem] rounded-none border border-stone-400 bg-white/70 p-0 text-amber-800 shadow-sm hover:border-amber-600 hover:bg-amber-50 hover:text-amber-950 focus-visible:ring-2 focus-visible:ring-amber-500/40'
 
 function RowActions({
   row,
@@ -130,7 +127,18 @@ function RowActions({
   onEmailDocument?: (row: BisProjectRow, kind: BisPrintDocumentKind) => void
 }) {
   return (
-    <div className="inline-flex shrink-0 items-center gap-0.5">
+    <div className="bis-project-row-actions inline-flex shrink-0 items-center gap-0.5">
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        className={actionGhostBtnClass}
+        aria-label={`Edit ${client}`}
+        title="Edit license"
+        onClick={() => onEdit(row)}
+      >
+        <Pencil size={16} />
+      </Button>
       <Button
         type="button"
         size="sm"
@@ -151,7 +159,7 @@ function RowActions({
         title="Manak Assist"
         onClick={() => {
           void openManakEbisAssist({
-            portalUserId: row.portal_user_id,
+            portalUserId: manakLoginFromProject(row).userId,
             projectId: row.id,
           })
             .then(({ extensionUsed }) => {
@@ -210,17 +218,6 @@ function RowActions({
           </DropdownMenuContent>
         </DropdownMenu>
       ) : null}
-      <Button
-        type="button"
-        size="sm"
-        variant="ghost"
-        className={actionGhostBtnClass}
-        aria-label={`Edit ${client}`}
-        title="Edit"
-        onClick={() => onEdit(row)}
-      >
-        <Pencil size={16} />
-      </Button>
     </div>
   )
 }
@@ -384,13 +381,13 @@ export function BisProjectsTable({
       {rows.length > 0 ? (
         <div
           className={cn(
-            'min-h-0 flex-1 overflow-y-auto overflow-x-auto overscroll-contain [-webkit-overflow-scrolling:touch]',
+            'bis-projects-list-viewport min-h-0 flex-1 overflow-y-auto overflow-x-hidden',
             loading && 'opacity-60 transition-opacity',
           )}
         >
           {/* Cards — below ~10″ / lg */}
-          <div className={cn('space-y-2.5 p-2 sm:p-3', CARDS_MQ_SHOW)}>
-            <div className="sticky top-0 z-[1] flex items-center gap-2 border border-stone-500 bg-stone-800 px-2.5 py-2 text-amber-200 shadow-sm">
+          <div className="bis-projects-card-view space-y-2 p-2 sm:space-y-2.5 sm:p-3">
+            <div className="sticky top-0 z-[1] flex items-center gap-2 rounded-lg border border-stone-600 bg-stone-900 px-3 py-2.5 text-amber-200 shadow-sm">
               <input
                 type="checkbox"
                 className={checkboxClass}
@@ -419,91 +416,95 @@ export function BisProjectsTable({
                 <article
                   key={r.id}
                   className={cn(
-                    'overflow-hidden border-2 border-stone-500 font-jakarta shadow-sm ring-1 ring-amber-700/20',
+                    'overflow-hidden rounded-xl border border-stone-300 font-jakarta shadow-[0_2px_8px_rgba(41,37,36,0.08)] transition-shadow hover:shadow-md',
                     tone,
                     selected && 'ring-2 ring-amber-500/40',
                   )}
                 >
-                  <div className="flex items-stretch">
-                    <div className="w-1 shrink-0 bg-gradient-to-b from-amber-500 via-amber-600 to-stone-700" />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start gap-2 px-2.5 py-2.5">
-                        <input
-                          type="checkbox"
-                          className={cn(checkboxClass, 'mt-1 shrink-0')}
-                          aria-label={`Select ${client}`}
-                          checked={selected}
-                          onChange={() => onToggle(r.id)}
-                        />
-                        <div className="min-w-0 flex-1 space-y-1">
-                          <div className="flex items-start gap-2">
-                            <Building2
-                              className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-700"
-                              aria-hidden
+                  <div className="min-w-0">
+                    <div className="flex items-start gap-2.5 px-3 py-3 sm:px-4">
+                      <input
+                        type="checkbox"
+                        className={cn(checkboxClass, 'mt-1 shrink-0')}
+                        aria-label={`Select ${client}`}
+                        checked={selected}
+                        onChange={() => onToggle(r.id)}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start gap-2.5">
+                          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-800">
+                            <Building2 className="h-4 w-4" aria-hidden />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <TableTextLink
+                              label={client}
+                              recordId={r.client_id}
+                              onOpen={onOpenClient}
+                              kind="Client"
+                              className="break-words text-[14px] font-bold leading-snug tracking-tight text-stone-900"
                             />
-                            <div className="min-w-0 flex-1">
+                            <div className="mt-0.5 text-xs font-semibold text-amber-800">
                               <TableTextLink
-                                label={client}
-                                recordId={r.client_id}
-                                onOpen={onOpenClient}
-                                kind="Client"
-                                className="text-[13px] font-bold leading-snug tracking-tight"
+                                label={isLabel}
+                                recordId={r.is_code_id}
+                                onOpen={onOpenIsCode}
+                                kind="IS Code"
                               />
-                              <div className="text-[11px] font-semibold">
-                                <TableTextLink
-                                  label={isLabel}
-                                  recordId={r.is_code_id}
-                                  onOpen={onOpenIsCode}
-                                  kind="IS Code"
-                                />
-                              </div>
                             </div>
                           </div>
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <CmLNumberLink
-                              digits={r.cm_l_digits}
-                              className="border border-stone-400 bg-stone-100 px-1.5 py-0.5 text-[10px] font-semibold no-underline hover:underline"
-                            />
-                            <span
-                              className={cn(
-                                'ml-auto border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em]',
-                                validity.state === 'operative' &&
-                                  'border-emerald-700/30 bg-emerald-50 text-emerald-800',
-                                validity.state === 'expiring' &&
-                                  'border-amber-700/30 bg-amber-50 text-amber-800',
-                                validity.state === 'expired' &&
-                                  'border-red-700/30 bg-red-50 text-red-800',
-                                validity.state === 'unknown' &&
-                                  'border-stone-400 bg-stone-100 text-stone-600',
-                              )}
-                            >
-                              {licStyle.label}
-                            </span>
-                          </div>
+                          <RowActions
+                            row={r}
+                            client={client}
+                            emailBusy={emailBusy}
+                            onEdit={onEdit}
+                            onViewDocuments={onViewDocuments}
+                            onEmailDocument={onEmailDocument}
+                          />
                         </div>
-                        <RowActions
-                          row={r}
-                          client={client}
-                          emailBusy={emailBusy}
-                          onEdit={onEdit}
-                          onViewDocuments={onViewDocuments}
-                          onEmailDocument={onEmailDocument}
-                        />
-                      </div>
 
-                      <div className="space-y-1.5 border-t border-[#e7e0d4] bg-[#f7f3eb]/70 px-2.5 py-2">
-                        <div className="flex min-w-0 items-center gap-2 text-[11px]">
-                          <Calendar className="h-3 w-3 shrink-0 text-amber-700" aria-hidden />
-                          <p className="tabular-nums text-[#44403c]">
-                            Validity: {formatDisplayDate(r.license_validity_date)}
+                        <div className="mt-3 flex flex-wrap items-center gap-2 pl-10">
+                          <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">CM/L</span>
+                          <CmLNumberLink
+                            digits={r.cm_l_digits}
+                            className="rounded-md border border-stone-300 bg-stone-50 px-2 py-1 font-mono text-[11px] font-semibold text-stone-700 no-underline hover:underline"
+                          />
+                          <span
+                            className={cn(
+                              'ml-auto rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em]',
+                              validity.state === 'operative' &&
+                                'border-emerald-700/20 bg-emerald-50 text-emerald-800',
+                              validity.state === 'expiring' &&
+                                'border-amber-700/20 bg-amber-50 text-amber-800',
+                              validity.state === 'expired' &&
+                                'border-red-700/20 bg-red-50 text-red-800',
+                              validity.state === 'unknown' &&
+                                'border-stone-300 bg-stone-100 text-stone-600',
+                            )}
+                          >
+                            {licStyle.label}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 border-t border-stone-200 bg-[#faf8f3] px-3 py-2.5 sm:px-4">
+                      <div className="min-w-0">
+                        <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">Validity</p>
+                        <div className="mt-1 flex min-w-0 items-center gap-1.5 text-xs">
+                          <Calendar className="h-3.5 w-3.5 shrink-0 text-amber-700" aria-hidden />
+                          <p className="truncate tabular-nums text-stone-700">
+                            {formatDisplayDate(r.license_validity_date)}
                             {validity.daysLeft != null && validity.state === 'expiring'
                               ? ` · ${validity.daysLeft}d left`
                               : ''}
                           </p>
                         </div>
-                        <div className="flex min-w-0 items-center gap-2 text-[11px]">
-                          <Wallet className="h-3 w-3 shrink-0 text-amber-700" aria-hidden />
-                          <p className="text-[#57534e]">
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">Billing</p>
+                        <div className="mt-1 flex min-w-0 items-center gap-1.5 text-xs">
+                          <Wallet className="h-3.5 w-3.5 shrink-0 text-amber-700" aria-hidden />
+                          <p className="truncate text-stone-700">
                             {formatInr(r.billing_amount)}
                             {r.billing_frequency ? ` · ${r.billing_frequency}` : ''}
                           </p>
@@ -517,8 +518,17 @@ export function BisProjectsTable({
           </div>
 
           {/* Table — ~10″ / lg+ */}
-          <div className={TABLE_MQ_SHOW}>
+          <div className="bis-projects-table-view min-w-0">
             <Table className={GRID_TABLE}>
+              <colgroup>
+                <col className="w-10" />
+                <col className="w-[29%]" />
+                <col className="w-[15%]" />
+                <col className="w-[15%]" />
+                <col className="w-[16%]" />
+                <col className="w-[11%]" />
+                <col className="bis-projects-action-column" />
+              </colgroup>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead className={cn(thBase, 'w-[4%]')}>
@@ -574,7 +584,7 @@ export function BisProjectsTable({
                     onSort={onSort}
                     className={cn(thBase, 'w-[12%]')}
                   />
-                  <TableHead className={cn(thBase, 'w-[10%]')}>Action</TableHead>
+                  <TableHead className={cn('bis-projects-action-column', thBase)}>Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -593,7 +603,7 @@ export function BisProjectsTable({
                         selected ? rowSelectedClass : index % 2 === 0 ? rowEvenClass : rowOddClass,
                       )}
                     >
-                      <TableCell className="px-2 py-2 text-center align-middle">
+                      <TableCell className="bis-projects-action-column px-2 py-2 text-center align-middle">
                         <input
                           type="checkbox"
                           className={checkboxClass}
@@ -608,7 +618,7 @@ export function BisProjectsTable({
                           recordId={r.client_id}
                           onOpen={onOpenClient}
                           kind="Client"
-                          className="break-words text-sm font-semibold leading-snug"
+                          className="break-all text-sm font-semibold leading-snug"
                         />
                       </TableCell>
                       <TableCell className="px-2 py-2 text-center align-middle text-sm">
@@ -617,6 +627,7 @@ export function BisProjectsTable({
                           recordId={r.is_code_id}
                           onOpen={onOpenIsCode}
                           kind="IS Code"
+                          className="block w-full text-center"
                         />
                       </TableCell>
                       <TableCell className="px-2 py-2 text-center align-middle">

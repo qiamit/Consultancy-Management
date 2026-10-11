@@ -3,13 +3,20 @@ import { toast } from 'sonner'
 import { searchClients, type ClientSearchRow } from '@/lib/clientsApi'
 import {
   deleteClientCertificate,
+  FIRM_NAME_TAKEN,
   findSimilarClients,
+  firmNameConstraintMessage,
+  firmNameTaken,
+  isSameFirmName,
   listClientCertificates,
   listClientContacts,
   listClientSites,
+  loadClientAddressDirectory,
+  type ClientAddressDirectory,
   openClientCertificate,
   saveClientContacts,
   saveClientSites,
+  updateClientCertificateDetails,
   uploadClientCertificate,
   type ClientCertificateFile,
   type SimilarClient,
@@ -24,6 +31,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input'
 import { AuditHistoryDialog } from '@/components/lims/AuditHistoryDialog'
 import { ClientsTableFooterBar } from './ClientsFooterBar'
+import { setClientPortalPassword } from './clientPortalSecretApi'
 import { ClientsForm } from './ClientsForm'
 import { ClientsHeaderBar } from './ClientsHeaderBar'
 import { ClientsTable, type ClientSortDir, type ClientSortKey } from './ClientsTable'
@@ -90,13 +98,18 @@ function formatPermanentDeleteMessage(
 
 const nameCollator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true })
 
-/** CSV columns matching every Client form field (+ id for round-trip). */
+/** CSV columns for every Client form field. Id and the Manak password are never exported. */
 const CLIENT_CSV_HEADERS = [
   'gst_number',
+  'pan',
+  'sector',
   'company_type',
   'company_scale',
   'company_name',
+  'women_entrepreneur',
+  'startup_status',
   'address',
+  'factory_address',
   'pin_code',
   'district',
   'state',
@@ -108,16 +121,23 @@ const CLIENT_CSV_HEADERS = [
   'opening_balance',
   'balance_type',
   'payment_term',
+  'longitude',
+  'latitude',
+  'manak_user_id',
   'remark',
-  'id',
 ] as const
 
 const CLIENT_CSV_HEADER_ALIASES: Record<(typeof CLIENT_CSV_HEADERS)[number], string[]> = {
   gst_number: ['gst_number', 'gst number', 'gst', 'gstnumber'],
+  pan: ['pan', 'pan number', 'pan_number'],
+  sector: ['sector'],
   company_type: ['company_type', 'company type', 'type'],
   company_scale: ['company_scale', 'company scale', 'scale'],
   company_name: ['company_name', 'company name', 'name of the company', 'name', 'client'],
-  address: ['address', 'address of the company', 'company address'],
+  women_entrepreneur: ['women_entrepreneur', 'women entrepreneur', 'woman entrepreneur'],
+  startup_status: ['startup_status', 'startup', 'startup status'],
+  address: ['address', 'address of the company', 'company address', 'office address', 'office_address'],
+  factory_address: ['factory_address', 'factory address'],
   pin_code: ['pin_code', 'pin code', 'pincode', 'postal code', 'zip'],
   district: ['district'],
   state: ['state'],
@@ -135,9 +155,13 @@ const CLIENT_CSV_HEADER_ALIASES: Record<(typeof CLIENT_CSV_HEADERS)[number], str
   opening_balance: ['opening_balance', 'opening balance', 'balance'],
   balance_type: ['balance_type', 'balance type', 'dr_cr', 'dr/cr'],
   payment_term: ['payment_term', 'payment term', 'payment terms'],
+  longitude: ['longitude', 'long'],
+  latitude: ['latitude', 'lat'],
+  manak_user_id: ['manak_user_id', 'manak online user id', 'manak user id', 'portal user id', 'portal_user_id'],
   remark: ['remark', 'remarks', 'note', 'notes'],
-  id: ['id', 'client_id', 'uuid'],
 }
+
+const CLIENT_CSV_ID_ALIASES = ['id', 'client_id', 'uuid']
 
 function normalizeCsvHeaderKey(value: string): string {
   return value
@@ -156,6 +180,9 @@ function resolveCsvHeaderIndex(header: string[]): Record<string, number> {
     const idx = normalized.findIndex((h) => aliases.includes(h) || h === field)
     if (idx >= 0) map[field] = idx
   }
+  const idAliases = CLIENT_CSV_ID_ALIASES.map(normalizeCsvHeaderKey)
+  const idIdx = normalized.findIndex((h) => idAliases.includes(h))
+  if (idIdx >= 0) map.id = idIdx
   return map
 }
 
@@ -187,7 +214,21 @@ const formatSupabaseError = (err: unknown) => {
 const CLIENT_FORM_COLUMNS_LEGACY =
   'id, gst_number, company_type, company_scale, company_name, contact_person_name, country_code, mobile, email, address, pin_code, district, state, country, opening_balance, balance_type, payment_term, remark, archived_at'
 const CLIENT_FORM_COLUMNS =
-  `${CLIENT_FORM_COLUMNS_LEGACY}, pan, cin, llpin, udyam_no, msme_category, udyam_date, constitution, sector, is_startup, startup_dpiit_no, is_women_entrepreneur, gst_registration_type, gst_state_code, client_status, lead_source, referred_by, longitude, latitude`
+  `${CLIENT_FORM_COLUMNS_LEGACY}, pan, cin, llpin, udyam_no, msme_category, udyam_date, constitution, sector, is_startup, startup_dpiit_no, is_women_entrepreneur, gst_registration_type, gst_state_code, client_status, lead_source, referred_by`
+const CLIENT_FORM_COLUMNS_GEO = `${CLIENT_FORM_COLUMNS}, longitude, latitude`
+const CLIENT_FORM_COLUMNS_FLAGS = `${CLIENT_FORM_COLUMNS}, women_entrepreneur, startup_status`
+const CLIENT_FORM_COLUMNS_EXTRA = `${CLIENT_FORM_COLUMNS_GEO}, women_entrepreneur, startup_status`
+const CLIENT_FORM_COLUMNS_MANAK = `${CLIENT_FORM_COLUMNS_EXTRA}, manak_user_id, manak_password_set`
+
+function missingColumnName(error: { message?: string } | null) {
+  const message = error?.message ?? ''
+  return (
+    message.match(/'([a-z0-9_]+)' column/i)?.[1]
+    ?? message.match(/column (?:[a-z0-9_]+\.)?([a-z0-9_]+) does not exist/i)?.[1]
+    ?? message.match(/column "([a-z0-9_]+)"/i)?.[1]
+    ?? null
+  )
+}
 
 function missingColumnError(error: { code?: string; message?: string } | null) {
   if (!error) return false
@@ -195,12 +236,24 @@ function missingColumnError(error: { code?: string; message?: string } | null) {
 }
 
 async function loadClientForForm(id: string): Promise<ClientRow> {
-  const first = await supabase.from('clients').select(CLIENT_FORM_COLUMNS).eq('id', id).single()
-  if (!first.error && first.data) return first.data as ClientRow
-  if (!missingColumnError(first.error)) throw first.error ?? new Error('Client not found')
-  const second = await supabase.from('clients').select(CLIENT_FORM_COLUMNS_LEGACY).eq('id', id).single()
-  if (second.error || !second.data) throw second.error ?? new Error('Client not found')
-  return second.data as ClientRow
+  const selects = [CLIENT_FORM_COLUMNS_MANAK, CLIENT_FORM_COLUMNS_EXTRA, CLIENT_FORM_COLUMNS_FLAGS, CLIENT_FORM_COLUMNS_GEO, CLIENT_FORM_COLUMNS, CLIENT_FORM_COLUMNS_LEGACY]
+  let lastError: { message?: string } | null = null
+  let row: ClientRow | null = null
+  for (const columns of selects) {
+    const result = await supabase.from('clients').select(columns).eq('id', id).single()
+    if (!result.error && result.data) {
+      row = result.data as unknown as ClientRow
+      break
+    }
+    lastError = result.error
+    if (!missingColumnError(result.error)) throw result.error ?? new Error('Client not found')
+  }
+  if (!row) throw lastError ?? new Error('Client not found')
+  if (!('manak_user_id' in row)) {
+    const manak = await supabase.from('clients').select('manak_user_id, manak_password_set').eq('id', id).maybeSingle()
+    if (!manak.error && manak.data) return { ...row, ...(manak.data as { manak_user_id?: string | null; manak_password_set?: boolean | null }) }
+  }
+  return row
 }
 
 function mapSearchRow(row: ClientSearchRow): ClientRow {
@@ -227,6 +280,30 @@ function mapSearchRow(row: ClientSearchRow): ClientRow {
   }
 }
 
+function withFactorySameAsOffice(form: ClientFormType): ClientFormType {
+  const factory = form.sites.find((site) => site.siteRole === 'Factory')?.address ?? ''
+  const same = !factory.trim() || factory.trim().toLowerCase() === form.address.trim().toLowerCase()
+  if (!same) return { ...form, factorySameAsOffice: false }
+  return {
+    ...form,
+    factorySameAsOffice: true,
+    sites: form.sites.map((site) => (site.siteRole === 'Factory' ? { ...site, address: form.address } : site)),
+  }
+}
+
+function yesNoFormFields(row: ClientRow) {
+  const startupStatus = String((row as { startup_status?: string | null }).startup_status ?? '').trim()
+    || ((row as { is_startup?: boolean | null }).is_startup ? 'Yes' : 'No')
+  const womenEntrepreneur = String((row as { women_entrepreneur?: string | null }).women_entrepreneur ?? '').trim()
+    || ((row as { is_women_entrepreneur?: boolean | null }).is_women_entrepreneur ? 'Yes' : 'No')
+  return {
+    isStartup: startupStatus.trim().toLowerCase() === 'yes',
+    startupStatus,
+    isWomenEntrepreneur: womenEntrepreneur.trim().toLowerCase() === 'yes',
+    womenEntrepreneur,
+  }
+}
+
 function rowToClientForm(row: ClientRow): ClientFormType {
   return {
     gstNumber: row.gst_number ?? '',
@@ -245,8 +322,12 @@ function rowToClientForm(row: ClientRow): ClientFormType {
     openingBalance: String(row.opening_balance ?? 0),
     balanceType: row.balance_type,
     paymentTerm: (row.payment_term as ClientFormType['paymentTerm']) || '100 % Advance',
-    longitude: row.longitude ?? '',
-    latitude: row.latitude ?? '',
+    longitude: String((row as { longitude?: string | number | null }).longitude ?? ''),
+    latitude: String((row as { latitude?: string | number | null }).latitude ?? ''),
+    manakUserId: String((row as { manak_user_id?: string | null }).manak_user_id ?? ''),
+    manakPassword: '',
+    manakPasswordSet: Boolean((row as { manak_password_set?: boolean | null }).manak_password_set),
+    clearManakPassword: false,
     remark: row.remark ?? '',
     pan: row.pan ?? '',
     cin: String((row as { cin?: string | null }).cin ?? ''),
@@ -256,15 +337,15 @@ function rowToClientForm(row: ClientRow): ClientFormType {
     udyamDate: String((row as { udyam_date?: string | null }).udyam_date ?? '').slice(0, 10),
     constitution: String((row as { constitution?: string | null }).constitution ?? ''),
     sector: ((row.sector ?? '') as ClientFormType['sector']) || '',
-    isStartup: Boolean((row as { is_startup?: boolean | null }).is_startup),
+    ...yesNoFormFields(row),
     startupDpiitNo: String((row as { startup_dpiit_no?: string | null }).startup_dpiit_no ?? ''),
-    isWomenEntrepreneur: Boolean((row as { is_women_entrepreneur?: boolean | null }).is_women_entrepreneur),
     gstRegistrationType: String((row as { gst_registration_type?: string | null }).gst_registration_type ?? ''),
     gstStateCode: String((row as { gst_state_code?: string | null }).gst_state_code ?? ''),
     clientStatus: ((row.client_status as ClientFormType['clientStatus']) || 'Active'),
     leadSource: String((row as { lead_source?: string | null }).lead_source ?? ''),
     referredBy: String((row as { referred_by?: string | null }).referred_by ?? ''),
     panFromGstin: false,
+    factorySameAsOffice: true,
     sites: emptyClientSites(),
     contacts: emptyClientContacts(),
   }
@@ -305,15 +386,21 @@ export default function ClientsMasterPage() {
   const [sortKey, setSortKey] = useState<ClientSortKey>('companyIdentity')
   const [sortDir, setSortDir] = useState<ClientSortDir>('asc')
 
-  const [states, setStates] = useState<Array<{ id: string; label: string }>>(() => [{ id: 'default-state', label: DEFAULT_STATE }])
-  const [countries, setCountries] = useState<Array<{ id: string; label: string }>>(() => [{ id: 'default-country', label: DEFAULT_COUNTRY }])
+  const [states, setStates] = useState<Array<{ id: string; label: string }>>(() => [])
+  const [countries, setCountries] = useState<Array<{ id: string; label: string }>>(() => [])
   const [districts, setDistricts] = useState<Array<{ id: string; label: string }>>(() => [])
   const [pinCodes, setPinCodes] = useState<Array<{ id: string; label: string }>>(() => [])
-  const [countryCodes, setCountryCodes] = useState<Array<{ id: string; value: string; label: string }>>(() => [
-    { id: 'default-code', value: '+91', label: '+91 (IN)' },
-  ])
+  const [addressDirectory, setAddressDirectory] = useState<ClientAddressDirectory>({
+    byPin: new Map(),
+    districts: [],
+    states: [],
+    countries: [],
+  })
+  const [countryCodes, setCountryCodes] = useState<Array<{ id: string; value: string; label: string }>>(() => [])
   const [companyTypes, setCompanyTypes] = useState<Array<{ id: string; label: string }>>(() => [])
   const [companyScales, setCompanyScales] = useState<Array<{ id: string; label: string }>>(() => [])
+  const [womenOptions, setWomenOptions] = useState<Array<{ id: string; label: string }>>(() => [])
+  const [startupOptions, setStartupOptions] = useState<Array<{ id: string; label: string }>>(() => [])
   const [paymentTerms, setPaymentTerms] = useState<Array<{ id: string; label: string }>>(() => [])
 
   const [stateDialogOpen, setStateDialogOpen] = useState(false)
@@ -336,6 +423,12 @@ export default function ClientsMasterPage() {
 
   const [companyScaleDialogOpen, setCompanyScaleDialogOpen] = useState(false)
   const [newCompanyScale, setNewCompanyScale] = useState('')
+
+  const [womenDialogOpen, setWomenDialogOpen] = useState(false)
+  const [newWomenOption, setNewWomenOption] = useState('')
+
+  const [startupDialogOpen, setStartupDialogOpen] = useState(false)
+  const [newStartupOption, setNewStartupOption] = useState('')
 
   const [paymentTermDialogOpen, setPaymentTermDialogOpen] = useState(false)
   const [newPaymentTerm, setNewPaymentTerm] = useState('')
@@ -406,22 +499,10 @@ export default function ClientsMasterPage() {
       const byCategory = (cat: string) => rows.filter((r) => r.category === cat)
 
       const stateRows = byCategory('state')
-      setStates(() => {
-        const base = [{ id: 'default-state', label: DEFAULT_STATE }]
-        const fromDb = stateRows.map((r) => ({ id: r.id, label: r.label }))
-        const merged = [...base, ...fromDb]
-        const uniq = new Map(merged.map((x) => [x.label.toLowerCase(), x]))
-        return Array.from(uniq.values()).sort((a, b) => a.label.localeCompare(b.label))
-      })
+      setStates(() => stateRows.map((r) => ({ id: r.id, label: r.label })).sort((a, b) => a.label.localeCompare(b.label)))
 
       const countryRows = byCategory('country')
-      setCountries(() => {
-        const base = [{ id: 'default-country', label: DEFAULT_COUNTRY }]
-        const fromDb = countryRows.map((r) => ({ id: r.id, label: r.label }))
-        const merged = [...base, ...fromDb]
-        const uniq = new Map(merged.map((x) => [x.label.toLowerCase(), x]))
-        return Array.from(uniq.values()).sort((a, b) => a.label.localeCompare(b.label))
-      })
+      setCountries(() => countryRows.map((r) => ({ id: r.id, label: r.label })).sort((a, b) => a.label.localeCompare(b.label)))
 
       const districtRows = byCategory('district')
       setDistricts(() => districtRows.map((r) => ({ id: r.id, label: r.label })).sort((a, b) => a.label.localeCompare(b.label)))
@@ -430,19 +511,19 @@ export default function ClientsMasterPage() {
       setPinCodes(() => pinRows.map((r) => ({ id: r.id, label: r.label })).sort((a, b) => a.label.localeCompare(b.label)))
 
       const codeRows = byCategory('country_code')
-      setCountryCodes(() => {
-        const base = [{ id: 'default-code', value: '+91', label: '+91 (IN)' }]
-        const fromDb = codeRows
+      setCountryCodes(() =>
+        codeRows
           .map((r) => ({ id: r.id, value: r.value ?? r.label, label: r.label }))
-          .filter((r) => r.value)
-        const merged = [...base, ...fromDb]
-        const uniq = new Map(merged.map((x) => [x.value, x]))
-        return Array.from(uniq.values())
-      })
+          .filter((r) => r.value),
+      )
 
-      setCompanyTypes(() => byCategory('company_type').map((r) => ({ id: r.id, label: r.label })))
-      setCompanyScales(() => byCategory('company_scale').map((r) => ({ id: r.id, label: r.label })))
-      setPaymentTerms(() => byCategory('payment_term').map((r) => ({ id: r.id, label: r.label })))
+      const byLabel = (rows: Array<{ id: string; label: string }>) =>
+        [...rows].sort((a, b) => a.label.localeCompare(b.label))
+      setCompanyTypes(() => byLabel(byCategory('company_type').map((r) => ({ id: r.id, label: r.label }))))
+      setCompanyScales(() => byLabel(byCategory('company_scale').map((r) => ({ id: r.id, label: r.label }))))
+      setWomenOptions(() => byLabel(byCategory('women_entrepreneur').map((r) => ({ id: r.id, label: r.label }))))
+      setStartupOptions(() => byLabel(byCategory('startup').map((r) => ({ id: r.id, label: r.label }))))
+      setPaymentTerms(() => byLabel(byCategory('payment_term').map((r) => ({ id: r.id, label: r.label }))))
     } catch (err) {
       setSaveMessage((prev) => prev ?? (err instanceof Error ? err.message : 'Unable to load masters'))
     }
@@ -455,6 +536,18 @@ export default function ClientsMasterPage() {
 
   useEffect(() => {
     void loadMasterOptions()
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    void loadClientAddressDirectory()
+      .then((directory) => {
+        if (!cancelled) setAddressDirectory(directory)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   useEffect(() => {
@@ -491,11 +584,11 @@ export default function ClientsMasterPage() {
         listClientCertificates(editId),
       ])
       if (cancelled) return
-      setForm({
+      setForm(withFactorySameAsOffice({
         ...base,
         sites: sites.length > 0 ? sites : base.sites,
         contacts: contacts.length > 0 ? contacts : base.contacts,
-      })
+      }))
       setCertificates(files)
       hydratedEditRef.current = editId
     })()
@@ -504,7 +597,7 @@ export default function ClientsMasterPage() {
     }
   }, [editId, setEdit])
 
-  const handleAddState = () => {
+  const handleAddState = (close = true) => {
     if (!canEdit) {
       setSaveMessage(VIEW_ONLY_MSG)
       return
@@ -530,12 +623,12 @@ export default function ClientsMasterPage() {
         setSaveMessage(err instanceof Error ? err.message : 'Unable to add state')
       } finally {
         setNewStateName('')
-        setStateDialogOpen(false)
+        if (close) setStateDialogOpen(false)
       }
     })()
   }
 
-  const handleAddCountry = () => {
+  const handleAddCountry = (close = true) => {
     if (!canEdit) {
       setSaveMessage(VIEW_ONLY_MSG)
       return
@@ -561,12 +654,12 @@ export default function ClientsMasterPage() {
         setSaveMessage(err instanceof Error ? err.message : 'Unable to add country')
       } finally {
         setNewCountryName('')
-        setCountryDialogOpen(false)
+        if (close) setCountryDialogOpen(false)
       }
     })()
   }
 
-  const handleAddDistrict = () => {
+  const handleAddDistrict = (close = true) => {
     if (!canEdit) {
       setSaveMessage(VIEW_ONLY_MSG)
       return
@@ -592,12 +685,12 @@ export default function ClientsMasterPage() {
         setSaveMessage(err instanceof Error ? err.message : 'Unable to add district')
       } finally {
         setNewDistrictName('')
-        setDistrictDialogOpen(false)
+        if (close) setDistrictDialogOpen(false)
       }
     })()
   }
 
-  const handleAddPinCode = () => {
+  const handleAddPinCode = (close = true) => {
     if (!canEdit) {
       setSaveMessage(VIEW_ONLY_MSG)
       return
@@ -623,7 +716,7 @@ export default function ClientsMasterPage() {
         setSaveMessage(err instanceof Error ? err.message : 'Unable to add pin code')
       } finally {
         setNewPinCode('')
-        setPinCodeDialogOpen(false)
+        if (close) setPinCodeDialogOpen(false)
       }
     })()
   }
@@ -635,6 +728,30 @@ export default function ClientsMasterPage() {
     }
     void (async () => {
       try {
+        if (category === 'women_entrepreneur' && id.startsWith('default-')) {
+          setWomenOptions((prev) => prev.filter((item) => item.id !== id))
+          return
+        }
+        if (category === 'startup' && id.startsWith('default-')) {
+          setStartupOptions((prev) => prev.filter((item) => item.id !== id))
+          return
+        }
+        if (category === 'country' && id.startsWith('default-')) {
+          setCountries((prev) => prev.filter((item) => item.id !== id))
+          return
+        }
+        if (category === 'state' && id.startsWith('default-')) {
+          setStates((prev) => prev.filter((item) => item.id !== id))
+          return
+        }
+        if (category === 'district' && id.startsWith('default-')) {
+          setDistricts((prev) => prev.filter((item) => item.id !== id))
+          return
+        }
+        if (category === 'pin_code' && id.startsWith('default-')) {
+          setPinCodes((prev) => prev.filter((item) => item.id !== id))
+          return
+        }
         if (!id || id.startsWith('default-') || id.startsWith('db-')) return
         const { error } = await supabase.from('client_master_options').delete().eq('id', id)
         if (error) throw error
@@ -646,6 +763,8 @@ export default function ClientsMasterPage() {
         if (category === 'country_code') setCountryCodes((prev) => prev.filter((x) => x.id !== id))
         if (category === 'company_type') setCompanyTypes((prev) => prev.filter((x) => x.id !== id))
         if (category === 'company_scale') setCompanyScales((prev) => prev.filter((x) => x.id !== id))
+        if (category === 'women_entrepreneur') setWomenOptions((prev) => prev.filter((x) => x.id !== id))
+        if (category === 'startup') setStartupOptions((prev) => prev.filter((x) => x.id !== id))
         if (category === 'payment_term') setPaymentTerms((prev) => prev.filter((x) => x.id !== id))
       } catch (err) {
         setSaveMessage(err instanceof Error ? err.message : 'Unable to delete option')
@@ -690,6 +809,8 @@ export default function ClientsMasterPage() {
           if (category === 'country_code') return countryCodes.find((x) => x.id === id)?.value
           if (category === 'company_type') return companyTypes.find((x) => x.id === id)?.label
           if (category === 'company_scale') return companyScales.find((x) => x.id === id)?.label
+          if (category === 'women_entrepreneur') return womenOptions.find((x) => x.id === id)?.label
+          if (category === 'startup') return startupOptions.find((x) => x.id === id)?.label
           if (category === 'payment_term') return paymentTerms.find((x) => x.id === id)?.label
           return undefined
         }
@@ -717,6 +838,8 @@ export default function ClientsMasterPage() {
         }
         if (category === 'company_type') setCompanyTypes((prev) => sortByLabel(prev.map((x) => (x.id === id ? { ...x, label: name } : x))))
         if (category === 'company_scale') setCompanyScales((prev) => sortByLabel(prev.map((x) => (x.id === id ? { ...x, label: name } : x))))
+        if (category === 'women_entrepreneur') setWomenOptions((prev) => sortByLabel(prev.map((x) => (x.id === id ? { ...x, label: name } : x))))
+        if (category === 'startup') setStartupOptions((prev) => sortByLabel(prev.map((x) => (x.id === id ? { ...x, label: name } : x))))
         if (category === 'payment_term') setPaymentTerms((prev) => sortByLabel(prev.map((x) => (x.id === id ? { ...x, label: name } : x))))
 
         const clientField = CLIENT_FIELD_BY_CATEGORY[category]
@@ -736,6 +859,12 @@ export default function ClientsMasterPage() {
             if (category === 'payment_term' && prev.paymentTerm === oldLabel) {
               return { ...prev, paymentTerm: name as ClientFormType['paymentTerm'] }
             }
+            if (category === 'women_entrepreneur' && prev.womenEntrepreneur === oldLabel) {
+              return { ...prev, womenEntrepreneur: name, isWomenEntrepreneur: name.trim().toLowerCase() === 'yes' }
+            }
+            if (category === 'startup' && prev.startupStatus === oldLabel) {
+              return { ...prev, startupStatus: name, isStartup: name.trim().toLowerCase() === 'yes' }
+            }
             return prev
           })
 
@@ -745,6 +874,16 @@ export default function ClientsMasterPage() {
             .eq(clientField, oldLabel)
           if (clientErr) throw clientErr
           await loadClients()
+        }
+        if ((category === 'women_entrepreneur' || category === 'startup') && oldLabel && oldLabel !== name) {
+          const column = category === 'women_entrepreneur' ? 'women_entrepreneur' : 'startup_status'
+          const flag = category === 'women_entrepreneur' ? 'is_women_entrepreneur' : 'is_startup'
+          const { error: labelErr } = await supabase
+            .from('clients')
+            .update({ [column]: name, [flag]: name.trim().toLowerCase() === 'yes' })
+            .eq(column, oldLabel)
+          if (labelErr && !missingColumnError(labelErr)) throw labelErr
+          if (!labelErr) await loadClients()
         }
       } catch (err) {
         setSaveMessage(err instanceof Error ? err.message : 'Unable to update option')
@@ -777,6 +916,14 @@ export default function ClientsMasterPage() {
           setNewCompanyScale('')
           setCompanyScaleDialogOpen(false)
         }
+        if (category === 'women_entrepreneur') {
+          setNewWomenOption('')
+          setWomenDialogOpen(false)
+        }
+        if (category === 'startup') {
+          setNewStartupOption('')
+          setStartupDialogOpen(false)
+        }
         if (category === 'payment_term') {
           setNewPaymentTerm('')
           setPaymentTermDialogOpen(false)
@@ -785,22 +932,7 @@ export default function ClientsMasterPage() {
     })()
   }
 
-  const pinAutoFill = useMemo(() => {
-    const m = new Map<string, { district?: string; state?: string; country?: string }>()
-    for (const r of rows) {
-      const pin = (r.pin_code ?? '').trim()
-      if (!pin) continue
-      if (m.has(pin)) continue
-      m.set(pin, {
-        district: r.district ?? undefined,
-        state: r.state ?? undefined,
-        country: r.country ?? undefined,
-      })
-    }
-    return m
-  }, [rows])
-
-  const handleAddCountryCode = () => {
+  const handleAddCountryCode = (close = true) => {
     if (!canEdit) {
       setSaveMessage(VIEW_ONLY_MSG)
       return
@@ -828,7 +960,7 @@ export default function ClientsMasterPage() {
         setSaveMessage(err instanceof Error ? err.message : 'Unable to add code')
       } finally {
         setNewCountryCode('')
-        setCountryCodeDialogOpen(false)
+        if (close) setCountryCodeDialogOpen(false)
       }
     })()
   }
@@ -862,8 +994,18 @@ export default function ClientsMasterPage() {
       setSaveLoading(true)
       try {
         const companyName = toProperTitleCase(form.companyName)
+        if (await firmNameTaken(companyName, editingId)) {
+          setDuplicates([])
+          setSaveMessage(FIRM_NAME_TAKEN)
+          return
+        }
         if (!allowDuplicateSave && !allowDuplicateRef.current) {
-          const hits = (await findSimilarClients(companyName, form.gstNumber)).filter((hit) => hit.id !== editingId)
+          const hits = (await findSimilarClients(companyName, form.gstNumber)).filter((hit) => {
+            if (hit.id === editingId) return false
+            if (isSameFirmName(hit.company_name ?? '', companyName)) return false
+            // Similarity 1 with a different name is the same GSTIN on another unit.
+            return hit.similarity < 1
+          })
           if (hits.length > 0) {
             setDuplicates(hits)
             return
@@ -893,6 +1035,7 @@ export default function ClientsMasterPage() {
           payment_term: form.paymentTerm,
           longitude: form.longitude.trim() || null,
           latitude: form.latitude.trim() || null,
+          manak_user_id: form.manakUserId.trim() || null,
           remark: form.remark.trim() || null,
           pan: form.pan.trim().toUpperCase() || null,
           cin: form.cin.trim() || null,
@@ -902,9 +1045,11 @@ export default function ClientsMasterPage() {
           udyam_date: form.udyamDate || null,
           constitution: form.constitution.trim() || null,
           sector: form.sector || null,
-          is_startup: form.isStartup,
+          is_startup: form.startupStatus.trim().toLowerCase() === 'yes',
+          startup_status: form.startupStatus.trim() || 'No',
           startup_dpiit_no: form.startupDpiitNo.trim() || null,
-          is_women_entrepreneur: form.isWomenEntrepreneur,
+          is_women_entrepreneur: form.womenEntrepreneur.trim().toLowerCase() === 'yes',
+          women_entrepreneur: form.womenEntrepreneur.trim() || 'No',
           gst_registration_type: form.gstRegistrationType.trim() || null,
           gst_state_code: form.gstStateCode.trim() || null,
           client_status: form.clientStatus,
@@ -914,22 +1059,45 @@ export default function ClientsMasterPage() {
 
         // Prefer insert/update over upsert — avoids 42P10 when the unique index
         // on company_name is missing on some environments.
-        let savedId = editingId
-        if (editingId) {
-          const { data, error } = await supabase.from('clients').update(payload).eq('id', editingId).select('id')
-          if (error) throw error
-          if (!data || data.length === 0) {
-            throw new Error('You do not have edit access for this record (view-only).')
+        const writeClient = async (row: Record<string, unknown>) => {
+          if (editingId) {
+            const { data, error } = await supabase.from('clients').update(row).eq('id', editingId).select('id')
+            if (error) throw error
+            if (!data || data.length === 0) {
+              throw new Error('You do not have edit access for this record (view-only).')
+            }
+            return editingId
           }
-        } else {
-          const { data, error } = await supabase.from('clients').insert(payload).select('id').single()
+          const { data, error } = await supabase.from('clients').insert(row).select('id').single()
           if (error) throw error
-          savedId = (data as { id: string } | null)?.id ?? null
+          return (data as { id: string } | null)?.id ?? null
+        }
+        let savedId: string | null = null
+        // Coordinates are now part of the required client schema. Never retry a
+        // save without them, or the form can close while silently losing values.
+        const optionalColumns = ['women_entrepreneur', 'startup_status', 'manak_user_id']
+        const row: Record<string, unknown> = { ...payload }
+        for (let attempt = 0; attempt < optionalColumns.length + 1; attempt += 1) {
+          try {
+            savedId = await writeClient(row)
+            break
+          } catch (error) {
+            const err = error as { code?: string; message?: string }
+            const column = missingColumnName(err)
+            if (!missingColumnError(err) || !column || !optionalColumns.includes(column) || !(column in row)) throw error
+            delete row[column]
+          }
         }
         if (savedId) {
           const sites = (form.sites.length > 0 ? form.sites : emptyClientSites()).map((site, index) => {
             const primaryOffice = site.siteRole === 'Registered Office' && (site.isPrimary || index === 0)
-            if (!primaryOffice) return { ...site, isPrimary: false }
+            if (!primaryOffice) {
+              return {
+                ...site,
+                isPrimary: false,
+                address: site.siteRole === 'Factory' && form.factorySameAsOffice ? form.address : site.address,
+              }
+            }
             return {
               ...site,
               isPrimary: true,
@@ -953,8 +1121,11 @@ export default function ClientsMasterPage() {
           })
           await saveClientSites(savedId, sites)
           await saveClientContacts(savedId, contacts)
+          if (form.clearManakPassword) await setClientPortalPassword(savedId, null)
+          else if (form.manakPassword.trim()) await setClientPortalPassword(savedId, form.manakPassword)
         }
         invalidateClientsCache()
+        void loadClientAddressDirectory().then(setAddressDirectory).catch(() => {})
 
         setSaveMessage('Saved successfully.')
         setForm(emptyClientForm())
@@ -962,7 +1133,8 @@ export default function ClientsMasterPage() {
         setEdit(null)
         await loadClients()
       } catch (err) {
-        setSaveMessage(formatSupabaseError(err))
+        const taken = firmNameConstraintMessage(err as { code?: string; message?: string })
+        setSaveMessage(taken ?? formatSupabaseError(err))
       } finally {
         setSaveLoading(false)
       }
@@ -989,12 +1161,13 @@ export default function ClientsMasterPage() {
       listClientContacts(id),
       listClientCertificates(id),
     ])
-    const next = {
+    const next = withFactorySameAsOffice({
       ...base,
       sites: sites.length > 0 ? sites.map((site) => (mode === 'copy' ? { ...site, id: undefined } : site)) : base.sites,
       contacts: contacts.length > 0 ? contacts.map((contact) => (mode === 'copy' ? { ...contact, id: undefined } : contact)) : base.contacts,
       companyName: mode === 'copy' ? (copyLabel || `${full.company_name} - Copy`) : base.companyName,
-    }
+      ...(mode === 'copy' ? { manakUserId: '', manakPassword: '', manakPasswordSet: false, clearManakPassword: false } : {}),
+    })
     setForm(next)
     setCertificates(mode === 'copy' ? [] : files)
     hydratedEditRef.current = mode === 'copy' ? 'new' : id
@@ -1257,8 +1430,16 @@ export default function ClientsMasterPage() {
         if (error) throw error
         const res = (data ?? null) as MasterDeleteResult | null
         const deleted = Array.isArray(res?.deleted) ? res.deleted : []
+        const paths = (Array.isArray(res?.storage_paths) ? res.storage_paths : []).filter(
+          (path): path is string => typeof path === 'string' && path.length > 0,
+        )
+        let storageWarn = ''
+        if (paths.length > 0) {
+          const { error: rmErr } = await supabase.storage.from('client-certificates').remove(paths)
+          if (rmErr) storageWarn = ' Some certificate files could not be removed from storage.'
+        }
         if (deleted.length > 0) invalidateClientsCache()
-        setSaveMessage(formatPermanentDeleteMessage(res, (id) => rows.find((r) => r.id === id)?.company_name || id))
+        setSaveMessage(`${formatPermanentDeleteMessage(res, (id) => rows.find((r) => r.id === id)?.company_name || id)}${storageWarn}`)
         setSelectedIds(new Set())
         await loadClients()
       } catch (err) {
@@ -1275,40 +1456,60 @@ export default function ClientsMasterPage() {
       setSaveMessage('No clients to export.')
       return
     }
-
-    const headers = [...CLIENT_CSV_HEADERS]
-    const lines = exportRows.map((r) => ({
-      gst_number: r.gst_number ?? '',
-      company_type: r.company_type,
-      company_scale: r.company_scale,
-      company_name: r.company_name,
-      address: r.address ?? '',
-      pin_code: r.pin_code ?? '',
-      district: r.district ?? '',
-      state: r.state ?? '',
-      country: r.country ?? '',
-      contact_person_name: r.contact_person_name ?? '',
-      country_code: r.country_code ?? '',
-      mobile: r.mobile ?? '',
-      email: r.email ?? '',
-      opening_balance: String(r.opening_balance ?? 0),
-      balance_type: r.balance_type,
-      payment_term: r.payment_term ?? '',
-      remark: r.remark ?? '',
-      id: r.id,
-    }))
-
-    const csv = `\uFEFF${toCsv(headers, lines)}`
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `clients-export-${new Date().toISOString().slice(0, 10)}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
-    const exportNote = `Exported this page (${exportRows.length} of ${total}).`
-    toast(exportNote)
-    setSaveMessage(exportNote)
+    void (async () => {
+      const ids = exportRows.map((row) => row.id)
+      const [fullById, factoryById] = await Promise.all([
+        loadClientsForExport(ids),
+        loadFactoryAddresses(ids),
+      ])
+      const cell = (row: Record<string, unknown>, key: string) => {
+        const value = row[key]
+        return value == null ? '' : String(value)
+      }
+      const lines = exportRows.map((listed) => {
+        const row = fullById.get(listed.id) ?? (listed as unknown as Record<string, unknown>)
+        return {
+          gst_number: cell(row, 'gst_number'),
+          pan: cell(row, 'pan'),
+          sector: cell(row, 'sector'),
+          company_type: cell(row, 'company_type'),
+          company_scale: cell(row, 'company_scale'),
+          company_name: cell(row, 'company_name'),
+          women_entrepreneur: yesNoExport(row, 'women_entrepreneur', 'is_women_entrepreneur'),
+          startup_status: yesNoExport(row, 'startup_status', 'is_startup'),
+          address: cell(row, 'address'),
+          factory_address: factoryById.get(listed.id) ?? '',
+          pin_code: cell(row, 'pin_code'),
+          district: cell(row, 'district'),
+          state: cell(row, 'state'),
+          country: cell(row, 'country'),
+          contact_person_name: cell(row, 'contact_person_name'),
+          country_code: cell(row, 'country_code'),
+          mobile: cell(row, 'mobile'),
+          email: cell(row, 'email'),
+          opening_balance: cell(row, 'opening_balance') || '0',
+          balance_type: cell(row, 'balance_type'),
+          payment_term: cell(row, 'payment_term'),
+          longitude: cell(row, 'longitude'),
+          latitude: cell(row, 'latitude'),
+          manak_user_id: cell(row, 'manak_user_id'),
+          remark: cell(row, 'remark'),
+        }
+      })
+      const csv = `\uFEFF${toCsv([...CLIENT_CSV_HEADERS], lines)}`
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `clients-export-${new Date().toISOString().slice(0, 10)}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+      const exportNote = `Exported this page (${exportRows.length} of ${total}).`
+      toast(exportNote)
+      setSaveMessage(exportNote)
+    })().catch((err) => {
+      setSaveMessage(formatSupabaseError(err))
+    })
   }
 
   const handleImport = () => {
@@ -1344,10 +1545,11 @@ export default function ClientsMasterPage() {
         }
 
         const rowsData = records.slice(1).filter((r) => r.some((c) => String(c ?? '').trim().length > 0))
-        const get = (cells: string[], key: (typeof CLIENT_CSV_HEADERS)[number]) => {
+        const get = (cells: string[], key: string) => {
           const idx = col[key]
           return idx == null ? '' : String(cells[idx] ?? '')
         }
+        const has = (key: string) => col[key] != null
 
         const valid: Array<Record<string, unknown>> = []
         const invalid: string[][] = []
@@ -1376,6 +1578,24 @@ export default function ClientsMasterPage() {
             balance_type: pickCsvEnum(get(cells, 'balance_type'), BALANCE_TYPES, 'Dr') as BalanceType,
             payment_term: normalizePaymentTerm(get(cells, 'payment_term')),
             remark: normalizeText(get(cells, 'remark')) || null,
+          }
+          if (has('pan')) payload.pan = normalizeText(get(cells, 'pan')).toUpperCase() || null
+          if (has('sector')) payload.sector = normalizeText(get(cells, 'sector')) || null
+          if (has('women_entrepreneur')) {
+            const women = normalizeText(get(cells, 'women_entrepreneur'))
+            payload.women_entrepreneur = women || null
+            payload.is_women_entrepreneur = women.toLowerCase() === 'yes'
+          }
+          if (has('startup_status')) {
+            const startup = normalizeText(get(cells, 'startup_status'))
+            payload.startup_status = startup || null
+            payload.is_startup = startup.toLowerCase() === 'yes'
+          }
+          if (has('longitude')) payload.longitude = normalizeText(get(cells, 'longitude')) || null
+          if (has('latitude')) payload.latitude = normalizeText(get(cells, 'latitude')) || null
+          if (has('manak_user_id')) payload.manak_user_id = normalizeText(get(cells, 'manak_user_id')) || null
+          if (has('factory_address')) {
+            payload.factory_address = toProperTitleCase(normalizeText(get(cells, 'factory_address'))) || null
           }
 
           const problems: string[] = []
@@ -1418,19 +1638,9 @@ export default function ClientsMasterPage() {
       try {
         const withId = preview.valid.filter((row) => row.id)
         const byName = preview.valid.filter((row) => !row.id)
-        if (withId.length > 0) {
-          const { error } = await supabase.from('clients').upsert(withId, { onConflict: 'id' })
-          if (error) throw error
-        }
-        if (byName.length > 0) {
-          const { error } = await supabase.from('clients').upsert(byName, { onConflict: 'company_name' })
-          if (error) {
-            if (String(error.code) === '42P10' || /ON CONFLICT/i.test(error.message ?? '')) {
-              const { error: insertErr } = await supabase.from('clients').insert(byName)
-              if (insertErr) throw insertErr
-            } else throw error
-          }
-        }
+        if (withId.length > 0) await writeClientImportRows(withId, 'id')
+        if (byName.length > 0) await writeClientImportRows(byName, 'company_name')
+        await saveImportedFactoryAddresses(preview.valid)
         setSaveMessage(`Imported ${preview.valid.length} valid client(s). ${preview.invalid.length} invalid row(s) were not imported.`)
         setCsvPreview(null)
         invalidateClientsCache()
@@ -1485,9 +1695,11 @@ export default function ClientsMasterPage() {
           persistOnFocusLoss
           aria-describedby={undefined}
           className={cn(
-            limsDialogClass,
-            'max-h-[92vh] max-w-[51.2rem] bg-white',
-            'w-[min(51.2rem,calc(100vw-1.5rem))]',
+            '!flex z-50 h-[100dvh] max-h-[100dvh] translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 bg-white p-0 shadow-none sm:rounded-none',
+            'left-[var(--app-dialog-overlay-left,0px)] top-0 right-0 bottom-0',
+            'w-[calc(100vw-var(--app-dialog-overlay-left,0px))] max-w-none',
+            'border-stone-600 ring-1 ring-amber-700/20',
+            '[&>button]:!rounded-none [&>button]:opacity-100',
           )}
         >
           <div className="relative overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white sm:px-5 sm:py-3">
@@ -1517,7 +1729,7 @@ export default function ClientsMasterPage() {
                 <p className="font-medium">Possible duplicate</p>
                 <ul className="mt-2 space-y-1">
                   {duplicates.map((hit) => (
-                    <li key={hit.id}>{hit.company_name} {hit.gst_number ? `(${hit.gst_number})` : ''}</li>
+                    <li key={hit.id}>{hit.company_name}</li>
                   ))}
                 </ul>
                 <Button type="button" className="mt-3 h-10 min-h-10" onClick={() => { allowDuplicateRef.current = true; setAllowDuplicateSave(true); handleSave() }}>
@@ -1527,19 +1739,39 @@ export default function ClientsMasterPage() {
             ) : null}
             <ClientsForm
             form={form}
+            recordId={editingId}
             onChange={(next) => {
               setAllowDuplicateSave(false)
               setForm(next)
             }}
             clientSaved={Boolean(editingId)}
             certificates={certificates}
-            onUploadCertificate={(certName, file) => {
-              if (!editingId) return
-              void uploadClientCertificate(editingId, certName, file)
+            onUploadCertificate={(input) => {
+              if (!editingId) {
+                const error = new Error('Save the client before uploading a document.')
+                setSaveMessage(error.message)
+                return Promise.reject(error)
+              }
+              return uploadClientCertificate(editingId, input)
                 .then(() => listClientCertificates(editingId))
                 .then(setCertificates)
-                .catch((err) => setSaveMessage(err instanceof Error ? err.message : 'Unable to upload certificate'))
+                .catch((err) => {
+                  setSaveMessage(err instanceof Error ? err.message : 'Unable to upload certificate')
+                  throw err
+                })
             }}
+            onUpdateCertificate={(row, input) => updateClientCertificateDetails(row.id, input)
+              .then(() => {
+                setCertificates((prev) => prev.map((item) => (
+                  item.id === row.id
+                    ? { ...item, cert_name: input.certName.trim(), document_number: input.documentNumber.trim(), issued_on: input.issuedOn }
+                    : item
+                )))
+              })
+              .catch((err) => {
+                setSaveMessage(err instanceof Error ? err.message : 'Unable to update document')
+                throw err
+              })}
             onDeleteCertificate={(row) => {
               void deleteClientCertificate(row)
                 .then(() => setCertificates((prev) => prev.filter((item) => item.id !== row.id)))
@@ -1552,7 +1784,8 @@ export default function ClientsMasterPage() {
             countries={countries}
             districts={districts}
             pinCodes={pinCodes}
-            pinAutoFill={pinAutoFill}
+            pinAutoFill={addressDirectory.byPin}
+            knownPlaces={addressDirectory}
             countryCodes={countryCodes}
             companyTypes={companyTypes}
             companyScales={companyScales}
@@ -1596,12 +1829,12 @@ export default function ClientsMasterPage() {
             setCompanyTypeDialogOpen={setCompanyTypeDialogOpen}
             newCompanyType={newCompanyType}
             setNewCompanyType={setNewCompanyType}
-            onAddCompanyType={() =>
+            onAddCompanyType={(close = true) =>
               addSimpleOption('company_type', newCompanyType, (id) => {
                 setCompanyTypes((prev) => [...prev, { id, label: normalizeText(newCompanyType) }])
                 setForm((prev) => ({ ...prev, companyType: normalizeText(newCompanyType) as ClientFormType['companyType'] }))
                 setNewCompanyType('')
-                setCompanyTypeDialogOpen(false)
+                if (close) setCompanyTypeDialogOpen(false)
               })
             }
             onUpdateCompanyType={(id: string) => updateMasterOption(id, 'company_type', newCompanyType)}
@@ -1610,26 +1843,58 @@ export default function ClientsMasterPage() {
             setCompanyScaleDialogOpen={setCompanyScaleDialogOpen}
             newCompanyScale={newCompanyScale}
             setNewCompanyScale={setNewCompanyScale}
-            onAddCompanyScale={() =>
+            onAddCompanyScale={(close = true) =>
               addSimpleOption('company_scale', newCompanyScale, (id) => {
                 setCompanyScales((prev) => [...prev, { id, label: normalizeText(newCompanyScale) }])
                 setForm((prev) => ({ ...prev, companyScale: normalizeText(newCompanyScale) as ClientFormType['companyScale'] }))
                 setNewCompanyScale('')
-                setCompanyScaleDialogOpen(false)
+                if (close) setCompanyScaleDialogOpen(false)
               })
             }
             onUpdateCompanyScale={(id: string) => updateMasterOption(id, 'company_scale', newCompanyScale)}
             onDeleteCompanyScale={(id: string) => deleteMasterOption(id, 'company_scale')}
+            womenOptions={womenOptions}
+            startupOptions={startupOptions}
+            womenDialogOpen={womenDialogOpen}
+            setWomenDialogOpen={setWomenDialogOpen}
+            newWomenOption={newWomenOption}
+            setNewWomenOption={setNewWomenOption}
+            onAddWomenOption={(close = true) =>
+              addSimpleOption('women_entrepreneur', newWomenOption, (id) => {
+                const label = normalizeText(newWomenOption)
+                setWomenOptions((prev) => [...prev.filter((x) => x.id !== id), { id, label }].sort((a, b) => a.label.localeCompare(b.label)))
+                setForm((prev) => ({ ...prev, womenEntrepreneur: label, isWomenEntrepreneur: label.toLowerCase() === 'yes' }))
+                setNewWomenOption('')
+                if (close) setWomenDialogOpen(false)
+              })
+            }
+            onUpdateWomenOption={(id: string) => updateMasterOption(id, 'women_entrepreneur', newWomenOption)}
+            onDeleteWomenOption={(id: string) => deleteMasterOption(id, 'women_entrepreneur')}
+            startupDialogOpen={startupDialogOpen}
+            setStartupDialogOpen={setStartupDialogOpen}
+            newStartupOption={newStartupOption}
+            setNewStartupOption={setNewStartupOption}
+            onAddStartupOption={(close = true) =>
+              addSimpleOption('startup', newStartupOption, (id) => {
+                const label = normalizeText(newStartupOption)
+                setStartupOptions((prev) => [...prev.filter((x) => x.id !== id), { id, label }].sort((a, b) => a.label.localeCompare(b.label)))
+                setForm((prev) => ({ ...prev, startupStatus: label, isStartup: label.toLowerCase() === 'yes' }))
+                setNewStartupOption('')
+                if (close) setStartupDialogOpen(false)
+              })
+            }
+            onUpdateStartupOption={(id: string) => updateMasterOption(id, 'startup', newStartupOption)}
+            onDeleteStartupOption={(id: string) => deleteMasterOption(id, 'startup')}
             paymentTermDialogOpen={paymentTermDialogOpen}
             setPaymentTermDialogOpen={setPaymentTermDialogOpen}
             newPaymentTerm={newPaymentTerm}
             setNewPaymentTerm={setNewPaymentTerm}
-            onAddPaymentTerm={() =>
+            onAddPaymentTerm={(close = true) =>
               addSimpleOption('payment_term', newPaymentTerm, (id) => {
                 setPaymentTerms((prev) => [...prev, { id, label: normalizeText(newPaymentTerm) }])
                 setForm((prev) => ({ ...prev, paymentTerm: normalizeText(newPaymentTerm) as ClientFormType['paymentTerm'] }))
                 setNewPaymentTerm('')
-                setPaymentTermDialogOpen(false)
+                if (close) setPaymentTermDialogOpen(false)
               })
             }
             onUpdatePaymentTerm={(id: string) => updateMasterOption(id, 'payment_term', newPaymentTerm)}
@@ -1744,6 +2009,150 @@ export default function ClientsMasterPage() {
   )
 }
 
+const CLIENT_EXPORT_COLUMNS = [
+  'id',
+  'gst_number',
+  'pan',
+  'sector',
+  'company_type',
+  'company_scale',
+  'company_name',
+  'women_entrepreneur',
+  'is_women_entrepreneur',
+  'startup_status',
+  'is_startup',
+  'address',
+  'pin_code',
+  'district',
+  'state',
+  'country',
+  'contact_person_name',
+  'country_code',
+  'mobile',
+  'email',
+  'opening_balance',
+  'balance_type',
+  'payment_term',
+  'longitude',
+  'latitude',
+  'manak_user_id',
+  'remark',
+]
+
+function yesNoExport(row: Record<string, unknown>, textKey: string, boolKey: string) {
+  const text = row[textKey]
+  if (text != null && String(text).trim()) return String(text)
+  if (boolKey in row) return row[boolKey] ? 'Yes' : 'No'
+  return ''
+}
+
+async function loadClientsForExport(ids: string[]): Promise<Map<string, Record<string, unknown>>> {
+  let columns = [...CLIENT_EXPORT_COLUMNS]
+  let lastError: { message?: string } | null = null
+  for (let attempt = 0; attempt < columns.length; attempt += 1) {
+    const result = await supabase.from('clients').select(columns.join(',')).in('id', ids)
+    if (!result.error && result.data) {
+      const map = new Map<string, Record<string, unknown>>()
+      for (const raw of result.data as unknown as Record<string, unknown>[]) {
+        const id = String(raw.id ?? '')
+        if (id) map.set(id, raw)
+      }
+      return map
+    }
+    lastError = result.error
+    const column = missingColumnName(result.error)
+    if (!missingColumnError(result.error) || !column || !columns.includes(column)) break
+    columns = columns.filter((name) => name !== column)
+  }
+  if (lastError) throw lastError
+  return new Map()
+}
+
+async function loadFactoryAddresses(ids: string[]): Promise<Map<string, string>> {
+  const map = new Map<string, string>()
+  const { data, error } = await supabase
+    .from('client_sites')
+    .select('client_id, site_role, address')
+    .in('client_id', ids)
+  if (error) {
+    if (error.code === '42P01' || error.code === 'PGRST205') return map
+    throw error
+  }
+  for (const raw of data ?? []) {
+    const row = raw as { client_id?: string; site_role?: string; address?: string | null }
+    if (row.site_role === 'Factory' && row.client_id) map.set(row.client_id, String(row.address ?? ''))
+  }
+  return map
+}
+
+function clientRowWithoutFactory(row: Record<string, unknown>) {
+  const next = { ...row }
+  delete next.factory_address
+  return next
+}
+
+async function writeClientImportRows(rows: Array<Record<string, unknown>>, onConflict: 'id' | 'company_name') {
+  let pending = rows.map(clientRowWithoutFactory)
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const { error } = await supabase.from('clients').upsert(pending, { onConflict })
+    if (!error) return
+    const useInsert = onConflict === 'company_name' && (String(error.code) === '42P10' || /ON CONFLICT/i.test(error.message ?? ''))
+    const failed = useInsert ? await supabase.from('clients').insert(pending) : { error }
+    if (!failed.error) return
+    const column = missingColumnName(failed.error)
+    if (!missingColumnError(failed.error) || !column) throw failed.error
+    pending = pending.map((row) => {
+      const next = { ...row }
+      delete next[column]
+      return next
+    })
+  }
+  throw new Error('Unable to import clients')
+}
+
+async function saveImportedFactoryAddresses(rows: Array<Record<string, unknown>>) {
+  const wanted = rows.filter((row) => String(row.factory_address ?? '').trim())
+  if (wanted.length === 0) return
+  const names = wanted.filter((row) => !row.id).map((row) => String(row.company_name ?? '')).filter(Boolean)
+  const nameToId = new Map<string, string>()
+  if (names.length > 0) {
+    const { data, error } = await supabase.from('clients').select('id, company_name').in('company_name', names)
+    if (error) throw error
+    for (const raw of data ?? []) {
+      const row = raw as { id: string; company_name: string | null }
+      if (row.company_name) nameToId.set(row.company_name, row.id)
+    }
+  }
+  for (const row of wanted) {
+    const clientId = String(row.id ?? nameToId.get(String(row.company_name ?? '')) ?? '')
+    const address = String(row.factory_address ?? '').trim()
+    if (!clientId || !address) continue
+    const existing = await supabase
+      .from('client_sites')
+      .select('id')
+      .eq('client_id', clientId)
+      .eq('site_role', 'Factory')
+      .limit(1)
+      .maybeSingle()
+    if (existing.error) {
+      if (existing.error.code === '42P01' || existing.error.code === 'PGRST205') return
+      throw existing.error
+    }
+    if (existing.data?.id) {
+      const { error } = await supabase.from('client_sites').update({ address }).eq('id', existing.data.id)
+      if (error) throw error
+    } else {
+      const { error } = await supabase.from('client_sites').insert({
+        client_id: clientId,
+        site_role: 'Factory',
+        address,
+        is_primary: false,
+      })
+      if (error) throw error
+    }
+  }
+}
+
 function toCsv(headers: string[], rows: Array<Record<string, string>>) {
   const escape = (value: string) => {
     const v = value ?? ''
@@ -1836,7 +2245,8 @@ function buildCourierSlipPrintHtml(rows: ClientRow[]) {
 
   const slipHtml = (r: ClientRow) => {
     const address = formatClientAddress(r)
-    const mobile = `${r.country_code || '+91'} ${r.mobile || ''}`.trim()
+    const mobileNumber = (r.mobile ?? '').trim()
+    const mobile = mobileNumber ? `${(r.country_code || '+91').trim()} ${mobileNumber}`.trim() : ''
     return `
       <article class="slip">
         <div class="cut">✂ Cut here — half A4 courier slip</div>
