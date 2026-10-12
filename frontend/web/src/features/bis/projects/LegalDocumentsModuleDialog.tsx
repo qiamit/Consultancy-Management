@@ -1068,11 +1068,8 @@ export function LegalDocumentsModuleDialog({
 
       if (showCmpf307Fields && printKind) {
         await saveBisModulePayload(row.id, printKind, {
-          ...cmpf307,
           rows: cmpf307.rows.filter(cmpf307RowHasContent),
           brandsWithoutMarkReasons: cmpf307.brandsWithoutMarkReasons.trim(),
-          signatoryName: cmpf307.signatoryName.trim(),
-          signatoryDesignation: cmpf307.signatoryDesignation.trim(),
         })
         onProjectSaved?.()
         toast.success(`${title} saved.`)
@@ -1853,19 +1850,6 @@ export function LegalDocumentsModuleDialog({
               value={cmpf307}
               onChange={setCmpf307}
               disabled={busy || saving}
-              applicantName={row ? clientDisplayName(row) : ''}
-              applicantAddress={[
-                row?.client?.address,
-                row?.client?.district,
-                row?.client?.state,
-                row?.client?.pin_code,
-              ].map((part) => (part ?? '').trim()).filter(Boolean).join(', ')}
-              applicationNumber={
-                row?.license_number?.trim() && !['N/A', '—'].includes(row.license_number.trim().toUpperCase())
-                  ? row.license_number.trim()
-                  : row?.application_number?.trim() || ''
-              }
-              licenceValidity={(row?.license_validity_date ?? '').slice(0, 10)}
             />
           ) : showCmpf310Fields ? (
             <Cmpf310ModuleFields

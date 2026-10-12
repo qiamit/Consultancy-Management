@@ -64,10 +64,6 @@ export const DEFAULT_APPLICATION_STAGE = 'Under Preparation'
 
 export type BisProjectClientJoin = {
   company_name: string | null
-  address?: string | null
-  district?: string | null
-  state?: string | null
-  pin_code?: string | null
   manak_user_id?: string | null
   manak_password_set?: boolean | null
 }

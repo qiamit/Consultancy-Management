@@ -20,9 +20,9 @@ import {
 } from './types'
 
 const SELECT_WITH_JOINS =
-  '*, client:clients(company_name, address, district, state, pin_code, manak_user_id, manak_password_set), is_code:is_codes(is_number, title, revision_year, part_no, section_no, standard_prefix, unit_of_is)'
+  '*, client:clients(company_name, manak_user_id, manak_password_set), is_code:is_codes(is_number, title, revision_year, part_no, section_no, standard_prefix, unit_of_is)'
 const SELECT_WITH_JOINS_LEGACY =
-  '*, client:clients(company_name, address, district, state, pin_code), is_code:is_codes(is_number, title, revision_year, part_no, section_no, standard_prefix, unit_of_is)'
+  '*, client:clients(company_name), is_code:is_codes(is_number, title, revision_year, part_no, section_no, standard_prefix, unit_of_is)'
 
 function missingManakColumn(error: { code?: string; message?: string } | null) {
   if (!error) return false

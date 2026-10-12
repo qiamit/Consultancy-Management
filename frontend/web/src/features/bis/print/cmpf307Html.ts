@@ -9,7 +9,7 @@ import {
   CMPF_FORM_STYLES,
   type PrintApplicantContext,
 } from './printDocumentShared'
-import { formatDisplayDate } from '../projects/types'
+import { formatDisplayDate, todayIsoDate } from '../projects/types'
 
 export type Cmpf307BrandRow = {
   brandName: string
@@ -99,15 +99,27 @@ export function buildCmpf307Html(data: Cmpf307Data): string {
 export function cmpf307DataFromPrintData(printData: BisPrintData): Cmpf307Data {
   const modulePayload = parseCmpf307Payload(printData.modulePayload ?? null)
   const signatory = printSignatoryDefaults(printData)
+  const management = printData.topManagement ?? {}
+  const managementRows = Array.isArray(management.rows)
+    ? management.rows.filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
+    : []
+  const selectedManagement = managementRows.find((item) => Boolean(item.applySignatureToDocuments))
+  const firstManagement = managementRows.find((item) => String(item.personName ?? '').trim())
+  const managementSignatoryName = String(management.authorizedSignatoryName ?? '').trim() ||
+    String(management.signatoryName ?? '').trim() ||
+    String(selectedManagement?.personName ?? firstManagement?.personName ?? '').trim()
+  const managementSignatoryDesignation = String(management.authorizedSignatoryDesignation ?? '').trim() ||
+    String(management.signatoryDesignation ?? '').trim() ||
+    String(selectedManagement?.designation ?? firstManagement?.designation ?? '').trim()
   return {
     ...applicantContextFromPrintData(printData),
-    signatoryName: modulePayload.signatoryName || signatory.signatoryName,
-    signatoryDesignation: modulePayload.signatoryDesignation || signatory.signatoryDesignation,
+    signatoryName: managementSignatoryName || signatory.signatoryName,
+    signatoryDesignation: managementSignatoryDesignation || signatory.signatoryDesignation,
     brandsWithoutMarkReasons: modulePayload.brandsWithoutMarkReasons,
-    licenseValidUpTo: modulePayload.licenseValidUpTo || formatDisplayDate(printData.row.license_validity_date),
-    brandNamesBeingUsed: modulePayload.brandNamesBeingUsed,
-    place: modulePayload.place,
-    declarationDate: modulePayload.declarationDate,
+    licenseValidUpTo: String(printData.row.license_validity_date ?? '').slice(0, 10),
+    brandNamesBeingUsed: modulePayload.rows.map((brand) => brand.brandName.trim()).filter(Boolean).join(', '),
+    place: printData.client.district || printData.client.state,
+    declarationDate: todayIsoDate(),
     rows: modulePayload.rows,
   }
 }
