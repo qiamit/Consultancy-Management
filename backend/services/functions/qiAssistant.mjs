@@ -251,6 +251,7 @@ export function createQiAssistantHandler(deps) {
         temperature: Number.isFinite(temperature) ? temperature : 0.7,
         max_tokens: chatMaxTokens,
         ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
+        ...(provider === 'deepseek' && isCmpf311Request ? { thinking: { type: 'disabled' } } : {}),
       }),
     })
 
