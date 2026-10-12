@@ -34,6 +34,7 @@ export type BisPrintIsCode = {
   title: string
   label: string
   unitOfIs: string
+  productManualNumber: string
 }
 
 /** Authorized signatory overlay applied to all BIS print documents when enabled. */
@@ -65,9 +66,9 @@ export function printSignatoryDefaults(printData: BisPrintData): {
   signatureImageUrl?: string
 } {
   const overlay = printData.documentSignatory
-  if (overlay?.name.trim()) {
+  if (overlay && (overlay.name.trim() || overlay.signatureImageUrl?.trim())) {
     return {
-      signatoryName: overlay.name.trim(),
+      signatoryName: overlay.name.trim() || printData.client.contactPerson,
       signatoryDesignation: overlay.designation.trim(),
       signatureImageUrl: overlay.signatureImageUrl,
     }
@@ -175,11 +176,12 @@ async function loadIsCode(row: BisProjectRow): Promise<BisPrintIsCode> {
   let standardPrefix = text(joined?.standard_prefix)
   let title = text(joined?.title)
   let unitOfIs = text(joined?.unit_of_is)
+  let productManualNumber = text(joined?.product_manual_number)
 
-  if (row.is_code_id && (!isNumber || !title || !unitOfIs)) {
+  if (row.is_code_id && (!isNumber || !title || !unitOfIs || !productManualNumber)) {
     const { data } = await supabase
       .from('is_codes')
-      .select('is_number, revision_year, part_no, section_no, standard_prefix, title, unit_of_is')
+      .select('is_number, revision_year, part_no, section_no, standard_prefix, title, unit_of_is, product_manual_number')
       .eq('id', row.is_code_id)
       .maybeSingle()
     if (data) {
@@ -191,6 +193,7 @@ async function loadIsCode(row: BisProjectRow): Promise<BisPrintIsCode> {
       standardPrefix = text(r.standard_prefix) || standardPrefix
       title = text(r.title) || title
       unitOfIs = text(r.unit_of_is) || unitOfIs
+      productManualNumber = text(r.product_manual_number) || productManualNumber
     }
   }
 
@@ -211,6 +214,7 @@ async function loadIsCode(row: BisProjectRow): Promise<BisPrintIsCode> {
     title,
     label,
     unitOfIs,
+    productManualNumber,
   }
 }
 

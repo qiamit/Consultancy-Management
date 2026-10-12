@@ -1,3 +1,5 @@
+import { applyPrintScanFriendlyCss } from './printScanFriendlyCss'
+
 export type BisPrintPageSize = 'A4' | 'A5' | 'Letter' | 'Legal'
 
 export type BisPrintOrientation = 'portrait' | 'landscape'
@@ -710,7 +712,7 @@ export function applyBisDocumentPrintPageSettings(
     '',
   )
   if (/<\/head>/i.test(withoutOld)) {
-    return withoutOld.replace(/<\/head>/i, `${override}</head>`)
+    return applyPrintScanFriendlyCss(withoutOld.replace(/<\/head>/i, `${override}</head>`))
   }
-  return `${override}${withoutOld}`
+  return applyPrintScanFriendlyCss(`${override}${withoutOld}`)
 }

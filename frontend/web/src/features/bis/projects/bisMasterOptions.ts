@@ -14,6 +14,12 @@ export type BisMasterOptionCategory =
   | 'bis_dealing_officer_name'
   | 'bis_type_of_inspection'
   | 'unit_of_is'
+  | 'osl_sample_for'
+  | 'osl_sample_priority'
+  | 'osl_sample_type'
+  | 'osl_sample_shelf_life'
+  | 'osl_sample_mode_of_disposal'
+  | 'osl_sample_test_required'
 
 /** Legacy name categories are merged into one shared officer-name list. */
 const OFFICER_NAME_CATEGORIES: BisMasterOptionCategory[] = [

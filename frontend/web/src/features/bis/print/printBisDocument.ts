@@ -17,6 +17,7 @@ import {
   certifiedReferenceMaterialsDataFromPrintData,
 } from './certifiedReferenceMaterialsHtml'
 import { buildFactoryTestReportHtml, factoryTestReportDataFromPrintData } from './factoryTestReportHtml'
+import { factoryTestReportHasContent, parseFactoryTestReportPayload } from '../projects/factoryTestReportModel'
 import { loadBisPrintData, type BisPrintData } from './loadBisPrintData'
 import {
   buildApplicationDetailsHtml,
@@ -37,7 +38,12 @@ import {
   DEFAULT_BIS_DOCUMENT_PRINT_PAGE_SETTINGS,
 } from './bisDocumentPrintPageSettings'
 import { openPendingPrintWindow, openPrintHtml } from './openPrintHtml'
-import { buildOslSampleRequirementsHtml, oslSampleRequirementsDataFromPrintData } from './oslSampleRequirementsHtml'
+import {
+  buildOslSampleRequirementsHtml,
+  oslSampleRequirementsDataFromPrintData,
+  printableOslSampleRows,
+} from './oslSampleRequirementsHtml'
+import { parseOslSampleRequirementsPayload } from '../projects/oslSampleRequirementsModel'
 import {
   buildOslCourierLabelsHtml,
   oslCourierLabelsDataFromPrintData,
@@ -71,9 +77,7 @@ import {
   subcontractedTestsDataFromPrintData,
 } from './subcontractedTestsHtml'
 import {
-  buildTechnicalStaffAttachmentSheetHtml,
   buildTechnicalStaffHtml,
-  filledTechnicalStaffRows,
   technicalStaffDataFromPrintData,
 } from './technicalStaffHtml'
 import {
@@ -141,7 +145,7 @@ export type BisPrintDocumentKind =
 
 export const BIS_PRINT_DOCUMENT_LABEL: Record<BisPrintDocumentKind, string> = {
   'legal-documents': 'Legal Documents',
-  'application-details': 'Application Copy',
+  'application-details': 'Application, Legal Documents & Location Map',
   'license-details': 'License Details',
   'branch-details': 'Branch Details',
   form1: 'BIS Form-I',
@@ -203,25 +207,33 @@ export const EXTRA_PRINT_KINDS: BisPrintDocumentKind[] = [
   'osl-courier-labels',
 ]
 
+/** Documents managed inside their parent module instead of as separate View Documents rows. */
+const EMBEDDED_BIS_DOCUMENT_KINDS: BisPrintDocumentKind[] = [
+  'calibration-certificates',
+  'consent-letter',
+  'subcontracted-tests',
+  'osl-sample-test-request',
+  'osl-courier-labels',
+]
+
 /** Full license document pack for View Documents. */
 export const ALL_BIS_PRINT_KINDS: BisPrintDocumentKind[] = [
   'legal-documents',
   'application-details',
   'top-management',
   'technical-staff',
-  'manufacturing-scope',
-  'osl-sample-requirements',
-  'location-map',
   'plant-layout',
   'process-flow-chart',
+  'manufacturing-scope',
+  'osl-sample-requirements',
   // Authorization Letter → Top Management; Appointment Letter → Technical Staff annex.
   // Process Description is edited inside Process Flow Chart (not a separate list row).
   // Factory Test Report is generated per sample inside Sample Requirements (not a list row).
   ...EXTRA_PRINT_KINDS.filter(
     (kind) =>
+      !EMBEDDED_BIS_DOCUMENT_KINDS.includes(kind) &&
       kind !== 'manufacturing-scope' &&
       kind !== 'osl-sample-requirements' &&
-      kind !== 'location-map' &&
       kind !== 'plant-layout' &&
       kind !== 'process-flow-chart',
   ),
@@ -322,7 +334,15 @@ export async function buildBisDocumentHtml(
       : kind === 'osl-sample-test-request' || kind === 'osl-courier-labels'
         ? 'osl-sample-requirements'
         : kind
-  const [printData, modulePayload, topManagementPayload, technicalManagementPayload] = await Promise.all([
+  const [
+    printData,
+    modulePayload,
+    topManagementPayload,
+    technicalManagementPayload,
+    factoryTestReportPayload,
+    legalDocumentsPayload,
+    locationMapPayload,
+  ] = await Promise.all([
     loadBisPrintData(row),
     fetchBisModulePayload(row.id, modulePayloadKind).catch(() => null),
     kind === 'top-management'
@@ -330,6 +350,15 @@ export async function buildBisDocumentHtml(
       : fetchBisModulePayload(row.id, 'top-management').catch(() => null),
     kind === 'application-details'
       ? fetchBisModulePayload(row.id, 'technical-staff').catch(() => null)
+      : Promise.resolve(null),
+    kind === 'osl-sample-requirements'
+      ? fetchBisModulePayload(row.id, 'factory-test-report').catch(() => null)
+      : Promise.resolve(null),
+    kind === 'application-details'
+      ? fetchBisModulePayload(row.id, 'legal-documents').catch(() => null)
+      : Promise.resolve(null),
+    kind === 'application-details'
+      ? fetchBisModulePayload(row.id, 'location-map').catch(() => null)
       : Promise.resolve(null),
   ])
 
@@ -460,15 +489,81 @@ export async function buildBisDocumentHtml(
       ? buildLocationMapHtml(await enrichLocationMapRoute(locationMapDataFromPrintData(data)))
       : HTML_BUILDERS[kind](data)
 
+  if (kind === 'application-details') {
+    const legalData = legalDocumentsDataFromPrintData({
+      ...data,
+      modulePayload: legalDocumentsPayload,
+    })
+    const locationData = locationMapDataFromPrintData({
+      ...data,
+      modulePayload: locationMapPayload,
+    })
+    html = appendPrintHtmlDocument(html, buildLegalDocumentsHtml(legalData))
+    html = appendPrintHtmlDocument(
+      html,
+      buildLocationMapHtml(await enrichLocationMapRoute(locationData)),
+    )
+  }
+
+  // The Sample Offer Letter preview also includes generated FTRs for its printable samples.
+  if (kind === 'osl-sample-requirements' && factoryTestReportPayload) {
+    const samplePayload = parseOslSampleRequirementsPayload(
+      modulePayload && typeof modulePayload === 'object' ? modulePayload : null,
+    )
+    const printableSampleIds = new Set(
+      printableOslSampleRows(samplePayload.rows).map((sample) => sample.id),
+    )
+    const reports = parseFactoryTestReportPayload(factoryTestReportPayload).reports.filter(
+      (report) => printableSampleIds.has(report.sampleRowId) && factoryTestReportHasContent(report),
+    )
+
+    if (reports.length > 0) {
+      let reportPrintData: BisPrintData = {
+        ...data,
+        modulePayload: { ...factoryTestReportPayload, reports },
+      }
+      const techRaw = await fetchBisModulePayload(row.id, 'technical-staff').catch(() => null)
+      const { resolveTechnicalStaffForTestedBy } = await import('../projects/bisModuleDataApi')
+      const techPerson = resolveTechnicalStaffForTestedBy(techRaw)
+      if (techPerson) {
+        let testedBySignatureImageUrl = ''
+        if (techPerson.applySignatureToDocuments && techPerson.signatureStoragePath) {
+          try {
+            const urls = await createBisProjectFileUrls(
+              techPerson.signatureStoragePath,
+              techPerson.signatureFileName || 'signature',
+            )
+            testedBySignatureImageUrl = urls.viewUrl?.trim() || ''
+          } catch {
+            testedBySignatureImageUrl = ''
+          }
+        }
+        reportPrintData = {
+          ...reportPrintData,
+          modulePayload: {
+            ...(reportPrintData.modulePayload ?? {}),
+            testedByName: techPerson.personName,
+            testedByDesignation: techPerson.designation,
+            ...(testedBySignatureImageUrl ? { testedBySignatureImageUrl } : {}),
+          },
+        }
+      }
+      html = appendPrintHtmlDocument(
+        html,
+        buildFactoryTestReportHtml(factoryTestReportDataFromPrintData(reportPrintData)),
+      )
+    }
+  }
+
   // Top Management + Authorized Signatory ON → also generate Authorization Letter (2nd page).
   if (kind === 'top-management' && tm && shouldIncludeAuthorizationLetter(tm)) {
     const authHtml = buildAuthorizationLetterHtml(authorizationLetterDataFromPrintData(data))
     html = appendPrintHtmlDocument(html, authHtml)
   }
 
-  // Technical Staff: list first, then per person → Appointment → Education Certificate → Photo.
+  // Technical Staff preview includes generated letters, but uploaded files remain download-only.
   if (kind === 'technical-staff') {
-    html = await appendTechnicalStaffAnnexes(html, data, createBisProjectFileUrls)
+    html = appendGeneratedTechnicalStaffLetters(html, data)
   }
 
   const toSafeImg = (src: string, alt: string) => {
@@ -543,81 +638,18 @@ export async function buildBisDocumentHtml(
   return injectBisDocumentPageFooters(html)
 }
 
-async function appendTechnicalStaffAnnexes(
+function appendGeneratedTechnicalStaffLetters(
   baseHtml: string,
   data: BisPrintData,
-  createBisProjectFileUrls: (
-    storagePath: string,
-    fileName: string,
-  ) => Promise<{ viewUrl?: string; downloadUrl?: string }>,
-): Promise<string> {
+): string {
   const staffData = technicalStaffDataFromPrintData(data)
-  const people = filledTechnicalStaffRows(staffData.rows)
-  if (people.length === 0) return baseHtml
-
   let html = baseHtml
-
-  const appendUploaded = async (
-    title: string,
-    personName: string,
-    fileName: string,
-    storagePath: string,
-  ) => {
-    const path = storagePath.trim()
-    if (!path) return
-    try {
-      const urls = await createBisProjectFileUrls(path, fileName.trim() || title)
-      if (!urls.viewUrl) return
-      html = appendPrintHtmlDocument(
-        html,
-        buildTechnicalStaffAttachmentSheetHtml({
-          title,
-          personName,
-          fileName: fileName.trim() || title,
-          viewUrl: urls.viewUrl,
-        }),
-      )
-    } catch {
-      // Skip missing / unreadable uploads; keep the rest of the pack.
-    }
-  }
-
-  for (let i = 0; i < people.length; i += 1) {
-    const person = people[i]!
-    const name = person.personName.trim() || `Technical Staff ${String(i + 1).padStart(2, '0')}`
-
-    // 1) Appointment Letter — uploaded file preferred; else generated when Date of Joining exists.
-    if (person.appointmentLetterStoragePath.trim()) {
-      await appendUploaded(
-        `Appointment Letter — ${name}`,
-        name,
-        person.appointmentLetterFileName,
-        person.appointmentLetterStoragePath,
-      )
-    } else if (person.appointmentDate.trim()) {
+  for (const person of staffData.rows) {
+    // Generated appointment letters may appear; uploaded appointment files do not.
+    if (!person.appointmentLetterStoragePath.trim() && person.appointmentDate.trim()) {
       html = appendPrintHtmlDocument(
         html,
         buildAppointmentLetterHtml(appointmentLetterDataForTechnicalStaff(data, person)),
-      )
-    }
-
-    // 2) Educational Certificate
-    if (person.educationCertificateStoragePath.trim()) {
-      await appendUploaded(
-        `Educational Certificate — ${name}`,
-        name,
-        person.educationCertificateFileName,
-        person.educationCertificateStoragePath,
-      )
-    }
-
-    // 3) Photo
-    if (person.photoStoragePath.trim()) {
-      await appendUploaded(
-        `Photo — ${name}`,
-        name,
-        person.photoFileName,
-        person.photoStoragePath,
       )
     }
   }

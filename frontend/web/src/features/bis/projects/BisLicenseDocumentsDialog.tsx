@@ -293,10 +293,12 @@ export function BisLicenseDocumentsDialog({
 
   const filteredKinds = useMemo(() => {
     const q = search.trim().toLowerCase()
-    const kinds = ALL_BIS_PRINT_KINDS.filter((kind) => kind !== 'legal-documents')
+    const kinds = ALL_BIS_PRINT_KINDS.filter(
+      (kind) => kind !== 'legal-documents' && kind !== 'location-map',
+    )
     if (!q) return kinds
     return kinds.filter((kind) =>
-      (kind === 'location-map' ? 'legal documents & location map' : BIS_PRINT_DOCUMENT_LABEL[kind])
+      BIS_PRINT_DOCUMENT_LABEL[kind]
         .toLowerCase()
         .includes(q),
     )
@@ -695,9 +697,7 @@ export function BisLicenseDocumentsDialog({
                       <TableBody>
                         {pageKinds.map((kind, index) => {
                           const selected = selectedKinds.has(kind)
-                          const label = kind === 'location-map'
-                            ? 'Legal Documents & Location Map'
-                            : BIS_PRINT_DOCUMENT_LABEL[kind]
+                          const label = BIS_PRINT_DOCUMENT_LABEL[kind]
                           return (
                             <TableRow
                               key={kind}

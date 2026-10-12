@@ -153,11 +153,18 @@ export async function openManakEbisAssist(options: {
     ? ((await getPortalPasswordForExtension(options.projectId)) ?? '')
     : ''
 
-  let acked = isQeExtensionPresent()
+  let acked = false
 
   return new Promise((resolve) => {
     function onAck(event: MessageEvent) {
       if (event.source !== window) return
+      if (event.data?.type === 'QE_MANAK_OPEN_ERROR') {
+        acked = true
+        window.removeEventListener('message', onAck)
+        openManakUrl(loginUrl)
+        resolve({ extensionUsed: false })
+        return
+      }
       if (event.data?.type !== 'QE_MANAK_OPEN_ACK') return
       acked = true
       window.removeEventListener('message', onAck)
@@ -182,7 +189,7 @@ export async function openManakEbisAssist(options: {
       if (acked) return
       openManakUrl(loginUrl)
       resolve({ extensionUsed: false })
-    }, 400)
+    }, 5000)
   })
 }
 
@@ -207,11 +214,18 @@ export async function importManakQrCodes(options: {
     ? ((await getPortalPasswordForExtension(options.projectId)) ?? '')
     : ''
 
-  let acked = isQeExtensionPresent()
+  let acked = false
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     function onAck(event: MessageEvent) {
       if (event.source !== window) return
+      if (event.data?.type === 'QE_MANAK_OPEN_ERROR') {
+        acked = true
+        window.removeEventListener('message', onAck)
+        openManakUrl(loginUrl)
+        reject(new Error(String(event.data.error || 'The extension could not open Manak Online.')))
+        return
+      }
       if (event.data?.type !== 'QE_MANAK_OPEN_ACK') return
       acked = true
       window.removeEventListener('message', onAck)
@@ -226,6 +240,7 @@ export async function importManakQrCodes(options: {
         loginOnly: false,
         importQr: true,
         qrCount,
+        projectId: String(options.projectId ?? '').trim(),
         loginUrl,
         homeUrl: MANAK_HOME_URL,
         portalUserId,
@@ -239,19 +254,28 @@ export async function importManakQrCodes(options: {
       if (acked) return
       openManakUrl(loginUrl)
       resolve({ extensionUsed: false })
-    }, 400)
+    }, 8000)
   })
 }
 
 /** Listen for QR codes published by the extension after Import Codes. */
 export function subscribeManakQrImport(
-  onCodes: (codes: string[]) => void,
+  projectId: string | null | undefined,
+  onCodes: (codes: string[], sourcePortalUserId: string) => void,
+  onRejected?: (message: string) => void,
 ): () => void {
+  const targetProjectId = String(projectId ?? '').trim()
   let lastKey = ''
   let lastAt = 0
   function onMessage(event: MessageEvent) {
     if (event.source !== window) return
+    if (event.data?.type === 'QE_MANAK_QR_IMPORT_REJECTED') {
+      onRejected?.(String(event.data.message || 'QR import was rejected.'))
+      return
+    }
     if (event.data?.type !== 'QE_MANAK_QR_IMPORT') return
+    const importedProjectId = String(event.data?.result?.projectId ?? '').trim()
+    if (importedProjectId && importedProjectId !== targetProjectId) return
     const raw = event.data?.result?.qr_codes
     const codes = Array.isArray(raw)
       ? raw.map((c: unknown) => String(c ?? '').replace(/\D/g, '')).filter((c: string) => c.length >= 12)
@@ -263,7 +287,7 @@ export function subscribeManakQrImport(
     if (key === lastKey && now - lastAt < 8000) return
     lastKey = key
     lastAt = now
-    onCodes(codes)
+    onCodes(codes, String(event.data?.result?.portalUserId ?? '').trim())
   }
   window.addEventListener('message', onMessage)
   return () => window.removeEventListener('message', onMessage)

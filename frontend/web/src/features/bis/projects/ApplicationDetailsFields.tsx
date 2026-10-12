@@ -56,6 +56,12 @@ function sanitizeCapacity(value: string): string {
   return fraction.length ? `${whole}.${fraction.join('')}` : whole
 }
 
+function formatCapacity(value: string): string {
+  if (!value.trim()) return ''
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed.toFixed(2) : value
+}
+
 export function ApplicationDetailsFields({
   form,
   onChange,
@@ -318,7 +324,19 @@ export function ApplicationDetailsFields({
           />
           <div className="min-w-0 space-y-0.5">
             <Label htmlFor="app-installed-capacity">Installed Capacity</Label>
-            <Input id="app-installed-capacity" type="text" inputMode="decimal" className={limsFieldClass} value={form.installedCapacity} disabled={disabled} onChange={(e) => {
+            <Input id="app-installed-capacity" type="text" inputMode="decimal" className={limsFieldClass} value={form.installedCapacity} disabled={disabled} onBlur={() => {
+              const installedCapacity = formatCapacity(form.installedCapacity)
+              const actual = Number(form.actualCapacity)
+              const actualCapacity = installedCapacity && Number.isFinite(actual) && actual >= Number(installedCapacity)
+                ? ''
+                : !installedCapacity ? '' : form.actualCapacity ? formatCapacity(form.actualCapacity) : ''
+              onChange({
+                ...form,
+                installedCapacity,
+                actualCapacity,
+                productionValue: calculatedProductionValue(actualCapacity, form.productionRate),
+              })
+            }} onChange={(e) => {
               const installed = sanitizeCapacity(e.target.value)
               const actual = Number(form.actualCapacity)
               const actualCapacity = installed && Number.isFinite(actual) && actual >= Number(installed) ? '' : !installed ? '' : form.actualCapacity
@@ -332,7 +350,15 @@ export function ApplicationDetailsFields({
           </div>
           <div className="min-w-0 space-y-0.5">
             <Label htmlFor="app-actual-capacity">Actual Capacity</Label>
-            <Input id="app-actual-capacity" type="text" inputMode="decimal" className={limsFieldClass} value={form.actualCapacity} disabled={disabled || !form.installedCapacity} onChange={(e) => {
+            <Input id="app-actual-capacity" type="text" inputMode="decimal" className={limsFieldClass} value={form.actualCapacity} disabled={disabled || !form.installedCapacity} onBlur={() => {
+              const actualCapacity = formatCapacity(form.actualCapacity)
+              if (actualCapacity && Number(actualCapacity) >= Number(form.installedCapacity)) return
+              onChange({
+                ...form,
+                actualCapacity,
+                productionValue: calculatedProductionValue(actualCapacity, form.productionRate),
+              })
+            }} onChange={(e) => {
               const actual = sanitizeCapacity(e.target.value)
               if (actual && Number(actual) >= Number(form.installedCapacity)) return
               onChange({

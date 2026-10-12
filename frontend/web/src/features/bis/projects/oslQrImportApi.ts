@@ -45,11 +45,44 @@ function digitsQr(code: string): string {
   return code.replace(/\D/g, '')
 }
 
-/**
- * QR codes already assigned to a *sample row* on Applications / Licenses of other firms.
- * Unused imported pools on other firms are ignored — those ghosts must not wipe a fresh
- * Manak / transfer import on this firm.
- */
+/** A Manak account must identify one client firm only for safe QR import. */
+export async function assertManakAccountBelongsToOnlyFirm(opts: {
+  clientId: string
+  portalUserId: string
+}): Promise<void> {
+  const clientId = opts.clientId.trim()
+  const portalUserId = opts.portalUserId.trim()
+  if (!clientId || !portalUserId) {
+    throw new Error('This firm needs its own saved Manak User ID before importing QR codes.')
+  }
+
+  const [clients, projects] = await Promise.all([
+    supabase
+      .from('clients')
+      .select('id')
+      .eq('manak_user_id', portalUserId)
+      .neq('id', clientId)
+      .limit(1),
+    supabase
+      .from('bis_projects')
+      .select('id, client_id')
+      .eq('portal_user_id', portalUserId)
+      .limit(500),
+  ])
+  if (clients.error) throw clients.error
+  if (projects.error) throw projects.error
+  const legacyProjectOwnedElsewhere = (projects.data ?? []).some((project) => {
+    const ownerId = String((project as { client_id?: string | null }).client_id ?? '').trim()
+    return !ownerId || ownerId !== clientId
+  })
+  if ((clients.data?.length ?? 0) > 0 || legacyProjectOwnedElsewhere) {
+    throw new Error(
+      'This Manak User ID is assigned to another firm too. Give each company its own Manak account before importing QR codes.',
+    )
+  }
+}
+
+/** QR codes present in any pool or sample row owned by another firm. */
 export async function collectForeignOslQrCodes(clientId: string): Promise<Set<string>> {
   const cid = clientId.trim()
   if (!cid) return new Set()
@@ -78,6 +111,10 @@ export async function collectForeignOslQrCodes(clientId: string): Promise<Set<st
     const row = raw as { payload?: unknown }
     if (!row.payload || typeof row.payload !== 'object' || Array.isArray(row.payload)) continue
     const parsed = parseOslSampleRequirementsPayload(row.payload as Record<string, unknown>)
+    for (const code of parsed.importedQrCodes ?? []) {
+      const d = digitsQr(code)
+      if (d.length >= 12) foreign.add(d)
+    }
     for (const sample of parsed.rows ?? []) {
       const d = digitsQr(sample.qrCode)
       if (d.length >= 12) foreign.add(d)
@@ -131,39 +168,62 @@ export async function persistScrubbedOslQrPool(opts: {
  */
 export async function claimImportedOslQrCodes(opts: {
   projectId: string
+  clientId: string
   codes: string[]
   currentPayload: OslSampleRequirementsModulePayload
 }): Promise<OslSampleRequirementsModulePayload> {
   const projectId = opts.projectId.trim()
+  const clientId = opts.clientId.trim()
   const claimed = normalizeImportedQrCodes(opts.codes)
   const claimedSet = new Set(claimed.map((c) => digitsQr(c)).filter((d) => d.length >= 12))
-  if (!projectId || claimedSet.size === 0) {
-    return {
-      ...opts.currentPayload,
-      importedQrCodes: normalizeImportedQrCodes([
-        ...(opts.currentPayload.importedQrCodes ?? []),
-        ...claimed,
-      ]),
-    }
+  if (!projectId || !clientId) {
+    throw new Error('Save this project and set its client before importing Manak QR codes.')
+  }
+  const targetClientId = await fetchProjectClientId(projectId)
+  if (!targetClientId || targetClientId !== clientId) {
+    throw new Error('The selected project no longer matches this firm. Reload it before importing QR codes.')
   }
 
+  const foreignCodes = await collectForeignOslQrCodes(clientId)
+  if ([...claimedSet].some((code) => foreignCodes.has(code))) {
+    throw new Error('One or more QR codes are already owned by another firm and cannot be imported here.')
+  }
+
+  const safeCurrentPayload = scrubForeignImportedQrCodes(opts.currentPayload, foreignCodes)
   const nextPayload: OslSampleRequirementsModulePayload = {
-    ...opts.currentPayload,
+    ...safeCurrentPayload,
     importedQrCodes: normalizeImportedQrCodes([
-      ...(opts.currentPayload.importedQrCodes ?? []),
+      ...(safeCurrentPayload.importedQrCodes ?? []),
       ...claimed,
     ]),
   }
 
-  const { data: modules, error } = await supabase
-    .from('bis_project_module_data')
-    .select('bis_project_id, payload')
-    .eq('module_kind', OSL_MODULE_KIND)
-    .neq('bis_project_id', projectId)
+  // Find siblings by the same firm before saving or touching any QR pool.
+  const { data: clientProjects, error: projectsError } = await supabase
+    .from('bis_projects')
+    .select('id')
+    .eq('client_id', clientId)
+    .neq('id', projectId)
     .limit(500)
-  if (error) throw error
+  if (projectsError) throw projectsError
+  const siblingIds = (Array.isArray(clientProjects) ? clientProjects : [])
+    .map((row) => String((row as { id?: string }).id ?? '').trim())
+    .filter(Boolean)
+  let modules: unknown[] = []
+  if (siblingIds.length > 0) {
+    const { data, error } = await supabase
+      .from('bis_project_module_data')
+      .select('bis_project_id, payload')
+      .eq('module_kind', OSL_MODULE_KIND)
+      .in('bis_project_id', siblingIds)
+      .limit(500)
+    if (error) throw error
+    modules = Array.isArray(data) ? data : []
+  }
 
-  for (const raw of Array.isArray(modules) ? modules : []) {
+  await saveBisModulePayload(projectId, OSL_MODULE_KIND, payloadToRecord(nextPayload))
+
+  for (const raw of modules) {
     const row = raw as { bis_project_id?: string; payload?: unknown }
     const otherId = String(row.bis_project_id ?? '').trim()
     if (!otherId || !row.payload || typeof row.payload !== 'object' || Array.isArray(row.payload)) {

@@ -51,8 +51,11 @@ import {
 } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { downloadPdfViaPlaywright } from '@/lib/playwrightPdfClient'
+import { getCurrencyCode, getCurrencySymbol } from '@/lib/appCurrency'
+import { formatMoneyInput, sanitizeMoneyInput } from '@/features/masters/products-services/types'
 import { RemoteLookupCombobox } from '@/features/bis/shared/RemoteLookupCombobox'
-import { fetchBisProjectById, fetchTestingLaboratoryAddressByName, searchTestingLaboratoryClientOptions } from './bisProjectsApi'
+import { MasterOptionFieldWithAdd } from './MasterOptionFieldWithAdd'
+import { fetchBisProjectById, fetchIsCodeTestingCharges, fetchTestingLaboratoryAddressByName } from './bisProjectsApi'
 import { fetchBisModulePayload, resolveTechnicalStaffForTestedBy, saveBisModulePayload } from './bisModuleDataApi'
 import { loadBisProjectPrintPageSettings } from './bisPrintPageSettingsApi'
 import { FactoryTestReportModuleFields, type FactoryTestReportPreviewContext } from './FactoryTestReportModuleFields'
@@ -91,6 +94,7 @@ import {
 import { createBisProjectFileUrls, deleteBisProjectFile, uploadBisProjectFile } from './bisProjectFilesApi'
 import { downloadMergedOslTestRequestPdfs } from './mergeOslTestRequestPdfs'
 import {
+  assertManakAccountBelongsToOnlyFirm,
   collectForeignOslQrCodes,
   claimImportedOslQrCodes,
   listOslQrSourceProjects,
@@ -106,17 +110,25 @@ import {
   oslSampleRowHasContent,
   oslSampleRowStatusTone,
   sampleForLabel,
-  type OslSampleFor,
-  type OslSamplePriority,
   type OslSampleRequirementRow,
   type OslSampleRequirementsModulePayload,
 } from './oslSampleRequirementsModel'
 import { formatDisplayDate } from './types'
+import { searchLaboratoryMasterOptions } from '@/features/masters/laboratories/laboratoriesApi'
 
 const thClass =
   'bg-stone-800 text-center text-[10px] font-bold uppercase tracking-[0.12em] text-amber-200'
 const actionBtnClass =
   'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-none p-0 text-amber-900 hover:bg-amber-100 hover:text-amber-950'
+const OSL_SAMPLE_FOR_OPTIONS = [
+  { id: 'osl', label: 'OSL' },
+  { id: 'ft', label: 'FT' },
+  { id: 'it', label: 'IT' },
+]
+const OSL_SAMPLE_PRIORITY_OPTIONS = [
+  { id: 'Priority', label: 'Priority' },
+  { id: 'Non Priority', label: 'Non Priority' },
+]
 const checkboxClass =
   'h-4 w-4 rounded-none border-stone-500 text-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/30'
 const rowSelectedClass = 'bg-[#fde68a]/80 hover:bg-[#fde68a]/80'
@@ -186,23 +198,6 @@ function Field({
   )
 }
 
-function FormSection({
-  title,
-  children,
-}: {
-  title: string
-  children: ReactNode
-}) {
-  return (
-    <section className="space-y-3 rounded-none border border-stone-300 bg-[#fffcf7] p-3 sm:p-3.5">
-      <p className="border-b border-stone-300 pb-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-amber-900/80">
-        {title}
-      </p>
-      {children}
-    </section>
-  )
-}
-
 export function OslSampleRequirementsModuleFields({
   value,
   onChange,
@@ -240,6 +235,9 @@ export function OslSampleRequirementsModuleFields({
   const rows = value.rows
   const [editIndex, setEditIndex] = useState<number | null>(null)
   const [draft, setDraft] = useState<OslSampleRequirementRow | null>(null)
+  const [declaredValueUploadBusy, setDeclaredValueUploadBusy] = useState(false)
+  const [testingChargesFocused, setTestingChargesFocused] = useState(false)
+  const declaredValueFileInputRef = useRef<HTMLInputElement | null>(null)
   const [labClientId, setLabClientId] = useState('')
   const manufacturingDateRef = useRef<HTMLInputElement | null>(null)
   const paymentDateRef = useRef<HTMLInputElement | null>(null)
@@ -297,6 +295,24 @@ export function OslSampleRequirementsModuleFields({
   const onChangeRef = useRef(onChange)
   valueRef.current = value
   onChangeRef.current = onChange
+  const draftIdForCharges = draft?.id ?? null
+  const draftChargesValue = draft?.testingCharges ?? null
+
+  useEffect(() => {
+    if (!draftIdForCharges || !isCodeId || draftChargesValue?.trim()) return
+    let cancelled = false
+    void fetchIsCodeTestingCharges(isCodeId)
+      .then((charges) => {
+        if (cancelled || charges == null) return
+        setDraft((current) => current?.id === draftIdForCharges && !current.testingCharges.trim()
+          ? { ...current, testingCharges: charges.toFixed(2) }
+          : current)
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) toast.error(error instanceof Error ? error.message : 'Could not load IS testing charges.')
+      })
+    return () => { cancelled = true }
+  }, [draftChargesValue, draftIdForCharges, isCodeId])
 
   const attachManakPdfToSample = async (result: ManakTrResult) => {
     const pid = (projectId ?? '').trim()
@@ -345,36 +361,48 @@ export function OslSampleRequirementsModuleFields({
   }
 
   useEffect(() => {
-    return subscribeManakQrImport((codes) => {
+    return subscribeManakQrImport(
+      projectId,
+      (codes, sourcePortalUserId) => {
+      const expectedPortalUserId = String(portalUserId ?? '').replace(/\s+/g, '').toLowerCase()
+      const importedPortalUserId = String(sourcePortalUserId ?? '').replace(/\s+/g, '').toLowerCase()
+      if (!expectedPortalUserId || !importedPortalUserId || importedPortalUserId !== expectedPortalUserId) {
+        toast.error(
+          'QR import stopped: the signed-in Manak account does not match this firm. Sign out, then retry from this firm’s project.',
+        )
+        return
+      }
+      const pid = String(projectId ?? '').trim()
+      const cid = String(clientId ?? '').trim()
+      if (!pid || !cid) {
+        toast.error('Save this project and set its client before importing QR codes.')
+        return
+      }
       const current = valueRef.current
       const before = current.importedQrCodes ?? []
       const merged = normalizeImportedQrCodes([...before, ...codes])
-      // Only update when something new was added (extension may re-broadcast).
-      if (merged.length === before.length) return
-      const pid = (projectId ?? '').trim()
-      const added = merged.filter(
-        (c) => !before.some((b) => b.replace(/\D/g, '') === c.replace(/\D/g, '')),
-      )
-      // Optimistic UI first, then claim ownership (strip ghost unused pools elsewhere).
-      onChangeRef.current({ ...current, importedQrCodes: merged })
-      if (!pid || added.length === 0) {
-        toast.success(`Imported ${merged.length - before.length} QR code(s) from Manak.`)
-        return
-      }
+      // Replays after reconnect can contain codes already in local state. Save
+      // that complete list too, so an earlier unsaved import cannot look done.
       void claimImportedOslQrCodes({
         projectId: pid,
-        codes: added,
+        clientId: cid,
+        codes,
         currentPayload: { ...current, importedQrCodes: merged },
       })
         .then((next) => {
           onChangeRef.current(next)
-          toast.success(`Imported ${added.length} QR code(s) from Manak.`)
         })
-        .catch(() => {
-          toast.success(`Imported ${added.length} QR code(s) from Manak.`)
+        .catch((error: unknown) => {
+          toast.error(
+            error instanceof Error
+              ? `QR codes were received but could not be saved: ${error.message}`
+              : 'QR codes were received but could not be saved.',
+          )
         })
-    })
-  }, [projectId])
+      },
+      (message) => toast.error(message),
+    )
+  }, [clientId, portalUserId, projectId])
 
   useEffect(() => {
     return subscribeManakTestRequestResult((result) => {
@@ -407,9 +435,6 @@ export function OslSampleRequirementsModuleFields({
         const afterLen = next.importedQrCodes?.length ?? 0
         if (afterLen >= beforeLen) return
         onChangeRef.current(next)
-        toast.message(
-          `Removed ${beforeLen - afterLen} QR code(s) already used on another firm’s sample.`,
-        )
       })
       .catch(() => {
         /* fallback: local-only scrub if persist fails */
@@ -442,7 +467,7 @@ export function OslSampleRequirementsModuleFields({
   const openEdit = (index: number) => {
     const row = rows[index]!
     const laboratoryName = row.laboratoryName.trim()
-    const destinationLab = row.destinationLab.trim() || laboratoryName
+    const destinationLab = laboratoryName || row.destinationLab.trim()
     setEditIndex(index)
     setLabClientId('')
     setDraft({
@@ -506,11 +531,11 @@ export function OslSampleRequirementsModuleFields({
     if (addMode === 'with-qr') {
       const qr = selectedQr.replace(/\D/g, '')
       if (!qr || qr.length < 12) {
-        toast.error('Select a QR code from the imported list.')
+        setSelectedQr('')
         return
       }
       if (!availableQrCodes.includes(qr) && !availableQrCodes.includes(selectedQr)) {
-        toast.error('That QR code is already used or not imported.')
+        setSelectedQr('')
         return
       }
       pasteRowFromAbove(qr)
@@ -536,19 +561,19 @@ export function OslSampleRequirementsModuleFields({
   }
 
   const handleImportFromManak = () => {
+    const pid = (projectId ?? '').trim()
+    const cid = (clientId ?? '').trim()
+    const userId = (portalUserId ?? '').trim()
+    if (!pid || !cid || !userId) {
+      toast.error('Save this project with its firm and Manak User ID before importing QR codes.')
+      return
+    }
     closeImportDialog()
     setImportBusy(true)
-    void importManakQrCodes({
-      portalUserId,
-      projectId,
-      qrCount: 5,
-    })
+    void assertManakAccountBelongsToOnlyFirm({ clientId: cid, portalUserId: userId })
+      .then(() => importManakQrCodes({ portalUserId: userId, projectId: pid, qrCount: 5 }))
       .then(({ extensionUsed }) => {
-        if (extensionUsed) {
-          toast.success(
-            'Import QR started — after login, unused codes are copied; if none exist, new codes are generated then copied.',
-          )
-        } else {
+        if (!extensionUsed) {
           toast.message(
             'QE Consultancy extension not detected. Opened Manak login — install/enable the extension to import QR codes.',
           )
@@ -1635,6 +1660,112 @@ export function OslSampleRequirementsModuleFields({
   ) => {
     if (!draft) return
     setDraft({ ...draft, [key]: next })
+  }
+
+  const updateDeclaredValueAttachment = (
+    rowId: string,
+    file: { id: string; file_name: string; storage_path: string } | null,
+  ) => {
+    const nextRows = rows.map((row) =>
+      row.id === rowId
+        ? {
+            ...row,
+            declaredValueFileId: file?.id ?? '',
+            declaredValueFileName: file?.file_name ?? '',
+            declaredValueStoragePath: file?.storage_path ?? '',
+          }
+        : row,
+    )
+    setRows(nextRows)
+    setDraft((current) =>
+      current?.id === rowId
+        ? {
+            ...current,
+            declaredValueFileId: file?.id ?? '',
+            declaredValueFileName: file?.file_name ?? '',
+            declaredValueStoragePath: file?.storage_path ?? '',
+          }
+        : current,
+    )
+  }
+
+  const handleDeclaredValueFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0]
+    event.currentTarget.value = ''
+    const row = draft
+    if (!file || !row) return
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+      toast.error('Attach a PDF file.')
+      return
+    }
+    const pid = (projectId ?? '').trim()
+    if (!pid) {
+      toast.error('Save the BIS project before attaching a PDF.')
+      return
+    }
+    setDeclaredValueUploadBusy(true)
+    void uploadBisProjectFile(pid, file, 'osl-sample-declared-value')
+      .then((uploaded) => {
+        updateDeclaredValueAttachment(row.id, uploaded)
+        if (row.declaredValueFileId) {
+          void deleteBisProjectFile({
+            id: row.declaredValueFileId,
+            file_name: row.declaredValueFileName || 'Declared_Value.pdf',
+            storage_path: row.declaredValueStoragePath,
+          }).catch(() => undefined)
+        }
+        toast.success('PDF attached to Declared Value.')
+      })
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'PDF upload failed.')
+      })
+      .finally(() => setDeclaredValueUploadBusy(false))
+  }
+
+  const viewDeclaredValueFile = (row: OslSampleRequirementRow) => {
+    if (!row.declaredValueStoragePath) return
+    void createBisProjectFileUrls(
+      row.declaredValueStoragePath,
+      row.declaredValueFileName || 'Declared_Value.pdf',
+    )
+      .then(({ viewUrl, downloadUrl }) => {
+        const url = viewUrl || downloadUrl
+        if (url) window.open(url, '_blank', 'noopener,noreferrer')
+        else toast.error('Could not open the attached PDF.')
+      })
+      .catch((err) => toast.error(err instanceof Error ? err.message : 'Could not open the PDF.'))
+  }
+
+  const downloadDeclaredValueFile = (row: OslSampleRequirementRow) => {
+    if (!row.declaredValueStoragePath) return
+    const filename = row.declaredValueFileName || 'Declared_Value.pdf'
+    void createBisProjectFileUrls(row.declaredValueStoragePath, filename)
+      .then(({ downloadUrl, viewUrl }) => {
+        const url = downloadUrl || viewUrl
+        if (!url) return toast.error('Could not download the attached PDF.')
+        const anchor = document.createElement('a')
+        anchor.href = url
+        anchor.download = filename
+        anchor.rel = 'noopener'
+        document.body.appendChild(anchor)
+        anchor.click()
+        anchor.remove()
+      })
+      .catch((err) => toast.error(err instanceof Error ? err.message : 'Could not download the PDF.'))
+  }
+
+  const deleteDeclaredValueFile = (row: OslSampleRequirementRow) => {
+    if (!row.declaredValueFileId) return
+    void deleteBisProjectFile({
+      id: row.declaredValueFileId,
+      file_name: row.declaredValueFileName || 'Declared_Value.pdf',
+      storage_path: row.declaredValueStoragePath,
+    })
+      .then(() => {
+        updateDeclaredValueAttachment(row.id, null)
+        toast.success('Attached PDF removed.')
+      })
+      .catch((err) => toast.error(err instanceof Error ? err.message : 'Could not delete the PDF.'))
   }
 
   const toggleId = (id: string) => {
@@ -3038,7 +3169,9 @@ export function OslSampleRequirementsModuleFields({
           className={cn(
             limsDialogClass,
             'flex !flex-col gap-0 overflow-hidden bg-white p-0',
-            'w-[min(56rem,calc(100vw-1.5rem))] max-w-[56rem] max-h-[min(92vh,900px)]',
+            '!fixed left-[var(--app-dialog-overlay-left,0px)] right-0 top-0 bottom-0',
+            'h-[100dvh] max-h-[100dvh] w-[calc(100vw-var(--app-dialog-overlay-left,0px))] max-w-none',
+            'translate-x-0 translate-y-0 rounded-none border-0 shadow-none sm:rounded-none',
           )}
         >
           <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-3 text-white">
@@ -3060,45 +3193,51 @@ export function OslSampleRequirementsModuleFields({
 
           {draft ? (
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain bg-gradient-to-b from-stone-100/90 to-white px-4 py-4 [-webkit-overflow-scrolling:touch]">
-              <FormSection title="Sample Identity">
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  <Field label="Sample For">
-                    <Select
-                      value={draft.sampleFor}
-                      onValueChange={(v) => patchDraft('sampleFor', v as OslSampleFor)}
-                    >
-                      <SelectTrigger className={cn(limsFieldClass, 'h-9')}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="osl">OSL</SelectItem>
-                        <SelectItem value="ft">FT</SelectItem>
-                        <SelectItem value="it">IT</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                  <Field label="Priority">
-                    <Select
-                      value={draft.priority}
-                      onValueChange={(v) => patchDraft('priority', v as OslSamplePriority)}
-                    >
-                      <SelectTrigger className={cn(limsFieldClass, 'h-9')}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Priority">Priority</SelectItem>
-                        <SelectItem value="Non Priority">Non Priority</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                  <Field label="Sample Type" htmlFor="osl-sample-type">
-                    <Input
-                      id="osl-sample-type"
-                      className={cn(limsFieldClass, 'h-9')}
-                      value={draft.sampleType}
-                      onChange={(e) => patchDraft('sampleType', e.target.value)}
-                    />
-                  </Field>
+              <input
+                ref={declaredValueFileInputRef}
+                type="file"
+                accept="application/pdf,.pdf"
+                className="hidden"
+                aria-hidden
+                tabIndex={-1}
+                onChange={handleDeclaredValueFileChange}
+              />
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                  <MasterOptionFieldWithAdd
+                    category="osl_sample_for"
+                    value={sampleForLabel(draft.sampleFor)}
+                    onChange={(value) => {
+                      const normalized = value.trim().toLowerCase()
+                      patchDraft(
+                        'sampleFor',
+                        normalized === 'osl' || normalized === 'ft' || normalized === 'it'
+                          ? normalized
+                          : value,
+                      )
+                    }}
+                    label="Sample For"
+                    inputId="osl-sample-for"
+                    listId="osl-sample-for-list"
+                    defaultOptions={OSL_SAMPLE_FOR_OPTIONS}
+                  />
+                  <MasterOptionFieldWithAdd
+                    category="osl_sample_priority"
+                    value={draft.priority}
+                    onChange={(value) => patchDraft('priority', value)}
+                    label="Priority"
+                    inputId="osl-sample-priority"
+                    listId="osl-sample-priority-list"
+                    defaultOptions={OSL_SAMPLE_PRIORITY_OPTIONS}
+                  />
+                  <MasterOptionFieldWithAdd
+                    category="osl_sample_type"
+                    value={draft.sampleType}
+                    onChange={(value) => patchDraft('sampleType', value)}
+                    label="Sample Type"
+                    inputId="osl-sample-type"
+                    listId="osl-sample-type-list"
+                  />
                   <Field label="Serial Number" htmlFor="osl-serial">
                     <Input
                       id="osl-serial"
@@ -3107,8 +3246,16 @@ export function OslSampleRequirementsModuleFields({
                       onChange={(e) => patchDraft('serialNumber', e.target.value)}
                     />
                   </Field>
+                  <Field label="Batch Quantity" htmlFor="osl-batch-qty">
+                    <Input
+                      id="osl-batch-qty"
+                      className={cn(limsFieldClass, 'h-9')}
+                      value={draft.batchQuantity}
+                      onChange={(e) => patchDraft('batchQuantity', e.target.value)}
+                    />
+                  </Field>
                 </div>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
                   <Field label="Sample Code" htmlFor="osl-sample-code">
                     <Input
                       id="osl-sample-code"
@@ -3126,45 +3273,34 @@ export function OslSampleRequirementsModuleFields({
                       placeholder="12-digit Manak QR (optional)"
                     />
                   </Field>
-                </div>
-              </FormSection>
-
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 rounded-none border border-stone-300 bg-[#fffcf7] p-3 sm:p-3.5">
-                <Field label="Shelf Life" htmlFor="osl-shelf">
-                  <Input
-                    id="osl-shelf"
-                    className={cn(limsFieldClass, 'h-9')}
+                  <MasterOptionFieldWithAdd
+                    category="osl_sample_shelf_life"
                     value={draft.shelfLife}
-                    onChange={(e) => patchDraft('shelfLife', e.target.value)}
+                    onChange={(value) => patchDraft('shelfLife', value)}
+                    label="Shelf Life"
+                    inputId="osl-shelf"
+                    listId="osl-shelf-list"
                   />
-                </Field>
-                <Field label="Mode Of Disposal" htmlFor="osl-disposal">
-                  <Input
-                    id="osl-disposal"
-                    className={cn(limsFieldClass, 'h-9')}
+                  <MasterOptionFieldWithAdd
+                    category="osl_sample_mode_of_disposal"
                     value={draft.modeOfDisposal}
-                    onChange={(e) => patchDraft('modeOfDisposal', e.target.value)}
+                    onChange={(value) => patchDraft('modeOfDisposal', value)}
+                    label="Mode Of Disposal"
+                    inputId="osl-disposal"
+                    listId="osl-disposal-list"
                   />
-                </Field>
-                <Field label="Test Required" htmlFor="osl-test">
-                  <Input
-                    id="osl-test"
-                    className={cn(limsFieldClass, 'h-9')}
+                  <MasterOptionFieldWithAdd
+                    category="osl_sample_test_required"
                     value={draft.testRequired}
-                    onChange={(e) => patchDraft('testRequired', e.target.value)}
+                    onChange={(value) => patchDraft('testRequired', value)}
+                    label="Test Required"
+                    inputId="osl-test"
+                    listId="osl-test-list"
                   />
-                </Field>
-                <Field label="Batch Quantity" htmlFor="osl-batch-qty">
-                  <Input
-                    id="osl-batch-qty"
-                    className={cn(limsFieldClass, 'h-9')}
-                    value={draft.batchQuantity}
-                    onChange={(e) => patchDraft('batchQuantity', e.target.value)}
-                  />
-                </Field>
+                </div>
               </div>
 
-              <FormSection title="Product & Batch">
+              <div className="space-y-3">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <Field label="Grade / Type / Variety / Size / Class / Rating" htmlFor="osl-grade">
                     <Textarea
@@ -3176,13 +3312,57 @@ export function OslSampleRequirementsModuleFields({
                     />
                   </Field>
                   <Field label="Declared Value" htmlFor="osl-declared">
-                    <Textarea
-                      id="osl-declared"
-                      rows={2}
-                      className={cn(limsFieldClass, 'h-[4.5rem] min-h-[4.5rem] resize-none py-2')}
-                      value={draft.declaredValue}
-                      onChange={(e) => patchDraft('declaredValue', e.target.value)}
-                    />
+                    <div className="relative">
+                      <Textarea
+                        id="osl-declared"
+                        rows={2}
+                        className={cn(
+                          limsFieldClass,
+                          'h-[4.5rem] min-h-[4.5rem] resize-none py-2 pb-8',
+                        )}
+                        value={draft.declaredValue}
+                        onChange={(e) => patchDraft('declaredValue', e.target.value)}
+                      />
+                      {draft.declaredValueFileName ? (
+                        <span
+                          className="pointer-events-none absolute bottom-1.5 left-2 max-w-[calc(100%-9rem)] truncate bg-white/90 pr-1 text-[10px] text-stone-600"
+                          title={draft.declaredValueFileName}
+                        >
+                          {draft.declaredValueFileName}
+                        </span>
+                      ) : null}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="absolute bottom-1 right-1 h-6 gap-1 rounded-none border-stone-400 bg-white px-1.5 text-[10px] text-stone-700 hover:bg-amber-50"
+                            aria-label="Declared value PDF actions"
+                            disabled={declaredValueUploadBusy}
+                          >
+                            <FileText size={12} aria-hidden />
+                            {declaredValueUploadBusy ? 'Uploading…' : draft.declaredValueFileName ? 'PDF attached' : 'PDF options'}
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className={fileMenuContentClass}>
+                          <DropdownMenuLabel className={fileMenuLabelClass}>Declared Value PDF</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className={fileMenuItemClass}
+                            onSelect={() => declaredValueFileInputRef.current?.click()}
+                          ><Upload size={15} aria-hidden />Upload / Replace</DropdownMenuItem>
+                          <DropdownMenuItem className={fileMenuItemClass} disabled={!draft.declaredValueStoragePath} onSelect={() => viewDeclaredValueFile(draft)}>
+                            <Eye size={15} aria-hidden />View
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className={fileMenuItemClass} disabled={!draft.declaredValueStoragePath} onSelect={() => downloadDeclaredValueFile(draft)}>
+                            <Download size={15} aria-hidden />Download
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className={cn(fileMenuItemClass, 'text-red-700 focus:text-red-800')} disabled={!draft.declaredValueFileId} onSelect={() => deleteDeclaredValueFile(draft)}>
+                            <Trash2 size={15} aria-hidden />Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </Field>
                 </div>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -3228,67 +3408,49 @@ export function OslSampleRequirementsModuleFields({
                     />
                   </Field>
                 </div>
-              </FormSection>
+              </div>
 
-              <FormSection title="Laboratory">
+              <div className="space-y-3">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <Field label="Name of the Laboratory" htmlFor="osl-lab">
-                    <RemoteLookupCombobox
-                      inputId="osl-lab"
-                      listId="osl-lab-list"
-                      placeholder="Select testing laboratory…"
-                      label={draft.laboratoryName}
-                      selectedId={labClientId}
-                      search={searchTestingLaboratoryClientOptions}
-                      onChange={({ id, label }) => {
-                        const lab = label
-                        setLabClientId(id)
-                        setDraft({
-                          ...draft,
-                          laboratoryName: lab,
-                          destinationLab:
-                            !draft.destinationLab.trim() ||
-                            draft.destinationLab === draft.laboratoryName
-                              ? lab
-                              : draft.destinationLab,
-                        })
-                        void fetchTestingLaboratoryAddressByName(lab)
-                          .then((address) => {
-                            if (!address) return
-                            setDraft((prev) => {
-                              if (!prev) return prev
-                              const current = prev.destinationLab.trim()
-                              const name = prev.laboratoryName.trim().toLowerCase()
-                              if (!current || current.toLowerCase() === name) {
-                                return { ...prev, destinationLab: address }
-                              }
-                              return prev
-                            })
+                    <div className="border border-stone-400 bg-white">
+                      <RemoteLookupCombobox
+                        inputId="osl-lab"
+                        listId="osl-lab-list"
+                        placeholder="Select Testing Laboratory"
+                        inputClassName="h-[34px]"
+                        label={draft.laboratoryName}
+                        selectedId={labClientId}
+                        search={searchLaboratoryMasterOptions}
+                        onChange={({ id, label }) => {
+                          setLabClientId(id)
+                          setDraft({
+                            ...draft,
+                            laboratoryName: label,
+                            destinationLab: label,
                           })
-                          .catch(() => {
-                            /* keep lab name as destination */
-                          })
-                      }}
-                    />
+                        }}
+                      />
+                    </div>
                   </Field>
                   <Field label="Destination Lab" htmlFor="osl-dest-lab">
                     <Input
                       id="osl-dest-lab"
                       className={cn(limsFieldClass, 'h-9')}
                       value={draft.destinationLab}
-                      onChange={(e) => patchDraft('destinationLab', e.target.value)}
+                      readOnly
                     />
                   </Field>
                 </div>
-              </FormSection>
+              </div>
 
-              <FormSection title="Description">
+              <div className="space-y-3">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <Field label="Sample Description" htmlFor="osl-desc">
                     <Textarea
                       id="osl-desc"
                       rows={1}
-                      className={cn(limsFieldClass, 'h-9 min-h-9 resize-none py-2')}
+                      className={cn(limsFieldClass, 'h-[4.5rem] min-h-[4.5rem] resize-none py-2')}
                       value={draft.sampleDescription}
                       onChange={(e) => patchDraft('sampleDescription', e.target.value)}
                     />
@@ -3297,23 +3459,37 @@ export function OslSampleRequirementsModuleFields({
                     <Textarea
                       id="osl-extra"
                       rows={1}
-                      className={cn(limsFieldClass, 'h-9 min-h-9 resize-none py-2')}
+                      className={cn(limsFieldClass, 'h-[4.5rem] min-h-[4.5rem] resize-none py-2')}
                       value={draft.additionalInformation}
                       onChange={(e) => patchDraft('additionalInformation', e.target.value)}
                     />
                   </Field>
                 </div>
-              </FormSection>
+              </div>
 
-              <FormSection title="Payment & Print">
+              <div className="space-y-3">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   <Field label="Testing Charges" htmlFor="osl-charges">
-                    <Input
-                      id="osl-charges"
-                      className={cn(limsFieldClass, 'h-9')}
-                      value={draft.testingCharges}
-                      onChange={(e) => patchDraft('testingCharges', e.target.value)}
-                    />
+                    <div className="flex h-9 min-w-0 flex-1 overflow-hidden rounded-none border border-stone-500 bg-stone-50 focus-within:border-amber-600 focus-within:bg-white focus-within:ring-2 focus-within:ring-amber-500/20">
+                      <span className="inline-flex shrink-0 items-center border-r border-stone-500 bg-stone-100 px-2.5 text-sm font-semibold text-stone-700" aria-hidden>
+                        {getCurrencySymbol()}
+                      </span>
+                      <Input
+                        id="osl-charges"
+                        type="text"
+                        inputMode="decimal"
+                        value={testingChargesFocused ? draft.testingCharges : formatMoneyInput(draft.testingCharges || '0')}
+                        onFocus={() => setTestingChargesFocused(true)}
+                        onChange={(event) => patchDraft('testingCharges', sanitizeMoneyInput(event.target.value))}
+                        onBlur={(event) => {
+                          setTestingChargesFocused(false)
+                          patchDraft('testingCharges', formatMoneyInput(event.target.value || '0'))
+                        }}
+                        placeholder="0.00"
+                        className="h-full min-w-0 flex-1 rounded-none !border-0 !bg-transparent text-right tabular-nums shadow-none focus-visible:!ring-0"
+                        aria-label={`Testing Charges in ${getCurrencyCode()}`}
+                      />
+                    </div>
                   </Field>
                   <Field label="UTR / UPI / Cheque No." htmlFor="osl-pay-ref">
                     <Input
@@ -3357,7 +3533,7 @@ export function OslSampleRequirementsModuleFields({
                     </LimsFieldWithAdd>
                   </Field>
                 </div>
-              </FormSection>
+              </div>
             </div>
           ) : null}
 

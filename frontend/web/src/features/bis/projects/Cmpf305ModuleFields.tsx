@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Pencil, Plus, Trash2 } from 'lucide-react'
+import { FileSpreadsheet, Pencil, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { limsFieldClass, limsOutlineBtnClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
+import { importCmpfSpreadsheetRows } from './cmpfSpreadsheetImport'
 import {
   cmpf305RowHasContent,
   emptyCmpf305MachineryRow,
@@ -40,6 +41,33 @@ export function Cmpf305ModuleFields({
   const [draft, setDraft] = useState<Cmpf305MachineryRow>(() => emptyCmpf305MachineryRow())
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const nameInputRef = useRef<HTMLInputElement | null>(null)
+  const importInputRef = useRef<HTMLInputElement | null>(null)
+
+  const importSpreadsheet = async (file: File) => {
+    try {
+      const importedRows = await importCmpfSpreadsheetRows<Cmpf305MachineryRow>(
+        file,
+        [
+          { key: 'machineryName', aliases: ['machinery name', 'machinery', 'machine', 'equipment name'] },
+          { key: 'make', aliases: ['make', 'identification no', 'make identification no', 'make id'] },
+          { key: 'capacityPerDay', aliases: ['production capacity per day', 'production capacity day', 'capacity per day', 'capacity'] },
+          { key: 'number', aliases: ['number', 'qty', 'quantity'] },
+          { key: 'remarks', aliases: ['remarks', 'remark'] },
+        ],
+        cmpf305RowHasContent,
+      )
+      if (!importedRows.length) {
+        toast.error('No machinery rows were found in the selected spreadsheet.')
+        return
+      }
+      onChange({ ...value, rows: [...savedRows, ...importedRows] })
+      toast.success(`Imported ${importedRows.length} machinery row(s).`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to import the spreadsheet.')
+    } finally {
+      if (importInputRef.current) importInputRef.current.value = ''
+    }
+  }
 
   const columnSuggestions = useMemo(() => {
     const pick = (key: StickyField) =>
@@ -154,11 +182,34 @@ export function Cmpf305ModuleFields({
         <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-stone-600">
           Manufacturing Machinery
         </p>
-        {editingIndex != null ? (
-          <p className="text-[11px] font-medium text-amber-800">
-            Editing row {editingIndex + 1} — press + to update
-          </p>
-        ) : null}
+        <div className="flex items-center gap-2">
+          {editingIndex != null ? (
+            <p className="text-[11px] font-medium text-amber-800">
+              Editing row {editingIndex + 1} — press + to update
+            </p>
+          ) : null}
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
+            className="hidden"
+            disabled={disabled}
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              if (file) void importSpreadsheet(file)
+            }}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className={cn(limsOutlineBtnClass, 'h-8')}
+            disabled={disabled}
+            onClick={() => importInputRef.current?.click()}
+          >
+            <FileSpreadsheet className="mr-1.5 h-4 w-4" aria-hidden /> Import Excel
+          </Button>
+        </div>
       </div>
 
       {/* Entry row — always a single add/update form */}
@@ -166,9 +217,9 @@ export function Cmpf305ModuleFields({
         <Table className="w-full min-w-[880px] border-collapse [&_td]:border [&_td]:border-stone-400 [&_th]:border [&_th]:border-stone-700">
           <TableHeader>
             <TableRow className="border-stone-700 hover:bg-transparent">
-              <TableHead className={cn(thClass, 'w-[28%]')}>Machinery Name</TableHead>
-              <TableHead className={cn(thClass, 'w-[14%]')}>Make / Identification No.</TableHead>
-              <TableHead className={cn(thClass, 'w-[18%]')}>Production Capacity / Day</TableHead>
+              <TableHead className={cn(thClass, 'w-[28%]')}>Name of the Machinery</TableHead>
+              <TableHead className={cn(thClass, 'w-[14%]')}>Make</TableHead>
+              <TableHead className={cn(thClass, 'w-[18%]')}>Production Capacity</TableHead>
               <TableHead className={cn(thClass, 'w-[10%]')}>Number</TableHead>
               <TableHead className={cn(thClass, 'w-[20%]')}>Remarks</TableHead>
               <TableHead className={cn(thClass, 'w-[10%]')}>Action</TableHead>
@@ -228,9 +279,9 @@ export function Cmpf305ModuleFields({
               <TableHeader className="sticky top-0 z-10">
                 <TableRow className="border-stone-700 hover:bg-transparent">
                   <TableHead className={cn(thClass, 'w-[5%]')}>Sr</TableHead>
-                  <TableHead className={cn(thClass, 'w-[26%]')}>Machinery Name</TableHead>
-                  <TableHead className={cn(thClass, 'w-[14%]')}>Make / Identification No.</TableHead>
-                  <TableHead className={cn(thClass, 'w-[16%]')}>Production Capacity / Day</TableHead>
+                  <TableHead className={cn(thClass, 'w-[26%]')}>Name of the Machinery</TableHead>
+                  <TableHead className={cn(thClass, 'w-[14%]')}>Make</TableHead>
+                  <TableHead className={cn(thClass, 'w-[16%]')}>Production Capacity</TableHead>
                   <TableHead className={cn(thClass, 'w-[10%]')}>Number</TableHead>
                   <TableHead className={cn(thClass, 'w-[19%]')}>Remarks</TableHead>
                   <TableHead className={cn(thClass, 'w-[10%]')}>Action</TableHead>

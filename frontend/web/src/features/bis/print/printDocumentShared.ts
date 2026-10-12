@@ -1,6 +1,7 @@
-import { formatCmL, formatDisplayDate, todayIsoDate } from '../projects/types'
+import { formatCmA, formatCmL, formatDisplayDate, todayIsoDate } from '../projects/types'
 import type { BisPrintData } from './loadBisPrintData'
 import { escapeHtml as esc } from './openPrintHtml'
+import { PRINT_SCAN_FRIENDLY_OVERRIDE_CSS } from './printScanFriendlyCss'
 
 export type PrintApplicantContext = {
   applicantName: string
@@ -19,6 +20,22 @@ export type PrintApplicantContext = {
   preparedBy: string
 }
 
+export function applicationNumberForProject(row: BisPrintData['row']): string {
+  const licenseNumber = (row.license_number ?? '').trim()
+  const validLicenseNumber = licenseNumber && !['N/A', '—'].includes(licenseNumber.toUpperCase())
+  const licenseDigits = String(row.cm_l_digits ?? '').replace(/\D/g, '')
+  const applicationDigits = String(row.application_number ?? '').replace(/\D/g, '')
+  const isLicenceProject = ['licence', 'license'].includes((row.project_kind ?? '').trim().toLowerCase())
+  if (isLicenceProject) {
+    if (validLicenseNumber) return licenseNumber
+    if (licenseDigits) return formatCmL(licenseDigits)
+  }
+  if (applicationDigits) return formatCmA(applicationDigits)
+  if (validLicenseNumber) return licenseNumber
+  if (licenseDigits) return formatCmL(licenseDigits)
+  return ''
+}
+
 export function applicantContextFromPrintData({ row, client, isCode, company }: BisPrintData): PrintApplicantContext {
   const address = [client.address, client.district, client.state, client.pinCode]
     .map((p) => p.trim())
@@ -34,7 +51,7 @@ export function applicantContextFromPrintData({ row, client, isCode, company }: 
     contactPerson: client.contactPerson,
     bisBranchName: (row.branch_name ?? '').trim(),
     bisBranchState: (row.branch_state ?? '').trim() || client.state,
-    applicationNumber: (row.license_number ?? '').trim() || (row.cm_l_digits ? formatCmL(row.cm_l_digits) : ''),
+    applicationNumber: applicationNumberForProject(row),
     dateOfApplication: row.start_date ?? row.created_at ?? '',
     /** Application inspection date when set; otherwise empty (print helpers fall back to today). */
     dateOfInspection: (row.inspection_date ?? '').trim(),
@@ -558,6 +575,7 @@ export function buildPrintPage(opts: { title: string; styles: string; body: stri
     .pd-signatory { break-inside: avoid; page-break-inside: avoid; }
     .pd-body { break-inside: auto; page-break-inside: auto; }
     ${opts.styles}
+    ${PRINT_SCAN_FRIENDLY_OVERRIDE_CSS}
   </style>
 </head>
 <body>

@@ -7,7 +7,7 @@ Merged **QE Consultancy** extension (Manak Test Request, IS Code fetch, copy/pas
 | [`qe-consultancy-chrome`](qe-consultancy-chrome/) | Chrome, Edge, Brave, and other Chromium browsers |
 | [`qe-consultancy-safari`](qe-consultancy-safari/) | Safari 16.4+ (Xcode wrapper in `macos/` and `macos-generated/`) |
 
-**Version:** `2.2.33` (see each folder’s `manifest.json`).
+**Version:** `2.2.36` (see each folder’s `manifest.json`).
 
 ## Allowed app origins
 

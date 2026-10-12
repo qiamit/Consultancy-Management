@@ -2,7 +2,7 @@
 //  SafariWebExtensionHandler.swift
 //  QE Consultancy Safari Extension
 //
-//  Created by Amit Kumar on 26/09/26.
+//  Created by Amit Kumar on 11/10/26.
 //
 
 import SafariServices

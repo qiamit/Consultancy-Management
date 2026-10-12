@@ -131,6 +131,7 @@ export function BisProjectsForm({
   open,
   onOpenChange,
   editing,
+  projectId,
   form,
   onChange,
   canSave,
@@ -550,6 +551,7 @@ export function BisProjectsForm({
                     disabled={saving}
                     inputId="bis-notes"
                     isCodeId={form.isCodeId || null}
+                    projectId={projectId}
                   />
                 </div>
               </div>

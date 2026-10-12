@@ -758,6 +758,24 @@
     return match ? match[1] : "";
   }
 
+  function normalizedPortalUserId(value) {
+    return text(value).replace(/\s+/g, "").toLowerCase();
+  }
+
+  function importQrAccountMatches(expectedUserId) {
+    const expected = normalizedPortalUserId(expectedUserId);
+    const actual = normalizedPortalUserId(loggedInPortalUser());
+    return Boolean(expected && actual && expected === actual);
+  }
+
+  function showImportQrAccountMismatch() {
+    showBanner(
+      "QR import stopped: the signed-in Manak account does not match this firm's saved account. Sign out of Manak, then retry from this firm's project.",
+      false,
+      true,
+    );
+  }
+
   function payloadWithoutPassword(payload) {
     if (!payload || typeof payload !== "object") return payload || null;
     const next = { ...payload };
@@ -2362,6 +2380,13 @@
   }
 
   async function publishImportedQrCodes(codes) {
+    const portal = await new Promise((resolve) => {
+      chrome.storage.local.get(["qeManakPortal"], (data) => resolve(data?.qeManakPortal || {}));
+    });
+    if (!importQrAccountMatches(portal.userId)) {
+      showImportQrAccountMismatch();
+      return false;
+    }
     const qr_codes = Array.from(
       new Set((codes || []).map((c) => text(c).replace(/\s+/g, "")).filter(isLikelyQrCodeValue)),
     );
@@ -2369,6 +2394,7 @@
     const result = {
       kind: "QE_MANAK_QR_IMPORT_V1",
       qr_codes,
+      portalUserId: loggedInPortalUser(),
       filledAt: Date.now(),
       autoSave: true,
     };
@@ -2381,13 +2407,11 @@
       chrome.runtime.sendMessage({
         type: "QE_MANAK_QR_IMPORT",
         result,
-        closeTab: true,
-        finishImport: true,
       });
     } catch {
       /* ignore */
     }
-    showBanner(`Imported ${qr_codes.length} QR code(s). Closing tab…`, true);
+    showBanner(`Sent ${qr_codes.length} QR code(s) to Consultancy Pro. You may close this tab.`, true);
     return true;
   }
 
@@ -2410,6 +2434,11 @@
     });
     if (state.qeManakImportQr !== true) {
       return { ok: false, message: "Import QR is not armed." };
+    }
+    const expectedPortalUserId = text(state.qeManakPortal?.userId);
+    if (isLoggedInSession() && !importQrAccountMatches(expectedPortalUserId)) {
+      showImportQrAccountMismatch();
+      return { ok: false, message: "The signed-in Manak account does not match this firm's account." };
     }
     // Never start a Test Request during Import QR.
     chrome.storage.local.set({ pendingFill: null, qeManakEnabled: false });

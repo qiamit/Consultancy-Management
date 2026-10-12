@@ -29,13 +29,14 @@ const DialogTrigger = DialogPrimitive.Trigger
 
 const DialogClose = DialogPrimitive.Close
 
-type DialogLayer = 'default' | 'nested' | 'stacked' | 'top' | 'overlay'
+type DialogLayer = 'default' | 'nested' | 'stacked' | 'top' | 'overlay' | 'above'
 
 const dialogLayerZClass = (layer: DialogLayer) => {
   if (layer === 'nested') return 'z-[60]'
   if (layer === 'stacked') return 'z-[70]'
   if (layer === 'top') return 'z-[80]'
   if (layer === 'overlay') return 'z-[90]'
+  if (layer === 'above') return 'z-[100]'
   return 'z-50'
 }
 
@@ -103,7 +104,7 @@ const DialogContent = React.forwardRef<
     persistOnFocusLoss?: boolean
     /** Render the top-right close control (default true) */
     showCloseButton?: boolean
-    /** Raise nested dialogs above an already-open parent; stacked=3rd, top=4th, overlay=above top */
+    /** Raise nested dialogs above an already-open parent; stacked=3rd, top=4th, overlay=5th, above=6th */
     layer?: DialogLayer
     /** Optional classes for the dimmed backdrop (e.g. leave app sidebar uncovered) */
     overlayClassName?: string

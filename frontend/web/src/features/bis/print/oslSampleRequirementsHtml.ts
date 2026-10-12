@@ -25,7 +25,7 @@ export type OslSampleRequirementsData = PrintApplicantContext & {
   rows: OslSampleRequirementRow[]
 }
 
-function printableRows(rows: OslSampleRequirementRow[]): OslSampleRequirementRow[] {
+export function printableOslSampleRows(rows: OslSampleRequirementRow[]): OslSampleRequirementRow[] {
   return rows.filter(
     (r) =>
       r.includeInPrint !== false &&
@@ -39,7 +39,7 @@ function printableRows(rows: OslSampleRequirementRow[]): OslSampleRequirementRow
 }
 
 function sampleRows(rows: OslSampleRequirementRow[]): string {
-  const filled = printableRows(rows)
+  const filled = printableOslSampleRows(rows)
   if (filled.length === 0) {
     return `<tr><td colspan="6" class="pd-left">No samples marked for letter.</td></tr>`
   }
@@ -118,9 +118,9 @@ function buildBody(data: OslSampleRequirementsData): string {
 
 const STYLES = `
   .osl-table td { height: 8mm; }
-  .osl-closing { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; margin-top: 8px; break-inside: avoid; page-break-inside: avoid; }
-  .osl-declaration { flex: 1; margin: 0; font-size: 11px; line-height: 1.4; text-align: justify; }
-  .osl-sign { flex-shrink: 0; }
+  .osl-closing { display: block; margin-top: 8px; break-inside: avoid; page-break-inside: avoid; }
+  .osl-declaration { width: 100%; margin: 0; font-size: 11px; line-height: 1.4; text-align: justify; }
+  .osl-sign { width: fit-content; max-width: 100%; margin: 10px 0 0 auto; }
 `
 
 export function buildOslSampleRequirementsHtml(data: OslSampleRequirementsData): string {

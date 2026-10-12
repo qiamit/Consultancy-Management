@@ -20,10 +20,12 @@ export function AddSymbolDialog({
   open,
   onOpenChange,
   onInsert,
+  layer = 'stacked',
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   onInsert: (symbol: string) => void
+  layer?: 'default' | 'nested' | 'stacked' | 'top' | 'overlay' | 'above'
 }) {
   const [search, setSearch] = useState('')
   const [recents, setRecents] = useState<string[]>(() => loadSymbolRecents())
@@ -57,7 +59,7 @@ export function AddSymbolDialog({
     >
       <DialogContent
         persistOnFocusLoss
-        layer="stacked"
+        layer={layer}
         aria-describedby={undefined}
         className={cn(
           limsDialogClass,

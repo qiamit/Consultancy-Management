@@ -94,6 +94,8 @@ import {
 } from './cmpf306Model'
 import { Cmpf311ModuleFields } from './Cmpf311ModuleFields'
 import { emptyCmpf311Payload, parseCmpf311Payload, type Cmpf311ModulePayload } from './cmpf311Model'
+import { Cmpf307ModuleFields } from './Cmpf307ModuleFields'
+import { cmpf307RowHasContent, emptyCmpf307Payload, parseCmpf307Payload, type Cmpf307ModulePayload } from './cmpf307Model'
 import { ProcessFlowModuleFields } from './ProcessFlowModuleFields'
 import {
   emptyProcessFlowPayload,
@@ -121,6 +123,7 @@ import { openPendingPrintWindow, openPrintHtml } from '../print/openPrintHtml'
 import {
   clientDisplayName,
   emptyBisApplicationDetailsForm,
+  formatCmA,
   formatCmL,
   isCodeDisplayLabel,
   manakLoginFromProject,
@@ -247,6 +250,7 @@ export function LegalDocumentsModuleDialog({
   const showCmpf305Fields = printKind === 'cmpf-305'
   const showCmpf306Fields = printKind === 'cmpf-306'
   const showCmpf311Fields = printKind === 'cmpf-311'
+  const showCmpf307Fields = printKind === 'cmpf-307'
   /** Merged Process Flow Chart + Process Description (shared payload). */
   const showProcessFlowFields =
     printKind === 'process-flow-chart' || printKind === 'process-description'
@@ -265,7 +269,8 @@ export function LegalDocumentsModuleDialog({
     showProcessFlowFields ||
     showCmpf305Fields ||
     showCmpf306Fields ||
-    showCmpf311Fields
+    showCmpf311Fields ||
+    showCmpf307Fields
   const showFileTable =
     !showApplicationFields &&
     !showTopManagementFields &&
@@ -278,6 +283,7 @@ export function LegalDocumentsModuleDialog({
     !showCmpf305Fields &&
     !showCmpf306Fields &&
     !showCmpf311Fields &&
+    !showCmpf307Fields &&
     !showProcessFlowFields
 
   const [files, setFiles] = useState<BisProjectViewFile[]>([])
@@ -324,6 +330,7 @@ export function LegalDocumentsModuleDialog({
   const [cmpf305, setCmpf305] = useState<Cmpf305ModulePayload>(() => emptyCmpf305Payload())
   const [cmpf306, setCmpf306] = useState<Cmpf306ModulePayload>(() => emptyCmpf306Payload())
   const [cmpf311, setCmpf311] = useState<Cmpf311ModulePayload>(() => emptyCmpf311Payload())
+  const [cmpf307, setCmpf307] = useState<Cmpf307ModulePayload>(() => emptyCmpf307Payload())
   const [processFlow, setProcessFlow] = useState<ProcessFlowModulePayload>(() =>
     emptyProcessFlowPayload(),
   )
@@ -430,6 +437,7 @@ export function LegalDocumentsModuleDialog({
       setCmpf305(emptyCmpf305Payload())
       setCmpf306(emptyCmpf306Payload())
       setCmpf311(emptyCmpf311Payload())
+      setCmpf307(emptyCmpf307Payload())
       setProcessFlow(emptyProcessFlowPayload())
       setLicenseScopeNotes('')
       return
@@ -508,6 +516,7 @@ export function LegalDocumentsModuleDialog({
       showCmpf305Fields ||
       showCmpf306Fields ||
       showCmpf311Fields ||
+      showCmpf307Fields ||
       showProcessFlowFields
     ) {
       setFiles([])
@@ -651,7 +660,11 @@ export function LegalDocumentsModuleDialog({
             )
           }
           if (showCmpf311Fields) {
-            setCmpf311(parseCmpf311Payload(payload))
+            const parsed = parseCmpf311Payload(payload)
+            setCmpf311(parsed)
+          }
+          if (showCmpf307Fields) {
+            setCmpf307(parseCmpf307Payload(payload))
           }
           if (showProcessFlowFields) {
             setProcessFlow(parseProcessFlowPayload(payload))
@@ -670,6 +683,7 @@ export function LegalDocumentsModuleDialog({
           if (showCmpf305Fields) setCmpf305(emptyCmpf305Payload())
           if (showCmpf306Fields) setCmpf306(emptyCmpf306Payload())
           if (showCmpf311Fields) setCmpf311(emptyCmpf311Payload())
+          if (showCmpf307Fields) setCmpf307(emptyCmpf307Payload())
           if (showProcessFlowFields) setProcessFlow(emptyProcessFlowPayload())
         } finally {
           setLoading(false)
@@ -695,6 +709,7 @@ export function LegalDocumentsModuleDialog({
     showCmpf305Fields,
     showCmpf306Fields,
     showCmpf311Fields,
+    showCmpf307Fields,
     showProcessFlowFields,
     row?.notes,
     row?.client_id,
@@ -1041,6 +1056,19 @@ export function LegalDocumentsModuleDialog({
         return
       }
 
+      if (showCmpf307Fields && printKind) {
+        await saveBisModulePayload(row.id, printKind, {
+          ...cmpf307,
+          rows: cmpf307.rows.filter(cmpf307RowHasContent),
+          brandsWithoutMarkReasons: cmpf307.brandsWithoutMarkReasons.trim(),
+          signatoryName: cmpf307.signatoryName.trim(),
+          signatoryDesignation: cmpf307.signatoryDesignation.trim(),
+        })
+        onProjectSaved?.()
+        toast.success(`${title} saved.`)
+        return
+      }
+
       if (showProcessFlowFields) {
         const payload = {
           nodes: processFlow.nodes.map((n, i) => ({
@@ -1111,6 +1139,7 @@ export function LegalDocumentsModuleDialog({
         showPlantLayoutFields ||
         showCmpf305Fields ||
         showCmpf306Fields ||
+        showCmpf307Fields ||
         showProcessFlowFields
           ? formatBisApiError(err)
           : formatBisProjectFilesError(err)
@@ -1424,7 +1453,7 @@ export function LegalDocumentsModuleDialog({
             fullPageModule
               ? 'min-h-0 flex-1 overflow-hidden'
               : compactFormModule
-                ? 'shrink-0 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]'
+                ? 'min-h-0 flex-1 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]'
                 : 'min-h-0 flex-1',
           )}
         >
@@ -1607,6 +1636,7 @@ export function LegalDocumentsModuleDialog({
                 label="Notes / License Scope"
                 inputId="bis-manufacturing-scope-notes"
                 isCodeId={row?.is_code_id ?? null}
+                projectId={row?.id ?? null}
               />
             </div>
           ) : showOslSampleFields ? (
@@ -1685,7 +1715,7 @@ export function LegalDocumentsModuleDialog({
                       ? {
                           applicantName: clientDisplayName(row),
                           applicantAddress: '',
-                          applicationNumber: (row.application_number ?? '').trim(),
+                          applicationNumber: formatCmA(row.application_number),
                           dateOfApplication: (row.application_date ?? '').trim(),
                           dateOfInspection: (row.inspection_date ?? '').trim(),
                           licenceNumber: formatCmL(row.cm_l_digits),
@@ -1785,6 +1815,7 @@ export function LegalDocumentsModuleDialog({
                   value={cmpf306}
                   onChange={setCmpf306}
                   disabled={busy || saving}
+                  projectId={row?.id ?? null}
                 />
               )}
             </div>
@@ -1797,6 +1828,8 @@ export function LegalDocumentsModuleDialog({
               isNumber={row ? isCodeDisplayLabel(row) : ''}
               productTitle={(row?.is_code?.title ?? '').trim()}
             />
+          ) : showCmpf307Fields ? (
+            <Cmpf307ModuleFields value={cmpf307} onChange={setCmpf307} disabled={busy || saving} />
           ) : showProcessFlowFields ? (
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
               {loading ? (

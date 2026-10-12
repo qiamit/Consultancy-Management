@@ -10,7 +10,6 @@ import {
   buildPrintPage,
   inspectionDateOrToday,
   letterheadHtml,
-  preparedByHtml,
   toBlockHtml,
   type PrintApplicantContext,
 } from './printDocumentShared'
@@ -26,138 +25,183 @@ export type Cmpf305MachineryRow = {
 export type Cmpf305Data = PrintApplicantContext & {
   firmRepName: string
   firmRepDesignation: string
+  signatureImageUrl?: string
   inspectionOfficerName: string
   inspectionOfficerDesignation: string
   rows: Cmpf305MachineryRow[]
 }
 
-const MIN_BLANK_ROWS = 15
+const ROWS_PER_CONTINUATION_PAGE = 18
+const MIN_ROWS_ON_CONTINUATION_PAGE = 15
 
 function dateOrNa(raw: string): string {
-  const v = (raw ?? '').trim()
-  return v ? formatDisplayDate(v) : 'N/A'
+  const value = (raw ?? '').trim()
+  return value ? formatDisplayDate(value) : 'N/A'
 }
 
-function machineryRows(rows: Cmpf305MachineryRow[]): string {
-  const filled = rows.filter((r) => Object.values(r).some((v) => v.trim()))
-  const total = Math.max(MIN_BLANK_ROWS, filled.length)
-  const out: string[] = []
-  for (let i = 0; i < total; i += 1) {
-    const r = filled[i]
-    out.push(`<tr>
-      <td>${i + 1}</td>
-      <td class="pd-left">${r ? esc(r.machineryName) : '&nbsp;'}</td>
-      <td>${r ? esc(r.make) : '&nbsp;'}</td>
-      <td>${r ? esc(r.capacityPerDay) : '&nbsp;'}</td>
-      <td>${r ? esc(r.number) : '&nbsp;'}</td>
-      <td>${r ? esc(r.remarks) : '&nbsp;'}</td>
-    </tr>`)
+function machineryRows(rows: Cmpf305MachineryRow[], startIndex: number): string {
+  return rows.map((row, index) => `<tr>
+    <td>${startIndex + index + 1}</td>
+    <td class="pd-left">${row.machineryName ? esc(row.machineryName) : '&nbsp;'}</td>
+    <td>${row.make ? esc(row.make) : '&nbsp;'}</td>
+    <td>${row.capacityPerDay ? esc(row.capacityPerDay) : '&nbsp;'}</td>
+    <td>${row.number ? esc(row.number) : '&nbsp;'}</td>
+    <td>${row.remarks ? esc(row.remarks) : '&nbsp;'}</td>
+  </tr>`).join('')
+}
+
+function machineryTable(rows: string, attachmentRows = false): string {
+  return `<table class="pd-table c305-table">
+    <colgroup>
+      <col style="width:7%"/><col style="width:25%"/><col style="width:20%"/><col style="width:20%"/><col style="width:10%"/><col style="width:18%"/>
+    </colgroup>
+    <thead><tr>
+      <th>Sr.<br/>No.</th><th>Name of the Machinery</th><th>Make</th>
+      <th>Production Capacity</th><th>Number</th><th>Remarks</th>
+    </tr></thead>
+    <tbody>${rows || (attachmentRows
+      ? '<tr><td colspan="6" class="c305-attached">Separate Sheet Attached</td></tr>'
+      : '')}</tbody>
+  </table>`
+}
+
+function pageSignature(data: Cmpf305Data, dateApp: string): string {
+  const name = data.firmRepName.trim() || data.contactPerson.trim() || '—'
+  const designation = data.firmRepDesignation.trim()
+  const signatureImage = data.signatureImageUrl?.trim()
+  return `<div class="c305-page-signature">
+    <div>For <strong>${esc(data.applicantName || 'Applicant Firm')}</strong></div>
+    ${signatureImage ? `<img class="c305-sign-image" src="${esc(signatureImage)}" alt="Authorized signatory stamp and signature" />` : '<div class="c305-sign-gap"></div>'}
+    <div class="c305-sign-line"></div>
+    <div><strong>${esc(name)}</strong>${designation ? ` (${esc(designation)})` : ''}</div>
+    <div>Firm Representative Seal &amp; Signature</div>
+    <div>Date: ${esc(dateApp)}</div>
+  </div>`
+}
+
+function firstPageDeclarations(data: Cmpf305Data, dateInsp: string): string {
+  const firmName = data.firmRepName.trim() || data.contactPerson.trim() || '—'
+  const firmDesignation = data.firmRepDesignation.trim() || '—'
+  const officerName = data.inspectionOfficerName.trim() || '----'
+  const officerDesignation = data.inspectionOfficerDesignation.trim() || '----'
+  const signatureImage = data.signatureImageUrl?.trim()
+  return `<div class="c305-declaration-panels">
+    <section class="c305-declaration-panel">
+      <p>I hereby declare that the machinery of which details are given overleaf is owned by me and are actually installed in the premises.*</p>
+      <p>I also declare that in case of grant of licence, I will send prior intimation to BIS whenever any machinery is taken out of the premises of the firm due to any reason.</p>
+      <div class="c305-panel-signature">
+        <div class="c305-panel-signature-title">Sig. of Firm’s Representative :-</div>
+        <div class="c305-panel-stamp">${signatureImage ? `<img src="${esc(signatureImage)}" alt="Authorized signatory stamp and signature" />` : ''}</div>
+        <div><span>Name</span><span>:-</span><strong>${esc(firmName)}</strong></div>
+        <div><span>Designation</span><span>:-</span><strong>${esc(firmDesignation)}</strong></div>
+        <div><span>Date</span><span>:-</span><strong>${esc(dateInsp)}</strong></div>
+      </div>
+    </section>
+    <section class="c305-declaration-panel">
+      <p>I have checked and found that machinery of which details are given overleaf was available during my inspection.</p>
+      <div class="c305-panel-signature c305-officer-signature">
+        <div class="c305-panel-signature-title">Sig. of BIS Certification Officer :-</div>
+        <div class="c305-panel-stamp"></div>
+        <div><span>Name</span><span>:-</span><strong>${esc(officerName)}</strong></div>
+        <div><span>Designation</span><span>:-</span><strong>${esc(officerDesignation)}</strong></div>
+        <div><span>Date</span><span>:-</span><strong>${esc(dateInsp)}</strong></div>
+      </div>
+    </section>
+  </div>
+  <p class="c305-outsourced-note">* If any part of the manufacturing activity is outsourced, details of machinery used for the outsourced activity shall be indicated in a separate form along with the complete address of the outsourced premises.</p>`
+}
+
+function firstPage(data: Cmpf305Data, appNo: string, dateApp: string, dateInsp: string): string {
+  return `<div class="pd-sheet c305-page-one">
+    <div class="c305-form-id">Form - I</div>
+    <h1 class="pd-title">Declaration Regarding Manufacturing Machinery</h1>
+    <div class="pd-to-row c305-recipient">
+      <div class="pd-to-block">${toBlockHtml(data.bisBranchName, data.bisBranchState)}</div>
+      <div class="pd-date-block"><div>Date of Inspection: <strong>${esc(dateInsp)}</strong></div><div>Application No.: <strong>${esc(appNo)}</strong></div></div>
+    </div>
+    <p class="c305-application-paragraph"><span>Respected Sir,</span><br/><span>we, <strong>M/s. ${esc(data.applicantName || '—')}</strong>, submit the machinery declaration for <strong>${esc(data.isNumber || 'the applicable Indian Standard')}</strong>, Application No. <strong>${esc(appNo)}</strong>, dated <strong>${esc(dateApp)}</strong>. The required machinery is installed at <strong>${esc(addressWithIndia(data.applicantAddress))}</strong>, available for inspection, and recorded in the attached sheet. Inspection date: <strong>${esc(dateInsp)}</strong>.</span></p>
+    ${machineryTable('', true)}
+    <p class="pd-note c305-note">Note: Attach extra sheet, if required.</p>
+    ${firstPageDeclarations(data, dateInsp)}
+  </div>`
+}
+
+function continuationPage(
+  data: Cmpf305Data,
+  appNo: string,
+  dateApp: string,
+  dateInsp: string,
+  rows: Cmpf305MachineryRow[],
+  startIndex: number,
+): string {
+  const visibleRows = [...rows]
+  const targetRows = Math.max(MIN_ROWS_ON_CONTINUATION_PAGE, visibleRows.length)
+  while (visibleRows.length < targetRows) {
+    visibleRows.push({ machineryName: '', make: '', capacityPerDay: '', number: '', remarks: '' })
   }
-  return out.join('')
+  return `<div class="pd-sheet c305-continuation">
+    ${letterheadHtml(data)}
+    <div class="pd-to-row c305-recipient">
+      <div class="pd-to-block">${toBlockHtml(data.bisBranchName, data.bisBranchState)}</div>
+      <div class="pd-date-block"><div>Date of Inspection: <strong>${esc(dateInsp)}</strong></div><div>Application No.: <strong>${esc(appNo)}</strong></div></div>
+    </div>
+    ${machineryTable(machineryRows(visibleRows, startIndex))}
+    ${pageSignature(data, dateApp)}
+  </div>`
 }
 
 function buildBody(data: Cmpf305Data): string {
   const appNo = applicationNoDisplay(data.applicationNumber)
   const dateApp = dateOrNa(data.dateOfApplication)
   const dateInsp = inspectionDateOrToday(data.dateOfInspection)
-  const repName = data.firmRepName.trim() || data.contactPerson.trim() || '—'
-  const repDesig = data.firmRepDesignation.trim() || '—'
-  const bisName = data.inspectionOfficerName.trim() || '----'
-  const bisDesig = data.inspectionOfficerDesignation.trim() || '----'
-
-  return `
-<div class="pd-sheet c305-page-one">
-  ${letterheadHtml(data)}
-  <div class="c305-form-id">Form - I</div>
-  <h1 class="pd-title">Declaration Regarding Manufacturing Machinery</h1>
-
-  <table class="pd-meta">
-    <tr><td class="pd-lbl">Applicant Name</td><td colspan="3"><strong>${esc(data.applicantName || '—')}</strong></td></tr>
-    <tr><td class="pd-lbl">Applicant Address</td><td colspan="3">${esc(addressWithIndia(data.applicantAddress))}</td></tr>
-    <tr>
-      <td class="pd-lbl">Application No.</td><td>${esc(appNo)}</td>
-      <td class="pd-lbl">Date of Application</td><td>${esc(dateApp)}</td>
-    </tr>
-    <tr>
-      <td class="pd-lbl">IS Code</td><td>${esc(data.isNumber || '—')}</td>
-      <td class="pd-lbl">Date of Inspection</td><td>${esc(dateInsp)}</td>
-    </tr>
-  </table>
-
-  <div class="c305-to">${toBlockHtml(data.bisBranchName, data.bisBranchState)}</div>
-</div>
-
-<div class="pd-sheet c305-page-two">
-  ${letterheadHtml(data)}
-  <div class="c305-form-id">Form - I (Continued)</div>
-  <h1 class="pd-title">Declaration Regarding Manufacturing Machinery</h1>
-  <p class="c305-no-cross">No entry to be crossed</p>
-
-  <table class="pd-meta c305-reference">
-    <tr><td class="pd-lbl">Application/Licence No.</td><td>${esc(appNo)}</td></tr>
-    <tr><td class="pd-lbl">Name/Address</td><td><strong>${esc(data.applicantName || '—')}</strong><br/>${esc(addressWithIndia(data.applicantAddress))}</td></tr>
-  </table>
-
-  <table class="pd-table c305-table">
-    <colgroup>
-      <col style="width:7%"/><col style="width:25%"/><col style="width:20%"/><col style="width:20%"/><col style="width:10%"/><col style="width:18%"/>
-    </colgroup>
-    <thead>
-      <tr>
-        <th>Sr.<br/>No.</th>
-        <th>Machinery</th>
-        <th>Make /<br/>Identification No.</th>
-        <th>Production capacity per day,<br/>if applicable</th>
-        <th>Number</th>
-        <th>Remarks</th>
-      </tr>
-    </thead>
-    <tbody>${machineryRows(data.rows)}</tbody>
-  </table>
-  <p class="pd-note">Note: Attach extra sheet, if required.</p>
-
-  <table class="c305-decl">
-    <tr>
-      <td>
-        <p>I hereby declare that the machinery details given above are available with us.</p>
-        <p>I also declare that I will send prior intimation to Bureau of Indian Standards whenever any machinery is not available due to any reason.</p>
-        <div class="c305-sig">
-          <div>Signature of Firm's Representative</div>
-          <div class="c305-sig-gap"></div>
-          <div>Name: ${esc(repName)}</div>
-          <div>Designation: ${esc(repDesig)}</div>
-          <div>Date: ${esc(dateApp)}</div>
-        </div>
-      </td>
-      <td>
-        <p>I have verified the availability of the above mentioned machinery during my inspection.</p>
-        <div class="c305-sig">
-          <div>Signature of BIS Certification Officer</div>
-          <div class="c305-sig-gap"></div>
-          <div>Name: ${esc(bisName)}</div>
-          <div>Designation: ${esc(bisDesig)}</div>
-          <div>Date of verification: ${esc(dateInsp)}</div>
-        </div>
-      </td>
-    </tr>
-  </table>
-  <p class="c305-footnote">* If any part of the manufacturing activity is outsourced, details of machinery used for the outsourced activity shall be indicated in a separate form along with the complete address of the outsourced premises.</p>
-  ${preparedByHtml(data.preparedBy)}
-</div>`
+  const rows = data.rows.filter((row) => Object.values(row).some((value) => value.trim()))
+  const chunks: Cmpf305MachineryRow[][] = []
+  const continuationCount = Math.max(1, Math.ceil(rows.length / ROWS_PER_CONTINUATION_PAGE))
+  for (let i = 0; i < continuationCount; i += 1) {
+    chunks.push(rows.slice(i * ROWS_PER_CONTINUATION_PAGE, (i + 1) * ROWS_PER_CONTINUATION_PAGE))
+  }
+  return firstPage(data, appNo, dateApp, dateInsp) + chunks.map((chunk, index) => continuationPage(
+    data,
+    appNo,
+    dateApp,
+    dateInsp,
+    chunk,
+    index * ROWS_PER_CONTINUATION_PAGE,
+  )).join('')
 }
 
 const STYLES = `
-  .c305-form-id { text-align: right; font-weight: 700; font-size: 11px; margin-bottom: 4px; }
-  .c305-to { font-size: 11.5px; line-height: 1.45; margin: 6px 0 4px; }
-  .c305-no-cross { text-align: center; font-size: 11px; font-weight: 700; margin: -6px 0 6px; }
-  .c305-reference { margin-bottom: 6px; }
+  .c305-page-one, .c305-continuation { font-size: 11pt !important; line-height: 1.45 !important; }
+  .c305-page-one *, .c305-continuation * { overflow-wrap: break-word; word-break: normal; }
+  .c305-page-one .pd-title { font-size: 14pt !important; line-height: 1.3 !important; margin-bottom: 8px; }
+  .c305-form-id { text-align: right; font-weight: 700; font-size: 10.5pt; margin-bottom: 4px; }
+  .c305-recipient { margin: 7px 0; }
+  .c305-recipient .pd-to-block, .c305-recipient .pd-date-block { font-size: 10.5pt !important; line-height: 1.45 !important; }
+  .c305-application-paragraph { width: 100%; margin: 6px 0; font-size: 10.5pt !important; line-height: 1.5 !important; text-align: justify !important; text-align-last: left; text-justify: inter-word; }
+  .c305-table th, .c305-table td { font-size: 10pt !important; line-height: 1.35 !important; padding: 4px 5px !important; }
+  .c305-table .c305-attached { font-size: 11pt !important; }
   .c305-table td { height: 7mm; }
-  .c305-decl { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 6px; page-break-inside: avoid; break-inside: avoid; }
-  .c305-decl > tbody > tr > td, .c305-decl > tr > td { border: 1px solid #111; vertical-align: top; padding: 6px 8px; width: 50%; font-size: 11px; line-height: 1.4; }
-  .c305-decl p { margin: 0 0 6px; text-align: justify; }
-  .c305-sig { margin-top: 10px; font-size: 11px; line-height: 1.5; }
-  .c305-sig-gap { height: 14mm; }
-  .c305-footnote { font-size: 10px; font-weight: 700; line-height: 1.4; text-align: justify; margin: 6px 0 0; }
+  .c305-table .c305-attached { height: 80mm; vertical-align: middle; text-align: center; font-weight: 700; }
+  .c305-note { margin: 4px 0; font-size: 10pt !important; line-height: 1.4 !important; }
+  .c305-declaration-panels { display: grid; grid-template-columns: 1fr 1fr; gap: 8mm; margin-top: 2mm; }
+  .c305-declaration-panel { min-width: 0; min-height: 70mm; border: 1.5px solid #111; padding: 2.5mm; display: flex; flex-direction: column; font-family: Arial, Helvetica, sans-serif; font-size: 10pt !important; line-height: 1.5 !important; }
+  .c305-declaration-panel p { margin: 0 0 7mm; text-align: justify; text-justify: inter-word; }
+  .c305-panel-signature { margin-top: auto; font-size: 9.5pt !important; line-height: 1.5 !important; }
+  .c305-panel-signature-title { margin-bottom: 1mm; }
+  .c305-panel-stamp { height: 15mm; display: flex; justify-content: flex-end; align-items: center; }
+  .c305-panel-stamp img { max-width: 38mm; max-height: 14mm; object-fit: contain; }
+  .c305-sign-image { max-width: 52mm; max-height: 21mm; object-fit: contain; }
+  .c305-panel-signature > div:not(.c305-panel-signature-title) { display: grid; grid-template-columns: 24mm 7mm minmax(0, 1fr); border-bottom: 1px solid #bbb; }
+  .c305-officer-signature { margin-top: auto; }
+  .c305-outsourced-note { margin: 2mm 0 0; font-size: 9.5pt !important; font-weight: 700; line-height: 1.45 !important; }
+  .c305-page-signature { position: static; width: 78mm; max-width: 78mm; margin: 2mm 0 0 auto; text-align: center; font-size: 9.5pt !important; line-height: 1.35 !important; page-break-inside: avoid; break-inside: avoid; }
+  .c305-sign-gap { height: 12mm; }
+  .c305-sign-image { display: block; margin: 0 4mm 1mm auto; }
+  .c305-sign-line { border-top: 1px solid #111; margin: 0 5mm 2px; }
+  .c305-continuation .pd-letterhead { margin-bottom: 7px; padding-bottom: 5px; }
+  .c305-continuation .pd-firm { font-size: 17px; }
+  .c305-continuation .c305-table td { height: 6mm; }
+  .c305-continuation .pd-table th, .c305-continuation .pd-table td { padding: 3px 4px !important; font-size: 10pt !important; }
 `
 
 export function buildCmpf305Html(data: Cmpf305Data): string {
@@ -179,15 +223,11 @@ export function cmpf305DataFromPrintData(printData: BisPrintData): Cmpf305Data {
   const sig = printSignatoryDefaults(printData)
   return {
     ...ctx,
-    firmRepName:
-      parsed.firmRepName || sig.signatoryName || printData.client.contactPerson,
+    firmRepName: parsed.firmRepName || sig.signatoryName || printData.client.contactPerson,
     firmRepDesignation: parsed.firmRepDesignation || sig.signatoryDesignation,
-    inspectionOfficerName:
-      parsed.inspectionOfficerName ||
-      (printData.row.inspection_officer_name ?? '').trim(),
-    inspectionOfficerDesignation:
-      parsed.inspectionOfficerDesignation ||
-      (printData.row.inspection_officer_designation ?? '').trim(),
-    rows: parsed.rows.filter((r) => Object.values(r).some((v) => v.trim())),
+    signatureImageUrl: sig.signatureImageUrl,
+    inspectionOfficerName: parsed.inspectionOfficerName || (printData.row.inspection_officer_name ?? '').trim(),
+    inspectionOfficerDesignation: parsed.inspectionOfficerDesignation || (printData.row.inspection_officer_designation ?? '').trim(),
+    rows: parsed.rows.filter((row) => Object.values(row).some((value) => value.trim())),
   }
 }

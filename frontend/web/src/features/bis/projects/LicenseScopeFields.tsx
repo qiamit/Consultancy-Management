@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { BookOpen, ChevronDown, ChevronUp, Columns3, Eye, FileText, Plus, Trash2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { BookOpen, ChevronDown, ChevronUp, Columns3, Download, Eye, FileText, Plus, Trash2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -14,6 +14,12 @@ import {
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
   limsDarkBarGlowStyle,
   limsManageDialogClass,
   limsOutlineBtnClass,
@@ -25,6 +31,13 @@ import {
   loadIsCodeFileLinks,
   type IsCodeFileLink,
 } from '@/features/masters/is-codes/loadIsCodeFileLinks'
+import {
+  deleteBisProjectFile,
+  formatBisProjectFilesError,
+  listBisProjectFiles,
+  uploadBisProjectFile,
+  type BisProjectViewFile,
+} from './bisProjectFilesApi'
 import {
   BIS_NOTES_COLUMN_COUNT_OPTIONS,
   bisNotesScopeColumnCount,
@@ -74,6 +87,7 @@ export function LicenseScopeFields({
   inputId = 'bis-license-scope',
   className,
   isCodeId = null,
+  projectId = null,
 }: {
   value: string
   onChange: (next: string) => void
@@ -83,6 +97,8 @@ export function LicenseScopeFields({
   className?: string
   /** When set, shows View buttons for the Specification + Product Manual of this IS Code. */
   isCodeId?: string | null
+  /** Existing project required to store an uploaded manufacturing scope PDF. */
+  projectId?: string | null
 }) {
   // parseBisNotesScope already strips imported checklist JSON for display.
   const notesScope = parseBisNotesScope(value)
@@ -91,6 +107,33 @@ export function LicenseScopeFields({
   const [draftColumnCount, setDraftColumnCount] = useState('2')
   const [isFiles, setIsFiles] = useState<IsCodeFileLink[]>([])
   const [filesLoading, setFilesLoading] = useState(false)
+  const [scopeFiles, setScopeFiles] = useState<BisProjectViewFile[]>([])
+  const [scopeFilesProjectId, setScopeFilesProjectId] = useState('')
+  const [scopeUploadBusy, setScopeUploadBusy] = useState(false)
+  const scopeUploadRef = useRef<HTMLInputElement | null>(null)
+  const scopeProjectId = (projectId ?? '').trim()
+
+  useEffect(() => {
+    if (!scopeProjectId) return
+    let cancelled = false
+    void listBisProjectFiles(scopeProjectId, 'manufacturing-scope')
+      .then((files) => {
+        if (!cancelled) {
+          setScopeFiles(files)
+          setScopeFilesProjectId(scopeProjectId)
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setScopeFiles([])
+          setScopeFilesProjectId(scopeProjectId)
+          toast.error(formatBisProjectFilesError(error))
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [scopeProjectId])
 
   useEffect(() => {
     const id = (isCodeId ?? '').trim()
@@ -170,19 +213,106 @@ export function LicenseScopeFields({
   const showIsFileButtons = Boolean((isCodeId ?? '').trim())
   const filesMissing =
     showIsFileButtons && !filesLoading && isFiles.length === 0
+  const scopeFilesLoading = Boolean(scopeProjectId) && scopeFilesProjectId !== scopeProjectId
+  const scopeFile = scopeFilesProjectId === scopeProjectId ? scopeFiles[0] ?? null : null
+
+  const handleScopeUpload = async (file?: File) => {
+    const id = (projectId ?? '').trim()
+    if (!id || !file) return
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      toast.error('Upload Scope must be a PDF file.')
+      return
+    }
+    setScopeUploadBusy(true)
+    try {
+      const uploaded = await uploadBisProjectFile(id, file, 'manufacturing-scope', {
+        displayName: 'Manufacturing Scope.pdf',
+      })
+      const oldFiles = scopeFiles.filter((existing) => existing.id !== uploaded.id)
+      const removed = await Promise.allSettled(oldFiles.map(deleteBisProjectFile))
+      setScopeFiles([uploaded])
+      setScopeFilesProjectId(id)
+      toast.success('Manufacturing scope PDF uploaded.')
+      if (removed.some((result) => result.status === 'rejected')) {
+        toast.warning('The new scope was uploaded, but an older copy could not be removed.')
+      }
+    } catch (error) {
+      toast.error(formatBisProjectFilesError(error))
+    } finally {
+      setScopeUploadBusy(false)
+      if (scopeUploadRef.current) scopeUploadRef.current.value = ''
+    }
+  }
+
+  const openScopeFile = (url: string | undefined) => {
+    if (!url) {
+      toast.error(scopeFile?.error || 'Manufacturing scope PDF is unavailable.')
+      return
+    }
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
 
   return (
-    <div className={cn('space-y-2', className)}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
+    <div className={cn('min-w-0 max-w-full space-y-2', className)}>
+      <div className="flex min-w-0 flex-col gap-2 min-[641px]:flex-row min-[641px]:items-center min-[641px]:justify-between">
         <Label htmlFor={inputId}>{label}</Label>
-        <div className="flex flex-wrap items-center justify-end gap-1.5">
+        <div className="flex min-w-0 flex-wrap items-center justify-start gap-1.5 min-[641px]:justify-end">
+          <input
+            ref={scopeUploadRef}
+            type="file"
+            accept="application/pdf,.pdf"
+            className="hidden"
+            disabled={disabled || !projectId || scopeUploadBusy}
+            onChange={(event) => void handleScopeUpload(event.target.files?.[0])}
+          />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className={cn(limsOutlineBtnClass, 'h-10 gap-1.5 px-2.5 text-xs min-[641px]:h-7')}
+                title="Upload, view, or download the manufacturing scope PDF"
+              >
+                <FileText className="h-3.5 w-3.5" aria-hidden />
+                Scope PDF
+                <ChevronDown className="h-3 w-3" aria-hidden />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                disabled={disabled || !scopeProjectId || scopeUploadBusy}
+                onSelect={() => scopeUploadRef.current?.click()}
+                title={!scopeProjectId ? 'Save the Application / Licence before uploading a scope PDF' : undefined}
+              >
+                <Upload className="h-4 w-4" aria-hidden />
+                {scopeUploadBusy ? 'Uploading…' : 'Upload Scope'}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={scopeFilesLoading || !scopeFile?.viewUrl}
+                onSelect={() => openScopeFile(scopeFile?.viewUrl)}
+                title={scopeFile?.file_name ? `View ${scopeFile.file_name}` : 'No scope PDF uploaded'}
+              >
+                <Eye className="h-4 w-4" aria-hidden />
+                View Scope
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={scopeFilesLoading || !scopeFile?.downloadUrl}
+                onSelect={() => openScopeFile(scopeFile?.downloadUrl)}
+                title={scopeFile?.file_name ? `Download ${scopeFile.file_name}` : 'No scope PDF uploaded'}
+              >
+                <Download className="h-4 w-4" aria-hidden />
+                Download Scope
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           {showIsFileButtons ? (
             <>
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                className={cn(limsOutlineBtnClass, 'h-7 gap-1.5 px-2.5 text-xs')}
+                className={cn(limsOutlineBtnClass, 'h-10 gap-1.5 px-2.5 text-xs min-[641px]:h-7')}
                 disabled={disabled || filesLoading || !standardFile?.url}
                 title={
                   standardFile?.file_name
@@ -199,7 +329,7 @@ export function LicenseScopeFields({
                 type="button"
                 variant="outline"
                 size="sm"
-                className={cn(limsOutlineBtnClass, 'h-7 gap-1.5 px-2.5 text-xs')}
+                className={cn(limsOutlineBtnClass, 'h-10 gap-1.5 px-2.5 text-xs min-[641px]:h-7')}
                 disabled={disabled || filesLoading || !manualFile?.url}
                 title={
                   manualFile?.file_name
@@ -218,7 +348,7 @@ export function LicenseScopeFields({
             type="button"
             variant="outline"
             size="sm"
-            className={cn(limsOutlineBtnClass, 'h-7 gap-1.5 px-2.5 text-xs')}
+            className={cn(limsOutlineBtnClass, 'h-10 gap-1.5 px-2.5 text-xs min-[641px]:h-7')}
             onClick={openColumnDialog}
             disabled={disabled}
             title="Set License Scope columns (1 = plain text, 2+ = table)"
@@ -241,6 +371,15 @@ export function LicenseScopeFields({
           ) : null}
         </div>
       ) : null}
+      {scopeFilesLoading ? (
+        <p className="text-[11px] text-stone-500">Loading uploaded scope PDF…</p>
+      ) : scopeFile ? (
+        <p className="truncate text-[11px] text-stone-600" title={scopeFile.file_name}>
+          Uploaded Scope: {scopeFile.file_name}
+        </p>
+      ) : !projectId ? (
+        <p className="text-[11px] text-stone-500">Save this Application / Licence to upload its scope PDF.</p>
+      ) : null}
 
       {notesScope.mode === 'plain' ? (
         <Textarea
@@ -254,7 +393,7 @@ export function LicenseScopeFields({
         />
       ) : (
         <div className="space-y-2">
-          <div className="overflow-x-auto rounded-none border border-stone-500 bg-stone-50">
+          <div className="hidden overflow-x-auto rounded-none border border-stone-500 bg-stone-50 min-[641px]:block">
             <table
               className={cn(
                 'w-full min-w-[28rem] border-collapse text-sm',
@@ -378,6 +517,82 @@ export function LicenseScopeFields({
                 })}
               </tbody>
             </table>
+          </div>
+          <div className="min-w-0 space-y-3 min-[641px]:hidden">
+            <div className="space-y-2 rounded-none border border-stone-400 bg-stone-50 p-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-stone-600">Column names</p>
+              {notesScope.headers.map((header, colIndex) => (
+                <div key={`${inputId}-mobile-header-${colIndex}`} className="min-w-0 space-y-1">
+                  <Label htmlFor={`${inputId}-mobile-header-${colIndex}`} className="text-xs text-stone-600">
+                    Column {colIndex + 1}
+                  </Label>
+                  <Input
+                    id={`${inputId}-mobile-header-${colIndex}`}
+                    value={header}
+                    disabled={disabled}
+                    className="h-10 min-w-0 rounded-none bg-white"
+                    placeholder={`Column ${colIndex + 1}`}
+                    onChange={(event) =>
+                      updateNotesTable((table) => {
+                        const headers = [...table.headers]
+                        headers[colIndex] = event.target.value
+                        return { headers, rows: table.rows }
+                      })
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+            {notesScope.rows.map((row, rowIndex) => {
+              const isLastRow = rowIndex === notesScope.rows.length - 1
+              return (
+                <section
+                  key={`${inputId}-mobile-row-${rowIndex}`}
+                  className="min-w-0 space-y-3 rounded-none border border-stone-400 bg-white p-3"
+                  aria-label={`Scope row ${rowIndex + 1}`}
+                >
+                  <div className="flex items-center justify-between gap-2 border-b border-stone-200 pb-2">
+                    <p className="text-sm font-semibold text-stone-700">Row {rowIndex + 1}</p>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <Button type="button" variant="outline" size="icon" className="h-10 w-10 rounded-none" disabled={disabled || rowIndex === 0} title="Move row up" aria-label={`Move row ${rowIndex + 1} up`} onClick={() => moveNotesTableRow(rowIndex, -1)}>
+                        <ChevronUp className="h-4 w-4" aria-hidden />
+                      </Button>
+                      <Button type="button" variant="outline" size="icon" className="h-10 w-10 rounded-none" disabled={disabled || isLastRow} title="Move row down" aria-label={`Move row ${rowIndex + 1} down`} onClick={() => moveNotesTableRow(rowIndex, 1)}>
+                        <ChevronDown className="h-4 w-4" aria-hidden />
+                      </Button>
+                      {isLastRow ? (
+                        <Button type="button" variant="outline" size="icon" className="h-10 w-10 rounded-none text-amber-800" disabled={disabled} title="Add row" aria-label="Add row" onClick={addNotesTableRow}>
+                          <Plus className="h-4 w-4" aria-hidden />
+                        </Button>
+                      ) : null}
+                      <Button type="button" variant="outline" size="icon" className="h-10 w-10 rounded-none text-stone-600" disabled={disabled || notesScope.rows.length <= 1} title="Remove row" aria-label={`Remove row ${rowIndex + 1}`} onClick={() => removeNotesTableRow(rowIndex)}>
+                        <Trash2 className="h-4 w-4" aria-hidden />
+                      </Button>
+                    </div>
+                  </div>
+                  {row.map((cell, colIndex) => (
+                    <div key={`${inputId}-mobile-cell-${rowIndex}-${colIndex}`} className="min-w-0 space-y-1">
+                      <Label htmlFor={`${inputId}-mobile-cell-${rowIndex}-${colIndex}`} className="break-words text-xs text-stone-600">
+                        {notesScope.headers[colIndex] || `Column ${colIndex + 1}`}
+                      </Label>
+                      <Input
+                        id={`${inputId}-mobile-cell-${rowIndex}-${colIndex}`}
+                        value={cell}
+                        disabled={disabled}
+                        className="h-10 min-w-0 rounded-none bg-stone-50"
+                        onChange={(event) =>
+                          updateNotesTable((table) => {
+                            const rows = table.rows.map((currentRow) => [...currentRow])
+                            rows[rowIndex][colIndex] = event.target.value
+                            return { headers: table.headers, rows }
+                          })
+                        }
+                      />
+                    </div>
+                  ))}
+                </section>
+              )
+            })}
           </div>
         </div>
       )}

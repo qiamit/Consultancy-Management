@@ -1,3 +1,5 @@
+import { applyPrintScanFriendlyCss } from './printScanFriendlyCss'
+
 export function escapeHtml(value: unknown): string {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -44,10 +46,11 @@ export function openPrintHtml(
   const win = options?.target && !options.target.closed ? options.target : window.open('', '_blank')
   if (!win) return POPUP_BLOCKED_MESSAGE
 
+  const scanReadyHtml = applyPrintScanFriendlyCss(html)
   const doc =
-    options?.autoPrint !== false && !html.includes('window.print()')
-      ? html.replace(/<\/body>/i, `${AUTO_PRINT_SCRIPT}</body>`)
-      : html
+    options?.autoPrint !== false && !scanReadyHtml.includes('window.print()')
+      ? scanReadyHtml.replace(/<\/body>/i, `${AUTO_PRINT_SCRIPT}</body>`)
+      : scanReadyHtml
 
   win.document.open()
   win.document.write(doc)

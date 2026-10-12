@@ -39,6 +39,7 @@ const STRUCTURED_MODULE_KINDS: BisPrintDocumentKind[] = [
   'plant-layout',
   'cmpf-305',
   'cmpf-306',
+  'cmpf-307',
   'process-flow-chart',
 ]
 

@@ -78,6 +78,40 @@ function safeTabCreate(props) {
   return settle(chrome.tabs.create(next));
 }
 
+function createManakTab(url) {
+  return new Promise((resolve, reject) => {
+    chrome.tabs.create({ url: stripPasswordFromManakUrl(url), active: true }, (tab) => {
+      const error = chrome.runtime.lastError;
+      if (error) {
+        reject(new Error(error.message || "Could not open Manak Online."));
+      } else if (!tab || !tab.id) {
+        reject(new Error("Manak Online tab was not created."));
+      } else {
+        resolve(tab);
+      }
+    });
+  });
+}
+
+function activateManakTab(tabId, url) {
+  return new Promise((resolve, reject) => {
+    chrome.tabs.update(
+      tabId,
+      { active: true, ...(url ? { url: stripPasswordFromManakUrl(url) } : {}) },
+      (tab) => {
+        const error = chrome.runtime.lastError;
+        if (error) {
+          reject(new Error(error.message || "Could not open the Manak Online tab."));
+        } else if (!tab || !tab.id) {
+          reject(new Error("The Manak Online tab could not be activated."));
+        } else {
+          resolve(tab);
+        }
+      },
+    );
+  });
+}
+
 function safeSendTab(tabId, message) {
   return settle(chrome.tabs.sendMessage(tabId, message));
 }
@@ -317,17 +351,19 @@ function deliverQrImportToTab(tabId, result) {
   void safeSendTab(tabId, { type: "QE_MANAK_QR_IMPORT", result });
 }
 
-function notifyQrImportToApp(result) {
+function notifyQrImportToApp(result, targetAppTabId) {
   const seen = new Set();
   const send = (tabId) => {
     if (!tabId || seen.has(tabId)) return;
     seen.add(tabId);
     deliverQrImportToTab(tabId, result);
   };
-  send(lastManakAppTabId || lastIsCodeAppTabId);
-  chrome.tabs.query({}, (all) => {
-    findAppTabIds(all).forEach(send);
-  });
+  send(targetAppTabId || lastManakAppTabId || lastIsCodeAppTabId);
+  if (!targetAppTabId) {
+    chrome.tabs.query({}, (all) => {
+      findAppTabIds(all).forEach(send);
+    });
+  }
 }
 
 const STORE_CHUNK = 350000;
@@ -733,6 +769,10 @@ function ebisLoginHref(userId) {
   }
 }
 
+function normalizePortalUserId(value) {
+  return String(value || "").replace(/\s+/g, "").toLowerCase();
+}
+
 function queryManakTabs() {
   return new Promise((resolve) => {
     chrome.tabs.query({ url: ["https://www.manakonline.in/*", "https://manakonline.in/*"] }, (tabs) => {
@@ -913,6 +953,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const portalPassword = String(message.portalPassword || payload?.portalPassword || "").trim();
     rememberPortal(portalUserId, portalPassword);
     const importQr = Boolean(message.importQr);
+    const importAppTabId = Number(sender && sender.tab && sender.tab.id) || lastManakAppTabId || 0;
+    const importProjectId = String(message.projectId || "").trim();
     const qrCount = Math.max(1, Math.min(5, Number(message.qrCount) || 1));
     const openKey = [
       message.loginOnly ? "login" : importQr ? "import-qr" : "tr",
@@ -936,52 +978,83 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         : ebisLoginUrl;
     void (async () => {
       if (importQr) {
-        // Import QR is independent of Manak Test Request Auto power.
-        // Section enables after Login; never create Test Request.
-        await chrome.storage.local.set({
-          pendingFill: null,
-          manakQrImport: null,
-          manakResult: null,
-          qeManakImportQr: true,
-          qeManakImportQrEnabled: false,
-          qeManakImportQrLanded: false,
-          qeManakQrCount: qrCount,
-          // Kill any leftover Test Request auto-flow so captcha never routes to TR.
-          qeManakEnabled: false,
-          qeManakArmed: true,
-          qeManakHomeReady: false,
-          qeManakImportQrTabId: 0,
-          qeManakPortal: {
-            userId: portalUserId,
-          },
-        });
-        const reused = await findConfirmedLoggedInManakTab();
-        if (reused && reused.tab.id) {
-          clearRememberedPortal();
+        try {
+          // Import QR is independent of Manak Test Request Auto power.
+          // Section enables after Login; never create Test Request.
           await chrome.storage.local.set({
-            qeManakImportQrEnabled: true,
-            qeManakImportQrLanded: true,
-            qeManakImportQrTabId: reused.tab.id,
             pendingFill: null,
+            manakQrImport: null,
+            manakResult: null,
+            qeManakImportQr: true,
+            qeManakImportQrEnabled: false,
+            qeManakImportQrLanded: false,
+            qeManakQrCount: qrCount,
+            // Kill any leftover Test Request auto-flow so captcha never routes to TR.
+            qeManakEnabled: false,
+            qeManakArmed: true,
+            qeManakHomeReady: false,
+            qeManakImportQrTabId: 0,
+            qeManakImportAppTabId: importAppTabId,
+            qeManakImportProjectId: importProjectId,
+            qeManakImportPortalUserId: portalUserId,
+            qeManakPortal: {
+              userId: portalUserId,
+            },
           });
-          await safeTabUpdate(reused.tab.id, { active: true, url: GENERATE_QR_URL });
+          const reused = await findConfirmedLoggedInManakTab();
+          if (reused && reused.tab.id) {
+            if (
+              !normalizePortalUserId(portalUserId) ||
+              normalizePortalUserId(reused.session.userId) !== normalizePortalUserId(portalUserId)
+            ) {
+              await chrome.storage.local.set({
+                qeManakImportQr: false,
+                qeManakImportQrEnabled: false,
+                qeManakImportQrLanded: false,
+                qeManakImportQrTabId: 0,
+                qeManakImportAppTabId: 0,
+                qeManakImportProjectId: "",
+                qeManakImportPortalUserId: "",
+              });
+              clearRememberedPortal();
+              sendResponse({
+                ok: false,
+                message:
+                  "The signed-in Manak account does not match this firm's saved account. Sign out of Manak, then retry the import.",
+              });
+              return;
+            }
+            clearRememberedPortal();
+            await chrome.storage.local.set({
+              qeManakImportQrEnabled: true,
+              qeManakImportQrLanded: true,
+              qeManakImportQrTabId: reused.tab.id,
+              pendingFill: null,
+            });
+            await activateManakTab(reused.tab.id, GENERATE_QR_URL);
+            sendResponse({
+              ok: true,
+              message: "Already logged in. Import QR enabled — opening Not Used QR Codes…",
+            });
+            return;
+          }
+          const created = await createManakTab(ebisLoginUrl);
+          await chrome.storage.local.set({ qeManakImportQrTabId: created.id });
+          scheduleLoginFill(created.id, portalUserId, portalPassword);
           sendResponse({
             ok: true,
-            message: "Already logged in. Import QR enabled — opening Not Used QR Codes…",
+            message:
+              "Import QR armed. Opening eBIS login — captcha + Login, then Not Used QR import.",
+          });
+          return;
+        } catch (error) {
+          lastOpenKey = "";
+          sendResponse({
+            ok: false,
+            message: error instanceof Error ? error.message : "Could not open Manak Online.",
           });
           return;
         }
-        const created = await safeTabCreate({ url: ebisLoginUrl });
-        if (created && created.id) {
-          await chrome.storage.local.set({ qeManakImportQrTabId: created.id });
-          scheduleLoginFill(created.id, portalUserId, portalPassword);
-        }
-        sendResponse({
-          ok: true,
-          message:
-            "Import QR armed. Opening eBIS login — captcha + Login, then Not Used QR import.",
-        });
-        return;
       }
       if (message.loginOnly) {
         // App-started login always turns Manak Test Request Auto flow ON.
@@ -1054,26 +1127,57 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === "QE_MANAK_QR_IMPORT" && message.result) {
-    const result = { ...message.result, autoSave: true };
     const senderTabId = sender && sender.tab ? Number(sender.tab.id) || 0 : 0;
-    chrome.storage.local.get(["qeManakImportQrTabId"], (stored) => {
-      const tracked = Number((stored && stored.qeManakImportQrTabId) || 0) || 0;
-      chrome.storage.local.set({
-        manakQrImport: result,
-        qeManakImportQr: false,
-        qeManakImportQrEnabled: false,
-        qeManakImportQrLanded: false,
-        qeManakImportQrTabId: 0,
-        pendingFill: null,
-      });
-      notifyQrImportToApp(result);
-      const closeIds = new Set([senderTabId, tracked].filter(Boolean));
-      if (message.closeTab || message.finishImport) {
-        closeIds.forEach((id) => {
-          void settle(chrome.tabs.remove(id)).catch(() => {});
+    chrome.storage.local.get(
+      [
+        "qeManakImportQrTabId",
+        "qeManakImportAppTabId",
+        "qeManakImportProjectId",
+        "qeManakImportPortalUserId",
+      ],
+      (stored) => {
+        const tracked = Number((stored && stored.qeManakImportQrTabId) || 0) || 0;
+        const targetAppTabId = Number((stored && stored.qeManakImportAppTabId) || 0) || 0;
+        const projectId = String((stored && stored.qeManakImportProjectId) || "").trim();
+        const expectedPortalUserId = normalizePortalUserId(stored && stored.qeManakImportPortalUserId);
+        const actualPortalUserId = normalizePortalUserId(message.result.portalUserId);
+        if (
+          !tracked ||
+          senderTabId !== tracked ||
+          !expectedPortalUserId ||
+          actualPortalUserId !== expectedPortalUserId
+        ) {
+          const reason =
+            !tracked || senderTabId !== tracked
+              ? "QR import rejected: these codes came from a Manak tab that is not linked to the active project import."
+              : "QR import rejected: the signed-in Manak account does not match this firm's saved account.";
+          if (targetAppTabId) {
+            void safeSendTab(targetAppTabId, { type: "QE_MANAK_QR_IMPORT_REJECTED", message: reason });
+          }
+          sendResponse({ ok: false, message: reason });
+          return;
+        }
+        const result = { ...message.result, autoSave: true, projectId };
+        chrome.storage.local.set({
+          manakQrImport: result,
+          qeManakImportQr: false,
+          qeManakImportQrEnabled: false,
+          qeManakImportQrLanded: false,
+          qeManakImportQrTabId: 0,
+          qeManakImportAppTabId: 0,
+          qeManakImportProjectId: "",
+          qeManakImportPortalUserId: "",
+          pendingFill: null,
         });
-      }
-    });
+        notifyQrImportToApp(result, targetAppTabId);
+        const closeIds = new Set([senderTabId, tracked].filter(Boolean));
+        if (message.closeTab || message.finishImport) {
+          closeIds.forEach((id) => {
+            void settle(chrome.tabs.remove(id)).catch(() => {});
+          });
+        }
+      },
+    );
     sendResponse({ ok: true });
     return true;
   }

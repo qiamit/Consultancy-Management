@@ -22,6 +22,8 @@ import {
   type BisMasterOptionCategory,
 } from './bisMasterOptions'
 
+const NO_DEFAULT_OPTIONS: FilterComboboxOption[] = []
+
 export function MasterOptionFieldWithAdd({
   category,
   value,
@@ -34,6 +36,7 @@ export function MasterOptionFieldWithAdd({
   disabled = false,
   showLabel = true,
   className,
+  defaultOptions = NO_DEFAULT_OPTIONS,
 }: {
   category: BisMasterOptionCategory
   value: string
@@ -47,12 +50,20 @@ export function MasterOptionFieldWithAdd({
   /** When false, omit the field label (e.g. table cells). */
   showLabel?: boolean
   className?: string
+  /** Built-in choices shown alongside values managed in the master list. */
+  defaultOptions?: FilterComboboxOption[]
 }) {
   const [query, setQuery] = useState(value)
   const [open, setOpen] = useState(false)
-  const [options, setOptions] = useState<FilterComboboxOption[]>(() =>
-    (getCachedBisMasterOptions(category) ?? []).map((row) => ({ id: row.value, label: row.label })),
-  )
+  const [options, setOptions] = useState<FilterComboboxOption[]>(() => {
+    const merged = [
+      ...defaultOptions,
+      ...(getCachedBisMasterOptions(category) ?? []).map((row) => ({ id: row.value, label: row.label })),
+    ]
+    const unique = new Map<string, FilterComboboxOption>()
+    for (const option of merged) unique.set(option.label.toLowerCase(), option)
+    return [...unique.values()]
+  })
   const [dialogOpen, setDialogOpen] = useState(false)
   const [newName, setNewName] = useState('')
   const [managerKey, setManagerKey] = useState(0)
@@ -70,8 +81,14 @@ export function MasterOptionFieldWithAdd({
   })
 
   const applyOptions = useCallback((rows: { value: string; label: string }[]) => {
-    setOptions(rows.map((r) => ({ id: r.value, label: r.label })))
-  }, [])
+    const merged = [
+      ...defaultOptions,
+      ...rows.map((r) => ({ id: r.value, label: r.label })),
+    ]
+    const unique = new Map<string, FilterComboboxOption>()
+    for (const option of merged) unique.set(option.label.toLowerCase(), option)
+    setOptions([...unique.values()])
+  }, [defaultOptions])
 
   useEffect(() => {
     let cancelled = false
@@ -175,8 +192,15 @@ export function MasterOptionFieldWithAdd({
   }
 
   return (
-    <div className={cn('min-w-0', showLabel ? 'space-y-0.5' : '', className)}>
-      {showLabel ? <Label htmlFor={inputId}>{label}</Label> : null}
+    <div className={cn('min-w-0', showLabel ? 'space-y-1.5' : '', className)}>
+      {showLabel ? (
+        <Label
+          htmlFor={inputId}
+          className="text-[11px] font-semibold uppercase tracking-[0.08em] text-stone-600"
+        >
+          {label}
+        </Label>
+      ) : null}
       <LimsFieldWithAdd
         addButton={
           <LimsFieldAddButton

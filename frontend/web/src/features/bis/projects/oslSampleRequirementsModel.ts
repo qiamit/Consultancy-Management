@@ -1,7 +1,7 @@
 /** OSL Sample Requirements — QE data model, QI/LIMS UI persistence. */
 
-export type OslSampleFor = 'osl' | 'ft' | 'it'
-export type OslSamplePriority = 'Priority' | 'Non Priority'
+export type OslSampleFor = string
+export type OslSamplePriority = string
 
 export type OslSampleRequirementRow = {
   id: string
@@ -19,6 +19,9 @@ export type OslSampleRequirementRow = {
   serialNumber: string
   gradeTypeVariety: string
   declaredValue: string
+  declaredValueFileId: string
+  declaredValueFileName: string
+  declaredValueStoragePath: string
   batchQuantity: string
   laboratoryName: string
   destinationLab: string
@@ -61,13 +64,13 @@ export function todayYmdLocal(d = new Date()): string {
 export function sampleForLabel(value: OslSampleFor): string {
   if (value === 'ft') return 'FT'
   if (value === 'it') return 'IT'
-  return 'OSL'
+  if (value === 'osl') return 'OSL'
+  return value
 }
 
 export function parseSampleFor(raw: unknown, fallback: OslSampleFor = 'osl'): OslSampleFor {
-  const v = String(raw ?? '')
-    .trim()
-    .toLowerCase()
+  const value = String(raw ?? '').trim()
+  const v = value.toLowerCase()
   if (v === 'ft' || v === 'factory' || v === 'factory_test') return 'ft'
   if (
     v === 'it' ||
@@ -79,11 +82,11 @@ export function parseSampleFor(raw: unknown, fallback: OslSampleFor = 'osl'): Os
     return 'it'
   }
   if (v === 'osl' || v === 'outside' || v === 'outside_lab') return 'osl'
-  return fallback
+  return value || fallback
 }
 
 function parsePriority(raw: unknown): OslSamplePriority {
-  return String(raw ?? '').trim() === 'Non Priority' ? 'Non Priority' : 'Priority'
+  return String(raw ?? '').trim() || 'Priority'
 }
 
 let oslRowSeq = 0
@@ -110,6 +113,9 @@ export function emptyOslSampleRequirementRow(sampleFor: OslSampleFor = 'osl'): O
     serialNumber: '',
     gradeTypeVariety: '',
     declaredValue: '',
+    declaredValueFileId: '',
+    declaredValueFileName: '',
+    declaredValueStoragePath: '',
     batchQuantity: '0.50 Tonne Approx',
     laboratoryName: '',
     destinationLab: '',
@@ -208,6 +214,9 @@ export function parseOslSampleRequirementRow(
     serialNumber: str(raw.serialNumber ?? raw.serial_number),
     gradeTypeVariety: resolvedGrade,
     declaredValue: str(raw.declaredValue ?? raw.declared_value),
+    declaredValueFileId: str(raw.declaredValueFileId ?? raw.declared_value_file_id),
+    declaredValueFileName: str(raw.declaredValueFileName ?? raw.declared_value_file_name),
+    declaredValueStoragePath: str(raw.declaredValueStoragePath ?? raw.declared_value_storage_path),
     batchQuantity: str(raw.batchQuantity ?? raw.batch_quantity) || '0.50 Tonne Approx',
     laboratoryName: str(raw.laboratoryName ?? raw.laboratory_name),
     destinationLab: str(raw.destinationLab ?? raw.destination_lab),

@@ -87,6 +87,7 @@ export type BisProjectIsCodeJoin = {
   section_no?: string | null
   standard_prefix?: string | null
   unit_of_is?: string | null
+  product_manual_number?: string | null
 }
 
 export type BisProjectRow = {

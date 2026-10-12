@@ -29,21 +29,27 @@
 
   function sendRuntime(message, onDone) {
     if (!runtimeOk()) {
-      if (onDone) onDone();
+      if (onDone) onDone(null, new Error("QE Consultancy extension runtime is unavailable."));
       return;
     }
+    let completed = false;
+    const finish = (response, error) => {
+      if (completed) return;
+      completed = true;
+      if (onDone) onDone(response, error || null);
+    };
     try {
-      const sent = chrome.runtime.sendMessage(message, () => {
-        void chrome.runtime.lastError;
-        if (onDone) onDone();
+      const sent = chrome.runtime.sendMessage(message, (response) => {
+        const lastError = chrome.runtime.lastError;
+        finish(response, lastError ? new Error(lastError.message) : null);
       });
       if (sent && typeof sent.catch === "function") {
-        sent.catch(() => {
-          if (onDone) onDone();
+        sent.then((response) => finish(response, null)).catch((error) => {
+          finish(null, error instanceof Error ? error : new Error(String(error)));
         });
       }
-    } catch {
-      if (onDone) onDone();
+    } catch (error) {
+      finish(null, error instanceof Error ? error : new Error(String(error)));
     }
   }
 
@@ -178,13 +184,27 @@
         loginOnly: Boolean(data.loginOnly),
         importQr: Boolean(data.importQr),
         qrCount: Number(data.qrCount) || 1,
+        projectId: data.projectId || "",
         loginUrl: data.loginUrl || "",
         homeUrl: data.homeUrl || "",
         portalUserId: data.portalUserId || "",
         portalPassword: data.portalPassword || "",
       },
-      () => {
-        window.postMessage({ type: "QE_MANAK_OPEN_ACK" }, window.location.origin);
+      (response, error) => {
+        if (error || response?.ok === false || !response) {
+          window.postMessage(
+            {
+              type: "QE_MANAK_OPEN_ERROR",
+              error: error?.message || response?.message || "The extension could not open Manak Online.",
+            },
+            window.location.origin,
+          );
+          return;
+        }
+        window.postMessage(
+          { type: "QE_MANAK_OPEN_ACK", message: response.message || "Manak Online opened." },
+          window.location.origin,
+        );
       },
     );
   });
@@ -200,6 +220,12 @@
         }
         if (msg.type === "QE_MANAK_QR_IMPORT" && msg.result) {
           publish(msg.result, false);
+        }
+        if (msg.type === "QE_MANAK_QR_IMPORT_REJECTED") {
+          window.postMessage(
+            { type: "QE_MANAK_QR_IMPORT_REJECTED", message: msg.message || "QR import was rejected." },
+            window.location.origin,
+          );
         }
         if (msg.type === "QE_MANAK_PDF_CHUNK") {
           acceptPdfChunk(msg);

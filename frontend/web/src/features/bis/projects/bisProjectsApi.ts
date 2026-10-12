@@ -33,6 +33,22 @@ function missingManakColumn(error: { code?: string; message?: string } | null) {
 const LOOKUP_ID_LIMIT = 100
 const LOOKUP_OPTION_LIMIT = 30
 
+/** Read the testing charge configured for an IS code master record. */
+export async function fetchIsCodeTestingCharges(isCodeId: string): Promise<number | null> {
+  const id = isCodeId.trim()
+  if (!id) return null
+  const { data, error } = await supabase
+    .from('is_codes')
+    .select('testing_charges')
+    .eq('id', id)
+    .maybeSingle()
+  if (error) throw error
+  const raw = (data as { testing_charges: number | string | null } | null)?.testing_charges
+  if (raw == null || raw === '') return null
+  const value = Number(raw)
+  return Number.isFinite(value) && value >= 0 ? value : null
+}
+
 export function formatBisApiError(err: unknown): string {
   if (!err) return 'Unknown error'
   const anyErr = err as { message?: string; details?: string; hint?: string; code?: string }

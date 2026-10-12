@@ -1,5 +1,6 @@
 import type { BisPrintData } from './loadBisPrintData'
 import { printSignatoryDefaults } from './loadBisPrintData'
+import { parseCmpf307Payload } from '../projects/cmpf307Model'
 import { escapeHtml as esc } from './openPrintHtml'
 import {
   applicantContextFromPrintData,
@@ -112,11 +113,13 @@ export function buildCmpf307Html(data: Cmpf307Data): string {
 
 /** Maps a BIS project row + client + IS code + consultancy context into CMPF-307 fields. */
 export function cmpf307DataFromPrintData(printData: BisPrintData): Cmpf307Data {
+  const modulePayload = parseCmpf307Payload(printData.modulePayload ?? null)
+  const signatory = printSignatoryDefaults(printData)
   return {
     ...applicantContextFromPrintData(printData),
-    signatoryName: printSignatoryDefaults(printData).signatoryName,
-    signatoryDesignation: printSignatoryDefaults(printData).signatoryDesignation,
-    brandsWithoutMarkReasons: '',
-    rows: [],
+    signatoryName: modulePayload.signatoryName || signatory.signatoryName,
+    signatoryDesignation: modulePayload.signatoryDesignation || signatory.signatoryDesignation,
+    brandsWithoutMarkReasons: modulePayload.brandsWithoutMarkReasons,
+    rows: modulePayload.rows,
   }
 }
