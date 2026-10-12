@@ -333,6 +333,41 @@ function responseShape(record: Record<string, unknown>): string {
   return `top-level keys: ${keys}; arrays: ${arrays.slice(0, 12).join(', ') || 'none'}`
 }
 
+function parseMarkdownTestRows(reply: string): Array<Record<string, string>> {
+  const lines = reply.split(/\r?\n/).map((line) => line.trim()).filter((line) => line.startsWith('|') && line.endsWith('|'))
+  const splitCells = (line: string) => line.slice(1, -1).split('|').map((cell) => cell.trim().replace(/\\\|/g, '|'))
+  const headerField = (value: string): keyof ReturnType<typeof emptyCmpf311TestRow> | null => {
+    const key = normalizedKey(value)
+    if (key.includes('testmethod') && key.includes('clause')) return 'testMethod'
+    if (key.includes('testmethod') || key === 'method') return 'testMethod'
+    if (key.includes('clause')) return 'clause'
+    if (key.includes('requirement') || key.includes('parameter')) return 'requirement'
+    if (key.includes('equipment') || key === 'rs' || key.includes('requiredorsubcontract')) return 'testEquipmentRequirement'
+    if (key.includes('sample')) return 'noOfSample'
+    if (key.includes('frequency') || key.includes('controllevel')) return 'frequency'
+    if (key.includes('remark') || key.includes('note') || key.includes('footnote')) return 'remarks'
+    return null
+  }
+  for (let headerIndex = 0; headerIndex < lines.length; headerIndex += 1) {
+    const fields = splitCells(lines[headerIndex]!).map(headerField)
+    const hasRequiredHeaders = fields.includes('clause') && fields.includes('requirement') && fields.some((field) => field === 'testMethod')
+    if (!hasRequiredHeaders) continue
+    const rows: Array<Record<string, string>> = []
+    for (let rowIndex = headerIndex + 1; rowIndex < lines.length; rowIndex += 1) {
+      const cells = splitCells(lines[rowIndex]!)
+      if (cells.every((cell) => /^:?-{3,}:?$/.test(cell))) continue
+      const row: Record<string, string> = {}
+      cells.forEach((cell, index) => {
+        const field = fields[index]
+        if (field && cell) row[field] = row[field] ? `${row[field]} — ${cell}` : cell
+      })
+      if (Object.entries(row).some(([key, value]) => key !== 'clause' && value.trim())) rows.push(row)
+    }
+    if (rows.length) return rows
+  }
+  return []
+}
+
 export async function generateCmpf311Section(input: {
   target: Cmpf311GenerateTarget
   productManualNumber: string
@@ -399,7 +434,15 @@ export async function generateCmpf311Section(input: {
     try {
       parsed = parseJson(correction.reply)
     } catch {
-      throw new Error(`The AI model returned non-JSON twice for ${targetLabel}. Automatic JSON correction also failed. Try again or select a JSON-capable active model in AI Settings.`)
+      if (input.target === 'test-table') {
+        const textRows = parseMarkdownTestRows(correction.reply).length
+          ? parseMarkdownTestRows(correction.reply)
+          : parseMarkdownTestRows(reply)
+        if (textRows.length) parsed = { rows: textRows }
+        else throw new Error(`The AI model returned non-JSON twice for ${targetLabel}; no recognizable Markdown table was found (${correction.reply.length} characters, ${correction.reply.split(/\r?\n/).filter((line) => line.trim().startsWith('|')).length} table lines). Try again or select a JSON-capable active model in AI Settings.`)
+      } else {
+        throw new Error(`The AI model returned non-JSON twice for ${targetLabel}. Automatic JSON correction also failed. Try again or select a JSON-capable active model in AI Settings.`)
+      }
     }
   }
   const mapResponse = (source: Record<string, unknown>) => {
