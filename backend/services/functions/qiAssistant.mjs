@@ -236,7 +236,8 @@ export function createQiAssistantHandler(deps) {
     const modelId = normalizeModelId(provider, String(model.model_id || ''))
     const temperature = Number(model.temperature)
     const maxTokens = Number(model.max_tokens)
-    const chatMaxTokens = Number.isFinite(maxTokens) ? Math.min(maxTokens, 8192) : 4096
+    const isCmpf311Request = body.page === 'bis/cmpf-311-on-sit'
+    const chatMaxTokens = isCmpf311Request ? 8192 : Number.isFinite(maxTokens) ? Math.min(maxTokens, 8192) : 4096
 
     const requestChatCompletion = (jsonMode) => fetch(`${apiBase}/chat/completions`, {
       method: 'POST',
@@ -272,9 +273,24 @@ export function createQiAssistantHandler(deps) {
       return
     }
 
-    const reply = String(
-      aiPayload?.choices?.[0]?.message?.content ?? '',
-    ).trim() || 'No response from model.'
+    const choice = aiPayload?.choices?.[0]
+    const content = choice?.message?.content
+    const reply = (typeof content === 'string'
+      ? content
+      : Array.isArray(content)
+        ? content.map((part) => typeof part === 'string' ? part : String(part?.text ?? '')).join('\n')
+        : '').trim()
+    if (!reply) {
+      const messageFields = choice?.message && typeof choice.message === 'object'
+        ? Object.keys(choice.message).slice(0, 8).join(', ') || 'none'
+        : 'none'
+      const finishReason = String(choice?.finish_reason ?? 'unknown')
+      const diagnostic = isCmpf311Request
+        ? `AI provider returned an empty response for CMPF-311 (provider: ${provider}, model: ${modelId || 'unspecified'}, finish reason: ${finishReason}, message fields: ${messageFields}). Check the active model's output limit and provider response format in AI Settings.`
+        : 'No response from model.'
+      corsJson(res, isCmpf311Request ? 502 : 200, isCmpf311Request ? { error: diagnostic } : { reply: diagnostic })
+      return
+    }
 
     corsJson(res, 200, { reply })
   }
