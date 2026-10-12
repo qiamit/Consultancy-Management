@@ -172,7 +172,7 @@ export const BIS_PRINT_DOCUMENT_LABEL: Record<BisPrintDocumentKind, string> = {
   'top-management': 'Top Management Details',
   'technical-staff': 'Technical Staff Details',
   'self-evaluation-form': 'Self Evaluation Form',
-  'all-required-undertakings': "All Required Undertaking's",
+  'all-required-undertakings': 'All Undertakings',
   'raw-material-reference': 'Raw Material & Reference Material',
   'certified-reference-materials': 'Certified Reference Materials',
   'raw-material-details': 'Raw Material Details',
@@ -193,7 +193,6 @@ export const EXTRA_PRINT_KINDS: BisPrintDocumentKind[] = [
   'cmpf-311',
   'updated-sit',
   'cmpf-307',
-  'undertaking-general',
   'all-required-undertakings',
   'manufacturing-scope',
   'osl-sample-requirements',
@@ -330,7 +329,8 @@ const HTML_BUILDERS: Record<BisPrintDocumentKind, (data: BisPrintData) => string
   'plant-layout': (d) => buildPlantLayoutHtml(plantLayoutDataFromPrintData(d)),
   'osl-courier-labels': (d) => buildOslCourierLabelsHtml(oslCourierLabelsDataFromPrintData(d)),
   'location-map': (d) => buildLocationMapHtml(locationMapDataFromPrintData(d)),
-  'all-required-undertakings': (d) => combinePrintHtmlDocuments('All Required Undertakings', [
+  'all-required-undertakings': (d) => combinePrintHtmlDocuments('All Undertakings', [
+    buildUndertakingGeneralHtml(undertakingGeneralDataFromPrintData(d)),
     buildUndertakingOption2Html(undertakingOption2DataFromPrintData(d)),
     buildUndertakingLongDurationHtml(undertakingLongDurationDataFromPrintData(d)),
     buildUndertakingMinimumMarkingFeeHtml(undertakingMinimumMarkingFeeDataFromPrintData(d)),
