@@ -368,6 +368,20 @@ function parseMarkdownTestRows(reply: string): Array<Record<string, string>> {
   return []
 }
 
+function parseTargetReply(reply: string, target: Cmpf311GenerateTarget, targetLabel: string): Record<string, unknown> {
+  try {
+    return parseJson(reply)
+  } catch {
+    if (target === 'test-table') {
+      const rows = parseMarkdownTestRows(reply)
+      if (rows.length) return { rows }
+      const tableLineCount = reply.split(/\r?\n/).filter((line) => line.trim().startsWith('|')).length
+      throw new Error(`The AI model returned non-JSON for ${targetLabel}; no recognizable Markdown table was found (${reply.length} characters, ${tableLineCount} table lines).`)
+    }
+    throw new Error(`The AI model returned non-JSON for ${targetLabel}.`)
+  }
+}
+
 export async function generateCmpf311Section(input: {
   target: Cmpf311GenerateTarget
   productManualNumber: string
@@ -432,17 +446,9 @@ export async function generateCmpf311Section(input: {
       history: [],
     })
     try {
-      parsed = parseJson(correction.reply)
-    } catch {
-      if (input.target === 'test-table') {
-        const textRows = parseMarkdownTestRows(correction.reply).length
-          ? parseMarkdownTestRows(correction.reply)
-          : parseMarkdownTestRows(reply)
-        if (textRows.length) parsed = { rows: textRows }
-        else throw new Error(`The AI model returned non-JSON twice for ${targetLabel}; no recognizable Markdown table was found (${correction.reply.length} characters, ${correction.reply.split(/\r?\n/).filter((line) => line.trim().startsWith('|')).length} table lines). Try again or select a JSON-capable active model in AI Settings.`)
-      } else {
-        throw new Error(`The AI model returned non-JSON twice for ${targetLabel}. Automatic JSON correction also failed. Try again or select a JSON-capable active model in AI Settings.`)
-      }
+      parsed = parseTargetReply(correction.reply, input.target, targetLabel)
+    } catch (error) {
+      throw new Error(`The AI model returned unusable structured data twice for ${targetLabel}. ${error instanceof Error ? error.message : 'Automatic JSON correction also failed.'} Try again or select a JSON-capable active model in AI Settings.`)
     }
   }
   const mapResponse = (source: Record<string, unknown>) => {
@@ -515,10 +521,10 @@ export async function generateCmpf311Section(input: {
     })
     let retryParsed: Record<string, unknown>
     try {
-      retryParsed = parseJson(retry.reply)
+      retryParsed = parseTargetReply(retry.reply, input.target, targetLabel)
       result = mapResponse(retryParsed)
-    } catch {
-      throw new Error(`The AI retry could not return usable structured data for ${targetLabel}. Check the Product Manual text and active AI model settings.`)
+    } catch (error) {
+      throw new Error(`The AI retry could not return usable structured data for ${targetLabel}. ${error instanceof Error ? error.message : ''} Check the Product Manual text and active AI model settings.`)
     }
     if (!hasTargetContent(result)) {
       throw new Error(`AI returned no usable ${input.target === 'test-table' ? 'test rows' : input.target === 'notes' ? 'notes' : 'Annexure C descriptions'} after re-reading the Product Manual. ${responseShape(retryParsed)}`)
