@@ -368,6 +368,18 @@ function parseMarkdownTestRows(reply: string): Array<Record<string, string>> {
   return []
 }
 
+function parseExtractedTextTestRows(sourceText: string): Array<Record<string, string>> {
+  const tableLines = sourceText.split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.includes('|') && line.split('|').length >= 5)
+    .map((line) => {
+      const cells = line.split(/\s*\|\s*/).map((cell) => cell.trim()).filter(Boolean)
+      return cells.length >= 4 ? `| ${cells.join(' | ')} |` : ''
+    })
+    .filter(Boolean)
+  return parseMarkdownTestRows(tableLines.join('\n'))
+}
+
 function parseTargetReply(reply: string, target: Cmpf311GenerateTarget, targetLabel: string): Record<string, unknown> {
   try {
     return parseJson(reply)
@@ -545,7 +557,17 @@ export async function generateCmpf311Section(input: {
       retryParsed = parseTargetReply(retry.reply, input.target, targetLabel)
       result = mapResponse(retryParsed)
     } catch (error) {
+      const sourceRows = input.target === 'test-table' ? parseExtractedTextTestRows(input.manualText) : []
+      if (sourceRows.length) {
+        return { annexureSections: [], testRows: sourceRows.map((row) => ({ ...emptyCmpf311TestRow(), ...row })), notes: [] }
+      }
       throw new Error(`The AI retry could not return usable structured data for ${targetLabel}. ${error instanceof Error ? error.message : ''} Check the Product Manual text and active AI model settings.`)
+    }
+    if (!hasTargetContent(result)) {
+      const sourceRows = input.target === 'test-table' ? parseExtractedTextTestRows(input.manualText) : []
+      if (sourceRows.length) {
+        result = { ...result, testRows: sourceRows.map((row) => ({ ...emptyCmpf311TestRow(), ...row })) }
+      }
     }
     if (!hasTargetContent(result)) {
       throw new Error(`AI returned no usable ${input.target === 'test-table' ? 'test rows' : input.target === 'notes' ? 'notes' : 'Annexure C descriptions'} after re-reading the Product Manual. ${responseShape(retryParsed)}`)
