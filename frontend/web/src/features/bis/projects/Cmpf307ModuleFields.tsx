@@ -1,116 +1,84 @@
 import { useRef } from 'react'
-import { FileSpreadsheet, Trash2 } from 'lucide-react'
+import { FileSpreadsheet, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { limsOutlineBtnClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { importCmpfSpreadsheetRows } from './cmpfSpreadsheetImport'
 import { cmpf307RowHasContent, type Cmpf307BrandRow, type Cmpf307ModulePayload } from './cmpf307Model'
 
-const thClass = 'bg-stone-800 text-center text-[10px] font-bold uppercase tracking-[0.12em] text-amber-200'
+const inputClass = 'h-9 w-full border border-stone-400 bg-white px-2 text-sm text-stone-900 outline-none focus:border-amber-600 focus:ring-2 focus:ring-amber-500/20 disabled:opacity-60'
+const labelClass = 'flex flex-col gap-1 text-xs font-semibold text-stone-700'
+const headers = ['Sr. No.', 'Brand Name / Trade Mark(s) to be marked on BIS Standard Mark product (include actual design depiction)', 'Owned by Self / Others', 'Registered / Unregistered', 'Date of Introduction', 'Action']
 
-export function Cmpf307ModuleFields({
-  value,
-  onChange,
-  disabled = false,
-}: {
+export function Cmpf307ModuleFields({ value, onChange, disabled = false, applicantName = '', applicantAddress = '', applicationNumber = '', licenceValidity = '' }: {
   value: Cmpf307ModulePayload
   onChange: (next: Cmpf307ModulePayload) => void
   disabled?: boolean
+  applicantName?: string
+  applicantAddress?: string
+  applicationNumber?: string
+  licenceValidity?: string
 }) {
   const fileRef = useRef<HTMLInputElement | null>(null)
+  const updateRow = (index: number, patch: Partial<Cmpf307BrandRow>) => onChange({
+    ...value,
+    rows: value.rows.map((row, rowIndex) => rowIndex === index ? { ...row, ...patch } : row),
+  })
 
   const importSpreadsheet = async (file: File) => {
     try {
-      const rows = await importCmpfSpreadsheetRows<Cmpf307BrandRow>(
-        file,
-        [
-          { key: 'brandName', aliases: ['brand name', 'brand names', 'brand trade name', 'trade mark', 'trademark', 'trade name'] },
-          { key: 'ownedBy', aliases: ['owned by', 'owned by self or others', 'owner', 'ownership'] },
-          { key: 'registeredStatus', aliases: ['registered status', 'registered unregistered', 'registration status', 'registered'] },
-          { key: 'registrationDate', aliases: ['date of registration', 'date of registration introduction', 'registration introduction date', 'date of introduction'] },
-        ],
-        cmpf307RowHasContent,
-      )
-      if (!rows.length) {
-        toast.error('No brand rows were found in the selected spreadsheet.')
-        return
-      }
+      const rows = await importCmpfSpreadsheetRows<Cmpf307BrandRow>(file, [
+        { key: 'brandName', aliases: ['brand name', 'brand names', 'brand trade name', 'trade mark', 'trademark', 'trade name'] },
+        { key: 'ownedBy', aliases: ['owned by', 'owned by self or others', 'owner', 'ownership'] },
+        { key: 'registeredStatus', aliases: ['registered status', 'registered unregistered', 'registration status', 'registered'] },
+        { key: 'registrationDate', aliases: ['date of registration', 'date of registration introduction', 'registration introduction date', 'date of introduction'] },
+      ], cmpf307RowHasContent)
+      if (!rows.length) { toast.error('No brand rows were found in the selected spreadsheet.'); return }
       onChange({ ...value, rows: [...value.rows, ...rows] })
       toast.success(`Imported ${rows.length} brand row(s).`)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Unable to import the spreadsheet.')
-    } finally {
-      if (fileRef.current) fileRef.current.value = ''
-    }
+    } finally { if (fileRef.current) fileRef.current.value = '' }
   }
 
-  return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3 sm:p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-stone-600">CMPF-307 · Brand Names</h2>
-          <p className="mt-1 text-xs text-stone-500">Import rows from an Excel workbook; imported entries are added to the current list.</p>
-        </div>
-        <input
-          ref={fileRef}
-          type="file"
-          accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
-          className="hidden"
-          disabled={disabled}
-          onChange={(event) => {
-            const file = event.target.files?.[0]
-            if (file) void importSpreadsheet(file)
-          }}
-        />
-        <Button type="button" variant="outline" size="sm" className={cn(limsOutlineBtnClass, 'h-8')} disabled={disabled} onClick={() => fileRef.current?.click()}>
-          <FileSpreadsheet className="mr-1.5 h-4 w-4" aria-hidden /> Import Excel
-        </Button>
+  return <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-3 sm:p-5">
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-300 pb-3">
+      <div><h2 className="text-sm font-bold uppercase tracking-wide text-stone-800">Annex G · CMPF-307</h2><p className="mt-1 text-xs text-stone-500">Applicant’s/licensee’s declaration of brand name / trade mark proposed to be covered under certification</p></div>
+      <div className="flex gap-2">
+        <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv" className="hidden" disabled={disabled} onChange={(e) => { const file = e.target.files?.[0]; if (file) void importSpreadsheet(file) }} />
+        <Button type="button" variant="outline" size="sm" className={cn(limsOutlineBtnClass, 'h-8')} disabled={disabled} onClick={() => fileRef.current?.click()}><FileSpreadsheet className="mr-1.5 h-4 w-4" aria-hidden />Import Excel</Button>
       </div>
-
-      <div className="min-h-0 overflow-auto border-2 border-stone-500 bg-white">
-        <Table className="w-full min-w-[760px] border-collapse [&_td]:border [&_td]:border-stone-400 [&_th]:border [&_th]:border-stone-700">
-          <TableHeader>
-            <TableRow className="border-stone-700 hover:bg-transparent">
-              <TableHead className={cn(thClass, 'w-[5%]')}>Sr.</TableHead>
-              <TableHead className={cn(thClass, 'w-[35%]')}>Brand / Trade-Mark</TableHead>
-              <TableHead className={cn(thClass, 'w-[18%]')}>Owned by Self / Others</TableHead>
-              <TableHead className={cn(thClass, 'w-[20%]')}>Registered / Unregistered</TableHead>
-              <TableHead className={cn(thClass, 'w-[18%]')}>Registration / Introduction Date</TableHead>
-              <TableHead className={cn(thClass, 'w-[4%]')}>Action</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {value.rows.length ? value.rows.map((row, index) => (
-              <TableRow key={`cmpf307-${index}-${row.brandName}`}>
-                <TableCell className="text-center">{index + 1}</TableCell>
-                <TableCell>{row.brandName || '—'}</TableCell>
-                <TableCell>{row.ownedBy || '—'}</TableCell>
-                <TableCell>{row.registeredStatus || '—'}</TableCell>
-                <TableCell>{row.registrationDate || '—'}</TableCell>
-                <TableCell className="text-center">
-                  <Button type="button" variant="outline" size="icon" className="h-7 w-7" disabled={disabled} aria-label={`Remove brand ${row.brandName}`} onClick={() => onChange({ ...value, rows: value.rows.filter((_, rowIndex) => rowIndex !== index) })}>
-                    <Trash2 className="h-4 w-4 text-red-700" aria-hidden />
-                  </Button>
-                </TableCell>
-              </TableRow>
-            )) : (
-              <TableRow><TableCell colSpan={6} className="py-8 text-center text-sm text-stone-500">No brand rows yet. Import an Excel workbook to add rows.</TableCell></TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
-
-      <label className="space-y-1 text-sm font-medium text-stone-800">
-        Brand / Trade Names that will not carry the BIS Certification Mark — reasons
-        <textarea
-          className="min-h-20 w-full resize-y border border-stone-500 bg-stone-50 px-3 py-2 text-sm font-normal text-stone-900 outline-none focus:border-amber-600 focus:bg-white focus:ring-2 focus:ring-amber-500/20 disabled:cursor-not-allowed disabled:opacity-60"
-          value={value.brandsWithoutMarkReasons}
-          disabled={disabled}
-          onChange={(event) => onChange({ ...value, brandsWithoutMarkReasons: event.target.value })}
-        />
-      </label>
     </div>
-  )
+
+    <section className="grid gap-3 sm:grid-cols-2">
+      <label className={labelClass}>1. Application No. / Licence No.<input className={inputClass} value={applicationNumber} readOnly aria-label="Application or licence number" /></label>
+      <label className={labelClass}>2. Licence Valid Up To<input className={inputClass} type="date" value={value.licenseValidUpTo || licenceValidity} disabled={disabled} onChange={(e) => onChange({ ...value, licenseValidUpTo: e.target.value })} /></label>
+      <label className={cn(labelClass, 'sm:col-span-2')}>3. Name / Address<textarea className={cn(inputClass, 'h-20 resize-y py-2')} value={[applicantName, applicantAddress].filter(Boolean).join('\n')} readOnly aria-label="Applicant name and address" /></label>
+      <label className={cn(labelClass, 'sm:col-span-2')}>4. Brand / Trade Names Being Used<textarea className={cn(inputClass, 'h-16 resize-y py-2')} value={value.brandNamesBeingUsed} disabled={disabled} onChange={(e) => onChange({ ...value, brandNamesBeingUsed: e.target.value })} placeholder="Enter all brand / trade names being used" /></label>
+    </section>
+
+    <section className="space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-sm font-bold text-stone-800">5. Brand names / trade marks to be marked on BIS Standard Mark product</h3><Button type="button" variant="outline" size="sm" disabled={disabled} className={cn(limsOutlineBtnClass, 'h-8')} onClick={() => onChange({ ...value, rows: [...value.rows, { brandName: '', ownedBy: '', registeredStatus: '', registrationDate: '' }] })}><Plus className="mr-1 h-4 w-4" aria-hidden />Add Brand</Button></div>
+      <div className="overflow-x-auto border border-stone-400 bg-white"><table className="w-full min-w-[900px] table-fixed border-collapse text-xs"><thead><tr>{headers.map((header, i) => <th key={header} className={cn('border border-stone-700 bg-stone-800 px-2 py-2 font-bold text-amber-200', i === 0 || i === 5 ? 'w-[7%]' : i === 1 ? 'w-[39%]' : 'w-[16%]')}>{header}</th>)}</tr></thead><tbody>
+        {value.rows.map((row, index) => <tr key={`cmpf307-${index}`} className="odd:bg-stone-50"> <td className="border border-stone-300 p-2 text-center">{index + 1}</td>
+          <td className="border border-stone-300 p-1"><textarea aria-label={`Brand name or trade mark row ${index + 1}`} className={cn(inputClass, 'h-14 resize-y')} value={row.brandName} disabled={disabled} onChange={(e) => updateRow(index, { brandName: e.target.value })} /></td>
+          <td className="border border-stone-300 p-1"><input aria-label={`Owner row ${index + 1}`} className={inputClass} value={row.ownedBy} disabled={disabled} onChange={(e) => updateRow(index, { ownedBy: e.target.value })} placeholder="Self / Others" /></td>
+          <td className="border border-stone-300 p-1"><input aria-label={`Registration status row ${index + 1}`} className={inputClass} value={row.registeredStatus} disabled={disabled} onChange={(e) => updateRow(index, { registeredStatus: e.target.value })} placeholder="Registered / Unregistered" /></td>
+          <td className="border border-stone-300 p-1"><input aria-label={`Date of introduction row ${index + 1}`} className={inputClass} value={row.registrationDate} disabled={disabled} onChange={(e) => updateRow(index, { registrationDate: e.target.value })} /></td>
+          <td className="border border-stone-300 p-1 text-center"><Button type="button" variant="outline" size="icon" aria-label={`Delete brand row ${index + 1}`} className="h-8 w-8" disabled={disabled} onClick={() => onChange({ ...value, rows: value.rows.filter((_, rowIndex) => rowIndex !== index) })}><Trash2 className="h-4 w-4 text-red-700" aria-hidden /></Button></td>
+        </tr>)}
+        {!value.rows.length && <tr><td colSpan={6} className="border border-stone-300 py-6 text-center text-stone-500">No brand rows. Add a row or import a spreadsheet.</td></tr>}
+      </tbody></table></div>
+    </section>
+
+    <label className={labelClass}>6. Other Brand Names / Trade Marks used for the same product without BIS Standard Mark — give reasons<textarea className={cn(inputClass, 'min-h-20 resize-y py-2')} value={value.brandsWithoutMarkReasons} disabled={disabled} onChange={(e) => onChange({ ...value, brandsWithoutMarkReasons: e.target.value })} /></label>
+    <div className="space-y-2 border border-stone-300 bg-stone-50 p-3 text-xs leading-relaxed text-stone-700"><h3 className="font-bold text-stone-900">Declaration (as per Annex G)</h3>
+      <p><strong>7.</strong> In case Brand Names/Trademark(s) of any other party/manufacturer is being used for purposes of the above, give the design depiction of the Brand Names/Trademark(s) and copy of the agreement authorizing the use of the same.</p>
+      <p><strong>8.</strong> I/We undertake to inform BIS in advance as and when we propose to use any other Brand Names/Trademark(s) in conjunction with the operation of the BIS Certification Scheme.</p>
+      <p><strong>9.</strong> I/We also undertake that, as far as possible, the entire production which conforms to the specification shall be marked with the BIS Mark, irrespective of the Brand Names/Trademark(s) used.</p>
+      <p><strong>10.</strong> I/We understand that the above has been given only as information to BIS, that BIS has no role in permitting/approving of any Brand Name or Trade Mark, that this is not in any way be interpreted to mean that BIS has permitted/approved the use of the Brand Names and Trade Marks listed above, and that the responsibility is entirely mine/ours.</p>
+    </div>
+    <section className="grid gap-3 sm:grid-cols-2"><label className={labelClass}>Place<input className={inputClass} value={value.place} disabled={disabled} onChange={(e) => onChange({ ...value, place: e.target.value })} /></label><label className={labelClass}>Date<input type="date" className={inputClass} value={value.declarationDate} disabled={disabled} onChange={(e) => onChange({ ...value, declarationDate: e.target.value })} /></label><label className={labelClass}>Authorized Signatory Name<input className={inputClass} value={value.signatoryName} disabled={disabled} onChange={(e) => onChange({ ...value, signatoryName: e.target.value })} /></label><label className={labelClass}>Designation<input className={inputClass} value={value.signatoryDesignation} disabled={disabled} onChange={(e) => onChange({ ...value, signatoryDesignation: e.target.value })} /></label></section>
+  </div>
 }

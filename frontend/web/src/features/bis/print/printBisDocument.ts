@@ -134,6 +134,8 @@ export type BisPrintDocumentKind =
   | 'top-management'
   | 'technical-staff'
   | 'self-evaluation-form'
+  | 'all-required-undertakings'
+  | 'raw-material-reference'
   | 'certified-reference-materials'
   | 'raw-material-details'
   | 'subcontracted-tests'
@@ -170,6 +172,8 @@ export const BIS_PRINT_DOCUMENT_LABEL: Record<BisPrintDocumentKind, string> = {
   'top-management': 'Top Management Details',
   'technical-staff': 'Technical Staff Details',
   'self-evaluation-form': 'Self Evaluation Form',
+  'all-required-undertakings': "All Required Undertaking's",
+  'raw-material-reference': 'Raw Material & Reference Material',
   'certified-reference-materials': 'Certified Reference Materials',
   'raw-material-details': 'Raw Material Details',
   'subcontracted-tests': 'Subcontracted Tests Declaration',
@@ -191,17 +195,13 @@ export const EXTRA_PRINT_KINDS: BisPrintDocumentKind[] = [
   'cmpf-307',
   'cmpf-310',
   'undertaking-general',
-  'undertaking-option-2',
-  'undertaking-long-duration',
-  'undertaking-mmf',
+  'all-required-undertakings',
   'manufacturing-scope',
   'osl-sample-requirements',
   'location-map',
   'plant-layout',
   'process-flow-chart',
-  'self-evaluation-form',
-  'certified-reference-materials',
-  'raw-material-details',
+  'raw-material-reference',
   'subcontracted-tests',
   'osl-sample-test-request',
   'osl-courier-labels',
@@ -278,6 +278,19 @@ export const LEGACY_FILE_MODULE_ALIASES: Record<string, BisPrintDocumentKind> = 
 export const MORE_PRINTS_TOOLTIP =
   'Full BIS application print pack (CMPF, undertakings, staff, SEF, OSL, plant layout, location map)'
 
+function combinePrintHtmlDocuments(title: string, documents: string[]): string {
+  const pageBodies = documents.map((html) => {
+    const body = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i)?.[1] ?? html
+    const style = html.match(/<style[^>]*>([\s\S]*?)<\/style>/i)?.[1] ?? ''
+    return { body, style }
+  })
+  const first = pageBodies[0]
+  if (!first) return ''
+  const styles = pageBodies.map((page) => page.style).join('\n')
+  const bodies = pageBodies.map((page, index) => `<section class="merged-print-section${index ? ' merged-print-next' : ''}">${page.body}</section>`).join('')
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"/><title>${title}</title><style>${styles}\n@media print{.merged-print-next{break-before:page;page-break-before:always}}</style></head><body>${bodies}</body></html>`
+}
+
 const HTML_BUILDERS: Record<BisPrintDocumentKind, (data: BisPrintData) => string> = {
   'legal-documents': (d) => buildLegalDocumentsHtml(legalDocumentsDataFromPrintData(d)),
   'application-details': (d) => buildBisForm1Html(bisForm1DataFromPrintData(d)),
@@ -318,6 +331,16 @@ const HTML_BUILDERS: Record<BisPrintDocumentKind, (data: BisPrintData) => string
   'plant-layout': (d) => buildPlantLayoutHtml(plantLayoutDataFromPrintData(d)),
   'osl-courier-labels': (d) => buildOslCourierLabelsHtml(oslCourierLabelsDataFromPrintData(d)),
   'location-map': (d) => buildLocationMapHtml(locationMapDataFromPrintData(d)),
+  'all-required-undertakings': (d) => combinePrintHtmlDocuments('All Required Undertakings', [
+    buildUndertakingOption2Html(undertakingOption2DataFromPrintData(d)),
+    buildUndertakingLongDurationHtml(undertakingLongDurationDataFromPrintData(d)),
+    buildUndertakingMinimumMarkingFeeHtml(undertakingMinimumMarkingFeeDataFromPrintData(d)),
+    buildSelfEvaluationFormHtml(selfEvaluationFormDataFromPrintData(d)),
+  ]),
+  'raw-material-reference': (d) => combinePrintHtmlDocuments('Raw Material & Reference Material', [
+    buildRawMaterialDetailsHtml(rawMaterialDetailsDataFromPrintData(d)),
+    buildCertifiedReferenceMaterialsHtml(certifiedReferenceMaterialsDataFromPrintData(d)),
+  ]),
 }
 
 /** Builds full HTML for one BIS print document (no popup). */

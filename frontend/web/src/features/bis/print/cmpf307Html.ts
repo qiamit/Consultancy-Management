@@ -4,17 +4,12 @@ import { parseCmpf307Payload } from '../projects/cmpf307Model'
 import { escapeHtml as esc } from './openPrintHtml'
 import {
   applicantContextFromPrintData,
-  applicationNoDisplay,
   blankTableRows,
   buildPrintPage,
   CMPF_FORM_STYLES,
-  inspectionDateOrToday,
-  letterheadHtml,
-  preparedByHtml,
-  signatoryHtml,
-  toBlockHtml,
   type PrintApplicantContext,
 } from './printDocumentShared'
+import { formatDisplayDate } from '../projects/types'
 
 export type Cmpf307BrandRow = {
   brandName: string
@@ -27,6 +22,10 @@ export type Cmpf307Data = PrintApplicantContext & {
   signatoryName: string
   signatoryDesignation: string
   brandsWithoutMarkReasons: string
+  licenseValidUpTo: string
+  brandNamesBeingUsed: string
+  place: string
+  declarationDate: string
   rows: Cmpf307BrandRow[]
 }
 
@@ -50,63 +49,48 @@ function brandRows(rows: Cmpf307BrandRow[]): string {
 }
 
 function buildBody(data: Cmpf307Data): string {
-  const letterDate = inspectionDateOrToday(data.dateOfInspection)
-  const sigName = data.signatoryName.trim() || data.contactPerson.trim()
+  const declarationDate = data.declarationDate.trim() ? formatDisplayDate(data.declarationDate) : ''
   const reasons = data.brandsWithoutMarkReasons.trim()
+  const rows = data.rows.filter((r) => Object.values(r).some((v) => v.trim()))
+  const bodyRows = rows.length ? brandRows(rows) : blankTableRows(MIN_BLANK_ROWS, 5, { leftColumn: 1 })
 
   return `
 <div class="pd-sheet">
-  ${letterheadHtml(data)}
-  <div class="cmpf-form-id">CMPF - 307</div>
-  <h1 class="pd-title">Declaration of Brand Names Proposed to be Covered Under Certification</h1>
-
-  <div class="pd-to-row">
-    <div class="pd-to-block">${toBlockHtml(data.bisBranchName, data.bisBranchState)}</div>
-    <div class="pd-date-block">
-      <div><strong>Date of Inspection:</strong> ${esc(letterDate)}</div>
-      <div><strong>Application No.:</strong> ${esc(applicationNoDisplay(data.applicationNumber))}</div>
-    </div>
+  <div class="cmpf307-top"><div><strong>ANNEX G</strong></div><div><strong>CMPF 307</strong><br/>Oct-96</div></div>
+  <h1 class="cmpf307-title">APPLICANT’S/LICENSEE’S DECLARATION OF BRAND NAME/<br/>TRADE MARK PROPOSED TO BE COVERED UNDER CERTIFICATION</h1>
+  <div class="cmpf307-meta">
+    <div><strong>1. Application No./Licence No.:</strong><span>${esc(data.applicationNumber)}</span></div>
+    <div><strong>2. Licence Valid Up To:</strong><span>${esc(data.licenseValidUpTo ? formatDisplayDate(data.licenseValidUpTo) : '')}</span></div>
+    <div><strong>3. Name/Address:-</strong><span>${esc(data.applicantName)}${data.applicantAddress ? `<br/>${esc(data.applicantAddress)}` : ''}</span></div>
   </div>
-
-  <p class="cmpf-heading">4. Brand / Trade Names Being Used:-</p>
+  <div class="cmpf307-used"><strong>4. Brand/Trade Names Being Used:-</strong><span>${esc(data.brandNamesBeingUsed)}</span></div>
+  <p class="cmpf-heading">5.</p>
   <table class="pd-table cmpf-table">
-    <colgroup><col style="width:6%"/><col style="width:40%"/><col style="width:16%"/><col style="width:17%"/><col style="width:21%"/></colgroup>
+    <colgroup><col style="width:8%"/><col style="width:46%"/><col style="width:16%"/><col style="width:16%"/><col style="width:14%"/></colgroup>
     <thead>
       <tr>
-        <th>Sr.</th>
-        <th>Brand Names / Trade-Mark(s) which would be marked on the product bearing the BIS Standard Mark<br/>(Give actual design depiction of the Brand Name / Trade-Mark(s))</th>
+        <th>Sr. No.</th>
+        <th>Brand Names/Trademark(s) which would be marked on the product bearing the BIS Standard Mark (Give actual design depiction of the Brand Name/Trade Mark(s))</th>
         <th>Owned by Self or Others</th>
         <th>Registered / Unregistered</th>
-        <th>Date of Registration / Introduction</th>
+        <th>Date of Introduction</th>
       </tr>
     </thead>
-    <tbody>${brandRows(data.rows)}</tbody>
+    <tbody>${bodyRows}</tbody>
   </table>
-
-  <div class="cmpf-terms">
-    <p><strong>Note-1:-</strong> In case the brand name is registered in your name, enclose copies of the Registration Certificate / document.</p>
-    <p><strong>Note-2:-</strong> In case the brand name is not registered in your name, enclose copies of the agreement authorizing use of this / these brand name(s).</p>
-  </div>
-
-  <p class="cmpf-heading"><span>5.</span> Brand / Trade Names which will not carry the BIS Certification Mark. Give reasons.</p>
-  <div class="cmpf-box">${reasons ? esc(reasons) : '&nbsp;'}</div>
-
-  <div class="cmpf-decls">
-    <p><strong>6.</strong> I/We understand that in the event of a dispute with any other party over the use of the above Brand Names / Trade Marks, the responsibility is entirely ours and BIS would not be involved in such disputes.</p>
-    <p><strong>7.</strong> I/We also understand that in the event of any change, I/We will submit a revised declaration in the prescribed proforma before introducing the change in brand use, including deletion or addition.</p>
-    <p><strong>8.</strong> I/We also understand to maintain production and dispatch records of the product covered under the licence under each brand separately.</p>
-    <p><strong>9.</strong> I/We also understand that, as far as possible, the entire production under the above brands which conforms to the specification shall be marked with the Standard Mark.</p>
-  </div>
-
-  <div class="cmpf-sign-right">${signatoryHtml({ firmName: data.applicantName, name: sigName, designation: data.signatoryDesignation })}</div>
-  ${preparedByHtml(data.preparedBy)}
+  <p class="cmpf307-clause"><strong>6. Other Brand Names/Trademark(s) used for the same product marketed without BIS Standard Mark. Give reasons.</strong><br/>${reasons ? esc(reasons) : '&nbsp;'}</p>
+  <p class="cmpf307-clause"><strong>7.</strong> In case Brand Names/Trademark(s) of any other party/manufacturer is being used for purposes of the above, give the design depiction of the Brand Names/Trademark(s) and copy of the agreement authorizing the use of the same.</p>
+  <p class="cmpf307-clause"><strong>8.</strong> I/We undertake to inform BIS in advance as and when we propose to use any other Brand Names/Trademark(s) in conjunction with the operation of the BIS Certification Scheme.</p>
+  <p class="cmpf307-clause"><strong>9.</strong> I/We also undertake that, as far as possible, the entire production which conforms to the specification shall be marked with the BIS Mark, irrespective of the Brand Names/Trademark(s) used.</p>
+  <p class="cmpf307-clause"><strong>10.</strong> I/We understand that the above has been given only as information to BIS, that BIS has no role in permitting/approving of any Brand Name or Trade Mark, that this is not in any way be interpreted to mean that BIS has permitted/approved the use of the Brand Names and Trade Marks listed above, and that the responsibility is entirely mine/ours.</p>
+  <div class="cmpf307-sign"><div><p><strong>Place</strong> - ${esc(data.place)}</p><p><strong>Date</strong> - ${esc(declarationDate)}</p></div><div><div class="cmpf307-sign-space"></div><p><strong>Signature</strong> -</p><p><strong>Name</strong> - ${esc(data.signatoryName || data.contactPerson)}</p><p><strong>Designation</strong> - ${esc(data.signatoryDesignation)}</p><p><strong>Seal of Firm</strong></p></div></div>
 </div>`
 }
 
 export function buildCmpf307Html(data: Cmpf307Data): string {
   return buildPrintPage({
     title: `CMPF 307 — ${data.applicantName || 'Applicant'}`,
-    styles: CMPF_FORM_STYLES,
+    styles: `${CMPF_FORM_STYLES}\n.cmpf307-top{display:flex;justify-content:space-between;text-align:center;font-family:'Times New Roman',serif;font-size:13px;line-height:1.25;margin-bottom:7px}.cmpf307-title{text-align:center;font:bold 14px/1.25 'Times New Roman',serif;margin:8px 0 12px}.cmpf307-meta{display:grid;gap:5px;font:12px/1.35 'Times New Roman',serif}.cmpf307-meta>div{display:grid;grid-template-columns:62mm 1fr;gap:5px}.cmpf307-meta span,.cmpf307-used span{font-weight:700;text-decoration:underline}.cmpf307-used{display:grid;grid-template-columns:62mm 1fr;gap:5px;margin-top:10px;font:12px/1.35 'Times New Roman',serif}.cmpf307-used span{white-space:pre-wrap}.cmpf307-clause{margin:7px 0;font:11.5px/1.3 'Times New Roman',serif;text-align:justify}.cmpf307-clause strong{font-weight:700}.cmpf307-sign{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px;font:11.5px/1.3 'Times New Roman',serif}.cmpf307-sign p{margin:6px 0}.cmpf307-sign-space{height:10mm}`,
     body: buildBody(data),
   })
 }
@@ -120,6 +104,10 @@ export function cmpf307DataFromPrintData(printData: BisPrintData): Cmpf307Data {
     signatoryName: modulePayload.signatoryName || signatory.signatoryName,
     signatoryDesignation: modulePayload.signatoryDesignation || signatory.signatoryDesignation,
     brandsWithoutMarkReasons: modulePayload.brandsWithoutMarkReasons,
+    licenseValidUpTo: modulePayload.licenseValidUpTo || formatDisplayDate(printData.row.license_validity_date),
+    brandNamesBeingUsed: modulePayload.brandNamesBeingUsed,
+    place: modulePayload.place,
+    declarationDate: modulePayload.declarationDate,
     rows: modulePayload.rows,
   }
 }
