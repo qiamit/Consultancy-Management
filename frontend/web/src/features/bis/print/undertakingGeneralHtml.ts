@@ -1,4 +1,5 @@
 import type { BisPrintData } from './loadBisPrintData'
+import { parseUndertakingGeneralPayload } from '../projects/undertakingPayloadModels'
 import { printSignatoryDefaults } from './loadBisPrintData'
 import { escapeHtml as esc } from './openPrintHtml'
 import {
@@ -17,6 +18,11 @@ export type UndertakingGeneralData = PrintApplicantContext & {
   markingClause: string
   packagingClause: string
   weeklyOff: string
+  waterSupplySource: string
+  electricSupplySource: string
+  generatorBackup: string
+  machineryOwnership: string
+  pollutionControlArrangement: string
   signatoryName: string
   signatoryDesignation: string
 }
@@ -26,10 +32,15 @@ export function undertakingGeneralPoints(data: UndertakingGeneralData): string[]
   const markingRef = data.markingClause.trim() || 'Clause 13'
   const packagingRef = data.packagingClause.trim() || 'Clause 14'
   const weeklyOff = data.weeklyOff.trim() || 'Sunday'
+  const waterSource = data.waterSupplySource.trim() || 'Own'
+  const electricSource = data.electricSupplySource.trim() || 'Electricity Board'
+  const generator = data.generatorBackup.trim() || 'Yes'
+  const machinery = data.machineryOwnership.trim() || 'Owned by us'
+  const pollution = data.pollutionControlArrangement.trim() || 'Own'
 
   return [
-    'We have adequate electric power supply and water to run the factory, and we have a generator set. The manufacturing machinery and testing equipment available in the factory are owned by us.',
-    'We have our own arrangement for water supply and a pollution control system.',
+    `We have adequate water supply (${waterSource}) and electric power supply (${electricSource}) to run the factory. Generator backup: ${generator}. The manufacturing machinery and testing equipment available in the factory are ${machinery}.`,
+    `We have a water supply arrangement and pollution control system (${pollution}).`,
     'We will inform the BIS office whenever we shift any testing arrangement or manufacturing machinery, or add any new machine in the factory.',
     'We shall inform BIS of any change or leave of the quality control person and will not mark material with the ISI mark during his or her leave period.',
     'In case a stop-marking order is imposed on us at any time after grant of licence, we shall stop marking immediately and shall restart marking only after obtaining permission.',
@@ -91,11 +102,17 @@ export function buildUndertakingGeneralHtml(data: UndertakingGeneralData): strin
 /** Maps a BIS project row + client + IS code + consultancy context into Undertaking fields. */
 export function undertakingGeneralDataFromPrintData(printData: BisPrintData): UndertakingGeneralData {
   const ctx = applicantContextFromPrintData(printData)
+  const payload = parseUndertakingGeneralPayload(printData.modulePayload ?? null)
   return {
     ...ctx,
-    markingClause: '',
-    packagingClause: '',
-    weeklyOff: 'Sunday',
+    markingClause: payload.markingClause,
+    packagingClause: payload.packagingClause,
+    weeklyOff: payload.weeklyOff,
+    waterSupplySource: payload.waterSupplySource,
+    electricSupplySource: payload.electricSupplySource,
+    generatorBackup: payload.generatorBackup,
+    machineryOwnership: payload.machineryOwnership,
+    pollutionControlArrangement: payload.pollutionControlArrangement,
     signatoryName: printSignatoryDefaults(printData).signatoryName,
     signatoryDesignation: printSignatoryDefaults(printData).signatoryDesignation,
   }

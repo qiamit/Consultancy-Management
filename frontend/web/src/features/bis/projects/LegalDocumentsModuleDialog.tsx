@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import {
   limsDarkBarGlowStyle,
@@ -18,6 +19,8 @@ import {
   limsPrimaryBtnClass,
 } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
+import { getCurrencyCode, getCurrencySymbol } from '@/lib/appCurrency'
+import { formatMoneyInput, sanitizeMoneyInput } from '@/features/masters/products-services/types'
 import { supabase } from '@/lib/supabaseClient'
 import {
   listClientCertificates,
@@ -97,8 +100,30 @@ import { emptyCmpf311Payload, parseCmpf311Payload, type Cmpf311ModulePayload } f
 import { Cmpf307ModuleFields } from './Cmpf307ModuleFields'
 import { cmpf307RowHasContent, emptyCmpf307Payload, parseCmpf307Payload, type Cmpf307ModulePayload } from './cmpf307Model'
 import { Cmpf310ModuleFields } from './Cmpf310ModuleFields'
+import { RawMaterialReferenceModuleFields } from './RawMaterialReferenceModuleFields'
+import {
+  emptyRawMaterialReferencePayload,
+  parseRawMaterialReferencePayload,
+  type RawMaterialReferencePayload,
+} from './rawMaterialReferenceModel'
 import { emptyCmpf310Payload, parseCmpf310Payload, type Cmpf310ModulePayload } from './cmpf310Model'
 import { ProcessFlowModuleFields } from './ProcessFlowModuleFields'
+import {
+  emptyUndertakingGeneralPayload,
+  emptyUndertakingLongDurationRow,
+  emptyUndertakingLongDurationPayload,
+  emptyUndertakingMinimumFeePayload,
+  emptySelfEvaluationPayload,
+  parseUndertakingGeneralPayload,
+  parseUndertakingLongDurationPayload,
+  parseUndertakingMinimumFeePayload,
+  undertakingFirmStatusFromCompanyScale,
+  parseSelfEvaluationPayload,
+  type UndertakingGeneralPayload,
+  type UndertakingLongDurationPayload,
+  type UndertakingMinimumFeePayload,
+  type SelfEvaluationPayload,
+} from './undertakingPayloadModels'
 import {
   emptyProcessFlowPayload,
   parseProcessFlowPayload,
@@ -211,6 +236,88 @@ function newDraft(): DraftRow {
   return { id: crypto.randomUUID(), name: '' }
 }
 
+function UndertakingCurrencyField({ label, value, disabled, onChange }: {
+  label: string
+  value: string
+  disabled: boolean
+  onChange: (value: string) => void
+}) {
+  const [focused, setFocused] = useState(false)
+  return (
+    <label className="grid gap-1 text-sm font-medium text-stone-700">
+      {label}
+      <span className="flex h-8 min-w-0 overflow-hidden rounded-none border border-stone-500 bg-stone-50 focus-within:border-amber-600 focus-within:bg-white focus-within:ring-2 focus-within:ring-amber-500/20">
+        <span className="inline-flex shrink-0 items-center border-r border-stone-500 bg-stone-100 px-2.5 text-sm font-semibold text-stone-700" aria-hidden>{getCurrencySymbol()}</span>
+        <Input
+          type="text"
+          inputMode="decimal"
+          value={focused ? value : formatMoneyInput(value || '0')}
+          onFocus={() => setFocused(true)}
+          onChange={(event) => onChange(sanitizeMoneyInput(event.target.value))}
+          onBlur={(event) => { setFocused(false); onChange(formatMoneyInput(event.target.value || '0')) }}
+          disabled={disabled}
+          placeholder="0.00"
+          className="h-full min-w-0 flex-1 rounded-none !border-0 !bg-transparent text-right tabular-nums shadow-none focus-visible:!ring-0"
+          aria-label={`${label} in ${getCurrencyCode()}`}
+        />
+      </span>
+    </label>
+  )
+}
+
+const UNDERTAKING_OPTIONS: Array<{
+  kind: Extract<BisPrintDocumentKind, 'undertaking-option-2' | 'undertaking-general' | 'undertaking-long-duration' | 'undertaking-mmf' | 'self-evaluation-form'>
+  title: string
+  compactTitle: string
+  icon: string
+  description: string
+}> = [
+  {
+    kind: 'self-evaluation-form',
+    title: 'Self Evaluation Form',
+    compactTitle: 'Self Eval',
+    icon: '📋',
+    description: 'Self Evaluation cum Verification Form using project raw material, staff and brand records.',
+  },
+  {
+    kind: 'undertaking-general',
+    title: 'Undertaking for General ISS',
+    compactTitle: 'General ISS',
+    icon: '📄',
+    description: 'General licence, inspection, quality control and marking commitments.',
+  },
+  {
+    kind: 'undertaking-option-2',
+    title: 'Undertaking for Option 2',
+    compactTitle: 'Option 2',
+    icon: '📝',
+    description: 'Option 2 undertaking with applicant, product and factory details.',
+  },
+  {
+    kind: 'undertaking-long-duration',
+    title: 'Undertaking for Long Duration Test',
+    compactTitle: 'Long Test',
+    icon: '⏱️',
+    description: 'Long duration test declaration with a test schedule table.',
+  },
+  {
+    kind: 'undertaking-mmf',
+    title: 'Undertaking for Minimum Marking Fee',
+    compactTitle: 'Min. Fee',
+    icon: '💰',
+    description: 'Minimum marking fee proposal and supporting calculation schedule.',
+  },
+]
+
+type UndertakingPreviewOptions = Record<(typeof UNDERTAKING_OPTIONS)[number]['kind'], boolean>
+const DEFAULT_UNDERTAKING_PREVIEW_OPTIONS: UndertakingPreviewOptions = {
+  'self-evaluation-form': true,
+  'undertaking-general': true,
+  'undertaking-option-2': true,
+  'undertaking-long-duration': false,
+  'undertaking-mmf': false,
+}
+
 export function LegalDocumentsModuleDialog({
   open,
   onOpenChange,
@@ -254,6 +361,9 @@ export function LegalDocumentsModuleDialog({
   const showCmpf311Fields = printKind === 'cmpf-311'
   const showCmpf307Fields = printKind === 'cmpf-307'
   const showCmpf310Fields = printKind === 'cmpf-310'
+  const showRawMaterialReferenceFields = printKind === 'raw-material-reference'
+  const showAllUndertakingsFields = printKind === 'all-required-undertakings'
+  const showSelfEvaluationFields = printKind === 'self-evaluation-form'
   /** Merged Process Flow Chart + Process Description (shared payload). */
   const showProcessFlowFields =
     printKind === 'process-flow-chart' || printKind === 'process-description'
@@ -274,7 +384,10 @@ export function LegalDocumentsModuleDialog({
     showCmpf306Fields ||
     showCmpf311Fields ||
     showCmpf307Fields ||
-    showCmpf310Fields
+    showCmpf310Fields ||
+    showRawMaterialReferenceFields ||
+    showAllUndertakingsFields ||
+    showSelfEvaluationFields
   const showFileTable =
     !showApplicationFields &&
     !showTopManagementFields &&
@@ -289,6 +402,9 @@ export function LegalDocumentsModuleDialog({
     !showCmpf311Fields &&
     !showCmpf307Fields &&
     !showCmpf310Fields &&
+    !showRawMaterialReferenceFields &&
+    !showAllUndertakingsFields &&
+    !showSelfEvaluationFields &&
     !showProcessFlowFields
 
   const [files, setFiles] = useState<BisProjectViewFile[]>([])
@@ -298,6 +414,19 @@ export function LegalDocumentsModuleDialog({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [printingUndertaking, setPrintingUndertaking] = useState(false)
+  const [selectedUndertaking, setSelectedUndertaking] = useState<(typeof UNDERTAKING_OPTIONS)[number]['kind']>('self-evaluation-form')
+  const [undertakingPreviewOptions, setUndertakingPreviewOptions] = useState<UndertakingPreviewOptions>(DEFAULT_UNDERTAKING_PREVIEW_OPTIONS)
+  const [undertakingPreviewOptionsLoadedFor, setUndertakingPreviewOptionsLoadedFor] = useState<string | null>(null)
+  const [undertakingPreviewOptionsTouched, setUndertakingPreviewOptionsTouched] = useState(false)
+  const [undertakingGeneral, setUndertakingGeneral] = useState<UndertakingGeneralPayload>(() => emptyUndertakingGeneralPayload())
+  const [undertakingLongDuration, setUndertakingLongDuration] = useState<UndertakingLongDurationPayload>(() => emptyUndertakingLongDurationPayload())
+  const [longDurationDraft, setLongDurationDraft] = useState(() => emptyUndertakingLongDurationRow())
+  const [editingLongDurationIndex, setEditingLongDurationIndex] = useState<number | null>(null)
+  const [selectedLongDurationRows, setSelectedLongDurationRows] = useState<Set<number>>(() => new Set())
+  const [undertakingMinimumFee, setUndertakingMinimumFee] = useState<UndertakingMinimumFeePayload>(() => emptyUndertakingMinimumFeePayload())
+  const [companyFirmStatus, setCompanyFirmStatus] = useState('')
+  const [selfEvaluation, setSelfEvaluation] = useState<SelfEvaluationPayload>(() => emptySelfEvaluationPayload())
   const [saving, setSaving] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
   const [appDetails, setAppDetails] = useState<BisApplicationDetailsForm>(() =>
@@ -337,6 +466,7 @@ export function LegalDocumentsModuleDialog({
   const [cmpf311, setCmpf311] = useState<Cmpf311ModulePayload>(() => emptyCmpf311Payload())
   const [cmpf307, setCmpf307] = useState<Cmpf307ModulePayload>(() => emptyCmpf307Payload())
   const [cmpf310, setCmpf310] = useState<Cmpf310ModulePayload>(() => emptyCmpf310Payload())
+  const [rawMaterialReference, setRawMaterialReference] = useState<RawMaterialReferencePayload>(() => emptyRawMaterialReferencePayload())
   const [processFlow, setProcessFlow] = useState<ProcessFlowModulePayload>(() =>
     emptyProcessFlowPayload(),
   )
@@ -445,7 +575,19 @@ export function LegalDocumentsModuleDialog({
       setCmpf311(emptyCmpf311Payload())
       setCmpf307(emptyCmpf307Payload())
       setCmpf310(emptyCmpf310Payload())
+      setRawMaterialReference(emptyRawMaterialReferencePayload())
       setProcessFlow(emptyProcessFlowPayload())
+      setUndertakingGeneral(emptyUndertakingGeneralPayload())
+      setUndertakingLongDuration(emptyUndertakingLongDurationPayload())
+      setLongDurationDraft(emptyUndertakingLongDurationRow())
+      setEditingLongDurationIndex(null)
+      setSelectedLongDurationRows(new Set())
+      setUndertakingMinimumFee(emptyUndertakingMinimumFeePayload())
+      setCompanyFirmStatus('')
+      setSelfEvaluation(emptySelfEvaluationPayload())
+      setUndertakingPreviewOptions(DEFAULT_UNDERTAKING_PREVIEW_OPTIONS)
+      setUndertakingPreviewOptionsLoadedFor(null)
+      setUndertakingPreviewOptionsTouched(false)
       setLicenseScopeNotes('')
       return
     }
@@ -513,6 +655,51 @@ export function LegalDocumentsModuleDialog({
       return
     }
 
+    if (showAllUndertakingsFields || showSelfEvaluationFields) {
+      setFiles([])
+      setFileNames({})
+      setLoading(true)
+      setStatus(null)
+      void (async () => {
+        try {
+          const [general, duration, fee, evaluation, company, previewSettings] = await Promise.all([
+            showAllUndertakingsFields ? fetchBisModulePayload(row.id, 'undertaking-general').catch(() => null) : Promise.resolve(null),
+            showAllUndertakingsFields ? fetchBisModulePayload(row.id, 'undertaking-long-duration').catch(() => null) : Promise.resolve(null),
+            showAllUndertakingsFields ? fetchBisModulePayload(row.id, 'undertaking-mmf').catch(() => null) : Promise.resolve(null),
+            fetchBisModulePayload(row.id, 'self-evaluation-form').catch(() => null),
+            row.client_id
+              ? supabase.from('clients').select('company_scale').eq('id', row.client_id).maybeSingle()
+              : Promise.resolve({ data: null, error: null }),
+            showAllUndertakingsFields ? fetchBisModulePayload(row.id, 'all-required-undertakings').catch(() => null) : Promise.resolve(null),
+          ])
+          if (company.error) throw company.error
+          const firmStatus = undertakingFirmStatusFromCompanyScale(
+            (company.data as { company_scale?: unknown } | null)?.company_scale,
+          )
+          setUndertakingGeneral(parseUndertakingGeneralPayload(general))
+          setUndertakingLongDuration(parseUndertakingLongDurationPayload(duration))
+          setLongDurationDraft(emptyUndertakingLongDurationRow())
+          setEditingLongDurationIndex(null)
+          setSelectedLongDurationRows(new Set())
+          setCompanyFirmStatus(firmStatus)
+          setUndertakingMinimumFee({ ...parseUndertakingMinimumFeePayload(fee), firmStatus })
+          setSelfEvaluation(parseSelfEvaluationPayload(evaluation))
+          const savedPreviewOptions = previewSettings?.previewOptions
+          setUndertakingPreviewOptions({
+            ...DEFAULT_UNDERTAKING_PREVIEW_OPTIONS,
+            ...(previewSettings?.previewOptionsVersion === 2 && savedPreviewOptions && typeof savedPreviewOptions === 'object' ? savedPreviewOptions as Partial<UndertakingPreviewOptions> : {}),
+          })
+          setUndertakingPreviewOptionsTouched(false)
+          if (showAllUndertakingsFields) setUndertakingPreviewOptionsLoadedFor(row.id)
+        } catch (err) {
+          setStatus(formatBisApiError(err))
+        } finally {
+          setLoading(false)
+        }
+      })()
+      return
+    }
+
     if (
       showTopManagementFields ||
       showTechnicalStaffFields ||
@@ -524,6 +711,7 @@ export function LegalDocumentsModuleDialog({
       showCmpf306Fields ||
       showCmpf311Fields ||
       showCmpf307Fields ||
+      showRawMaterialReferenceFields ||
       showProcessFlowFields
     ) {
       setFiles([])
@@ -674,6 +862,7 @@ export function LegalDocumentsModuleDialog({
             setCmpf307(parseCmpf307Payload(payload))
           }
           if (showCmpf310Fields) setCmpf310(parseCmpf310Payload(payload))
+          if (showRawMaterialReferenceFields) setRawMaterialReference(parseRawMaterialReferencePayload(payload))
           if (showProcessFlowFields) {
             setProcessFlow(parseProcessFlowPayload(payload))
           }
@@ -693,6 +882,7 @@ export function LegalDocumentsModuleDialog({
           if (showCmpf311Fields) setCmpf311(emptyCmpf311Payload())
           if (showCmpf307Fields) setCmpf307(emptyCmpf307Payload())
           if (showCmpf310Fields) setCmpf310(emptyCmpf310Payload())
+          if (showRawMaterialReferenceFields) setRawMaterialReference(emptyRawMaterialReferencePayload())
           if (showProcessFlowFields) setProcessFlow(emptyProcessFlowPayload())
         } finally {
           setLoading(false)
@@ -720,12 +910,45 @@ export function LegalDocumentsModuleDialog({
     showCmpf311Fields,
     showCmpf307Fields,
     showCmpf310Fields,
+    showRawMaterialReferenceFields,
     showProcessFlowFields,
+    showAllUndertakingsFields,
+    showSelfEvaluationFields,
     row?.notes,
     row?.client_id,
     row?.inspection_officer_name,
     row?.inspection_officer_designation,
   ])
+
+  useEffect(() => {
+    if (!open || !row?.id || loading || (!showAllUndertakingsFields && !showSelfEvaluationFields)) return
+    const timer = window.setTimeout(() => {
+      const saves: Promise<unknown>[] = []
+      if (showAllUndertakingsFields && selectedUndertaking === 'undertaking-general') {
+        saves.push(saveBisModulePayload(row.id, 'undertaking-general', undertakingGeneral))
+      } else if (showAllUndertakingsFields && selectedUndertaking === 'undertaking-long-duration') {
+        saves.push(saveBisModulePayload(row.id, 'undertaking-long-duration', undertakingLongDuration))
+      } else if (showAllUndertakingsFields && selectedUndertaking === 'undertaking-mmf') {
+        saves.push(saveBisModulePayload(row.id, 'undertaking-mmf', undertakingMinimumFee))
+      } else if (selectedUndertaking === 'self-evaluation-form' || showSelfEvaluationFields) {
+        saves.push(saveBisModulePayload(row.id, 'self-evaluation-form', selfEvaluation))
+      }
+      void Promise.all(saves).catch((err) => toast.error(formatBisApiError(err)))
+    }, 700)
+    return () => window.clearTimeout(timer)
+  }, [
+    open, row?.id, loading, showAllUndertakingsFields, showSelfEvaluationFields, selectedUndertaking,
+    undertakingGeneral, undertakingLongDuration, undertakingMinimumFee, selfEvaluation,
+  ])
+
+  useEffect(() => {
+    if (!open || !row?.id || !showAllUndertakingsFields || undertakingPreviewOptionsLoadedFor !== row.id || !undertakingPreviewOptionsTouched) return
+    const timer = window.setTimeout(() => {
+      void saveBisModulePayload(row.id, 'all-required-undertakings', { previewOptionsVersion: 2, previewOptions: undertakingPreviewOptions })
+        .catch((err) => toast.error(formatBisApiError(err)))
+    }, 400)
+    return () => window.clearTimeout(timer)
+  }, [open, row?.id, showAllUndertakingsFields, undertakingPreviewOptions, undertakingPreviewOptionsLoadedFor, undertakingPreviewOptionsTouched])
 
   useEffect(() => {
     const clientId = row?.client_id
@@ -901,6 +1124,30 @@ export function LegalDocumentsModuleDialog({
     setSaving(true)
     setStatus(null)
     try {
+      if (showAllUndertakingsFields) {
+        await Promise.all([
+          saveBisModulePayload(row.id, 'self-evaluation-form', selfEvaluation),
+          saveBisModulePayload(row.id, 'undertaking-general', undertakingGeneral),
+          saveBisModulePayload(row.id, 'undertaking-long-duration', undertakingLongDuration),
+          saveBisModulePayload(row.id, 'undertaking-mmf', undertakingMinimumFee),
+          saveBisModulePayload(row.id, 'all-required-undertakings', {
+            previewOptionsVersion: 2,
+            previewOptions: undertakingPreviewOptions,
+          }),
+        ])
+        setUndertakingPreviewOptionsTouched(false)
+        onProjectSaved?.()
+        toast.success('Undertaking documents and preview settings saved.')
+        return
+      }
+
+      if (showSelfEvaluationFields) {
+        await saveBisModulePayload(row.id, 'self-evaluation-form', selfEvaluation)
+        onProjectSaved?.()
+        toast.success('Self Evaluation Form saved.')
+        return
+      }
+
       if (showApplicationFields) {
         await saveBisApplicationDetails(row.id, appDetails)
         onProjectSaved?.()
@@ -1067,8 +1314,19 @@ export function LegalDocumentsModuleDialog({
       }
 
       if (showCmpf307Fields && printKind) {
+        const completedBrandRows = cmpf307.rows.filter(cmpf307RowHasContent)
+        const missingAgreement = completedBrandRows.some((brand) => brand.ownedBy === 'Others' && !brand.agreementFileId)
+        if (missingAgreement) {
+          toast.error('Upload the agreement copy for each brand owned by Others.')
+          return
+        }
+        const missingTrademarkCertificate = completedBrandRows.some((brand) => brand.registeredStatus === 'Registered' && !brand.trademarkFileId)
+        if (missingTrademarkCertificate) {
+          toast.error('Upload the trademark license certificate for each Registered brand.')
+          return
+        }
         await saveBisModulePayload(row.id, printKind, {
-          rows: cmpf307.rows.filter(cmpf307RowHasContent),
+          rows: completedBrandRows,
           brandsWithoutMarkReasons: cmpf307.brandsWithoutMarkReasons.trim(),
         })
         onProjectSaved?.()
@@ -1081,6 +1339,30 @@ export function LegalDocumentsModuleDialog({
           feePerYear: cmpf310.feePerYear.trim(),
           unit: cmpf310.unit.trim(),
         })
+        onProjectSaved?.()
+        toast.success(`${title} saved.`)
+        return
+      }
+
+      if (showRawMaterialReferenceFields) {
+        const payload: RawMaterialReferencePayload = {
+          rawMaterials: rawMaterialReference.rawMaterials.map((item) => ({
+            rawMaterial: item.rawMaterial.trim(),
+            supplierName: item.supplierName.trim(),
+            bisCertificationMark: item.bisCertificationMark.trim(),
+            testCertificate: item.testCertificate.trim(),
+            batchesPackaging: item.batchesPackaging.trim(),
+          })),
+          certifiedReferenceMaterials: rawMaterialReference.certifiedReferenceMaterials.map((item) => ({
+            crmName: item.crmName.trim(),
+            crmNumber: item.crmNumber.trim(),
+            crmType: item.crmType.trim(),
+            validity: item.validity.trim(),
+            traceability: item.traceability.trim(),
+          })),
+        }
+        await saveBisModulePayload(row.id, 'raw-material-reference', payload)
+        setRawMaterialReference(payload)
         onProjectSaved?.()
         toast.success(`${title} saved.`)
         return
@@ -1157,6 +1439,7 @@ export function LegalDocumentsModuleDialog({
         showCmpf305Fields ||
         showCmpf306Fields ||
         showCmpf307Fields ||
+        showRawMaterialReferenceFields ||
         showProcessFlowFields
           ? formatBisApiError(err)
           : formatBisProjectFilesError(err)
@@ -1168,6 +1451,38 @@ export function LegalDocumentsModuleDialog({
     } finally {
       setSaving(false)
     }
+  }
+
+  const handlePrintUndertaking = async (kind: (typeof UNDERTAKING_OPTIONS)[number]['kind'] | 'self-evaluation-form') => {
+    if (!row || printingUndertaking) return
+    setPrintingUndertaking(true)
+    try {
+      if (kind === 'undertaking-general') await saveBisModulePayload(row.id, kind, undertakingGeneral)
+      if (kind === 'undertaking-long-duration') await saveBisModulePayload(row.id, kind, undertakingLongDuration)
+      if (kind === 'undertaking-mmf') await saveBisModulePayload(row.id, kind, undertakingMinimumFee)
+      if (kind === 'self-evaluation-form') await saveBisModulePayload(row.id, kind, selfEvaluation)
+      const error = await printBisDocument(row, kind)
+      if (error) toast.error(error)
+    } catch (err) {
+      toast.error(formatBisApiError(err))
+    } finally {
+      setPrintingUndertaking(false)
+    }
+  }
+
+  const addLongDurationRow = () => {
+    if (!longDurationDraft.typeOfTest.trim() || !longDurationDraft.durationOfTest.trim() || !longDurationDraft.dateOfCompletion) {
+      toast.error('Enter the test type, duration and completion date before adding the row.')
+      return
+    }
+    setUndertakingLongDuration((current) => ({
+      ...current,
+      testRows: editingLongDurationIndex === null
+        ? [...current.testRows, longDurationDraft]
+        : current.testRows.map((row, index) => index === editingLongDurationIndex ? longDurationDraft : row),
+    }))
+    setLongDurationDraft(emptyUndertakingLongDurationRow())
+    setEditingLongDurationIndex(null)
   }
 
   const renderNameField = (entry: TableEntry) => {
@@ -1478,6 +1793,146 @@ export function LegalDocumentsModuleDialog({
             <p className="text-xs text-red-700" role="alert">
               {status}
             </p>
+          ) : null}
+
+          {showAllUndertakingsFields ? (
+            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
+              <nav aria-label="Undertaking types" className="grid shrink-0 grid-cols-5 gap-1 border-b border-stone-400 bg-stone-800 p-1">
+                {UNDERTAKING_OPTIONS.map((option) => (
+                  <Button
+                    key={option.kind}
+                    type="button"
+                    variant="ghost"
+                    aria-pressed={selectedUndertaking === option.kind}
+                    title={option.title}
+                    aria-label={option.title}
+                    className={cn(
+                      'h-auto min-h-10 min-w-0 whitespace-normal rounded-none px-2 py-2 text-center text-[11px] font-semibold leading-tight text-stone-100 hover:bg-stone-700 hover:text-white max-[640px]:px-1 max-[640px]:text-[10px] max-[420px]:min-h-9',
+                      selectedUndertaking === option.kind && 'bg-amber-700 text-white hover:bg-amber-700',
+                    )}
+                    onClick={() => setSelectedUndertaking(option.kind)}
+                  >
+                    <span className="hidden min-[641px]:inline">{option.title}</span>
+                    <span className="hidden max-[640px]:inline max-[420px]:hidden">{option.compactTitle}</span>
+                    <span aria-hidden="true" className="hidden max-[420px]:inline">{option.icon}</span>
+                  </Button>
+                ))}
+              </nav>
+              {UNDERTAKING_OPTIONS.filter((option) => option.kind === selectedUndertaking).map((option) => (
+                <section key={option.kind} className="min-h-0 flex-1 overflow-y-auto border border-stone-300 bg-white p-5 sm:p-8">
+                  <div className="flex items-center justify-between gap-4">
+                    <h2 className="text-xl font-semibold text-stone-900">{option.title}</h2>
+                    <label className="flex shrink-0 cursor-pointer items-center gap-2 text-sm font-medium text-stone-700" title={`Show ${option.title} in preview`}>
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-amber-600"
+                        aria-label={`Show ${option.title} in preview`}
+                        checked={undertakingPreviewOptions[option.kind]}
+                        disabled={loading || undertakingPreviewOptionsLoadedFor !== row?.id}
+                        onChange={(event) => {
+                          setUndertakingPreviewOptions((current) => ({ ...current, [option.kind]: event.target.checked }))
+                          setUndertakingPreviewOptionsTouched(true)
+                        }}
+                      />
+                      <span>Show in Preview</span>
+                    </label>
+                  </div>
+                  {option.kind === 'undertaking-option-2' ? <p className="mt-4 border border-stone-200 bg-stone-50 p-3 text-sm text-stone-700">No additional inputs are required. The undertaking is prepared directly from this project’s saved application details.</p> : null}
+                  {option.kind === 'undertaking-general' ? (
+                    <div className="mt-5 grid max-w-5xl gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                      <label className="grid gap-1 text-sm font-medium text-stone-700">Weekly Holiday<select className="h-8 rounded-none border border-stone-400 bg-white px-2 text-sm" value={undertakingGeneral.weeklyOff} disabled={loading || printingUndertaking} onChange={(e) => setUndertakingGeneral((v) => ({ ...v, weeklyOff: e.target.value }))}>{['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((day) => <option key={day}>{day}</option>)}</select></label>
+                      <label className="grid gap-1 text-sm font-medium text-stone-700">Marking Clause<Input value={undertakingGeneral.markingClause} disabled={loading || printingUndertaking} onChange={(e) => setUndertakingGeneral((v) => ({ ...v, markingClause: e.target.value }))} /></label>
+                      <label className="grid gap-1 text-sm font-medium text-stone-700">Packaging Clause<Input value={undertakingGeneral.packagingClause} disabled={loading || printingUndertaking} onChange={(e) => setUndertakingGeneral((v) => ({ ...v, packagingClause: e.target.value }))} /></label>
+                      <label className="grid gap-1 text-sm font-medium text-stone-700">Water Supply<select className="h-8 rounded-none border border-stone-400 bg-white px-2 text-sm" value={undertakingGeneral.waterSupplySource} disabled={loading || printingUndertaking} onChange={(e) => setUndertakingGeneral((v) => ({ ...v, waterSupplySource: e.target.value }))}>{['Own', 'Rented', 'Municipal', 'Other'].map((source) => <option key={source}>{source}</option>)}</select></label>
+                      <label className="grid gap-1 text-sm font-medium text-stone-700">Electric Supply<select className="h-8 rounded-none border border-stone-400 bg-white px-2 text-sm" value={undertakingGeneral.electricSupplySource} disabled={loading || printingUndertaking} onChange={(e) => setUndertakingGeneral((v) => ({ ...v, electricSupplySource: e.target.value }))}>{['Electricity Board', 'Own'].map((source) => <option key={source}>{source}</option>)}</select></label>
+                      <label className="grid gap-1 text-sm font-medium text-stone-700">Generator Backup<select className="h-8 rounded-none border border-stone-400 bg-white px-2 text-sm" value={undertakingGeneral.generatorBackup} disabled={loading || printingUndertaking} onChange={(e) => setUndertakingGeneral((v) => ({ ...v, generatorBackup: e.target.value }))}>{['Yes', 'No'].map((choice) => <option key={choice}>{choice}</option>)}</select></label>
+                      <label className="grid gap-1 text-sm font-medium text-stone-700">Machinery &amp; Testing Equipment<select className="h-8 rounded-none border border-stone-400 bg-white px-2 text-sm" value={undertakingGeneral.machineryOwnership} disabled={loading || printingUndertaking} onChange={(e) => setUndertakingGeneral((v) => ({ ...v, machineryOwnership: e.target.value }))}>{['Owned by us', 'Rented'].map((choice) => <option key={choice}>{choice}</option>)}</select></label>
+                      <label className="grid gap-1 text-sm font-medium text-stone-700">Pollution Control System<select className="h-8 rounded-none border border-stone-400 bg-white px-2 text-sm" value={undertakingGeneral.pollutionControlArrangement} disabled={loading || printingUndertaking} onChange={(e) => setUndertakingGeneral((v) => ({ ...v, pollutionControlArrangement: e.target.value }))}>{['Own', 'Rented', 'Not Applicable'].map((choice) => <option key={choice}>{choice}</option>)}</select></label>
+                    </div>
+                  ) : null}
+                  {option.kind === 'undertaking-long-duration' ? (
+                    <div className="mt-5 grid max-w-6xl gap-4">
+                      <div className="overflow-x-auto border border-stone-300">
+                        <table className="w-full min-w-[900px] text-sm">
+                          <thead className="bg-stone-100"><tr><th className="w-10 border-b border-stone-300 p-2 text-center">Select</th><th className="border-b border-stone-300 p-2 text-left">Type of Test</th><th className="border-b border-stone-300 p-2 text-left">Duration of Test</th><th className="border-b border-stone-300 p-2 text-left">Date of Completion</th><th className="w-16 border-b border-stone-300 p-2 text-center">Action</th></tr></thead>
+                          <tbody><tr className="bg-white">
+                            <td className="border-b border-stone-200 p-2 text-center">—</td>
+                            <td className="border-b border-stone-200 p-1"><Input aria-label="New type of test" value={longDurationDraft.typeOfTest} disabled={loading || printingUndertaking} onChange={(e) => setLongDurationDraft((v) => ({ ...v, typeOfTest: e.target.value }))} /></td>
+                            <td className="border-b border-stone-200 p-1"><Input aria-label="New duration of test" value={longDurationDraft.durationOfTest} disabled={loading || printingUndertaking} onChange={(e) => setLongDurationDraft((v) => ({ ...v, durationOfTest: e.target.value }))} /></td>
+                            <td className="border-b border-stone-200 p-1"><Input aria-label="New date of completion" type="date" value={longDurationDraft.dateOfCompletion} disabled={loading || printingUndertaking} onChange={(e) => setLongDurationDraft((v) => ({ ...v, dateOfCompletion: e.target.value }))} /></td>
+                            <td className="border-b border-stone-200 p-1 text-center"><Button type="button" variant="outline" size="icon" aria-label={editingLongDurationIndex === null ? 'Add test schedule row' : 'Update test schedule row'} disabled={loading || printingUndertaking} onClick={addLongDurationRow}><Plus size={16} /></Button></td>
+                          </tr></tbody>
+                        </table>
+                      </div>
+                      <div className="overflow-x-auto border border-stone-300">
+                        <table className="w-full min-w-[900px] text-sm">
+                          <thead className="bg-stone-100"><tr><th className="w-10 border-b border-stone-300 p-2 text-center">Select</th><th className="border-b border-stone-300 p-2 text-left">Type of Test</th><th className="border-b border-stone-300 p-2 text-left">Duration of Test</th><th className="border-b border-stone-300 p-2 text-left">Date of Completion</th><th className="w-28 border-b border-stone-300 p-2 text-center">Action</th></tr></thead>
+                          <tbody>{undertakingLongDuration.testRows.length ? undertakingLongDuration.testRows.map((test, index) => <tr key={`${test.typeOfTest}-${index}`} className="border-b border-stone-200">
+                            <td className="p-2 text-center"><input type="checkbox" aria-label={`Select test row ${index + 1}`} checked={selectedLongDurationRows.has(index)} onChange={(e) => setSelectedLongDurationRows((current) => { const next = new Set(current); if (e.target.checked) next.add(index); else next.delete(index); return next })} /></td>
+                            <td className="p-2">{test.typeOfTest}</td><td className="p-2">{test.durationOfTest}</td><td className="p-2">{test.dateOfCompletion}</td>
+                            <td className="p-1 text-center"><div className="flex justify-center gap-1"><Button type="button" variant="outline" size="icon" aria-label={`Edit test row ${index + 1}`} onClick={() => { setLongDurationDraft(test); setEditingLongDurationIndex(index) }}><Pencil size={14} /></Button><Button type="button" variant="outline" size="icon" aria-label={`Delete test row ${index + 1}`} onClick={() => { setUndertakingLongDuration((current) => ({ ...current, testRows: current.testRows.filter((_, i) => i !== index) })); setSelectedLongDurationRows((current) => new Set([...current].filter((i) => i !== index).map((i) => i > index ? i - 1 : i))); if (editingLongDurationIndex === index) { setLongDurationDraft(emptyUndertakingLongDurationRow()); setEditingLongDurationIndex(null) } }}><Trash2 size={14} /></Button></div></td>
+                          </tr>) : <tr><td colSpan={5} className="p-3 text-center text-stone-500">No test schedule rows added yet.</td></tr>}</tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ) : null}
+                  {option.kind === 'undertaking-mmf' ? (
+                    <div className="mt-5 grid max-w-6xl gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                      <label className="grid gap-1 text-sm font-medium text-stone-700">Firm Status<Input value={companyFirmStatus === 'LS' ? 'Large Scale' : companyFirmStatus} placeholder="Set company scale in Company Master" readOnly disabled={loading || printingUndertaking} /></label>
+                      <label className="grid gap-1 text-sm font-medium text-stone-700">Annual Production Capacity<Input value={undertakingMinimumFee.annualProductionCapacity} disabled={loading || printingUndertaking} onChange={(event) => setUndertakingMinimumFee((current) => ({ ...current, annualProductionCapacity: event.target.value }))} /></label>
+                      <UndertakingCurrencyField label="Value of Production per Unit" value={undertakingMinimumFee.valueOfProductionPerUnit} disabled={loading || printingUndertaking} onChange={(value) => setUndertakingMinimumFee((current) => ({ ...current, valueOfProductionPerUnit: value }))} />
+                      <UndertakingCurrencyField label="Cost of Production per Unit" value={undertakingMinimumFee.costOfProductionPerUnit} disabled={loading || printingUndertaking} onChange={(value) => setUndertakingMinimumFee((current) => ({ ...current, costOfProductionPerUnit: value }))} />
+                      <label className="grid gap-1 text-sm font-medium text-stone-700">Market Surveillance Plan<Textarea value={undertakingMinimumFee.marketSurveillancePlan} disabled={loading || printingUndertaking} onChange={(event) => setUndertakingMinimumFee((current) => ({ ...current, marketSurveillancePlan: event.target.value }))} className="min-h-8 h-8 rounded-none border-stone-500 py-1" /></label>
+                      {undertakingMinimumFee.factoryTestingBasis !== 'Yes' ? <>
+                        <label className="grid gap-1 text-sm font-medium text-stone-700">Testing Charge Basis<select className="h-8 rounded-none border border-stone-400 bg-white px-2 text-sm" value={undertakingMinimumFee.testingChargeBasis} disabled={loading || printingUndertaking} onChange={(event) => setUndertakingMinimumFee((current) => ({ ...current, testingChargeBasis: event.target.value }))}><option value="">Select charge basis</option><option value="BIS Lab">BIS laboratory charges</option><option value="OSL Complete Testing">OSL average (complete testing)</option><option value="OSL Maximum Parameters">OSL average (maximum available parameters)</option></select></label>
+                        {undertakingMinimumFee.testingChargeBasis === 'BIS Lab' ? <UndertakingCurrencyField label="BIS Laboratory Testing Charge per Sample" value={undertakingMinimumFee.bisLabTestingCharges} disabled={loading || printingUndertaking} onChange={(value) => setUndertakingMinimumFee((current) => ({ ...current, bisLabTestingCharges: value }))} /> : null}
+                        {undertakingMinimumFee.testingChargeBasis.startsWith('OSL') ? <UndertakingCurrencyField label="Average OSL Testing Charge per Sample" value={undertakingMinimumFee.oslAvgTestingCharges} disabled={loading || printingUndertaking} onChange={(value) => setUndertakingMinimumFee((current) => ({ ...current, oslAvgTestingCharges: value }))} /> : null}
+                      </> : null}
+                      <label className="grid gap-1 text-sm font-medium text-stone-700">Quantity per Market Sample<Input value={undertakingMinimumFee.marketSampleQuantity} disabled={loading || printingUndertaking} onChange={(event) => setUndertakingMinimumFee((current) => ({ ...current, marketSampleQuantity: event.target.value }))} /></label>
+                      <UndertakingCurrencyField label="Cost of One Market Sample" value={undertakingMinimumFee.marketSampleCost} disabled={loading || printingUndertaking} onChange={(value) => setUndertakingMinimumFee((current) => ({ ...current, marketSampleCost: value }))} />
+                      <label className="grid gap-1 text-sm font-medium text-stone-700">Factory Testing Basis<select className="h-8 rounded-none border border-stone-400 bg-white px-2 text-sm" value={undertakingMinimumFee.factoryTestingBasis} disabled={loading || printingUndertaking} onChange={(event) => setUndertakingMinimumFee((current) => ({ ...current, factoryTestingBasis: event.target.value }))}><option value="No">No</option><option value="Yes">Yes</option></select></label>
+                      {undertakingMinimumFee.factoryTestingBasis === 'Yes' ? <>
+                        <label className="grid gap-1 text-sm font-medium text-stone-700">BIS Testing Mandays per Visit<Input inputMode="decimal" value={undertakingMinimumFee.factoryMandays} disabled={loading || printingUndertaking} onChange={(event) => setUndertakingMinimumFee((current) => ({ ...current, factoryMandays: event.target.value }))} /></label>
+                        <UndertakingCurrencyField label="BIS Officer Visit Charge per Manday" value={undertakingMinimumFee.factoryVisitRate} disabled={loading || printingUndertaking} onChange={(value) => setUndertakingMinimumFee((current) => ({ ...current, factoryVisitRate: value }))} />
+                      </> : null}
+                    </div>
+                  ) : null}
+                  {option.kind === 'self-evaluation-form' ? (
+                    <div className="mt-5 grid max-w-5xl gap-4">
+                      <div className="border border-stone-300">
+                        <div className="bg-stone-100 p-3 text-sm font-semibold">Packaging &amp; Marking</div>
+                        {selfEvaluation.packagingMarkingRows.map((item, index) => <div key={index} className="grid gap-2 border-t border-stone-200 p-2 sm:grid-cols-2"><Input aria-label={`Packaging field ${index + 1}`} value={item.label} disabled={loading || printingUndertaking} onChange={(e) => setSelfEvaluation((v) => ({ ...v, packagingMarkingRows: v.packagingMarkingRows.map((r, i) => i === index ? { ...r, label: e.target.value } : r) }))} /><Input aria-label={`Packaging value ${index + 1}`} value={item.value} disabled={loading || printingUndertaking} onChange={(e) => setSelfEvaluation((v) => ({ ...v, packagingMarkingRows: v.packagingMarkingRows.map((r, i) => i === index ? { ...r, value: e.target.value } : r) }))} /></div>)}
+                      </div>
+                    </div>
+                  ) : null}
+                </section>
+              ))}
+            </div>
+          ) : null}
+
+          {showSelfEvaluationFields ? (
+            <section className="m-3 flex min-h-0 flex-1 flex-col border border-stone-300 bg-white p-5 sm:m-5 sm:p-8">
+              <h2 className="text-xl font-semibold text-stone-900">Self Evaluation cum Verification Form</h2>
+              <p className="mt-2 max-w-4xl text-sm leading-6 text-stone-600">
+                The form follows the attached BIS format and compiles raw material supplier details, packaging and marking, quality control staff, and brand information saved in this project’s related modules.
+              </p>
+              <ol className="mt-5 grid max-w-5xl gap-2 text-sm text-stone-700 sm:grid-cols-2">
+                <li className="border border-stone-200 bg-stone-50 p-3">1. General Information and Plant Layout</li>
+                <li className="border border-stone-200 bg-stone-50 p-3">2. Raw Material Supplier Details</li>
+                <li className="border border-stone-200 bg-stone-50 p-3">3. Packaging and Marking</li>
+                <li className="border border-stone-200 bg-stone-50 p-3">4. Quality Control Staff Details</li>
+                <li className="border border-stone-200 bg-stone-50 p-3">5. Brand Names and Declarations</li>
+              </ol>
+              <Button
+                type="button"
+                className={cn(limsPrimaryBtnClass, 'mt-6 h-10 w-fit px-5')}
+                disabled={!row?.id || busy || saving || printingUndertaking}
+                onClick={() => void handlePrintUndertaking('self-evaluation-form')}
+              >
+                <Printer size={15} className="mr-2" />
+                {printingUndertaking ? 'Preparing…' : 'Prepare Self Evaluation Form'}
+              </Button>
+            </section>
           ) : null}
 
           {showApplicationFields ? (
@@ -1850,6 +2305,7 @@ export function LegalDocumentsModuleDialog({
               value={cmpf307}
               onChange={setCmpf307}
               disabled={busy || saving}
+              projectId={row?.id ?? null}
             />
           ) : showCmpf310Fields ? (
             <Cmpf310ModuleFields
@@ -1859,6 +2315,18 @@ export function LegalDocumentsModuleDialog({
               isNumber={row ? isCodeDisplayLabel(row) : ''}
               isUnit={(row?.is_code?.unit_of_is ?? '').trim()}
             />
+          ) : showRawMaterialReferenceFields ? (
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              {loading ? (
+                <p className="py-6 text-center text-sm text-stone-500">Loading…</p>
+              ) : (
+                <RawMaterialReferenceModuleFields
+                  value={rawMaterialReference}
+                  onChange={setRawMaterialReference}
+                  disabled={busy || saving}
+                />
+              )}
+            </div>
           ) : showProcessFlowFields ? (
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
               {loading ? (

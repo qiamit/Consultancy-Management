@@ -35,6 +35,10 @@ export type BisPrintIsCode = {
   label: string
   unitOfIs: string
   productManualNumber: string
+  mmfLargeScale: string
+  mmfMediumScale: string
+  mmfSmallScale: string
+  mmfMicroScale: string
 }
 
 /** Authorized signatory overlay applied to all BIS print documents when enabled. */
@@ -177,11 +181,15 @@ async function loadIsCode(row: BisProjectRow): Promise<BisPrintIsCode> {
   let title = text(joined?.title)
   let unitOfIs = text(joined?.unit_of_is)
   let productManualNumber = text(joined?.product_manual_number)
+  let mmfLargeScale = text((joined as Record<string, unknown> | null)?.mmf_large_scale)
+  let mmfMediumScale = text((joined as Record<string, unknown> | null)?.mmf_medium_scale)
+  let mmfSmallScale = text((joined as Record<string, unknown> | null)?.mmf_small_scale)
+  let mmfMicroScale = text((joined as Record<string, unknown> | null)?.mmf_micro_scale)
 
-  if (row.is_code_id && (!isNumber || !title || !unitOfIs || !productManualNumber)) {
+  if (row.is_code_id) {
     const { data } = await supabase
       .from('is_codes')
-      .select('is_number, revision_year, part_no, section_no, standard_prefix, title, unit_of_is, product_manual_number')
+      .select('is_number, revision_year, part_no, section_no, standard_prefix, title, unit_of_is, product_manual_number, mmf_large_scale, mmf_medium_scale, mmf_small_scale, mmf_micro_scale')
       .eq('id', row.is_code_id)
       .maybeSingle()
     if (data) {
@@ -194,6 +202,10 @@ async function loadIsCode(row: BisProjectRow): Promise<BisPrintIsCode> {
       title = text(r.title) || title
       unitOfIs = text(r.unit_of_is) || unitOfIs
       productManualNumber = text(r.product_manual_number) || productManualNumber
+      mmfLargeScale = text(r.mmf_large_scale) || mmfLargeScale
+      mmfMediumScale = text(r.mmf_medium_scale) || mmfMediumScale
+      mmfSmallScale = text(r.mmf_small_scale) || mmfSmallScale
+      mmfMicroScale = text(r.mmf_micro_scale) || mmfMicroScale
     }
   }
 
@@ -215,6 +227,10 @@ async function loadIsCode(row: BisProjectRow): Promise<BisPrintIsCode> {
     label,
     unitOfIs,
     productManualNumber,
+    mmfLargeScale,
+    mmfMediumScale,
+    mmfSmallScale,
+    mmfMicroScale,
   }
 }
 

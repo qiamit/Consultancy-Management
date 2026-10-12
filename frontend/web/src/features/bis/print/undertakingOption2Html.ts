@@ -47,7 +47,7 @@ function buildBody(data: UndertakingOption2Data): string {
   return `
 <div class="pd-sheet">
   ${letterheadHtml(data)}
-  <h1 class="pd-title">Undertaking for Simplified Procedure (Option 2)</h1>
+  <h1 class="pd-title">Undertaking for Option 2</h1>
 
   <div class="pd-to-row">
     <div class="pd-to-block">${toBlockHtml(data.bisBranchName, data.bisBranchState)}</div>

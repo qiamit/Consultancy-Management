@@ -10,7 +10,7 @@ import { bisForm1DataFromPrintData, buildBisForm1Html } from './bisForm1Html'
 import { buildCmpf305Html, cmpf305DataFromPrintData } from './cmpf305Html'
 import { buildCmpf306Html, cmpf306DataFromPrintData } from './cmpf306Html'
 import { buildCmpf307Html, cmpf307DataFromPrintData } from './cmpf307Html'
-import { buildCmpf310Html, cmpf310DataFromPrintData } from './cmpf310Html'
+import { buildCmpf310AcceptanceLetterHtml, buildCmpf310Html, cmpf310DataFromPrintData, minimumMarkingFeeForScale } from './cmpf310Html'
 import { buildCmpf311Html, cmpf311DataFromPrintData } from './cmpf311Html'
 import {
   buildCertifiedReferenceMaterialsHtml,
@@ -147,7 +147,7 @@ export type BisPrintDocumentKind =
 
 export const BIS_PRINT_DOCUMENT_LABEL: Record<BisPrintDocumentKind, string> = {
   'legal-documents': 'Legal Documents',
-  'application-details': 'Application, Legal Documents & Location Map',
+  'application-details': 'Application Details & Location Map',
   'license-details': 'License Details',
   'branch-details': 'Branch Details',
   form1: 'BIS Form-I',
@@ -163,16 +163,16 @@ export const BIS_PRINT_DOCUMENT_LABEL: Record<BisPrintDocumentKind, string> = {
   'factory-test-report': 'Factory Test Report',
   'osl-sample-requirements': 'Sample Requirements, Test Request, & Test Reports',
   'undertaking-general': 'Undertaking (General & ISS)',
-  'undertaking-option-2': 'Undertaking (Option 2)',
+  'undertaking-option-2': 'Undertaking for Option 2',
   'undertaking-long-duration': 'Undertaking (Long Duration Test)',
-  'undertaking-mmf': 'Annex-1 Marking Fee Calculation',
+  'undertaking-mmf': 'Undertaking for Minimum Marking Fee',
   'appointment-letter': 'Appointment Letter',
   'manufacturing-scope': 'Manufacturing Scope Declaration',
   'process-description': 'Process Description',
   'top-management': 'Top Management Details',
   'technical-staff': 'Technical Staff Details',
   'self-evaluation-form': 'Self Evaluation Form',
-  'all-required-undertakings': 'All Undertakings',
+  'all-required-undertakings': 'All Undertakings & Self Evaluation Form',
   'raw-material-reference': 'Raw Material & Reference Material',
   'certified-reference-materials': 'Certified Reference Materials',
   'raw-material-details': 'Raw Material Details',
@@ -188,18 +188,19 @@ export const BIS_PRINT_DOCUMENT_LABEL: Record<BisPrintDocumentKind, string> = {
 export const EXTRA_PRINT_KINDS: BisPrintDocumentKind[] = [
   'cmpf-305',
   'cmpf-306',
+  'cmpf-307',
   'calibration-certificates',
   'consent-letter',
   'cmpf-311',
   'updated-sit',
-  'cmpf-307',
+  'raw-material-reference',
   'all-required-undertakings',
+  'self-evaluation-form',
   'manufacturing-scope',
   'osl-sample-requirements',
   'location-map',
   'plant-layout',
   'process-flow-chart',
-  'raw-material-reference',
   'subcontracted-tests',
   'osl-sample-test-request',
   'osl-courier-labels',
@@ -230,6 +231,7 @@ export const ALL_BIS_PRINT_KINDS: BisPrintDocumentKind[] = [
   ...EXTRA_PRINT_KINDS.filter(
     (kind) =>
       !EMBEDDED_BIS_DOCUMENT_KINDS.includes(kind) &&
+      kind !== 'self-evaluation-form' &&
       kind !== 'manufacturing-scope' &&
       kind !== 'osl-sample-requirements' &&
       kind !== 'plant-layout' &&
@@ -289,6 +291,66 @@ function combinePrintHtmlDocuments(title: string, documents: string[]): string {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"/><title>${title}</title><style>${styles}\n@media print{.merged-print-next{break-before:page;page-break-before:always}}</style></head><body>${bodies}</body></html>`
 }
 
+function allRequiredUndertakingsHtml(data: BisPrintData): string {
+  const savedOptions = data.modulePayload?.previewOptions
+  const options = savedOptions && typeof savedOptions === 'object'
+    ? savedOptions as Record<string, unknown>
+    : {}
+  const defaults: Record<string, boolean> = {
+    'self-evaluation-form': true,
+    'undertaking-general': true,
+    'undertaking-option-2': true,
+    'undertaking-long-duration': false,
+    'undertaking-mmf': false,
+  }
+  const show = (kind: string) => typeof options[kind] === 'boolean' ? options[kind] as boolean : defaults[kind] !== false
+  const undertakingSources = data.modulePayload?.__undertakingSources
+  const sources = undertakingSources && typeof undertakingSources === 'object'
+    ? undertakingSources as Record<string, unknown>
+    : {}
+  const withPayload = (payload: unknown): BisPrintData => ({
+    ...data,
+    modulePayload: payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? payload as Record<string, unknown>
+      : null,
+  })
+  const documents: string[] = []
+  if (show('self-evaluation-form')) documents.push(buildSelfEvaluationFormHtml(selfEvaluationFormDataFromPrintData(data)))
+  if (show('undertaking-general')) documents.push(buildUndertakingGeneralHtml(undertakingGeneralDataFromPrintData(withPayload(sources.general))))
+  if (show('undertaking-option-2')) documents.push(buildUndertakingOption2Html(undertakingOption2DataFromPrintData(data)))
+  if (show('undertaking-long-duration')) documents.push(buildUndertakingLongDurationHtml(undertakingLongDurationDataFromPrintData(withPayload(sources.longDuration))))
+  if (show('undertaking-mmf')) documents.push(buildUndertakingMinimumMarkingFeeHtml(undertakingMinimumMarkingFeeDataFromPrintData(withPayload(sources.minimumFee))))
+  if (documents.length) return combinePrintHtmlDocuments('All Undertakings', documents)
+  return '<!doctype html><html lang="en"><head><meta charset="utf-8"/><title>All Undertakings</title></head><body><p style="font:14px Arial,sans-serif;padding:24px">No documents are selected to show in preview.</p></body></html>'
+}
+
+async function locationMapPayloadWithBranchOffice(
+  row: BisProjectRow,
+  payload: Record<string, unknown> | null | undefined,
+): Promise<Record<string, unknown>> {
+  const saved = payload ?? {}
+  const offices = await listBisBranchOffices().catch(() => [])
+  const normalize = (value: string | null | undefined) =>
+    String(value ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
+  const branchName = normalize(row.branch_name)
+  const branchState = normalize(row.branch_state)
+  const office = offices.find((candidate) => normalize(candidate.name) === branchName &&
+    (!branchState || normalize(candidate.state) === branchState)) ??
+    offices.find((candidate) => candidate.id === row.bis_office_id)
+  if (!office) return saved
+
+  const officeAddress = [office.address, office.city, office.state, office.pinCode, office.country]
+    .filter(Boolean)
+    .join(', ')
+  return {
+    ...saved,
+    bisLatitude: office.latitude || saved.bisLatitude,
+    bisLongitude: office.longitude || saved.bisLongitude,
+    toLocation: row.branch_name || saved.toLocation,
+    toLocationAddress: officeAddress || saved.toLocationAddress,
+  }
+}
+
 const HTML_BUILDERS: Record<BisPrintDocumentKind, (data: BisPrintData) => string> = {
   'legal-documents': (d) => buildLegalDocumentsHtml(legalDocumentsDataFromPrintData(d)),
   'application-details': (d) => buildBisForm1Html(bisForm1DataFromPrintData(d)),
@@ -329,13 +391,7 @@ const HTML_BUILDERS: Record<BisPrintDocumentKind, (data: BisPrintData) => string
   'plant-layout': (d) => buildPlantLayoutHtml(plantLayoutDataFromPrintData(d)),
   'osl-courier-labels': (d) => buildOslCourierLabelsHtml(oslCourierLabelsDataFromPrintData(d)),
   'location-map': (d) => buildLocationMapHtml(locationMapDataFromPrintData(d)),
-  'all-required-undertakings': (d) => combinePrintHtmlDocuments('All Undertakings', [
-    buildUndertakingGeneralHtml(undertakingGeneralDataFromPrintData(d)),
-    buildUndertakingOption2Html(undertakingOption2DataFromPrintData(d)),
-    buildUndertakingLongDurationHtml(undertakingLongDurationDataFromPrintData(d)),
-    buildUndertakingMinimumMarkingFeeHtml(undertakingMinimumMarkingFeeDataFromPrintData(d)),
-    buildSelfEvaluationFormHtml(selfEvaluationFormDataFromPrintData(d)),
-  ]),
+  'all-required-undertakings': (d) => allRequiredUndertakingsHtml(d),
   'raw-material-reference': (d) => combinePrintHtmlDocuments('Raw Material & Reference Material', [
     buildRawMaterialDetailsHtml(rawMaterialDetailsDataFromPrintData(d)),
     buildCertifiedReferenceMaterialsHtml(certifiedReferenceMaterialsDataFromPrintData(d)),
@@ -362,8 +418,8 @@ export async function buildBisDocumentHtml(
     topManagementPayload,
     technicalManagementPayload,
     factoryTestReportPayload,
-    legalDocumentsPayload,
     locationMapPayload,
+    markingFeePayload,
   ] = await Promise.all([
     loadBisPrintData(row),
     fetchBisModulePayload(row.id, modulePayloadKind).catch(() => null),
@@ -377,10 +433,10 @@ export async function buildBisDocumentHtml(
       ? fetchBisModulePayload(row.id, 'factory-test-report').catch(() => null)
       : Promise.resolve(null),
     kind === 'application-details'
-      ? fetchBisModulePayload(row.id, 'legal-documents').catch(() => null)
-      : Promise.resolve(null),
-    kind === 'application-details'
       ? fetchBisModulePayload(row.id, 'location-map').catch(() => null)
+      : Promise.resolve(null),
+    kind === 'cmpf-311'
+      ? fetchBisModulePayload(row.id, 'cmpf-310').catch(() => null)
       : Promise.resolve(null),
   ])
 
@@ -396,28 +452,48 @@ export async function buildBisDocumentHtml(
     technicalManagement: technicalManagementPayload,
   }
 
-  if (kind === 'location-map') {
-    const offices = await listBisBranchOffices().catch(() => [])
-    const normalize = (value: string | null | undefined) =>
-      String(value ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
-    const branchName = normalize(row.branch_name)
-    const branchState = normalize(row.branch_state)
-    const office = offices.find((candidate) => candidate.id === row.bis_office_id) ??
-      offices.find((candidate) => normalize(candidate.name) === branchName &&
-        (!branchState || normalize(candidate.state) === branchState))
-    if (office) {
-      data = {
-        ...data,
-        modulePayload: {
-          ...(modulePayload ?? {}),
-          bisLatitude: office.latitude || modulePayload?.bisLatitude,
-          bisLongitude: office.longitude || modulePayload?.bisLongitude,
-          toLocation: row.branch_name || modulePayload?.toLocation,
-          toLocationAddress: [office.address, office.city, office.state, office.pinCode, office.country]
-            .filter(Boolean)
-            .join(', '),
+  if (kind === 'self-evaluation-form' || kind === 'all-required-undertakings') {
+    const [rawMaterials, technicalStaff, brandData, selfEvaluation, generalUndertaking, longDurationUndertaking, minimumFeeUndertaking] = await Promise.all([
+      fetchBisModulePayload(row.id, 'raw-material-reference').catch(() => null),
+      fetchBisModulePayload(row.id, 'technical-staff').catch(() => null),
+      fetchBisModulePayload(row.id, 'cmpf-307').catch(() => null),
+      kind === 'all-required-undertakings'
+        ? fetchBisModulePayload(row.id, 'self-evaluation-form').catch(() => null)
+        : Promise.resolve(modulePayload),
+      kind === 'all-required-undertakings'
+        ? fetchBisModulePayload(row.id, 'undertaking-general').catch(() => null)
+        : Promise.resolve(null),
+      kind === 'all-required-undertakings'
+        ? fetchBisModulePayload(row.id, 'undertaking-long-duration').catch(() => null)
+        : Promise.resolve(null),
+      kind === 'all-required-undertakings'
+        ? fetchBisModulePayload(row.id, 'undertaking-mmf').catch(() => null)
+        : Promise.resolve(null),
+    ])
+    data = {
+      ...data,
+      modulePayload: {
+        ...(data.modulePayload ?? {}),
+        __sefSources: {
+          rawMaterials: rawMaterials?.rawMaterials,
+          technicalStaff: technicalStaff?.rows,
+          brands: brandData?.rows,
+          brandsWithoutMarkReasons: brandData?.brandsWithoutMarkReasons,
+          selfEvaluation,
         },
-      }
+        __undertakingSources: {
+          general: generalUndertaking,
+          longDuration: longDurationUndertaking,
+          minimumFee: minimumFeeUndertaking,
+        },
+      },
+    }
+  }
+
+  if (kind === 'location-map') {
+    data = {
+      ...data,
+      modulePayload: await locationMapPayloadWithBranchOffice(row, modulePayload),
     }
   }
 
@@ -511,16 +587,27 @@ export async function buildBisDocumentHtml(
       ? buildLocationMapHtml(await enrichLocationMapRoute(locationMapDataFromPrintData(data)))
       : HTML_BUILDERS[kind](data)
 
-  if (kind === 'application-details') {
-    const legalData = legalDocumentsDataFromPrintData({
+  if (kind === 'cmpf-311') {
+    const sitData = cmpf311DataFromPrintData(data)
+    const markingFeeData = cmpf310DataFromPrintData({
       ...data,
-      modulePayload: legalDocumentsPayload,
+      modulePayload: markingFeePayload,
     })
+    const acceptanceLetterHtml = buildCmpf310AcceptanceLetterHtml({
+      ...sitData,
+      minimumMarkingFee: minimumMarkingFeeForScale(data.isCode, data.client.scale),
+      unit: markingFeeData.unit,
+      firmScale: data.client.scale,
+    })
+    html = combinePrintHtmlDocuments('CMPF - 310 & CMPF - 311', [html, acceptanceLetterHtml])
+  }
+
+  if (kind === 'application-details') {
+    const resolvedLocationMapPayload = await locationMapPayloadWithBranchOffice(row, locationMapPayload)
     const locationData = locationMapDataFromPrintData({
       ...data,
-      modulePayload: locationMapPayload,
+      modulePayload: resolvedLocationMapPayload,
     })
-    html = appendPrintHtmlDocument(html, buildLegalDocumentsHtml(legalData))
     html = appendPrintHtmlDocument(
       html,
       buildLocationMapHtml(await enrichLocationMapRoute(locationData)),

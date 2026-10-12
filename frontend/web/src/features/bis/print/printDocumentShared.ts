@@ -171,9 +171,11 @@ export function injectBisDocumentPageFooters(html: string): string {
   }
   const total = opens.length
   if (total === 0) return out
+  const continuationPageNumbering = /class="[^"]*\bc(?:305|306)-page-one\b/.test(out)
 
   const inserts: { at: number; footer: string }[] = []
   for (let i = 0; i < opens.length; i += 1) {
+    if (continuationPageNumbering && i === 0) continue
     let depth = 1
     let pos = opens[i]
     while (pos < out.length && depth > 0) {

@@ -101,14 +101,25 @@ export function properCapitalize(raw: string): string {
   })
 }
 
-function personRows(people: BisForm1Person[]): string {
+type ManagementColumnWidths = { name: number; designation: number }
+
+function managementColumnWidths(people: BisForm1Person[]): ManagementColumnWidths {
+  const longestName = Math.max(0, ...people.map((person) => person.name.trim().length))
+  const longestDesignation = Math.max(0, ...people.map((person) => person.designation.trim().length))
+  const total = longestName + longestDesignation
+  const name = total ? Math.min(68, Math.max(32, (longestName / total) * 100)) : 50
+  return { name, designation: 100 - name }
+}
+
+function personTable(people: BisForm1Person[], widths: ManagementColumnWidths): string {
   const filled = people.filter((p) => p.name.trim() || p.designation.trim())
+  const colgroup = `<colgroup><col style="width:${widths.name}%"/><col style="width:${widths.designation}%"/></colgroup>`
   if (filled.length === 0) {
-    return '<tr><td>&nbsp;</td><td>&nbsp;</td></tr><tr><td>&nbsp;</td><td>&nbsp;</td></tr>'
+    return `<table class="f1-inner">${colgroup}<tbody><tr><td>&nbsp;</td><td>&nbsp;</td></tr><tr><td>&nbsp;</td><td>&nbsp;</td></tr></tbody></table>`
   }
-  return filled
+  return `<table class="f1-inner">${colgroup}<tbody>${filled
     .map((p) => `<tr><td>${esc(p.name.trim())}</td><td>${esc(p.designation.trim())}</td></tr>`)
-    .join('')
+    .join('')}</tbody></table>`
 }
 
 function addressBlock(opts: {
@@ -165,6 +176,12 @@ function buildFormBody(data: BisForm1Data): string {
   const correspondence = properCapitalize(dash(data.correspondenceAddress, 'Factory'))
   const scale = properCapitalize(dash(data.scale, ''))
   const sector = properCapitalize(dash(data.sector, ''))
+  const topManagementWidths = managementColumnWidths(data.topManagement)
+  const technicalManagementWidths = managementColumnWidths(data.technicalManagement)
+  const topNameColumn = 42.5 * topManagementWidths.name / 100
+  const topDesignationColumn = 42.5 - topNameColumn
+  const technicalNameColumn = 42.5 * technicalManagementWidths.name / 100
+  const technicalDesignationColumn = 42.5 - technicalNameColumn
 
   return `
 <div class="f1-continuous">
@@ -206,6 +223,13 @@ function buildFormBody(data: BisForm1Data): string {
     })}
 
     <table class="f1-box f1-mgmt">
+      <colgroup>
+        <col style="width:15%"/>
+        <col style="width:${topNameColumn}%"/>
+        <col style="width:${topDesignationColumn}%"/>
+        <col style="width:${technicalNameColumn}%"/>
+        <col style="width:${technicalDesignationColumn}%"/>
+      </colgroup>
       <tr>
         <td class="f1-mgmt-side" rowspan="3">Management</td>
         <td class="f1-mgmt-head" colspan="2">Top Management</td>
@@ -218,15 +242,14 @@ function buildFormBody(data: BisForm1Data): string {
         <td class="f1-mgmt-sub">Designation</td>
       </tr>
       <tr>
-        <td colspan="2" class="f1-mgmt-body"><table class="f1-inner">${personRows(data.topManagement)}</table></td>
-        <td colspan="2" class="f1-mgmt-body"><table class="f1-inner">${personRows(data.technicalManagement)}</table></td>
+        <td colspan="2" class="f1-mgmt-body">${personTable(data.topManagement, topManagementWidths)}</td>
+        <td colspan="2" class="f1-mgmt-body">${personTable(data.technicalManagement, technicalManagementWidths)}</td>
       </tr>
       <tr>
         <td class="f1-contact-label" colspan="2">Contact Person &amp; Tel/Mobile No.</td>
         <td class="f1-contact-value" colspan="3">${esc(dash(data.contactPersonLine, ''))}</td>
       </tr>
     </table>
-    <p class="f1-note">*Furnishing of correct and valid email id is a mandatory requirement and absence of this information shall make the application liable for rejection.</p>
     <table class="f1-box f1-meta-row">
       <tr>
         <td class="f1-meta-pair">Correspondence Address<br/><strong>${esc(correspondence)}</strong></td>
@@ -251,7 +274,7 @@ function buildFormBody(data: BisForm1Data): string {
             <tr>
               <td class="f1-is-meta">
                 <div><strong>IS:</strong> ${esc(dash(data.isNumber, ''))}</div>
-                <div><strong>Revision Year:</strong> ${esc(dash(data.revisionYear, ''))}</div>
+                <div><strong>Year:</strong> ${esc(dash(data.revisionYear, ''))}</div>
                 <div><strong>Part:</strong> ${esc(dash(data.isPart, ''))}</div>
                 <div><strong>Sec:</strong> ${esc(dash(data.isSection, ''))}</div>
               </td>
@@ -340,8 +363,8 @@ const FORM1_STYLES = `
   .f1-vlabel { font-weight: 700; font-size: 12px; line-height: 1.25; letter-spacing: 0.02em; }
   .f1-vlabel-sm { font-weight: 700; font-size: 12px; line-height: 1.3; padding: 2px 0; }
   .f1-kind { font-weight: 700; font-size: 12px; margin-top: 4px; }
-  .f1-address-kind-col { width: 8%; }
-  .f1-geo-col { width: 12.8%; }
+  .f1-address-kind-col { width: 11%; }
+  .f1-geo-col { width: 12.2%; }
   .f1-contact-col-width { width: 28%; }
   .f1-addr-kind { text-align: center; background: #fafaf9; padding: 3px 4px !important; }
   .f1-addr-main { vertical-align: top !important; min-height: 38px; }
@@ -350,19 +373,18 @@ const FORM1_STYLES = `
   .f1-contact-row:last-child { border-bottom: none; }
   .f1-geo { text-align: center; padding: 3px !important; height: 34px; }
   .f1-geo .f1-mini, .f1-geo .f1-val { text-align: center; }
-  .f1-pin { width: 10%; }
+  .f1-pin { width: 12.2%; }
   .f1-meta-pair { width: 33.33%; text-align: center; font-size: 12px; font-weight: 600; padding: 4px 6px !important; }
   .f1-mgmt { table-layout: fixed; }
   .f1-mgmt-side { width: 15%; text-align: center; white-space: nowrap; background: #fafaf9; padding: 4px !important; font-weight: 700; }
   .f1-mgmt-head { text-align: center; font-weight: 700; font-size: 12px; background: #f5f5f4; padding: 4px !important; }
-  .f1-mgmt-sub { text-align: center; font-size: 12px; font-weight: 600; width: 21.25%; padding: 3px !important; }
+  .f1-mgmt-sub { text-align: center; font-size: 12px; font-weight: 600; padding: 3px !important; }
   .f1-mgmt-body { padding: 0 !important; vertical-align: top !important; }
-  .f1-inner { width: 100%; border-collapse: collapse; }
-  .f1-inner td { border: none !important; border-bottom: 1px solid #ccc !important; padding: 3px 4px !important; font-size: 12px; width: 50%; overflow-wrap: anywhere; }
+  .f1-inner { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  .f1-inner td { border: none !important; border-bottom: 1px solid #ccc !important; padding: 3px 4px !important; font-size: 12px; overflow-wrap: anywhere; }
   .f1-inner tr:last-child td { border-bottom: none !important; }
   .f1-contact-label { font-size: 10px; font-weight: 600; background: #fafaf9; }
   .f1-contact-value { font-size: 12px; font-weight: 700; }
-  .f1-note { font-size: 12px; margin: 3px 0 4px; font-style: italic; line-height: 1.35; }
   .f1-mark-line { font-size: 12px; margin: 4px 0; line-height: 1.45; }
   .f1-fill { font-weight: 700; text-decoration: underline; }
   .f1-side-label { width: 18%; text-align: center; background: #fafaf9; padding: 6px 4px !important; }

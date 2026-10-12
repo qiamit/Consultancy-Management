@@ -13,13 +13,14 @@ import {
   toBlockHtml,
   type PrintApplicantContext,
 } from './printDocumentShared'
+import { parseRawMaterialReferencePayload } from '../projects/rawMaterialReferenceModel'
 
 export type CrmRow = {
   crmName: string
-  supplierName: string
-  accreditedRmp: string
-  certificateLotNo: string
-  validityPeriod: string
+  crmNumber: string
+  crmType: string
+  validity: string
+  traceability: string
 }
 
 export type CertifiedReferenceMaterialsData = PrintApplicantContext & {
@@ -28,27 +29,22 @@ export type CertifiedReferenceMaterialsData = PrintApplicantContext & {
   signatoryDesignation: string
 }
 
-const MIN_ROWS = 10
-
 function tableHtml(rows: CrmRow[]): string {
-  const filled = rows.filter((r) => Object.values(r).some((v) => v.trim()))
+  const filled = rows.filter((r) =>
+    [r.crmName, r.crmNumber, r.crmType, r.traceability].some((value) => value.trim()),
+  )
   const body = filled
     .map(
       (r, i) => `<tr>
       <td>${i + 1}</td>
       <td class="pd-left">${esc(r.crmName) || '&nbsp;'}</td>
-      <td>${esc(r.supplierName) || '&nbsp;'}</td>
-      <td>${esc(r.accreditedRmp) || '&nbsp;'}</td>
-      <td>${esc(r.certificateLotNo) || '&nbsp;'}</td>
-      <td>${esc(r.validityPeriod) || '&nbsp;'}</td>
+      <td>${esc(r.crmNumber) || '&nbsp;'}</td>
+      <td>${esc(r.crmType) || '&nbsp;'}</td>
+      <td>${esc(r.validity) || '&nbsp;'}</td>
+      <td>${esc(r.traceability) || '&nbsp;'}</td>
     </tr>`,
     )
     .join('')
-
-  let pad = ''
-  for (let i = filled.length; i < MIN_ROWS; i += 1) {
-    pad += `<tr><td>${i + 1}</td><td class="pd-left">&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>`
-  }
 
   return `
 <table class="pd-table crm-table">
@@ -56,13 +52,13 @@ function tableHtml(rows: CrmRow[]): string {
     <tr>
       <th style="width:6%">Sr. No.</th>
       <th>Certified Reference Material</th>
-      <th>Name of Supplier / Manufacturer</th>
-      <th>From Accredited RMP (Yes / No)</th>
-      <th>CRM Certificate / Lot No.</th>
-      <th>Validity / Expiry Period</th>
+      <th>CRM No.</th>
+      <th>CRM Type</th>
+      <th>CRM Validity</th>
+      <th>CRM Traceability</th>
     </tr>
   </thead>
-  <tbody>${body}${pad}</tbody>
+  <tbody>${body}</tbody>
 </table>`
 }
 
@@ -94,9 +90,7 @@ function buildBody(data: CertifiedReferenceMaterialsData): string {
     ${data.applicantAddress ? ` having our factory / laboratory at <strong>${esc(data.applicantAddress)}</strong>,` : ''}
     hereby furnish the list of Certified Reference Materials (CRMs) used in our in-house testing
     activities ${isStdRef ? ` in connection with BIS certification under ${isStdRef}` : ' in connection with BIS certification'}.
-    The particulars regarding the name of CRM, supplier / manufacturer, whether procured from an
-    accredited Reference Material Producer (RMP), CRM certificate / lot number, and validity /
-    expiry period are as under:
+    The particulars regarding the CRM name, CRM number, type, validity and traceability are as under:
   </p>
 
   ${tableHtml(data.rows)}
@@ -131,9 +125,10 @@ export function certifiedReferenceMaterialsDataFromPrintData(
   printData: BisPrintData,
 ): CertifiedReferenceMaterialsData {
   const ctx = applicantContextFromPrintData(printData)
+  const payload = parseRawMaterialReferencePayload(printData.modulePayload ?? null)
   return {
     ...ctx,
-    rows: [],
+    rows: payload.certifiedReferenceMaterials,
     signatoryName: printSignatoryDefaults(printData).signatoryName,
     signatoryDesignation: printSignatoryDefaults(printData).signatoryDesignation,
   }

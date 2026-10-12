@@ -23,34 +23,48 @@ function formatApiError(err: unknown): string {
   return 'Something went wrong'
 }
 
-function isPdf(file: StoredFile): boolean {
-  const mime = (file.mime_type ?? '').toLowerCase()
-  const name = file.file_name.toLowerCase()
-  return mime.includes('pdf') || name.endsWith('.pdf')
-}
+type SupportedAssetKind = 'pdf' | 'png' | 'jpeg' | null
 
-function isPng(file: StoredFile): boolean {
+/** Prefer stored metadata, but inspect file signatures when storage metadata is missing or wrong. */
+export function detectBisPdfAssetKind(
+  file: Pick<StoredFile, 'file_name' | 'mime_type'>,
+  bytes: Uint8Array,
+): SupportedAssetKind {
   const mime = (file.mime_type ?? '').toLowerCase()
   const name = file.file_name.toLowerCase()
-  return mime.includes('png') || name.endsWith('.png')
-}
+  if (
+    bytes.length >= 5 &&
+    bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 &&
+    bytes[3] === 0x46 && bytes[4] === 0x2d
+  ) return 'pdf'
+  if (
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e &&
+    bytes[3] === 0x47 && bytes[4] === 0x0d && bytes[5] === 0x0a &&
+    bytes[6] === 0x1a && bytes[7] === 0x0a
+  ) return 'png'
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return 'jpeg'
+  }
 
-function isJpeg(file: StoredFile): boolean {
-  const mime = (file.mime_type ?? '').toLowerCase()
-  const name = file.file_name.toLowerCase()
-  return (
+  if (mime.includes('pdf') || name.endsWith('.pdf')) return 'pdf'
+  if (mime.includes('png') || name.endsWith('.png')) return 'png'
+  if (
     mime.includes('jpeg') ||
     mime.includes('jpg') ||
     name.endsWith('.jpg') ||
     name.endsWith('.jpeg')
-  )
+  ) return 'jpeg'
+  return null
 }
 
 async function listStoredFiles(
   projectId: string,
-  docKind: BisProjectDocKind,
+  docKinds: BisProjectDocKind | readonly BisProjectDocKind[],
 ): Promise<StoredFile[]> {
-  const kinds = docKindsForList(docKind)
+  const kinds = [...new Set(
+    (Array.isArray(docKinds) ? docKinds : [docKinds]).flatMap(docKindsForList),
+  )]
   let query = supabase
     .from('bis_project_files')
     .select('file_name, storage_path, mime_type')
@@ -70,45 +84,49 @@ async function downloadBytes(storagePath: string): Promise<Uint8Array> {
   return new Uint8Array(await data.arrayBuffer())
 }
 
-/** Merge attached module PDFs (and images) into one PDF document. */
-export async function buildMergedBisModulePdf(
+/** Merge attached PDFs (and images) across one or more stored document categories. */
+export async function buildMergedBisProjectFilesPdf(
   projectId: string,
-  docKind: BisProjectDocKind,
-): Promise<Uint8Array> {
-  const files = await listStoredFiles(projectId, docKind)
-  if (files.length === 0) {
-    throw new Error('No attached files found for this module.')
-  }
-
+  docKinds: readonly BisProjectDocKind[],
+  options: { ignoreUnsupported?: boolean } = {},
+): Promise<Uint8Array | null> {
+  const files = await listStoredFiles(projectId, docKinds)
+  if (files.length === 0) return null
   const merged = await PDFDocument.create()
   let added = 0
+  let unsupported = 0
   const skipped: string[] = []
 
   for (const file of files) {
+    const bytes = await downloadBytes(file.storage_path)
+    const assetKind = detectBisPdfAssetKind(file, bytes)
+    if (!assetKind) {
+      unsupported += 1
+      skipped.push(file.file_name)
+      continue
+    }
     try {
-      const bytes = await downloadBytes(file.storage_path)
-      if (isPdf(file)) {
+      if (assetKind === 'pdf') {
         const src = await PDFDocument.load(bytes, { ignoreEncryption: true })
         const pages = await merged.copyPages(src, src.getPageIndices())
         for (const page of pages) merged.addPage(page)
         added += pages.length
         continue
       }
-      if (isPng(file)) {
+      if (assetKind === 'png') {
         const img = await merged.embedPng(bytes)
         const page = merged.addPage([img.width, img.height])
         page.drawImage(img, { x: 0, y: 0, width: img.width, height: img.height })
         added += 1
         continue
       }
-      if (isJpeg(file)) {
+      if (assetKind === 'jpeg') {
         const img = await merged.embedJpg(bytes)
         const page = merged.addPage([img.width, img.height])
         page.drawImage(img, { x: 0, y: 0, width: img.width, height: img.height })
         added += 1
         continue
       }
-      skipped.push(file.file_name)
     } catch (err) {
       skipped.push(
         `${file.file_name} (${err instanceof Error ? err.message : 'failed'})`,
@@ -116,6 +134,7 @@ export async function buildMergedBisModulePdf(
     }
   }
 
+  if (added === 0 && options.ignoreUnsupported && unsupported === files.length) return null
   if (added === 0) {
     const detail =
       skipped.length > 0
@@ -127,8 +146,20 @@ export async function buildMergedBisModulePdf(
   return merged.save()
 }
 
+/** Merge attached module PDFs (and images) into one PDF document. */
+export async function buildMergedBisModulePdf(
+  projectId: string,
+  docKind: BisProjectDocKind,
+): Promise<Uint8Array> {
+  const bytes = await buildMergedBisProjectFilesPdf(projectId, [docKind])
+  if (!bytes) throw new Error('No attached files found for this module.')
+  return bytes
+}
+
 function blobFromPdfBytes(bytes: Uint8Array): Blob {
-  return new Blob([bytes], { type: 'application/pdf' })
+  const ownedBytes = new Uint8Array(bytes.byteLength)
+  ownedBytes.set(bytes)
+  return new Blob([ownedBytes.buffer], { type: 'application/pdf' })
 }
 
 function writePdfViewerHtml(

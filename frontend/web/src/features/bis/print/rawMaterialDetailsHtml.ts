@@ -13,6 +13,7 @@ import {
   toBlockHtml,
   type PrintApplicantContext,
 } from './printDocumentShared'
+import { parseRawMaterialReferencePayload } from '../projects/rawMaterialReferenceModel'
 
 export type RawMaterialRow = {
   rawMaterial: string
@@ -28,10 +29,8 @@ export type RawMaterialDetailsData = PrintApplicantContext & {
   signatoryDesignation: string
 }
 
-const MIN_ROWS = 10
-
 function tableHtml(rows: RawMaterialRow[]): string {
-  const filled = rows.filter((r) => Object.values(r).some((v) => v.trim()))
+  const filled = rows.filter((r) => r.rawMaterial.trim() && r.supplierName.trim())
   const body = filled
     .map(
       (r, i) => `<tr>
@@ -45,24 +44,19 @@ function tableHtml(rows: RawMaterialRow[]): string {
     )
     .join('')
 
-  let pad = ''
-  for (let i = filled.length; i < MIN_ROWS; i += 1) {
-    pad += `<tr><td>${i + 1}</td><td class="pd-left">&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>`
-  }
-
   return `
 <table class="pd-table rmd-table">
   <thead>
     <tr>
       <th style="width:6%">Sr. No.</th>
-      <th>Raw Material</th>
-      <th>Name of Supplier</th>
-      <th>With OR Without BIS Certification Mark</th>
-      <th>Test Certificate of The Supplier</th>
-      <th>How Received Batches / Lots Nature of Packaging</th>
+      <th style="width:22.5%">Raw Material</th>
+      <th style="width:22.5%">Name of Supplier</th>
+      <th style="width:16%">With OR Without BIS Certification Mark</th>
+      <th style="width:16%">Test Certificate of The Supplier</th>
+      <th style="width:17%">How Received Batches / Lots Nature of Packaging</th>
     </tr>
   </thead>
-  <tbody>${body}${pad}</tbody>
+  <tbody>${body}</tbody>
 </table>`
 }
 
@@ -127,9 +121,10 @@ export function buildRawMaterialDetailsHtml(data: RawMaterialDetailsData): strin
 /** Maps a BIS project row + client + consultancy context into Raw Material Details fields. */
 export function rawMaterialDetailsDataFromPrintData(printData: BisPrintData): RawMaterialDetailsData {
   const ctx = applicantContextFromPrintData(printData)
+  const payload = parseRawMaterialReferencePayload(printData.modulePayload ?? null)
   return {
     ...ctx,
-    rows: [],
+    rows: payload.rawMaterials,
     signatoryName: printSignatoryDefaults(printData).signatoryName,
     signatoryDesignation: printSignatoryDefaults(printData).signatoryDesignation,
   }

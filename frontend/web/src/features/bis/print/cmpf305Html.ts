@@ -31,8 +31,7 @@ export type Cmpf305Data = PrintApplicantContext & {
   rows: Cmpf305MachineryRow[]
 }
 
-const ROWS_PER_CONTINUATION_PAGE = 18
-const MIN_ROWS_ON_CONTINUATION_PAGE = 15
+const ROWS_PER_CONTINUATION_PAGE = 25
 
 function dateOrNa(raw: string): string {
   const value = (raw ?? '').trim()
@@ -63,20 +62,6 @@ function machineryTable(rows: string, attachmentRows = false): string {
       ? '<tr><td colspan="6" class="c305-attached">Separate Sheet Attached</td></tr>'
       : '')}</tbody>
   </table>`
-}
-
-function pageSignature(data: Cmpf305Data, dateApp: string): string {
-  const name = data.firmRepName.trim() || data.contactPerson.trim() || '—'
-  const designation = data.firmRepDesignation.trim()
-  const signatureImage = data.signatureImageUrl?.trim()
-  return `<div class="c305-page-signature">
-    <div>For <strong>${esc(data.applicantName || 'Applicant Firm')}</strong></div>
-    ${signatureImage ? `<img class="c305-sign-image" src="${esc(signatureImage)}" alt="Authorized signatory stamp and signature" />` : '<div class="c305-sign-gap"></div>'}
-    <div class="c305-sign-line"></div>
-    <div><strong>${esc(name)}</strong>${designation ? ` (${esc(designation)})` : ''}</div>
-    <div>Firm Representative Seal &amp; Signature</div>
-    <div>Date: ${esc(dateApp)}</div>
-  </div>`
 }
 
 function firstPageDeclarations(data: Cmpf305Data, dateInsp: string): string {
@@ -126,27 +111,33 @@ function firstPage(data: Cmpf305Data, appNo: string, dateApp: string, dateInsp: 
   </div>`
 }
 
+function pageSignature(data: Cmpf305Data): string {
+  const name = data.firmRepName.trim() || data.contactPerson.trim() || '—'
+  const designation = data.firmRepDesignation.trim()
+  const signatureImage = data.signatureImageUrl?.trim()
+  return `<div class="c305-page-signature">
+    <div>For <strong>${esc(data.applicantName || 'Applicant Firm')}</strong></div>
+    ${signatureImage ? `<img class="c305-sign-image" src="${esc(signatureImage)}" alt="Authorized signatory stamp and signature" />` : '<div class="c305-sign-gap"></div>'}
+    <div class="c305-sign-line"></div>
+    <div><strong>${esc(name)}</strong>${designation ? ` (${esc(designation)})` : ''}</div>
+  </div>`
+}
+
 function continuationPage(
   data: Cmpf305Data,
   appNo: string,
-  dateApp: string,
   dateInsp: string,
   rows: Cmpf305MachineryRow[],
   startIndex: number,
 ): string {
-  const visibleRows = [...rows]
-  const targetRows = Math.max(MIN_ROWS_ON_CONTINUATION_PAGE, visibleRows.length)
-  while (visibleRows.length < targetRows) {
-    visibleRows.push({ machineryName: '', make: '', capacityPerDay: '', number: '', remarks: '' })
-  }
   return `<div class="pd-sheet c305-continuation">
     ${letterheadHtml(data)}
     <div class="pd-to-row c305-recipient">
       <div class="pd-to-block">${toBlockHtml(data.bisBranchName, data.bisBranchState)}</div>
       <div class="pd-date-block"><div>Date of Inspection: <strong>${esc(dateInsp)}</strong></div><div>Application No.: <strong>${esc(appNo)}</strong></div></div>
     </div>
-    ${machineryTable(machineryRows(visibleRows, startIndex))}
-    ${pageSignature(data, dateApp)}
+    ${machineryTable(machineryRows(rows, startIndex))}
+    ${pageSignature(data)}
   </div>`
 }
 
@@ -156,14 +147,13 @@ function buildBody(data: Cmpf305Data): string {
   const dateInsp = inspectionDateOrToday(data.dateOfInspection)
   const rows = data.rows.filter((row) => Object.values(row).some((value) => value.trim()))
   const chunks: Cmpf305MachineryRow[][] = []
-  const continuationCount = Math.max(1, Math.ceil(rows.length / ROWS_PER_CONTINUATION_PAGE))
+  const continuationCount = Math.ceil(rows.length / ROWS_PER_CONTINUATION_PAGE)
   for (let i = 0; i < continuationCount; i += 1) {
     chunks.push(rows.slice(i * ROWS_PER_CONTINUATION_PAGE, (i + 1) * ROWS_PER_CONTINUATION_PAGE))
   }
   return firstPage(data, appNo, dateApp, dateInsp) + chunks.map((chunk, index) => continuationPage(
     data,
     appNo,
-    dateApp,
     dateInsp,
     chunk,
     index * ROWS_PER_CONTINUATION_PAGE,
@@ -189,19 +179,19 @@ const STYLES = `
   .c305-panel-signature { margin-top: auto; font-size: 9.5pt !important; line-height: 1.5 !important; }
   .c305-panel-signature-title { margin-bottom: 1mm; }
   .c305-panel-stamp { height: 15mm; display: flex; justify-content: flex-end; align-items: center; }
-  .c305-panel-stamp img { max-width: 38mm; max-height: 14mm; object-fit: contain; }
-  .c305-sign-image { max-width: 52mm; max-height: 21mm; object-fit: contain; }
+  .c305-panel-stamp img { max-width: 48mm; max-height: 18mm; object-fit: contain; transform: translateX(40mm); }
   .c305-panel-signature > div:not(.c305-panel-signature-title) { display: grid; grid-template-columns: 24mm 7mm minmax(0, 1fr); border-bottom: 1px solid #bbb; }
   .c305-officer-signature { margin-top: auto; }
   .c305-outsourced-note { margin: 2mm 0 0; font-size: 9.5pt !important; font-weight: 700; line-height: 1.45 !important; }
-  .c305-page-signature { position: static; width: 78mm; max-width: 78mm; margin: 2mm 0 0 auto; text-align: center; font-size: 9.5pt !important; line-height: 1.35 !important; page-break-inside: avoid; break-inside: avoid; }
-  .c305-sign-gap { height: 12mm; }
-  .c305-sign-image { display: block; margin: 0 4mm 1mm auto; }
-  .c305-sign-line { border-top: 1px solid #111; margin: 0 5mm 2px; }
   .c305-continuation .pd-letterhead { margin-bottom: 7px; padding-bottom: 5px; }
   .c305-continuation .pd-firm { font-size: 17px; }
+  .c305-continuation .c305-table { margin-bottom: 1mm; }
   .c305-continuation .c305-table td { height: 6mm; }
   .c305-continuation .pd-table th, .c305-continuation .pd-table td { padding: 3px 4px !important; font-size: 10pt !important; }
+  .c305-page-signature { width: 78mm; max-width: 78mm; margin: 1mm 0 0 auto; text-align: right; font-size: 8pt !important; line-height: 1.2 !important; page-break-inside: avoid; break-inside: avoid; }
+  .c305-sign-gap { height: 8mm; }
+  .c305-sign-image { display: block; max-width: 40mm; max-height: 16mm; object-fit: contain; margin: 0 0 1mm auto; }
+  .c305-sign-line { width: 50mm; border-top: 1px solid #111; margin: 0 0 2px auto; }
 `
 
 export function buildCmpf305Html(data: Cmpf305Data): string {

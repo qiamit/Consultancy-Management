@@ -1,15 +1,16 @@
 import type { BisPrintData } from './loadBisPrintData'
+import { parseUndertakingLongDurationPayload } from '../projects/undertakingPayloadModels'
 import { printSignatoryDefaults } from './loadBisPrintData'
 import { escapeHtml as esc } from './openPrintHtml'
 import {
   addressWithIndia,
   applicantContextFromPrintData,
-  applicationMetaTableHtml,
   applicationNoDisplay,
   buildPrintPage,
   dateOrNa,
-  inspectionDateOrToday,
+  letterheadHtml,
   preparedByHtml,
+  signatoryHtml,
   toBlockHtml,
   type PrintApplicantContext,
 } from './printDocumentShared'
@@ -37,14 +38,9 @@ function blankOr(value: string): string {
 }
 
 function testTableHtml(rows: LongDurationTestRow[]): string {
-  const source =
-    rows.length > 0
-      ? rows
-      : [
-          { typeOfTest: '', durationOfTest: '', dateOfCompletion: '' },
-          { typeOfTest: '', durationOfTest: '', dateOfCompletion: '' },
-          { typeOfTest: '', durationOfTest: '', dateOfCompletion: '' },
-        ]
+  const source = rows.filter((row) =>
+    [row.typeOfTest, row.durationOfTest, row.dateOfCompletion].some((value) => value.trim()),
+  )
 
   const body = source
     .map((row, i) => {
@@ -55,22 +51,17 @@ function testTableHtml(rows: LongDurationTestRow[]): string {
     })
     .join('')
 
-  let pad = ''
-  for (let i = source.length; i < 5; i += 1) {
-    pad += `<tr><td>${i + 1}</td><td class="pd-left">&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>`
-  }
-
   return `
 <table class="pd-table ldt-table">
   <thead>
     <tr>
-      <th style="width:8%">Sr. No.</th>
+      <th style="width:8%">Sr.<br>No.</th>
       <th>Type of Test</th>
       <th>Duration of Test</th>
       <th>Date of Completion of Test</th>
     </tr>
   </thead>
-  <tbody>${body}${pad}</tbody>
+  <tbody>${body}</tbody>
 </table>`
 }
 
@@ -79,16 +70,20 @@ function buildBody(data: UndertakingLongDurationData): string {
   const product = blankOr(data.productForMark)
   const standard = blankOr(data.isStandard || data.isNumber)
   const factory = addressWithIndia(data.factoryAddress || data.applicantAddress)
-  const place = data.place.trim() || data.bisBranchState.trim() || '________________'
-  const dateVal = inspectionDateOrToday(data.dateOfInspection)
   const sigName = data.signatoryName.trim() || data.declarantName.trim() || data.contactPerson.trim()
 
   return `
 <div class="pd-sheet">
+  ${letterheadHtml(data)}
   <h1 class="pd-title">Undertaking for Long Duration Test</h1>
-  ${applicationMetaTableHtml(data)}
 
-  <div class="ldt-to">${toBlockHtml(data.bisBranchName, data.bisBranchState)}</div>
+  <div class="pd-to-row ldt-to-row">
+    <div class="pd-to-block">${toBlockHtml(data.bisBranchName, data.bisBranchState)}</div>
+    <div class="pd-date-block">
+      <div><strong>Date of Application:</strong> ${esc(dateOrNa(data.dateOfApplication))}</div>
+      <div><strong>Application Number:</strong> ${esc(applicationNoDisplay(data.applicationNumber))}</div>
+    </div>
+  </div>
   <p class="ldt-salutation">Respected / Sir,</p>
   <p class="pd-body">
     I, <strong>${esc(declarant)}</strong> have applied for a license under Option 2 to you for use of BIS standard mark on
@@ -108,36 +103,17 @@ function buildBody(data: UndertakingLongDurationData): string {
     Further, I duly Undertake that I shall Abide by all the Directions Issued by the Bureau in this Regard.
   </p>
 
-  <table class="ldt-sign-row">
-    <tr>
-      <td>
-        <div>Place :- ${esc(place)}</div>
-        <div>Date :- ${esc(dateVal)}</div>
-        <div class="ldt-appno">Application No.: ${esc(applicationNoDisplay(data.applicationNumber))}</div>
-      </td>
-      <td class="ldt-sig">
-        <div class="ldt-sig-gap"></div>
-        <div>Signature</div>
-        <div>Name:- <strong>${esc(sigName || '—')}</strong></div>
-        <div>Designation:- ${esc(data.signatoryDesignation.trim() || '—')}</div>
-        <div class="ldt-seal">Seal of the Firm</div>
-      </td>
-    </tr>
-  </table>
+  <div class="cmpf-sign-right">${signatoryHtml({ firmName: data.applicantName, name: sigName, designation: data.signatoryDesignation })}</div>
   ${preparedByHtml(data.preparedBy)}
 </div>`
 }
 
 const STYLES = `
-  .ldt-to { margin: 8px 0 10px; line-height: 1.5; }
+  .ldt-to-row { margin: 8px 0 12px; }
   .ldt-salutation { margin: 0 0 8px; }
   .ldt-table td { height: 8mm; }
-  .ldt-sign-row { width: 100%; border-collapse: collapse; margin-top: 18px; }
-  .ldt-sign-row td { width: 50%; vertical-align: top; font-size: 11px; line-height: 1.7; border: none; padding: 0; }
-  .ldt-sig { text-align: right; }
-  .ldt-sig-gap { height: 18mm; }
-  .ldt-seal { margin-top: 10px; font-weight: 700; }
-  .ldt-appno { margin-top: 8px; font-size: 10px; color: #57534e; }
+  .cmpf-sign-right { margin-top: 14px; text-align: right; }
+  .cmpf-sign-right .pd-signatory { text-align: left; }
 `
 
 export function buildUndertakingLongDurationHtml(data: UndertakingLongDurationData): string {
@@ -153,17 +129,18 @@ export function undertakingLongDurationDataFromPrintData(
   printData: BisPrintData,
 ): UndertakingLongDurationData {
   const ctx = applicantContextFromPrintData(printData)
+  const payload = parseUndertakingLongDurationPayload(printData.modulePayload ?? null)
   const product =
     (printData.row.title ?? '').trim() || printData.isCode.title || printData.isCode.label
   return {
     ...ctx,
-    declarantName: printData.client.contactPerson || printData.client.companyName,
+    declarantName: payload.declarantName || printData.client.contactPerson || printData.client.companyName,
     productForMark: product,
     isStandard: printData.isCode.label || printData.isCode.isNumber,
     factoryAddress: ctx.applicantAddress,
     signatoryName: printSignatoryDefaults(printData).signatoryName,
     signatoryDesignation: printSignatoryDefaults(printData).signatoryDesignation,
-    place: printData.client.district || printData.client.state,
-    testRows: [],
+    place: payload.place || printData.client.district || printData.client.state,
+    testRows: payload.testRows,
   }
 }

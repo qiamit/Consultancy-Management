@@ -33,7 +33,7 @@ import {
   type BisPrintPageSize,
 } from '../print/bisDocumentPrintPageSettings'
 import { openPendingPrintWindow, openPrintHtml } from '../print/openPrintHtml'
-import { appendPrintHtmlDocument } from '../print/printDocumentShared'
+import { buildApplicationDetailsPackPdf } from './buildApplicationDetailsPackPdf'
 import {
   ALL_BIS_PRINT_KINDS,
   BIS_PRINT_DOCUMENT_LABEL,
@@ -140,9 +140,10 @@ export function BisDocumentPrintPreviewDialog({
     originY: number
   } | null>(null)
   const [baseHtml, setBaseHtml] = useState<string | null>(null)
-  const [locationMapHtml, setLocationMapHtml] = useState<string | null>(null)
   const [pdfUrl, setPdfUrl] = useState<string | null>(null)
+  const [applicationPackPdfSettingsKey, setApplicationPackPdfSettingsKey] = useState<string | null>(null)
   const [previewSource, setPreviewSource] = useState<PreviewSource | null>(null)
+  const [settingsLoadedFor, setSettingsLoadedFor] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [printing, setPrinting] = useState(false)
@@ -154,9 +155,14 @@ export function BisDocumentPrintPreviewDialog({
   const lastSavedSettingsJsonRef = useRef('')
   const pendingSaveRef = useRef<BisDocumentPrintPageSettings | null>(null)
   const projectId = row?.id ?? null
+  const settingsKey = JSON.stringify(settings)
+  const visiblePdfUrl =
+    previewSource === 'application-pack' && applicationPackPdfSettingsKey !== settingsKey
+      ? null
+      : pdfUrl
 
   const title = kind ? BIS_PRINT_DOCUMENT_LABEL[kind] : 'Document'
-  const mergePdfMode = previewSource === 'attachments' && Boolean(pdfUrl)
+  const mergePdfMode = previewSource === 'attachments' && Boolean(visiblePdfUrl)
 
   const revokePdfUrl = () => {
     if (pdfUrlRef.current) {
@@ -176,8 +182,8 @@ export function BisDocumentPrintPreviewDialog({
       }
       pendingSaveRef.current = null
       setBaseHtml(null)
-      setLocationMapHtml(null)
       revokePdfUrl()
+      setApplicationPackPdfSettingsKey(null)
       setPreviewSource(null)
       setError(null)
       setLoading(false)
@@ -189,6 +195,7 @@ export function BisDocumentPrintPreviewDialog({
       settingsDragRef.current = null
       settingsReadyRef.current = false
       settingsProjectIdRef.current = null
+      setSettingsLoadedFor(null)
       lastSavedSettingsJsonRef.current = ''
       return
     }
@@ -199,17 +206,19 @@ export function BisDocumentPrintPreviewDialog({
     setLoading(true)
     setError(null)
     setBaseHtml(null)
-    setLocationMapHtml(null)
     setPreviewSource(null)
     revokePdfUrl()
+    setApplicationPackPdfSettingsKey(null)
 
     // Load shared Page & Print Settings for this Application / Licence.
     settingsReadyRef.current = false
+    setSettingsLoadedFor(null)
     const markSettingsLoaded = (next: BisDocumentPrintPageSettings) => {
       setSettings(next)
       settingsReadyRef.current = true
       settingsProjectIdRef.current = projectId
       lastSavedSettingsJsonRef.current = JSON.stringify(next)
+      setSettingsLoadedFor(projectId)
     }
     if (projectId) {
       const cached = getCachedBisProjectPrintPageSettings(projectId)
@@ -241,13 +250,9 @@ export function BisDocumentPrintPreviewDialog({
         }
 
         if (kind === 'application-details') {
-          const [applicationHtml, mapHtml] = await Promise.all([
-            buildBisDocumentHtml(row, 'application-details'),
-            buildBisDocumentHtml(row, 'location-map'),
-          ])
+          const applicationHtml = await buildBisDocumentHtml(row, 'application-details')
           if (cancelled) return
           setBaseHtml(applicationHtml)
-          setLocationMapHtml(mapHtml)
           setPreviewSource('application-pack')
           return
         }
@@ -301,6 +306,42 @@ export function BisDocumentPrintPreviewDialog({
       cancelled = true
     }
   }, [open, row, kind, generatedHtml, projectId])
+
+  // Application Details preview and download share one PDF packet, including its uploaded PDFs.
+  useEffect(() => {
+    if (
+      !open ||
+      previewSource !== 'application-pack' ||
+      !baseHtml ||
+      !projectId ||
+      settingsLoadedFor !== projectId
+    ) return
+
+    let cancelled = false
+    let generatedUrl: string | null = null
+    void buildApplicationDetailsPackPdf(
+      baseHtml,
+      projectId,
+      row?.client_id ?? null,
+      settings,
+      `${title}.pdf`,
+    ).then((pdf) => {
+      if (cancelled) return
+      generatedUrl = URL.createObjectURL(pdf)
+      const previousUrl = pdfUrlRef.current
+      pdfUrlRef.current = generatedUrl
+      setPdfUrl(generatedUrl)
+      setApplicationPackPdfSettingsKey(settingsKey)
+      if (previousUrl) URL.revokeObjectURL(previousUrl)
+    }).catch((err: unknown) => {
+      if (!cancelled) setError(err instanceof Error ? err.message : 'Unable to prepare application PDF pack.')
+    })
+
+    return () => {
+      cancelled = true
+      if (generatedUrl && generatedUrl !== pdfUrlRef.current) URL.revokeObjectURL(generatedUrl)
+    }
+  }, [open, previewSource, baseHtml, projectId, row?.client_id, settingsLoadedFor, settings, settingsKey, title])
 
   // Keep every module preview on the same live settings for this Application / Licence.
   useEffect(() => {
@@ -360,20 +401,12 @@ export function BisDocumentPrintPreviewDialog({
     }
   }, [settingsFormOpen])
 
-  const combinedHtml = useMemo(() => {
-    if (!baseHtml) return null
-    if (kind === 'application-details' && locationMapHtml) {
-      return appendPrintHtmlDocument(baseHtml, locationMapHtml)
-    }
-    return baseHtml
-  }, [baseHtml, kind, locationMapHtml])
-
   const previewHtml = useMemo(() => {
-    if (!combinedHtml) return null
-    return applyBisDocumentPrintPageSettings(combinedHtml, settings)
-  }, [combinedHtml, settings])
+    if (!baseHtml) return null
+    return applyBisDocumentPrintPageSettings(baseHtml, settings)
+  }, [baseHtml, settings])
 
-  const hasPreview = Boolean(pdfUrl || previewHtml)
+  const hasPreview = Boolean(visiblePdfUrl || previewHtml)
 
   const setMargin =
     (key: keyof Pick<
@@ -423,7 +456,7 @@ export function BisDocumentPrintPreviewDialog({
     setPrinting(true)
     setError(null)
     try {
-      if (pdfUrl) {
+      if (visiblePdfUrl) {
         const target = openPendingPrintWindow(`Printing ${title}…`)
         if (!target) {
           setError('Popup blocked. Allow popups to print.')
@@ -433,7 +466,7 @@ export function BisDocumentPrintPreviewDialog({
         target.document.write(
           `<!doctype html><html lang="en"><head><meta charset="utf-8"/><title>${title}</title>` +
             `<style>html,body{margin:0;height:100%;background:#525659}iframe{border:0;width:100%;height:100%}</style></head>` +
-            `<body><iframe id="pdf-frame" src="${pdfUrl}"></iframe>` +
+            `<body><iframe id="pdf-frame" src="${visiblePdfUrl}"></iframe>` +
             `<script>window.addEventListener('load',function(){setTimeout(function(){try{var f=document.getElementById('pdf-frame');if(f&&f.contentWindow){f.contentWindow.focus();f.contentWindow.print()}else{window.print()}}catch(e){try{window.print()}catch(e2){}}},600)});</script>` +
             `</body></html>`,
         )
@@ -556,7 +589,7 @@ export function BisDocumentPrintPreviewDialog({
                 <div className="flex h-full min-h-[16rem] items-center justify-center p-4 text-sm text-red-700">
                   {error}
                 </div>
-              ) : pdfUrl ? (
+              ) : visiblePdfUrl ? (
                 <div
                   className="h-full min-h-[16rem] w-full origin-top-left bg-[#525659]"
                   style={{
@@ -568,7 +601,7 @@ export function BisDocumentPrintPreviewDialog({
                   <iframe
                     ref={pdfFrameRef}
                     title={`Preview ${title}`}
-                    src={pdfUrl}
+                    src={visiblePdfUrl}
                     className="h-full w-full border-0"
                   />
                 </div>

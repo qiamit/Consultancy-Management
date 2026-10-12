@@ -381,7 +381,8 @@ export function applyBisDocumentPrintPageSettings(
   .pd-sheet .cmpf-sign-right .pd-sign-line,
   .pd-sheet .ug-sign .pd-sign-line,
   .pd-sheet .usit-sign .pd-sign-line,
-  .pd-sheet .osl-sign .pd-sign-line {
+  .pd-sheet .osl-sign .pd-sign-line,
+  .pd-sheet .cmpf311-cover-sign .pd-sign-line {
     width: 48mm !important;
     margin-left: auto !important;
     margin-right: 0 !important;

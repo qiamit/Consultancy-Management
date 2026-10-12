@@ -33,8 +33,7 @@ export type Cmpf306Data = PrintApplicantContext & {
   rows: Cmpf306EquipmentRow[]
 }
 
-const MIN_BLANK_ROWS = 15
-const ROWS_PER_CONTINUATION_PAGE = 18
+const ROWS_PER_CONTINUATION_PAGE = 25
 
 function equipmentRows(rows: Cmpf306EquipmentRow[], startIndex: number): string {
   const out: string[] = []
@@ -83,7 +82,7 @@ function firstPageDeclarations(data: Cmpf306Data, inspectionDate: string): strin
       <div class="c306-panel-signature"><div class="c306-sign-title">Sig. of Firm’s Representative :-</div>${stamp}
         <div><span>Name</span><span>:-</span><strong>${esc(firmName)}</strong></div>
         <div><span>Designation</span><span>:-</span><strong>${esc(firmDesignation)}</strong></div>
-        <div><span>Date of Inspection</span><span>:-</span><strong>${esc(inspectionDate)}</strong></div>
+        <div><span>Date</span><span>:-</span><strong>${esc(inspectionDate)}</strong></div>
       </div>
     </section>
     <section class="c306-declaration">
@@ -92,7 +91,7 @@ function firstPageDeclarations(data: Cmpf306Data, inspectionDate: string): strin
         <div class="c306-stamp"></div>
         <div><span>Name</span><span>:-</span><strong>${esc(officerName)}</strong></div>
         <div><span>Designation</span><span>:-</span><strong>${esc(officerDesignation)}</strong></div>
-        <div><span>Date of Inspection</span><span>:-</span><strong>${esc(inspectionDate)}</strong></div>
+        <div><span>Date</span><span>:-</span><strong>${esc(inspectionDate)}</strong></div>
       </div>
     </section>
   </div>
@@ -115,11 +114,12 @@ function firstPage(data: Cmpf306Data, dateApp: string, dateInsp: string): string
   </div>`
 }
 
-function continuationPage(data: Cmpf306Data, rows: Cmpf306EquipmentRow[], startIndex: number, dateInsp: string): string {
-  const visibleRows = [...rows]
-  while (visibleRows.length < Math.max(MIN_BLANK_ROWS, rows.length)) {
-    visibleRows.push({ equipmentName: '', make: '', leastCount: '', range: '', calibrationStatus: '', clauseNo: '', quantity: '' })
-  }
+function continuationPage(
+  data: Cmpf306Data,
+  rows: Cmpf306EquipmentRow[],
+  startIndex: number,
+  dateInsp: string,
+): string {
   const signature = data.signatureImageUrl?.trim()
   const signArea = signature
     ? `<img class="c306-cont-sign-image" src="${esc(signature)}" alt="Authorized signatory stamp and signature" />`
@@ -131,14 +131,12 @@ function continuationPage(data: Cmpf306Data, rows: Cmpf306EquipmentRow[], startI
       <div class="pd-to-block">${toBlockHtml(data.bisBranchName, data.bisBranchState)}</div>
       <div class="pd-date-block"><div>Date of Inspection: <strong>${esc(dateInsp)}</strong></div><div>Application No.: <strong>${esc(applicationNoDisplay(data.applicationNumber))}</strong></div></div>
     </div>
-    ${equipmentTable(equipmentRows(visibleRows, startIndex))}
+    ${equipmentTable(equipmentRows(rows, startIndex))}
     <div class="c306-cont-signature">
       <div>For <strong>${esc(data.applicantName || 'Applicant Firm')}</strong></div>
       ${signArea}
       <div class="c306-cont-sign-line"></div>
       <div><strong>${esc(data.firmRepName || data.contactPerson || '—')}</strong>${designation ? ` (${esc(designation)})` : ''}</div>
-      <div>Firm Representative Seal &amp; Signature</div>
-      <div>Date of Inspection: ${esc(dateInsp)}</div>
     </div>
   </div>`
 }
@@ -147,11 +145,16 @@ function buildBody(data: Cmpf306Data): string {
   const dateApp = dateOrNa(data.dateOfApplication)
   const dateInsp = inspectionDateOrToday(data.dateOfInspection)
   const rows = data.rows.filter((row) => Object.values(row).some((value) => value.trim()))
-  const pages = Math.max(1, Math.ceil(rows.length / ROWS_PER_CONTINUATION_PAGE))
+  const pages = Math.ceil(rows.length / ROWS_PER_CONTINUATION_PAGE)
   const parts = [firstPage(data, dateApp, dateInsp)]
   for (let index = 0; index < pages; index += 1) {
     const startIndex = index * ROWS_PER_CONTINUATION_PAGE
-    parts.push(continuationPage(data, rows.slice(startIndex, startIndex + ROWS_PER_CONTINUATION_PAGE), startIndex, dateInsp))
+    parts.push(continuationPage(
+      data,
+      rows.slice(startIndex, startIndex + ROWS_PER_CONTINUATION_PAGE),
+      startIndex,
+      dateInsp,
+    ))
   }
   return parts.join('')
 }
@@ -176,11 +179,12 @@ const CMPF306_STYLES = `${CMPF_FORM_STYLES}
   .c306-footnote { margin: 2mm 0 0; font-size: 9.5pt !important; font-weight: 700; line-height: 1.4 !important; text-align: justify; }
   .c306-continuation .pd-letterhead { margin-bottom: 7px; padding-bottom: 5px; }
   .c306-continuation .pd-firm { font-size: 17px; }
+  .c306-continuation .c306-table { margin-bottom: 1mm; }
   .c306-continuation .c306-table td { height: 6mm; }
-  .c306-cont-signature { width: 72mm; margin: 2mm 0 0 auto; text-align: center; font-size: 9.5pt !important; line-height: 1.35 !important; break-inside: avoid; page-break-inside: avoid; }
-  .c306-cont-sign-image { display: block; margin: 0 5mm 1mm auto; }
-  .c306-cont-sign-gap { height: 12mm; }
-  .c306-cont-sign-line { border-top: 1px solid #111; margin: 0 5mm 2px; }
+  .c306-cont-signature { width: 78mm; max-width: 78mm; margin: 1mm 0 0 auto; text-align: right; font-size: 8pt !important; line-height: 1.2 !important; break-inside: avoid; page-break-inside: avoid; }
+  .c306-cont-sign-image { display: block; max-width: 40mm; max-height: 16mm; object-fit: contain; margin: 0 0 1mm auto; }
+  .c306-cont-sign-gap { height: 8mm; }
+  .c306-cont-sign-line { width: 50mm; border-top: 1px solid #111; margin: 0 0 2px auto; }
 `
 
 export function buildCmpf306Html(data: Cmpf306Data): string {

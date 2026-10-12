@@ -80,6 +80,9 @@ function sigBlock(
   const titleHtml = titleAboveOrg
     ? `<div class="ftr-sig-label">${esc(title)}</div>`
     : `<div class="ftr-sig-title">${esc(title)}</div>`
+  const roleHtml = titleAboveOrg
+    ? `<div class="ftr-sig-label">${esc(designation.trim() || title)}</div>`
+    : designation.trim() ? `<div>${esc(designation)}</div>` : ''
   const alignClass =
     align === 'left' ? ' ftr-sig-left' : align === 'right' ? ' ftr-sig-right' : ''
   return `
@@ -87,8 +90,7 @@ function sigBlock(
   ${titleAboveOrg ? '' : titleHtml}
   <div class="ftr-sig-space">${img}</div>
   <div>${esc(name.trim() || '—')}</div>
-  ${designation.trim() ? `<div>${esc(designation)}</div>` : ''}
-  ${titleAboveOrg ? titleHtml : ''}
+  ${roleHtml}
   <div>${esc(org)}</div>
 </div>`
 }

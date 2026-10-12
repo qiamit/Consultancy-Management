@@ -26,13 +26,13 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { downloadPdfViaPlaywright } from '@/lib/playwrightPdfClient'
+import { downloadPdfViaPlaywright, triggerPdfDownload } from '@/lib/playwrightPdfClient'
+import { DEFAULT_BIS_DOCUMENT_PRINT_PAGE_SETTINGS } from '../print/bisDocumentPrintPageSettings'
 import {
   limsDarkBarBtnClass,
   limsDarkBarFieldClass,
   limsDarkBarGlowStyle,
   limsDarkBarSearchClass,
-  limsOutlineBtnClass,
   limsPageShellClass,
   limsPanelClass,
 } from '@/lib/limsThemeUi'
@@ -48,6 +48,8 @@ import {
   type BisPrintDocumentKind,
 } from '../print/printBisDocument'
 import { BisDocumentPrintPreviewDialog } from './BisDocumentPrintPreviewDialog'
+import { buildApplicationDetailsPackPdf } from './buildApplicationDetailsPackPdf'
+import { loadBisProjectPrintPageSettings } from './bisPrintPageSettingsApi'
 import { BisModuleImportDialog } from './BisModuleImportDialog'
 import { isImportableBisModuleKind } from './bisModuleImportApi'
 import { LegalDocumentsModuleDialog } from './LegalDocumentsModuleDialog'
@@ -369,7 +371,7 @@ export function BisLicenseDocumentsDialog({
     activeModuleKind === 'process-description'
         ? 'Process Flow Chart & Description'
       : activeModuleKind === 'location-map'
-        ? 'Legal Documents & Location Map'
+        ? 'Location Map'
       : activeModuleKind
         ? BIS_PRINT_DOCUMENT_LABEL[activeModuleKind]
         : 'Documents'
@@ -465,6 +467,31 @@ export function BisLicenseDocumentsDialog({
     if (!row) return
     const label = BIS_PRINT_DOCUMENT_LABEL[kind]
     const base = safeFileBase(label, cmL)
+    if (kind === 'application-details' && format === 'pdf') {
+      setDownloadBusy(true)
+      try {
+        const [html, settings] = await Promise.all([
+          buildBisDocumentHtml(row, kind),
+          loadBisProjectPrintPageSettings(row.id).catch(
+            () => DEFAULT_BIS_DOCUMENT_PRINT_PAGE_SETTINGS,
+          ),
+        ])
+        const pdf = await buildApplicationDetailsPackPdf(
+          html,
+          row.id,
+          row.client_id,
+          settings,
+          `${base}.pdf`,
+        )
+        triggerPdfDownload(pdf, `${base}.pdf`)
+        toast.success(`PDF downloaded: ${label}`)
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'PDF download failed')
+      } finally {
+        setDownloadBusy(false)
+      }
+      return
+    }
     if (format === 'pdf' && (isMergePdfModuleKind(kind) || isHybridFileViewKind(kind))) {
       const error = await runMergedModulePdf(kind, 'download')
       if (error && /no attached files/i.test(error) && !isMergePdfModuleKind(kind)) {
@@ -757,84 +784,76 @@ export function BisLicenseDocumentsDialog({
             </div>
           </div>
 
-          {/* Footer — Client Master style */}
+          {/* Footer */}
           <div className={cn(limsPanelClass, 'shrink-0')}>
-            <div className="relative overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-2 py-1.5 text-white sm:px-3 sm:py-2 md:px-4">
+            <div className="relative overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-3 py-2 text-white sm:px-4">
               <div
                 className="pointer-events-none absolute inset-0 opacity-[0.18]"
                 style={limsDarkBarGlowStyle}
               />
               <div className="absolute top-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
-              <div className="relative flex min-w-0 flex-nowrap items-center gap-1 overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch] sm:gap-1.5 md:gap-2.5">
-                <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className={cn(limsOutlineBtnClass, 'h-8 border-stone-400 bg-stone-50')}
-                    onClick={() => onOpenChange(false)}
-                  >
-                    Close
-                  </Button>
-                  <span className="shrink-0 whitespace-nowrap text-[10px] text-stone-300 sm:text-xs">
-                    Total: {filteredKinds.length.toLocaleString('en-IN')}
-                    {selectedKinds.size > 0 ? ` · Selected: ${selectedKinds.size}` : ''}
+              <div className="relative flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                  <span className="whitespace-nowrap text-xs font-medium text-stone-200">
+                    {filteredKinds.length.toLocaleString('en-IN')} documents
+                    {selectedKinds.size > 0 ? ` · ${selectedKinds.size} selected` : ''}
                   </span>
                   {downloadBusy || busy ? (
-                    <span className="truncate text-[10px] text-amber-200 sm:text-xs">
+                    <span className="text-xs text-amber-200">
                       {downloadBusy ? 'Preparing download…' : 'Preparing document…'}
                     </span>
                   ) : null}
                 </div>
 
-                <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5">
-                  <Input
-                    aria-label="Jump to page"
-                    placeholder="Page"
-                    value={jumpTo}
-                    onChange={(e) => setJumpTo(e.target.value.replace(/[^0-9]/g, ''))}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleJumpToGo()
-                    }}
-                    className={cn(limsDarkBarFieldClass, 'h-8 w-12 shrink-0 text-xs sm:w-14')}
-                    inputMode="numeric"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className={cn(limsDarkBarBtnClass, 'hidden h-8 shrink-0 px-2.5 text-xs sm:inline-flex')}
-                    onClick={handleJumpToGo}
-                  >
-                    Jump
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    className={cn(limsDarkBarBtnClass, 'h-8 w-8 shrink-0')}
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={safePage <= 1}
-                  >
-                    <ChevronLeft size={16} />
-                    <span className="sr-only">Previous page</span>
-                  </Button>
-                  <span className="shrink-0 whitespace-nowrap text-center text-xs font-medium text-stone-300 sm:min-w-[5rem]">
-                    <span className="hidden sm:inline">Page </span>
-                    {safePage}/{pageCount}
-                  </span>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    className={cn(limsDarkBarBtnClass, 'h-8 w-8 shrink-0')}
-                    onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
-                    disabled={safePage >= pageCount}
-                  >
-                    <ChevronRight size={16} />
-                    <span className="sr-only">Next page</span>
-                  </Button>
-                </div>
+                {pageCount > 1 ? (
+                  <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
+                    <span className="mr-1 whitespace-nowrap text-xs font-medium text-stone-300">
+                      Page {safePage} of {pageCount}
+                    </span>
+                    <Input
+                      aria-label="Jump to page"
+                      placeholder="Page"
+                      value={jumpTo}
+                      onChange={(e) => setJumpTo(e.target.value.replace(/[^0-9]/g, ''))}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleJumpToGo()
+                      }}
+                      className={cn(limsDarkBarFieldClass, 'h-8 w-14 text-xs')}
+                      inputMode="numeric"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className={cn(limsDarkBarBtnClass, 'h-8 px-2.5 text-xs')}
+                      onClick={handleJumpToGo}
+                    >
+                      Go
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      aria-label="Previous page"
+                      className={cn(limsDarkBarBtnClass, 'h-8 w-8')}
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={safePage <= 1}
+                    >
+                      <ChevronLeft size={16} />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      aria-label="Next page"
+                      className={cn(limsDarkBarBtnClass, 'h-8 w-8')}
+                      onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+                      disabled={safePage >= pageCount}
+                    >
+                      <ChevronRight size={16} />
+                    </Button>
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>

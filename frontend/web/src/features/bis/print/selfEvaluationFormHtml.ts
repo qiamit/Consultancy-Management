@@ -4,7 +4,6 @@ import { escapeHtml as esc } from './openPrintHtml'
 import {
   applicantContextFromPrintData,
   applicationNoDisplay,
-  blankTableRows,
   buildPrintPage,
   inspectionDateOrToday,
   letterheadHtml,
@@ -13,6 +12,9 @@ import {
   toBlockHtml,
   type PrintApplicantContext,
 } from './printDocumentShared'
+import { parseRawMaterialReferencePayload } from '../projects/rawMaterialReferenceModel'
+import { cmpf307RowHasContent, parseCmpf307Payload } from '../projects/cmpf307Model'
+import { formatDisplayDate } from '../projects/types'
 
 export type SefPackagingRow = { label: string; value: string }
 
@@ -20,6 +22,9 @@ export type SelfEvaluationFormData = PrintApplicantContext & {
   plantLayout: string
   packagingMarkingRows: SefPackagingRow[]
   brandsWithoutMarkReasons: string
+  rawMaterials: Array<{ rawMaterial: string; supplierName: string; bisCertificationMark: string; testCertificate: string; batchesPackaging: string }>
+  qualityControlStaff: Array<{ personName: string; designation: string; qualification: string; experience: string }>
+  brandRows: Array<{ brandName: string; ownedBy: string; registeredStatus: string; registrationDate: string }>
   signatoryName: string
   signatoryDesignation: string
 }
@@ -46,8 +51,7 @@ export function defaultPackagingMarkingRows(markingClause = ''): SefPackagingRow
     { label: 'Batch OR Code Number for Identification', value: 'Batch Number Will be Provided After GOL' },
     {
       label: 'In What Manner Marking Differs from the Provisions in the IS Specification',
-      value:
-        'Immediate Stop Marking & Take Corrective Action Intend to Follow All the Specific Requirements as per',
+      value: 'Immediate Stop Marking & Take Corrective Action',
     },
   ]
 }
@@ -65,13 +69,10 @@ function packagingTableHtml(rows: SefPackagingRow[]): string {
   return `<table class="pd-table sef-pack">${body}</table>`
 }
 
-function blankStaffTable(minRows: number, headers: string[]): string {
-  const head = headers.map((h) => `<th>${esc(h)}</th>`).join('')
-  return `
-<table class="pd-table sef-blank">
-  <thead><tr>${head}</tr></thead>
-  <tbody>${blankTableRows(minRows, headers.length, { leftColumn: 1 })}</tbody>
-</table>`
+function dataTable(headers: string[], rows: string[][], widths: string[] = []): string {
+  const head = headers.map((header, i) => `<th${widths[i] ? ` style="width:${widths[i]}"` : ''}>${i === 0 ? 'Sr.<br/>No.' : esc(header)}</th>`).join('')
+  const body = rows.map((row, rowIndex) => `<tr><td>${rowIndex + 1}</td>${row.map((cell, cellIndex) => `<td${cellIndex === 0 ? ' class="pd-left"' : ''}>${esc(cell) || '&nbsp;'}</td>`).join('')}</tr>`).join('')
+  return `<table class="pd-table sef-blank"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`
 }
 
 function buildBody(data: SelfEvaluationFormData): string {
@@ -97,29 +98,28 @@ function buildBody(data: SelfEvaluationFormData): string {
   </div>
 
   <p class="sef-section"><strong>1. General Information</strong></p>
-  <p class="sef-line"><strong>a.</strong> Applicant Name :- ${esc(data.applicantName) || '________________'}</p>
+  <p class="sef-line"><strong>a.</strong> Applicant Name :- ${esc(data.applicantName) || '________________'}${data.applicantAddress ? `, ${esc(data.applicantAddress)}` : ''}</p>
   <p class="sef-line"><strong>b.</strong> Plant Layout :- ${esc(data.plantLayout.trim() || 'Enclosed')}</p>
 
   <p class="sef-section"><strong>2. Raw Material Details</strong></p>
-  ${blankStaffTable(4, ['Sr. No', 'Raw Material', 'Name of Supplier', 'BIS Mark', 'Test Certificate', 'Batches / Packaging'])}
+  ${dataTable(['', 'Raw Material', 'Name of Supplier', 'BIS Mark', 'Test Certificate', 'Batches / Packaging'], data.rawMaterials.filter((row) => row.rawMaterial.trim() && row.supplierName.trim()).map((row) => [row.rawMaterial, row.supplierName, row.bisCertificationMark, row.testCertificate, row.batchesPackaging]), ['6%', '22%', '27%', '14%', '15%', '16%'])}
 
   <p class="sef-section"><strong>3. Packaging &amp; Marking</strong></p>
   ${packagingTableHtml(packaging)}
 
   <div class="cmpf-sign-right">${signatoryHtml({ firmName: data.applicantName, name: sigName, designation: data.signatoryDesignation })}</div>
-  <div class="sef-page">Page 01 of 02</div>
 </div>`
 
   const page2 = `
-<div class="pd-sheet">
+<div class="pd-sheet sef-page-two">
   ${letterheadHtml(data)}
   <p class="sef-section"><strong>4. Details of Quality Control Staff</strong></p>
-  ${blankStaffTable(4, ['Sr. No', 'Name of the Person', 'Designation', 'Qualification', 'Experience'])}
+  ${dataTable(['', 'Name of the Person', 'Designation', 'Qualification', 'Experience'], data.qualityControlStaff.filter((row) => [row.personName, row.designation, row.qualification, row.experience].some((value) => value.trim())).map((row) => [row.personName, row.designation, row.qualification, row.experience]), ['6%', '24%', '24%', '24%', '22%'])}
 
   <p class="sef-section"><strong>5. Brand Name</strong></p>
   <p class="sef-sub"><strong>Declaration of Brand Name / Trade – Mark Proposed to be Covered Under Certification</strong></p>
   <p class="sef-sub"><strong>A. Brand Name / Trade – Mark(s) Being Used</strong></p>
-  ${blankStaffTable(3, ['Sr. No.', 'Brand Names / Trade – Mark(s)', 'Owned By', 'Registered / Unregistered', 'Date of Registration'])}
+  ${dataTable(['', 'Brand Names / Trade – Mark(s)', 'Owned By', 'Registered / Unregistered', 'Date of Registration'], data.brandRows.filter((row) => row.brandName.trim()).map((row) => [row.brandName, row.ownedBy, row.registeredStatus, formatDisplayDate(row.registrationDate)]), ['6%', '32%', '13%', '27%', '22%'])}
 
   <div class="sef-points">
     ${SEF_BRAND_DECLARATION_POINTS.map(
@@ -133,7 +133,6 @@ function buildBody(data: SelfEvaluationFormData): string {
 
   <div class="cmpf-sign-right">${signatoryHtml({ firmName: data.applicantName, name: sigName, designation: data.signatoryDesignation })}</div>
   ${preparedByHtml(data.preparedBy)}
-  <div class="sef-page">Page 02 of 02</div>
 </div>`
 
   return `${page1}${page2}`
@@ -144,8 +143,10 @@ const STYLES = `
   .sef-line, .sef-sub { margin: 3px 0; font-size: 11px; }
   .sef-lbl { font-weight: 700; background: #f8fafc; width: 42%; text-align: left; }
   .sef-pack td, .sef-blank td { height: 7mm; font-size: 9.5px; }
+  .sef-blank { table-layout: fixed; }
+  .sef-blank th:first-child, .sef-blank td:first-child { width: 6%; }
   .sef-points p { margin: 4px 0; font-size: 10px; line-height: 1.45; text-align: justify; }
-  .sef-page { margin-top: 10px; font-size: 10px; font-weight: 600; text-align: right; }
+  .sef-page-two { margin-top: 2em !important; break-before: page; page-break-before: always; }
   .cmpf-sign-right { margin-top: 14px; text-align: right; }
   .cmpf-sign-right .pd-signatory { text-align: left; }
 `
@@ -161,11 +162,30 @@ export function buildSelfEvaluationFormHtml(data: SelfEvaluationFormData): strin
 /** Maps a BIS project row + client + consultancy context into Self Evaluation Form fields. */
 export function selfEvaluationFormDataFromPrintData(printData: BisPrintData): SelfEvaluationFormData {
   const ctx = applicantContextFromPrintData(printData)
+  const basePayload = printData.modulePayload ?? {}
+  const source = basePayload.__sefSources && typeof basePayload.__sefSources === 'object'
+    ? basePayload.__sefSources as Record<string, unknown>
+    : {}
+  const payload = source.selfEvaluation && typeof source.selfEvaluation === 'object'
+    ? source.selfEvaluation as Record<string, unknown>
+    : basePayload
+  const rows = (value: unknown) => Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object') : []
+  const rawRows = parseRawMaterialReferencePayload({ rawMaterials: source.rawMaterials } as Record<string, unknown>).rawMaterials
+    .filter((row) => row.rawMaterial.trim() && row.supplierName.trim())
+  const staffRows = rows(source.technicalStaff)
+  const brandPayload = parseCmpf307Payload({ rows: source.brands, brandsWithoutMarkReasons: source.brandsWithoutMarkReasons })
+  const brandRows = brandPayload.rows.filter(cmpf307RowHasContent)
+  const packageRows = Array.isArray(payload.packagingMarkingRows)
+    ? payload.packagingMarkingRows.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object').map((item) => ({ label: String(item.label ?? ''), value: String(item.value ?? '') }))
+    : defaultPackagingMarkingRows()
   return {
     ...ctx,
-    plantLayout: 'Enclosed',
-    packagingMarkingRows: defaultPackagingMarkingRows(),
-    brandsWithoutMarkReasons: '',
+    plantLayout: String(payload.plantLayout ?? 'Enclosed'),
+    packagingMarkingRows: packageRows,
+    brandsWithoutMarkReasons: brandPayload.brandsWithoutMarkReasons,
+    rawMaterials: rawRows.map((row) => ({ rawMaterial: String(row.rawMaterial ?? ''), supplierName: String(row.supplierName ?? ''), bisCertificationMark: String(row.bisCertificationMark ?? ''), testCertificate: String(row.testCertificate ?? ''), batchesPackaging: String(row.batchesPackaging ?? '') })),
+    qualityControlStaff: staffRows.map((row) => ({ personName: String(row.personName ?? ''), designation: String(row.designation ?? ''), qualification: String(row.educationalQualification ?? ''), experience: String(row.experienceYears ?? '') })),
+    brandRows: brandRows.map((row) => ({ brandName: String(row.brandName ?? ''), ownedBy: String(row.ownedBy ?? 'Self'), registeredStatus: String(row.registeredStatus ?? 'Unregistered'), registrationDate: String(row.registrationDate ?? '') })),
     signatoryName: printSignatoryDefaults(printData).signatoryName,
     signatoryDesignation: printSignatoryDefaults(printData).signatoryDesignation,
   }
