@@ -18,6 +18,13 @@ const CMPF311_REQUIRED_ANNEXURE_TITLES = [
   'Disposable',
 ] as const
 
+const CMPF311_REQUIRED_NOTES: Cmpf311Note[] = [
+  { title: 'Note 1', description: 'In the Test Equipment column, R means Required and S means Subcontracted.' },
+  { title: 'Note 2', description: 'All subcontracted testing shall be done with the selected laboratory, using its name and address, at the decided frequency.' },
+  { title: 'Note 3', description: 'Whether test equipment is required or sub-contracting is permitted in column 2 shall be decided by the Bureau and shall be mandatory. Sub-contracting is permitted to a laboratory recognized by the Bureau or Government laboratories empaneled by the Bureau.' },
+  { title: 'Note 4', description: 'Levels of control given in column 3 are only recommendatory in nature. The manufacturer may define the control unit/batch/lot and submit his own levels of control in column 3 with proper justification for approval to BO head.' },
+]
+
 export type Cmpf311TestRow = {
   clause: string
   requirement: string
@@ -435,6 +442,10 @@ export async function generateCmpf311Section(input: {
   productTitle: string
   manualText: string
 }): Promise<Pick<Cmpf311ModulePayload, 'annexureSections' | 'testRows' | 'notes'>> {
+  // These four Notes are fixed CMPF-311 guidance, so they must not vary with
+  // model output or with which Product Manual PDF is selected.
+  if (input.target === 'notes') return { annexureSections: [], testRows: [], notes: CMPF311_REQUIRED_NOTES.map((note) => ({ ...note })) }
+
   const outputShape = input.target === 'annexure-c'
     ? '{"sections":[{"title":"Laboratory","clause":"...","content":"..."},{"title":"Calibration","clause":"...","content":"..."}]}'
     : input.target === 'test-table'
@@ -461,7 +472,7 @@ export async function generateCmpf311Section(input: {
       'Review all supplied pages, page headings, definitions, cross-references, footnotes, notes, and relevant tables. Preserve source clause IDs, terminology, units, ranges, conditions, exceptions, sample counts, frequencies, and associations between cells. If a value is absent or unreadable, leave that JSON field as an empty string and record the uncertainty in remarks/description rather than inventing it.',
       `Annexure C: Always return one item for each of these minimum titles, in this exact order: ${CMPF311_REQUIRED_ANNEXURE_TITLES.join(', ')}. Search the entire manual, including clauses outside a heading named Annexure C, for the source clause(s) relevant to each title. Keep each title exactly as listed. Put the exact source clause number/reference in the separate clause field and the complete source-backed definition or requirement in content. Do not guess or invent clause numbers or requirements. If a listed title has no matching source clause, still include that required title and state in content: "No matching requirement was found in the supplied Product Manual." Also include any additional distinct, relevant source-backed Annexure C requirements after the minimum titles.`,
       'SIT test table: inspect each relevant Scheme of Inspection and Testing table, including continuation pages. Make one JSON row per actual source test row, never one row per table or a summary. Map the source clause, requirement, test method, method clause/reference, equipment requirement (preserve R or S exactly), number of samples, frequency/control level, and remarks/footnotes to the matching fields. Keep merged headings and repeated table headers in their original context. Do not move footnotes into unrelated rows.',
-      'Notes: extract each distinct note, footnote, condition, or process instruction that governs subcontracted laboratories or the Own SIT process. Give each a short identifying title and a complete description. If none is stated, return one explicit note saying that no such notes are specified in the supplied Product Manual.',
+      'Notes: return exactly four notes, titled Note 1, Note 2, Note 3, and Note 4, using these exact descriptions and no additional notes: Note 1: In the Test Equipment column, R means Required and S means Subcontracted. Note 2: All subcontracted testing shall be done with the selected laboratory, using its name and address, at the decided frequency. Note 3: Whether test equipment is required or sub-contracting is permitted in column 2 shall be decided by the Bureau and shall be mandatory. Sub-contracting is permitted to a laboratory recognized by the Bureau or Government laboratories empaneled by the Bureau. Note 4: Levels of control given in column 3 are only recommendatory in nature. The manufacturer may define the control unit/batch/lot and submit his own levels of control in column 3 with proper justification for approval to BO head. Do not replace these fixed Notes with extracted notes from the Product Manual.',
       'Before responding, check that every relevant source entry is represented once, that the JSON parses, that property names match the requested schema exactly, and that no unsupported fact was added.',
       'BEGIN UNTRUSTED PRODUCT MANUAL TEXT',
       input.manualText,
