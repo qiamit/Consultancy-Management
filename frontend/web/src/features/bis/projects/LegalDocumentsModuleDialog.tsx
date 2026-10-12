@@ -1854,6 +1854,12 @@ export function LegalDocumentsModuleDialog({
               onChange={setCmpf307}
               disabled={busy || saving}
               applicantName={row ? clientDisplayName(row) : ''}
+              applicantAddress={[
+                row?.client?.address,
+                row?.client?.district,
+                row?.client?.state,
+                row?.client?.pin_code,
+              ].map((part) => (part ?? '').trim()).filter(Boolean).join(', ')}
               applicationNumber={
                 row?.license_number?.trim() && !['N/A', '—'].includes(row.license_number.trim().toUpperCase())
                   ? row.license_number.trim()
