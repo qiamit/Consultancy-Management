@@ -382,6 +382,27 @@ function parseTargetReply(reply: string, target: Cmpf311GenerateTarget, targetLa
   }
 }
 
+async function sendCmpf311AssistantMessage(input: Parameters<typeof sendQiAssistantMessage>[0]) {
+  let lastError: unknown
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await sendQiAssistantMessage(input)
+    } catch (error) {
+      lastError = error
+      const message = error instanceof Error ? error.message : String(error ?? '')
+      const isNetworkFailure = error instanceof TypeError || /failed to fetch|network.?error|load failed/i.test(message)
+      if (!isNetworkFailure || attempt === 2) {
+        if (isNetworkFailure) {
+          throw new Error(`Could not reach the AI service for CMPF-311 after 3 attempts. Check the connection and AI service status, then retry. (${message || 'Network request failed'})`)
+        }
+        throw error
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 800 * (attempt + 1)))
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error('Could not reach the AI service for CMPF-311.')
+}
+
 export async function generateCmpf311Section(input: {
   target: Cmpf311GenerateTarget
   productManualNumber: string
@@ -405,7 +426,7 @@ export async function generateCmpf311Section(input: {
     `Product Manual number: ${input.productManualNumber || 'not specified'}`,
     'Task: extract structured Own SIT content for CMPF-311 from the attached source text in the user message.',
   ].join('\n\n')
-  const { reply } = await sendQiAssistantMessage({
+  const { reply } = await sendCmpf311AssistantMessage({
     page: 'bis/cmpf-311-on-sit',
     responseFormat: 'json_object',
     message: [
@@ -431,7 +452,7 @@ export async function generateCmpf311Section(input: {
   } catch {
     // Some OpenAI-compatible models ignore JSON mode and return a prose/table answer.
     // Give that same model one chance to normalize its answer before failing the section.
-    const correction = await sendQiAssistantMessage({
+    const correction = await sendCmpf311AssistantMessage({
       page: 'bis/cmpf-311-on-sit',
       responseFormat: 'json_object',
       message: [
@@ -503,7 +524,7 @@ export async function generateCmpf311Section(input: {
       ? candidate.testRows.some((row) => Object.entries(row).some(([key, value]) => key !== 'clause' && value.trim().length > 0))
       : candidate.notes.some((note) => note.description.trim().length > 0)
   if (!hasTargetContent(result)) {
-    const retry = await sendQiAssistantMessage({
+    const retry = await sendCmpf311AssistantMessage({
       page: 'bis/cmpf-311-on-sit',
       responseFormat: 'json_object',
       message: [
