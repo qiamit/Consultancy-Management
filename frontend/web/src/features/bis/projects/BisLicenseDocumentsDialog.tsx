@@ -294,7 +294,7 @@ export function BisLicenseDocumentsDialog({
   const filteredKinds = useMemo(() => {
     const q = search.trim().toLowerCase()
     const kinds = ALL_BIS_PRINT_KINDS.filter(
-      (kind) => kind !== 'legal-documents' && kind !== 'location-map',
+      (kind) => kind !== 'legal-documents' && kind !== 'location-map' && kind !== 'updated-sit',
     )
     if (!q) return kinds
     return kinds.filter((kind) =>
