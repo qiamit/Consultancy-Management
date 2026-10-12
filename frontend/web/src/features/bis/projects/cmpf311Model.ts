@@ -217,7 +217,7 @@ export async function extractProductManualText(file: File): Promise<string> {
           if (index === 0) return item.text
           const previous = ordered[index - 1]!
           const gap = item.x - (previous.x + previous.width)
-          return `${line}${gap > 20 ? ' | ' : ' '}${item.text}`
+          return `${line}${gap > 8 ? ' | ' : ' '}${item.text}`
         }, '')
       })
       .filter(Boolean)
