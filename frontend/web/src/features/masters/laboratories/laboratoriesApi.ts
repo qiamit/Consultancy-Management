@@ -49,6 +49,25 @@ export const LAB_TYPES = ['BIS', 'OSL', 'Other'] as const
 
 export type LabType = (typeof LAB_TYPES)[number]
 
+/** Search active entries in Laboratory Master for project laboratory selectors. */
+export async function searchLaboratoryMasterOptions(
+  rawTerm: string,
+): Promise<{ id: string; label: string }[]> {
+  const term = rawTerm.replace(/[,()"\\*%_]/g, ' ').replace(/\s+/g, ' ').trim()
+  let query = supabase
+    .from('laboratories')
+    .select('id, name')
+    .is('archived_at', null)
+    .order('name', { ascending: true })
+  if (term) query = query.ilike('name', `%${term}%`)
+  const { data, error } = await query.limit(30)
+  if (error) throw error
+  return (data ?? []).map((row) => {
+    const lab = row as { id: string; name: string | null }
+    return { id: String(lab.id), label: (lab.name ?? '').trim() || 'Unnamed Laboratory' }
+  })
+}
+
 export function normalizeLabType(value: string): LabType {
   const key = value.trim().toLowerCase()
   if (key === 'bis' || key === 'bis lab') return 'BIS'

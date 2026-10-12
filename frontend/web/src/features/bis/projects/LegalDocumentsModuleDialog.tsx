@@ -92,6 +92,8 @@ import {
   parseCmpf306Payload,
   type Cmpf306ModulePayload,
 } from './cmpf306Model'
+import { Cmpf311ModuleFields } from './Cmpf311ModuleFields'
+import { emptyCmpf311Payload, parseCmpf311Payload, type Cmpf311ModulePayload } from './cmpf311Model'
 import { ProcessFlowModuleFields } from './ProcessFlowModuleFields'
 import {
   emptyProcessFlowPayload,
@@ -244,6 +246,7 @@ export function LegalDocumentsModuleDialog({
   const showPlantLayoutFields = printKind === 'plant-layout'
   const showCmpf305Fields = printKind === 'cmpf-305'
   const showCmpf306Fields = printKind === 'cmpf-306'
+  const showCmpf311Fields = printKind === 'cmpf-311'
   /** Merged Process Flow Chart + Process Description (shared payload). */
   const showProcessFlowFields =
     printKind === 'process-flow-chart' || printKind === 'process-description'
@@ -261,7 +264,8 @@ export function LegalDocumentsModuleDialog({
     showPlantLayoutFields ||
     showProcessFlowFields ||
     showCmpf305Fields ||
-    showCmpf306Fields
+    showCmpf306Fields ||
+    showCmpf311Fields
   const showFileTable =
     !showApplicationFields &&
     !showTopManagementFields &&
@@ -273,6 +277,7 @@ export function LegalDocumentsModuleDialog({
     !showPlantLayoutFields &&
     !showCmpf305Fields &&
     !showCmpf306Fields &&
+    !showCmpf311Fields &&
     !showProcessFlowFields
 
   const [files, setFiles] = useState<BisProjectViewFile[]>([])
@@ -318,6 +323,7 @@ export function LegalDocumentsModuleDialog({
   )
   const [cmpf305, setCmpf305] = useState<Cmpf305ModulePayload>(() => emptyCmpf305Payload())
   const [cmpf306, setCmpf306] = useState<Cmpf306ModulePayload>(() => emptyCmpf306Payload())
+  const [cmpf311, setCmpf311] = useState<Cmpf311ModulePayload>(() => emptyCmpf311Payload())
   const [processFlow, setProcessFlow] = useState<ProcessFlowModulePayload>(() =>
     emptyProcessFlowPayload(),
   )
@@ -423,6 +429,7 @@ export function LegalDocumentsModuleDialog({
       setPlantLayout(emptyPlantLayoutPayload())
       setCmpf305(emptyCmpf305Payload())
       setCmpf306(emptyCmpf306Payload())
+      setCmpf311(emptyCmpf311Payload())
       setProcessFlow(emptyProcessFlowPayload())
       setLicenseScopeNotes('')
       return
@@ -500,6 +507,7 @@ export function LegalDocumentsModuleDialog({
       showPlantLayoutFields ||
       showCmpf305Fields ||
       showCmpf306Fields ||
+      showCmpf311Fields ||
       showProcessFlowFields
     ) {
       setFiles([])
@@ -642,6 +650,9 @@ export function LegalDocumentsModuleDialog({
                   },
             )
           }
+          if (showCmpf311Fields) {
+            setCmpf311(parseCmpf311Payload(payload))
+          }
           if (showProcessFlowFields) {
             setProcessFlow(parseProcessFlowPayload(payload))
           }
@@ -658,6 +669,7 @@ export function LegalDocumentsModuleDialog({
           if (showPlantLayoutFields) setPlantLayout(emptyPlantLayoutPayload())
           if (showCmpf305Fields) setCmpf305(emptyCmpf305Payload())
           if (showCmpf306Fields) setCmpf306(emptyCmpf306Payload())
+          if (showCmpf311Fields) setCmpf311(emptyCmpf311Payload())
           if (showProcessFlowFields) setProcessFlow(emptyProcessFlowPayload())
         } finally {
           setLoading(false)
@@ -682,6 +694,7 @@ export function LegalDocumentsModuleDialog({
     showPlantLayoutFields,
     showCmpf305Fields,
     showCmpf306Fields,
+    showCmpf311Fields,
     showProcessFlowFields,
     row?.notes,
     row?.client_id,
@@ -1012,6 +1025,16 @@ export function LegalDocumentsModuleDialog({
           firmRepDesignation: cmpf306.firmRepDesignation.trim(),
           inspectionOfficerName: cmpf306.inspectionOfficerName.trim(),
           inspectionOfficerDesignation: cmpf306.inspectionOfficerDesignation.trim(),
+        })
+        onProjectSaved?.()
+        toast.success(`${title} saved.`)
+        return
+      }
+
+      if (showCmpf311Fields && printKind) {
+        await saveBisModulePayload(row.id, printKind, {
+          ...cmpf311,
+          productManualNumber: cmpf311.productManualNumber.trim(),
         })
         onProjectSaved?.()
         toast.success(`${title} saved.`)
@@ -1765,6 +1788,15 @@ export function LegalDocumentsModuleDialog({
                 />
               )}
             </div>
+          ) : showCmpf311Fields ? (
+            <Cmpf311ModuleFields
+              value={cmpf311}
+              onChange={setCmpf311}
+              disabled={busy || saving}
+              isCodeId={row?.is_code_id ?? null}
+              isNumber={row ? isCodeDisplayLabel(row) : ''}
+              productTitle={(row?.is_code?.title ?? '').trim()}
+            />
           ) : showProcessFlowFields ? (
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
               {loading ? (

@@ -134,6 +134,7 @@ export async function sendQiAssistantMessage(input: {
   page: string
   message: string
   context?: string
+  responseFormat?: 'json_object'
   /** When set, edge function loads this IS code + PDF files from DB/storage. */
   isCodeId?: string
   /** Row opened via per-row Ask AI (e.g. test parameter sparkle button). */
@@ -153,6 +154,7 @@ export async function sendQiAssistantMessage(input: {
     page: input.page,
     message: input.message,
     context: input.context,
+    responseFormat: input.responseFormat,
     isCodeId: input.isCodeId,
     activeRecordId: input.activeRecordId,
     activeRecordTable: input.activeRecordTable,

@@ -238,7 +238,7 @@ export function createQiAssistantHandler(deps) {
     const maxTokens = Number(model.max_tokens)
     const chatMaxTokens = Number.isFinite(maxTokens) ? Math.min(maxTokens, 8192) : 4096
 
-    const aiRes = await fetch(`${apiBase}/chat/completions`, {
+    const requestChatCompletion = (jsonMode) => fetch(`${apiBase}/chat/completions`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${String(model.api_key).trim()}`,
@@ -249,10 +249,24 @@ export function createQiAssistantHandler(deps) {
         messages: chatMessages,
         temperature: Number.isFinite(temperature) ? temperature : 0.7,
         max_tokens: chatMaxTokens,
+        ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
       }),
     })
 
-    const aiPayload = await aiRes.json().catch(() => ({}))
+    const requestJson = body.responseFormat === 'json_object'
+    let aiRes = await requestChatCompletion(requestJson)
+    let aiPayload = await aiRes.json().catch(() => ({}))
+    const aiError = aiRes.ok ? '' : extractAiError(aiPayload, aiRes.status)
+    if (
+      requestJson &&
+      !aiRes.ok &&
+      aiRes.status === 400 &&
+      /response[_ -]?format|json[_ -]?object|json mode|structured output/i.test(aiError)
+    ) {
+      // Some OpenAI-compatible providers do not implement response_format; retry with prompt-only formatting.
+      aiRes = await requestChatCompletion(false)
+      aiPayload = await aiRes.json().catch(() => ({}))
+    }
     if (!aiRes.ok) {
       corsJson(res, 400, { error: extractAiError(aiPayload, aiRes.status) })
       return

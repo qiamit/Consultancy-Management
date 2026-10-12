@@ -24,6 +24,7 @@ export function RemoteLookupCombobox({
   onChange,
   disabled,
   searchKey,
+  inputClassName,
 }: {
   inputId: string
   listId: string
@@ -35,6 +36,7 @@ export function RemoteLookupCombobox({
   disabled?: boolean
   /** Changing this value forces the option list to reload (e.g. parent client id). */
   searchKey?: string
+  inputClassName?: string
 }) {
   const [open, setOpen] = useState(false)
   const [options, setOptions] = useState<FilterComboboxOption[]>([])
@@ -70,7 +72,7 @@ export function RemoteLookupCombobox({
       open={open}
       onOpenChange={setOpen}
       placeholder={placeholder}
-      inputClassName="h-8"
+      inputClassName={inputClassName}
       disabled={disabled}
     />
   )
