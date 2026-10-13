@@ -1131,7 +1131,7 @@ export default function ClientsMasterPage() {
         setForm(emptyClientForm())
         hydratedEditRef.current = null
         setEdit(null)
-        await loadClients()
+        void loadClients()
       } catch (err) {
         const taken = firmNameConstraintMessage(err as { code?: string; message?: string })
         setSaveMessage(taken ?? formatSupabaseError(err))

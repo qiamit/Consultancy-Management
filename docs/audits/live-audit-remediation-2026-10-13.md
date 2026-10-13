@@ -16,7 +16,7 @@ Source: `docs/agents/reports/testing/LIVE_AUDIT_2026-10-12.md` (live browser aud
 |---|---|---|---|
 | AUD-01 | P1 | Open | Fixed the deployed PDF client to send the current bearer token, configured the PDF service to validate sessions through Railway Auth, and allowed both qengineering.in origins in CORS. Both services deployed successfully; health, CORS, and unauthenticated rejection passed. A signed-in PDF generation and download still needs authenticated browser acceptance. |
 | AUD-02 | P2 | Open | Finance Add New actions now open the form immediately while default values load, instead of waiting for the bootstrap request before showing the dialog. Build passed; the reported click sequence was not replayed in an authenticated browser. |
-| AUD-03 | P2 | Open | Client save latency was not measured or changed. The save workflow also persists related sites, contacts, and portal credentials; optimize only after timing those requests in an authenticated session. |
+| AUD-03 | P2 | Open | After a successful client save, the editor now closes immediately and the client list refreshes in the background. Build and targeted ESLint pass. End-to-end save latency still needs measurement in an authenticated session, including related sites, contacts, and portal credentials. |
 | AUD-04 | P2 | Open | Added loading states for IS Code Master and User Management; Finance list pages start in loading state. Build passed; delayed-network empty-state behavior was not replayed live. |
 | AUD-05 | P2 | Open | Client Save now explains that the company name is required or that highlighted fields need correction. Interactive validation was not replayed live. |
 | AUD-06 | P2 | Open | Excel downloads now create real `.xlsx` workbooks from document tables, with selected documents placed in separate sheets. Word output remains Word-readable HTML `.doc`; a real DOCX export matching preview layout remains open. |
@@ -42,3 +42,7 @@ Source: `docs/agents/reports/testing/LIVE_AUDIT_2026-10-12.md` (live browser aud
 - Commits are pushed to each source repository. Railway frontend and PDF-service deployments are both `SUCCESS`.
 - A redundant staged Railway patch remains for the same two PDF Auth variables. `accept-deploy` returned “Cancelled — the user did not approve this action”; it made no changes. The variables were then applied directly to production and the PDF service redeployed successfully. The remaining staged patch does not block the live deployment, but may appear as pending in Railway.
 - Open findings: 18. Pass findings: 1. Items that depend on authenticated data, real downloads, or viewport interaction stay Open until those acceptance checks are completed.
+
+### Follow-up deployment
+
+- Client save now closes the editor without waiting for the refreshed list request. Frontend build and targeted ESLint passed on 2026-10-13; this UI change is included in the follow-up production deployment.
