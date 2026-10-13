@@ -88,7 +88,7 @@ async function downloadBytes(storagePath: string): Promise<Uint8Array> {
 export async function buildMergedBisProjectFilesPdf(
   projectId: string,
   docKinds: readonly BisProjectDocKind[],
-  options: { ignoreUnsupported?: boolean } = {},
+  options: { ignoreUnsupported?: boolean; strict?: boolean } = {},
 ): Promise<Uint8Array | null> {
   const files = await listStoredFiles(projectId, docKinds)
   if (files.length === 0) return null
@@ -132,6 +132,10 @@ export async function buildMergedBisProjectFilesPdf(
         `${file.file_name} (${err instanceof Error ? err.message : 'failed'})`,
       )
     }
+  }
+
+  if (options.strict && skipped.length > 0) {
+    throw new Error(`Could not include all attached files: ${skipped.join(', ')}`)
   }
 
   if (added === 0 && options.ignoreUnsupported && unsupported === files.length) return null

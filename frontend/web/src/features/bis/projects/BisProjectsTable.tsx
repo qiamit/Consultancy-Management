@@ -381,7 +381,7 @@ export function BisProjectsTable({
       {rows.length > 0 ? (
         <div
           className={cn(
-            'bis-projects-list-viewport min-h-0 flex-1 overflow-y-auto overflow-x-hidden',
+            'bis-projects-list-viewport min-h-0 flex-1 overflow-y-auto overflow-x-auto',
             loading && 'opacity-60 transition-opacity',
           )}
         >

@@ -128,9 +128,10 @@ export const AiGeneralPanel = forwardRef<AiGeneralPanelHandle, AiGeneralPanelPro
     setLoading(true)
     try {
       const [modelRows, settings] = await Promise.all([fetchAiModels(), fetchAiSettings()])
-      setModels(modelRows.filter((m) => m.is_active))
+      const configuredDefaultId = settings?.default_model_id ?? modelRows.find((m) => m.is_default)?.id ?? ''
+      setModels(modelRows.filter((m) => m.is_active || m.id === configuredDefaultId))
+      setDefaultModelId(configuredDefaultId)
       if (settings) {
-        setDefaultModelId(settings.default_model_id ?? '')
         setShowAiAssistant(settings.ai_enabled)
         setTemperature(String(settings.temperature ?? 0.7))
         setMaxTokens(String(settings.max_tokens ?? 4096))
@@ -317,7 +318,7 @@ export const AiGeneralPanel = forwardRef<AiGeneralPanelHandle, AiGeneralPanelPro
               className="min-h-[140px] rounded-none border border-stone-500 bg-stone-50 shadow-none focus-visible:border-amber-600 focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-amber-500/20"
               value={systemPromptPrefix}
               onChange={(e) => setSystemPromptPrefix(e.target.value)}
-              placeholder="You are an assistant for an ISO 17025 testing laboratory…"
+              placeholder="You are an assistant for BIS applications, Indian Standards, and consultancy workflows…"
             />
           </div>
         </SettingSection>

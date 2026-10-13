@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
+import { PDFDocument } from 'pdf-lib'
+import * as XLSX from 'xlsx'
 import {
   ChevronLeft,
   ChevronRight,
@@ -26,8 +28,15 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { downloadPdfViaPlaywright, triggerPdfDownload } from '@/lib/playwrightPdfClient'
-import { DEFAULT_BIS_DOCUMENT_PRINT_PAGE_SETTINGS } from '../print/bisDocumentPrintPageSettings'
+import {
+  mapPageSizeToPlaywrightFormat,
+  renderPdfViaPlaywright,
+  triggerPdfDownload,
+} from '@/lib/playwrightPdfClient'
+import {
+  applyBisDocumentPrintPageSettings,
+  DEFAULT_BIS_DOCUMENT_PRINT_PAGE_SETTINGS,
+} from '../print/bisDocumentPrintPageSettings'
 import {
   limsDarkBarBtnClass,
   limsDarkBarFieldClass,
@@ -54,6 +63,7 @@ import { BisModuleImportDialog } from './BisModuleImportDialog'
 import { isImportableBisModuleKind } from './bisModuleImportApi'
 import { LegalDocumentsModuleDialog } from './LegalDocumentsModuleDialog'
 import {
+  buildMergedBisProjectFilesPdf,
   downloadMergedBisModulePdf,
   openMergedBisModulePdf,
 } from './mergeBisProjectFilesPdf'
@@ -91,8 +101,16 @@ const CARDS_MQ_SHOW = 'lg:hidden'
 const PAGE_SIZE_OPTIONS = [10, 20, 25, 50] as const
 
 function safeFileBase(label: string, cmL: string): string {
-  const raw = [label, cmL].filter(Boolean).join('-')
-  return raw.replace(/[\\/:*?"<>|]+/g, '_').replace(/\s+/g, '-').slice(0, 80) || 'document'
+  const raw = [label, cmL]
+    .map((part) => part.trim())
+    .filter((part) => part && !/^[-\u2012-\u2015]+$/.test(part))
+    .join('-')
+  return raw
+    .replace(/[\\/:*?"<>|]+/g, '_')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 80) || 'document'
 }
 
 function triggerBlobDownload(blob: Blob, filename: string) {
@@ -105,6 +123,82 @@ function triggerBlobDownload(blob: Blob, filename: string) {
   a.click()
   a.remove()
   window.setTimeout(() => URL.revokeObjectURL(url), 2_000)
+}
+
+function pdfBlob(bytes: Uint8Array): Blob {
+  const copy = new Uint8Array(bytes.byteLength)
+  copy.set(bytes)
+  return new Blob([copy.buffer], { type: 'application/pdf' })
+}
+
+async function mergePdfBlobs(blobs: Blob[]): Promise<Blob> {
+  const merged = await PDFDocument.create()
+  for (const blob of blobs) {
+    const source = await PDFDocument.load(new Uint8Array(await blob.arrayBuffer()), {
+      ignoreEncryption: true,
+    })
+    const pages = await merged.copyPages(source, source.getPageIndices())
+    pages.forEach((page) => merged.addPage(page))
+  }
+  const bytes = await merged.save()
+  return pdfBlob(bytes)
+}
+
+function combineWordHtml(title: string, documents: string[]): string {
+  const pages = documents.map((html) => ({
+    body: html.match(/<body[^>]*>([\s\S]*?)<\/body>/i)?.[1] ?? html,
+    style: html.match(/<style[^>]*>([\s\S]*?)<\/style>/i)?.[1] ?? '',
+  }))
+  const safeTitle = title.replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  })[character] ?? character)
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"/><title>${safeTitle}</title><style>${pages.map((page) => page.style).join('\n')}\n@media print{.bis-word-document + .bis-word-document{break-before:page;page-break-before:always}}</style></head><body>${pages.map((page) => `<section class="bis-word-document">${page.body}</section>`).join('')}</body></html>`
+}
+
+function buildExcelWorkbook(
+  documents: Array<{ title: string; html: string }>,
+): Blob {
+  const workbook = XLSX.utils.book_new()
+  const usedNames = new Set<string>()
+  const addSheet = (sheet: XLSX.WorkSheet, rawName: string) => {
+    const base = rawName.replace(/[\\/?*:[\]]/g, ' ').trim().slice(0, 25) || 'Document'
+    let name = base
+    let suffix = 2
+    while (usedNames.has(name.toLowerCase())) {
+      name = `${base.slice(0, 25 - String(suffix).length)} ${suffix}`
+      suffix += 1
+    }
+    usedNames.add(name.toLowerCase())
+    XLSX.utils.book_append_sheet(workbook, sheet, name)
+  }
+
+  for (const document of documents) {
+    const parsed = new DOMParser().parseFromString(document.html, 'text/html')
+    const tables = Array.from(parsed.querySelectorAll('table'))
+    if (tables.length > 0) {
+      tables.forEach((table, index) => {
+        addSheet(
+          XLSX.utils.table_to_sheet(table, { raw: true }),
+          tables.length === 1 ? document.title : `${document.title} ${index + 1}`,
+        )
+      })
+      continue
+    }
+    const lines = (parsed.body.innerText || parsed.body.textContent || '')
+      .split(/\n+/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+    addSheet(XLSX.utils.aoa_to_sheet(lines.map((line) => [line])), document.title)
+  }
+
+  const bytes = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
+  return new Blob([bytes], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  })
 }
 
 function DocRowActions({
@@ -460,6 +554,80 @@ export function BisLicenseDocumentsDialog({
     onViewDocument(kind)
   }
 
+  const selectedDocumentKinds = (clickedKind: BisPrintDocumentKind) =>
+    selectedKinds.size > 0
+      ? ALL_BIS_PRINT_KINDS.filter((kind) => selectedKinds.has(kind))
+      : [clickedKind]
+
+  const buildDocumentPdf = async (
+    kind: BisPrintDocumentKind,
+    settings: typeof DEFAULT_BIS_DOCUMENT_PRINT_PAGE_SETTINGS,
+  ): Promise<Blob> => {
+    if (!row) throw new Error('Select a license first.')
+
+    if (kind === 'application-details') {
+      const html = await buildBisDocumentHtml(row, kind)
+      return buildApplicationDetailsPackPdf(
+        html,
+        row.id,
+        row.client_id,
+        settings,
+        `${safeFileBase(BIS_PRINT_DOCUMENT_LABEL[kind], cmL)}.pdf`,
+      )
+    }
+
+    if (isMergePdfModuleKind(kind) || isHybridFileViewKind(kind)) {
+      const attached = await buildMergedBisProjectFilesPdf(
+        row.id,
+        [printKindToStorageDocKind(kind)],
+        { strict: true },
+      )
+      if (attached) return pdfBlob(attached)
+      if (isMergePdfModuleKind(kind)) {
+        throw new Error(`No attached files found for ${BIS_PRINT_DOCUMENT_LABEL[kind]}.`)
+      }
+    }
+
+    const html = applyBisDocumentPrintPageSettings(
+      await buildBisDocumentHtml(row, kind),
+      settings,
+    )
+    return renderPdfViaPlaywright({
+      html,
+      filename: `${safeFileBase(BIS_PRINT_DOCUMENT_LABEL[kind], cmL)}.pdf`,
+      format: mapPageSizeToPlaywrightFormat(settings.pageSize),
+      landscape: settings.orientation === 'landscape',
+      margin: { top: '0mm', right: '0mm', bottom: '0mm', left: '0mm' },
+    })
+  }
+
+  const downloadPdfDocuments = async (clickedKind: BisPrintDocumentKind) => {
+    if (!row) return
+    const kinds = selectedDocumentKinds(clickedKind)
+    setDownloadBusy(true)
+    try {
+      const settings = await loadBisProjectPrintPageSettings(row.id).catch(
+        () => DEFAULT_BIS_DOCUMENT_PRINT_PAGE_SETTINGS,
+      )
+      const pdfs: Blob[] = []
+      for (const kind of kinds) pdfs.push(await buildDocumentPdf(kind, settings))
+      const output = pdfs.length === 1 ? pdfs[0] : await mergePdfBlobs(pdfs)
+      const filename = pdfs.length === 1
+        ? `${safeFileBase(BIS_PRINT_DOCUMENT_LABEL[kinds[0]], cmL)}.pdf`
+        : `${safeFileBase('Selected BIS Documents', cmL)}.pdf`
+      triggerPdfDownload(output, filename)
+      toast.success(
+        pdfs.length === 1
+          ? `PDF downloaded: ${BIS_PRINT_DOCUMENT_LABEL[kinds[0]]}`
+          : `PDF downloaded: ${pdfs.length} selected documents combined`,
+      )
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'PDF download failed')
+    } finally {
+      setDownloadBusy(false)
+    }
+  }
+
   const runDownload = async (
     kind: BisPrintDocumentKind,
     format: 'excel' | 'word' | 'pdf',
@@ -467,57 +635,62 @@ export function BisLicenseDocumentsDialog({
     if (!row) return
     const label = BIS_PRINT_DOCUMENT_LABEL[kind]
     const base = safeFileBase(label, cmL)
-    if (kind === 'application-details' && format === 'pdf') {
-      setDownloadBusy(true)
-      try {
-        const [html, settings] = await Promise.all([
-          buildBisDocumentHtml(row, kind),
-          loadBisProjectPrintPageSettings(row.id).catch(
-            () => DEFAULT_BIS_DOCUMENT_PRINT_PAGE_SETTINGS,
-          ),
-        ])
-        const pdf = await buildApplicationDetailsPackPdf(
-          html,
-          row.id,
-          row.client_id,
-          settings,
-          `${base}.pdf`,
-        )
-        triggerPdfDownload(pdf, `${base}.pdf`)
-        toast.success(`PDF downloaded: ${label}`)
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'PDF download failed')
-      } finally {
-        setDownloadBusy(false)
-      }
+    if (format === 'pdf') {
+      void downloadPdfDocuments(kind)
       return
-    }
-    if (format === 'pdf' && (isMergePdfModuleKind(kind) || isHybridFileViewKind(kind))) {
-      const error = await runMergedModulePdf(kind, 'download')
-      if (error && /no attached files/i.test(error) && !isMergePdfModuleKind(kind)) {
-        // fall through to HTML→PDF for hybrid kinds without uploads
-      } else {
-        return
-      }
     }
     setDownloadBusy(true)
     try {
-      const html = await buildBisDocumentHtml(row, kind)
-      if (format === 'pdf') {
-        await downloadPdfViaPlaywright({ html, filename: `${base}.pdf` })
-        toast.success(`PDF downloaded: ${label}`)
-        return
-      }
+      const settings = await loadBisProjectPrintPageSettings(row.id).catch(
+        () => DEFAULT_BIS_DOCUMENT_PRINT_PAGE_SETTINGS,
+      )
+      const kinds = format === 'word' || format === 'excel' ? selectedDocumentKinds(kind) : [kind]
+      const htmlDocuments = await Promise.all(
+        kinds.map(async (documentKind) => applyBisDocumentPrintPageSettings(
+          await buildBisDocumentHtml(row, documentKind),
+          settings,
+        )),
+      )
       if (format === 'word') {
         triggerBlobDownload(
-          new Blob([html], { type: 'application/msword;charset=utf-8' }),
-          `${base}.doc`,
+          new Blob(
+            [combineWordHtml(
+              kinds.length === 1 ? label : 'Selected BIS Documents',
+              htmlDocuments,
+            )],
+            { type: 'application/msword;charset=utf-8' },
+          ),
+          kinds.length === 1
+            ? `${base}.doc`
+            : `${safeFileBase('Selected BIS Documents', cmL)}.doc`,
         )
-        toast.success(`Word downloaded: ${label}`)
+        toast.success(
+          kinds.length === 1
+            ? `Word downloaded: ${label}`
+            : `Word downloaded: ${kinds.length} selected documents combined`,
+        )
+        return
+      }
+      if (format === 'excel') {
+        const excel = buildExcelWorkbook(kinds.map((documentKind, index) => ({
+          title: kinds.length === 1
+            ? label
+            : BIS_PRINT_DOCUMENT_LABEL[documentKind],
+          html: htmlDocuments[index],
+        })))
+        triggerBlobDownload(
+          excel,
+          `${safeFileBase(kinds.length === 1 ? label : 'Selected BIS Documents', cmL)}.xlsx`,
+        )
+        toast.success(
+          kinds.length === 1
+            ? `Excel downloaded: ${label}`
+            : `Excel downloaded: ${kinds.length} selected documents combined`,
+        )
         return
       }
       triggerBlobDownload(
-        new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8' }),
+        new Blob([htmlDocuments[0]], { type: 'application/vnd.ms-excel;charset=utf-8' }),
         `${base}.xls`,
       )
       toast.success(`Excel downloaded: ${label}`)
@@ -796,7 +969,9 @@ export function BisLicenseDocumentsDialog({
                 <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
                   <span className="whitespace-nowrap text-xs font-medium text-stone-200">
                     {filteredKinds.length.toLocaleString('en-IN')} documents
-                    {selectedKinds.size > 0 ? ` · ${selectedKinds.size} selected` : ''}
+                    {selectedKinds.size > 0
+                      ? ` · ${selectedKinds.size} selected (PDF / Word action bundles selection)`
+                      : ''}
                   </span>
                   {downloadBusy || busy ? (
                     <span className="text-xs text-amber-200">

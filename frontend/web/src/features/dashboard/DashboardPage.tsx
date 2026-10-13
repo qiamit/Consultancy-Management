@@ -137,7 +137,7 @@ export default function DashboardPage() {
     {
       title: 'Clients',
       value: counts.clients,
-      subtitle: 'Client master records',
+      subtitle: 'Client master records visible to your account',
       icon: Users,
       href: '/masters/clients',
     },
@@ -276,8 +276,7 @@ export default function DashboardPage() {
           Welcome{profileName || user?.email ? `, ${profileName || user?.email}` : ''}
         </h1>
         <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-          Consultancy operations on the Railway stack — Auth, PostgREST, Storage, PDF, Resend, and
-          Manak eBIS Assist.
+          Manage client applications, BIS licences, documents, and finance in one place.
         </p>
       </div>
 

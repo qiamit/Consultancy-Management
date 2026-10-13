@@ -152,7 +152,7 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
   const [reminderAsk, setReminderAsk] = useState(false)
   const [reminderBusy, setReminderBusy] = useState(false)
   const [total, setTotal] = useState(0)
-  const [listLoading, setListLoading] = useState(false)
+  const [listLoading, setListLoading] = useState(true)
   const [listError, setListError] = useState<string | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
   const [searchInput, setSearchInput] = useState('')
@@ -554,11 +554,8 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
   }, [editId, rows, listLoading, bootstrapNewForm, setEdit])
 
   const openNew = () => {
-    void (async () => {
-      await bootstrapNewForm()
-      hydratedEditRef.current = 'new'
-      setEdit('new')
-    })()
+    setSaveMessage(null)
+    setEdit('new')
   }
 
   const openEdit = (row: QuotationRow) => {

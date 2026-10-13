@@ -14,6 +14,7 @@ const checkboxClass =
 
 type UserManagementTableProps = {
   users: UserAccount[]
+  loading?: boolean
   searchActive?: boolean
   selectedIds: Set<string>
   onToggle: (id: string) => void
@@ -31,7 +32,9 @@ export function UserManagementTable(props: UserManagementTableProps) {
 
   return (
     <div className="overflow-x-auto rounded-none border-2 border-stone-500 bg-white shadow-sm ring-1 ring-amber-700/20">
-      {props.users.length > 0 ? (
+      {props.loading ? (
+        <div className="p-6 text-center text-sm text-muted-foreground" role="status">Loading team members…</div>
+      ) : props.users.length > 0 ? (
         <Table className={GRID_TABLE}>
           <TableHeader>
             <TableRow className="bg-stone-800 hover:bg-stone-800">

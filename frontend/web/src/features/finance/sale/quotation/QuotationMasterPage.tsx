@@ -452,11 +452,8 @@ export default function QuotationMasterPage() {
   }, [editId, rows, listLoading, bootstrapNewForm, setEdit])
 
   const openNew = () => {
-    void (async () => {
-      await bootstrapNewForm()
-      hydratedEditRef.current = 'new'
-      setEdit('new')
-    })()
+    setSaveMessage(null)
+    setEdit('new')
   }
 
   const openEdit = (row: QuotationRow) => {

@@ -1370,6 +1370,13 @@ export function ClientsForm({
           >
             {saveLoading ? 'Saving…' : 'Save & Close'}
           </Button>
+          {!canSave && !saveLoading ? (
+            <p className="basis-full text-right text-xs text-red-700" role="status">
+              {!form.companyName.trim()
+                ? 'Company name is required before saving.'
+                : 'Correct the highlighted fields before saving.'}
+            </p>
+          ) : null}
         </div>
       ) : null}
     </div>

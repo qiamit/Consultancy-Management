@@ -39,9 +39,7 @@ export async function buildApplicationDetailsPackPdf(
       landscape: settings.orientation === 'landscape',
       margin: { top: '0mm', right: '0mm', bottom: '0mm', left: '0mm' },
     }),
-    buildMergedBisProjectFilesPdf(projectId, APPLICATION_PACK_FILE_KINDS, {
-      ignoreUnsupported: true,
-    }),
+    buildMergedBisProjectFilesPdf(projectId, APPLICATION_PACK_FILE_KINDS, { strict: true }),
     clientId ? listClientCertificates(clientId) : Promise.resolve([]),
   ])
 
@@ -73,6 +71,8 @@ export async function buildApplicationDetailsPackPdf(
       const image = await packet.embedJpg(bytes)
       const page = packet.addPage([image.width, image.height])
       page.drawImage(image, { x: 0, y: 0, width: image.width, height: image.height })
+    } else {
+      throw new Error(`Could not include attached certificate ${certificate.cert_name}: unsupported file type.`)
     }
   }
   return pdfBlob(await packet.save())

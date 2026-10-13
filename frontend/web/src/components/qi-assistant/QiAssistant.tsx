@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { FileUp, ImagePlus, Loader2, Mic, MicOff, Send, Sparkles, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -39,6 +39,61 @@ import { cn } from '@/lib/utils'
 
 function newId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+}
+
+function renderAssistantInline(text: string): ReactNode[] {
+  const nodes: ReactNode[] = []
+  const pattern = /(\*\*[^*]+\*\*|`[^`]+`|\*[^*]+\*)/g
+  let cursor = 0
+  for (const match of text.matchAll(pattern)) {
+    const index = match.index ?? 0
+    if (index > cursor) nodes.push(text.slice(cursor, index))
+    const token = match[0]
+    const body = token.startsWith('**') ? token.slice(2, -2) : token.slice(1, -1)
+    const key = `md-${index}`
+    nodes.push(token.startsWith('**')
+      ? <strong key={key}>{body}</strong>
+      : token.startsWith('`')
+        ? <code key={key} className="rounded bg-black/5 px-1">{body}</code>
+        : <em key={key}>{body}</em>)
+    cursor = index + token.length
+  }
+  if (cursor < text.length) nodes.push(text.slice(cursor))
+  return nodes
+}
+
+function AssistantMessage({ content }: { content: string }) {
+  const blocks = content.trim().split(/\n\s*\n/).filter(Boolean)
+  return (
+    <div className="space-y-2 whitespace-normal">
+      {blocks.map((block, blockIndex) => {
+        const lines = block.split('\n')
+        const heading = lines.length === 1 ? lines[0].match(/^(#{1,4})\s+(.+)$/) : null
+        const bulletLines = lines.every((line) => /^\s*[-*]\s+/.test(line))
+        const numberedLines = lines.every((line) => /^\s*\d+[.)]\s+/.test(line))
+        if (heading) {
+          return <h4 key={blockIndex} className="font-semibold">{renderAssistantInline(heading[2])}</h4>
+        }
+        if (bulletLines || numberedLines) {
+          const List = numberedLines ? 'ol' : 'ul'
+          return (
+            <List key={blockIndex} className={numberedLines ? 'list-decimal pl-5' : 'list-disc pl-5'}>
+              {lines.map((line, lineIndex) => (
+                <li key={lineIndex}>{renderAssistantInline(line.replace(/^\s*(?:[-*]|\d+[.)])\s+/, ''))}</li>
+              ))}
+            </List>
+          )
+        }
+        return (
+          <p key={blockIndex}>
+            {lines.map((line, lineIndex) => (
+              <span key={lineIndex}>{renderAssistantInline(line)}{lineIndex < lines.length - 1 ? <br /> : null}</span>
+            ))}
+          </p>
+        )
+      })}
+    </div>
+  )
 }
 
 function assistantDialogTitle(activeRecordTable?: string, isCodeId?: string, page?: string): string {
@@ -722,7 +777,7 @@ export function QiAssistant({
                   : 'mr-auto border-stone-400 bg-white text-stone-800',
               )}
             >
-              <p className="whitespace-pre-wrap">{m.content}</p>
+              <AssistantMessage content={m.content} />
             </div>
           ))}
           {loading && (

@@ -58,6 +58,7 @@ export default function UserManagementMasterPage() {
   const { editId, setEdit } = useMasterUiSearchState()
   const hydratedEditRef = useRef<string | null>(null)
   const [users, setUsers] = useState<UserAccount[]>([])
+  const [usersLoading, setUsersLoading] = useState(true)
   const [usersLoadError, setUsersLoadError] = useState<string | null>(null)
   const [userUpdateLoadingId, setUserUpdateLoadingId] = useState<string | null>(null)
   const [userUpdateError, setUserUpdateError] = useState<string | null>(null)
@@ -115,7 +116,10 @@ export default function UserManagementMasterPage() {
       } = await supabase.auth.getSession()
 
       if (!(latestSession?.access_token ?? session?.access_token)) {
-        if (!canceled) setUsersLoadError('Session expired. Please log in again.')
+        if (!canceled) {
+          setUsersLoadError('Session expired. Please log in again.')
+          setUsersLoading(false)
+        }
         return
       }
 
@@ -152,6 +156,8 @@ export default function UserManagementMasterPage() {
         if (!canceled) {
           setUsersLoadError(err instanceof Error ? err.message : 'Unable to load users')
         }
+      } finally {
+        if (!canceled) setUsersLoading(false)
       }
     }
 
@@ -163,6 +169,7 @@ export default function UserManagementMasterPage() {
   }, [session])
 
   const reloadUsers = async () => {
+    setUsersLoading(true)
     setUsersLoadError(null)
 
     const {
@@ -171,6 +178,7 @@ export default function UserManagementMasterPage() {
 
     if (!(latestSession?.access_token ?? session?.access_token)) {
       setUsersLoadError('Session expired. Please log in again.')
+      setUsersLoading(false)
       return
     }
 
@@ -204,6 +212,8 @@ export default function UserManagementMasterPage() {
       }
     } catch (err) {
       setUsersLoadError(err instanceof Error ? err.message : 'Unable to load users')
+    } finally {
+      setUsersLoading(false)
     }
   }
 
@@ -339,6 +349,7 @@ export default function UserManagementMasterPage() {
       {printMessage && <p className="text-sm text-destructive">{printMessage}</p>}
       <UserManagementTable
         users={pagedUsers}
+        loading={usersLoading}
         searchActive={searchQuery.trim().length > 0}
         selectedIds={selectedIds}
         onToggle={toggleRow}

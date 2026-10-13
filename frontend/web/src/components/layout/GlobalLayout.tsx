@@ -435,7 +435,7 @@ export default function GlobalLayout() {
     location.pathname.startsWith('/masters/is-codes/') ||
     location.pathname === '/masters/test-parameter' ||
     location.pathname.startsWith('/masters/test-parameter/')
-  const { profileName, designation } = useAuth()
+  const { profileName, designation, profileReady } = useAuth()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false
     return window.localStorage.getItem('app.sidebarCollapsed') === '1'
@@ -737,10 +737,10 @@ export default function GlobalLayout() {
                   </div>
                   <div className="hidden text-left leading-tight sm:block">
                     <p className="max-w-[140px] truncate text-xs font-semibold text-white lg:max-w-[180px]">
-                      {profileName || 'User'}
+                      {profileReady ? profileName || 'User' : 'Loading profile…'}
                     </p>
                     <p className="max-w-[140px] truncate text-[10px] text-stone-300 lg:max-w-[180px]">
-                      {designation || 'Staff'}
+                      {profileReady ? designation || 'Staff' : ' '}
                     </p>
                   </div>
                   <ChevronDown size={14} className="hidden text-stone-400 sm:block" />
@@ -749,8 +749,8 @@ export default function GlobalLayout() {
 
               <DropdownMenuContent align="end" className="w-56">
                 <div className="px-2 py-2 sm:hidden">
-                  <p className="text-sm font-semibold">{profileName || 'User'}</p>
-                  <p className="text-xs text-muted-foreground">{designation || 'Staff'}</p>
+                  <p className="text-sm font-semibold">{profileReady ? profileName || 'User' : 'Loading profile…'}</p>
+                  <p className="text-xs text-muted-foreground">{profileReady ? designation || 'Staff' : ' '}</p>
                 </div>
                 <DropdownMenuSeparator className="sm:hidden" />
 

@@ -1,4 +1,5 @@
 /** Browser client for the local Playwright PDF service (same Chromium print engine). */
+import { supabase } from './supabaseClient'
 
 export type PlaywrightPdfFormat = 'a4' | 'a5' | 'letter' | 'legal'
 
@@ -76,9 +77,17 @@ export async function renderPdfViaPlaywright(
   const endpoint = pdfServiceUrl()
   let res: Response
   try {
+    const { data, error } = await supabase.auth.getSession()
+    const accessToken = data.session?.access_token
+    if (error || !accessToken) {
+      throw new Error('Your sign-in session has expired. Sign in again before downloading a PDF.')
+    }
     res = await fetch(endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
       body: JSON.stringify({
         html: request.html,
         filename: request.filename,
@@ -92,7 +101,10 @@ export async function renderPdfViaPlaywright(
         },
       }),
     })
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('Your sign-in session')) {
+      throw error
+    }
     throw new Error(friendlyPdfServiceError('failed to fetch'))
   }
 
@@ -103,6 +115,12 @@ export async function renderPdfViaPlaywright(
       detail = j.error?.trim() || ''
     } catch {
       detail = await res.text().catch(() => '')
+    }
+    if (res.status === 401) {
+      throw new Error('Your sign-in session has expired. Sign in again before downloading a PDF.')
+    }
+    if (res.status === 503 && detail.toLowerCase().includes('auth is not configured')) {
+      throw new Error('PDF service authentication is not configured. Contact the administrator.')
     }
     throw new Error(friendlyPdfServiceError(detail, res.status))
   }

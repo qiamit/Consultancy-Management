@@ -160,6 +160,7 @@ function RowActions({
 
 export function IsCodesTable({
   rows,
+  loading = false,
   selectedIds,
   idsWithFiles,
   sortKey,
@@ -172,6 +173,7 @@ export function IsCodesTable({
   onAssistantDataChanged,
 }: {
   rows: IsCodeRow[]
+  loading?: boolean
   selectedIds: Set<string>
   idsWithFiles: Set<string>
   sortKey: IsCodeSortKey
@@ -188,7 +190,11 @@ export function IsCodesTable({
 
   return (
     <div className={cn(limsPanelClass, 'flex h-full min-h-0 flex-col bg-[#f7f3eb]')}>
-      {rows.length === 0 ? (
+      {loading ? (
+        <div className="flex flex-1 items-center justify-center px-4 py-16 text-sm text-stone-500" role="status">
+          Loading IS codes…
+        </div>
+      ) : rows.length === 0 ? (
         <div className="flex flex-1 items-center justify-center px-4 py-16 text-sm text-stone-500">
           No IS codes found.
         </div>

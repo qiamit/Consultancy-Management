@@ -408,7 +408,7 @@ export default function IsCodesMasterPage() {
   const [search, setSearch] = useState('')
 
   const [rows, setRows] = useState<IsCodeRow[]>([])
-  const [listLoading, setListLoading] = useState(false)
+  const [listLoading, setListLoading] = useState(true)
   const [listError, setListError] = useState<string | null>(null)
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())

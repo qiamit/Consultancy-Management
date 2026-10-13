@@ -375,7 +375,7 @@ export default function ClientsMasterPage() {
   const [total, setTotal] = useState(0)
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const loadSeq = useRef(0)
-  const [listLoading, setListLoading] = useState(false)
+  const [listLoading, setListLoading] = useState(true)
   const [listError, setListError] = useState<string | null>(null)
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
@@ -1927,6 +1927,7 @@ export default function ClientsMasterPage() {
       <div className="shrink-0">
         <ClientsTableFooterBar
           message={saveMessage}
+          responsiveWrap
           loading={saveLoading}
           selectedCount={selectedIds.size}
           totalCount={total}

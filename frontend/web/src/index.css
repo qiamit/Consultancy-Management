@@ -232,7 +232,7 @@ th * {
 
 .bis-projects-card-view { display: none; }
 .bis-projects-table-view { display: block; }
-.bis-projects-table-view > div { overflow-x: clip !important; }
+.bis-projects-table-view > div { overflow-x: auto !important; }
 .bis-projects-table-view th,
 .bis-projects-table-view td { overflow-wrap: anywhere; }
 .bis-projects-action-column {
