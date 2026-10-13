@@ -11,80 +11,79 @@ export type HelpFaqItem = {
   answer: string
 }
 
-/** Short how-to guide aligned with main LIMS sidebar modules. */
+/** Short how-to guide for the BIS consultancy workflows. */
 export const HELP_GUIDE_SECTIONS: HelpGuideSection[] = [
   {
     id: 'dashboard',
     title: 'Dashboard',
-    summary: 'Role-based overview of samples, equipment, and finance shortcuts.',
+    summary: 'A role-based overview of clients, BIS work, licences, and finance.',
     tips: [
-      'Open any KPI or card to jump to the related module (if your Module Access allows it).',
-      'Overdue and due-soon counts help prioritize daily work.',
+      'Open a card to go to its module when your account has access.',
+      'Use expiry and due-soon counts to plan licence follow-up.',
     ],
   },
   {
-    id: 'management',
-    title: 'Management Documentation & System',
-    summary: 'Level 1–4 documents, objectives, risk, audit/MRM, personnel, complaints, and CAPA.',
+    id: 'clients',
+    title: 'Clients',
+    summary: 'Maintain company details, addresses, contacts, certificates, and portal access.',
     tips: [
-      'Use Master Document levels for controlled QMS documents.',
-      'Non Conformities and Corrective Action share a unified CAPA hub where linked.',
+      'Keep the registered office and factory addresses up to date for application documents.',
+      'Upload client certificates in the client record so they can be included in document packs.',
     ],
   },
   {
-    id: 'equipment',
-    title: 'Equipment Management',
-    summary: 'Testing/calibration equipment masters, IQC, CRM, schedules, and breakdown register.',
+    id: 'bis-projects',
+    title: 'BIS Projects & Licences',
+    summary: 'Manage applications, inclusions, renewals, surveillance, and licence documents.',
     tips: [
-      'Keep calibration and maintenance due dates updated so dashboards stay accurate.',
-      'CRM list supports uncertainty rows used in testing traceability.',
+      'Select a client and IS Code, then maintain the application and project modules.',
+      'Use document preview to review generated forms before printing or downloading.',
     ],
   },
   {
-    id: 'testing-lims',
-    title: 'Testing LIMS (Sample Handling)',
-    summary: 'End-to-end sample flow from receiving through issued test reports.',
+    id: 'documents',
+    title: 'Application Documents',
+    summary: 'Prepare Form 1, supporting declarations, location maps, and application packs.',
     tips: [
-      'Stages move with the sample: Receiving → Allocation → Test Allocation → Under Testing → Review → Report → Issued.',
-      'Module Access and your designation control which stages you can open.',
-      'Validating the Results, NABL Scope, and Test Parameter support quality of reported data.',
-    ],
-  },
-  {
-    id: 'calibration-lims',
-    title: 'Calibration LIMS',
-    summary: 'Service request through certificate preparation for calibration jobs.',
-    tips: [
-      'Use Calibration Handling stages in order for each job.',
-      'Calibration Equipments and NABL Scope (Calibration) are separate from Testing equipment masters.',
+      'Check the preview for page breaks, dates, signatures, and attached certificates.',
+      'Download one document or select documents for a combined export.',
     ],
   },
   {
     id: 'finance',
-    title: 'Finance Management',
-    summary: 'Sale documents: quotation, proforma, invoice, credit note, and payment receipt.',
+    title: 'Quotations & Finance',
+    summary: 'Create and manage quotations, invoices, credit notes, and payment receipts.',
     tips: [
-      'Currency and date formats follow Lab Settings preferences across the app.',
-      'Quotations can be printed or shared using the document view.',
+      'Review client, item, tax, payment terms, and totals before issuing a document.',
+      'Use the document preview to print or share the generated finance document.',
+    ],
+  },
+  {
+    id: 'assistant',
+    title: 'QE Assistant',
+    summary: 'Ask questions about consultancy workflows and the current module.',
+    tips: [
+      'Give the assistant the relevant client, IS Code, and application context.',
+      'Review generated content against the applicable BIS standard before using it.',
     ],
   },
   {
     id: 'masters',
-    title: 'Master Managements',
-    summary: 'Client Master, IS Code Master, and Product & Services.',
+    title: 'Masters',
+    summary: 'Maintain clients, IS Codes, products and services, and shared options.',
     tips: [
-      'Keep IS codes and product titles accurate — they appear on test reports and consent letters.',
-      'Client address fields feed Part A cover details on reports.',
+      'Keep IS Code titles and revision details accurate; they appear in BIS documents.',
+      'Changes to master records can affect linked applications and finance documents.',
     ],
   },
   {
     id: 'access',
-    title: 'Module Access & Lab Settings',
-    summary: 'Laboratory Director configures themes, formats, users, and per-module View/Edit/None.',
+    title: 'Settings & Access',
+    summary: 'Configure company preferences, users, module access, and AI settings.',
     tips: [
-      'None on a module hides it from that user’s sidebar and dashboard.',
-      'View allows browsing without save/delete actions where enforced.',
-      'Only Laboratory Director can open Lab Settings, User Management, Module Access, and AI Settings.',
+      'Module access controls which sections each user can view or edit.',
+      'Check currency, date format, and company details before generating documents.',
+      'Settings access depends on your account role.',
     ],
   },
 ]
@@ -94,36 +93,36 @@ export const HELP_FAQ_ITEMS: HelpFaqItem[] = [
     id: 'faq-login',
     question: 'I cannot open a module that appears for other users. Why?',
     answer:
-      'Your Module Access may be set to None for that module, or your designation/department role only allows specific stages. Ask your Laboratory Director to review Module Access for your user.',
+      'Your Module Access may not include that module. Ask an administrator to review the access assigned to your account.',
   },
   {
-    id: 'faq-none-calibration',
-    question: 'Calibration LIMS is set to None but I still see related cards. What should I do?',
+    id: 'faq-document-preview',
+    question: 'How do I check a generated BIS document before printing?',
     answer:
-      'After Module Access is saved, sign out and sign in (or hard refresh). Dashboard and sidebar now follow the saved matrix. Equipment Management (testing equipment) is separate from Calibration LIMS.',
+      'Open the document preview and check its text, page breaks, dates, and signatures. If a supporting file is missing, confirm it is attached to the client or project record.',
   },
   {
     id: 'faq-theme',
-    question: 'How do I change theme, date format, or currency?',
+    question: 'Where do I change date format or currency?',
     answer:
-      'Laboratory Director: open Lab Settings → System / preferences. Theme, date format, time format, and currency apply across the app for the lab session preferences stored on this device.',
+      'Open Company Settings and update the date, time, or currency preference. Review a document preview after changing these settings.',
   },
   {
-    id: 'faq-report',
-    question: 'Where do I prepare and issue a test report?',
+    id: 'faq-application',
+    question: 'What should I check before submitting an application pack?',
     answer:
-      'Open Testing LIMS → Test Report Preparation. Complete Part A–D checks, then Issue. Issued reports appear under Issued Test Report. Access depends on Module Access and role.',
+      'Confirm the client details, factory address, selected IS Code and revision, application date, required declarations, and supporting attachments.',
   },
   {
     id: 'faq-is-title',
-    question: 'How should Product IS Code Title appear on Part A?',
+    question: 'How should Product IS Code Title appear on Form 1?',
     answer:
-      'Format is: IS Title as per IS Number: Revision Year (example: High Strength Deformed Steel Bars as per IS 1786: 2008). Values come from the linked IS Code master.',
+      'The product title, IS number, and revision year come from the linked IS Code master. Verify the master record before generating the application.',
   },
   {
     id: 'faq-support',
     question: 'Who do I contact for account or access issues?',
     answer:
-      'Contact your Laboratory Director for Module Access and user accounts. Use Contact Us from the profile menu for laboratory phone, email, and address from Lab Settings.',
+      'Contact your account administrator for user access. Use Contact Us for company support details.',
   },
 ]

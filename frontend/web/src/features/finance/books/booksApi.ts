@@ -130,6 +130,34 @@ export async function listLedger(tab: string): Promise<LedgerRow[]> {
   })
 }
 
+export type FinanceTdsReportRow = {
+  txn_date: string
+  pan: string
+  party_name: string
+  tds_section: string
+  taxable_amount: number
+  tds_amount: number
+}
+
+export async function listFinanceTdsReport(from: string, to: string): Promise<FinanceTdsReportRow[]> {
+  const { data, error } = await supabase.rpc('finance_tds_report', { p_from: from, p_to: to })
+  if (error) {
+    if (missingRelation(error) || error.code === '42883' || error.code === 'PGRST202') return []
+    throw error
+  }
+  return (Array.isArray(data) ? data : []).map((raw) => {
+    const row = raw as Record<string, unknown>
+    return {
+      txn_date: String(row.txn_date ?? '').slice(0, 10),
+      pan: String(row.pan ?? ''),
+      party_name: String(row.party_name ?? ''),
+      tds_section: String(row.tds_section ?? ''),
+      taxable_amount: Number(row.taxable_amount) || 0,
+      tds_amount: Number(row.tds_amount) || 0,
+    }
+  })
+}
+
 export type StockRow = {
   product_id: string
   item_name: string
@@ -202,6 +230,43 @@ export async function saveInventorySettings(settings: InventorySettings): Promis
 }
 
 export type AccountRow = { id: string; account_name: string; account_type: string }
+
+export type BankAccountRow = {
+  id: string
+  account_name: string
+  bank_name: string
+  account_number_last4: string
+  ifsc: string
+  is_active: boolean
+}
+
+export async function listBankAccounts(): Promise<BankAccountRow[]> {
+  const { data, error } = await supabase
+    .from('finance_bank_accounts')
+    .select('id, account_name, bank_name, account_number_last4, ifsc, is_active')
+    .eq('is_active', true)
+    .order('account_name')
+  if (error) {
+    if (missingRelation(error)) return []
+    throw error
+  }
+  return (data ?? []) as BankAccountRow[]
+}
+
+export async function addBankAccount(input: {
+  accountName: string
+  bankName: string
+  accountNumberLast4: string
+  ifsc: string
+}): Promise<void> {
+  const { error } = await supabase.from('finance_bank_accounts').insert({
+    account_name: input.accountName.trim(),
+    bank_name: input.bankName.trim(),
+    account_number_last4: input.accountNumberLast4.trim(),
+    ifsc: input.ifsc.trim().toUpperCase(),
+  })
+  if (error) throw error
+}
 
 export async function listAccounts(): Promise<AccountRow[]> {
   const { data, error } = await supabase.from('finance_accounts').select('id, account_name, account_type').order('account_name')

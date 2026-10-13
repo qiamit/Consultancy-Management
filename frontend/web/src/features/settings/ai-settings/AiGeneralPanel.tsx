@@ -128,9 +128,13 @@ export const AiGeneralPanel = forwardRef<AiGeneralPanelHandle, AiGeneralPanelPro
     setLoading(true)
     try {
       const [modelRows, settings] = await Promise.all([fetchAiModels(), fetchAiSettings()])
-      const configuredDefaultId = settings?.default_model_id ?? modelRows.find((m) => m.is_default)?.id ?? ''
-      setModels(modelRows.filter((m) => m.is_active || m.id === configuredDefaultId))
-      setDefaultModelId(configuredDefaultId)
+      const configuredDefaultId = String(settings?.default_model_id ?? '').trim()
+      const selectedDefault =
+        modelRows.find((model) => model.id === configuredDefaultId) ??
+        modelRows.find((model) => model.is_default) ??
+        modelRows.find((model) => model.is_active)
+      setModels(modelRows.filter((model) => model.is_active || model.id === selectedDefault?.id))
+      setDefaultModelId(selectedDefault?.id ?? '')
       if (settings) {
         setShowAiAssistant(settings.ai_enabled)
         setTemperature(String(settings.temperature ?? 0.7))

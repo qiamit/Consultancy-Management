@@ -131,6 +131,10 @@ export type QuotationRow = {
   payment_method?: string | null
   /** Payment Receipt only — 2 or 10. Null means no TDS. */
   tds_percent?: number | null
+  tds_section?: string | null
+  tds_amount?: number | null
+  tds_taxable_amount?: number | null
+  bank_account_id?: string | null
   discount_percent: number
   discount_amount: number
   transportation_charges?: number | null
@@ -191,6 +195,10 @@ export type QuotationForm = {
   paymentMethod: string
   /** Payment Receipt: 2 or 10. Empty means no TDS. */
   tdsPercent: string
+  tdsSection: string
+  tdsTaxableAmount: string
+  /** Selected bank account for Bank mode. */
+  bankAccountId: string
   lines: QuotationLineForm[]
 }
 
@@ -283,6 +291,9 @@ export function emptyQuotationForm(nextNumber = ''): QuotationForm {
     paymentAmount: '',
     paymentMethod: 'Bank',
     tdsPercent: '',
+    tdsSection: '',
+    tdsTaxableAmount: '',
+    bankAccountId: '',
     lines: [emptyQuotationLine()],
   }
 }
@@ -495,7 +506,10 @@ export function rowToForm(row: QuotationRow, asCopy = false, nextNumber = ''): Q
     discountPercent: String(row.discount_percent ?? 0),
     gstPercent: String(row.gst_percent ?? 18),
     paymentAmount: String(row.grand_total ?? 0),
-    tdsPercent: row.tds_percent === 2 || row.tds_percent === 10 ? String(row.tds_percent) : '',
+    tdsPercent: row.tds_percent == null ? '' : String(row.tds_percent),
+    tdsSection: row.tds_section ?? '',
+    tdsTaxableAmount: row.tds_taxable_amount == null ? String(row.grand_total ?? 0) : String(row.tds_taxable_amount),
+    bankAccountId: row.bank_account_id ?? '',
     paymentMethod: normalizePaymentMethod(
       row.payment_method ??
         // Legacy receipts briefly stored mode in reference_no before invoice-link fix.

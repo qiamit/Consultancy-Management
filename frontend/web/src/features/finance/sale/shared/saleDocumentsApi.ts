@@ -326,6 +326,10 @@ function receiptFromRaw(raw: RawRow): QuotationRow {
       const tdsRaw = raw.tds_percent ?? extra.tds_percent
       return tdsRaw == null || tdsRaw === '' ? null : num(tdsRaw)
     })(),
+    tds_section: strOrNull(raw.tds_section ?? extra.tds_section),
+    tds_amount: num(raw.tds_amount ?? extra.tds_amount),
+    tds_taxable_amount: num(raw.tds_taxable_amount ?? extra.tds_taxable_amount),
+    bank_account_id: strOrNull(raw.bank_account_id ?? extra.bank_account_id),
     gst_amount: 0,
     subtotal: amount,
     grand_total: amount,
@@ -573,9 +577,13 @@ async function saveReceipt(kind: SaleDocumentKind, form: QuotationForm, editingI
   const money = MONEY_BOOK[kind] ?? { flow: 'in' as const, book: '' }
   const amount = Math.max(0, parseMoney(String(form.paymentAmount ?? '')))
   const method = normalizePaymentMethod(form.paymentMethod)
-  const tdsPercent = kind === 'paymentReceipt' && (form.tdsPercent === '2' || form.tdsPercent === '10')
+  const percent = kind === 'paymentReceipt' && Number.isFinite(Number(form.tdsPercent)) && Number(form.tdsPercent) > 0 && Number(form.tdsPercent) <= 100
     ? Number(form.tdsPercent)
     : null
+  const tdsPercent = percent
+  const tdsSection = tdsPercent == null ? null : form.tdsSection.trim() || null
+  const tdsTaxableAmount = tdsPercent == null ? 0 : Math.max(0, parseMoney(form.tdsTaxableAmount || String(amount)))
+  const tdsAmountValue = tdsPercent == null ? 0 : Math.round(tdsTaxableAmount * tdsPercent) / 100
   const against = form.referenceNo.trim() || null
   const payload: Record<string, unknown> = {
     payment_flow: money.flow,
@@ -586,9 +594,13 @@ async function saveReceipt(kind: SaleDocumentKind, form: QuotationForm, editingI
     txn_date: form.quotationDate || new Date().toISOString().slice(0, 10),
     status: 'completed',
     mode_of_payment: MODE_TO_DB[method],
+    bank_account_id: method === 'Bank' ? form.bankAccountId || null : null,
     description: form.subject.trim() || null,
     notes: form.notes.trim() || null,
     tds_percent: tdsPercent,
+    tds_section: tdsSection,
+    tds_amount: tdsAmountValue,
+    tds_taxable_amount: tdsTaxableAmount,
     extra: {
       ...clientSnapshot(form),
       book: money.book || null,
@@ -604,6 +616,10 @@ async function saveReceipt(kind: SaleDocumentKind, form: QuotationForm, editingI
       receipt_number: kind === 'refund' ? against : null,
       allocated_amount: amount,
       tds_percent: tdsPercent,
+      tds_section: tdsSection,
+      tds_amount: tdsAmountValue,
+      tds_taxable_amount: tdsTaxableAmount,
+      bank_account_id: method === 'Bank' ? form.bankAccountId || null : null,
     },
     updated_at: new Date().toISOString(),
   }

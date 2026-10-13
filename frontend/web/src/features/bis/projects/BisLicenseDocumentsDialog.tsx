@@ -95,8 +95,8 @@ const actionBtnClass =
   'h-8 w-8 rounded-none border border-stone-400 bg-white/70 p-0 text-amber-800 shadow-sm hover:border-amber-600 hover:bg-amber-50 hover:text-amber-950 focus-visible:ring-2 focus-visible:ring-amber-500/40'
 
 /** ~10″ / desktop: row table. Below that: cards. */
-const TABLE_MQ_SHOW = 'hidden lg:block'
-const CARDS_MQ_SHOW = 'lg:hidden'
+const TABLE_MQ_SHOW = 'hidden xl:block'
+const CARDS_MQ_SHOW = 'xl:hidden'
 
 const PAGE_SIZE_OPTIONS = [10, 20, 25, 50] as const
 
@@ -366,7 +366,7 @@ export function BisLicenseDocumentsDialog({
   const client = row ? clientDisplayName(row) || '—' : '—'
   const isLabel = row ? isCodeDisplayLabel(row) : ''
   const cmL = row ? formatCmL(row.cm_l_digits) : ''
-  const subtitle = [client, isLabel, cmL].filter(Boolean).join(' · ')
+  const subtitle = [client, isLabel, cmL].filter((part) => Boolean(part) && part !== '—').join(' · ')
 
   useEffect(() => {
     if (!open) {

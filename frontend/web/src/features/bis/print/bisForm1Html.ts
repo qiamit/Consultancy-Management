@@ -42,6 +42,7 @@ export type BisForm1Data = {
   signatoryDesignation: string
   dateOfApplication: string
   preparedBy: string
+  sealSignImageUrl: string
 }
 
 function managementPeople(payload: Record<string, unknown> | null | undefined): BisForm1Person[] {
@@ -318,7 +319,7 @@ function buildFormBody(data: BisForm1Data): string {
       <tr>
         <td class="f1-seal">
           <div class="f1-mini">Seal of the Firm:</div>
-          <div class="f1-seal-box"></div>
+          <div class="f1-seal-box">${data.sealSignImageUrl ? `<img src="${esc(data.sealSignImageUrl)}" alt="Client seal or sign"/>` : ''}</div>
         </td>
         <td class="f1-sign-fields">
           <div class="f1-sign-line">Signature ______________________________</div>
@@ -406,6 +407,7 @@ const FORM1_STYLES = `
   .f1-declaration p { margin: 0; font-size: 12px; text-align: justify; line-height: 1.45; }
   .f1-seal { width: 50%; text-align: center; }
   .f1-seal-box { width: 22mm; height: 22mm; border: 1px solid #111; margin: 6px auto 0; }
+  .f1-seal-box img { display: block; width: 100%; height: 100%; object-fit: contain; }
   .f1-sign-fields { width: 50%; font-size: 12px; }
   .f1-sign-line { margin: 4px 0; line-height: 1.4; }
   .f1-important { font-size: 12px; margin: 4px 0 0; font-weight: 600; line-height: 1.4; }
@@ -487,5 +489,6 @@ export function bisForm1DataFromPrintData(printData: BisPrintData): BisForm1Data
     signatoryDesignation: sig.signatoryDesignation,
     dateOfApplication: row.application_date ?? row.start_date ?? row.created_at ?? '',
     preparedBy: company.companyName,
+    sealSignImageUrl: client.sealSignEnabled ? client.sealSignImageUrl : '',
   }
 }

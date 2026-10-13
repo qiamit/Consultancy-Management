@@ -9,7 +9,7 @@ import {
   BUILTIN_TIME_FORMAT_OPTIONS,
   toDateFormatValue,
 } from '@/lib/appDateFormat'
-import { BUILTIN_CURRENCY_OPTIONS, parseCurrencyFromLabel } from '@/lib/appCurrency'
+import { BUILTIN_CURRENCY_OPTIONS, getCurrencyMeta, parseCurrencyFromLabel } from '@/lib/appCurrency'
 import { LimsFieldWithAdd, LimsFieldAddButton } from '@/components/lims/LimsFieldWithAdd'
 import { Tabs, TabsContent } from '@/components/ui/tabs'
 import { Input } from '@/components/ui/input'
@@ -189,12 +189,15 @@ export default function LabSettingsPage() {
   const [currencies, setCurrencies] = useState(
     BUILTIN_CURRENCY_OPTIONS.map((c) => ({ value: c.id, label: c.label })),
   )
+  const currencyOptions = currencies.some((currency) => currency.value === selectedCurrency)
+    ? currencies
+    : [...currencies, { value: selectedCurrency, label: getCurrencyMeta().label }]
   const [currencyDialogOpen, setCurrencyDialogOpen] = useState(false)
   const [newCurrency, setNewCurrency] = useState('')
   const [dateFormats, setDateFormats] = useState(BUILTIN_DATE_FORMAT_OPTIONS)
   const [dateDialogOpen, setDateDialogOpen] = useState(false)
   const [newDateFormat, setNewDateFormat] = useState('')
-  const [timeFormats, setTimeFormats] = useState(
+  const [timeFormats, setTimeFormats] = useState<OptionItem[]>(
     BUILTIN_TIME_FORMAT_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
   )
   const [timeDialogOpen, setTimeDialogOpen] = useState(false)
@@ -227,7 +230,7 @@ export default function LabSettingsPage() {
 
         if (deleteError) throw deleteError
 
-        const payload = registrationDocsToRows(registrationDocs)
+        const payload = registrationDocsToRows(registrationDocs.map((doc) => ({ ...doc, fileUrl: doc.fileUrl ?? null })))
         if (payload.length > 0) {
           const { error: insertError } = await supabase.from('lab_documents').insert(payload)
           if (insertError) throw insertError
@@ -254,7 +257,14 @@ export default function LabSettingsPage() {
 
         if (deleteError) throw deleteError
 
-        const payload = accreditationsToRows(accreditationCards)
+        const payload = accreditationsToRows(accreditationCards.map((card) => ({
+          ...card,
+          certificateFilePath: card.certificateFilePath ?? null,
+          scopeFilePath: card.scopeFilePath ?? null,
+          logoFilePath: card.logoFilePath ?? null,
+          validityStart: card.validityStart ?? null,
+          validityEnd: card.validityEnd ?? null,
+        })))
         if (payload.length > 0) {
           const { error: insertError } = await supabase.from('lab_accreditations').insert(payload)
           if (insertError) throw insertError
@@ -1964,7 +1974,7 @@ export default function LabSettingsPage() {
                       <Select
                         value={selectedCurrency}
                         onValueChange={(value) => {
-                          const match = currencies.find((c) => c.value === value)
+                          const match = currencyOptions.find((c) => c.value === value)
                           setSelectedCurrency(value, match?.label)
                         }}
                       >
@@ -1972,7 +1982,7 @@ export default function LabSettingsPage() {
                           <SelectValue placeholder="Select currency" />
                         </SelectTrigger>
                         <SelectContent>
-                          {currencies.map((currency) => (
+                          {currencyOptions.map((currency) => (
                             <SelectItem key={currency.value} value={currency.value}>
                               {currency.label}
                             </SelectItem>

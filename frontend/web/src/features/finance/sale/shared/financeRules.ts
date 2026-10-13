@@ -38,7 +38,7 @@ export function linesForDocumentKind(kind: string, lines: QuotationLineForm[]): 
 }
 
 export function tdsAmount(gross: number, percent: string): number {
-  if (percent !== '2' && percent !== '10') return 0
   const rate = Number(percent)
+  if (!Number.isFinite(rate) || rate < 0 || rate > 100) return 0
   return Math.round(gross * (rate / 100) * 100) / 100
 }

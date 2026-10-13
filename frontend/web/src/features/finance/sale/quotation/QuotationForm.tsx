@@ -69,7 +69,6 @@ import {
   lineAmount,
   parseMoney,
   QUOTATION_STATUS_LABELS,
-  QUOTATION_STATUS_OPTIONS,
   statusOptionsForDocumentKind,
   PAYMENT_METHOD_OPTIONS,
   type QuotationForm as QuotationFormType,
@@ -95,9 +94,11 @@ import { parseLabSettingsRow } from '@/features/settings/lab-settings/labSetting
 import { computeClientSaleBalance } from '@/features/finance/sale/shared/clientSaleBalance'
 import { refreshSaleLedgerCache } from '@/features/finance/sale/shared/saleDocumentsApi'
 import { supabase } from '@/lib/supabaseClient'
+import { toast } from 'sonner'
+import { listBankAccounts, type BankAccountRow } from '@/features/finance/books/booksApi'
 
-function ReceiptTdsSummary({ gross, percent }: { gross: string; percent: string }) {
-  const deducted = tdsAmount(parseMoney(gross), percent)
+function ReceiptTdsSummary({ gross, taxableBase, percent }: { gross: string; taxableBase: string; percent: string }) {
+  const deducted = tdsAmount(parseMoney(taxableBase || gross), percent)
   const net = Math.round((parseMoney(gross) - deducted) * 100) / 100
   return (
     <div className="flex min-w-0 flex-col justify-end space-y-1 text-sm text-stone-800">
@@ -418,11 +419,30 @@ export function QuotationFormView({
   const [purchaseBills, setPurchaseBills] = useState<PurchaseBillOption[]>([])
   const [purchaseSettlements, setPurchaseSettlements] = useState<PurchaseSettlement[]>([])
   const [clientReceipts, setClientReceipts] = useState<ReceiptOption[]>([])
+  const [bankAccounts, setBankAccounts] = useState<BankAccountRow[]>([])
   const linksInvoice =
     documentKind === 'paymentReceipt' || documentKind === 'creditNote' || documentKind === 'salesDebitNote'
   const linksPurchase = documentKind === 'paymentMade' || documentKind === 'debitNote'
   const linksReceipt = documentKind === 'refund'
   const showReceiptTds = documentKind === 'paymentReceipt' || (isPaymentReceipt && !documentKind)
+  const tdsRate = Number(form.tdsPercent)
+  const canSaveReceipt = !showReceiptTds || !form.tdsPercent || (
+    Number.isFinite(tdsRate) && tdsRate > 0 && tdsRate <= 100 &&
+    parseMoney(form.tdsTaxableAmount) >= 0 && Boolean(form.tdsSection.trim())
+  )
+
+  useEffect(() => {
+    if (!isPaymentReceipt) return
+    let cancelled = false
+    void listBankAccounts()
+      .then((rows) => {
+        if (!cancelled) setBankAccounts(rows)
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) toast.error(err instanceof Error ? err.message : 'Bank accounts could not be loaded')
+      })
+    return () => { cancelled = true }
+  }, [isPaymentReceipt])
 
   useEffect(() => {
     if (!form.clientId || (documentKind !== 'invoice' && !linksInvoice)) {
@@ -715,6 +735,18 @@ export function QuotationFormView({
     onChange({ ...form, [key]: value })
   }
 
+  const setTdsRate = (value: string) => {
+    const nextPercent = value === '0' ? '' : value === 'custom'
+      ? (form.tdsPercent && form.tdsPercent !== '2' && form.tdsPercent !== '10' ? form.tdsPercent : '0')
+      : value
+    onChange({
+      ...form,
+      tdsPercent: nextPercent,
+      tdsTaxableAmount: nextPercent && !form.tdsPercent ? form.paymentAmount : form.tdsTaxableAmount,
+      tdsSection: nextPercent ? form.tdsSection : '',
+    })
+  }
+
   const patchLine = (key: string, patch: Partial<QuotationLineForm>) => {
     onChange({
       ...form,
@@ -956,6 +988,24 @@ export function QuotationFormView({
                 </SelectContent>
               </Select>
             </div>
+            {form.paymentMethod === 'Bank' ? (
+              <div className="flex min-w-0 flex-col space-y-2">
+                <Label htmlFor="payment-bank-account">Bank account</Label>
+                <Select value={form.bankAccountId || 'none'} onValueChange={(value) => set('bankAccountId', value === 'none' ? '' : value)}>
+                  <SelectTrigger id="payment-bank-account" className={cn(fieldClass, 'w-full')}>
+                    <SelectValue placeholder="Select bank account" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Unassigned</SelectItem>
+                    {bankAccounts.map((account) => (
+                      <SelectItem key={account.id} value={account.id}>
+                        {account.account_name}{account.bank_name ? ` — ${account.bank_name}` : ''}{account.account_number_last4 ? ` ·•••• ${account.account_number_last4}` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
             <div className="flex min-w-0 flex-col space-y-2">
               <Label htmlFor="quotation-date">Date of {documentLabel}</Label>
               <Input
@@ -1218,10 +1268,7 @@ export function QuotationFormView({
             {showReceiptTds ? (
             <div className="flex min-w-0 flex-col space-y-2">
               <Label htmlFor="payment-tds">TDS</Label>
-              <Select
-                value={form.tdsPercent === '2' || form.tdsPercent === '10' ? form.tdsPercent : '0'}
-                onValueChange={(v) => set('tdsPercent', v === '0' ? '' : v)}
-              >
+              <Select value={form.tdsPercent ? (form.tdsPercent === '2' || form.tdsPercent === '10' ? form.tdsPercent : 'custom') : '0'} onValueChange={setTdsRate}>
                 <SelectTrigger id="payment-tds" className={cn(fieldClass, 'w-full min-h-10')}>
                   <SelectValue placeholder="No TDS" />
                 </SelectTrigger>
@@ -1229,11 +1276,43 @@ export function QuotationFormView({
                   <SelectItem value="0">No TDS</SelectItem>
                   <SelectItem value="2">2%</SelectItem>
                   <SelectItem value="10">10%</SelectItem>
+                  <SelectItem value="custom">Custom rate</SelectItem>
                 </SelectContent>
               </Select>
+              {form.tdsPercent && form.tdsPercent !== '2' && form.tdsPercent !== '10' ? (
+                <Input
+                  aria-label="Custom TDS rate percent"
+                  className={cn(fieldClass, 'w-full')}
+                  type="number"
+                  min="0.01"
+                  max="100"
+                  step="0.01"
+                  placeholder="Rate %"
+                  value={form.tdsPercent === '0' ? '' : form.tdsPercent}
+                  onChange={(event) => set('tdsPercent', event.target.value)}
+                />
+              ) : null}
+              {form.tdsPercent ? (
+                <CurrencyInrField
+                  id="payment-tds-taxable-base"
+                  label="TDS taxable amount"
+                  value={form.tdsTaxableAmount}
+                  onChange={(v) => set('tdsTaxableAmount', v)}
+                />
+              ) : null}
+              {form.tdsPercent ? (
+                <Input
+                  aria-label="TDS section"
+                  className={cn(fieldClass, 'w-full')}
+                  maxLength={32}
+                  placeholder="TDS section (e.g. 194C)"
+                  value={form.tdsSection}
+                  onChange={(event) => set('tdsSection', event.target.value)}
+                />
+              ) : null}
             </div>
             ) : null}
-            {showReceiptTds ? <ReceiptTdsSummary gross={form.paymentAmount} percent={form.tdsPercent} /> : null}
+            {showReceiptTds ? <ReceiptTdsSummary gross={form.paymentAmount} taxableBase={form.tdsTaxableAmount} percent={form.tdsPercent} /> : null}
             {showReceiptTds ? (
             <CurrencyBalanceField
               label="Balance After Payment"
@@ -2674,7 +2753,7 @@ export function QuotationFormView({
         <Button
           type="button"
           className={cn(limsPrimaryBtnClass, 'h-9 px-4 text-sm')}
-          disabled={saveLoading}
+          disabled={saveLoading || !canSave || !canSaveReceipt}
           onClick={onSave}
         >
           {saveLoading ? 'Saving…' : 'Save & Close'}
