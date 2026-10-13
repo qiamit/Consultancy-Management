@@ -150,7 +150,7 @@ export default function ReportsPage() {
             </ul>
           )
         ) : null}
-        {report !== 'ageing' && report !== 'stock' ? (
+        {report !== 'tds_return' && report !== 'ageing' && report !== 'stock' ? (
           rows.length === 0 ? <p className="text-sm text-stone-600">No rows for this report.</p> : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[640px] text-sm">
