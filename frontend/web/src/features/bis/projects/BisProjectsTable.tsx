@@ -8,6 +8,7 @@ import {
   FileText,
   Mail,
   Pencil,
+  RefreshCw,
   Wallet,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -118,6 +119,9 @@ function RowActions({
   onEdit,
   onViewDocuments,
   onEmailDocument,
+  renewalMode = false,
+  onStartRenewal,
+  onRenewalReminder,
 }: {
   row: BisProjectRow
   client: string
@@ -125,9 +129,63 @@ function RowActions({
   onEdit: (row: BisProjectRow) => void
   onViewDocuments: (row: BisProjectRow) => void
   onEmailDocument?: (row: BisProjectRow, kind: BisPrintDocumentKind) => void
+  renewalMode?: boolean
+  onStartRenewal?: (row: BisProjectRow) => void
+  onRenewalReminder?: (row: BisProjectRow) => void
 }) {
   return (
     <div className="bis-project-row-actions inline-flex shrink-0 items-center gap-0.5">
+      {renewalMode ? (
+        <>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className={actionGhostBtnClass}
+            aria-label={`Start renewal for ${client}`}
+            title="Open renewal form"
+            onClick={() => onStartRenewal?.(row)}
+          >
+            <RefreshCw size={16} />
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className={actionGhostBtnClass}
+            aria-label={`Manak Assist for ${client}`}
+            title="Open MANAK Online"
+            onClick={() => {
+              void openManakEbisAssist({
+                portalUserId: manakLoginFromProject(row).userId,
+                projectId: row.id,
+              })
+                .then(({ extensionUsed }) => {
+                  if (extensionUsed) toast.success('Opening Manak eBIS via extension')
+                  else toast.warning('Extension not detected — opened Manak eBIS in a new tab', {
+                    description: EXTENSION_MISSING_MSG,
+                  })
+                })
+                .catch((err: unknown) => toast.error(err instanceof Error ? err.message : 'Could not open Manak'))
+            }}
+          >
+            <ExternalLink size={16} />
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className={actionGhostBtnClass}
+            aria-label={`Prepare renewal reminder for ${client}`}
+            title={row.client?.email ? `Prepare renewal reminder for ${row.client.email}` : 'Client email is not available'}
+            disabled={!row.client?.email || emailBusy}
+            onClick={() => onRenewalReminder?.(row)}
+          >
+            <Mail size={16} />
+          </Button>
+        </>
+      ) : (
+        <>
       <Button
         type="button"
         size="sm"
@@ -218,6 +276,8 @@ function RowActions({
           </DropdownMenuContent>
         </DropdownMenu>
       ) : null}
+        </>
+      )}
     </div>
   )
 }
@@ -316,6 +376,9 @@ export function BisProjectsTable({
   onEdit,
   onViewDocuments,
   onEmailDocument,
+  renewalMode = false,
+  onStartRenewal,
+  onRenewalReminder,
   emailBusy = false,
   onOpenIsCode,
   onOpenClient,
@@ -334,6 +397,9 @@ export function BisProjectsTable({
   onEdit: (row: BisProjectRow) => void
   onViewDocuments: (row: BisProjectRow) => void
   onEmailDocument?: (row: BisProjectRow, kind: BisPrintDocumentKind) => void
+  renewalMode?: boolean
+  onStartRenewal?: (row: BisProjectRow) => void
+  onRenewalReminder?: (row: BisProjectRow) => void
   emailBusy?: boolean
   onOpenIsCode?: (isCodeId: string) => void
   onOpenClient?: (clientId: string) => void
@@ -459,6 +525,9 @@ export function BisProjectsTable({
                             onEdit={onEdit}
                             onViewDocuments={onViewDocuments}
                             onEmailDocument={onEmailDocument}
+                            renewalMode={renewalMode}
+                            onStartRenewal={onStartRenewal}
+                            onRenewalReminder={onRenewalReminder}
                           />
                         </div>
 
@@ -659,6 +728,9 @@ export function BisProjectsTable({
                           onEdit={onEdit}
                           onViewDocuments={onViewDocuments}
                           onEmailDocument={onEmailDocument}
+                          renewalMode={renewalMode}
+                          onStartRenewal={onStartRenewal}
+                          onRenewalReminder={onRenewalReminder}
                         />
                       </TableCell>
                     </TableRow>

@@ -31,7 +31,8 @@ import JournalPage from '@/features/finance/journal/JournalPage'
 import StatementsPage from '@/features/finance/statements/StatementsPage'
 import ReportsPage from '@/features/finance/reports/ReportsPage'
 import BisProjectsMasterPage from '@/features/bis/projects/BisProjectsMasterPage'
-import BisRenewalsMasterPage from '@/features/bis/renewals/BisRenewalsMasterPage'
+import BisLicenseLifecyclePage from '@/features/bis/renewals/BisLicenseLifecyclePage'
+import { Navigate } from 'react-router-dom'
 import BisSurveillanceMasterPage from '@/features/bis/surveillance/BisSurveillanceMasterPage'
 import BisSampleFailureReplyMasterPage from '@/features/bis/sample-failure-reply/BisSampleFailureReplyMasterPage'
 import BisKnowledgeSearchPage from '@/features/bis/knowledge-search/BisKnowledgeSearchPage'
@@ -113,7 +114,7 @@ export function BisNewInclusionRoute() {
 }
 
 export function BisLicenseRenewalsRoute() {
-  return <BisRenewalsMasterPage />
+  return <BisLicenseLifecyclePage />
 }
 
 export function LicenseStopMarkingRoute() {
@@ -141,7 +142,7 @@ export function ExpiredLicensesRoute() {
 }
 
 export function DueSoonLicensesRoute() {
-  return <BisProjectsMasterPage key="due_soon" listMode="due_soon" />
+  return <Navigate to="/bis/license-renewals" replace />
 }
 
 export function BisKnowledgeSearchRoute() {

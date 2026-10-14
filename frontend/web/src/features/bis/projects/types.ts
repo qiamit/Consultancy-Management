@@ -13,7 +13,7 @@ export const BIS_PROJECTS_LIST_TITLES: Record<BisProjectsListMode, string> = {
   all: 'All BIS Licenses',
   our: 'QE BIS Licenses',
   expired: 'Expired Licenses',
-  due_soon: 'Licenses Due Soon',
+  due_soon: 'BIS License Renewals',
   stop_marking: 'License in Stop Marking',
   applications: 'BIS New Application',
   inclusion: 'BIS New Inclusion',
@@ -64,6 +64,7 @@ export const DEFAULT_APPLICATION_STAGE = 'Under Preparation'
 
 export type BisProjectClientJoin = {
   company_name: string | null
+  email?: string | null
   manak_user_id?: string | null
   manak_password_set?: boolean | null
 }

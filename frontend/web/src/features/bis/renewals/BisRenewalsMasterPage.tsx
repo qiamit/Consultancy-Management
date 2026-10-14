@@ -9,12 +9,15 @@ import { BisRenewalsTable } from './BisRenewalsTable'
 import { BisRenewalsForm } from './BisRenewalsForm'
 import {
   deleteRenewals,
+  fetchRenewalById,
+  fetchRenewalSlabRates,
   fetchRenewalProjectSummary,
   fetchRenewalsPage,
   formatBisApiError,
   saveRenewal,
 } from './bisRenewalsApi'
 import {
+  coveredProductionExceedsTotal,
   emptyRenewalForm,
   rowToRenewalForm,
   type BisRenewalForm,
@@ -26,10 +29,59 @@ import { emailRenewalFormToClient, printRenewalForm } from './printRenewalForm'
 import { formatIsCodeLabel } from '@/features/masters/is-codes/formatIsCodeLabel'
 
 const SEARCH_DEBOUNCE_MS = 350
+const RENEWAL_DRAFT_KEY_PREFIX = 'bis-renewal-draft:'
 
-export default function BisRenewalsMasterPage() {
+type StoredRenewalDraft = { recordId: string; form: BisRenewalForm }
+
+function renewalDraftKey(editId: string): string {
+  return `${RENEWAL_DRAFT_KEY_PREFIX}${editId}`
+}
+
+function readRenewalDraft(editId: string): StoredRenewalDraft | null {
+  try {
+    const raw = window.sessionStorage.getItem(renewalDraftKey(editId))
+    if (!raw) return null
+    const value = JSON.parse(raw) as Partial<StoredRenewalDraft>
+    if (!value.recordId || !value.form || typeof value.form.projectId !== 'string') return null
+    return value as StoredRenewalDraft
+  } catch {
+    return null
+  }
+}
+
+function writeRenewalDraft(editId: string, form: BisRenewalForm): StoredRenewalDraft | null {
+  try {
+    const current = readRenewalDraft(editId)
+    const draft = {
+      recordId: editId === 'new'
+        ? current?.form.projectId === form.projectId
+          ? current.recordId
+          : globalThis.crypto.randomUUID()
+        : editId,
+      form,
+    }
+    window.sessionStorage.setItem(renewalDraftKey(editId), JSON.stringify(draft))
+    return draft
+  } catch {
+    return null
+  }
+}
+
+function removeRenewalDraft(editId: string | null): void {
+  if (!editId) return
+  try {
+    window.sessionStorage.removeItem(renewalDraftKey(editId))
+  } catch {
+    // Saving to the database remains authoritative if session storage is unavailable.
+  }
+}
+
+export default function BisRenewalsMasterPage({ dialogOnly = false }: { dialogOnly?: boolean }) {
   const [searchParams, setSearchParams] = useSearchParams()
-  const { editId, setEdit } = useMasterUiSearchState()
+  const requestedProjectId = (searchParams.get('projectId') ?? '').trim()
+  const { editId, setEdit } = useMasterUiSearchState({
+    editKey: dialogOnly ? 'renewalEdit' : 'edit',
+  })
   const [rows, setRows] = useState<BisRenewalRow[]>([])
   const [total, setTotal] = useState(0)
   const [listLoading, setListLoading] = useState(false)
@@ -44,7 +96,16 @@ export default function BisRenewalsMasterPage() {
   const [reloadKey, setReloadKey] = useState(0)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
 
-  const [form, setForm] = useState<BisRenewalForm>(() => emptyRenewalForm())
+  const [form, setForm] = useState<BisRenewalForm>(() => {
+    const params = new URLSearchParams(window.location.search)
+    const initialEditId = (params.get(dialogOnly ? 'renewalEdit' : 'edit') ?? '').trim()
+    const initialProjectId = (params.get('projectId') ?? '').trim()
+    const savedDraft = initialEditId ? readRenewalDraft(initialEditId) : null
+    if (savedDraft && (!initialProjectId || savedDraft.form.projectId === initialProjectId)) {
+      return savedDraft.form
+    }
+    return emptyRenewalForm()
+  })
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [emailBusy, setEmailBusy] = useState(false)
@@ -63,12 +124,17 @@ export default function BisRenewalsMasterPage() {
   })
 
   useEffect(() => {
-    const projectId = (searchParams.get('projectId') ?? '').trim()
+    const projectId = requestedProjectId
     if (!projectId || prefillHandledRef.current === projectId) return
     prefillHandledRef.current = projectId
     const nextParams = new URLSearchParams(searchParams)
     nextParams.delete('projectId')
     setSearchParams(nextParams, { replace: true })
+
+    // A saved renewal id takes precedence over the project prefill parameter. The
+    // latter can remain in a refreshed URL briefly while the prefill cleanup runs;
+    // never let that stale parameter replace an existing renewal with a blank form.
+    if (editId && editId !== 'new') return
 
     void (async () => {
       try {
@@ -77,8 +143,10 @@ export default function BisRenewalsMasterPage() {
           setMessage('License not found for renewal.')
           return
         }
-        setForm({
-          ...emptyRenewalForm(),
+        const activeParams = new URLSearchParams(window.location.search)
+        const activeEditId = (activeParams.get(dialogOnly ? 'renewalEdit' : 'edit') ?? '').trim()
+        if (activeEditId && activeEditId !== 'new') return
+        const projectMetadata = {
           projectId,
           projectLabel: summary.projectLabel,
           clientId: summary.clientId,
@@ -86,7 +154,13 @@ export default function BisRenewalsMasterPage() {
           currentValidity: summary.currentValidity,
           cmLDigits: summary.cmLDigits,
           isCodeLabel: summary.isCodeLabel,
-        })
+          unitOfIs: summary.unitOfIs,
+          slabRates: summary.slabRates,
+        }
+        const savedDraft = readRenewalDraft('new')
+        setForm(savedDraft?.form.projectId === projectId
+          ? { ...savedDraft.form, ...projectMetadata }
+          : { ...emptyRenewalForm(), ...projectMetadata })
         setFormError(null)
         hydratedEditRef.current = 'new'
         setEdit('new')
@@ -95,7 +169,12 @@ export default function BisRenewalsMasterPage() {
         setMessage(formatBisApiError(err))
       }
     })()
-  }, [searchParams, setSearchParams])
+  }, [dialogOnly, requestedProjectId, editId, searchParams, setSearchParams, setEdit])
+
+  useEffect(() => {
+    if (!editId || !form.projectId || hydratedEditRef.current !== editId) return
+    writeRenewalDraft(editId, form)
+  }, [editId, form])
 
   useEffect(() => {
     const id = window.setTimeout(() => {
@@ -109,10 +188,11 @@ export default function BisRenewalsMasterPage() {
   }, [searchInput])
 
   useEffect(() => {
+    if (dialogOnly) return
     const requestId = ++requestRef.current
-    setListLoading(true)
-    setListError(null)
     void (async () => {
+      setListLoading(true)
+      setListError(null)
       try {
         const result = await fetchRenewalsPage({ search, page, pageSize })
         if (requestId !== requestRef.current) return
@@ -132,7 +212,7 @@ export default function BisRenewalsMasterPage() {
         if (requestId === requestRef.current) setListLoading(false)
       }
     })()
-  }, [search, page, pageSize, reloadKey])
+  }, [dialogOnly, search, page, pageSize, reloadKey])
 
   const reload = useCallback(() => setReloadKey((k) => k + 1), [])
 
@@ -144,22 +224,47 @@ export default function BisRenewalsMasterPage() {
     if (hydratedEditRef.current === editId) return
 
     if (editId === 'new') {
-      if (!form.projectId) setForm(emptyRenewalForm())
-      setFormError(null)
       hydratedEditRef.current = 'new'
       return
     }
 
     const fromPage = rows.find((r) => r.id === editId)
     if (fromPage) {
-      setForm(rowToRenewalForm(fromPage))
-      setFormError(null)
-      hydratedEditRef.current = editId
-      return
+      let active = true
+      queueMicrotask(() => {
+        if (!active) return
+        setForm(rowToRenewalForm(fromPage))
+        setFormError(null)
+        hydratedEditRef.current = editId
+      })
+      return () => { active = false }
+    }
+
+    if (dialogOnly) {
+      let active = true
+      void fetchRenewalById(editId)
+        .then((row) => {
+          if (!active) return
+          if (!row) {
+            setFormError('Saved renewal could not be found. Return to the renewals list and open it again.')
+            return
+          }
+          const serverForm = rowToRenewalForm(row)
+          const savedDraft = readRenewalDraft(editId)
+          setForm(savedDraft?.form.projectId === serverForm.projectId
+            ? { ...serverForm, ...savedDraft.form }
+            : serverForm)
+          setFormError(null)
+          hydratedEditRef.current = editId
+        })
+        .catch((err) => {
+          if (active) setFormError(formatBisApiError(err))
+        })
+      return () => { active = false }
     }
 
     if (!listLoading) setEdit(null)
-  }, [editId, rows, listLoading, form.projectId, setEdit])
+  }, [dialogOnly, editId, rows, listLoading, form.projectId, requestedProjectId, setEdit])
 
   const pageCount = Math.max(1, Math.ceil(total / pageSize))
   const canSave = !saving && form.projectId.length > 0 && form.renewalStatus.length > 0
@@ -180,6 +285,10 @@ export default function BisRenewalsMasterPage() {
 
   const handleSave = async () => {
     if (!canSave) return
+    if (form.productionRows.some(coveredProductionExceedsTotal)) {
+      setFormError('Covered Production must be equal to or less than Total Production for every period.')
+      return
+    }
     if (form.newValidityFrom && form.newValidityTo && form.newValidityTo < form.newValidityFrom) {
       setFormError('New validity "to" date cannot be before the "from" date.')
       return
@@ -187,10 +296,15 @@ export default function BisRenewalsMasterPage() {
     setSaving(true)
     setFormError(null)
     try {
-      await saveRenewal(form, editingId)
-      hydratedEditRef.current = null
-      setEdit(null)
-      setMessage(editingId ? 'Saved changes.' : 'Saved new renewal.')
+      const slabRates = await fetchRenewalSlabRates(form.projectId)
+      const currentForm = { ...form, slabRates }
+      setForm((previous) => ({ ...previous, slabRates }))
+      const saveDraftId = !editingId ? readRenewalDraft('new')?.recordId : undefined
+      const savedId = await saveRenewal(currentForm, editingId, saveDraftId)
+      removeRenewalDraft(editId)
+      hydratedEditRef.current = savedId
+      setEdit(savedId)
+      setMessage(editingId ? 'Saved changes. You can continue editing.' : 'Saved new renewal. You can continue editing.')
       reload()
     } catch (err) {
       setFormError(formatBisApiError(err))
@@ -297,6 +411,22 @@ export default function BisRenewalsMasterPage() {
     setMessage(`Exported ${source.length} row(s).`)
   }
 
+  const renewalForm = (
+    <BisRenewalsForm
+      open={showForm}
+      onOpenChange={handleFormOpenChange}
+      editing={editingId != null}
+      form={form}
+      onChange={setForm}
+      canSave={canSave}
+      saving={saving}
+      errorMessage={formError}
+      onSave={() => void handleSave()}
+    />
+  )
+
+  if (dialogOnly) return renewalForm
+
   return (
     <div className={limsPageShellClass}>
       <BisProjectsHeaderBar
@@ -345,17 +475,7 @@ export default function BisRenewalsMasterPage() {
           if (Number.isFinite(n) && n >= 1 && n <= pageCount) setPage(n)
         }}
       />
-      <BisRenewalsForm
-        open={showForm}
-        onOpenChange={handleFormOpenChange}
-        editing={editingId != null}
-        form={form}
-        onChange={setForm}
-        canSave={canSave}
-        saving={saving}
-        errorMessage={formError}
-        onSave={() => void handleSave()}
-      />
+      {renewalForm}
     </div>
   )
 }

@@ -4,6 +4,9 @@ import type { FilterComboboxOption } from '@/features/sample-handling/receiving/
 import { formatBisApiError } from '../projects/bisProjectsApi'
 import {
   renewalClientName,
+  coveredProductionExceedsTotal,
+  calculateRenewalProductionRow,
+  type RenewalSlabRate,
   type BisRenewalForm,
   type BisRenewalRow,
 } from './types'
@@ -11,7 +14,7 @@ import {
 export { formatBisApiError }
 
 const PROJECT_JOIN =
-  'project:bis_projects(id, title, cm_l_digits, license_validity_date, status, client_id, is_code:is_codes(is_number, title, revision_year, part_no, section_no, standard_prefix))'
+  'project:bis_projects(id, title, cm_l_digits, license_validity_date, status, client_id, is_code:is_codes(is_number, title, revision_year, part_no, section_no, standard_prefix, unit_of_is, slab_1_quantity, slab_1_rate, slab_2_quantity, slab_2_rate, slab_3_quantity, slab_3_rate))'
 const SELECT_WITH_JOINS = `*, client:clients(company_name), ${PROJECT_JOIN}`
 
 const LOOKUP_ID_LIMIT = 100
@@ -84,6 +87,16 @@ export async function fetchRenewalsPage({
   }
 }
 
+export async function fetchRenewalById(id: string): Promise<BisRenewalRow | null> {
+  const { data, error } = await supabase
+    .from('bis_renewal_applications')
+    .select(SELECT_WITH_JOINS)
+    .eq('id', id)
+    .maybeSingle()
+  if (error) throw error
+  return data as unknown as BisRenewalRow | null
+}
+
 export async function searchRenewalProjectOptions(term: string): Promise<FilterComboboxOption[]> {
   const clean = sanitizeSearchTerm(term)
   let query = supabase
@@ -120,6 +133,40 @@ export type RenewalProjectSummary = {
   currentValidity: string
   cmLDigits: string
   isCodeLabel: string
+  unitOfIs: string
+  slabRates: RenewalSlabRate[]
+}
+
+export async function fetchRenewalSlabRates(projectId: string): Promise<RenewalSlabRate[]> {
+  const { data: project, error: projectError } = await supabase
+    .from('bis_projects')
+    .select('is_code_id')
+    .eq('id', projectId)
+    .maybeSingle()
+  if (projectError) throw projectError
+  const isCodeId = (project as { is_code_id?: string | null } | null)?.is_code_id
+  if (!isCodeId) return []
+
+  const { data, error } = await supabase
+    .from('is_codes')
+    .select('slab_1_quantity, slab_1_rate, slab_2_quantity, slab_2_rate, slab_3_quantity, slab_3_rate')
+    .eq('id', isCodeId)
+    .maybeSingle()
+  if (error) throw error
+  const isCode = data as {
+    slab_1_quantity?: string | null
+    slab_1_rate?: number | string | null
+    slab_2_quantity?: string | null
+    slab_2_rate?: number | string | null
+    slab_3_quantity?: string | null
+    slab_3_rate?: number | string | null
+  } | null
+  if (!isCode) return []
+  return [
+    { quantity: isCode.slab_1_quantity ?? '', rate: String(isCode.slab_1_rate ?? '') },
+    { quantity: isCode.slab_2_quantity ?? '', rate: String(isCode.slab_2_rate ?? '') },
+    { quantity: isCode.slab_3_quantity ?? '', rate: String(isCode.slab_3_rate ?? '') },
+  ]
 }
 
 export async function fetchRenewalProjectSummary(
@@ -128,7 +175,7 @@ export async function fetchRenewalProjectSummary(
   const { data, error } = await supabase
     .from('bis_projects')
     .select(
-      'id, title, client_id, cm_l_digits, license_validity_date, client:clients(company_name), is_code:is_codes(is_number, revision_year, part_no, section_no, standard_prefix)',
+      'id, title, client_id, is_code_id, cm_l_digits, license_validity_date, client:clients(company_name), is_code:is_codes(id, is_number, revision_year, part_no, section_no, standard_prefix, unit_of_is, slab_1_quantity, slab_1_rate, slab_2_quantity, slab_2_rate, slab_3_quantity, slab_3_rate)',
     )
     .eq('id', projectId)
     .maybeSingle()
@@ -137,6 +184,7 @@ export async function fetchRenewalProjectSummary(
   const row = data as unknown as {
     title: string | null
     client_id: string | null
+    is_code_id: string | null
     cm_l_digits: string | null
     license_validity_date: string | null
     client: { company_name: string | null } | null
@@ -146,8 +194,31 @@ export async function fetchRenewalProjectSummary(
       part_no?: string | null
       section_no?: string | null
       standard_prefix?: string | null
+      unit_of_is?: string | null
+      slab_1_quantity?: string | null
+      slab_1_rate?: number | string | null
+      slab_2_quantity?: string | null
+      slab_2_rate?: number | string | null
+      slab_3_quantity?: string | null
+      slab_3_rate?: number | string | null
     } | null
   }
+  let isCode = row.is_code
+  if (!isCode?.unit_of_is && row.is_code_id) {
+    const { data: fetchedIsCode, error: isCodeError } = await supabase
+      .from('is_codes')
+      .select('unit_of_is, slab_1_quantity, slab_1_rate, slab_2_quantity, slab_2_rate, slab_3_quantity, slab_3_rate')
+      .eq('id', row.is_code_id)
+      .maybeSingle()
+    if (isCodeError) throw isCodeError
+    if (fetchedIsCode) isCode = fetchedIsCode as typeof row.is_code
+  }
+  const unitOfIs = isCode?.unit_of_is?.trim() ?? ''
+  const slabRates = isCode ? [
+    { quantity: isCode.slab_1_quantity ?? '', rate: String(isCode.slab_1_rate ?? '') },
+    { quantity: isCode.slab_2_quantity ?? '', rate: String(isCode.slab_2_rate ?? '') },
+    { quantity: isCode.slab_3_quantity ?? '', rate: String(isCode.slab_3_rate ?? '') },
+  ] : []
   const cmLDigits = String(row.cm_l_digits ?? '').replace(/\D/g, '')
   return {
     projectLabel: (row.title ?? '').trim() || (cmLDigits ? `CM/L-${cmLDigits}` : 'BIS License'),
@@ -158,6 +229,8 @@ export async function fetchRenewalProjectSummary(
     isCodeLabel: row.is_code
       ? formatIsCodeLabel(row.is_code)
       : '',
+    unitOfIs,
+    slabRates,
   }
 }
 
@@ -175,8 +248,17 @@ function numberOrNull(value: string): number | null {
   return Number.isFinite(n) ? n : null
 }
 
-export async function saveRenewal(form: BisRenewalForm, editingId: string | null): Promise<void> {
+export async function saveRenewal(
+  form: BisRenewalForm,
+  editingId: string | null,
+  draftId?: string,
+): Promise<string> {
+  if (form.productionRows.some(coveredProductionExceedsTotal)) {
+    throw new Error('Covered Production must be equal to or less than Total Production for every period.')
+  }
+  const renewalId = editingId ?? draftId ?? globalThis.crypto.randomUUID()
   const payload = {
+    id: renewalId,
     project_id: form.projectId,
     client_id: form.clientId || null,
     application_date: dateOrNull(form.applicationDate),
@@ -185,6 +267,10 @@ export async function saveRenewal(form: BisRenewalForm, editingId: string | null
     bis_office: textOrNull(form.bisOffice),
     bis_desk_officer: textOrNull(form.bisDeskOfficer),
     marking_fee_rate: numberOrNull(form.markingFeeRate),
+    renewal_period_from: dateOrNull(form.renewalPeriodFrom),
+    renewal_period_to: dateOrNull(form.renewalPeriodTo),
+    renewal_term_years: Number.parseInt(form.renewalTermYears, 10) || 5,
+    basic_unit_rate: numberOrNull(form.basicUnitRate),
     marking_fee_quantity: numberOrNull(form.markingFeeQuantity),
     marking_fee_total: numberOrNull(form.markingFeeTotal),
     fee_challan_number: textOrNull(form.feeChallanNumber),
@@ -203,6 +289,11 @@ export async function saveRenewal(form: BisRenewalForm, editingId: string | null
     new_validity_from: dateOrNull(form.newValidityFrom),
     new_validity_to: dateOrNull(form.newValidityTo),
     renewal_status: form.renewalStatus || 'Initiated',
+    production_details: form.productionRows.map((row, index) => calculateRenewalProductionRow(
+      index === 0 ? { ...row, periodFrom: form.renewalPeriodFrom } : row,
+      form.basicUnitRate,
+      form.slabRates,
+    )),
     notes: textOrNull(form.notes),
     updated_at: new Date().toISOString(),
   }
@@ -214,13 +305,17 @@ export async function saveRenewal(form: BisRenewalForm, editingId: string | null
       .eq('id', editingId)
     if (error) throw error
   } else {
-    const { error } = await supabase.from('bis_renewal_applications').insert(payload)
+    const { error } = await supabase
+      .from('bis_renewal_applications')
+      .upsert(payload, { onConflict: 'id' })
     if (error) throw error
   }
 
-  // A granted validity date becomes the license's current validity (same as Consultancy Pro).
+  // Renewal records remain linked to the same BIS license/project. Update its current
+  // validity only after BIS has actually granted the renewal; draft target dates are not
+  // license history and must not make a license appear renewed prematurely.
   const newValidity = dateOrNull(form.newValidityTo)
-  if (newValidity) {
+  if (newValidity && form.renewalStatus === 'Renewal Granted') {
     const { error } = await supabase
       .from('bis_projects')
       .update({
@@ -235,6 +330,8 @@ export async function saveRenewal(form: BisRenewalForm, editingId: string | null
       )
     }
   }
+
+  return renewalId
 }
 
 export async function deleteRenewals(ids: string[]): Promise<void> {

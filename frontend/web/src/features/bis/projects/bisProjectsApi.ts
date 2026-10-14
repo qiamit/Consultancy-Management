@@ -20,9 +20,9 @@ import {
 } from './types'
 
 const SELECT_WITH_JOINS =
-  '*, client:clients(company_name, manak_user_id, manak_password_set), is_code:is_codes(is_number, title, revision_year, part_no, section_no, standard_prefix, unit_of_is)'
+  '*, client:clients(company_name, email, manak_user_id, manak_password_set), is_code:is_codes(is_number, title, revision_year, part_no, section_no, standard_prefix, unit_of_is)'
 const SELECT_WITH_JOINS_LEGACY =
-  '*, client:clients(company_name), is_code:is_codes(is_number, title, revision_year, part_no, section_no, standard_prefix, unit_of_is)'
+  '*, client:clients(company_name, email), is_code:is_codes(is_number, title, revision_year, part_no, section_no, standard_prefix, unit_of_is)'
 
 function missingManakColumn(error: { code?: string; message?: string } | null) {
   if (!error) return false
@@ -159,7 +159,7 @@ export async function fetchBisProjectsPage(
   let query = supabase.from('bis_projects').select(selectColumns, { count: 'exact' })
 
   const today = todayIsoDate()
-  if (listMode === 'our') query = query.eq('is_qe_managed', true)
+  if (listMode === 'our' || listMode === 'due_soon') query = query.eq('is_qe_managed', true)
   else if (qeManagedFilter === 'managed') query = query.eq('is_qe_managed', true)
   else if (qeManagedFilter === 'not_managed') query = query.eq('is_qe_managed', false)
 
@@ -186,6 +186,9 @@ export async function fetchBisProjectsPage(
   }
 
   if (listMode === 'stop_marking') query = query.eq('status', 'stop_marking')
+  if (listMode === 'due_soon') {
+    query = query.not('project_kind', 'in', '("Application","application")')
+  }
   if (listMode === 'applications') {
     query = query.or('project_kind.eq.Application,project_kind.eq.application')
   } else if (listMode === 'inclusion') {

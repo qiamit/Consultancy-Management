@@ -47,7 +47,7 @@ export function BisProjectsHeaderBar({
   onSearchChange: (value: string) => void
   pageSize: number
   onPageSizeChange: (size: number) => void
-  onNew: () => void
+  onNew?: () => void
   addLabel?: string
   searchPlaceholder?: string
   searchAriaLabel?: string
@@ -187,18 +187,20 @@ export function BisProjectsHeaderBar({
               </SelectContent>
             </Select>
 
-            <Button
-              type="button"
-              className={cn('h-8 shrink-0 gap-1 px-2 sm:gap-1.5 sm:px-3', limsPrimaryBtnClass)}
-              size="sm"
-              onClick={onNew}
-              aria-label={addLabel}
-              title={addLabel}
-            >
-              <Plus size={14} className="shrink-0" />
-              <span className="bis-projects-add-label hidden lg:inline">{addLabel}</span>
-              <span className="bis-projects-add-label hidden sm:inline lg:hidden">Add</span>
-            </Button>
+            {onNew ? (
+              <Button
+                type="button"
+                className={cn('h-8 shrink-0 gap-1 px-2 sm:gap-1.5 sm:px-3', limsPrimaryBtnClass)}
+                size="sm"
+                onClick={onNew}
+                aria-label={addLabel}
+                title={addLabel}
+              >
+                <Plus size={14} className="shrink-0" />
+                <span className="bis-projects-add-label hidden lg:inline">{addLabel}</span>
+                <span className="bis-projects-add-label hidden sm:inline lg:hidden">Add</span>
+              </Button>
+            ) : null}
           </div>
 
           {filterSelects ? (

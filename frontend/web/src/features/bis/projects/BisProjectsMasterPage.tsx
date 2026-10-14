@@ -60,7 +60,9 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
     setModule,
     setDetail,
     setClient,
-  } = useMasterUiSearchState({ detailKey: 'isCode' })
+  } = useMasterUiSearchState({
+    detailKey: 'isCode',
+  })
 
   const [rows, setRows] = useState<BisProjectRow[]>([])
   const [total, setTotal] = useState(0)
@@ -82,7 +84,8 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
   const [jumpTo, setJumpTo] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
-  const showListFilters = listMode !== 'applications' && listMode !== 'inclusion'
+  const showListFilters =
+    listMode !== 'applications' && listMode !== 'inclusion' && listMode !== 'due_soon'
 
   const handleSort = (key: BisProjectSortKey) => {
     if (sortKey === key) {
@@ -139,7 +142,7 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
           search,
           page,
           pageSize,
-          qeManagedFilter: showListFilters ? qeManagedFilter : 'all',
+          qeManagedFilter: listMode === 'due_soon' ? 'managed' : showListFilters ? qeManagedFilter : 'all',
           projectKindFilter: showListFilters ? projectKindFilter : 'all',
           licenseStatusFilter: showListFilters ? licenseStatusFilter : 'all',
           sortKey,
@@ -438,6 +441,34 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
     navigate(`/bis/license-renewals?projectId=${encodeURIComponent(selectedRow.id)}`)
   }
 
+  const startRenewalForRow = (row: BisProjectRow) => {
+    navigate(`/bis/license-renewals?view=applications&projectId=${encodeURIComponent(row.id)}`)
+  }
+
+  const prepareRenewalReminder = (row: BisProjectRow) => {
+    const email = String(row.client?.email ?? '').trim()
+    if (!email) {
+      setMessage('Client email is not available. Update Client Master before preparing a reminder.')
+      return
+    }
+    const license = formatCmL(row.cm_l_digits)
+    const standard = row.is_code ? isCodeDisplayLabel({ is_code: row.is_code }) : 'BIS Standard'
+    const subject = `BIS license renewal reminder — ${license}`
+    const body = [
+      `Dear ${(row.client?.company_name ?? '').trim() || 'Client'},`,
+      '',
+      `This is a reminder regarding your BIS license ${license} for ${standard}.`,
+      `Current validity date: ${row.license_validity_date || 'Please confirm from your records'}.`,
+      '',
+      'Please share the applicable renewal documents and confirm the renewal period so we can proceed through MANAK Online.',
+      '',
+      'Regards,',
+      'Quality Engineering',
+    ].join('\n')
+    window.location.href = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+    setMessage(`Renewal reminder draft opened for ${email}.`)
+  }
+
   const handleDeleteSelected = async () => {
     const ids = [...selectedIds]
     if (ids.length === 0) return
@@ -471,7 +502,7 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
             setPageSize(size)
             setPage(1)
           }}
-          onNew={openNew}
+          onNew={listMode === 'due_soon' ? undefined : openNew}
           showListFilters={showListFilters}
           qeManagedFilter={qeManagedFilter}
           onQeManagedFilterChange={(value) => {
@@ -502,6 +533,9 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
           onToggleAll={toggleAllOnPage}
           onEdit={openEdit}
           onViewDocuments={openDocuments}
+          renewalMode={listMode === 'due_soon'}
+          onStartRenewal={startRenewalForRow}
+          onRenewalReminder={prepareRenewalReminder}
           onEmailDocument={
             canPrintBisForms
               ? (row, kind) => void handleEmailDocument(row, kind)
