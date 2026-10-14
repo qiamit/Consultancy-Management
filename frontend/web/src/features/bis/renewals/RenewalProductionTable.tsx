@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type KeyboardEvent } from 'react'
 import { Calculator, Calendar, Plus, Scissors, Trash2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -35,6 +35,18 @@ function formatQuantityTotal(value: number | null): string {
 
 function formatAmountTotal(value: number | null): string {
   return value === null ? '—' : formatMoneyInput(value.toFixed(2))
+}
+
+function moveToAdjacentProductionQuantity(event: KeyboardEvent<HTMLInputElement>) {
+  if (event.key !== 'Tab') return
+  const inputs = Array.from(document.querySelectorAll<HTMLInputElement>('[data-renewal-quantity]'))
+    .filter((input) => !input.disabled && input.getClientRects().length > 0)
+  const currentIndex = inputs.indexOf(event.currentTarget)
+  if (currentIndex < 0) return
+  const next = inputs[currentIndex + (event.shiftKey ? -1 : 1)]
+  if (!next) return
+  event.preventDefault()
+  next.focus()
 }
 
 const periodDateInputClass =
@@ -101,12 +113,14 @@ function NumberCell({
   onChange,
   error,
   disabled = false,
+  quantityTabOrder = false,
 }: {
   value: string
   label: string
   onChange: (value: string) => void
   error?: string
   disabled?: boolean
+  quantityTabOrder?: boolean
 }) {
   return (
     <div className="min-w-0">
@@ -114,6 +128,8 @@ function NumberCell({
         aria-label={label}
         aria-invalid={Boolean(error)}
         disabled={disabled}
+        data-renewal-quantity={quantityTabOrder ? '' : undefined}
+        onKeyDown={quantityTabOrder ? moveToAdjacentProductionQuantity : undefined}
         inputMode="decimal"
         title={error}
         className={cn(
@@ -290,9 +306,9 @@ export function RenewalProductionTable({
               <tr key={row.id} className={cn(row.stockMarkingBreak ? 'bg-amber-50' : index % 2 ? 'bg-stone-50' : 'bg-white')}>
                 <td className="border border-stone-300 p-1"><PeriodDateInput id={`renewal-period-from-desktop-${row.id}`} label={`Period from ${index + 1}`} value={index === 0 ? renewalPeriodFrom : row.periodFrom} disabled={index === 0 || row.stockMarkingBreak} onChange={(value) => update(row.id, 'periodFrom', value)} />{row.stockMarkingBreak ? <span className="mt-1 block text-center text-[9px] font-semibold text-amber-900">Stock Marking — No Production</span> : null}</td>
                 <td className="border border-stone-300 p-1"><PeriodDateInput id={`renewal-period-to-desktop-${row.id}`} label={`Period to ${index + 1}`} value={row.periodTo} disabled={row.stockMarkingBreak} onChange={(value) => update(row.id, 'periodTo', value)} /></td>
-                <td className="border border-stone-300 p-1">{row.stockMarkingBreak ? <div className="flex h-8 items-center justify-center border border-stone-300 bg-stone-50 tabular-nums">0</div> : <NumberCell label={`Total production units ${index + 1}`} value={row.productionUnit} onChange={(value) => update(row.id, 'productionUnit', value)} />}</td>
+                <td className="border border-stone-300 p-1">{row.stockMarkingBreak ? <div className="flex h-8 items-center justify-center border border-stone-300 bg-stone-50 tabular-nums">0</div> : <NumberCell label={`Total production units ${index + 1}`} value={row.productionUnit} quantityTabOrder onChange={(value) => update(row.id, 'productionUnit', value)} />}</td>
                 <td className="border border-stone-300 p-1"><CalculatedAmount value={row.productionValue} /></td>
-                <td className="border border-stone-300 p-1">{row.stockMarkingBreak ? <div className="flex h-8 items-center justify-center border border-stone-300 bg-stone-50 tabular-nums">0</div> : <NumberCell label={`Quantity covered units ${index + 1}`} value={row.coveredUnit} error={coveredProductionExceedsTotal(row) ? 'Must be equal to or less than Total Production.' : undefined} onChange={(value) => update(row.id, 'coveredUnit', value)} />}</td>
+                <td className="border border-stone-300 p-1">{row.stockMarkingBreak ? <div className="flex h-8 items-center justify-center border border-stone-300 bg-stone-50 tabular-nums">0</div> : <NumberCell label={`Quantity covered units ${index + 1}`} value={row.coveredUnit} quantityTabOrder error={coveredProductionExceedsTotal(row) ? 'Must be equal to or less than Total Production.' : undefined} onChange={(value) => update(row.id, 'coveredUnit', value)} />}</td>
                 <td className="border border-stone-300 p-1"><CalculatedAmount value={row.coveredValue} /></td>
                 <td className="border border-stone-300 px-1 py-2 text-center font-medium tabular-nums">{row.coveredPercent || '—'}</td>
                 <td className="border border-stone-300 p-1"><CalculatedAmount value={row.markingFee} /></td>
@@ -331,9 +347,9 @@ export function RenewalProductionTable({
             <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="min-w-0 space-y-1 text-xs font-medium text-stone-700"><span className="block">Period Start</span><PeriodDateInput id={`renewal-period-from-mobile-${row.id}`} label={`Period start ${index + 1}`} value={index === 0 ? renewalPeriodFrom : row.periodFrom} disabled={index === 0} onChange={(value) => update(row.id, 'periodFrom', value)} /></div>
               <div className="min-w-0 space-y-1 text-xs font-medium text-stone-700"><span className="block">Period End</span><PeriodDateInput id={`renewal-period-to-mobile-${row.id}`} label={`Period end ${index + 1}`} value={row.periodTo} onChange={(value) => update(row.id, 'periodTo', value)} /></div>
-              <label className="min-w-0 space-y-1 text-xs font-medium text-stone-700">Total Production{unitOfIs ? ` in ${unitOfIs}` : ''}<NumberCell label={`Total production units ${index + 1}`} value={row.stockMarkingBreak ? '0' : row.productionUnit} disabled={row.stockMarkingBreak} onChange={(value) => update(row.id, 'productionUnit', value)} /></label>
+              <label className="min-w-0 space-y-1 text-xs font-medium text-stone-700">Total Production{unitOfIs ? ` in ${unitOfIs}` : ''}<NumberCell label={`Total production units ${index + 1}`} value={row.stockMarkingBreak ? '0' : row.productionUnit} disabled={row.stockMarkingBreak} quantityTabOrder onChange={(value) => update(row.id, 'productionUnit', value)} /></label>
               <div className="min-w-0 space-y-1 text-xs font-medium text-stone-700"><span className="block">Production Value (Rs)</span><CalculatedAmount value={row.productionValue} /></div>
-              <label className="min-w-0 space-y-1 text-xs font-medium text-stone-700">Covered Production{unitOfIs ? ` in ${unitOfIs}` : ''}<NumberCell label={`Quantity covered units ${index + 1}`} value={row.stockMarkingBreak ? '0' : row.coveredUnit} disabled={row.stockMarkingBreak} error={coveredProductionExceedsTotal(row) ? 'Must be equal to or less than Total Production.' : undefined} onChange={(value) => update(row.id, 'coveredUnit', value)} /></label>
+              <label className="min-w-0 space-y-1 text-xs font-medium text-stone-700">Covered Production{unitOfIs ? ` in ${unitOfIs}` : ''}<NumberCell label={`Quantity covered units ${index + 1}`} value={row.stockMarkingBreak ? '0' : row.coveredUnit} disabled={row.stockMarkingBreak} quantityTabOrder onChange={(value) => update(row.id, 'coveredUnit', value)} /></label>
               <div className="min-w-0 space-y-1 text-xs font-medium text-stone-700"><span className="block">Covered Value (Rs)</span><CalculatedAmount value={row.coveredValue} /></div>
               <div className="space-y-1 text-xs font-medium text-stone-700"><span className="block">Covered Qty in %</span><div className="flex h-8 items-center justify-center border border-stone-300 bg-stone-50 tabular-nums">{row.coveredPercent || '—'}</div></div>
               <div className="min-w-0 space-y-1 text-xs font-medium text-stone-700"><span className="block">Marking Fee (Rs)</span><CalculatedAmount value={row.markingFee} /></div>
