@@ -1,5 +1,7 @@
 import * as XLSX from 'xlsx'
 import { downloadPdfViaPlaywright } from '@/lib/playwrightPdfClient'
+import { blobToBase64, sendAppEmail } from '@/lib/sendAppEmail'
+import { resolveClientEmail } from '../shared/emailHtmlToClient'
 import { calculateRenewalProductionRow, formatDisplayDate, renewalSlabForQuantity, type BisRenewalForm, type RenewalProductionRow } from './types'
 
 const SHEET_NAME = 'Production Data'
@@ -28,7 +30,20 @@ function dateToIso(value: unknown): string {
   return ''
 }
 
-export async function downloadRenewalClientWorkbook(form: BisRenewalForm): Promise<void> {
+function renewalWorkbookFilename(form: BisRenewalForm): string {
+  return `${safeBaseName(form.clientLabel || form.projectLabel)}_Renewal_Production.xlsx`
+}
+
+function downloadWorkbookBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  anchor.click()
+  URL.revokeObjectURL(url)
+}
+
+export async function createRenewalClientWorkbook(form: BisRenewalForm): Promise<Blob> {
   if (!form.productionRows.length || !form.renewalPeriodFrom || !form.renewalPeriodTo) {
     throw new Error('Set the renewal period first so the monthly rows can be prepared.')
   }
@@ -121,7 +136,7 @@ export async function downloadRenewalClientWorkbook(form: BisRenewalForm): Promi
   sheet.getRow(12).height = 8
 
   const headerRow = 13
-  const headers = ['Period Start', 'Period End', 'Period Type', `Total Production (${unit})`, `Covered Production (${unit})`]
+  const headers = ['Period Start', 'Period End', 'Production Type / Status', `Total Production (${unit})`, `Covered Production (${unit})`]
   sheet.addRow(headers)
   const header = sheet.getRow(headerRow)
   header.height = 34
@@ -136,7 +151,7 @@ export async function downloadRenewalClientWorkbook(form: BisRenewalForm): Promi
     const excelRow = sheet.addRow([
       row.periodFrom ? new Date(`${row.periodFrom}T00:00:00`) : '',
       row.periodTo ? new Date(`${row.periodTo}T00:00:00`) : '',
-      row.stockMarkingBreak ? 'STOCK MARKING — NO PRODUCTION' : 'Production period',
+      row.stockMarkingBreak ? 'Stock-marking break — no production' : 'Normal production period',
       row.stockMarkingBreak ? 0 : '',
       row.stockMarkingBreak ? 0 : '',
     ])
@@ -187,13 +202,52 @@ export async function downloadRenewalClientWorkbook(form: BisRenewalForm): Promi
   })
 
   const buffer = await workbook.xlsx.writeBuffer()
-  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
-  const url = URL.createObjectURL(blob)
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = `${safeBaseName(form.clientLabel || form.projectLabel)}_Renewal_Production.xlsx`
-  anchor.click()
-  URL.revokeObjectURL(url)
+  return new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+}
+
+export async function downloadRenewalClientWorkbook(form: BisRenewalForm): Promise<void> {
+  const blob = await createRenewalClientWorkbook(form)
+  downloadWorkbookBlob(blob, renewalWorkbookFilename(form))
+}
+
+export async function shareRenewalWorkbookOnWhatsApp(form: BisRenewalForm): Promise<'shared' | 'downloaded'> {
+  const filename = renewalWorkbookFilename(form)
+  const type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  const text = `Please find the blank BIS renewal production sheet for ${form.clientLabel || 'your company'} (${form.isCodeLabel || 'BIS license renewal'}). Please complete the highlighted fields and return the same workbook.`
+  const placeholder = new File([], filename, { type })
+  const canShareWorkbook = typeof navigator.share === 'function'
+    && typeof navigator.canShare === 'function'
+    && navigator.canShare({ files: [placeholder] })
+
+  if (!canShareWorkbook) {
+    // Open WhatsApp synchronously from the menu click so popup blockers do not lose the user gesture.
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer')
+    const blob = await createRenewalClientWorkbook(form)
+    downloadWorkbookBlob(blob, filename)
+    return 'downloaded'
+  }
+
+  const blob = await createRenewalClientWorkbook(form)
+  const file = new File([blob], filename, { type })
+  await navigator.share({ files: [file], title: 'BIS renewal production sheet', text })
+  return 'shared'
+}
+
+export async function emailRenewalWorkbookToClient(form: BisRenewalForm): Promise<string> {
+  const email = await resolveClientEmail(form.clientId)
+  if (!email) throw new Error('Client email is missing. Update the email in Client Master before sending the workbook.')
+  const blob = await createRenewalClientWorkbook(form)
+  const attachment = await blobToBase64(blob)
+  const clientName = form.clientLabel || 'Client'
+  const subject = `BIS renewal production sheet — ${form.cmLDigits || form.isCodeLabel}`
+  await sendAppEmail({
+    to: email,
+    subject,
+    html: `<p>Dear ${escapeHtml(clientName)},</p><p>Please find attached the blank BIS renewal production sheet. Complete the highlighted fields, keep the period and reference fields unchanged, and return the same workbook.</p><p>Regards,<br/>Quality Engineering</p>`,
+    text: `Dear ${clientName},\n\nPlease find attached the blank BIS renewal production sheet. Complete the highlighted fields, keep the period and reference fields unchanged, and return the same workbook.\n\nRegards,\nQuality Engineering`,
+    attachments: [{ filename: renewalWorkbookFilename(form), content: attachment, contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }],
+  })
+  return email
 }
 
 export async function importRenewalClientWorkbook(

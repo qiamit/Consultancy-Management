@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
-import { Download, FileCheck2, FileText, Upload } from 'lucide-react'
+import { Download, FileCheck2, FileText, Mail, MessageCircle, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { limsDarkBarGlowStyle, limsPrimaryBtnClass } from '@/lib/limsThemeUi'
@@ -12,7 +13,9 @@ import { generateMonthlyRenewalRows, type BisRenewalForm } from './types'
 import {
   downloadRenewalCalculationPdf,
   downloadRenewalClientWorkbook,
+  emailRenewalWorkbookToClient,
   importRenewalClientWorkbook,
+  shareRenewalWorkbookOnWhatsApp,
 } from './renewalClientWorkflow'
 import { listBisProjectFiles, uploadBisProjectFile } from '../projects/bisProjectFilesApi'
 import { toast } from 'sonner'
@@ -40,7 +43,7 @@ export function BisRenewalsForm({
 }) {
   const importInputRef = useRef<HTMLInputElement>(null)
   const certificateInputRef = useRef<HTMLInputElement>(null)
-  const [workflowBusy, setWorkflowBusy] = useState<'workbook' | 'import' | 'pdf' | 'certificate' | null>(null)
+  const [workflowBusy, setWorkflowBusy] = useState<'workbook' | 'whatsapp' | 'email' | 'import' | 'pdf' | 'certificate' | null>(null)
   const [certificateFile, setCertificateFile] = useState<{ name: string; url?: string } | null>(null)
   const hasPeriods = Boolean(form.renewalPeriodFrom && form.renewalPeriodTo && form.productionRows.length)
   const hasClientData = Boolean(form.basicUnitRate.trim())
@@ -66,6 +69,34 @@ export function BisRenewalsForm({
       toast.success('Blank client workbook downloaded. Send it to the client to complete.')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not create the client workbook.')
+    } finally {
+      setWorkflowBusy(null)
+    }
+  }
+
+  const shareBlankWorkbookOnWhatsApp = async () => {
+    setWorkflowBusy('whatsapp')
+    try {
+      const result = await shareRenewalWorkbookOnWhatsApp(form)
+      toast.success(result === 'shared'
+        ? 'Choose WhatsApp in the share window to send the workbook.'
+        : 'Workbook downloaded and WhatsApp opened. Attach the downloaded workbook in the chat.')
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === 'AbortError')) {
+        toast.error(error instanceof Error ? error.message : 'Could not prepare the WhatsApp share.')
+      }
+    } finally {
+      setWorkflowBusy(null)
+    }
+  }
+
+  const emailBlankWorkbook = async () => {
+    setWorkflowBusy('email')
+    try {
+      const email = await emailRenewalWorkbookToClient(form)
+      toast.success(`Blank renewal workbook emailed to ${email}.`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not email the client workbook.')
     } finally {
       setWorkflowBusy(null)
     }
@@ -235,7 +266,18 @@ export function BisRenewalsForm({
             aria-label="Upload CA-attested renewal certificate"
             onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadCertificate(file) }}
           />
-          <Button type="button" variant="outline" className="h-8 rounded-none border-stone-400" disabled={!hasPeriods || workflowBusy !== null || saving} onClick={() => void downloadBlankWorkbook()}><Download className="mr-1 size-4" /> {workflowBusy === 'workbook' ? 'Preparing…' : 'Blank Sheet'}</Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" variant="outline" className="h-8 rounded-none border-stone-400" disabled={!hasPeriods || workflowBusy !== null || saving}>
+                <Download className="mr-1 size-4" /> {workflowBusy === 'workbook' ? 'Preparing…' : workflowBusy === 'whatsapp' ? 'Opening WhatsApp…' : workflowBusy === 'email' ? 'Sending email…' : 'Blank Sheet'}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              <DropdownMenuItem onSelect={() => void downloadBlankWorkbook()}><Download className="mr-2 size-4" /> Download workbook</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => void shareBlankWorkbookOnWhatsApp()}><MessageCircle className="mr-2 size-4" /> Send by WhatsApp</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => void emailBlankWorkbook()}><Mail className="mr-2 size-4" /> Email to client</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button type="button" variant="outline" className="h-8 rounded-none border-stone-400" disabled={!hasPeriods || workflowBusy !== null || saving} onClick={() => importInputRef.current?.click()}><Upload className="mr-1 size-4" /> {workflowBusy === 'import' ? 'Importing…' : 'Import Data'}</Button>
           <Button type="button" variant="outline" className="h-8 rounded-none border-stone-400" disabled={!hasClientData || workflowBusy !== null || saving} onClick={() => void downloadCalculationPdf()}><FileText className="mr-1 size-4" /> {workflowBusy === 'pdf' ? 'Creating…' : 'Send Report'}</Button>
           <Button type="button" variant="outline" className="h-8 rounded-none border-stone-400" disabled={!hasClientData || workflowBusy !== null || saving} onClick={() => certificateInputRef.current?.click()}><FileCheck2 className="mr-1 size-4" /> {workflowBusy === 'certificate' ? 'Uploading…' : 'Attach CA Certificate'}</Button>
