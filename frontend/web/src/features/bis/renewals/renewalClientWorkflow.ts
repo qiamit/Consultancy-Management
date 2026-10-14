@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx'
 import { downloadPdfViaPlaywright } from '@/lib/playwrightPdfClient'
 import { blobToBase64, sendAppEmail } from '@/lib/sendAppEmail'
+import { supabase } from '@/lib/supabaseClient'
 import { resolveClientEmail } from '../shared/emailHtmlToClient'
 import { calculateRenewalProductionRow, formatDisplayDate, renewalSlabForQuantity, type BisRenewalForm, type RenewalProductionRow } from './types'
 
@@ -210,32 +211,43 @@ export async function downloadRenewalClientWorkbook(form: BisRenewalForm): Promi
   downloadWorkbookBlob(blob, renewalWorkbookFilename(form))
 }
 
-export async function shareRenewalWorkbookOnWhatsApp(form: BisRenewalForm): Promise<'shared' | 'downloaded'> {
-  const filename = renewalWorkbookFilename(form)
-  const type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-  const text = `Please find the blank BIS renewal production sheet for ${form.clientLabel || 'your company'} (${form.isCodeLabel || 'BIS license renewal'}). Please complete the highlighted fields and return the same workbook.`
-  const placeholder = new File([], filename, { type })
-  const canShareWorkbook = typeof navigator.share === 'function'
-    && typeof navigator.canShare === 'function'
-    && navigator.canShare({ files: [placeholder] })
-
-  if (!canShareWorkbook) {
-    // Open WhatsApp synchronously from the menu click so popup blockers do not lose the user gesture.
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer')
-    const blob = await createRenewalClientWorkbook(form)
-    downloadWorkbookBlob(blob, filename)
-    return 'downloaded'
-  }
-
-  const blob = await createRenewalClientWorkbook(form)
-  const file = new File([blob], filename, { type })
-  await navigator.share({ files: [file], title: 'BIS renewal production sheet', text })
-  return 'shared'
+export async function resolveClientWhatsAppNumber(clientId: string): Promise<string> {
+  const { data, error } = await supabase.from('clients').select('mobile,country_code').eq('id', clientId).maybeSingle()
+  if (error) throw new Error('Could not read the client mobile number from Client Master.')
+  const mobile = String((data as { mobile?: string | null } | null)?.mobile ?? '').trim()
+  if (!mobile) throw new Error('Client mobile number is missing. Update it in Client Master or enter another number.')
+  return normalizeWhatsAppNumber(`${String((data as { country_code?: string | null } | null)?.country_code ?? '+91')} ${mobile}`)
 }
 
-export async function emailRenewalWorkbookToClient(form: BisRenewalForm): Promise<string> {
-  const email = await resolveClientEmail(form.clientId)
+export function normalizeWhatsAppNumber(value: string): string {
+  const digits = value.replace(/\D/g, '')
+  const normalized = digits.length === 10 ? `91${digits}` : digits
+  if (normalized.length < 10 || normalized.length > 15) {
+    throw new Error('Enter a valid WhatsApp number with country code, for example +91 9876543210.')
+  }
+  return normalized
+}
+
+export async function shareRenewalWorkbookOnWhatsApp(
+  form: BisRenewalForm,
+  recipient: string,
+  chatWindow?: Window | null,
+): Promise<void> {
+  const filename = renewalWorkbookFilename(form)
+  const text = `Please find the blank BIS renewal production sheet for ${form.clientLabel || 'your company'} (${form.isCodeLabel || 'BIS license renewal'}). Please complete the highlighted fields and return the same workbook.`
+  const phone = normalizeWhatsAppNumber(recipient)
+  // Use a normal WhatsApp deep link; the Web Share API can fail with Permission denied after async file generation.
+  const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(text)}`
+  if (chatWindow) chatWindow.location.href = whatsappUrl
+  else window.open(whatsappUrl, '_blank', 'noopener,noreferrer')
+  const blob = await createRenewalClientWorkbook(form)
+  downloadWorkbookBlob(blob, filename)
+}
+
+export async function emailRenewalWorkbookToClient(form: BisRenewalForm, recipient?: string): Promise<string> {
+  const email = recipient?.trim() || await resolveClientEmail(form.clientId)
   if (!email) throw new Error('Client email is missing. Update the email in Client Master before sending the workbook.')
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('Enter a valid client email address.')
   const blob = await createRenewalClientWorkbook(form)
   const attachment = await blobToBase64(blob)
   const clientName = form.clientLabel || 'Client'

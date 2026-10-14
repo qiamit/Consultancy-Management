@@ -1,8 +1,12 @@
-import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
-import { Download, FileCheck2, FileText, Mail, MessageCircle, Upload } from 'lucide-react'
+import { useEffect, useRef, useState, type Dispatch, type FormEvent, type SetStateAction } from 'react'
+import { ChevronRight, Download, FileCheck2, FileText, Mail, MessageCircle, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSub, DropdownMenuSubContent,
+  DropdownMenuSubTrigger, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { limsDarkBarGlowStyle, limsPrimaryBtnClass } from '@/lib/limsThemeUi'
@@ -15,6 +19,7 @@ import {
   downloadRenewalClientWorkbook,
   emailRenewalWorkbookToClient,
   importRenewalClientWorkbook,
+  resolveClientWhatsAppNumber,
   shareRenewalWorkbookOnWhatsApp,
 } from './renewalClientWorkflow'
 import { listBisProjectFiles, uploadBisProjectFile } from '../projects/bisProjectFilesApi'
@@ -44,6 +49,8 @@ export function BisRenewalsForm({
   const importInputRef = useRef<HTMLInputElement>(null)
   const certificateInputRef = useRef<HTMLInputElement>(null)
   const [workflowBusy, setWorkflowBusy] = useState<'workbook' | 'whatsapp' | 'email' | 'import' | 'pdf' | 'certificate' | null>(null)
+  const [recipientDialog, setRecipientDialog] = useState<'email' | 'whatsapp' | null>(null)
+  const [recipientValue, setRecipientValue] = useState('')
   const [certificateFile, setCertificateFile] = useState<{ name: string; url?: string } | null>(null)
   const hasPeriods = Boolean(form.renewalPeriodFrom && form.renewalPeriodTo && form.productionRows.length)
   const hasClientData = Boolean(form.basicUnitRate.trim())
@@ -74,32 +81,48 @@ export function BisRenewalsForm({
     }
   }
 
-  const shareBlankWorkbookOnWhatsApp = async () => {
+  const shareBlankWorkbookOnWhatsApp = async (recipient?: string): Promise<boolean> => {
     setWorkflowBusy('whatsapp')
+    const chatWindow = recipient ? null : window.open('about:blank', '_blank')
     try {
-      const result = await shareRenewalWorkbookOnWhatsApp(form)
-      toast.success(result === 'shared'
-        ? 'Choose WhatsApp in the share window to send the workbook.'
-        : 'Workbook downloaded and WhatsApp opened. Attach the downloaded workbook in the chat.')
+      const number = recipient?.trim() || await resolveClientWhatsAppNumber(form.clientId)
+      await shareRenewalWorkbookOnWhatsApp(form, number, chatWindow)
+      toast.success('WhatsApp opened for the selected number and the workbook downloaded. Attach the workbook in the chat.')
+      return true
     } catch (error) {
+      chatWindow?.close()
       if (!(error instanceof DOMException && error.name === 'AbortError')) {
         toast.error(error instanceof Error ? error.message : 'Could not prepare the WhatsApp share.')
       }
+      return false
     } finally {
       setWorkflowBusy(null)
     }
   }
 
-  const emailBlankWorkbook = async () => {
+  const emailBlankWorkbook = async (recipient?: string): Promise<boolean> => {
     setWorkflowBusy('email')
     try {
-      const email = await emailRenewalWorkbookToClient(form)
+      const email = await emailRenewalWorkbookToClient(form, recipient)
       toast.success(`Blank renewal workbook emailed to ${email}.`)
+      return true
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not email the client workbook.')
+      return false
     } finally {
       setWorkflowBusy(null)
     }
+  }
+
+  const submitRecipient = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const recipient = recipientValue.trim()
+    if (!recipientDialog || !recipient) return
+    const kind = recipientDialog
+    const complete = kind === 'email'
+      ? await emailBlankWorkbook(recipient)
+      : await shareBlankWorkbookOnWhatsApp(recipient)
+    if (complete) setRecipientDialog(null)
   }
 
   const importClientWorkbook = async (file: File) => {
@@ -149,6 +172,7 @@ export function BisRenewalsForm({
   }
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         persistOnFocusLoss
@@ -273,9 +297,21 @@ export function BisRenewalsForm({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
-              <DropdownMenuItem onSelect={() => void downloadBlankWorkbook()}><Download className="mr-2 size-4" /> Download workbook</DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => void shareBlankWorkbookOnWhatsApp()}><MessageCircle className="mr-2 size-4" /> Send by WhatsApp</DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => void emailBlankWorkbook()}><Mail className="mr-2 size-4" /> Email to client</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => void downloadBlankWorkbook()}><Download className="mr-2 size-4" /> Download Workbook</DropdownMenuItem>
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger><MessageCircle className="size-4" /> WhatsApp <ChevronRight className="ml-auto size-4" /></DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  <DropdownMenuItem onSelect={() => void shareBlankWorkbookOnWhatsApp()}>Use Client WhatsApp</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => { setRecipientValue(''); setRecipientDialog('whatsapp') }}>Enter WhatsApp Number…</DropdownMenuItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger><Mail className="size-4" /> Email Client <ChevronRight className="ml-auto size-4" /></DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  <DropdownMenuItem onSelect={() => void emailBlankWorkbook()}>Use Client Email</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => { setRecipientValue(''); setRecipientDialog('email') }}>Enter Email Address…</DropdownMenuItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
             </DropdownMenuContent>
           </DropdownMenu>
           <Button type="button" variant="outline" className="h-8 rounded-none border-stone-400" disabled={!hasPeriods || workflowBusy !== null || saving} onClick={() => importInputRef.current?.click()}><Upload className="mr-1 size-4" /> {workflowBusy === 'import' ? 'Importing…' : 'Import Data'}</Button>
@@ -305,5 +341,39 @@ export function BisRenewalsForm({
         </div>
       </DialogContent>
     </Dialog>
+      <Dialog open={recipientDialog !== null} onOpenChange={(nextOpen) => { if (!nextOpen && workflowBusy === null) setRecipientDialog(null) }}>
+        <DialogContent className="max-w-md rounded-none border-stone-500">
+          <DialogHeader>
+            <DialogTitle>{recipientDialog === 'email' ? 'Email Client' : 'WhatsApp'}</DialogTitle>
+          </DialogHeader>
+          <form className="space-y-4" onSubmit={(event) => void submitRecipient(event)}>
+            <div className="space-y-2">
+              <Label htmlFor="renewal-workbook-recipient">
+                {recipientDialog === 'email' ? 'Email address' : 'WhatsApp number'}
+              </Label>
+              <Input
+                id="renewal-workbook-recipient"
+                type={recipientDialog === 'email' ? 'email' : 'tel'}
+                autoComplete={recipientDialog === 'email' ? 'email' : 'tel'}
+                placeholder={recipientDialog === 'email' ? 'client@example.com' : '+91 9876543210'}
+                value={recipientValue}
+                onChange={(event) => setRecipientValue(event.target.value)}
+                required
+                autoFocus
+              />
+              {recipientDialog === 'whatsapp' ? (
+                <p className="text-xs text-stone-500">WhatsApp will open with a prepared message. The workbook downloads separately; attach it in the chat.</p>
+              ) : null}
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" className="rounded-none" onClick={() => setRecipientDialog(null)} disabled={workflowBusy !== null}>Cancel</Button>
+              <Button type="submit" className={limsPrimaryBtnClass} disabled={workflowBusy !== null}>
+                {workflowBusy === 'email' ? 'Sending…' : workflowBusy === 'whatsapp' ? 'Preparing…' : recipientDialog === 'email' ? 'Send Email' : 'Open WhatsApp'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
