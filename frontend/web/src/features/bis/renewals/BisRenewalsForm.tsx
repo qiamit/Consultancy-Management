@@ -40,7 +40,7 @@ export function BisRenewalsForm({
 }) {
   const importInputRef = useRef<HTMLInputElement>(null)
   const certificateInputRef = useRef<HTMLInputElement>(null)
-  const [workflowBusy, setWorkflowBusy] = useState<'import' | 'pdf' | 'certificate' | null>(null)
+  const [workflowBusy, setWorkflowBusy] = useState<'workbook' | 'import' | 'pdf' | 'certificate' | null>(null)
   const [certificateFile, setCertificateFile] = useState<{ name: string; url?: string } | null>(null)
   const hasPeriods = Boolean(form.renewalPeriodFrom && form.renewalPeriodTo && form.productionRows.length)
   const hasClientData = Boolean(form.basicUnitRate.trim())
@@ -59,12 +59,15 @@ export function BisRenewalsForm({
     return () => { active = false }
   }, [form.projectId])
 
-  const downloadBlankWorkbook = () => {
+  const downloadBlankWorkbook = async () => {
+    setWorkflowBusy('workbook')
     try {
-      downloadRenewalClientWorkbook(form)
+      await downloadRenewalClientWorkbook(form)
       toast.success('Blank client workbook downloaded. Send it to the client to complete.')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not create the client workbook.')
+    } finally {
+      setWorkflowBusy(null)
     }
   }
 
@@ -232,7 +235,7 @@ export function BisRenewalsForm({
             aria-label="Upload CA-attested renewal certificate"
             onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadCertificate(file) }}
           />
-          <Button type="button" variant="outline" className="h-8 rounded-none border-stone-400" disabled={!hasPeriods || saving} onClick={downloadBlankWorkbook}><Download className="mr-1 size-4" /> Blank Sheet</Button>
+          <Button type="button" variant="outline" className="h-8 rounded-none border-stone-400" disabled={!hasPeriods || workflowBusy !== null || saving} onClick={() => void downloadBlankWorkbook()}><Download className="mr-1 size-4" /> {workflowBusy === 'workbook' ? 'Preparing…' : 'Blank Sheet'}</Button>
           <Button type="button" variant="outline" className="h-8 rounded-none border-stone-400" disabled={!hasPeriods || workflowBusy !== null || saving} onClick={() => importInputRef.current?.click()}><Upload className="mr-1 size-4" /> {workflowBusy === 'import' ? 'Importing…' : 'Import Data'}</Button>
           <Button type="button" variant="outline" className="h-8 rounded-none border-stone-400" disabled={!hasClientData || workflowBusy !== null || saving} onClick={() => void downloadCalculationPdf()}><FileText className="mr-1 size-4" /> {workflowBusy === 'pdf' ? 'Creating…' : 'Send Report'}</Button>
           <Button type="button" variant="outline" className="h-8 rounded-none border-stone-400" disabled={!hasClientData || workflowBusy !== null || saving} onClick={() => certificateInputRef.current?.click()}><FileCheck2 className="mr-1 size-4" /> {workflowBusy === 'certificate' ? 'Uploading…' : 'Attach CA Certificate'}</Button>
