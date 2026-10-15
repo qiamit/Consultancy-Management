@@ -47,6 +47,12 @@ import {
 
 const SEARCH_DEBOUNCE_MS = 350
 
+function formForListMode(form: BisProjectForm, listMode: BisProjectsListMode): BisProjectForm {
+  return listMode === 'inclusion'
+    ? { ...form, projectKind: 'Inclusion', isQeManaged: true }
+    : form
+}
+
 export default function BisProjectsMasterPage({ listMode }: { listMode: BisProjectsListMode }) {
   const navigate = useNavigate()
   const {
@@ -117,7 +123,7 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
     const next = emptyBisProjectForm(defaultProjectKindForListMode(listMode))
     if (listMode === 'stop_marking') next.status = 'stop_marking'
     if (listMode === 'our') next.isQeManaged = true
-    return next
+    return formForListMode(next, listMode)
   }, [listMode])
 
   useEffect(() => {
@@ -196,7 +202,7 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
 
     const fromPage = rows.find((r) => r.id === editId)
     if (fromPage) {
-      setForm(rowToBisProjectForm(fromPage))
+      setForm(formForListMode(rowToBisProjectForm(fromPage), listMode))
       setFormError(null)
       hydratedEditRef.current = editId
       return
@@ -211,7 +217,7 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
           setEdit(null)
           return
         }
-        setForm(rowToBisProjectForm(row))
+        setForm(formForListMode(rowToBisProjectForm(row), listMode))
         setFormError(null)
         hydratedEditRef.current = editId
       } catch (err) {
@@ -223,7 +229,7 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
     return () => {
       cancelled = true
     }
-  }, [editId, rows, buildNewForm, setEdit])
+  }, [editId, rows, buildNewForm, listMode, setEdit])
 
   // Restore View Documents from URL (refresh-safe).
   useEffect(() => {
@@ -283,13 +289,14 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
   const pageCount = Math.max(1, Math.ceil(total / pageSize))
   const isApplicationProject =
     form.projectKind.trim().toLowerCase() === 'application'
+  const isInclusionMode = listMode === 'inclusion'
   const canSave =
     !saving &&
     form.clientId.length > 0 &&
     form.status.length > 0 &&
     // CM/L + Validity required for License (not for Application).
     (isApplicationProject ||
-      (form.cmLDigits.length > 0 && form.licenseValidityDate.trim().length > 0))
+      (form.cmLDigits.length > 0 && (isInclusionMode || form.licenseValidityDate.trim().length > 0)))
 
   const openNew = () => {
     setForm(buildNewForm())
@@ -299,7 +306,7 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
   }
 
   const openEdit = (row: BisProjectRow) => {
-    setForm(rowToBisProjectForm(row))
+    setForm(formForListMode(rowToBisProjectForm(row), listMode))
     setFormError(null)
     hydratedEditRef.current = row.id
     setEdit(row.id)
@@ -323,16 +330,43 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
     setSaving(true)
     setFormError(null)
     try {
-      await saveBisProject(form, editingId)
+      await saveBisProject(formForListMode(form, listMode), editingId)
       hydratedEditRef.current = null
       setEdit(null)
-      setMessage(editingId ? 'Saved changes.' : 'Saved new license.')
+      setMessage(isInclusionMode
+        ? 'Inclusion saved on the existing license.'
+        : editingId ? 'Saved changes.' : 'Saved new license.')
       reload()
     } catch (err) {
       setFormError(formatBisApiError(err))
     } finally {
       setSaving(false)
     }
+  }
+
+  const handleFinishInclusion = async () => {
+    if (!isInclusionMode || !editingId || !canSave || saving) return
+    setSaving(true)
+    setFormError(null)
+    try {
+      await saveBisProject(formForListMode(form, listMode), editingId, true)
+      hydratedEditRef.current = null
+      setEdit(null)
+      setMessage('Inclusion completed. Updates are saved on the existing license.')
+      reload()
+    } catch (err) {
+      setFormError(formatBisApiError(err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleSelectExistingLicenseForInclusion = (row: BisProjectRow) => {
+    const nextId = row.id
+    setForm(formForListMode(rowToBisProjectForm(row), listMode))
+    setFormError(null)
+    hydratedEditRef.current = nextId
+    setEdit(nextId)
   }
 
   const toggleRow = (id: string) => {
@@ -534,6 +568,7 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
           onEdit={openEdit}
           onViewDocuments={openDocuments}
           renewalMode={listMode === 'due_soon'}
+          inclusionMode={listMode === 'inclusion'}
           onStartRenewal={startRenewalForRow}
           onRenewalReminder={prepareRenewalReminder}
           onEmailDocument={
@@ -587,6 +622,9 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
         saving={saving}
         errorMessage={formError}
         onSave={() => void handleSave()}
+        onCompleteInclusion={isInclusionMode ? () => void handleFinishInclusion() : undefined}
+        onExistingLicenseSelected={isInclusionMode ? handleSelectExistingLicenseForInclusion : undefined}
+        inclusionMode={listMode === 'inclusion'}
       />
 
       <BisLicenseDocumentsDialog

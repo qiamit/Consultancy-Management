@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { Calendar } from 'lucide-react'
 import { LimsFieldAddButton, LimsFieldWithAdd } from '@/components/lims/LimsFieldWithAdd'
 import { AddClientDialog } from '@/features/sample-handling/receiving/AddClientDialog'
@@ -28,7 +28,13 @@ import {
 } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { fetchEmployeeNames } from '../shared/bisLookupApi'
-import { searchClientOptions, searchIsCodeOptions } from './bisProjectsApi'
+import {
+  findClientCmLForIsCode,
+  searchClientLicensedIsCodeOptions,
+  searchClientOptions,
+  searchIsCodeOptions,
+} from './bisProjectsApi'
+import { ExistingLicenseScope } from './ExistingLicenseScope'
 import { LicenseScopeFields } from './LicenseScopeFields'
 import {
   BIS_BILLING_FREQUENCIES,
@@ -36,6 +42,7 @@ import {
   DEFAULT_CASE_HANDLED_BY,
   sanitizeCurrencyInput,
   type BisProjectForm,
+  type BisProjectRow,
 } from './types'
 
 export function useDebouncedValue<T>(value: T, delayMs: number): T {
@@ -57,6 +64,7 @@ export function RemoteLookupCombobox({
   search,
   onChange,
   showSerialNumbers = false,
+  disabled = false,
   onAddNew,
   addLabel = 'Add New',
   extraActions,
@@ -69,6 +77,7 @@ export function RemoteLookupCombobox({
   search: (term: string) => Promise<FilterComboboxOption[]>
   onChange: (next: { id: string; label: string }) => void
   showSerialNumbers?: boolean
+  disabled?: boolean
   onAddNew?: (typedName: string) => void
   addLabel?: string
   extraActions?: FilterComboboxExtraAction[]
@@ -122,6 +131,7 @@ export function RemoteLookupCombobox({
       placeholder={placeholder}
       inputClassName="h-8"
       showSerialNumbers={showSerialNumbers}
+      disabled={disabled}
       extraActions={actions}
     />
   )
@@ -138,17 +148,23 @@ export function BisProjectsForm({
   saving,
   errorMessage,
   onSave,
+  onCompleteInclusion,
+  onExistingLicenseSelected,
+  inclusionMode = false,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   editing: boolean
   projectId?: string | null
   form: BisProjectForm
-  onChange: (next: BisProjectForm) => void
+  onChange: Dispatch<SetStateAction<BisProjectForm>>
   canSave: boolean
   saving: boolean
   errorMessage: string | null
   onSave: () => void
+  onCompleteInclusion?: () => void
+  onExistingLicenseSelected?: (row: BisProjectRow) => void
+  inclusionMode?: boolean
 }) {
   const frequencyOptions: string[] = BIS_BILLING_FREQUENCIES.includes(
     form.billingFrequency as (typeof BIS_BILLING_FREQUENCIES)[number],
@@ -164,6 +180,8 @@ export function BisProjectsForm({
 
   const validityInputRef = useRef<HTMLInputElement | null>(null)
   const grantedInputRef = useRef<HTMLInputElement | null>(null)
+  const cmLLookupRequestRef = useRef(0)
+  const [cmLLookupMessage, setCmLLookupMessage] = useState('')
   const [handledByOptions, setHandledByOptions] = useState<string[]>([DEFAULT_CASE_HANDLED_BY])
   const [addClientOpen, setAddClientOpen] = useState(false)
   const [addClientInitialName, setAddClientInitialName] = useState('')
@@ -184,13 +202,27 @@ export function BisProjectsForm({
         String((data as { company_name?: string | null } | null)?.company_name ?? '').trim() ||
         addClientInitialName.trim() ||
         'Unnamed'
-      onChange({ ...form, clientId, clientLabel: label })
+      cmLLookupRequestRef.current += 1
+      setCmLLookupMessage('')
+      onChange((previous) => ({
+        ...previous,
+        clientId,
+        clientLabel: label,
+        isCodeId: '',
+        isCodeLabel: '',
+        cmLDigits: '',
+      }))
     } catch {
-      onChange({
-        ...form,
+      cmLLookupRequestRef.current += 1
+      setCmLLookupMessage('')
+      onChange((previous) => ({
+        ...previous,
         clientId,
         clientLabel: addClientInitialName.trim() || 'Unnamed',
-      })
+        isCodeId: '',
+        isCodeLabel: '',
+        cmLDigits: '',
+      }))
     } finally {
       setAddClientInitialName('')
     }
@@ -212,6 +244,59 @@ export function BisProjectsForm({
 
   const openValidityPicker = () => openDatePicker(validityInputRef.current)
   const openGrantedPicker = () => openDatePicker(grantedInputRef.current)
+
+  const selectInclusionIsCode = (next: { id: string; label: string }) => {
+    const clientId = form.clientId
+    const requestId = ++cmLLookupRequestRef.current
+    setCmLLookupMessage('')
+    onChange((previous) => ({
+      ...previous,
+      isCodeId: next.id,
+      isCodeLabel: next.label,
+      cmLDigits: '',
+    }))
+    if (!clientId || !next.id) return
+    void findClientCmLForIsCode(clientId, next.id)
+      .then(({ cmLDigits, ambiguous, license }) => {
+        if (requestId !== cmLLookupRequestRef.current) return
+        onChange((previous) => {
+          if (previous.clientId !== clientId || previous.isCodeId !== next.id || previous.cmLDigits) return previous
+          return { ...previous, cmLDigits }
+        })
+        if (license) onExistingLicenseSelected?.(license)
+        setCmLLookupMessage(ambiguous
+          ? 'More than one license matches this client and IS. Enter the correct CM/L number.'
+          : cmLDigits
+            ? ''
+            : 'No matching client license found. Enter the CM/L number manually.')
+      })
+      .catch(() => {
+        if (requestId === cmLLookupRequestRef.current) {
+          setCmLLookupMessage('Could not find a matching license. Enter the CM/L number manually.')
+        }
+      })
+  }
+
+  const loadManuallySelectedInclusionLicense = () => {
+    if (!inclusionMode || !form.clientId || !form.isCodeId || form.cmLDigits.length < 3) return
+    const requestId = ++cmLLookupRequestRef.current
+    setCmLLookupMessage('Loading selected license…')
+    void findClientCmLForIsCode(form.clientId, form.isCodeId, form.cmLDigits)
+      .then(({ license }) => {
+        if (requestId !== cmLLookupRequestRef.current) return
+        if (!license) {
+          setCmLLookupMessage('No existing license matches this client, IS, and CM/L number.')
+          return
+        }
+        setCmLLookupMessage('')
+        onExistingLicenseSelected?.(license)
+      })
+      .catch(() => {
+        if (requestId === cmLLookupRequestRef.current) {
+          setCmLLookupMessage('Could not load the selected license details.')
+        }
+      })
+  }
 
   useEffect(() => {
     if (!open) return
@@ -277,54 +362,55 @@ export function BisProjectsForm({
 
           <div className={limsRegistryFormClass}>
             <div className="space-y-4">
-              {/* Line 1 (fixed 2 fields): QE + Type */}
-              <div className="grid grid-cols-12 gap-4">
-                <div className="col-span-12 space-y-2 md:col-span-6">
-                  <Label>QE Management</Label>
-                  <Select
-                    value={form.isQeManaged ? 'yes' : 'no'}
-                    onValueChange={(v) => set('isQeManaged', v === 'yes')}
-                  >
-                    <SelectTrigger aria-label="QE Management">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-none border-stone-500">
-                      <SelectItem value="yes">Managed by QE</SelectItem>
-                      <SelectItem value="no">Not Managed by QE</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              {!inclusionMode ? (
+                <div className="grid grid-cols-12 gap-4">
+                  <div className="col-span-12 space-y-2 md:col-span-6">
+                    <Label>QE Management</Label>
+                    <Select
+                      value={form.isQeManaged ? 'yes' : 'no'}
+                      onValueChange={(v) => set('isQeManaged', v === 'yes')}
+                    >
+                      <SelectTrigger aria-label="QE Management">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-none border-stone-500">
+                        <SelectItem value="yes">Managed by QE</SelectItem>
+                        <SelectItem value="no">Not Managed by QE</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-                <div className="col-span-12 space-y-2 md:col-span-6">
-                  <Label htmlFor="bis-project-kind">Type of Project</Label>
-                  <Select
-                    value={
-                      form.projectKind === 'Licence' || form.projectKind === 'License'
-                        ? 'Licence'
-                        : form.projectKind === 'Inclusion'
-                          ? 'Inclusion'
-                          : 'Application'
-                    }
-                    onValueChange={(v) => set('projectKind', v)}
-                  >
-                    <SelectTrigger id="bis-project-kind" aria-label="Type of Project">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-none border-stone-500">
-                      {BIS_PROJECT_KIND_OPTIONS.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                      {form.projectKind === 'Inclusion' ? (
-                        <SelectItem value="Inclusion">Inclusion</SelectItem>
-                      ) : null}
-                    </SelectContent>
-                  </Select>
+                  <div className="col-span-12 space-y-2 md:col-span-6">
+                    <Label htmlFor="bis-project-kind">Type of Project</Label>
+                    <Select
+                      value={
+                        form.projectKind === 'Licence' || form.projectKind === 'License'
+                          ? 'Licence'
+                          : form.projectKind === 'Inclusion'
+                            ? 'Inclusion'
+                            : 'Application'
+                      }
+                      onValueChange={(v) => set('projectKind', v)}
+                    >
+                      <SelectTrigger id="bis-project-kind" aria-label="Type of Project">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-none border-stone-500">
+                        {BIS_PROJECT_KIND_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                        {form.projectKind === 'Inclusion' ? (
+                          <SelectItem value="Inclusion">Inclusion</SelectItem>
+                        ) : null}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-              </div>
+              ) : null}
 
-              {/* Line 2 (fixed 2 fields): Client + IS */}
+              {/* Inclusion lookup row: Client 2/4, IS 1/4, CM/L 1/4. */}
               <div className="grid grid-cols-12 gap-4">
                 <div className="col-span-12 space-y-2 md:col-span-6">
                   <Label htmlFor="bis-client">
@@ -349,32 +435,72 @@ export function BisProjectsForm({
                       showSerialNumbers={false}
                       addLabel="Add New Client"
                       onAddNew={(typed) => openAddClient(typed)}
-                      onChange={({ id, label }) =>
-                        onChange({ ...form, clientId: id, clientLabel: label, factorySiteId: '' })
-                      }
+                      onChange={({ id, label }) => {
+                        cmLLookupRequestRef.current += 1
+                        setCmLLookupMessage('')
+                        onChange((previous) => ({
+                          ...previous,
+                          clientId: id,
+                          clientLabel: label,
+                          factorySiteId: '',
+                          isCodeId: '',
+                          isCodeLabel: '',
+                          cmLDigits: '',
+                        }))
+                      }}
                     />
                   </LimsFieldWithAdd>
                 </div>
 
-                <div className="col-span-12 space-y-2 md:col-span-6">
+                <div className={cn('col-span-12 space-y-2', inclusionMode ? 'md:col-span-3' : 'md:col-span-6')}>
                   <Label htmlFor="bis-is-code">Search IS Number</Label>
                   <RemoteLookupCombobox
                     inputId="bis-is-code"
                     listId="bis-is-code-list"
-                    placeholder="Search IS Number"
+                    placeholder={inclusionMode && !form.clientId ? 'Select client first' : 'Search IS Number'}
                     label={form.isCodeLabel}
                     selectedId={form.isCodeId}
-                    search={searchIsCodeOptions}
+                    disabled={inclusionMode && !form.clientId}
+                    search={inclusionMode
+                      ? (term) => searchClientLicensedIsCodeOptions(form.clientId, term)
+                      : searchIsCodeOptions}
                     showSerialNumbers={false}
-                    onChange={({ id, label }) =>
-                      onChange({ ...form, isCodeId: id, isCodeLabel: label })
-                    }
+                    onChange={inclusionMode
+                      ? selectInclusionIsCode
+                      : ({ id, label }) => onChange({ ...form, isCodeId: id, isCodeLabel: label })}
                   />
                 </div>
+
+                {inclusionMode ? (
+                  <div className="col-span-12 space-y-2 md:col-span-3">
+                    <Label htmlFor="bis-cml">
+                      CM/L Number <span className="text-destructive">*</span>
+                    </Label>
+                    <div className="flex items-stretch">
+                      <span className="inline-flex h-8 items-center border border-r-0 border-stone-500 bg-stone-100 px-3 text-xs font-semibold text-stone-700">
+                        CM/L
+                      </span>
+                      <Input
+                        id="bis-cml"
+                        inputMode="numeric"
+                        maxLength={10}
+                        placeholder="0000000000"
+                        className="font-mono tabular-nums"
+                        value={form.cmLDigits}
+                        onBlur={loadManuallySelectedInclusionLicense}
+                        onChange={(event) => {
+                          setCmLLookupMessage('')
+                          set('cmLDigits', event.target.value.replace(/\D/g, '').slice(0, 10))
+                        }}
+                      />
+                    </div>
+                    {cmLLookupMessage ? <p className="text-xs text-stone-600">{cmLLookupMessage}</p> : null}
+                  </div>
+                ) : null}
               </div>
 
               {/* Line 3 (License only): CM/L + Validity + Granted */}
-              {!isApplicationProject ? (
+              {!isApplicationProject && !inclusionMode ? (
                 <div className="grid grid-cols-12 gap-4">
                   <div className="col-span-12 space-y-2 md:col-span-4">
                     <Label htmlFor="bis-cml">
@@ -543,6 +669,8 @@ export function BisProjectsForm({
 
               </div>
 
+              {inclusionMode ? <ExistingLicenseScope cmLDigits={form.cmLDigits} /> : null}
+
               <div className="grid grid-cols-12 gap-4">
                 <div className="col-span-12">
                   <LicenseScopeFields
@@ -551,6 +679,7 @@ export function BisProjectsForm({
                     disabled={saving}
                     inputId="bis-notes"
                     isCodeId={form.isCodeId || null}
+                    isNumber={form.isCodeLabel || ''}
                     projectId={projectId}
                   />
                 </div>
@@ -569,13 +698,28 @@ export function BisProjectsForm({
           >
             Cancel
           </Button>
+          {inclusionMode && editing && onCompleteInclusion ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="h-8 rounded-none border-emerald-700 text-emerald-800"
+              onClick={onCompleteInclusion}
+              disabled={!canSave || saving}
+            >
+              Complete Inclusion
+            </Button>
+          ) : null}
           <Button
             type="button"
             className={limsPrimaryBtnClass}
             onClick={onSave}
             disabled={!canSave || saving}
           >
-            {saving ? 'Saving…' : editing ? 'Update License' : 'Save License'}
+            {saving
+              ? 'Saving…'
+              : inclusionMode
+                ? editing ? 'Update Inclusion' : 'Save Inclusion'
+                : editing ? 'Update License' : 'Save License'}
           </Button>
         </div>
       </DialogContent>

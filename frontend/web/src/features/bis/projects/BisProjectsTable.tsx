@@ -73,13 +73,13 @@ function SortableHeader({
       <button
         type="button"
         className={cn(
-          'inline-flex w-full items-center gap-1 text-amber-200 transition-colors hover:text-amber-100',
+          'inline-flex min-w-0 w-full items-center gap-1 text-amber-200 transition-colors hover:text-amber-100',
           align === 'left' ? 'justify-start text-left' : 'justify-center text-center',
         )}
         onClick={() => onSort(columnKey)}
         aria-label={`Sort by ${label}${active ? `, ${sortDir === 'asc' ? 'ascending' : 'descending'}` : ''}`}
       >
-        <span>{label}</span>
+        <span className="min-w-0 break-words">{label}</span>
         <Icon className={cn('h-3.5 w-3.5 shrink-0', active ? 'text-amber-300' : 'text-amber-200/60')} />
       </button>
     </TableHead>
@@ -377,6 +377,7 @@ export function BisProjectsTable({
   onViewDocuments,
   onEmailDocument,
   renewalMode = false,
+  inclusionMode = false,
   onStartRenewal,
   onRenewalReminder,
   emailBusy = false,
@@ -398,6 +399,7 @@ export function BisProjectsTable({
   onViewDocuments: (row: BisProjectRow) => void
   onEmailDocument?: (row: BisProjectRow, kind: BisPrintDocumentKind) => void
   renewalMode?: boolean
+  inclusionMode?: boolean
   onStartRenewal?: (row: BisProjectRow) => void
   onRenewalReminder?: (row: BisProjectRow) => void
   emailBusy?: boolean
@@ -556,7 +558,7 @@ export function BisProjectsTable({
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3 border-t border-stone-200 bg-[#faf8f3] px-3 py-2.5 sm:px-4">
+                    <div className={cn('grid gap-3 border-t border-stone-200 bg-[#faf8f3] px-3 py-2.5 sm:px-4', inclusionMode ? 'grid-cols-1' : 'grid-cols-2')}>
                       <div className="min-w-0">
                         <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">Validity</p>
                         <div className="mt-1 flex min-w-0 items-center gap-1.5 text-xs">
@@ -569,16 +571,18 @@ export function BisProjectsTable({
                           </p>
                         </div>
                       </div>
-                      <div className="min-w-0">
-                        <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">Billing</p>
-                        <div className="mt-1 flex min-w-0 items-center gap-1.5 text-xs">
-                          <Wallet className="h-3.5 w-3.5 shrink-0 text-amber-700" aria-hidden />
-                          <p className="truncate text-stone-700">
-                            {formatInr(r.billing_amount)}
-                            {r.billing_frequency ? ` · ${r.billing_frequency}` : ''}
-                          </p>
+                      {!inclusionMode ? (
+                        <div className="min-w-0">
+                          <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">Billing</p>
+                          <div className="mt-1 flex min-w-0 items-center gap-1.5 text-xs">
+                            <Wallet className="h-3.5 w-3.5 shrink-0 text-amber-700" aria-hidden />
+                            <p className="truncate text-stone-700">
+                              {formatInr(r.billing_amount)}
+                              {r.billing_frequency ? ` · ${r.billing_frequency}` : ''}
+                            </p>
+                          </div>
                         </div>
-                      </div>
+                      ) : null}
                     </div>
                   </div>
                 </article>
@@ -591,11 +595,11 @@ export function BisProjectsTable({
             <Table className={GRID_TABLE}>
               <colgroup>
                 <col className="w-10" />
-                <col className="w-[29%]" />
-                <col className="w-[15%]" />
-                <col className="w-[15%]" />
-                <col className="w-[16%]" />
-                <col className="w-[11%]" />
+                <col className={inclusionMode ? 'w-[28%]' : 'w-[27%]'} />
+                <col className={inclusionMode ? 'w-[16%]' : 'w-[14%]'} />
+                <col className={inclusionMode ? 'w-[16%]' : 'w-[14%]'} />
+                <col className={inclusionMode ? 'w-[16%]' : 'w-[14%]'} />
+                {!inclusionMode ? <col className="w-[11%]" /> : null}
                 <col className="bis-projects-action-column" />
               </colgroup>
               <TableHeader>
@@ -627,7 +631,7 @@ export function BisProjectsTable({
                     sortKey={sortKey}
                     sortDir={sortDir}
                     onSort={onSort}
-                    className={cn(thBase, 'w-[12%]')}
+                    className={cn(thBase, inclusionMode ? 'w-[16%]' : 'w-[12%]')}
                   />
                   <SortableHeader
                     label="CM/L Number"
@@ -635,7 +639,7 @@ export function BisProjectsTable({
                     sortKey={sortKey}
                     sortDir={sortDir}
                     onSort={onSort}
-                    className={cn(thBase, 'w-[12%]')}
+                    className={cn(thBase, inclusionMode ? 'w-[16%]' : 'w-[12%]')}
                   />
                   <SortableHeader
                     label="License Validity"
@@ -643,16 +647,18 @@ export function BisProjectsTable({
                     sortKey={sortKey}
                     sortDir={sortDir}
                     onSort={onSort}
-                    className={cn(thBase, 'w-[12%]')}
+                    className={cn(thBase, inclusionMode ? 'w-[16%]' : 'w-[12%]')}
                   />
-                  <SortableHeader
-                    label="Billing"
-                    columnKey="billing"
-                    sortKey={sortKey}
-                    sortDir={sortDir}
-                    onSort={onSort}
-                    className={cn(thBase, 'w-[12%]')}
-                  />
+                  {!inclusionMode ? (
+                    <SortableHeader
+                      label="Billing"
+                      columnKey="billing"
+                      sortKey={sortKey}
+                      sortDir={sortDir}
+                      onSort={onSort}
+                      className={cn(thBase, 'w-[12%]')}
+                    />
+                  ) : null}
                   <TableHead className={cn('bis-projects-action-column', thBase)}>Action</TableHead>
                 </TableRow>
               </TableHeader>
@@ -672,7 +678,7 @@ export function BisProjectsTable({
                         selected ? rowSelectedClass : index % 2 === 0 ? rowEvenClass : rowOddClass,
                       )}
                     >
-                      <TableCell className="bis-projects-action-column px-2 py-2 text-center align-middle">
+                      <TableCell className="px-2 py-2 text-center align-middle">
                         <input
                           type="checkbox"
                           className={checkboxClass}
@@ -716,10 +722,12 @@ export function BisProjectsTable({
                           </p>
                         ) : null}
                       </TableCell>
-                      <TableCell className="px-2 py-2 text-center align-middle text-sm">
-                        <p className="tabular-nums text-[#292524]">{formatInr(r.billing_amount)}</p>
-                        <p className="text-xs text-[#78716c]">{r.billing_frequency || '—'}</p>
-                      </TableCell>
+                      {!inclusionMode ? (
+                        <TableCell className="px-2 py-2 text-center align-middle text-sm">
+                          <p className="tabular-nums text-[#292524]">{formatInr(r.billing_amount)}</p>
+                          <p className="text-xs text-[#78716c]">{r.billing_frequency || '—'}</p>
+                        </TableCell>
+                      ) : null}
                       <TableCell className="px-2 py-2 text-center align-middle">
                         <RowActions
                           row={r}

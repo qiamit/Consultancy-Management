@@ -99,6 +99,8 @@ export type BisProjectRow = {
   bis_office_id?: string | null
   licence_status_id?: string | null
   project_kind: string | null
+  inclusion_in_progress?: boolean
+  inclusion_scope_draft?: string | null
   title: string | null
   status: string | null
   license_number: string | null
@@ -441,7 +443,11 @@ export function rowToBisProjectForm(row: BisProjectRow): BisProjectForm {
     portalPassword: '',
     portalPasswordSet: Boolean(row.portal_password_set),
     clearPortalPassword: false,
-    notes: sanitizeBisLicenseScopeNotes(row.notes ?? ''),
+    notes: sanitizeBisLicenseScopeNotes(
+      row.inclusion_in_progress && row.inclusion_scope_draft
+        ? row.inclusion_scope_draft
+        : row.notes ?? '',
+    ),
   }
 }
 

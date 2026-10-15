@@ -210,6 +210,8 @@ export const publicColumns = {
     "id",
     "client_id",
     "project_kind",
+    "inclusion_in_progress",
+    "inclusion_scope_draft",
     "title",
     "status",
     "license_number",
