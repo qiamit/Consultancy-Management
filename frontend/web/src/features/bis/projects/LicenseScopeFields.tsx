@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { BookOpen, ChevronDown, ChevronUp, Columns3, Download, Eye, FileText, Plus, Trash2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -27,6 +27,7 @@ import {
   limsRegistryFormClass,
 } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
+import { isQeExtensionPresent } from './manakExtensionBridge'
 import {
   loadIsCodeFileLinks,
   type IsCodeFileLink,
@@ -78,6 +79,44 @@ function openFileInBrowser(file: IsCodeFileLink | null, label: string) {
   window.open(url, '_blank', 'noopener,noreferrer')
 }
 
+function AutoResizeScopeCell({
+  value,
+  onChange,
+  disabled,
+  label,
+  fillCell = false,
+}: {
+  value: string
+  onChange: (value: string) => void
+  disabled: boolean
+  label: string
+  fillCell?: boolean
+}) {
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+
+  useLayoutEffect(() => {
+    const textarea = textareaRef.current
+    if (!textarea || fillCell) return
+    textarea.style.height = 'auto'
+    textarea.style.height = `${textarea.scrollHeight}px`
+  }, [fillCell, value])
+
+  return (
+    <Textarea
+      ref={textareaRef}
+      rows={1}
+      value={value}
+      aria-label={label}
+      disabled={disabled}
+      className={cn(
+        'min-h-8 w-full resize-none overflow-hidden rounded-none border-0 bg-transparent px-2 py-1.5 leading-5 shadow-none focus-visible:bg-white focus-visible:ring-1 focus-visible:ring-amber-500/30',
+        fillCell && 'absolute inset-0 h-full',
+      )}
+      onChange={(event) => onChange(event.target.value)}
+    />
+  )
+}
+
 /** Same Notes / License Scope editor used on Add Application/Licence and Manufacturing Scope module. */
 export function LicenseScopeFields({
   value,
@@ -87,6 +126,7 @@ export function LicenseScopeFields({
   inputId = 'bis-license-scope',
   className,
   isCodeId = null,
+  isNumber = '',
   projectId = null,
 }: {
   value: string
@@ -97,6 +137,8 @@ export function LicenseScopeFields({
   className?: string
   /** When set, shows View buttons for the Specification + Product Manual of this IS Code. */
   isCodeId?: string | null
+  /** Selected IS number used by the BIS Product Manual search. */
+  isNumber?: string
   /** Existing project required to store an uploaded manufacturing scope PDF. */
   projectId?: string | null
 }) {
@@ -110,6 +152,7 @@ export function LicenseScopeFields({
   const [scopeFiles, setScopeFiles] = useState<BisProjectViewFile[]>([])
   const [scopeFilesProjectId, setScopeFilesProjectId] = useState('')
   const [scopeUploadBusy, setScopeUploadBusy] = useState(false)
+  const [manualSearchBusy, setManualSearchBusy] = useState(false)
   const scopeUploadRef = useRef<HTMLInputElement | null>(null)
   const scopeProjectId = (projectId ?? '').trim()
 
@@ -209,12 +252,57 @@ export function LicenseScopeFields({
   }
 
   const standardFile = pickIsCodeFile(isFiles, 'standard')
-  const manualFile = pickIsCodeFile(isFiles, 'manual')
   const showIsFileButtons = Boolean((isCodeId ?? '').trim())
   const filesMissing =
     showIsFileButtons && !filesLoading && isFiles.length === 0
   const scopeFilesLoading = Boolean(scopeProjectId) && scopeFilesProjectId !== scopeProjectId
   const scopeFile = scopeFilesProjectId === scopeProjectId ? scopeFiles[0] ?? null : null
+
+  const openProductManualSearch = () => {
+    const selectedIs = isNumber.trim()
+    const productManualUrl = 'https://standards.bis.gov.in/website/product-manuals'
+    if (!selectedIs) {
+      window.open(productManualUrl, '_blank', 'noopener,noreferrer')
+      toast.warning('Product Manuals opened. Select an IS Number first to search automatically.')
+      return
+    }
+    if (!isQeExtensionPresent()) {
+      window.open(productManualUrl, '_blank', 'noopener,noreferrer')
+      toast.warning('Reload the QE Consultancy extension to auto-search the selected IS Number.')
+      return
+    }
+
+    const requestId = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    setManualSearchBusy(true)
+    let completed = false
+    const finish = (message: string, isError: boolean) => {
+      if (completed) return
+      completed = true
+      window.clearTimeout(timer)
+      window.removeEventListener('message', onResult)
+      setManualSearchBusy(false)
+      if (isError) toast.error(message)
+      else toast.success(message)
+    }
+    const onResult = (event: MessageEvent) => {
+      if (event.source !== window || event.origin !== window.location.origin) return
+      const data = event.data
+      if (data?.type !== 'QE_PRODUCT_MANUAL_SEARCH_RESULT' || data.requestId !== requestId) return
+      finish(
+        String(data.message || (data.ok ? 'Product Manual search started.' : 'Could not search Product Manuals.')),
+        !data.ok,
+      )
+    }
+    const timer = window.setTimeout(
+      () => finish('The QE Consultancy extension did not respond. Reload it and try again.', true),
+      60000,
+    )
+    window.addEventListener('message', onResult)
+    window.postMessage(
+      { type: 'QE_PRODUCT_MANUAL_SEARCH', requestId, isNumber: selectedIs },
+      window.location.origin,
+    )
+  }
 
   const handleScopeUpload = async (file?: File) => {
     const id = (projectId ?? '').trim()
@@ -330,13 +418,9 @@ export function LicenseScopeFields({
                 variant="outline"
                 size="sm"
                 className={cn(limsOutlineBtnClass, 'h-10 gap-1.5 px-2.5 text-xs min-[641px]:h-7')}
-                disabled={disabled || filesLoading || !manualFile?.url}
-                title={
-                  manualFile?.file_name
-                    ? `View ${manualFile.file_name}`
-                    : 'Product Manual file not attached on this IS Code'
-                }
-                onClick={() => openFileInBrowser(manualFile, 'Product Manual')}
+                disabled={disabled || manualSearchBusy}
+                title="Open BIS Product Manuals and search the selected IS Number"
+                onClick={openProductManualSearch}
               >
                 <FileText className="h-3.5 w-3.5" aria-hidden />
                 <Eye className="h-3.5 w-3.5" aria-hidden />
@@ -465,17 +549,17 @@ export function LicenseScopeFields({
                       {row.map((cell, colIndex) => (
                         <td
                           key={`${inputId}-c-${rowIndex}-${colIndex}`}
-                          className="border border-stone-400 p-0"
+                          className={cn('border border-stone-400 p-0', colIndex === 0 && row.length > 1 && 'relative')}
                         >
-                          <Input
+                          <AutoResizeScopeCell
                             value={cell}
-                            aria-label={`${notesScope.headers[colIndex] || `Column ${colIndex + 1}`} row ${rowIndex + 1}`}
+                            label={`${notesScope.headers[colIndex] || `Column ${colIndex + 1}`} row ${rowIndex + 1}`}
                             disabled={disabled}
-                            className="h-8 rounded-none border-0 bg-transparent px-2 shadow-none focus-visible:bg-white focus-visible:ring-1 focus-visible:ring-amber-500/30"
-                            onChange={(e) =>
+                            fillCell={colIndex === 0 && row.length > 1}
+                            onChange={(nextValue) =>
                               updateNotesTable((table) => {
                                 const rows = table.rows.map((r) => [...r])
-                                rows[rowIndex][colIndex] = e.target.value
+                                rows[rowIndex][colIndex] = nextValue
                                 return { headers: table.headers, rows }
                               })
                             }
