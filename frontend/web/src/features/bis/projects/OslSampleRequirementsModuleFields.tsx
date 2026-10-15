@@ -95,11 +95,12 @@ import { createBisProjectFileUrls, deleteBisProjectFile, uploadBisProjectFile } 
 import { downloadMergedOslTestRequestPdfs } from './mergeOslTestRequestPdfs'
 import {
   assertManakAccountBelongsToOnlyFirm,
-  collectForeignOslQrCodes,
+  collectUnavailableOslQrCodes,
   claimImportedOslQrCodes,
   listOslQrSourceProjects,
   persistScrubbedOslQrPool,
-  scrubForeignImportedQrCodes,
+  removeUnusedOslQrCode,
+  scrubUnavailableImportedQrCodes,
   transferUnusedOslQrFromProject,
   type OslQrSourceProject,
 } from './oslQrImportApi'
@@ -248,6 +249,7 @@ export function OslSampleRequirementsModuleFields({
   const [addMode, setAddMode] = useState<'without-qr' | 'with-qr'>('without-qr')
   const [selectedQr, setSelectedQr] = useState('')
   const [importBusy, setImportBusy] = useState(false)
+  const [qrRemoveBusyCode, setQrRemoveBusyCode] = useState('')
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [importStep, setImportStep] = useState<'choose' | 'from-app'>('choose')
   const [qrSources, setQrSources] = useState<OslQrSourceProject[]>([])
@@ -389,14 +391,19 @@ export function OslSampleRequirementsModuleFields({
         codes,
         currentPayload: { ...current, importedQrCodes: merged },
       })
-        .then((next) => {
-          onChangeRef.current(next)
+        .then(({ payload, skippedUsedCodes }) => {
+          onChangeRef.current(payload)
+          if (skippedUsedCodes.length > 0) {
+            toast.message(
+              `Skipped ${skippedUsedCodes.length} QR code(s) already assigned to sample rows.`,
+            )
+          }
         })
         .catch((error: unknown) => {
           toast.error(
             error instanceof Error
-              ? `QR codes were received but could not be saved: ${error.message}`
-              : 'QR codes were received but could not be saved.',
+              ? `QR import could not be saved: ${error.message}`
+              : 'QR import could not be saved.',
           )
         })
       },
@@ -413,8 +420,8 @@ export function OslSampleRequirementsModuleFields({
     })
   }, [projectId])
 
-  // Keep unused QR picker firm-scoped: drop codes that are already used on another firm's sample.
-  // Persist immediately so "Import from Application" on sibling licenses matches this UI.
+  // Keep the unused QR pool firm-scoped and drop codes already assigned on any sample.
+  // Persist immediately so sibling application import matches this picker.
   useEffect(() => {
     const cid = (clientId ?? '').trim()
     const pid = (projectId ?? '').trim()
@@ -430,7 +437,7 @@ export function OslSampleRequirementsModuleFields({
         if (cancelled) return
         const current = valueRef.current
         if (next === current) return
-        // Only apply if scrub actually removed foreign-used codes from the latest pool.
+        // Only apply if scrub actually removed unavailable codes from the latest pool.
         const beforeLen = current.importedQrCodes?.length ?? 0
         const afterLen = next.importedQrCodes?.length ?? 0
         if (afterLen >= beforeLen) return
@@ -438,11 +445,11 @@ export function OslSampleRequirementsModuleFields({
       })
       .catch(() => {
         /* fallback: local-only scrub if persist fails */
-        void collectForeignOslQrCodes(cid)
-          .then((foreign) => {
-            if (cancelled || foreign.size === 0) return
+        void collectUnavailableOslQrCodes(cid)
+          .then((unavailable) => {
+            if (cancelled || unavailable.size === 0) return
             const current = valueRef.current
-            const next = scrubForeignImportedQrCodes(current, foreign)
+            const next = scrubUnavailableImportedQrCodes(current, unavailable)
             if (next === current) return
             onChangeRef.current(next)
           })
@@ -551,6 +558,32 @@ export function OslSampleRequirementsModuleFields({
     setSelectedSourceId('')
     setQrSourcesLoading(false)
     setTransferBusy(false)
+  }
+
+  const handleRemoveImportedQrCode = async (code: string) => {
+    const pid = (projectId ?? '').trim()
+    if (!pid) {
+      toast.error('Save this BIS project before removing an imported QR code.')
+      return
+    }
+    setQrRemoveBusyCode(code)
+    try {
+      const next = await removeUnusedOslQrCode({
+        projectId: pid,
+        code,
+        currentPayload: valueRef.current,
+      })
+      onChangeRef.current({
+        ...valueRef.current,
+        importedQrCodes: next.importedQrCodes,
+      })
+      setSelectedQr((selected) => (selected.replace(/\D/g, '') === code ? '' : selected))
+      toast.success('QR code removed from the unused import pool.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not remove the QR code.')
+    } finally {
+      setQrRemoveBusyCode('')
+    }
   }
 
   const openImportDialog = () => {
@@ -2957,6 +2990,39 @@ export function OslSampleRequirementsModuleFields({
                 <Globe className="h-5 w-5 shrink-0 text-amber-800" aria-hidden />
                 <span className="text-sm font-semibold text-stone-800">From Manak Online</span>
               </button>
+              {availableQrCodes.length > 0 ? (
+                <section className="min-w-0 space-y-2 border border-stone-300 bg-stone-50 p-3 sm:col-span-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-xs font-semibold text-stone-800">
+                        Imported unused QR codes ({availableQrCodes.length})
+                      </h3>
+                      <p className="text-[11px] text-stone-600">
+                        Remove scanned or incorrect codes from this project’s unused pool.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="max-h-40 divide-y divide-stone-200 overflow-y-auto border border-stone-300 bg-white">
+                    {availableQrCodes.map((code) => (
+                      <div key={code} className="flex items-center justify-between gap-3 px-2 py-1.5">
+                        <span className="font-mono text-xs text-stone-800">{code}</span>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className={cn(limsOutlineBtnClass, 'h-7 gap-1 px-2 text-[11px] text-red-800')}
+                          disabled={disabled || Boolean(qrRemoveBusyCode)}
+                          title={`Remove QR ${code} from the unused pool`}
+                          onClick={() => void handleRemoveImportedQrCode(code)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                          {qrRemoveBusyCode === code ? 'Removing…' : 'Remove'}
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
             </div>
           ) : (
             <div className="space-y-3 px-4 py-4">

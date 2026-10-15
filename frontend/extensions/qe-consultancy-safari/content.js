@@ -2182,6 +2182,12 @@
 
   function scrapeQrCodesFromPage() {
     const found = new Set();
+    if (!/employeeQrCodeGeneration|generateqr|qrcodegeneration/i.test(location.pathname || "")) {
+      return [];
+    }
+    // Never collect old codes from the Generate New Code page. Newly generated
+    // codes are collected after Manak returns to its Not Used list (flag=2).
+    if (qrPageFlag() !== "2") return [];
     const add = (value) => {
       const v = text(value).replace(/\s+/g, "");
       if (isLikelyQrCodeValue(v)) found.add(v);
@@ -2190,30 +2196,47 @@
       const t = text(raw || "").replace(/\s+/g, " ");
       (t.match(/\b\d{12}\b/g) || []).forEach(add);
     };
-    // Not Used / Available Codes list — prefer visible 12-digit codes.
-    document
-      .querySelectorAll(
+    const isUnavailableRow = (raw) => {
+      const rowText = text(raw || "").replace(/\s+/g, " ");
+      if (/\b(?:scanned|assigned|consumed|submitted)\b|\balready\s+(?:used|scanned)\b|\btest\s*request\b/i.test(rowText)) {
+        return true;
+      }
+      return /\bused\b/i.test(rowText) && !/\bnot\s+used\b/i.test(rowText);
+    };
+    const addRow = (row, input) => {
+      if (!row || isUnavailableRow(row.innerText || row.textContent || "")) return;
+      if (input) add(input.value);
+      addFromText(row.innerText || row.textContent || "");
+    };
+
+    // The portal's Not Used table has checkboxes/numId controls per QR row.
+    // Read only those rows; scanning the whole page also caught old/sample codes.
+    const rowInputs = Array.from(
+      document.querySelectorAll(
         'input[name="chk"], input[name="chk[]"], input[id^="numId"], input[name^="numId"], input[id*="numId" i]',
-      )
-      .forEach((el) => {
-        if (!el) return;
-        add(el.value);
-        const row = el.closest("tr, li, label, div, td") || el.parentElement;
-        if (row) addFromText(row.textContent || "");
+      ),
+    );
+    if (rowInputs.length > 0) {
+      rowInputs.forEach((input) => {
+        const row = input.closest("tr") || input.closest("li") || input.parentElement;
+        addRow(row, input);
       });
-    document
-      .querySelectorAll(
-        "#qrcodeNumber, input[name='qrcodeNumber'], input[id*='qr' i], input[name*='qr' i], td, th, label, span",
-      )
-      .forEach((el) => {
-        if (!el) return;
-        if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") add(el.value);
-        addFromText(el.textContent || "");
-      });
-    const available =
-      document.querySelector("#availableCodes, .availableCodes, #AvailableCodes") ||
-      document.body;
-    if (available) addFromText(available.innerText || available.textContent || "");
+      return Array.from(found);
+    }
+
+    // Some Manak accounts render an explicit available-code list without row
+    // checkboxes. Keep the fallback scoped to that list, never document.body.
+    const available = document.querySelector(
+      "#availableCodes, .availableCodes, #AvailableCodes",
+    );
+    if (available) {
+      const rows = Array.from(available.querySelectorAll("tr, li, [data-qr-code]"));
+      if (rows.length > 0) {
+        rows.forEach((row) => addRow(row, row.querySelector("input")));
+      } else if (!isUnavailableRow(available.innerText || available.textContent || "")) {
+        addFromText(available.innerText || available.textContent || "");
+      }
+    }
     return Array.from(found);
   }
 
@@ -2639,6 +2662,15 @@
         const started = await submitGenerateNewQrCodes(copies);
         if (started) {
           return { ok: true, message: "Generating new QR codes…" };
+        }
+        // A successful Generate may reload the flag=1 page before the original
+        // page's redirect timer fires. Continue to Not Used after that postback.
+        if (sessionStorage.getItem("qeManakImportGenerateClicked") === "1") {
+          sessionStorage.setItem("qeManakImportAfterGenerate", "1");
+          window.setTimeout(() => {
+            if (!window.__qeManakImportPublished) navigateQrFlag("2");
+          }, 1200);
+          return { ok: true, message: "Checking the Not Used list for newly generated QR codes…" };
         }
         // Already clicked once this session — wait / scrape.
         const genCodes = scrapeQrCodesFromPage();

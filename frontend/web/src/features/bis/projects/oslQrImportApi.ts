@@ -123,14 +123,73 @@ export async function collectForeignOslQrCodes(clientId: string): Promise<Set<st
   return foreign
 }
 
+/** QR codes already assigned to a sample row under the same firm. */
+export async function collectFirmUsedOslQrCodes(clientId: string): Promise<Set<string>> {
+  const cid = clientId.trim()
+  if (!cid) return new Set()
+
+  const { data: projects, error: projectError } = await supabase
+    .from('bis_projects')
+    .select('id')
+    .eq('client_id', cid)
+    .limit(500)
+  if (projectError) throw projectError
+
+  const ids = (Array.isArray(projects) ? projects : [])
+    .map((project) => String((project as { id?: string }).id ?? '').trim())
+    .filter(Boolean)
+  if (ids.length === 0) return new Set()
+
+  const { data: modules, error: moduleError } = await supabase
+    .from('bis_project_module_data')
+    .select('payload')
+    .eq('module_kind', OSL_MODULE_KIND)
+    .in('bis_project_id', ids)
+    .limit(500)
+  if (moduleError) throw moduleError
+
+  const used = new Set<string>()
+  for (const raw of Array.isArray(modules) ? modules : []) {
+    const payload = (raw as { payload?: unknown }).payload
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) continue
+    const parsed = parseOslSampleRequirementsPayload(payload as Record<string, unknown>)
+    for (const sample of parsed.rows ?? []) {
+      const code = digitsQr(sample.qrCode)
+      if (code.length >= 12) used.add(code)
+    }
+  }
+  return used
+}
+
+/** Codes that must never be offered from an unused QR pool. */
+export async function collectUnavailableOslQrCodes(clientId: string): Promise<Set<string>> {
+  const [foreign, used] = await Promise.all([
+    collectForeignOslQrCodes(clientId),
+    collectFirmUsedOslQrCodes(clientId),
+  ])
+  return new Set([...foreign, ...used])
+}
+
 /** Drop unused imported QR codes that belong to another firm (used on their sample). */
-export function scrubForeignImportedQrCodes(
+export function scrubUnavailableImportedQrCodes(
   payload: OslSampleRequirementsModulePayload,
-  foreignCodes: Set<string>,
+  unavailableCodes: Set<string>,
 ): OslSampleRequirementsModulePayload {
-  if (foreignCodes.size === 0) return payload
+  const blocked = new Set(unavailableCodes)
+  for (const row of payload.rows ?? []) {
+    const usedHere = digitsQr(row.qrCode)
+    if (usedHere.length >= 12) blocked.add(usedHere)
+  }
+  return scrubImportedQrCodes(payload, blocked)
+}
+
+function scrubImportedQrCodes(
+  payload: OslSampleRequirementsModulePayload,
+  unavailableCodes: Set<string>,
+): OslSampleRequirementsModulePayload {
+  if (unavailableCodes.size === 0) return payload
   const nextImported = normalizeImportedQrCodes(
-    (payload.importedQrCodes ?? []).filter((c) => !foreignCodes.has(digitsQr(c))),
+    (payload.importedQrCodes ?? []).filter((code) => !unavailableCodes.has(digitsQr(code))),
   )
   if (nextImported.length === (payload.importedQrCodes ?? []).length) return payload
   return { ...payload, importedQrCodes: nextImported }
@@ -152,9 +211,13 @@ export async function persistScrubbedOslQrPool(opts: {
   const clientId = opts.clientId.trim()
   if (!projectId || !clientId) return opts.payload
 
-  const foreign = await collectForeignOslQrCodes(clientId)
+  const unavailable = await collectUnavailableOslQrCodes(clientId)
   const latest = opts.getLatest ? opts.getLatest() : opts.payload
-  const scrubbed = scrubForeignImportedQrCodes(latest, foreign)
+  for (const row of latest.rows ?? []) {
+    const usedHere = digitsQr(row.qrCode)
+    if (usedHere.length >= 12) unavailable.add(usedHere)
+  }
+  const scrubbed = scrubImportedQrCodes(latest, unavailable)
   if (scrubbed === latest) return latest
 
   await saveBisModulePayload(projectId, OSL_MODULE_KIND, payloadToRecord(scrubbed))
@@ -171,7 +234,7 @@ export async function claimImportedOslQrCodes(opts: {
   clientId: string
   codes: string[]
   currentPayload: OslSampleRequirementsModulePayload
-}): Promise<OslSampleRequirementsModulePayload> {
+}): Promise<{ payload: OslSampleRequirementsModulePayload; skippedUsedCodes: string[] }> {
   const projectId = opts.projectId.trim()
   const clientId = opts.clientId.trim()
   const claimed = normalizeImportedQrCodes(opts.codes)
@@ -189,13 +252,29 @@ export async function claimImportedOslQrCodes(opts: {
     throw new Error('One or more QR codes are already owned by another firm and cannot be imported here.')
   }
 
-  const safeCurrentPayload = scrubForeignImportedQrCodes(opts.currentPayload, foreignCodes)
+  const usedCodes = await collectFirmUsedOslQrCodes(clientId)
+  for (const row of opts.currentPayload.rows ?? []) {
+    const usedHere = digitsQr(row.qrCode)
+    if (usedHere.length >= 12) usedCodes.add(usedHere)
+  }
+  const skippedUsedCodes = claimed.filter((code) => usedCodes.has(digitsQr(code)))
+  const freshClaims = claimed.filter((code) => !usedCodes.has(digitsQr(code)))
+
+  const unavailable = new Set([...foreignCodes, ...usedCodes])
+  const safeCurrentPayload = scrubImportedQrCodes(opts.currentPayload, unavailable)
   const nextPayload: OslSampleRequirementsModulePayload = {
     ...safeCurrentPayload,
     importedQrCodes: normalizeImportedQrCodes([
       ...(safeCurrentPayload.importedQrCodes ?? []),
-      ...claimed,
+      ...freshClaims,
     ]),
+  }
+  if (
+    freshClaims.length === 0 &&
+    nextPayload.importedQrCodes.length !== (opts.currentPayload.importedQrCodes ?? []).length
+  ) {
+    await saveBisModulePayload(projectId, OSL_MODULE_KIND, payloadToRecord(nextPayload))
+    return { payload: nextPayload, skippedUsedCodes }
   }
 
   // Find siblings by the same firm before saving or touching any QR pool.
@@ -243,7 +322,37 @@ export async function claimImportedOslQrCodes(opts: {
     })
   }
 
-  return nextPayload
+  return { payload: nextPayload, skippedUsedCodes }
+}
+
+/** Remove one unused QR code from this project's import pool, without changing sample rows. */
+export async function removeUnusedOslQrCode(opts: {
+  projectId: string
+  code: string
+  currentPayload: OslSampleRequirementsModulePayload
+}): Promise<OslSampleRequirementsModulePayload> {
+  const projectId = opts.projectId.trim()
+  const code = digitsQr(opts.code)
+  if (!projectId || code.length < 12) throw new Error('Select a valid imported QR code to remove.')
+
+  const raw = await fetchBisModulePayload(projectId, OSL_MODULE_KIND)
+  const persisted = parseOslSampleRequirementsPayload(raw)
+  const current = opts.currentPayload
+  if ([...(persisted.rows ?? []), ...(current.rows ?? [])].some((row) => digitsQr(row.qrCode) === code)) {
+    throw new Error('This QR code is assigned to a sample row. Remove it from that row first.')
+  }
+  const next: OslSampleRequirementsModulePayload = {
+    ...current,
+    importedQrCodes: normalizeImportedQrCodes([
+      ...(persisted.importedQrCodes ?? []),
+      ...(current.importedQrCodes ?? []),
+    ]).filter((item) => digitsQr(item) !== code),
+  }
+  if (next.importedQrCodes.length !== persisted.importedQrCodes.length ||
+      next.importedQrCodes.some((item, index) => item !== persisted.importedQrCodes[index])) {
+    await saveBisModulePayload(projectId, OSL_MODULE_KIND, payloadToRecord(next))
+  }
+  return next
 }
 
 async function fetchProjectClientId(projectId: string): Promise<string> {
