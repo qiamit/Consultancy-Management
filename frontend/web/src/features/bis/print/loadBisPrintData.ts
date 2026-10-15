@@ -23,8 +23,6 @@ export type BisPrintClient = {
   factoryPin: string
   latitude: string
   longitude: string
-  sealSignEnabled: boolean
-  sealSignImageUrl: string
   topManagement: { name: string; designation: string }[]
 }
 
@@ -111,8 +109,6 @@ async function loadClient(row: BisProjectRow): Promise<BisPrintClient> {
     factoryPin: '',
     latitude: '',
     longitude: '',
-    sealSignEnabled: false,
-    sealSignImageUrl: '',
     topManagement: [],
   }
   if (!row.client_id) return empty
@@ -142,14 +138,7 @@ async function loadClient(row: BisProjectRow): Promise<BisPrintClient> {
     factoryPin: text(c.pin_code),
     latitude: text(c.latitude),
     longitude: text(c.longitude),
-    sealSignEnabled: Boolean(c.seal_sign_enabled),
-    sealSignImageUrl: '',
     topManagement: [],
-  }
-  const sealPath = text(c.seal_sign_image_path)
-  if (loaded.sealSignEnabled && sealPath) {
-    const { data: sealImage } = await supabase.storage.from('client-certificates').createSignedUrl(sealPath, 60 * 60)
-    loaded.sealSignImageUrl = sealImage?.signedUrl ?? ''
   }
   const clientId = text(c.id) || row.client_id
   if (!clientId) return loaded

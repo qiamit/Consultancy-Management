@@ -232,7 +232,7 @@ th * {
 
 .bis-projects-card-view { display: none; }
 .bis-projects-table-view { display: block; }
-.bis-projects-table-view > div { overflow-x: auto !important; }
+.bis-projects-table-view > div { overflow-x: clip !important; }
 .bis-projects-table-view th,
 .bis-projects-table-view td { overflow-wrap: anywhere; }
 .bis-projects-action-column {
@@ -352,21 +352,6 @@ th * {
 @media (min-width: 1024px) {
   .bis-projects-table-view { display: block !important; }
   .bis-projects-card-view { display: none !important; }
-}
-
-@container bis-projects (min-width: 850px) {
-  .bis-projects-table-view th:nth-child(1),
-  .bis-projects-table-view td:nth-child(1) { width: 3rem; }
-  .bis-projects-table-view th:nth-child(3),
-  .bis-projects-table-view td:nth-child(3),
-  .bis-projects-table-view th:nth-child(4),
-  .bis-projects-table-view td:nth-child(4),
-  .bis-projects-table-view th:nth-child(5),
-  .bis-projects-table-view td:nth-child(5),
-  .bis-projects-table-view th:nth-child(6),
-  .bis-projects-table-view td:nth-child(6) { width: 13%; }
-  .bis-projects-table-view th:nth-child(7),
-  .bis-projects-table-view td:nth-child(7) { width: 14%; }
 }
 
 .bis-branch-card-view { display: none; }

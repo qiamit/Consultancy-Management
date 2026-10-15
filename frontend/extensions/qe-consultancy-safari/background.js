@@ -773,6 +773,14 @@ function normalizePortalUserId(value) {
   return String(value || "").replace(/\s+/g, "").toLowerCase();
 }
 
+function portalUserIdsMatch(expectedUserId, candidates) {
+  const expected = normalizePortalUserId(expectedUserId);
+  if (!expected) return false;
+  return (Array.isArray(candidates) ? candidates : [candidates]).some(
+    (candidate) => normalizePortalUserId(candidate) === expected,
+  );
+}
+
 function queryManakTabs() {
   return new Promise((resolve) => {
     chrome.tabs.query({ url: ["https://www.manakonline.in/*", "https://manakonline.in/*"] }, (tabs) => {
@@ -1005,7 +1013,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           if (reused && reused.tab.id) {
             if (
               !normalizePortalUserId(portalUserId) ||
-              normalizePortalUserId(reused.session.userId) !== normalizePortalUserId(portalUserId)
+              !portalUserIdsMatch(
+                portalUserId,
+                reused.session.userIds?.length ? reused.session.userIds : [reused.session.userId],
+              )
             ) {
               await chrome.storage.local.set({
                 qeManakImportQr: false,
@@ -1136,16 +1147,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         "qeManakImportPortalUserId",
       ],
       (stored) => {
+        const readError = chrome.runtime.lastError;
+        if (readError) {
+          sendResponse({ ok: false, message: readError.message || "Could not verify the QR import session." });
+          return;
+        }
         const tracked = Number((stored && stored.qeManakImportQrTabId) || 0) || 0;
         const targetAppTabId = Number((stored && stored.qeManakImportAppTabId) || 0) || 0;
         const projectId = String((stored && stored.qeManakImportProjectId) || "").trim();
         const expectedPortalUserId = normalizePortalUserId(stored && stored.qeManakImportPortalUserId);
-        const actualPortalUserId = normalizePortalUserId(message.result.portalUserId);
+        const actualPortalUserIds = Array.isArray(message.result.portalUserIds)
+          ? message.result.portalUserIds
+          : [message.result.portalUserId];
         if (
           !tracked ||
           senderTabId !== tracked ||
           !expectedPortalUserId ||
-          actualPortalUserId !== expectedPortalUserId
+          !portalUserIdsMatch(expectedPortalUserId, actualPortalUserIds)
         ) {
           const reason =
             !tracked || senderTabId !== tracked
@@ -1168,17 +1186,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           qeManakImportProjectId: "",
           qeManakImportPortalUserId: "",
           pendingFill: null,
+        }, () => {
+          const writeError = chrome.runtime.lastError;
+          if (writeError) {
+            sendResponse({ ok: false, message: writeError.message || "Could not hand off the imported QR codes." });
+            return;
+          }
+          notifyQrImportToApp(result, targetAppTabId);
+          const closeIds = new Set([senderTabId, tracked].filter(Boolean));
+          if (message.closeTab || message.finishImport) {
+            closeIds.forEach((id) => {
+              void settle(chrome.tabs.remove(id)).catch(() => {});
+            });
+          }
+          sendResponse({ ok: true, message: `Returned ${result.qr_codes.length} QR code(s) to Consultancy Pro.` });
         });
-        notifyQrImportToApp(result, targetAppTabId);
-        const closeIds = new Set([senderTabId, tracked].filter(Boolean));
-        if (message.closeTab || message.finishImport) {
-          closeIds.forEach((id) => {
-            void settle(chrome.tabs.remove(id)).catch(() => {});
-          });
-        }
       },
     );
-    sendResponse({ ok: true });
     return true;
   }
 

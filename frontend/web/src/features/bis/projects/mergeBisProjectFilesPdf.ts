@@ -88,17 +88,24 @@ async function downloadBytes(storagePath: string): Promise<Uint8Array> {
 export async function buildMergedBisProjectFilesPdf(
   projectId: string,
   docKinds: readonly BisProjectDocKind[],
-  options: { ignoreUnsupported?: boolean; strict?: boolean } = {},
+  options: {
+    ignoreUnsupported?: boolean
+    strict?: boolean
+    shouldIncludeFile?: (file: StoredFile, bytes: Uint8Array) => boolean | Promise<boolean>
+  } = {},
 ): Promise<Uint8Array | null> {
   const files = await listStoredFiles(projectId, docKinds)
   if (files.length === 0) return null
   const merged = await PDFDocument.create()
   let added = 0
+  let included = 0
   let unsupported = 0
   const skipped: string[] = []
 
   for (const file of files) {
     const bytes = await downloadBytes(file.storage_path)
+    if (options.shouldIncludeFile && !(await options.shouldIncludeFile(file, bytes))) continue
+    included += 1
     const assetKind = detectBisPdfAssetKind(file, bytes)
     if (!assetKind) {
       unsupported += 1
@@ -137,6 +144,8 @@ export async function buildMergedBisProjectFilesPdf(
   if (options.strict && skipped.length > 0) {
     throw new Error(`Could not include all attached files: ${skipped.join(', ')}`)
   }
+
+  if (included === 0) return null
 
   if (added === 0 && options.ignoreUnsupported && unsupported === files.length) return null
   if (added === 0) {

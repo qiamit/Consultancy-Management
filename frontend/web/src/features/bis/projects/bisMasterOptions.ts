@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabaseClient'
 import { slugifyLabOptionValue } from '@/features/settings/lab-settings/labMasterOptions'
+import { normalizeIsUnitLabel } from '@/features/masters/is-codes/unitLabels'
 
 export type BisMasterOptionCategory =
   | 'state'
@@ -146,7 +147,7 @@ export async function ensureBisMasterOption(
   category: BisMasterOptionCategory,
   label: string,
 ): Promise<void> {
-  const trimmed = label.trim()
+  const trimmed = category === 'unit_of_is' ? normalizeIsUnitLabel(label) : label.trim()
   if (!trimmed) return
   if (category === 'unit_of_is') {
     const existing = await fetchBisMasterOptions(category)
@@ -174,7 +175,7 @@ export async function updateBisMasterOption(
   oldValue: string,
   label: string,
 ): Promise<void> {
-  const trimmed = label.trim()
+  const trimmed = category === 'unit_of_is' ? normalizeIsUnitLabel(label) : label.trim()
   if (!trimmed) return
   if (category === 'unit_of_is') {
     const { error } = await supabase

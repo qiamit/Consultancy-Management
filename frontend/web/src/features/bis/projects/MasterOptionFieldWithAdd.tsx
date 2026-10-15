@@ -12,6 +12,7 @@ import {
 } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { ClientManageDialogContent } from '@/features/masters/clients/ClientManageDialogContent'
+import { normalizeIsUnitLabel } from '@/features/masters/is-codes/unitLabels'
 import {
   deleteBisMasterOption,
   ensureBisMasterOption,
@@ -130,7 +131,7 @@ export function MasterOptionFieldWithAdd({
 
   const persistOption = (mode: 'add' | 'update', updateId?: string) => {
     void (async () => {
-      const formatted = newName.trim()
+      const formatted = category === 'unit_of_is' ? normalizeIsUnitLabel(newName) : newName.trim()
       if (!formatted) {
         setError(`${title} is required.`)
         return

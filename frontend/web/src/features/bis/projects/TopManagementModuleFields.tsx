@@ -836,8 +836,8 @@ export function TopManagementModuleFields({
                 />
               </TableHead>
               <TableHead className={cn(thBase, 'min-w-[11.5rem] w-[20%]')}>Name</TableHead>
-              <TableHead className={cn(thBase, 'min-w-[10.5rem] w-[16%]')}>Designation</TableHead>
-              <TableHead className={cn(thBase, 'min-w-[13.5rem] w-[22%]')}>Email</TableHead>
+              <TableHead className={cn(thBase, 'min-w-[10.5rem] w-[16%] text-center')}>Designation</TableHead>
+              <TableHead className={cn(thBase, 'min-w-[13.5rem] w-[22%] text-center')}>Email</TableHead>
               <TableHead className={cn(thBase, 'w-[8.75rem] whitespace-nowrap')}>Mobile</TableHead>
               <TableHead className={cn(thBase, 'w-[7.75rem] whitespace-nowrap px-1')}>
                 Signature
@@ -893,10 +893,10 @@ export function TopManagementModuleFields({
                       </p>
                     )}
                   </TableCell>
-                  <TableCell className={tdClass}>
+                  <TableCell className={cn(tdClass, 'text-center')}>
                     {canEditFields ? (
                       <Input
-                        className={cn(cellInputClass, 'px-2 text-left')}
+                        className={cn(cellInputClass, 'px-2 text-center')}
                         value={row.designation}
                         disabled={disabled}
                         placeholder="Designation"
@@ -905,17 +905,17 @@ export function TopManagementModuleFields({
                       />
                     ) : (
                       <p
-                        className="truncate text-left text-sm text-[#292524]"
+                        className="truncate text-center text-sm text-[#292524]"
                         title={row.designation.trim() || undefined}
                       >
                         {row.designation.trim() || '—'}
                       </p>
                     )}
                   </TableCell>
-                  <TableCell className={tdClass}>
+                  <TableCell className={cn(tdClass, 'text-center')}>
                     {canEditFields ? (
                       <Input
-                        className={emailInputClass}
+                        className={cn(emailInputClass, 'text-center')}
                         value={row.email}
                         disabled={disabled}
                         placeholder="Email"
@@ -925,7 +925,7 @@ export function TopManagementModuleFields({
                       />
                     ) : (
                       <p
-                        className="truncate text-left text-sm text-[#292524]"
+                        className="truncate text-center text-sm text-[#292524]"
                         title={row.email.trim() || undefined}
                       >
                         {row.email.trim() || '—'}

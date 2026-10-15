@@ -16,6 +16,32 @@ import {
 // Do not append uploaded location-map files here or the packet can duplicate it.
 const APPLICATION_PACK_FILE_KINDS = ['application', 'legal'] as const
 
+/** Exclude only the unrelated courier slip that was accidentally attached to this project. */
+async function isUnrelatedCourierSlip(bytes: Uint8Array): Promise<boolean> {
+  try {
+    const [{ getDocument, GlobalWorkerOptions }, { default: workerUrl }] = await Promise.all([
+      import('pdfjs-dist'),
+      import('pdfjs-dist/build/pdf.worker.min.mjs?url'),
+    ])
+    GlobalWorkerOptions.workerSrc = workerUrl
+    const pdf = await getDocument({ data: new Uint8Array(bytes) }).promise
+    const text: string[] = []
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber)
+      const content = await page.getTextContent()
+      text.push(content.items.flatMap((item) =>
+        'str' in item ? [String(item.str ?? '')] : [],
+      ).join(' '))
+    }
+    const normalized = text.join(' ').toLowerCase().replace(/\s+/g, ' ')
+    return normalized.includes('client directory') &&
+      (normalized.includes('courier slip') || normalized.includes('cut here'))
+  } catch {
+    // Keep a file if its contents cannot be inspected; never drop a possibly relevant attachment.
+    return false
+  }
+}
+
 function pdfBlob(bytes: Uint8Array): Blob {
   const ownedBytes = new Uint8Array(bytes.byteLength)
   ownedBytes.set(bytes)
@@ -39,7 +65,17 @@ export async function buildApplicationDetailsPackPdf(
       landscape: settings.orientation === 'landscape',
       margin: { top: '0mm', right: '0mm', bottom: '0mm', left: '0mm' },
     }),
-    buildMergedBisProjectFilesPdf(projectId, APPLICATION_PACK_FILE_KINDS, { strict: true }),
+    buildMergedBisProjectFilesPdf(projectId, APPLICATION_PACK_FILE_KINDS, {
+      strict: true,
+      shouldIncludeFile: async (file, bytes) => {
+        const isPdf = bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 &&
+          bytes[3] === 0x46 && bytes[4] === 0x2d
+        if (!isPdf) return true
+        const unrelated = await isUnrelatedCourierSlip(bytes)
+        if (unrelated) console.info(`Excluded unrelated courier-slip attachment: ${file.file_name}`)
+        return !unrelated
+      },
+    }),
     clientId ? listClientCertificates(clientId) : Promise.resolve([]),
   ])
 
@@ -59,6 +95,10 @@ export async function buildApplicationDetailsPackPdf(
     if (error) throw new Error(`Could not download ${certificate.cert_name}: ${error.message}`)
     const bytes = new Uint8Array(await data.arrayBuffer())
     const assetKind = detectBisPdfAssetKind(certificate, bytes)
+    if (assetKind === 'pdf' && await isUnrelatedCourierSlip(bytes)) {
+      console.info(`Excluded unrelated courier-slip certificate: ${certificate.cert_name}`)
+      continue
+    }
     if (assetKind === 'pdf') {
       const attachment = await PDFDocument.load(bytes, { ignoreEncryption: true })
       const pages = await packet.copyPages(attachment, attachment.getPageIndices())

@@ -287,8 +287,8 @@ function combinePrintHtmlDocuments(title: string, documents: string[]): string {
   const first = pageBodies[0]
   if (!first) return ''
   const styles = pageBodies.map((page) => page.style).join('\n')
-  const bodies = pageBodies.map((page, index) => `<section class="merged-print-section${index ? ' merged-print-next' : ''}">${page.body}</section>`).join('')
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"/><title>${title}</title><style>${styles}\n@media print{.merged-print-next{break-before:page;page-break-before:always}}</style></head><body>${bodies}</body></html>`
+  const bodies = pageBodies.map((page, index) => `<section class="merged-print-section${index ? ' merged-print-next' : ''}"${index ? ' style="break-before:page!important;page-break-before:always!important"' : ''}>${page.body}</section>`).join('')
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"/><title>${title}</title><style>${styles}\n@media print{.merged-print-next{break-before:page!important;page-break-before:always!important}}</style></head><body>${bodies}</body></html>`
 }
 
 function allRequiredUndertakingsHtml(data: BisPrintData): string {

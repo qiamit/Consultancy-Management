@@ -319,7 +319,7 @@ function buildFormBody(data: BisForm1Data): string {
       <tr>
         <td class="f1-seal">
           <div class="f1-mini">Seal of the Firm:</div>
-          <div class="f1-seal-box">${data.sealSignImageUrl ? `<img src="${esc(data.sealSignImageUrl)}" alt="Client seal or sign"/>` : ''}</div>
+          <div class="f1-seal-box">${data.sealSignImageUrl ? `<img src="${esc(data.sealSignImageUrl)}" alt="Selected management signatory signature"/>` : ''}</div>
         </td>
         <td class="f1-sign-fields">
           <div class="f1-sign-line">Signature ______________________________</div>
@@ -489,6 +489,6 @@ export function bisForm1DataFromPrintData(printData: BisPrintData): BisForm1Data
     signatoryDesignation: sig.signatoryDesignation,
     dateOfApplication: row.application_date ?? row.start_date ?? row.created_at ?? '',
     preparedBy: company.companyName,
-    sealSignImageUrl: client.sealSignEnabled ? client.sealSignImageUrl : '',
+    sealSignImageUrl: printData.documentSignatory?.signatureImageUrl?.trim() ?? '',
   }
 }

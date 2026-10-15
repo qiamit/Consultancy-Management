@@ -32,45 +32,6 @@ export type ClientCertificateInput = {
 const CERT_BUCKET = 'client-certificates'
 const CERT_MIME = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/webp'])
 const CERT_MAX = 25 * 1024 * 1024
-const CLIENT_SEAL_MIME = new Set(['image/jpeg', 'image/png', 'image/webp'])
-const CLIENT_SEAL_MAX = 5 * 1024 * 1024
-
-export type ClientSealSignSettings = { enabled: boolean; storagePath: string | null; signedUrl: string | null }
-
-export async function loadClientSealSignSettings(clientId: string): Promise<ClientSealSignSettings> {
-  const { data, error } = await supabase.from('clients').select('seal_sign_enabled, seal_sign_image_path').eq('id', clientId).maybeSingle()
-  if (error) throw error
-  const row = data as { seal_sign_enabled?: boolean | null; seal_sign_image_path?: string | null } | null
-  const storagePath = row?.seal_sign_image_path?.trim() || null
-  if (!storagePath) return { enabled: Boolean(row?.seal_sign_enabled), storagePath: null, signedUrl: null }
-  const { data: signed, error: signedError } = await supabase.storage.from(CERT_BUCKET).createSignedUrl(storagePath, 60 * 60)
-  if (signedError) throw signedError
-  return { enabled: Boolean(row?.seal_sign_enabled), storagePath, signedUrl: signed?.signedUrl ?? null }
-}
-
-export async function setClientSealSignEnabled(clientId: string, enabled: boolean): Promise<void> {
-  const { error } = await supabase.from('clients').update({ seal_sign_enabled: enabled }).eq('id', clientId)
-  if (error) throw error
-}
-
-export async function uploadClientSealSignImage(clientId: string, file: File): Promise<void> {
-  if (!CLIENT_SEAL_MIME.has(file.type)) throw new Error('Seal/sign image must be JPG, PNG, or WebP.')
-  if (file.size > CLIENT_SEAL_MAX) throw new Error('Seal/sign image must be 5 MB or smaller.')
-  const { data: old, error: readError } = await supabase.from('clients').select('seal_sign_image_path').eq('id', clientId).maybeSingle()
-  if (readError) throw readError
-  const previousPath = (old as { seal_sign_image_path?: string | null } | null)?.seal_sign_image_path
-  const safeName = file.name.replace(/[^\w.-]+/g, '_').slice(-100) || 'seal-sign-image'
-  const storagePath = `${clientId}/seal-sign/${crypto.randomUUID()}-${safeName}`
-  const { error: uploadError } = await supabase.storage.from(CERT_BUCKET).upload(storagePath, file, { contentType: file.type, upsert: false })
-  if (uploadError) throw uploadError
-  const { error: updateError } = await supabase.from('clients').update({ seal_sign_image_path: storagePath }).eq('id', clientId)
-  if (updateError) {
-    await supabase.storage.from(CERT_BUCKET).remove([storagePath])
-    throw updateError
-  }
-  if (previousPath) await supabase.storage.from(CERT_BUCKET).remove([previousPath])
-}
-
 export function isSameFirmName(a: string, b: string): boolean {
   return a.trim().toLowerCase() === b.trim().toLowerCase()
 }

@@ -773,6 +773,14 @@ function normalizePortalUserId(value) {
   return String(value || "").replace(/\s+/g, "").toLowerCase();
 }
 
+function portalUserIdsMatch(expectedUserId, candidates) {
+  const expected = normalizePortalUserId(expectedUserId);
+  if (!expected) return false;
+  return (Array.isArray(candidates) ? candidates : [candidates]).some(
+    (candidate) => normalizePortalUserId(candidate) === expected,
+  );
+}
+
 function queryManakTabs() {
   return new Promise((resolve) => {
     chrome.tabs.query({ url: ["https://www.manakonline.in/*", "https://manakonline.in/*"] }, (tabs) => {
@@ -815,6 +823,39 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "QE_IS_CODE_PING" || message.type === "QE_MANAK_APP_HELLO") {
     if (sender && sender.tab && sender.tab.id) rememberAppTab(sender.tab.id);
     sendResponse({ ok: true, extension: "QE Consultancy" });
+    return true;
+  }
+
+  if (message.type === "QE_PRODUCT_MANUAL_SEARCH") {
+    const isNumber = String(message.isNumber || "").trim();
+    if (!isNumber) {
+      sendResponse({ ok: false, message: "Select an IS Number first." });
+      return true;
+    }
+    void (async () => {
+      const tab = await safeTabCreate({
+        url: "https://standards.bis.gov.in/website/product-manuals",
+        active: true,
+      });
+      if (!tab || !tab.id) throw new Error("Could not open the BIS Product Manuals page.");
+      if (tab.status !== "complete") await waitTabComplete(tab.id, 45000);
+      await new Promise((resolve) => setTimeout(resolve, 1800));
+      await injectIsFetch(tab.id);
+      let result = null;
+      for (let attempt = 0; attempt < 24; attempt += 1) {
+        result = await chrome.tabs
+          .sendMessage(tab.id, { type: "QE_PRODUCT_MANUAL_SEARCH", isNumber })
+          .catch(() => null);
+        if (result && result.ok) break;
+        await new Promise((resolve) => setTimeout(resolve, 400));
+      }
+      if (!result || !result.ok) {
+        throw new Error(result?.message || "The Product Manuals search field was not found.");
+      }
+      sendResponse({ ok: true, message: `Searching Product Manuals for ${isNumber}.` });
+    })().catch((error) => {
+      sendResponse({ ok: false, message: String(error?.message || error) });
+    });
     return true;
   }
 
@@ -1005,7 +1046,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           if (reused && reused.tab.id) {
             if (
               !normalizePortalUserId(portalUserId) ||
-              normalizePortalUserId(reused.session.userId) !== normalizePortalUserId(portalUserId)
+              !portalUserIdsMatch(
+                portalUserId,
+                reused.session.userIds?.length ? reused.session.userIds : [reused.session.userId],
+              )
             ) {
               await chrome.storage.local.set({
                 qeManakImportQr: false,
@@ -1136,16 +1180,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         "qeManakImportPortalUserId",
       ],
       (stored) => {
+        const readError = chrome.runtime.lastError;
+        if (readError) {
+          sendResponse({ ok: false, message: readError.message || "Could not verify the QR import session." });
+          return;
+        }
         const tracked = Number((stored && stored.qeManakImportQrTabId) || 0) || 0;
         const targetAppTabId = Number((stored && stored.qeManakImportAppTabId) || 0) || 0;
         const projectId = String((stored && stored.qeManakImportProjectId) || "").trim();
         const expectedPortalUserId = normalizePortalUserId(stored && stored.qeManakImportPortalUserId);
-        const actualPortalUserId = normalizePortalUserId(message.result.portalUserId);
+        const actualPortalUserIds = Array.isArray(message.result.portalUserIds)
+          ? message.result.portalUserIds
+          : [message.result.portalUserId];
         if (
           !tracked ||
           senderTabId !== tracked ||
           !expectedPortalUserId ||
-          actualPortalUserId !== expectedPortalUserId
+          !portalUserIdsMatch(expectedPortalUserId, actualPortalUserIds)
         ) {
           const reason =
             !tracked || senderTabId !== tracked
@@ -1168,17 +1219,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           qeManakImportProjectId: "",
           qeManakImportPortalUserId: "",
           pendingFill: null,
+        }, () => {
+          const writeError = chrome.runtime.lastError;
+          if (writeError) {
+            sendResponse({ ok: false, message: writeError.message || "Could not hand off the imported QR codes." });
+            return;
+          }
+          notifyQrImportToApp(result, targetAppTabId);
+          const closeIds = new Set([senderTabId, tracked].filter(Boolean));
+          if (message.closeTab || message.finishImport) {
+            closeIds.forEach((id) => {
+              void settle(chrome.tabs.remove(id)).catch(() => {});
+            });
+          }
+          sendResponse({ ok: true, message: `Returned ${result.qr_codes.length} QR code(s) to Consultancy Pro.` });
         });
-        notifyQrImportToApp(result, targetAppTabId);
-        const closeIds = new Set([senderTabId, tracked].filter(Boolean));
-        if (message.closeTab || message.finishImport) {
-          closeIds.forEach((id) => {
-            void settle(chrome.tabs.remove(id)).catch(() => {});
-          });
-        }
       },
     );
-    sendResponse({ ok: true });
     return true;
   }
 
@@ -1291,6 +1348,12 @@ function waitTabComplete(tabId, timeoutMs) {
       }
     }
     chrome.tabs.onUpdated.addListener(onUpdated);
+    chrome.tabs.get(tabId, (tab) => {
+      if (chrome.runtime.lastError || tab?.status === "complete") {
+        clearTimeout(timer);
+        finish();
+      }
+    });
   });
 }
 

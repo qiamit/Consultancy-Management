@@ -18,7 +18,6 @@ import { ClientManageDialogContent } from './ClientManageDialogContent'
 import { clientRegistryFormClass } from './clientsFormUi'
 import { gstinStateCode, isValidPan } from '@/lib/indiaValidators'
 import { ClientIdentitySections } from './ClientIdentitySections'
-import { ClientSealSignControl } from './ClientSealSignControl'
 import { revealClientPortalPassword } from './clientPortalSecretApi'
 import type { ClientAddressDirectory, ClientCertificateFile, ClientCertificateInput } from './clientsApi'
 import {
@@ -1360,7 +1359,6 @@ export function ClientsForm({
           />
         </div>
       ) : null}
-      {!compact ? <ClientSealSignControl clientId={recordId} /> : null}
       {!hideFooter ? (
         <div className="sticky bottom-0 z-10 -mx-3 mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-stone-300 bg-white/95 px-3 py-2.5 shadow-[0_-4px_12px_rgba(28,25,23,0.08)] backdrop-blur sm:-mx-5 sm:px-5 md:-mx-6 md:px-6">
           {form.panFromGstin ? <span className="mr-auto text-xs text-stone-600">PAN from GSTIN</span> : null}

@@ -986,7 +986,31 @@
     return { fields: {}, notes: ["Unknown portal."] };
   }
 
+  async function searchProductManualsPage(isNumber) {
+    if (!/standards\.bis\.gov\.in/i.test(location.hostname)) {
+      return { ok: false, message: "Open the BIS Product Manuals page first." };
+    }
+    const is = parseIs(isNumber);
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      const box = document.getElementById("product-manual-search");
+      const searchBtn = document.querySelector('button[aria-label*="Search product manuals" i]');
+      if (box && searchBtn) {
+        setNativeValue(box, is.doc || isNumber);
+        searchBtn.click();
+        return { ok: true };
+      }
+      await sleep(300);
+    }
+    return { ok: false, message: "The BIS Product Manuals search field was not found." };
+  }
+
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (message && message.type === "QE_PRODUCT_MANUAL_SEARCH") {
+      searchProductManualsPage(message.isNumber)
+        .then(sendResponse)
+        .catch((error) => sendResponse({ ok: false, message: String(error) }));
+      return true;
+    }
     if (!message || message.type !== "QE_IS_CODE_RUN") return;
     runJob(message)
       .then((result) => sendResponse({ ok: true, result }))

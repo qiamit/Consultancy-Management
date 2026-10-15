@@ -485,6 +485,11 @@ export function appendPrintHtmlDocument(baseHtml: string, extraHtml: string): st
   if (!bodyMatch) return baseHtml
   const styleBlocks = [...extraHtml.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)].map((m) => m[1])
   let out = baseHtml
+  const printBreakStyle = '<style class="bis-document-page-break">@media print{.merged-print-next{break-before:page!important;page-break-before:always!important}}</style>'
+  if (!/class=["'][^"']*bis-document-page-break/.test(out)) {
+    if (/<\/head>/i.test(out)) out = out.replace(/<\/head>/i, `${printBreakStyle}</head>`)
+    else out = `${printBreakStyle}${out}`
+  }
   if (styleBlocks.length > 0) {
     const injected = styleBlocks.map((css) => `<style>${css}</style>`).join('')
     if (/<\/head>/i.test(out)) {
@@ -493,10 +498,11 @@ export function appendPrintHtmlDocument(baseHtml: string, extraHtml: string): st
       out = `${injected}${out}`
     }
   }
+  const separatedBody = `<section class="merged-print-next" style="break-before:page!important;page-break-before:always!important">${bodyMatch[1]}</section>`
   if (/<\/body>/i.test(out)) {
-    return out.replace(/<\/body>/i, `${bodyMatch[1]}</body>`)
+    return out.replace(/<\/body>/i, `${separatedBody}</body>`)
   }
-  return `${out}${bodyMatch[1]}`
+  return `${out}${separatedBody}`
 }
 
 export function buildPrintPage(opts: { title: string; styles: string; body: string; landscape?: boolean }): string {

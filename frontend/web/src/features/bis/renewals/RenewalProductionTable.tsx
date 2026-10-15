@@ -365,6 +365,7 @@ export function RenewalProductionTable({
       <MarkingFeeCalculationDialog
         selection={calculationSelection}
         unitOfIs={unitOfIs}
+        basicUnitRate={basicUnitRate}
         slabRates={slabRates}
         onOpenChange={(open) => { if (!open) setCalculationSelection(null) }}
       />
@@ -396,28 +397,116 @@ export function RenewalProductionTable({
 function MarkingFeeCalculationDialog({
   selection,
   unitOfIs,
+  basicUnitRate,
   slabRates,
   onOpenChange,
 }: {
   selection: { rows: RenewalProductionRow[]; total: boolean } | null
   unitOfIs: string
+  basicUnitRate: string
   slabRates: RenewalSlabRate[]
   onOpenChange: (open: boolean) => void
 }) {
   const rows = selection?.rows ?? []
+  const totalProduction = sumField(rows, 'productionUnit')
+  const totalProductionValue = sumField(rows, 'productionValue')
+  const totalCovered = sumField(rows, 'coveredUnit')
+  const totalCoveredValue = sumField(rows, 'coveredValue')
   const totalFee = sumField(rows, 'markingFee')
+  const totalCoveredPercent = totalProduction && totalProduction > 0 && totalCovered !== null
+    ? ((totalCovered / totalProduction) * 100).toFixed(2)
+    : '—'
   const unit = unitOfIs || 'unit'
+  const populatedRows = rows.filter((row) => row.productionUnit.trim() !== '')
+  const baseRate = basicUnitRate.trim() ? decimal(basicUnitRate) : null
+  const productionSumFormula = populatedRows.map((row) => formatQuantityTotal(decimal(row.productionUnit))).join(' + ')
+  const productionValueFormula = populatedRows.map((row) => baseRate === null
+    ? `${getCurrencySymbol()} ${formatAmountTotal(decimal(row.productionValue))}`
+    : `${formatQuantityTotal(decimal(row.productionUnit))} × ${getCurrencySymbol()} ${formatAmountTotal(baseRate)}`
+  ).join(' + ')
+  const coveredProductionRows = rows.filter((row) => row.coveredUnit.trim() !== '')
+  const coveredSumFormula = coveredProductionRows.map((row) => formatQuantityTotal(decimal(row.coveredUnit))).join(' + ')
+  const coveredValueFormula = coveredProductionRows.map((row) => baseRate === null
+    ? `${getCurrencySymbol()} ${formatAmountTotal(decimal(row.coveredValue))}`
+    : `${formatQuantityTotal(decimal(row.coveredUnit))} × ${getCurrencySymbol()} ${formatAmountTotal(baseRate)}`
+  ).join(' + ')
+  const feeFormula = rows.filter((row) => row.coveredUnit.trim() !== '').map((row) => {
+    const matchedSlab = renewalSlabForQuantity(row.coveredUnit, slabRates)
+    return matchedSlab
+      ? `${formatQuantityTotal(decimal(row.coveredUnit))} × ${getCurrencySymbol()} ${formatAmountTotal(decimal(matchedSlab.rate))}`
+      : 'unmatched slab'
+  }).join(' + ')
 
   return (
     <Dialog open={selection !== null} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-6xl overflow-hidden rounded-none border-stone-500 p-0">
+      <DialogContent className="flex max-h-[90vh] w-[min(96vw,1100px)] max-w-none flex-col overflow-hidden rounded-none border-stone-500 p-0">
         <DialogHeader>
-          <div className="border-b border-stone-300 bg-stone-900 px-5 py-4 text-amber-50">
+          <div className="shrink-0 border-b border-stone-300 bg-stone-900 px-5 py-4 text-amber-50">
             <DialogTitle className="text-base">{selection?.total ? 'Total Marking Fee Calculation' : 'Marking Fee Calculation'}</DialogTitle>
           </div>
         </DialogHeader>
         {selection ? (
-          <div className="min-h-0 space-y-3 overflow-y-auto px-5 pb-5 text-sm">
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-5 pb-5 text-sm">
+            {selection.total ? (
+              <article className="space-y-3 border-2 border-stone-400 bg-stone-50 p-3 sm:p-4">
+                <h3 className="border-b border-stone-300 pb-2 font-semibold text-stone-900">Overall Renewal Summary</h3>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
+                  <div className="min-w-0 border border-stone-200 bg-white px-3 py-2">
+                    <span className="block text-xs text-stone-600">Total Production</span>
+                    <strong className="block break-words tabular-nums">{formatQuantityTotal(totalProduction)} {unit}</strong>
+                  </div>
+                  <div className="min-w-0 border border-stone-200 bg-white px-3 py-2">
+                    <span className="block text-xs text-stone-600">Total Production Value</span>
+                    <strong className="block break-words tabular-nums">{getCurrencySymbol()} {formatAmountTotal(totalProductionValue)}</strong>
+                  </div>
+                  <div className="min-w-0 border border-stone-200 bg-white px-3 py-2">
+                    <span className="block text-xs text-stone-600">Total Covered Production</span>
+                    <strong className="block break-words tabular-nums">{formatQuantityTotal(totalCovered)} {unit}</strong>
+                  </div>
+                  <div className="min-w-0 border border-stone-200 bg-white px-3 py-2">
+                    <span className="block text-xs text-stone-600">Total Covered Value</span>
+                    <strong className="block break-words tabular-nums">{getCurrencySymbol()} {formatAmountTotal(totalCoveredValue)}</strong>
+                  </div>
+                  <div className="min-w-0 border border-stone-200 bg-white px-3 py-2">
+                    <span className="block text-xs text-stone-600">Covered Quantity</span>
+                    <strong className="block break-words tabular-nums">{totalCoveredPercent}%</strong>
+                  </div>
+                  <div className="min-w-0 border border-amber-500 bg-amber-100 px-3 py-2">
+                    <span className="block text-xs text-stone-700">Total Marking Fee</span>
+                    <strong className="block break-words tabular-nums">{getCurrencySymbol()} {formatAmountTotal(totalFee)}</strong>
+                  </div>
+                </div>
+                <section className="space-y-2 border-t border-stone-300 pt-3">
+                  <h4 className="text-xs font-semibold uppercase tracking-wide text-stone-600">Overall Calculation Steps</h4>
+                  <ol className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+                    <li className="flex min-w-0 items-start gap-2 border border-stone-200 bg-white p-2.5 text-xs leading-relaxed">
+                      <span className="flex size-6 shrink-0 items-center justify-center bg-stone-800 font-semibold text-amber-50">1</span>
+                      <p className="min-w-0 break-words [overflow-wrap:anywhere]">Total production = period production quantities added: <strong>{productionSumFormula || 'No production entered'} = {formatQuantityTotal(totalProduction)} {unit}</strong></p>
+                    </li>
+                    <li className="flex min-w-0 items-start gap-2 border border-stone-200 bg-white p-2.5 text-xs leading-relaxed">
+                      <span className="flex size-6 shrink-0 items-center justify-center bg-stone-800 font-semibold text-amber-50">2</span>
+                      <p className="min-w-0 break-words [overflow-wrap:anywhere]">Total production value = each period’s production × basic unit rate: <strong>{productionValueFormula || 'Rate or production not entered'} = {getCurrencySymbol()} {formatAmountTotal(totalProductionValue)}</strong></p>
+                    </li>
+                    <li className="flex min-w-0 items-start gap-2 border border-stone-200 bg-white p-2.5 text-xs leading-relaxed">
+                      <span className="flex size-6 shrink-0 items-center justify-center bg-stone-800 font-semibold text-amber-50">3</span>
+                      <p className="min-w-0 break-words [overflow-wrap:anywhere]">Total covered production = period covered quantities added: <strong>{coveredSumFormula || 'No covered production entered'} = {formatQuantityTotal(totalCovered)} {unit}</strong></p>
+                    </li>
+                    <li className="flex min-w-0 items-start gap-2 border border-stone-200 bg-white p-2.5 text-xs leading-relaxed">
+                      <span className="flex size-6 shrink-0 items-center justify-center bg-stone-800 font-semibold text-amber-50">4</span>
+                      <p className="min-w-0 break-words [overflow-wrap:anywhere]">Total covered value = each period’s covered production × basic unit rate: <strong>{coveredValueFormula || 'Rate or covered production not entered'} = {getCurrencySymbol()} {formatAmountTotal(totalCoveredValue)}</strong></p>
+                    </li>
+                    <li className="flex min-w-0 items-start gap-2 border border-stone-200 bg-white p-2.5 text-xs leading-relaxed">
+                      <span className="flex size-6 shrink-0 items-center justify-center bg-stone-800 font-semibold text-amber-50">5</span>
+                      <p className="min-w-0 break-words [overflow-wrap:anywhere]">Covered quantity percentage = total covered production ÷ total production × 100: <strong>{formatQuantityTotal(totalCovered)} ÷ {formatQuantityTotal(totalProduction)} × 100 = {totalCoveredPercent}%</strong></p>
+                    </li>
+                    <li className="flex min-w-0 items-start gap-2 border border-amber-400 bg-amber-50 p-2.5 text-xs leading-relaxed">
+                      <span className="flex size-6 shrink-0 items-center justify-center bg-amber-700 font-semibold text-white">6</span>
+                      <p className="min-w-0 break-words [overflow-wrap:anywhere]">Total marking fee = period covered quantities × their matched IS Code slab rates, then added: <strong>{feeFormula || 'No covered production entered'} = {getCurrencySymbol()} {formatAmountTotal(totalFee)}</strong></p>
+                    </li>
+                  </ol>
+                </section>
+              </article>
+            ) : null}
             {rows.map((row, index) => {
               const slab = renewalSlabForQuantity(row.coveredUnit, slabRates)
               const rate = slab ? decimal(slab.rate) : null
@@ -430,44 +519,44 @@ function MarkingFeeCalculationDialog({
                   <h3 className="border-b border-stone-300 pb-2 font-semibold text-stone-900">Period {index + 1}: {period}</h3>
                   <section className="space-y-2">
                     <h4 className="text-xs font-semibold uppercase tracking-wide text-stone-600">Calculation summary</h4>
-                    <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-                      <div className="border border-stone-200 bg-stone-50 px-3 py-2">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                      <div className="min-w-0 border border-stone-200 bg-stone-50 px-3 py-2">
                         <span className="block text-xs text-stone-600">Covered Production</span>
-                        <strong className="tabular-nums">{row.coveredUnit || '—'} {unit}</strong>
+                        <strong className="block break-words tabular-nums">{row.coveredUnit || '—'} {unit}</strong>
                       </div>
-                      <div className="border border-stone-200 bg-stone-50 px-3 py-2">
+                      <div className="min-w-0 border border-stone-200 bg-stone-50 px-3 py-2">
                         <span className="block text-xs text-stone-600">Applicable IS Code Slab</span>
-                        <strong>{slab?.quantity || 'No matching slab'}</strong>
+                        <strong className="block break-words">{slab?.quantity || 'No matching slab'}</strong>
                       </div>
-                      <div className="border border-stone-200 bg-stone-50 px-3 py-2">
+                      <div className="min-w-0 border border-stone-200 bg-stone-50 px-3 py-2">
                         <span className="block text-xs text-stone-600">Rate per {unit}</span>
-                        <strong className="tabular-nums">{rate === null ? '—' : `${getCurrencySymbol()} ${formatMoneyInput(String(rate))}`}</strong>
+                        <strong className="block break-words tabular-nums">{rate === null ? '—' : `${getCurrencySymbol()} ${formatMoneyInput(String(rate))}`}</strong>
                       </div>
-                      <div className="border border-amber-400 bg-amber-50 px-3 py-2">
+                      <div className="min-w-0 border border-amber-400 bg-amber-50 px-3 py-2">
                         <span className="block text-xs text-stone-600">Marking Fee</span>
-                        <strong className="tabular-nums">{getCurrencySymbol()} {fee}</strong>
+                        <strong className="block break-words tabular-nums">{getCurrencySymbol()} {fee}</strong>
                       </div>
                     </div>
                   </section>
 
                   <section className="space-y-2">
                     <h4 className="text-xs font-semibold uppercase tracking-wide text-stone-600">Calculation steps</h4>
-                    <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
-                      <div className="flex gap-2 border border-stone-200 bg-stone-50 p-2.5 text-xs leading-relaxed">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                      <div className="flex min-w-0 items-start gap-2 border border-stone-200 bg-stone-50 p-2.5 text-xs leading-relaxed">
                         <span className="flex size-6 shrink-0 items-center justify-center bg-stone-800 font-semibold text-amber-50">1</span>
-                        <p>Covered production: <strong>{row.coveredUnit || '0'} {unit}</strong></p>
+                        <p className="min-w-0 break-words [overflow-wrap:anywhere]">Covered production: <strong>{row.coveredUnit || '0'} {unit}</strong></p>
                       </div>
-                      <div className="flex gap-2 border border-stone-200 bg-stone-50 p-2.5 text-xs leading-relaxed">
+                      <div className="flex min-w-0 items-start gap-2 border border-stone-200 bg-stone-50 p-2.5 text-xs leading-relaxed">
                         <span className="flex size-6 shrink-0 items-center justify-center bg-stone-800 font-semibold text-amber-50">2</span>
-                        <p>Matched IS Code slab: <strong>{slab?.quantity || 'No matching slab'}</strong></p>
+                        <p className="min-w-0 break-words [overflow-wrap:anywhere]">Matched IS Code slab: <strong>{slab?.quantity || 'No matching slab'}</strong></p>
                       </div>
-                      <div className="flex gap-2 border border-stone-200 bg-stone-50 p-2.5 text-xs leading-relaxed">
+                      <div className="flex min-w-0 items-start gap-2 border border-stone-200 bg-stone-50 p-2.5 text-xs leading-relaxed">
                         <span className="flex size-6 shrink-0 items-center justify-center bg-stone-800 font-semibold text-amber-50">3</span>
-                        <p>Applicable rate: <strong>{rate === null ? 'Unavailable' : `${getCurrencySymbol()} ${formatMoneyInput(String(rate))} per ${unit}`}</strong></p>
+                        <p className="min-w-0 break-words [overflow-wrap:anywhere]">Applicable rate: <strong>{rate === null ? 'Unavailable' : `${getCurrencySymbol()} ${formatMoneyInput(String(rate))} per ${unit}`}</strong></p>
                       </div>
-                      <div className="flex gap-2 border border-amber-400 bg-amber-50 p-2.5 text-xs leading-relaxed">
+                      <div className="flex min-w-0 items-start gap-2 border border-amber-400 bg-amber-50 p-2.5 text-xs leading-relaxed">
                         <span className="flex size-6 shrink-0 items-center justify-center bg-amber-700 font-semibold text-white">4</span>
-                        <p>Covered production × rate = <strong className="tabular-nums">{rate === null
+                        <p className="min-w-0 break-words [overflow-wrap:anywhere]">Covered production × rate = <strong className="tabular-nums">{rate === null
                           ? 'Fee unavailable'
                           : `${row.coveredUnit || '0'} × ${formatMoneyInput(String(rate))} = ${getCurrencySymbol()} ${fee}`}</strong></p>
                       </div>

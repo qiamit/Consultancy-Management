@@ -324,7 +324,7 @@ export type BisRenewalRow = {
   production_details: RenewalProductionRow[] | null
   created_at?: string | null
   updated_at?: string | null
-  client: { company_name: string | null } | null
+  client: { company_name: string | null; address?: string | null; email?: string | null } | null
   project: RenewalProjectJoin | null
 }
 
@@ -333,6 +333,8 @@ export type BisRenewalForm = {
   projectLabel: string
   clientId: string
   clientLabel: string
+  clientAddress: string
+  clientEmail: string
   currentValidity: string
   cmLDigits: string
   isCodeLabel: string
@@ -376,6 +378,8 @@ export function emptyRenewalForm(): BisRenewalForm {
     projectLabel: '',
     clientId: '',
     clientLabel: '',
+    clientAddress: '',
+    clientEmail: '',
     currentValidity: '',
     cmLDigits: '',
     isCodeLabel: '',
@@ -436,6 +440,8 @@ export function rowToRenewalForm(row: BisRenewalRow): BisRenewalForm {
     projectLabel: row.project?.title?.trim() || 'BIS License',
     clientId: row.client_id ?? row.project?.client_id ?? '',
     clientLabel: renewalClientName(row),
+    clientAddress: row.client?.address?.trim() ?? '',
+    clientEmail: row.client?.email?.trim() ?? '',
     currentValidity: row.project?.license_validity_date ?? '',
     cmLDigits: String(row.project?.cm_l_digits ?? '').replace(/\D/g, ''),
     isCodeLabel: renewalIsCodeLabel(row),

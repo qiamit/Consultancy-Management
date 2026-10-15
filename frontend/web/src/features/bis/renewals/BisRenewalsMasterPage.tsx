@@ -151,6 +151,8 @@ export default function BisRenewalsMasterPage({ dialogOnly = false }: { dialogOn
           projectLabel: summary.projectLabel,
           clientId: summary.clientId,
           clientLabel: summary.clientLabel,
+          clientAddress: summary.clientAddress,
+          clientEmail: summary.clientEmail,
           currentValidity: summary.currentValidity,
           cmLDigits: summary.cmLDigits,
           isCodeLabel: summary.isCodeLabel,

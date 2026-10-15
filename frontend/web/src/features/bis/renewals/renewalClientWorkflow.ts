@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx'
-import { downloadPdfViaPlaywright } from '@/lib/playwrightPdfClient'
+import { renderPdfViaPlaywright, triggerPdfDownload } from '@/lib/playwrightPdfClient'
 import { blobToBase64, sendAppEmail } from '@/lib/sendAppEmail'
 import { supabase } from '@/lib/supabaseClient'
 import { resolveClientEmail } from '../shared/emailHtmlToClient'
@@ -35,6 +35,10 @@ function renewalWorkbookFilename(form: BisRenewalForm): string {
   return `${safeBaseName(form.clientLabel || form.projectLabel)}_Renewal_Production.xlsx`
 }
 
+function renewalCalculationPdfFilename(form: BisRenewalForm): string {
+  return `${safeBaseName(form.clientLabel || form.projectLabel)}_Renewal_Production_Report.pdf`
+}
+
 function downloadWorkbookBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
@@ -54,6 +58,7 @@ export async function createRenewalClientWorkbook(form: BisRenewalForm): Promise
   workbook.creator = 'Consultancy Management'
   workbook.title = 'BIS License Renewal Client Production Statement'
   workbook.subject = 'Client production data entry and return'
+  workbook.calcProperties = { fullCalcOnLoad: true }
 
   const sheet = workbook.addWorksheet(SHEET_NAME, {
     properties: { defaultRowHeight: 22 },
@@ -68,8 +73,8 @@ export async function createRenewalClientWorkbook(form: BisRenewalForm): Promise
     views: [{ state: 'frozen', ySplit: 13 }],
   })
   sheet.columns = [
-    { key: 'start', width: 16 }, { key: 'end', width: 16 }, { key: 'type', width: 34 },
-    { key: 'total', width: 24 }, { key: 'covered', width: 27 },
+    { key: 'start', width: 16 }, { key: 'end', width: 16 }, { key: 'total', width: 24 },
+    { key: 'rejection', width: 18 }, { key: 'covered', width: 25 },
   ]
   const dark = '292524'
   const amber = 'B45309'
@@ -103,7 +108,7 @@ export async function createRenewalClientWorkbook(form: BisRenewalForm): Promise
   setMergedPair(9, 'Renewal Term', `${form.renewalTermYears || '5'} year(s)`)
   sheet.mergeCells('A10:B10')
   sheet.mergeCells('C10:E10')
-  sheet.getCell('A10').value = 'Basic Unit Rate (₹ per unit)'
+  sheet.getCell('A10').value = 'Basic Unit Rate Approx (₹ per unit)'
   sheet.getCell('C10').value = ''
   for (let row = 4; row <= 10; row += 1) {
     const label = sheet.getCell(`A${row}`)
@@ -128,7 +133,7 @@ export async function createRenewalClientWorkbook(form: BisRenewalForm): Promise
   }
 
   sheet.mergeCells('A11:E11')
-  sheet.getCell('A11').value = 'Complete the highlighted cells only. Keep period dates and other reference fields unchanged, then return this workbook.'
+  sheet.getCell('A11').value = 'Enter Total Production and Rejection in the highlighted cells. Covered Production is calculated automatically; keep period dates and reference fields unchanged.'
   sheet.getCell('A11').font = { name: 'Aptos', size: 9, italic: true, color: { argb: 'FF57534E' } }
   sheet.getCell('A11').alignment = { vertical: 'middle', wrapText: true }
   sheet.getCell('A11').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFAFAF9' } }
@@ -137,7 +142,7 @@ export async function createRenewalClientWorkbook(form: BisRenewalForm): Promise
   sheet.getRow(12).height = 8
 
   const headerRow = 13
-  const headers = ['Period Start', 'Period End', 'Production Type / Status', `Total Production (${unit})`, `Covered Production (${unit})`]
+  const headers = ['Period Start', 'Period End', `Total Production (${unit})`, `Rejection (${unit})`, `Covered Production (${unit})`]
   sheet.addRow(headers)
   const header = sheet.getRow(headerRow)
   header.height = 34
@@ -152,29 +157,29 @@ export async function createRenewalClientWorkbook(form: BisRenewalForm): Promise
     const excelRow = sheet.addRow([
       row.periodFrom ? new Date(`${row.periodFrom}T00:00:00`) : '',
       row.periodTo ? new Date(`${row.periodTo}T00:00:00`) : '',
-      row.stockMarkingBreak ? 'Stock-marking break — no production' : 'Normal production period',
       row.stockMarkingBreak ? 0 : '',
       row.stockMarkingBreak ? 0 : '',
+      row.stockMarkingBreak ? 0 : { formula: `IF(C${headerRow + index + 1}="","",MAX(0,C${headerRow + index + 1}-IF(D${headerRow + index + 1}="",0,D${headerRow + index + 1})))`, result: '' },
     ])
     excelRow.height = 25
     excelRow.eachCell({ includeEmpty: true }, (cell, column) => {
       cell.font = { name: 'Aptos', size: 10, color: { argb: `FF${dark}` } }
-      cell.alignment = { vertical: 'middle', horizontal: column <= 2 ? 'center' : column >= 4 ? 'right' : 'left', wrapText: column === 3 }
+      cell.alignment = { vertical: 'middle', horizontal: column <= 2 ? 'center' : 'right', wrapText: false }
       cell.border = allBorders
       if (index % 2 === 1) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFAFAF9' } }
     })
     excelRow.getCell(1).numFmt = 'dd/mm/yyyy'
     excelRow.getCell(2).numFmt = 'dd/mm/yyyy'
+    excelRow.getCell(3).numFmt = '#,##0.00;[Red]-#,##0.00;0'
     excelRow.getCell(4).numFmt = '#,##0.00;[Red]-#,##0.00;0'
     excelRow.getCell(5).numFmt = '#,##0.00;[Red]-#,##0.00;0'
     if (row.stockMarkingBreak) {
-      excelRow.getCell(3).font = { name: 'Aptos', size: 9, bold: true, color: { argb: 'FF9A3412' } }
-      for (const column of [4, 5]) {
+      for (const column of [3, 4, 5]) {
         excelRow.getCell(column).font = { name: 'Aptos', size: 10, bold: true, color: { argb: 'FF78716C' } }
         excelRow.getCell(column).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE7E5E4' } }
       }
     } else {
-      for (const column of [4, 5]) {
+      for (const column of [3, 4]) {
         const cell = excelRow.getCell(column)
         cell.protection = { locked: false }
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF7D6' } }
@@ -183,6 +188,12 @@ export async function createRenewalClientWorkbook(form: BisRenewalForm): Promise
           showErrorMessage: true, errorTitle: 'Invalid quantity', error: 'Enter zero or a positive quantity.',
         }
       }
+      excelRow.getCell(4).dataValidation = {
+        type: 'decimal', operator: 'lessThanOrEqual', formulae: [`C${excelRow.number}`], allowBlank: true,
+        showErrorMessage: true, errorTitle: 'Rejection exceeds production', error: 'Rejection must be equal to or less than Total Production.',
+      }
+      excelRow.getCell(5).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFF6FF' } }
+      excelRow.getCell(5).font = { name: 'Aptos', size: 10, italic: true, color: { argb: 'FF44403C' } }
     }
   })
   sheet.autoFilter = { from: { row: headerRow, column: 1 }, to: { row: headerRow + form.productionRows.length, column: 5 } }
@@ -204,6 +215,11 @@ export async function createRenewalClientWorkbook(form: BisRenewalForm): Promise
 
   const buffer = await workbook.xlsx.writeBuffer()
   return new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+}
+
+export async function createRenewalClientWorkbookFile(form: BisRenewalForm): Promise<File> {
+  const blob = await createRenewalClientWorkbook(form)
+  return new File([blob], renewalWorkbookFilename(form), { type: blob.type })
 }
 
 export async function downloadRenewalClientWorkbook(form: BisRenewalForm): Promise<void> {
@@ -228,22 +244,6 @@ export function normalizeWhatsAppNumber(value: string): string {
   return normalized
 }
 
-export async function shareRenewalWorkbookOnWhatsApp(
-  form: BisRenewalForm,
-  recipient: string,
-  chatWindow?: Window | null,
-): Promise<void> {
-  const filename = renewalWorkbookFilename(form)
-  const text = `Please find the blank BIS renewal production sheet for ${form.clientLabel || 'your company'} (${form.isCodeLabel || 'BIS license renewal'}). Please complete the highlighted fields and return the same workbook.`
-  const phone = normalizeWhatsAppNumber(recipient)
-  // Use a normal WhatsApp deep link; the Web Share API can fail with Permission denied after async file generation.
-  const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(text)}`
-  if (chatWindow) chatWindow.location.href = whatsappUrl
-  else window.open(whatsappUrl, '_blank', 'noopener,noreferrer')
-  const blob = await createRenewalClientWorkbook(form)
-  downloadWorkbookBlob(blob, filename)
-}
-
 export async function emailRenewalWorkbookToClient(form: BisRenewalForm, recipient?: string): Promise<string> {
   const email = recipient?.trim() || await resolveClientEmail(form.clientId)
   if (!email) throw new Error('Client email is missing. Update the email in Client Master before sending the workbook.')
@@ -258,6 +258,24 @@ export async function emailRenewalWorkbookToClient(form: BisRenewalForm, recipie
     html: `<p>Dear ${escapeHtml(clientName)},</p><p>Please find attached the blank BIS renewal production sheet. Complete the highlighted fields, keep the period and reference fields unchanged, and return the same workbook.</p><p>Regards,<br/>Quality Engineering</p>`,
     text: `Dear ${clientName},\n\nPlease find attached the blank BIS renewal production sheet. Complete the highlighted fields, keep the period and reference fields unchanged, and return the same workbook.\n\nRegards,\nQuality Engineering`,
     attachments: [{ filename: renewalWorkbookFilename(form), content: attachment, contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }],
+  })
+  return email
+}
+
+export async function emailRenewalCalculationPdfToClient(form: BisRenewalForm, recipient?: string): Promise<string> {
+  const email = recipient?.trim() || await resolveClientEmail(form.clientId)
+  if (!email) throw new Error('Client email is missing. Update the email in Client Master before sending the report.')
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('Enter a valid client email address.')
+  const blob = await createRenewalCalculationPdf(form)
+  const attachment = await blobToBase64(blob)
+  const clientName = form.clientLabel || 'Client'
+  const subject = `BIS renewal production report — ${form.cmLDigits || form.isCodeLabel}`
+  await sendAppEmail({
+    to: email,
+    subject,
+    html: `<p>Dear ${escapeHtml(clientName)},</p><p>Please find attached the calculated BIS license renewal production report for ${escapeHtml(form.renewalPeriodFrom ? formatDisplayDate(form.renewalPeriodFrom) : 'the selected')} to ${escapeHtml(form.renewalPeriodTo ? formatDisplayDate(form.renewalPeriodTo) : 'selected period')}.</p><p>Please review the period-wise production and overall calculation summary, and arrange CA attestation if the report is verified.</p><p>Regards,<br/>Quality Engineering</p>`,
+    text: `Dear ${clientName},\n\nPlease find attached the calculated BIS license renewal production report. Please review the period-wise production and overall calculation summary, and arrange CA attestation if the report is verified.\n\nRegards,\nQuality Engineering`,
+    attachments: [{ filename: renewalCalculationPdfFilename(form), content: attachment, contentType: 'application/pdf' }],
   })
   return email
 }
@@ -284,9 +302,10 @@ export async function importRenewalClientWorkbook(
     end: headers.indexOf('periodend'),
     type: headers.indexOf('periodtype'),
     total: headers.findIndex((value) => value.startsWith('totalproduction')),
+    rejection: headers.findIndex((value) => value.startsWith('rejection')),
     covered: headers.findIndex((value) => value.startsWith('coveredproduction')),
   }
-  const basicUnitRateRow = matrix.find((row) => normalize(row[0]) === 'basicunitrateperunit')
+  const basicUnitRateRow = matrix.find((row) => ['basicunitrateperunit', 'basicunitrateapproxperunit'].includes(normalize(row[0])))
   if (!basicUnitRateRow) throw new Error('Basic Unit Rate field is missing. Please use the downloaded renewal workbook.')
   // Merged label/value cells may leave blank columns in the parsed row. Read the first populated cell after the label.
   const importedRate = amount(String(basicUnitRateRow.slice(1).find((value) => String(value ?? '').trim() !== '') ?? ''))
@@ -303,8 +322,18 @@ export async function importRenewalClientWorkbook(
     if (!original) throw new Error(`The workbook period ${periodFrom || '—'} to ${periodTo || '—'} does not match this renewal. Download a fresh template for this period.`)
     if (updated.has(key)) throw new Error(`Duplicate period found in workbook: ${periodFrom} to ${periodTo}.`)
     const total = amount(String(source[indexes.total] ?? ''))
-    const covered = amount(String(source[indexes.covered] ?? ''))
+    const rejection = indexes.rejection >= 0 ? amount(String(source[indexes.rejection] ?? '')) : null
+    const legacyCovered = indexes.rejection < 0 ? amount(String(source[indexes.covered] ?? '')) : null
     const isStockBreak = original.stockMarkingBreak || (indexes.type >= 0 && normalize(source[indexes.type]).includes('stockmarking'))
+    if (!isStockBreak && indexes.rejection >= 0 && rejection !== null && total === null) {
+      throw new Error(`Enter Total Production before Rejection for ${periodFrom} to ${periodTo}.`)
+    }
+    if (!isStockBreak && indexes.rejection >= 0 && total !== null && rejection !== null && rejection > total) {
+      throw new Error(`Rejection cannot exceed Total Production for ${periodFrom} to ${periodTo}.`)
+    }
+    const covered = indexes.rejection >= 0 && total !== null
+      ? Math.max(0, total - (rejection ?? 0))
+      : legacyCovered
     updated.set(key, {
       ...original,
       productionUnit: isStockBreak ? '0' : total === null ? '' : String(total),
@@ -324,18 +353,56 @@ function escapeHtml(value: unknown): string {
   })[character] ?? character)
 }
 
-export async function downloadRenewalCalculationPdf(form: BisRenewalForm): Promise<void> {
-  const rate = amount(form.basicUnitRate)
+export async function createRenewalCalculationPdf(form: BisRenewalForm): Promise<Blob> {
   const rows = form.productionRows.map((row) => calculateRenewalProductionRow(row, form.basicUnitRate, form.slabRates))
   const currency = new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  const quantity = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 })
   const unit = form.unitOfIs || 'unit'
-  const body = rows.map((row, index) => {
-    const matchedSlab = renewalSlabForQuantity(row.coveredUnit, form.slabRates)
-    const period = `${formatDisplayDate(row.periodFrom)} – ${formatDisplayDate(row.periodTo)}`
-    const fee = Number.parseFloat(row.markingFee) || 0
-    return `<section class="period"><h2>Period ${index + 1}: ${escapeHtml(period)}</h2><div class="summary"><div><small>Total Production</small><strong>${escapeHtml(row.productionUnit || '—')} ${escapeHtml(unit)}</strong></div><div><small>Production Value</small><strong>₹ ${currency.format(Number.parseFloat(row.productionValue) || 0)}</strong></div><div><small>Covered Production</small><strong>${escapeHtml(row.coveredUnit || '—')} ${escapeHtml(unit)}</strong></div><div><small>Covered Production Value</small><strong>₹ ${currency.format(Number.parseFloat(row.coveredValue) || 0)}</strong></div><div><small>Applicable IS Code Slab</small><strong>${escapeHtml(matchedSlab?.quantity || 'No matching slab')}</strong></div><div><small>Basic Unit Rate</small><strong>${rate === null ? '—' : `₹ ${currency.format(rate)} per ${escapeHtml(unit)}`}</strong></div><div><small>Marking Fee Slab Rate</small><strong>${matchedSlab ? `₹ ${currency.format(Number.parseFloat(matchedSlab.rate) || 0)} per ${escapeHtml(unit)}` : '—'}</strong></div><div><small>Covered Quantity</small><strong>${escapeHtml(row.coveredPercent || '—')}%</strong></div><div><small>Marking Fee</small><strong>₹ ${currency.format(fee)}</strong></div></div><div class="steps"><b>Calculation steps</b><ol><li>Production value = total production × basic unit rate = ₹ ${currency.format(Number.parseFloat(row.productionValue) || 0)}.</li><li>Covered value = covered production × basic unit rate = ₹ ${currency.format(Number.parseFloat(row.coveredValue) || 0)}.</li><li>Match covered production to IS Code slab: ${escapeHtml(matchedSlab?.quantity || 'No matching slab')}.</li><li>Apply the slab rate ${matchedSlab ? `₹ ${currency.format(Number.parseFloat(matchedSlab.rate) || 0)} per ${escapeHtml(unit)}` : '—'} to get the period marking fee: ₹ ${currency.format(fee)}.</li></ol></div></section>`
+  const total = (field: 'productionUnit' | 'productionValue' | 'coveredUnit' | 'coveredValue' | 'markingFee') =>
+    rows.reduce((sum, row) => sum + (Number.parseFloat(row[field]) || 0), 0)
+  const totalProduction = total('productionUnit')
+  const totalProductionValue = total('productionValue')
+  const totalCovered = total('coveredUnit')
+  const totalCoveredValue = total('coveredValue')
+  const totalMarkingFee = total('markingFee')
+  const coveredPercent = totalProduction > 0 ? (totalCovered / totalProduction) * 100 : 0
+  const feeEquation = rows.filter((row) => (Number.parseFloat(row.coveredUnit) || 0) > 0).map((row) => {
+    const slab = renewalSlabForQuantity(row.coveredUnit, form.slabRates)
+    return slab
+      ? `${quantity.format(Number.parseFloat(row.coveredUnit) || 0)} × ${currency.format(Number.parseFloat(slab.rate) || 0)}`
+      : 'No matching slab'
+  }).join(' + ')
+  const tableRows = rows.map((row) => {
+    const values = [
+      formatDisplayDate(row.periodFrom), formatDisplayDate(row.periodTo),
+      `${row.productionUnit || '—'} ${unit}`, `₹ ${currency.format(Number.parseFloat(row.productionValue) || 0)}`,
+      `${row.coveredUnit || '—'} ${unit}`, `₹ ${currency.format(Number.parseFloat(row.coveredValue) || 0)}`,
+      row.coveredPercent ? `${row.coveredPercent}%` : '—', `₹ ${currency.format(Number.parseFloat(row.markingFee) || 0)}`,
+    ]
+    return `<tr>${values.map((value) => `<td>${escapeHtml(value)}</td>`).join('')}</tr>`
   }).join('')
-  const total = rows.reduce((sum, row) => sum + (Number.parseFloat(row.markingFee) || 0), 0)
-  const html = `<!doctype html><html><head><meta charset="utf-8"><style>@page{size:A4 landscape;margin:12mm}*{box-sizing:border-box}body{font:10pt Arial,sans-serif;color:#292524}h1{font-size:18pt;margin:0}.head{border-bottom:3px solid #d97706;padding:0 0 10px;margin-bottom:14px}.meta{color:#57534e;margin-top:6px}.period{border:1px solid #a8a29e;margin:0 0 12px;padding:12px;page-break-inside:avoid}.period h2{font-size:12pt;margin:0 0 9px}.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}.summary div{border:1px solid #d6d3d1;padding:7px}.summary small{display:block;color:#78716c;margin-bottom:4px}.summary strong{font-size:9pt}.steps{margin-top:10px;padding:9px;background:#fafaf9;border-left:3px solid #d97706}.steps ol{margin:6px 0 0;padding-left:20px}.steps li{margin:3px 0}.total{font-size:13pt;text-align:right;padding:10px;border-top:2px solid #57534e;font-weight:bold}</style></head><body><header class="head"><h1>BIS License Renewal — Production Calculation Report</h1><div class="meta">${escapeHtml(form.clientLabel)} · ${escapeHtml(form.isCodeLabel)} · CM/L ${escapeHtml(form.cmLDigits)}<br>Renewal period: ${escapeHtml(formatDisplayDate(form.renewalPeriodFrom))} to ${escapeHtml(formatDisplayDate(form.renewalPeriodTo))}</div></header>${body}<div class="total">Total Marking Fee: ₹ ${currency.format(total)}</div></body></html>`
-  await downloadPdfViaPlaywright({ html, filename: `${safeBaseName(form.clientLabel)}_Renewal_Calculation.pdf` })
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>BIS License Renewal Production Report</title><style>
+    @page{size:A4 landscape;margin:12mm}*{box-sizing:border-box}body{font:9pt Arial,sans-serif;color:#292524;margin:0}h1{font-size:17pt;margin:0}.header{border-bottom:3px solid #b45309;padding:0 0 9px;margin-bottom:12px}.subtitle{font-size:10pt;font-weight:bold;margin-top:4px}.meta{display:grid;grid-template-columns:repeat(3,1fr);gap:5px 12px;margin-top:8px}.meta div{min-width:0}.label{display:block;color:#78716c;font-size:7.5pt;text-transform:uppercase;letter-spacing:.04em}.value{font-weight:bold;overflow-wrap:anywhere}.table-wrap{margin-top:8px}table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:8pt}thead{display:table-header-group}tr{break-inside:avoid;page-break-inside:avoid}th{background:#292524;color:#fff7ed;font-size:7.5pt;text-align:center;padding:6px 4px;border:1px solid #57534e}td{padding:5px 4px;border:1px solid #a8a29e;text-align:right;overflow-wrap:anywhere}td:nth-child(1),td:nth-child(2){text-align:center}tbody tr:nth-child(even){background:#fafaf9}.total-row{background:#f5f5f4;font-weight:bold}.total-row td{border-top:2px solid #57534e}.calculation{margin-top:14px;break-inside:avoid-page;page-break-inside:avoid}.calculation h2{font-size:11pt;margin:0 0 7px;padding-bottom:5px;border-bottom:1px solid #a8a29e}.fee-line{border:1px solid #d6d3d1;border-left:3px solid #d97706;background:#fffbeb;padding:8px;font-size:8pt;line-height:1.4;overflow-wrap:anywhere}.footer-total{text-align:right;font-size:11pt;font-weight:bold;margin-top:8px;padding-top:7px;border-top:2px solid #57534e}
+  </style></head><body><header class="header"><h1>BIS License Renewal — Production Statement</h1><div class="subtitle">Client Production and Marking Fee Summary</div><div class="meta">
+    <div><span class="label">Firm Name</span><span class="value">${escapeHtml(form.clientLabel || '—')}</span></div><div><span class="label">Address</span><span class="value">${escapeHtml(form.clientAddress || '—')}</span></div><div><span class="label">Email ID</span><span class="value">${escapeHtml(form.clientEmail || '—')}</span></div>
+    <div><span class="label">CM/L Number</span><span class="value">${escapeHtml(form.cmLDigits ? `CM/L-${form.cmLDigits}` : '—')}</span></div><div><span class="label">License Validity</span><span class="value">${escapeHtml(form.currentValidity ? formatDisplayDate(form.currentValidity) : '—')}</span></div><div><span class="label">Production Period</span><span class="value">${escapeHtml(formatDisplayDate(form.renewalPeriodFrom))} to ${escapeHtml(formatDisplayDate(form.renewalPeriodTo))}</span></div>
+  </div></header><div class="table-wrap"><table><thead><tr><th>Period Start</th><th>Period End</th><th>Total Production (${escapeHtml(unit)})</th><th>Value (₹)</th><th>Covered Production (${escapeHtml(unit)})</th><th>Value (₹)</th><th>Covered Qty (%)</th><th>Marking Fee (₹)</th></tr></thead><tbody>${tableRows}<tr class="total-row"><td colspan="2">Total</td><td>${quantity.format(totalProduction)} ${escapeHtml(unit)}</td><td>₹ ${currency.format(totalProductionValue)}</td><td>${quantity.format(totalCovered)} ${escapeHtml(unit)}</td><td>₹ ${currency.format(totalCoveredValue)}</td><td>${totalProduction > 0 ? `${coveredPercent.toFixed(2)}%` : '—'}</td><td>₹ ${currency.format(totalMarkingFee)}</td></tr></tbody></table></div>
+  <section class="calculation"><h2>Marking Fee Calculation</h2><p class="fee-line">Σ (period covered production × applicable IS Code slab rate): ${escapeHtml(feeEquation || 'No covered production entered')} = <strong>₹ ${currency.format(totalMarkingFee)}</strong></p></section></body></html>`
+  return renderPdfViaPlaywright({
+    html,
+    filename: renewalCalculationPdfFilename(form),
+    format: 'a4',
+    landscape: true,
+    margin: { top: '12mm', right: '12mm', bottom: '12mm', left: '12mm' },
+  })
+}
+
+export async function downloadRenewalCalculationPdf(form: BisRenewalForm): Promise<void> {
+  const blob = await createRenewalCalculationPdf(form)
+  triggerPdfDownload(blob, renewalCalculationPdfFilename(form))
+}
+
+export async function createRenewalCalculationPdfFile(form: BisRenewalForm): Promise<File> {
+  const blob = await createRenewalCalculationPdf(form)
+  return new File([blob], renewalCalculationPdfFilename(form), { type: 'application/pdf' })
 }

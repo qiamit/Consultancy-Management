@@ -2108,6 +2108,7 @@ export function LegalDocumentsModuleDialog({
                 label="Notes / License Scope"
                 inputId="bis-manufacturing-scope-notes"
                 isCodeId={row?.is_code_id ?? null}
+                isNumber={row?.is_code?.is_number ?? ''}
                 projectId={row?.id ?? null}
               />
             </div>

@@ -15,7 +15,7 @@ export { formatBisApiError }
 
 const PROJECT_JOIN =
   'project:bis_projects(id, title, cm_l_digits, license_validity_date, status, client_id, is_code:is_codes(is_number, title, revision_year, part_no, section_no, standard_prefix, unit_of_is, slab_1_quantity, slab_1_rate, slab_2_quantity, slab_2_rate, slab_3_quantity, slab_3_rate))'
-const SELECT_WITH_JOINS = `*, client:clients(company_name), ${PROJECT_JOIN}`
+const SELECT_WITH_JOINS = `*, client:clients(company_name, address, email), ${PROJECT_JOIN}`
 
 const LOOKUP_ID_LIMIT = 100
 const LOOKUP_OPTION_LIMIT = 30
@@ -130,6 +130,8 @@ export type RenewalProjectSummary = {
   projectLabel: string
   clientId: string
   clientLabel: string
+  clientAddress: string
+  clientEmail: string
   currentValidity: string
   cmLDigits: string
   isCodeLabel: string
@@ -175,7 +177,7 @@ export async function fetchRenewalProjectSummary(
   const { data, error } = await supabase
     .from('bis_projects')
     .select(
-      'id, title, client_id, is_code_id, cm_l_digits, license_validity_date, client:clients(company_name), is_code:is_codes(id, is_number, revision_year, part_no, section_no, standard_prefix, unit_of_is, slab_1_quantity, slab_1_rate, slab_2_quantity, slab_2_rate, slab_3_quantity, slab_3_rate)',
+      'id, title, client_id, is_code_id, cm_l_digits, license_validity_date, client:clients(company_name, address, email), is_code:is_codes(id, is_number, revision_year, part_no, section_no, standard_prefix, unit_of_is, slab_1_quantity, slab_1_rate, slab_2_quantity, slab_2_rate, slab_3_quantity, slab_3_rate)',
     )
     .eq('id', projectId)
     .maybeSingle()
@@ -187,7 +189,7 @@ export async function fetchRenewalProjectSummary(
     is_code_id: string | null
     cm_l_digits: string | null
     license_validity_date: string | null
-    client: { company_name: string | null } | null
+    client: { company_name: string | null; address: string | null; email: string | null } | null
     is_code: {
       is_number: string | null
       revision_year: string | null
@@ -224,6 +226,8 @@ export async function fetchRenewalProjectSummary(
     projectLabel: (row.title ?? '').trim() || (cmLDigits ? `CM/L-${cmLDigits}` : 'BIS License'),
     clientId: row.client_id ?? '',
     clientLabel: renewalClientName({ client: row.client }),
+    clientAddress: row.client?.address?.trim() ?? '',
+    clientEmail: row.client?.email?.trim() ?? '',
     currentValidity: row.license_validity_date ?? '',
     cmLDigits,
     isCodeLabel: row.is_code

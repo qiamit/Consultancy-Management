@@ -12,6 +12,7 @@ import { getCurrencyCode, getCurrencySymbol } from '@/lib/appCurrency'
 import { formatMoneyInput, sanitizeMoneyInput } from '@/features/masters/products-services/types'
 import { cn } from '@/lib/utils'
 import { IsCodeFilesTable, type IsCodeViewFile } from './IsCodeFilesTable'
+import { normalizeIsUnitLabel } from './unitLabels'
 import {
   isCodeNumberDigits,
   isCodeFileDocumentKind,
@@ -65,6 +66,7 @@ const IDENTITY_OPTION_META: Record<
 function normalizeIdentityOption(category: IdentityOptionCategory, raw: string): string {
   const text = raw.trim()
   if (category === 'revision_year') return text.replace(/\D/g, '').slice(0, 4)
+  if (category === 'unit_of_is') return normalizeIsUnitLabel(text)
   if (category === 'amendment_number') {
     const next = amendmentToFormStr(text)
     return next === '00' ? '' : next
@@ -325,6 +327,13 @@ export function IsCodesForm({
         .update({ label: name, value: name })
         .eq('id', id)
       if (error) return
+      if (identityDialogCategory === 'unit_of_is' && previous && previous !== name) {
+        const { error: isCodeError } = await supabase
+          .from('is_codes')
+          .update({ unit_of_is: name })
+          .eq('unit_of_is', previous)
+        if (isCodeError) return
+      }
       setIdentityOptions((prev) => ({
         ...prev,
         [identityDialogCategory]: prev[identityDialogCategory]

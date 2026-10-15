@@ -69,6 +69,7 @@ import {
 const normalizeText = (value: string) => value.trim()
 
 const VIEW_ONLY_MSG = 'View-only access — ask the Laboratory Director for Edit access.'
+const SIMILAR_CLIENT_WARNING_THRESHOLD = 0.5
 
 type MasterDeleteResult = {
   deleted?: string[] | null
@@ -360,12 +361,14 @@ export default function ClientsMasterPage() {
 
   const importInputRef = useRef<HTMLInputElement | null>(null)
   const hydratedEditRef = useRef<string | null>(null)
+  const originalCompanyNameRef = useRef<{ id: string; name: string } | null>(null)
 
   const showForm = editId != null
   const editingId = editId && editId !== 'new' ? editId : null
   const handleFormOpenChange = useFormDialogOpenChange((open) => {
     if (!open) {
       hydratedEditRef.current = null
+      originalCompanyNameRef.current = null
       setEdit(null)
     }
   })
@@ -557,12 +560,14 @@ export default function ClientsMasterPage() {
   useEffect(() => {
     if (!editId) {
       hydratedEditRef.current = null
+      originalCompanyNameRef.current = null
       return
     }
     if (hydratedEditRef.current === editId) return
 
     if (editId === 'new') {
       setForm(emptyClientForm())
+      originalCompanyNameRef.current = null
       hydratedEditRef.current = 'new'
       return
     }
@@ -578,6 +583,7 @@ export default function ClientsMasterPage() {
       }
       if (cancelled) return
       const base = rowToClientForm(row)
+      originalCompanyNameRef.current = { id: editId, name: base.companyName }
       const [sites, contacts, files] = await Promise.all([
         listClientSites(editId),
         listClientContacts(editId),
@@ -999,12 +1005,15 @@ export default function ClientsMasterPage() {
           setSaveMessage(FIRM_NAME_TAKEN)
           return
         }
-        if (!allowDuplicateSave && !allowDuplicateRef.current) {
+        const original = originalCompanyNameRef.current
+        const companyNameChanged = !editingId || !original || original.id !== editingId || !isSameFirmName(original.name, companyName)
+        if (companyNameChanged && !allowDuplicateSave && !allowDuplicateRef.current) {
           const hits = (await findSimilarClients(companyName, form.gstNumber)).filter((hit) => {
             if (hit.id === editingId) return false
             if (isSameFirmName(hit.company_name ?? '', companyName)) return false
             // Similarity 1 with a different name is the same GSTIN on another unit.
-            return hit.similarity < 1
+            // Ignore weak matches caused by shared legal suffixes such as "Global Limited".
+            return hit.similarity >= SIMILAR_CLIENT_WARNING_THRESHOLD && hit.similarity < 1
           })
           if (hits.length > 0) {
             setDuplicates(hits)
@@ -1129,6 +1138,7 @@ export default function ClientsMasterPage() {
 
         setSaveMessage('Saved successfully.')
         setForm(emptyClientForm())
+        originalCompanyNameRef.current = null
         hydratedEditRef.current = null
         setEdit(null)
         void loadClients()
@@ -1143,6 +1153,7 @@ export default function ClientsMasterPage() {
 
   const handleNew = () => {
     setSaveMessage(null)
+    originalCompanyNameRef.current = null
     setForm(emptyClientForm())
     hydratedEditRef.current = 'new'
     setEdit('new')
@@ -1168,6 +1179,7 @@ export default function ClientsMasterPage() {
       companyName: mode === 'copy' ? (copyLabel || `${full.company_name} - Copy`) : base.companyName,
       ...(mode === 'copy' ? { manakUserId: '', manakPassword: '', manakPasswordSet: false, clearManakPassword: false } : {}),
     })
+    originalCompanyNameRef.current = mode === 'edit' ? { id, name: base.companyName } : null
     setForm(next)
     setCertificates(mode === 'copy' ? [] : files)
     hydratedEditRef.current = mode === 'copy' ? 'new' : id

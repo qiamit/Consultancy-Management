@@ -745,17 +745,35 @@
     return /\/manak\/login\/?$/.test(location.pathname.toLowerCase());
   }
 
-  function loggedInPortalUser() {
-    const labels = Array.from(document.querySelectorAll(".profile-username")).map((el) =>
+  function loggedInPortalUserIds() {
+    const aliases = new Set();
+    const addLabeledIds = (source, includeEmail) => {
+      const pattern = includeEmail
+        ? /\b(user\s*(?:name|id)|email(?:\s*(?:id|address))?)\s*:\s*([A-Za-z0-9][A-Za-z0-9._@+-]{0,127})/gi
+        : /\buser\s*(?:name|id)\s*:\s*([A-Za-z0-9][A-Za-z0-9._@+-]{0,127})/gi;
+      let match;
+      while ((match = pattern.exec(source))) {
+        const value = (includeEmail ? match[2] : match[1]) || "";
+        if (value) aliases.add(value.trim());
+      }
+    };
+    const profileLines = Array.from(document.querySelectorAll(".profile-username")).map((el) =>
       text(el.textContent),
     );
-    for (const line of labels) {
-      const match = line.match(/user\s*name\s*:\s*([A-Za-z0-9._-]+)/i);
-      if (match) return match[1];
-    }
-    const body = document.body ? document.body.innerText || "" : "";
-    const match = body.match(/UserName:\s*([A-Za-z0-9._-]+)/i);
-    return match ? match[1] : "";
+    profileLines.forEach((line) => addLabeledIds(line, true));
+    const identityRegions = document.querySelectorAll(
+      "header, nav, #header, #profile, .profile, .navbar, .nav-bar, .user-info, .logged-in-user",
+    );
+    identityRegions.forEach((el) => addLabeledIds(text(el.innerText || el.textContent), true));
+    // Keep body fallback limited to explicit Manak account labels; the body may
+    // contain unrelated contact email addresses from application data.
+    addLabeledIds(document.body ? document.body.innerText || "" : "", false);
+    return Array.from(aliases);
+  }
+
+  function loggedInPortalUser() {
+    const aliases = loggedInPortalUserIds();
+    return aliases.find((value) => !value.includes("@")) || aliases[0] || "";
   }
 
   function normalizedPortalUserId(value) {
@@ -764,16 +782,98 @@
 
   function importQrAccountMatches(expectedUserId) {
     const expected = normalizedPortalUserId(expectedUserId);
-    const actual = normalizedPortalUserId(loggedInPortalUser());
-    return Boolean(expected && actual && expected === actual);
+    return Boolean(
+      expected &&
+        loggedInPortalUserIds().some((value) => normalizedPortalUserId(value) === expected),
+    );
   }
 
-  function showImportQrAccountMismatch() {
+  function showImportQrAccountProblem(expectedUserId) {
+    const expected = normalizedPortalUserId(expectedUserId);
+    const aliases = loggedInPortalUserIds().map(normalizedPortalUserId);
+    if (expected && aliases.length && !aliases.includes(expected)) {
+      showBanner(
+        "QR import stopped: the signed-in Manak account does not match this firm's saved account. Sign out of Manak, then retry from this firm's project.",
+        false,
+        true,
+      );
+      return;
+    }
     showBanner(
-      "QR import stopped: the signed-in Manak account does not match this firm's saved account. Sign out of Manak, then retry from this firm's project.",
+      !expected
+        ? "QR import paused: this firm's saved Manak User ID is missing. Return to the project and check its Manak account settings."
+        : "QR import paused: Manak is signed in, but the page does not expose its User ID for verification. Refresh the QR codes page and retry.",
       false,
       true,
     );
+  }
+
+  function startImportQrLoginWatch() {
+    if (window.__qeManakImportLoginWatch) return;
+    window.__qeManakImportLoginWatch = true;
+    let stopped = false;
+    let timer = 0;
+    let observer = null;
+    let lastBannerMessage = "";
+    const showWaitMessage = (message, ok) => {
+      if (message === lastBannerMessage) return;
+      lastBannerMessage = message;
+      showBanner(message, ok, true);
+    };
+    const stop = () => {
+      stopped = true;
+      window.__qeManakImportLoginWatch = false;
+      if (timer) window.clearInterval(timer);
+      if (observer) observer.disconnect();
+    };
+    const check = (expectedUserId) => {
+      if (stopped) return;
+      if (!isLoggedInSession()) {
+        showWaitMessage("Complete Manak sign-in with the captcha. The QR codes page will open after authentication.", true);
+        return;
+      }
+      const expected = normalizedPortalUserId(expectedUserId);
+      const actualAliases = loggedInPortalUserIds().map(normalizedPortalUserId);
+      if (!expected || !actualAliases.length) {
+        showWaitMessage("Manak sign-in detected, but the account could not be confirmed yet. Waiting…", false);
+        return;
+      }
+      if (!actualAliases.includes(expected)) {
+        stop();
+        showImportQrAccountProblem(expectedUserId);
+        return;
+      }
+      stop();
+      const qrUrl = generateQrPageUrl();
+      if (/employeeQrCodeGeneration|generateqr|qrcodegeneration/i.test(location.pathname || "")) return;
+      sessionStorage.setItem("qeManakOpenedQr", "1");
+      chrome.storage.local.set({
+        qeManakImportQr: true,
+        qeManakImportQrEnabled: true,
+        qeManakImportQrLanded: true,
+        pendingFill: null,
+        qeManakEnabled: false,
+      }, () => {
+        const error = chrome.runtime.lastError;
+        if (error) {
+          showBanner(`Sign-in verified, but QR navigation could not be prepared: ${error.message}`, false, true);
+          return;
+        }
+        showBanner("Sign-in verified. Opening the QR codes page…", true, true);
+        location.href = qrUrl;
+      });
+    };
+    chrome.storage.local.get(["qeManakPortal"], (data) => {
+      const expectedUserId = text(data?.qeManakPortal?.userId);
+      check(expectedUserId);
+      if (stopped) return;
+      timer = window.setInterval(() => check(expectedUserId), 1000);
+      if (document.body) {
+        observer = new MutationObserver(() => check(expectedUserId));
+        observer.observe(document.body, { childList: true, subtree: true, attributes: true });
+      }
+      window.setTimeout(stop, 10 * 60 * 1000);
+    });
   }
 
   function payloadWithoutPassword(payload) {
@@ -815,10 +915,13 @@
   }
 
   function findLoginUserField() {
-    const byId = document.getElementById("InputEmail");
-    if (byId && isVisibleEl(byId) && !isSkipField(byId)) return byId;
+    const candidates = Array.from(
+      document.querySelectorAll(
+        "#InputEmail, input[name='userId'], input[placeholder='Username' i], input[autocomplete='username'], input[type='text'], input[type='email']",
+      ),
+    );
     return (
-      Array.from(document.querySelectorAll("input[type='text'], input[type='email']")).find((el) => {
+      candidates.find((el) => {
         if (!isVisibleEl(el) || isSkipField(el)) return false;
         const blob = [el.id, el.name, el.placeholder, el.getAttribute("autocomplete"), el.getAttribute("aria-label")]
           .map(normalize)
@@ -830,12 +933,12 @@
   }
 
   function findLoginPasswordField() {
-    const byId = document.getElementById("InputPassword");
-    if (byId && isVisibleEl(byId)) return byId;
     return (
-      Array.from(document.querySelectorAll("input[type='password']")).find(
-        (el) => isVisibleEl(el) && !/otp|captcha/i.test(el.name || el.id || ""),
-      ) || null
+      Array.from(
+        document.querySelectorAll(
+          "#InputPassword, input[name='passwd'], input[placeholder='Password' i], input[autocomplete='current-password'], input[type='password']",
+        ),
+      ).find((el) => isVisibleEl(el) && !/captcha/i.test(el.name || el.id || "")) || null
     );
   }
 
@@ -1262,24 +1365,14 @@
         if (importQrMode) {
           chrome.storage.local.set({
             qeManakImportQrEnabled: true,
-            qeManakImportQrLanded: true,
+            // Do not mark the QR page as landed before captcha sign-in completes.
+            qeManakImportQrLanded: false,
             pendingFill: null,
             qeManakImportQr: true,
             // Keep Test Request Auto OFF for Import QR flow.
             qeManakEnabled: false,
           });
-          const qrUrl =
-            (map && map.generateQrUrl) ||
-            "https://www.manakonline.in/MANAK/employeeQrCodeGeneration";
-          window.setTimeout(() => {
-            if (/employeeQrCodeGeneration|generateqr|qrcodegeneration/i.test(location.pathname || "")) {
-              return;
-            }
-            if (isLoginPage() && !isLoggedInSession()) return;
-            if (sessionStorage.getItem("qeManakOpenedQr") === "1") return;
-            sessionStorage.setItem("qeManakOpenedQr", "1");
-            location.href = qrUrl;
-          }, 1600);
+          startImportQrLoginWatch();
           return;
         }
         // Belt-and-suspenders: if Import QR armed mid-flight, never open Test Request.
@@ -2384,7 +2477,7 @@
       chrome.storage.local.get(["qeManakPortal"], (data) => resolve(data?.qeManakPortal || {}));
     });
     if (!importQrAccountMatches(portal.userId)) {
-      showImportQrAccountMismatch();
+      showImportQrAccountProblem(portal.userId);
       return false;
     }
     const qr_codes = Array.from(
@@ -2395,6 +2488,7 @@
       kind: "QE_MANAK_QR_IMPORT_V1",
       qr_codes,
       portalUserId: loggedInPortalUser(),
+      portalUserIds: loggedInPortalUserIds(),
       filledAt: Date.now(),
       autoSave: true,
     };
@@ -2403,15 +2497,28 @@
     } catch {
       /* ignore */
     }
-    try {
-      chrome.runtime.sendMessage({
-        type: "QE_MANAK_QR_IMPORT",
-        result,
-      });
-    } catch {
-      /* ignore */
+    const handoff = await new Promise((resolve) => {
+      try {
+        chrome.runtime.sendMessage({ type: "QE_MANAK_QR_IMPORT", result }, (response) => {
+          const error = chrome.runtime.lastError;
+          resolve(
+            error
+              ? { ok: false, message: error.message || "The extension could not return the QR codes." }
+              : response || { ok: false, message: "The extension did not confirm the QR code handoff." },
+          );
+        });
+      } catch (error) {
+        resolve({
+          ok: false,
+          message: error instanceof Error ? error.message : "The extension could not return the QR codes.",
+        });
+      }
+    });
+    if (!handoff?.ok) {
+      showBanner(`QR import failed: ${handoff?.message || "The extension did not confirm the handoff."}`, false, true);
+      return false;
     }
-    showBanner(`Sent ${qr_codes.length} QR code(s) to Consultancy Pro. You may close this tab.`, true);
+    showBanner(handoff.message || `Returned ${qr_codes.length} QR code(s) to Consultancy Pro.`, true);
     return true;
   }
 
@@ -2437,9 +2544,12 @@
     }
     const expectedPortalUserId = text(state.qeManakPortal?.userId);
     if (isLoggedInSession() && !importQrAccountMatches(expectedPortalUserId)) {
-      showImportQrAccountMismatch();
+      showImportQrAccountProblem(expectedPortalUserId);
       return { ok: false, message: "The signed-in Manak account does not match this firm's account." };
     }
+    const onQrPath = /employeeQrCodeGeneration|generateqr|qrcodegeneration/i.test(
+      location.pathname || "",
+    );
     // Never start a Test Request during Import QR.
     chrome.storage.local.set({ pendingFill: null, qeManakEnabled: false });
     // Do not reset an already-running Import QR captcha watch (causes blink / lost typing).
@@ -2458,9 +2568,6 @@
     const portal = state.qeManakPortal || {};
     const qrUrl = generateQrPageUrl();
     const sectionOn = state.qeManakImportQrEnabled === true;
-    const onQrPath = /employeeQrCodeGeneration|generateqr|qrcodegeneration/i.test(
-      location.pathname || "",
-    );
 
     // If we landed on /MANAK/login by mistake, bounce to real eBIS login.
     if (/\/manak\/login\/?$/i.test(location.pathname) && !isLoggedInSession()) {
@@ -2472,7 +2579,9 @@
       return { ok: true, message: "Redirecting to eBIS login…" };
     }
 
-    if (isLoginPage()) {
+    // The QR page can retain login form markup in the DOM. Its route takes
+    // precedence so missing login credentials cannot stop QR extraction.
+    if (isLoginPage() && !onQrPath) {
       if (isLoggedInSession()) {
         // Enable Import, but do not mark Landed until Generate QR page —
         // background still needs one redirect chance if content nav fails.
@@ -2637,6 +2746,10 @@
     }
 
     if (msg.type === "QE_MANAK_FILL_LOGIN") {
+      if (/employeeQrCodeGeneration|generateqr|qrcodegeneration/i.test(location.pathname || "")) {
+        sendResponse({ ok: false, message: "Already on the QR codes page; skipping login field fill." });
+        return true;
+      }
       fillLoginFields(msg.userId, msg.password);
       [300, 900, 1800, 3200].forEach((ms) => {
         window.setTimeout(() => fillLoginFields(msg.userId, msg.password), ms);
@@ -2687,6 +2800,7 @@
       sendResponse({
         loggedIn: isLoggedInSession() && !isLoginPage(),
         userId: loggedInPortalUser(),
+        userIds: loggedInPortalUserIds(),
         onLogin: isLoginPage(),
         onHome: isHomePage(),
         onTr: isTrPage(),

@@ -174,6 +174,25 @@
       sendRuntime({ type: "QE_IS_CODE_FETCH", isNumber: data.isNumber || "" });
       return;
     }
+    if (data.type === "QE_PRODUCT_MANUAL_SEARCH") {
+      markPresent();
+      const requestId = String(data.requestId || "");
+      sendRuntime(
+        { type: "QE_PRODUCT_MANUAL_SEARCH", requestId, isNumber: data.isNumber || "" },
+        (response, error) => {
+          window.postMessage(
+            {
+              type: "QE_PRODUCT_MANUAL_SEARCH_RESULT",
+              requestId,
+              ok: Boolean(response && response.ok && !error),
+              message: error?.message || response?.message || "The Product Manual search could not be started.",
+            },
+            window.location.origin,
+          );
+        },
+      );
+      return;
+    }
     if (data.type !== "QE_MANAK_OPEN") return;
     // Always forward to background — ACK-only debounce skipped the login payload.
     window.__qeManakOpenSent = Date.now();
