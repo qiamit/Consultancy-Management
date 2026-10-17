@@ -456,6 +456,7 @@ function FieldGrid({
   tailLines = [],
   alignFirstLabel = false,
   alignFullRowLabel = false,
+  valueWeights = {},
 }: {
   items: Array<[string, ReactNode]>
   /** Label | value pairs per row (2 or 3). */
@@ -472,6 +473,8 @@ function FieldGrid({
   alignFirstLabel?: boolean
   /** Give only the full-width rows' label the same sixth-of-the-row width. */
   alignFullRowLabel?: boolean
+  /** Relative width of a field's value column (default 1), for example a wider e-mail field. */
+  valueWeights?: Record<string, number>
 }) {
   const topTaken = [...leadLines.flat(), ...topLines.flat(), ...tailLines.flat()]
   const toGroups = (lines: string[][]) =>
@@ -495,12 +498,17 @@ function FieldGrid({
     groups.map((group, g) => (
       <table key={g} className={cn('w-full table-fixed border-collapse', (g > 0 || gap) && '-mt-px')}>
         <colgroup>
-          {Array.from({ length: group.length * 2 }, (_, k) => {
+          {(() => {
             const n = group.length * 2
             const first = alignFirstLabel && group.length !== 3
-            const width = first ? (k === 0 ? 100 / 6 : (100 - 100 / 6) / (n - 1)) : 100 / n
-            return <col key={k} style={{ width: `${width}%` }} />
-          })}
+            // Label columns weigh 1, value columns their weight (default 1); the first label may be pinned to a sixth of the row.
+            const weights = Array.from({ length: n }, (_, k) => (k % 2 === 1 ? valueWeights[group[(k - 1) / 2]![0]] ?? 1 : 1))
+            const total = weights.reduce((sum, w) => sum + w, 0)
+            return weights.map((w, k) => {
+              const width = first ? (k === 0 ? 100 / 6 : ((100 - 100 / 6) * w) / (total - weights[0]!)) : (100 * w) / total
+              return <col key={k} style={{ width: `${width}%` }} />
+            })
+          })()}
         </colgroup>
         <tbody>
           <tr>
@@ -884,6 +892,7 @@ export function ManakGeneralStep({
         <FieldGrid
           columns={2}
           alignFirstLabel
+          valueWeights={{ 'E-MailId': 1.7 }}
           leadLines={[['CEO Name', 'E-MailId', 'Mobile No.']]}
           topLines={[
             ['PinCode', 'City', 'District', 'State'],
