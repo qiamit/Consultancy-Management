@@ -112,15 +112,27 @@ export function ManakFields({
     : singleLine
       ? [items]
       : arrangeByLabelLength(items)
-  const labelCls =
-    'w-[1%] whitespace-nowrap border border-[#e7e0d4] bg-[#f7f3eb] px-3 py-1.5 text-left align-top text-sm font-bold text-stone-800'
+  const labelCls = cn(
+    lines ? 'w-auto' : 'w-[1%]',
+    'whitespace-nowrap border border-[#e7e0d4] bg-[#f7f3eb] px-3 py-1.5 text-left align-top text-sm font-bold text-stone-800',
+  )
   const valueCls = cn(
     singleLine || lines ? 'whitespace-nowrap' : 'break-words',
-    'w-[32%] border border-[#e7e0d4] px-3 py-1.5 align-top text-sm text-stone-700',
+    lines ? 'w-auto' : 'w-[32%]',
+    'border border-[#e7e0d4] px-3 py-1.5 align-top text-sm text-stone-700',
   )
   return (
     <div className="overflow-x-auto">
-      <table className="w-full table-auto border-collapse">
+      <table className={cn('w-full border-collapse', lines ? 'table-fixed' : 'table-auto')}>
+        {lines ? (
+          // The first pair takes two thirds of the row, the second pair one third.
+          <colgroup>
+            <col style={{ width: '15%' }} />
+            <col style={{ width: '51.67%' }} />
+            <col style={{ width: '15%' }} />
+            <col style={{ width: '18.33%' }} />
+          </colgroup>
+        ) : null}
         <tbody>
           {rows.map((pair, i) => (
             <tr key={i}>
