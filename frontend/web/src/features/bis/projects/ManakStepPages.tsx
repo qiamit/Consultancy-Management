@@ -71,10 +71,27 @@ export function ManakSubPanel({
   )
 }
 
+/**
+ * Lay fields out in three columns, grouping labels of similar length so each label column is only as
+ * wide as its own longest label (short labels together, long labels together). Order inside a column is kept.
+ */
+export function arrangeByLabelLength<T>(items: Array<[string, T]>): Array<Array<[string, T] | null>> {
+  const perColumn = Math.ceil(items.length / 3)
+  const byLength = items.map((item, index) => ({ item, index })).sort((a, b) => a.item[0].length - b.item[0].length || a.index - b.index)
+  const columns: Array<Array<[string, T]>> = [0, 1, 2].map((c) =>
+    byLength
+      .slice(c * perColumn, (c + 1) * perColumn)
+      .sort((a, b) => a.index - b.index)
+      .map((x) => x.item),
+  )
+  const rows: Array<Array<[string, T] | null>> = []
+  for (let r = 0; r < perColumn; r += 1) rows.push(columns.map((col) => col[r] ?? null))
+  return rows
+}
+
 export function ManakFields({ items }: { items: Array<[string, ReactNode]> }) {
   // Grid layout: three label | value pairs per row. Label columns shrink to their text; value columns share the rest.
-  const rows: Array<Array<[string, ReactNode] | null>> = []
-  for (let i = 0; i < items.length; i += 3) rows.push([items[i], items[i + 1] ?? null, items[i + 2] ?? null])
+  const rows = arrangeByLabelLength(items)
   const labelCls =
     'w-[1%] whitespace-nowrap border border-[#e7e0d4] bg-[#f7f3eb] px-3 py-1.5 text-left align-top text-sm font-bold text-stone-800'
   const valueCls = 'w-[32%] break-words border border-[#e7e0d4] px-3 py-1.5 align-top text-sm text-stone-700'

@@ -10,7 +10,7 @@ import { patchClient, patchSite, type ClientSiteRow } from '@/features/masters/c
 import { updateClientCertificateDetails, type ClientCertificateFile } from '@/features/masters/clients/clientsApi'
 import { CLIENT_SECTORS, COMPANY_SCALES } from '@/features/masters/clients/types'
 import type { BisPrintClient } from '../print/loadBisPrintData'
-import { ManakSubPanel } from './ManakStepPages'
+import { ManakSubPanel, arrangeByLabelLength } from './ManakStepPages'
 import type { BisProjectRow } from './types'
 
 type Rec = Record<string, unknown>
@@ -198,8 +198,7 @@ function EditableValue({ value, onSave, type = 'text', options, disabled, title,
 
 /** Grid layout: three label | value pairs per row. Same look as ManakFields, with editable values. */
 function FieldGrid({ items }: { items: Array<[string, ReactNode]> }) {
-  const rows: Array<Array<[string, ReactNode] | null>> = []
-  for (let i = 0; i < items.length; i += 3) rows.push([items[i], items[i + 1] ?? null, items[i + 2] ?? null])
+  const rows = arrangeByLabelLength(items)
   const labelCls =
     'w-[1%] whitespace-nowrap border border-[#e7e0d4] bg-[#f7f3eb] px-3 py-1.5 text-left align-middle text-sm font-bold text-stone-800'
   const valueCls = 'w-[32%] border border-[#e7e0d4] px-2 py-1 align-middle text-sm text-stone-700'
