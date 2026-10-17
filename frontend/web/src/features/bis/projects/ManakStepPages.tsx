@@ -72,12 +72,12 @@ export function ManakSubPanel({
 }
 
 export function ManakFields({ items }: { items: Array<[string, ReactNode]> }) {
-  // Grid layout: label | value | label | value. Label columns shrink to their text; value columns share the rest.
+  // Grid layout: three label | value pairs per row. Label columns shrink to their text; value columns share the rest.
   const rows: Array<Array<[string, ReactNode] | null>> = []
-  for (let i = 0; i < items.length; i += 2) rows.push([items[i], items[i + 1] ?? null])
+  for (let i = 0; i < items.length; i += 3) rows.push([items[i], items[i + 1] ?? null, items[i + 2] ?? null])
   const labelCls =
     'w-[1%] whitespace-nowrap border border-[#e7e0d4] bg-[#f7f3eb] px-3 py-1.5 text-left align-top text-sm font-bold text-stone-800'
-  const valueCls = 'w-[49%] break-words border border-[#e7e0d4] px-3 py-1.5 align-top text-sm text-stone-700'
+  const valueCls = 'w-[32%] break-words border border-[#e7e0d4] px-3 py-1.5 align-top text-sm text-stone-700'
   return (
     <div className="overflow-x-auto">
       <table className="w-full table-auto border-collapse">

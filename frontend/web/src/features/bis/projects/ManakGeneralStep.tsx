@@ -1,6 +1,9 @@
-import { Fragment, useEffect, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useId, useState, type ReactNode } from 'react'
+import { Calendar } from 'lucide-react'
 import { toast } from 'sonner'
+import { LimsFieldWithAdd } from '@/components/lims/LimsFieldWithAdd'
 import { Input } from '@/components/ui/input'
+import { limsFieldAddBtnClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { isValidGstin, isValidPan } from '@/lib/indiaValidators'
 import { patchClient, patchSite, type ClientSiteRow } from '@/features/masters/clients/clientLinkApi'
@@ -11,6 +14,24 @@ import { ManakSubPanel } from './ManakStepPages'
 import type { BisProjectRow } from './types'
 
 type Rec = Record<string, unknown>
+
+/** Hide the browser's own calendar glyph; the calendar button sits on the right like Client Master. */
+const dateInputClass =
+  'min-w-0 border-0 bg-transparent pr-1 tabular-nums shadow-none focus-visible:ring-0 [&::-webkit-calendar-picker-indicator]:pointer-events-none [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:h-0 [&::-webkit-calendar-picker-indicator]:w-0 [&::-webkit-calendar-picker-indicator]:opacity-0'
+
+function openDatePicker(id: string) {
+  const el = document.getElementById(id)
+  if (!(el instanceof HTMLInputElement) || el.disabled) return
+  try {
+    if (typeof el.showPicker === 'function') {
+      el.showPicker()
+      return
+    }
+  } catch {
+    // showPicker is blocked outside a user gesture; fall back to focus.
+  }
+  el.focus()
+}
 
 const NATURE_OF_FIRM = ['Pvt. Limited', 'Public Limited', 'LLP', 'Partnership', 'Proprietorship', 'Trust / Society', 'Government']
 const YES_NO = ['Yes', 'No']
@@ -40,6 +61,7 @@ function EditableValue({ value, onSave, type = 'text', options, disabled, title,
   const [focused, setFocused] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const dateId = useId()
 
   useEffect(() => {
     if (!focused) setDraft(value)
@@ -80,7 +102,6 @@ function EditableValue({ value, onSave, type = 'text', options, disabled, title,
   return (
     <div className="min-w-0" title={title}>
       <div className="flex items-center gap-1">
-        {prefix ? <span className="shrink-0 text-xs text-stone-500">{prefix}</span> : null}
         {type === 'select' ? (
           <select
             className={cn(cls, 'border px-2')}
@@ -99,27 +120,75 @@ function EditableValue({ value, onSave, type = 'text', options, disabled, title,
               </option>
             ))}
           </select>
+        ) : type === 'date' ? (
+          <LimsFieldWithAdd
+            className={cn('w-full', error && '!border-red-600 !bg-red-50', busy && 'opacity-60')}
+            addButton={
+              <button
+                type="button"
+                className={limsFieldAddBtnClass}
+                aria-label="Open calendar"
+                title="Pick date"
+                disabled={disabled}
+                onClick={() => openDatePicker(dateId)}
+              >
+                <Calendar size={14} strokeWidth={2.25} aria-hidden />
+              </button>
+            }
+          >
+            <Input
+              id={dateId}
+              type="date"
+              value={draft}
+              disabled={disabled}
+              className={dateInputClass}
+              onFocus={() => setFocused(true)}
+              onChange={(e) => {
+                setDraft(e.target.value)
+                // Picking from the calendar saves right away; typing waits for blur.
+                if (document.activeElement !== e.target) void commit(e.target.value)
+              }}
+              onBlur={() => {
+                setFocused(false)
+                void commit(draft)
+              }}
+            />
+          </LimsFieldWithAdd>
         ) : (
-          <Input
-            className={cls}
-            type={type === 'date' ? 'date' : 'text'}
-            value={draft}
-            placeholder={placeholder}
-            disabled={disabled}
-            onFocus={() => setFocused(true)}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={() => {
-              setFocused(false)
-              void commit(draft)
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
-              if (e.key === 'Escape') {
-                setDraft(value)
-                setError('')
-              }
-            }}
-          />
+          <div
+            className={cn(
+              'flex h-8 w-full items-center rounded-none border bg-white text-sm focus-within:border-amber-600 focus-within:ring-2 focus-within:ring-amber-500/20',
+              error ? 'border-red-600 bg-red-50' : 'border-stone-300',
+              busy && 'opacity-60',
+              disabled && 'opacity-50',
+            )}
+          >
+            {/* Prefix (country code) sits inside the field as part of the text. */}
+            {prefix ? <span className="shrink-0 select-none pl-2 text-stone-700">{prefix}</span> : null}
+            <Input
+              className={cn(
+                'h-full min-w-0 flex-1 rounded-none border-0 bg-transparent py-0 shadow-none focus-visible:ring-0',
+                prefix ? 'pl-1.5 pr-2' : 'px-2',
+              )}
+              type="text"
+              value={draft}
+              placeholder={placeholder}
+              disabled={disabled}
+              onFocus={() => setFocused(true)}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={() => {
+                setFocused(false)
+                void commit(draft)
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                if (e.key === 'Escape') {
+                  setDraft(value)
+                  setError('')
+                }
+              }}
+            />
+          </div>
         )}
       </div>
       {error ? <p className="mt-0.5 text-[11px] text-red-700">{error}</p> : null}
@@ -127,13 +196,13 @@ function EditableValue({ value, onSave, type = 'text', options, disabled, title,
   )
 }
 
-/** Grid layout: label | value | label | value. Same look as ManakFields, with editable values. */
+/** Grid layout: three label | value pairs per row. Same look as ManakFields, with editable values. */
 function FieldGrid({ items }: { items: Array<[string, ReactNode]> }) {
   const rows: Array<Array<[string, ReactNode] | null>> = []
-  for (let i = 0; i < items.length; i += 2) rows.push([items[i], items[i + 1] ?? null])
+  for (let i = 0; i < items.length; i += 3) rows.push([items[i], items[i + 1] ?? null, items[i + 2] ?? null])
   const labelCls =
     'w-[1%] whitespace-nowrap border border-[#e7e0d4] bg-[#f7f3eb] px-3 py-1.5 text-left align-middle text-sm font-bold text-stone-800'
-  const valueCls = 'w-[49%] border border-[#e7e0d4] px-2 py-1 align-middle text-sm text-stone-700'
+  const valueCls = 'w-[32%] border border-[#e7e0d4] px-2 py-1 align-middle text-sm text-stone-700'
   return (
     <div className="overflow-x-auto">
       <table className="w-full table-auto border-collapse">
@@ -225,31 +294,18 @@ export function ManakGeneralStep({
   const mobile = str(raw.mobile)
   const countryCode = str(raw.country_code)
 
-  const contactCell = (
-    <div className="space-y-1">
-      <EditableValue
-        value={str(raw.landline)}
-        prefix="LandLine:"
-        placeholder="-"
-        disabled={locked}
-        onSave={col('landline')}
-      />
-      <EditableValue
-        value={mobile}
-        prefix={`Mobile: ${countryCode}`}
-        disabled={locked}
-        normalize={(v) => v.replace(/[^0-9]/g, '').slice(0, 10)}
-        validate={(v) => (v && v.length !== 10 ? 'Enter a 10 digit mobile number' : null)}
-        onSave={col('mobile')}
-      />
-    </div>
-  )
-
   const v = (
     value: string,
     onSave: (next: string) => Promise<void>,
     extra: Partial<EditableProps> = {},
   ) => <EditableValue value={value} onSave={onSave} disabled={locked} {...extra} />
+
+  const landlineCell = v(str(raw.landline), col('landline'), { placeholder: '-' })
+  const mobileCell = v(mobile, col('mobile'), {
+    prefix: countryCode,
+    normalize: (x) => x.replace(/[^0-9]/g, '').slice(0, 10),
+    validate: (x) => (x && x.length !== 10 ? 'Enter a 10 digit mobile number' : null),
+  })
 
   const yesNoFlag = (textCol: string, flagCol: string, current: string) =>
     v(current, async (next) => {
@@ -374,7 +430,8 @@ export function ManakGeneralStep({
               }),
             ],
             ['E-MailId', v(str(client?.email), col('email'))],
-            ['Contact No.', contactCell],
+            ['Landline', landlineCell],
+            ['Mobile No.', mobileCell],
             [
               'Address Proof Type',
               v(str(addressDoc?.cert_name), certField(addressDoc, 'cert_name'), { disabled: locked || !addressDoc, title: addressDoc ? undefined : noDoc }),
@@ -414,7 +471,8 @@ export function ManakGeneralStep({
               }),
             ],
             ['E-MailId', v(str(client?.email), col('email'))],
-            ['Contact No.', contactCell],
+            ['Landline', landlineCell],
+            ['Mobile No.', mobileCell],
             [
               'Address Proof Type',
               v(str(addressDoc?.cert_name), certField(addressDoc, 'cert_name'), { disabled: locked || !addressDoc, title: addressDoc ? undefined : noDoc }),
