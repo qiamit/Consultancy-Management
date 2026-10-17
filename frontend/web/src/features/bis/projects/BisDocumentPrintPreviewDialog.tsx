@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import { Eye, Loader2, Printer, X } from 'lucide-react'
+import { Download, Eye, Loader2, Printer, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -19,6 +19,7 @@ import {
   limsPrimaryBtnClass,
 } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
+import { mapPageSizeToPlaywrightFormat, renderPdfViaPlaywright, triggerPdfDownload } from '@/lib/playwrightPdfClient'
 import {
   applyBisDocumentPrintPageSettings,
   bisPrintPageSizeMm,
@@ -449,6 +450,35 @@ export function BisDocumentPrintPreviewDialog({
       e.currentTarget.releasePointerCapture(e.pointerId)
     } catch {
       /* already released */
+    }
+  }
+
+  const [downloadingPdf, setDownloadingPdf] = useState(false)
+
+  /** Download exactly what the preview shows as a PDF (an attached/merged PDF is saved as is; generated HTML is rendered by the PDF service). */
+  const handleDownloadPdf = async () => {
+    setDownloadingPdf(true)
+    setError(null)
+    try {
+      const filename = `${(title || 'Document').replace(/[\\/:*?"<>|]+/g, '_').trim() || 'Document'}.pdf`
+      if (visiblePdfUrl) {
+        const blob = await (await fetch(visiblePdfUrl)).blob()
+        triggerPdfDownload(blob, filename)
+        return
+      }
+      if (!previewHtml) return
+      const blob = await renderPdfViaPlaywright({
+        html: previewHtml,
+        filename,
+        format: mapPageSizeToPlaywrightFormat(settings.pageSize),
+        landscape: settings.orientation === 'landscape',
+        margin: { top: '0mm', right: '0mm', bottom: '0mm', left: '0mm' },
+      })
+      triggerPdfDownload(blob, filename)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'PDF download failed')
+    } finally {
+      setDownloadingPdf(false)
     }
   }
 
@@ -1583,6 +1613,15 @@ export function BisDocumentPrintPreviewDialog({
               onClick={() => onOpenChange(false)}
             >
               Close
+            </Button>
+            <Button
+              type="button"
+              className={cn(limsPrimaryBtnClass, 'min-w-[7.5rem]')}
+              disabled={!hasPreview || loading || downloadingPdf}
+              onClick={() => void handleDownloadPdf()}
+            >
+              <Download className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+              {downloadingPdf ? 'Preparing…' : 'PDF'}
             </Button>
             <Button
               type="button"
