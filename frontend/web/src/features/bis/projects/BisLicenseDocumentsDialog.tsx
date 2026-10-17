@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { PDFDocument } from 'pdf-lib'
 import * as XLSX from 'xlsx'
 import {
@@ -331,6 +331,8 @@ export function BisLicenseDocumentsDialog({
   const [previewKind, setPreviewKind] = useState<BisPrintDocumentKind | null>(null)
   // Generated letterhead HTML to preview instead of attached files (Undertaking for Manufacturing Scope).
   const [previewGeneratedHtml, setPreviewGeneratedHtml] = useState<string | null>(null)
+  // Undertaking the All Undertakings module opens on (set when it is opened from the Marking Fee section).
+  const [undertakingFocus, setUndertakingFocus] = useState<'undertaking-mmf' | null>(null)
   const [importKind, setImportKind] = useState<BisPrintDocumentKind | null>(null)
 
   const client = row ? clientDisplayName(row) || '—' : '—'
@@ -338,20 +340,53 @@ export function BisLicenseDocumentsDialog({
   const cmL = row ? formatCmL(row.cm_l_digits) : ''
   const subtitle = [client, isLabel, cmL].filter((part) => Boolean(part) && part !== '—').join(' · ')
 
-  useEffect(() => {
-    if (!open) {
-      setSelectedKinds(new Set())
-      setDownloadBusy(false)
-      setStep(0)
-      setPreviewKind(null)
-      setImportKind(null)
+  // The step the user is on survives a page refresh (kept per application until the dialog is closed).
+  const stepKey = row?.id ? `bis-application-step:${row.id}` : null
+  const wasOpen = useRef(false)
+  const readSavedStep = () => {
+    try {
+      const n = Number(stepKey ? window.localStorage.getItem(stepKey) : null)
+      return Number.isInteger(n) && n >= 0 && n < stepLabels.length ? n : 0
+    } catch {
+      return 0
     }
+  }
+
+  useEffect(() => {
+    if (open) {
+      wasOpen.current = true
+      return
+    }
+    if (wasOpen.current) {
+      wasOpen.current = false
+      try {
+        if (stepKey) window.localStorage.removeItem(stepKey)
+      } catch {
+        /* storage unavailable */
+      }
+    }
+    setSelectedKinds(new Set())
+    setDownloadBusy(false)
+    setStep(0)
+    setPreviewKind(null)
+    setImportKind(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
   useEffect(() => {
     setSelectedKinds(new Set())
-    setStep(0)
+    setStep(readSavedStep())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [row?.id])
+
+  useEffect(() => {
+    if (!open || !stepKey) return
+    try {
+      window.localStorage.setItem(stepKey, String(step))
+    } catch {
+      /* storage unavailable */
+    }
+  }, [open, stepKey, step])
 
   const allKinds = useMemo<BisPrintDocumentKind[]>(
     () =>
@@ -385,6 +420,7 @@ export function BisLicenseDocumentsDialog({
   }
 
   const handleModuleEdit = (kind: BisPrintDocumentKind) => {
+    setUndertakingFocus(null)
     if (!row?.id) {
       toast.error('Save the license first, then open the document module.')
       return
@@ -726,11 +762,18 @@ export function BisLicenseDocumentsDialog({
               <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
               <div className="relative flex min-w-0 flex-col gap-1.5">
                 <div className="flex min-w-0 flex-nowrap items-center gap-1.5 sm:gap-2.5">
-                  <DialogHeader className="min-w-0 flex-1 space-y-0 text-left">
-                    <DialogTitle className="truncate text-sm font-semibold tracking-tight text-white sm:text-base md:text-lg">
+                  <DialogHeader className="space-y-0 text-left">
+                    <DialogTitle className="sr-only">
                       Online Application for Grant of License
                     </DialogTitle>
                   </DialogHeader>
+                  <span className="hidden w-[82px] shrink-0 sm:block" aria-hidden />
+                  <p
+                    className="min-w-0 flex-1 truncate px-1 text-center text-sm font-semibold text-stone-100 sm:text-base md:text-lg"
+                    title={subtitle ? `Online Application Process of ${subtitle}` : undefined}
+                  >
+                    {subtitle ? `Online Application Process of ${subtitle}` : 'Online Application Process'}
+                  </p>
                   <Button
                     type="button"
                     variant="outline"
@@ -743,12 +786,6 @@ export function BisLicenseDocumentsDialog({
                     <span className="hidden sm:inline">Close</span>
                   </Button>
                 </div>
-                <p
-                  className="truncate px-1 text-center text-xs font-medium text-stone-200 sm:text-sm"
-                  title={subtitle}
-                >
-                  {subtitle || '—'}
-                </p>
               </div>
             </div>
           </div>
@@ -876,7 +913,6 @@ export function BisLicenseDocumentsDialog({
               ) : (
                 <>
                 <div className="mb-3 text-center font-jakarta">
-                  <h3 className="text-xl font-bold text-stone-900">Online Application for Grant of License</h3>
                   <p className="text-right text-xs text-red-600">* Mandatory Fields</p>
                 </div>
                 <ManakStepPage
@@ -887,6 +923,25 @@ export function BisLicenseDocumentsDialog({
                   onLocationMapPreview={() => handlePreview('location-map')}
                   onLocationMapPdf={() => void runDownload('location-map', 'pdf')}
                   onProjectSaved={onProjectSaved}
+                  onMarkingFee={{
+                    edit: () => {
+                      handleModuleEdit('all-required-undertakings')
+                      setUndertakingFocus('undertaking-mmf')
+                    },
+                    preview: () => handlePreview('marking-fee-acceptance'),
+                    pdf: () => void runDownload('marking-fee-acceptance', 'pdf', true),
+                    word: () => void runDownload('marking-fee-acceptance', 'word', true),
+                  }}
+                  onTopManagement={{
+                    preview: () => handlePreview('top-management'),
+                    pdf: () => void runDownload('top-management', 'pdf', true),
+                    word: () => void runDownload('top-management', 'word', true),
+                  }}
+                  onTechnicalStaff={{
+                    preview: () => handlePreview('technical-staff'),
+                    pdf: () => void runDownload('technical-staff', 'pdf', true),
+                    word: () => void runDownload('technical-staff', 'word', true),
+                  }}
                   onScopeDocument={{
                     preview: () => void previewScopeUndertaking(),
                     pdf: () => void downloadScopeUndertakingPdf(),
@@ -1017,7 +1072,11 @@ export function BisLicenseDocumentsDialog({
         }
       }}
       row={row}
-      title={activeModuleTitle}
+      title={
+        undertakingFocus === 'undertaking-mmf' && activeModuleKind === 'all-required-undertakings'
+          ? 'Undertaking for Minimum Marking Fee (All India First)'
+          : activeModuleTitle
+      }
       docKind={activeDocKind}
       printKind={activeModuleKind}
       onProjectSaved={() => {
@@ -1028,6 +1087,7 @@ export function BisLicenseDocumentsDialog({
       onLocationMapWord={() => void runDownload('location-map', 'word')}
       onLocationMapPdf={() => void runDownload('location-map', 'pdf')}
       onLocationMapPrint={() => handlePrint('location-map')}
+      initialUndertaking={undertakingFocus}
       onPreviewDocument={(kind) => handlePreview(kind)}
       onPdfDocument={(kind) => void runDownload(kind, 'pdf', true)}
       onWordDocument={(kind) => void runDownload(kind, 'word', true)}

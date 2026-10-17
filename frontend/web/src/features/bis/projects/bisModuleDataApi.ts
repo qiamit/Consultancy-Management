@@ -5,6 +5,8 @@ import type { TopManagementRow } from '../print/topManagementHtml'
 
 export type TopManagementModulePayload = {
   rows: TopManagementRow[]
+  /** 'table': the Authorized Signatory follows the tick in the Top Management table. */
+  authorizedSignatoryMode?: 'table'
   signatoryName: string
   signatoryDesignation: string
   /** When true, Authorized Signatory section is enabled (prints Authorization Letter too). */
@@ -136,8 +138,13 @@ export function parseTopManagementPayload(
         raw && typeof raw === 'object' && !Array.isArray(raw)
           ? Boolean((raw as Record<string, unknown>).applySignatureToDocuments)
           : false
-      return { ...row, applySignatureToDocuments: flag }
+      const authorized =
+        raw && typeof raw === 'object' && !Array.isArray(raw)
+          ? Boolean((raw as Record<string, unknown>).isAuthorizedSignatory)
+          : false
+      return { ...row, applySignatureToDocuments: flag, isAuthorizedSignatory: authorized }
     }),
+    authorizedSignatoryMode: payload?.authorizedSignatoryMode === 'table' ? 'table' : undefined,
     signatoryName: String(payload?.signatoryName ?? '').trim(),
     signatoryDesignation: String(payload?.signatoryDesignation ?? '').trim(),
     includeAuthorizedSignatory:

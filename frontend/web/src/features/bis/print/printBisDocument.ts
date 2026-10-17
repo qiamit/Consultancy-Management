@@ -10,7 +10,8 @@ import { bisForm1DataFromPrintData, buildBisForm1Html } from './bisForm1Html'
 import { buildCmpf305Html, cmpf305DataFromPrintData } from './cmpf305Html'
 import { buildCmpf306Html, cmpf306DataFromPrintData } from './cmpf306Html'
 import { buildCmpf307Html, cmpf307DataFromPrintData } from './cmpf307Html'
-import { buildCmpf310AcceptanceLetterHtml, buildCmpf310Html, cmpf310DataFromPrintData, minimumMarkingFeeForScale } from './cmpf310Html'
+import { parseCmpf310Payload } from '../projects/cmpf310Model'
+import { buildCmpf310AcceptanceLetterHtml, buildTentativeMarkingFeeAcceptanceHtml, buildCmpf310Html, cmpf310DataFromPrintData, minimumMarkingFeeForScale } from './cmpf310Html'
 import { buildCmpf311Html, cmpf311DataFromPrintData } from './cmpf311Html'
 import {
   buildCertifiedReferenceMaterialsHtml,
@@ -121,6 +122,7 @@ export type BisPrintDocumentKind =
   | 'cmpf-307'
   | 'cmpf-310'
   | 'cmpf-311'
+  | 'marking-fee-acceptance'
   | 'updated-sit'
   | 'factory-test-report'
   | 'osl-sample-requirements'
@@ -158,7 +160,8 @@ export const BIS_PRINT_DOCUMENT_LABEL: Record<BisPrintDocumentKind, string> = {
   'consent-letter': 'Consent Letter',
   'cmpf-307': 'CMPF-307 (Brand Names)',
   'cmpf-310': 'CMPF-310 (Marking Fee)',
-  'cmpf-311': 'CMPF - 310 & CMPF - 311',
+  'cmpf-311': 'Acceptance of SIT (CMPF - 311)',
+  'marking-fee-acceptance': 'Acceptance of Marking Fee',
   'updated-sit': 'Updated Scheme of Inspection',
   'factory-test-report': 'Factory Test Report',
   'osl-sample-requirements': 'Sample Requirements, Test Request, & Test Reports',
@@ -351,6 +354,16 @@ async function locationMapPayloadWithBranchOffice(
   }
 }
 
+/** Acceptance of Marking Fee letter (the minimum fee comes from the IS Code master for the firm's scale). */
+function markingFeeAcceptanceHtmlFromData(d: BisPrintData, unit: string): string {
+  return buildCmpf310AcceptanceLetterHtml({
+    ...cmpf311DataFromPrintData(d),
+    minimumMarkingFee: minimumMarkingFeeForScale(d.isCode, d.client.scale),
+    unit,
+    firmScale: d.client.scale,
+  })
+}
+
 const HTML_BUILDERS: Record<BisPrintDocumentKind, (data: BisPrintData) => string> = {
   'legal-documents': (d) => buildLegalDocumentsHtml(legalDocumentsDataFromPrintData(d)),
   'application-details': (d) => buildBisForm1Html(bisForm1DataFromPrintData(d)),
@@ -366,6 +379,7 @@ const HTML_BUILDERS: Record<BisPrintDocumentKind, (data: BisPrintData) => string
   'cmpf-307': (d) => buildCmpf307Html(cmpf307DataFromPrintData(d)),
   'cmpf-310': (d) => buildCmpf310Html(cmpf310DataFromPrintData(d)),
   'cmpf-311': (d) => buildCmpf311Html(cmpf311DataFromPrintData(d)),
+  'marking-fee-acceptance': (d) => markingFeeAcceptanceHtmlFromData(d, d.isCode.unitOfIs),
   'updated-sit': (d) => buildUpdatedSchemeOfInspectionHtml(updatedSchemeOfInspectionDataFromPrintData(d)),
   'factory-test-report': (d) => buildFactoryTestReportHtml(factoryTestReportDataFromPrintData(d)),
   'osl-sample-requirements': (d) => buildOslSampleRequirementsHtml(oslSampleRequirementsDataFromPrintData(d)),
@@ -411,7 +425,9 @@ export async function buildBisDocumentHtml(
       ? 'process-flow-chart'
       : kind === 'osl-sample-test-request' || kind === 'osl-courier-labels'
         ? 'osl-sample-requirements'
-        : kind
+        : kind === 'marking-fee-acceptance'
+          ? 'cmpf-311'
+          : kind
   const [
     printData,
     modulePayload,
@@ -435,7 +451,7 @@ export async function buildBisDocumentHtml(
     kind === 'application-details'
       ? fetchBisModulePayload(row.id, 'location-map').catch(() => null)
       : Promise.resolve(null),
-    kind === 'cmpf-311'
+    kind === 'cmpf-311' || kind === 'marking-fee-acceptance'
       ? fetchBisModulePayload(row.id, 'cmpf-310').catch(() => null)
       : Promise.resolve(null),
   ])
@@ -587,19 +603,28 @@ export async function buildBisDocumentHtml(
       ? buildLocationMapHtml(await enrichLocationMapRoute(locationMapDataFromPrintData(data)))
       : HTML_BUILDERS[kind](data)
 
-  if (kind === 'cmpf-311') {
-    const sitData = cmpf311DataFromPrintData(data)
-    const markingFeeData = cmpf310DataFromPrintData({
-      ...data,
-      modulePayload: markingFeePayload,
-    })
-    const acceptanceLetterHtml = buildCmpf310AcceptanceLetterHtml({
-      ...sitData,
-      minimumMarkingFee: minimumMarkingFeeForScale(data.isCode, data.client.scale),
-      unit: markingFeeData.unit,
-      firmScale: data.client.scale,
-    })
-    html = combinePrintHtmlDocuments('CMPF - 310 & CMPF - 311', [html, acceptanceLetterHtml])
+  if (kind === 'marking-fee-acceptance') {
+    const marking = parseCmpf310Payload(markingFeePayload)
+    const acceptance = markingFeeAcceptanceHtmlFromData(data, marking.unit || data.isCode.unitOfIs)
+    if (marking.allIndiaFirst === 'Yes') {
+      // All India First: Annexure 1 (Undertaking for Minimum Marking Fee) goes with the acceptance.
+      const minimumFee = await fetchBisModulePayload(row.id, 'undertaking-mmf').catch(() => null)
+      const feeData = undertakingMinimumMarkingFeeDataFromPrintData({ ...data, modulePayload: minimumFee })
+      const annexure = buildUndertakingMinimumMarkingFeeHtml(feeData)
+      // The tentative rate acceptance (SOP Annex-4) replaces the regular acceptance; Annex-1 follows it.
+      const tentative = buildTentativeMarkingFeeAcceptanceHtml({
+        ...cmpf311DataFromPrintData(data),
+        minimumMarkingFee: minimumMarkingFeeForScale(data.isCode, data.client.scale),
+        unit: marking.unit || data.isCode.unitOfIs,
+        firmScale: data.client.scale,
+        productTitle: data.isCode.title,
+        isLabel: data.isCode.label || data.isCode.isNumber,
+        fee: feeData,
+      })
+      html = combinePrintHtmlDocuments('Acceptance of Marking Fee', [tentative, annexure])
+    } else {
+      html = acceptance
+    }
   }
 
   if (kind === 'application-details') {
@@ -767,6 +792,11 @@ function appendGeneratedTechnicalStaffLetters(
 }
 
 function shouldIncludeAuthorizationLetter(tm: Record<string, unknown>): boolean {
+  // Authorized Signatory chosen in the Top Management table: the letter follows that tick only.
+  if (tm.authorizedSignatoryMode === 'table') {
+    const rows = Array.isArray(tm.rows) ? tm.rows : []
+    return rows.some((r) => r && typeof r === 'object' && Boolean((r as Record<string, unknown>).isAuthorizedSignatory))
+  }
   if (Boolean(tm.includeAuthorizedSignatory)) return true
   return Boolean(
     String(tm.authorizedSignatoryName ?? '').trim() ||

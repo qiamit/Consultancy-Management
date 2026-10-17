@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState, type ReactNode } from 'react'
-import { Pencil } from 'lucide-react'
+import { ClipboardList, Download, Eye, FileType, Pencil, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { loadBisPrintData, type BisPrintData } from '../print/loadBisPrintData'
 import { BIS_PRINT_DOCUMENT_LABEL, type BisPrintDocumentKind } from '../print/printBisDocument'
@@ -11,6 +11,11 @@ import { listBisBranchOffices, type BisBranchOfficeRow } from '@/features/master
 import { ManakGeneralStep } from './ManakGeneralStep'
 import { ManakVarietiesTable } from './ManakVarietiesTable'
 import { ManakSitRow } from './ManakSitRow'
+import { minimumMarkingFeeForScale } from '../print/cmpf310Html'
+import { parseCmpf310Payload } from './cmpf310Model'
+import { saveBisModulePayload } from './bisModuleDataApi'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { toast } from 'sonner'
 import { CORRESPONDENCE_KIND, ManakManagementStep } from './ManakManagementStep'
 import type { BisProjectRow } from './types'
 
@@ -21,16 +26,20 @@ export function ManakPanel({
   children,
   onEdit,
   editLabel = 'Edit',
+  headerExtra,
 }: {
   title: string
   children: ReactNode
   onEdit?: () => void
   editLabel?: string
+  /** Extra controls shown on the right of the header. */
+  headerExtra?: ReactNode
 }) {
   return (
     <section className="mb-4 border-2 border-stone-500 bg-[#fffcf7] ring-1 ring-amber-700/20">
       <header className="flex items-center justify-between bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-3 py-2 text-sm text-white">
         <h3 className="font-semibold tracking-tight">{title}</h3>
+        {headerExtra}
         {onEdit ? (
           <button
             type="button"
@@ -221,6 +230,8 @@ const STEP_MODULES: BisPrintDocumentKind[] = [
   'cmpf-307',
   'cmpf-311',
   'osl-sample-requirements',
+  'undertaking-mmf',
+  'cmpf-310',
   CORRESPONDENCE_KIND,
 ]
 
@@ -310,6 +321,9 @@ export function ManakStepPage({
   onLocationMapPdf,
   onProjectSaved,
   onScopeDocument,
+  onMarkingFee,
+  onTopManagement,
+  onTechnicalStaff,
 }: {
   stepId: string
   row: BisProjectRow | null
@@ -323,12 +337,71 @@ export function ManakStepPage({
   onProjectSaved?: () => void
   /** Undertaking for Manufacturing Scope: preview / PDF / Word actions. */
   onScopeDocument?: { preview: () => void; pdf: () => void; word: () => void }
+  /** Undertaking for Minimum Marking Fee: edit (opens its form) and preview / PDF / Word. */
+  onMarkingFee?: { edit: () => void; preview: () => void; pdf: () => void; word: () => void }
+  /** Top Management Details document: preview / PDF / Word. */
+  onTopManagement?: { preview: () => void; pdf: () => void; word: () => void }
+  onTechnicalStaff?: { preview: () => void; pdf: () => void; word: () => void }
 }) {
   const [reloadTick, setReloadTick] = useState(0)
   const { print, clientRaw, certificates, sites, projectRaw, branches, payloads, loading, error } = useStepData(row, refreshKey + reloadTick)
   const edit = (kind: BisPrintDocumentKind) => () => onEdit(kind)
   const c = print?.client
   const isCode = print?.isCode
+  const markingFee = isCode && c?.scale ? minimumMarkingFeeForScale(isCode, c.scale) : ''
+  const markingFeeSaved = parseCmpf310Payload(payloads['cmpf-310'] ?? null)
+  const allIndiaFirst = markingFeeSaved.allIndiaFirst === 'Yes'
+  const setAllIndiaFirst = async (value: 'Yes' | 'No') => {
+    if (!row?.id) return
+    try {
+      await saveBisModulePayload(row.id, 'cmpf-310', { ...markingFeeSaved, allIndiaFirst: value })
+      setReloadTick((t) => t + 1)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not save All India First')
+    }
+  }
+  const plainText = (value: string | null | undefined) => <span>{value || <span className="text-stone-400">—</span>}</span>
+  const markingFeeActions: Array<[string, string, () => void, LucideIcon]> = onMarkingFee
+    ? [
+        ['Preview the Acceptance of Marking Fee', 'Preview acceptance of marking fee', onMarkingFee.preview, Eye],
+        ['Acceptance of Marking Fee — PDF', 'Acceptance of marking fee PDF', onMarkingFee.pdf, Download],
+        ['Acceptance of Marking Fee — Word', 'Acceptance of marking fee Word', onMarkingFee.word, FileType],
+      ]
+    : []
+  const markingFeeRows: Array<Array<[string, ReactNode]>> = [
+    [
+      ['Production Unit', plainText(isCode?.unitOfIs)],
+      ['Firm Scale', plainText(c?.scale)],
+    ],
+    [
+      ['Minimum Marking Fee', plainText(markingFee ? `Rs. ${markingFee} per Year` : '')],
+      [
+        'All India First',
+        <div key="aif" className="flex items-center gap-2">
+          <Select value={allIndiaFirst ? 'yes' : 'no'} disabled={!row?.id} onValueChange={(v) => void setAllIndiaFirst(v === 'yes' ? 'Yes' : 'No')}>
+            <SelectTrigger className="h-8 w-28 rounded-none border-stone-300 bg-white text-sm" aria-label="All India First">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="no">No</SelectItem>
+              <SelectItem value="yes">Yes</SelectItem>
+            </SelectContent>
+          </Select>
+          {allIndiaFirst && onMarkingFee ? (
+            <button
+              type="button"
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-none border border-stone-400 bg-white text-amber-800 transition-colors hover:bg-amber-50"
+              title="Open the All India First marking fee form (Annexure 1: capacity, costs, testing charges, unit rate)"
+              aria-label="Open All India First marking fee form"
+              onClick={onMarkingFee.edit}
+            >
+              <ClipboardList size={15} aria-hidden />
+            </button>
+          ) : null}
+        </div>,
+      ],
+    ],
+  ]
 
   let body: ReactNode = null
 
@@ -352,6 +425,48 @@ export function ManakStepPage({
         onProjectSaved={onProjectSaved}
         onChanged={() => setReloadTick((t) => t + 1)}
       >
+        <ManakSubPanel
+          title="Marking Fee"
+          headerExtra={
+            onMarkingFee ? (
+              <div className="flex shrink-0 items-center gap-1">
+                {markingFeeActions
+                  .map(([title, label, handler, Icon]) => (
+                    <button
+                      key={label}
+                      type="button"
+                      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-none border border-stone-400 bg-white text-amber-800 transition-colors hover:bg-amber-50"
+                      title={title}
+                      aria-label={label}
+                      onClick={handler}
+                    >
+                      <Icon size={15} aria-hidden />
+                    </button>
+                  ))}
+              </div>
+            ) : null
+          }
+        >
+          {/* Label and value columns size to their content, so no label is wider than its cell. */}
+          <div className="overflow-x-auto">
+            <table className="w-full table-auto border-collapse text-sm">
+              <tbody>
+                {markingFeeRows.map((cells, rowIndex) => (
+                  <tr key={rowIndex}>
+                    {cells.map(([label, node]) => (
+                      <Fragment key={label}>
+                        <th scope="row" className="w-[1%] whitespace-nowrap border border-[#e7e0d4] bg-[#f7f3eb] px-3 py-1.5 text-left align-middle font-bold text-stone-800">
+                          {label}:
+                        </th>
+                        <td className="border border-[#e7e0d4] px-2 py-1 align-middle text-stone-700">{node}</td>
+                      </Fragment>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </ManakSubPanel>
         <ManakSubPanel title="Indian Standard Details">
           <ManakFields
             lines={[['Standard Title', 'Standard Number']]}
@@ -395,6 +510,9 @@ export function ManakStepPage({
         correspondence={payloads[CORRESPONDENCE_KIND]}
         onChanged={() => setReloadTick((t) => t + 1)}
         onOpenModule={onEdit}
+        onTopManagement={onTopManagement}
+        onTechnicalStaff={onTechnicalStaff}
+        projectRow={row}
       />
     ) : null
   } else if (stepId === 'manufacturing') {
@@ -511,8 +629,8 @@ export function ManakStepPage({
       {loading ? <p className="mb-2 text-xs text-stone-500">Loading application data…</p> : null}
       {error ? <p className="mb-2 text-xs text-red-700">{error}</p> : null}
       <div className={cn(loading && 'opacity-60')}>{body}</div>
-      {/* Step 1 no longer needs the documents list: everything is edited in place above. */}
-      {stepId !== 'general' ? <ManakPanel title="Documents (create · view · print · download)">{documents}</ManakPanel> : null}
+      {/* Steps 1 and 2 no longer need the documents list: everything is edited / generated in place above. */}
+      {stepId !== 'general' && stepId !== 'management' ? <ManakPanel title="Documents (create · view · print · download)">{documents}</ManakPanel> : null}
     </div>
   )
 }

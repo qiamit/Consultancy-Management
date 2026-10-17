@@ -1,16 +1,20 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Check, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { Check, Download, Eye, FileType, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import type { BisPrintClient } from '../print/loadBisPrintData'
 import type { BisPrintDocumentKind } from '../print/printBisDocument'
+import type { BisProjectRow } from './types'
 import {
   emptyTechnicalStaffRow,
   fetchBisModulePayload,
   saveBisModulePayload,
 } from './bisModuleDataApi'
+import { StaffDocumentsCell } from './StaffDocumentsCell'
+import { MasterOptionFieldWithAdd } from './MasterOptionFieldWithAdd'
+import type { BisMasterOptionCategory } from './bisMasterOptions'
 import { ManakPanel, ManakSubPanel } from './ManakStepPages'
 
 type Rec = Record<string, unknown>
@@ -38,7 +42,120 @@ async function patchPayload(
   await saveBisModulePayload(projectId, kind, mutate({ ...current }))
 }
 
-type Field = { key: string; label: string; placeholder?: string; width?: string }
+/** Preview / PDF / Word icon buttons shown in a panel header. */
+function DocActions({ what, actions }: { what: string; actions?: { preview: () => void; pdf: () => void; word: () => void } }) {
+  if (!actions) return null
+  return (
+    <div className="flex shrink-0 items-center gap-1">
+      {(
+        [
+          [`Preview ${what}`, actions.preview, Eye],
+          [`Download ${what} as PDF`, actions.pdf, Download],
+          [`Download ${what} as Word`, actions.word, FileType],
+        ] as const
+      ).map(([label, handler, Icon]) => (
+        <button
+          key={label}
+          type="button"
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-none border border-stone-400 bg-white text-amber-800 transition-colors hover:bg-amber-50"
+          title={label}
+          aria-label={label}
+          onClick={handler}
+        >
+          <Icon size={15} aria-hidden />
+        </button>
+      ))}
+    </div>
+  )
+}
+
+/** Marks one top-management row as the Authorized Signatory (exclusive) and fills the fields the Authorization Letter reads. */
+function withAuthorizedSignatory(payload: Rec, index: number | null): Rec {
+  const rows: Rec[] = (Array.isArray(payload.rows) ? (payload.rows as Rec[]) : []).map((r, i) => ({ ...r, isAuthorizedSignatory: index === i }))
+  const chosen = index == null ? null : rows[index]
+  return {
+    ...payload,
+    rows,
+    authorizedSignatoryMode: 'table',
+    includeAuthorizedSignatory: Boolean(chosen),
+    authorizedSignatoryName: chosen ? str(chosen.personName) : '',
+    authorizedSignatoryDesignation: chosen ? str(chosen.designation) : '',
+    authorizedSignatoryEmail: chosen ? str(chosen.email) : '',
+    authorizedSignatoryMobile: chosen ? str(chosen.mobile) : '',
+  }
+}
+
+function AuthorizedSignatoryCell({
+  projectId,
+  rowIndex,
+  row,
+  onChanged,
+  onDraftChange,
+}: {
+  projectId: string
+  rowIndex: number
+  row: Rec
+  onChanged: () => void
+  onDraftChange?: (patch: Rec) => void
+}) {
+  const [busy, setBusy] = useState(false)
+  const checked = Boolean(row.isAuthorizedSignatory)
+  const toggle = async (next: boolean) => {
+    if (onDraftChange) {
+      onDraftChange({ isAuthorizedSignatory: next })
+      return
+    }
+    setBusy(true)
+    try {
+      await patchPayload(projectId, 'top-management' as BisPrintDocumentKind, (p) => withAuthorizedSignatory(p, next ? rowIndex : null))
+      toast.success(next ? 'Authorized Signatory set — the Authorization Letter is included in the documents' : 'Authorized Signatory removed')
+      onChanged()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not save')
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <label
+      className="inline-flex items-center justify-center"
+      title="Make this person the Authorized Signatory (the Authorization Letter is added to Preview / PDF / Word)"
+    >
+      <input
+        type="checkbox"
+        className="h-4 w-4 rounded-none accent-amber-600"
+        disabled={busy}
+        checked={checked}
+        onChange={(e) => void toggle(e.target.checked)}
+        aria-label="Authorized Signatory"
+      />
+    </label>
+  )
+}
+
+type Field = {
+  key: string
+  label: string
+  placeholder?: string
+  width?: string
+  /** Left-align the saved value (default is centred). */
+  alignLeft?: boolean
+  /** Not mandatory: no asterisk, and it may stay empty. */
+  optional?: boolean
+  /** Digits only, exactly this many when filled in. */
+  digits?: number
+  /** Select-or-add drop-down backed by a shared master list (the + button adds to it). */
+  master?: BisMasterOptionCategory
+}
+
+const cleanField = (f: Field, value: string) => (f.digits ? value.replace(/[^0-9]/g, '').slice(0, f.digits) : value)
+const fieldError = (fields: Field[], values: Rec): string | null => {
+  for (const f of fields) {
+    const v = str(values[f.key]).trim()
+    if (f.digits && v && v.length !== f.digits) return `${f.label} must be ${f.digits} digits.`
+  }
+  return null
+}
 
 /**
  * Manak-style editable table: an input row on top with "+", then saved rows
@@ -58,7 +175,14 @@ function EditableRows({
   kind: BisPrintDocumentKind
   fields: Field[]
   blank: () => Rec
-  extraColumns?: Array<{ label: string; render: (row: Rec) => React.ReactNode }>
+  extraColumns?: Array<{
+    label: string
+    /** Centre the cells and shrink the column to its minimum width. */
+    compact?: boolean
+    render: (row: Rec, index: number) => React.ReactNode
+    /** Cell for the input (draft) row; when absent a hint is shown. */
+    renderDraft?: (draft: Rec, patchDraft: (patch: Rec) => void) => React.ReactNode
+  }>
   saved: Rec[]
   onChanged: () => void
   addLabel: string
@@ -92,10 +216,25 @@ function EditableRows({
       toast.error(`${fields[0]?.label ?? 'Name'} is required.`)
       return
     }
+    const bad = fieldError(fields, draft)
+    if (bad) {
+      toast.error(bad)
+      return
+    }
     void run(async () => {
       await patchPayload(projectId, kind, (p) => {
         const list = rowsOf(p).filter((r) => fields.some((f) => str(r[f.key]).trim()))
-        return { ...p, rows: [...list, { ...blank(), ...draft }] }
+        let next: Rec = { ...p, rows: [...list, { ...blank(), ...draft }] }
+        if (draft.applySignatureToDocuments) {
+          next = {
+            ...next,
+            rows: (next.rows as Rec[]).map((r, i, all) => ({ ...r, applySignatureToDocuments: i === all.length - 1 })),
+            signatoryName: str(draft.personName) || str(p.signatoryName),
+            signatoryDesignation: str(draft.designation) || str(p.signatoryDesignation),
+          }
+        }
+        if (draft.isAuthorizedSignatory) next = withAuthorizedSignatory(next, (next.rows as Rec[]).length - 1)
+        return next
       })
       setDraft(blank())
     }, 'Row added')
@@ -103,6 +242,11 @@ function EditableRows({
 
   const saveEdit = () => {
     if (editIndex == null) return
+    const bad = fieldError(fields, editDraft)
+    if (bad) {
+      toast.error(bad)
+      return
+    }
     void run(async () => {
       await patchPayload(projectId, kind, (p) => {
         const list = rowsOf(p).map((r, i) => (i === editIndex ? { ...r, ...editDraft } : r))
@@ -153,13 +297,13 @@ function EditableRows({
             <tr>
               <th className={cn(thCls, 'w-8 px-1 text-center')} aria-label="Select" />
               {fields.map((f) => (
-                <th key={f.key} className={thCls} style={f.width ? { width: f.width } : undefined}>
+                <th key={f.key} className={cn(thCls, 'text-center')} style={f.width ? { width: f.width } : undefined}>
                   {f.label}
-                  <span className="text-red-400">*</span>
+                  {f.optional ? null : <span className="text-red-400">*</span>}
                 </th>
               ))}
               {extraColumns?.map((c) => (
-                <th key={c.label} className={thCls}>
+                <th key={c.label} className={cn(thCls, c.compact && 'w-[1%] text-center')}>
                   {c.label}
                 </th>
               ))}
@@ -171,20 +315,36 @@ function EditableRows({
               <td className={tdCls} />
               {fields.map((f) => (
                 <td key={f.key} className={tdCls}>
+                  {f.master ? (
+                    <MasterOptionFieldWithAdd
+                      category={f.master}
+                      label={f.label}
+                      manageTitle={f.label}
+                      showLabel={false}
+                      inputId={`er-${kind}-${f.key}-new`}
+                      listId={`er-${kind}-${f.key}-new-list`}
+                      value={str(draft[f.key])}
+                      onChange={(v) => setDraft((d) => ({ ...d, [f.key]: v }))}
+                      placeholder="Select or Add"
+                    />
+                  ) : (
                   <Input
                     className={inputCls}
                     placeholder={f.placeholder ?? f.label}
                     value={str(draft[f.key])}
-                    onChange={(e) => setDraft({ ...draft, [f.key]: e.target.value })}
+                    onChange={(e) => setDraft({ ...draft, [f.key]: cleanField(f, e.target.value) })}
+                    inputMode={f.digits ? 'numeric' : undefined}
+                    maxLength={f.digits}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') add()
                     }}
                   />
+                  )}
                 </td>
               ))}
               {extraColumns?.map((c) => (
-                <td key={c.label} className={cn(tdCls, 'text-xs text-stone-400')}>
-                  via Edit module
+                <td key={c.label} className={cn(tdCls, c.renderDraft ? 'text-center' : 'text-center text-xs text-stone-400', c.compact && 'w-[1%]')}>
+                  {c.renderDraft ? c.renderDraft(draft, (patch) => setDraft((d) => ({ ...d, ...patch }))) : 'Add the row, then attach documents'}
                 </td>
               ))}
               <td className={cn(tdCls, 'text-center')}>
@@ -192,11 +352,12 @@ function EditableRows({
                   type="button"
                   size="sm"
                   disabled={busy}
-                  className="h-7 rounded-none bg-amber-700 px-2 text-xs text-white hover:bg-amber-800"
+                  className="h-7 w-7 rounded-none bg-amber-700 p-0 text-white hover:bg-amber-800"
                   onClick={add}
                   title={addLabel}
+                  aria-label={addLabel}
                 >
-                  <Plus className="mr-1 h-3 w-3" aria-hidden /> Add
+                  <Plus className="h-4 w-4" aria-hidden />
                 </Button>
               </td>
             </tr>
@@ -221,12 +382,26 @@ function EditableRows({
                       />
                     </td>
                     {fields.map((f) => (
-                      <td key={f.key} className={tdCls}>
-                        {editing ? (
+                      <td key={f.key} className={cn(tdCls, f.alignLeft ? 'text-left' : 'text-center')}>
+                        {editing && f.master ? (
+                          <MasterOptionFieldWithAdd
+                            category={f.master}
+                            label={f.label}
+                            manageTitle={f.label}
+                            showLabel={false}
+                            inputId={`er-${kind}-${f.key}-${index}`}
+                            listId={`er-${kind}-${f.key}-${index}-list`}
+                            value={str(editDraft[f.key])}
+                            onChange={(v) => setEditDraft((d) => ({ ...d, [f.key]: v }))}
+                            placeholder="Select or Add"
+                          />
+                        ) : editing ? (
                           <Input
                             className={inputCls}
                             value={str(editDraft[f.key])}
-                            onChange={(e) => setEditDraft({ ...editDraft, [f.key]: e.target.value })}
+                            onChange={(e) => setEditDraft({ ...editDraft, [f.key]: cleanField(f, e.target.value) })}
+                            inputMode={f.digits ? 'numeric' : undefined}
+                            maxLength={f.digits}
                           />
                         ) : (
                           str(r[f.key]) || <span className="text-stone-400">—</span>
@@ -234,8 +409,8 @@ function EditableRows({
                       </td>
                     ))}
                     {extraColumns?.map((c) => (
-                      <td key={c.label} className={tdCls}>
-                        {c.render(r)}
+                      <td key={c.label} className={cn(tdCls, c.compact && 'w-[1%] text-center')}>
+                        {c.render(r, index)}
                       </td>
                     ))}
                     <td className={cn(tdCls, 'text-center')}>
@@ -288,7 +463,9 @@ export function ManakManagementStep({
   technicalStaff,
   correspondence,
   onChanged,
-  onOpenModule,
+  onTopManagement,
+  onTechnicalStaff,
+  projectRow,
 }: {
   projectId: string
   client: BisPrintClient | undefined
@@ -296,7 +473,10 @@ export function ManakManagementStep({
   technicalStaff: Rec | null | undefined
   correspondence: Rec | null | undefined
   onChanged: () => void
-  onOpenModule: (kind: BisPrintDocumentKind) => void
+  onOpenModule?: (kind: BisPrintDocumentKind) => void
+  onTopManagement?: { preview: () => void; pdf: () => void; word: () => void }
+  onTechnicalStaff?: { preview: () => void; pdf: () => void; word: () => void }
+  projectRow?: BisProjectRow | null
 }) {
   const tmRows = rowsOf(topManagement)
   const firstTm = tmRows.find((r) => str(r.personName).trim())
@@ -315,9 +495,6 @@ export function ManakManagementStep({
   const [corrBusy, setCorrBusy] = useState(false)
   useEffect(() => setCorr(initial), [initial])
 
-  const addressFor = (type: string) =>
-    type === 'Factory' ? client?.factoryAddress || client?.address : client?.officeAddress || client?.address
-
   const saveCorr = async () => {
     setCorrBusy(true)
     try {
@@ -331,12 +508,12 @@ export function ManakManagementStep({
     }
   }
 
-  const yes = (v: unknown) => (str(v).trim() ? 'Yes' : 'No')
   const blankTm = (): Rec => ({
     personName: '',
     designation: '',
     mobile: '',
     email: '',
+    din: '',
     signatureFileId: '',
     signatureFileName: '',
     signatureStoragePath: '',
@@ -345,16 +522,37 @@ export function ManakManagementStep({
 
   return (
     <>
-      <ManakPanel title="Firm's Management Details" onEdit={() => onOpenModule('top-management')} editLabel="Open module">
+      <ManakPanel
+        title="Firm's Management Details"
+        headerExtra={<DocActions what="Top Management Details" actions={onTopManagement} />}
+      >
         <ManakSubPanel title="Top Management Details">
           <EditableRows
             projectId={projectId}
             kind={'top-management' as BisPrintDocumentKind}
             fields={[
-              { key: 'personName', label: 'Name' },
+              { key: 'personName', label: 'Name', alignLeft: true },
               { key: 'designation', label: 'Designation' },
-              { key: 'mobile', label: 'Contact No.' },
-              { key: 'email', label: 'Email ID' },
+              { key: 'mobile', label: 'Contact No.', width: '9rem' },
+              { key: 'email', label: 'Email ID', width: '17rem' },
+              { key: 'din', label: 'DIN', placeholder: '8 Digit DIN', optional: true, digits: 8, width: '7.5rem' },
+            ]}
+            extraColumns={[
+              {
+                label: 'Authorized Signatory',
+                compact: true,
+                render: (r, index) => <AuthorizedSignatoryCell projectId={projectId} rowIndex={index} row={r} onChanged={onChanged} />,
+                renderDraft: (draft, patchDraft) => (
+                  <AuthorizedSignatoryCell projectId={projectId} rowIndex={-1} row={draft} onChanged={onChanged} onDraftChange={patchDraft} />
+                ),
+              },
+              {
+                label: 'Signature',
+                render: (r, index) => <StaffDocumentsCell payloadKind="top-management" projectId={projectId} rowIndex={index} row={r} onChanged={onChanged} />,
+                renderDraft: (draft, patchDraft) => (
+                  <StaffDocumentsCell payloadKind="top-management" projectId={projectId} rowIndex={-1} row={draft} onChanged={onChanged} onDraftChange={patchDraft} />
+                ),
+              },
             ]}
             blank={blankTm}
             saved={tmRows}
@@ -362,75 +560,94 @@ export function ManakManagementStep({
             addLabel="Add top management person"
           />
         </ManakSubPanel>
-        <ManakSubPanel title="Correspondence Details">
-          <div className="grid grid-cols-1 gap-x-8 gap-y-2 text-sm md:grid-cols-2">
-            <label className="grid grid-cols-[minmax(8rem,12rem)_1fr] items-center gap-2">
-              <span className="font-bold text-stone-800">Correspondence Address Communication*:</span>
-              <select
-                className={cn(inputCls, 'w-full border px-2')}
-                value={corr.addressType}
-                onChange={(e) => setCorr({ ...corr, addressType: e.target.value })}
-              >
-                {ADDRESS_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="grid grid-cols-[minmax(8rem,12rem)_1fr] items-center gap-2">
-              <span className="font-bold text-stone-800">Address:</span>
-              <span className="min-w-0 break-words text-stone-700">{addressFor(corr.addressType) || '—'}</span>
-            </div>
-            {(
-              [
-                ['name', 'Name of Contact Person*'],
-                ['designation', 'Designation of Contact Person*'],
-                ['email', 'E-Mail Id*'],
-                ['mobile', 'Contact Number*'],
-              ] as const
-            ).map(([key, label]) => (
-              <label key={key} className="grid grid-cols-[minmax(8rem,12rem)_1fr] items-center gap-2">
-                <span className="font-bold text-stone-800">{label}:</span>
-                <Input
-                  className={inputCls}
-                  value={corr[key]}
-                  onChange={(e) => setCorr({ ...corr, [key]: e.target.value })}
-                />
-              </label>
-            ))}
-          </div>
-          <div className="mt-3 flex items-center justify-between gap-2">
-            <p className="text-xs text-stone-600">
-              Kindly note that the above correspondence will be used for all communications / alerts from BIS.
-            </p>
+        <ManakSubPanel
+          title="Correspondence Details"
+          headerExtra={
             <Button
               type="button"
               size="sm"
               disabled={corrBusy}
-              className="h-7 rounded-none bg-amber-700 px-3 text-xs text-white hover:bg-amber-800"
+              className="h-7 rounded-none border border-amber-500/40 bg-amber-700 px-3 text-xs font-medium normal-case tracking-normal text-white hover:bg-amber-800"
               onClick={() => void saveCorr()}
             >
               Save
             </Button>
-          </div>
+          }
+        >
+          {(() => {
+            const field = (key: 'name' | 'designation' | 'email' | 'mobile') => (
+              <Input className={inputCls} value={corr[key]} onChange={(e) => setCorr({ ...corr, [key]: e.target.value })} />
+            )
+            const thC = 'whitespace-nowrap border border-[#e7e0d4] bg-[#f7f3eb] px-3 py-1.5 text-left align-middle font-bold text-stone-800'
+            const tdC = 'border border-[#e7e0d4] px-2 py-1 align-middle text-stone-700'
+            return (
+              <div className="overflow-x-auto">
+                <table className="w-full table-fixed border-collapse text-sm">
+                  <colgroup>
+                    <col style={{ width: '20%' }} />
+                    <col style={{ width: '15%' }} />
+                    <col style={{ width: '10%' }} />
+                    <col style={{ width: '15%' }} />
+                    <col style={{ width: '12%' }} />
+                    <col style={{ width: '28%' }} />
+                  </colgroup>
+                  <tbody>
+                    <tr>
+                      <th scope="row" className={thC}>Address for Communication*:</th>
+                      <td className={tdC}>
+                        <select
+                          className={cn(inputCls, 'w-full border px-2')}
+                          value={corr.addressType}
+                          onChange={(e) => setCorr({ ...corr, addressType: e.target.value })}
+                        >
+                          {ADDRESS_TYPES.map((t) => (
+                            <option key={t} value={t}>
+                              {t}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <th scope="row" className={thC}>Designation*:</th>
+                      <td className={tdC}>{field('designation')}</td>
+                      <th scope="row" className={thC}>Mobile*:</th>
+                      <td className={tdC}>{field('mobile')}</td>
+                    </tr>
+                    <tr>
+                      <th scope="row" className={thC}>Name of Contact Person*:</th>
+                      <td className={tdC} colSpan={2}>{field('name')}</td>
+                      <th scope="row" className={thC}>E-Mail Id*:</th>
+                      <td className={tdC} colSpan={2}>{field('email')}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            )
+          })()}
         </ManakSubPanel>
       </ManakPanel>
 
-      <ManakPanel title="Technical Management / Quality Assurance / Control Personnel Details" onEdit={() => onOpenModule('technical-staff')} editLabel="Open module">
+      <ManakPanel
+        title="Technical Management / Quality Assurance / Control Personnel Details"
+        headerExtra={<DocActions what="Technical Staff Details" actions={onTechnicalStaff} />}
+      >
         <EditableRows
           projectId={projectId}
           kind={'technical-staff' as BisPrintDocumentKind}
           fields={[
-            { key: 'personName', label: 'Name' },
-            { key: 'designation', label: 'Designation' },
-            { key: 'educationalQualification', label: 'Qualification' },
-            { key: 'experienceYears', label: 'Experience (in years)', width: '9rem' },
+            { key: 'personName', label: 'Name', alignLeft: true },
+            { key: 'designation', label: 'Designation', master: 'designation', width: '12rem' },
+            { key: 'educationalQualification', label: 'Qualification', master: 'education', width: '12rem' },
+            { key: 'experienceYears', label: 'Experience', master: 'experience', width: '11rem' },
           ]}
           blank={() => ({ ...emptyTechnicalStaffRow() })}
           extraColumns={[
-            { label: 'Qualification Document', render: (r) => yes(r.educationCertificateFileId) },
-            { label: 'Photo', render: (r) => yes(r.photoFileId) },
+            {
+              label: 'Documents',
+              render: (r, index) => <StaffDocumentsCell projectId={projectId} rowIndex={index} row={r} onChanged={onChanged} projectRow={projectRow} />,
+              renderDraft: (draft, patchDraft) => (
+                <StaffDocumentsCell projectId={projectId} rowIndex={-1} row={draft} onChanged={onChanged} onDraftChange={patchDraft} projectRow={projectRow} />
+              ),
+            },
           ]}
           saved={rowsOf(technicalStaff)}
           onChanged={onChanged}
