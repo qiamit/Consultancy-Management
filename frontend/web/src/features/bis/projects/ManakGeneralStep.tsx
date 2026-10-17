@@ -912,7 +912,7 @@ export function ManakGeneralStep({
       >
         <FieldGrid
           columns={2}
-          items={[
+          fullRows={[
             [
               'Factory Address',
               v(str(client?.factoryAddress), async (next) => done(factory({ address: next || null })), {
@@ -920,6 +920,8 @@ export function ManakGeneralStep({
                 title: sameAsOffice ? 'Same as Office Address (untick to edit separately)' : factorySite ? undefined : 'Saving creates a separate Factory site for this client',
               }),
             ],
+          ]}
+          items={[
             ['City', v(str(raw.city), col('city'))],
             ['District', v(str(client?.factoryDistrict), async (next) => done(factory({ district: next || null })), { disabled: factoryLocked })],
             ['State', v(str(client?.factoryState), async (next) => done(factory({ state: next || null })), { disabled: factoryLocked })],
