@@ -849,7 +849,7 @@ export function ManakGeneralStep({
           columns={2}
           topLines={[
             ['CEO Name', 'E-MailId', 'Mobile No.'],
-            ['City', 'District', 'State', 'PinCode'],
+            ['PinCode', 'City', 'District', 'State'],
             ['Country', 'Landline', 'Address Proof Type'],
           ]}
           fullRows={[
