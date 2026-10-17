@@ -1,0 +1,8 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "web", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev"], "port": 5173 },
+    { "name": "pdf", "runtimeExecutable": "npm", "runtimeArgs": ["run", "pdf:dev"], "port": 3847 },
+    { "name": "functions", "runtimeExecutable": "node", "runtimeArgs": ["--watch", "backend/services/functions/server.mjs"], "port": 8080 }
+  ]
+}
