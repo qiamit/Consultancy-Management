@@ -313,34 +313,43 @@ export function ManakApplicationFields({
   const rest = items.filter(([label]) => !used.has(label))
   const labelCls =
     'w-[1%] whitespace-nowrap border border-[#e7e0d4] bg-[#f7f3eb] px-3 py-1.5 text-left align-middle text-sm font-bold text-stone-800'
-  const table = (list: Array<[string, ReactNode]>, columns: 2 | 3, valueWidth: string) => (
-    <table className="w-full table-auto border-collapse">
-      <tbody>
-        {arrangeByLabelLength(list, columns).map((pair, i) => (
-          <tr key={i}>
-            {pair.map((cell, j) => (
-              <Fragment key={j}>
-                <th scope="row" className={labelCls}>
-                  {cell ? `${cell[0]}:` : ''}
-                </th>
-                <td className={cn(valueWidth, 'border border-[#e7e0d4] px-2 py-1.5 align-middle text-sm text-stone-700')}>
-                  {cell ? cell[1] : null}
-                </td>
-              </Fragment>
-            ))}
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  )
+  const valueCls = 'border border-[#e7e0d4] px-2 py-1.5 align-middle text-sm text-stone-700'
+  // One shared six-column table so label and value columns line up across every row.
+  // Three-field lines use all six cells; two-field lines stretch the second value over the last three.
+  const threeUp = lineItems.map((list) => arrangeByLabelLength(list, 3)[0] ?? [])
+  const twoUp = arrangeByLabelLength(rest, 2)
   return (
     <div className="overflow-x-auto">
-      {lineItems.map((list, i) => (
-        <div key={i} className={i > 0 ? '-mt-px' : undefined}>
-          {table(list, 3, 'w-[32%]')}
-        </div>
-      ))}
-      <div className="-mt-px">{table(rest, 2, 'w-[49%]')}</div>
+      <table className="w-full table-auto border-collapse">
+        <tbody>
+          {threeUp.map((pair, i) => (
+            <tr key={`t${i}`}>
+              {pair.map((cell, j) => (
+                <Fragment key={j}>
+                  <th scope="row" className={labelCls}>
+                    {cell ? `${cell[0]}:` : ''}
+                  </th>
+                  <td className={cn(valueCls, 'w-[22%]')}>{cell ? cell[1] : null}</td>
+                </Fragment>
+              ))}
+            </tr>
+          ))}
+          {twoUp.map((pair, i) => (
+            <tr key={`w${i}`}>
+              <th scope="row" className={labelCls}>
+                {pair[0] ? `${pair[0][0]}:` : ''}
+              </th>
+              <td className={cn(valueCls, 'w-[22%]')}>{pair[0] ? pair[0][1] : null}</td>
+              <th scope="row" className={labelCls}>
+                {pair[1] ? `${pair[1][0]}:` : ''}
+              </th>
+              <td colSpan={3} className={valueCls}>
+                {pair[1] ? pair[1][1] : null}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }
