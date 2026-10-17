@@ -91,7 +91,6 @@ export function Cmpf311ModuleFields({
     ? [{ fileName: currentMasterData.fileName, fileId: currentMasterData.fileId, file: currentMasterData.file }]
     : []
   const manualFiles = selectedManuals?.isCodeId === isCodeId ? selectedManuals.files : defaultMasterFile
-  const selectedFileName = manualFiles.length === 1 ? manualFiles[0]!.fileName : `${manualFiles.length} PDFs selected`
 
   useEffect(() => {
     let active = true
@@ -236,60 +235,23 @@ export function Cmpf311ModuleFields({
     setEditingNoteIndex(null)
   }
 
-  const openSelectedManual = (file = manualFiles[0]?.file) => {
-    if (!file) return
-    const fileUrl = URL.createObjectURL(file)
-    const link = document.createElement('a')
-    link.href = fileUrl
-    link.target = '_blank'
-    link.rel = 'noopener noreferrer'
-    link.click()
-    window.setTimeout(() => URL.revokeObjectURL(fileUrl), 60_000)
-  }
-
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-2 sm:p-3">
-      <section className="grid gap-2 border border-stone-300 bg-[#fffcf7] p-3 lg:grid-cols-4">
-        <label className="flex flex-col gap-1 text-xs font-semibold text-stone-700">
-          SIT Type
-          <select
-            className={cn(limsFieldClass, 'h-9')}
-            value={value.mode}
-            disabled={disabled}
-            onChange={(event) => {
-              const mode = event.target.value === 'on-sit' ? 'on-sit' : 'bis-sit'
-              onChange({
-                ...value,
-                mode,
-                productManualNumber: mode === 'bis-sit' ? masterManualNumber : value.productManualNumber || masterManualNumber,
-              })
-            }}
-          >
-            <option value="bis-sit">BIS SIT</option>
-            <option value="on-sit">Own SIT</option>
-          </select>
-        </label>
-        <label className="flex flex-col gap-1 text-xs font-semibold text-stone-700">
-          Product Manual Number / SIT Number
-          <Input
-            className={cn(limsFieldClass, 'h-9')}
-            value={value.mode === 'bis-sit' ? masterManualNumber || value.productManualNumber : value.productManualNumber}
-            disabled={disabled || value.mode === 'bis-sit'}
-            placeholder={value.mode === 'bis-sit' ? 'Set Product Manual Number in IS Code master' : 'Enter Product Manual / SIT number'}
-            onChange={(event) => patch('productManualNumber', event.target.value)}
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-xs font-semibold text-stone-700">
+      {/* SIT type and Product Manual number are chosen on the application step (Select SIT row). */}
+      {value.mode === 'bis-sit' ? (
+        <section className="flex flex-wrap items-end gap-3 border border-stone-300 bg-[#fffcf7] p-3">
+        <label className="flex w-56 shrink-0 flex-col gap-1 text-xs font-semibold text-stone-700">
           Reference Letter Number
           <Input className={cn(limsFieldClass, 'h-9')} value={value.referenceLetterNo} disabled={disabled} onChange={(event) => patch('referenceLetterNo', event.target.value)} />
         </label>
-        <label className="flex flex-col gap-1 text-xs font-semibold text-stone-700">
+        <label className="flex w-56 shrink-0 flex-col gap-1 text-xs font-semibold text-stone-700">
           Reference Letter Date
           <LimsFieldWithAdd addButton={<button type="button" className={limsFieldAddBtnClass} aria-label="Open calendar" title="Pick date" disabled={disabled} onClick={openCmpf311DatePicker}><Calendar size={14} strokeWidth={2.25} aria-hidden /></button>}>
             <Input id="cmpf311-reference-letter-date" type="date" aria-label="Reference Letter Date" className={issueDateInputClass} value={value.referenceLetterDate} disabled={disabled} onChange={(event) => patch('referenceLetterDate', event.target.value)} />
           </LimsFieldWithAdd>
         </label>
-      </section>
+        </section>
+      ) : null}
 
       {value.mode === 'bis-sit' ? (
         <div className="border border-stone-300 bg-white p-3 text-sm text-stone-700">
@@ -297,15 +259,23 @@ export function Cmpf311ModuleFields({
         </div>
       ) : (
         <>
-          <section className="flex flex-wrap items-center gap-2 border border-stone-300 bg-[#fffcf7] p-3">
+          <section className="flex flex-wrap items-end gap-3 border border-stone-300 bg-[#fffcf7] p-3">
+        <label className="flex w-56 shrink-0 flex-col gap-1 text-xs font-semibold text-stone-700">
+          Reference Letter Number
+          <Input className={cn(limsFieldClass, 'h-9')} value={value.referenceLetterNo} disabled={disabled} onChange={(event) => patch('referenceLetterNo', event.target.value)} />
+        </label>
+        <label className="flex w-56 shrink-0 flex-col gap-1 text-xs font-semibold text-stone-700">
+          Reference Letter Date
+          <LimsFieldWithAdd addButton={<button type="button" className={limsFieldAddBtnClass} aria-label="Open calendar" title="Pick date" disabled={disabled} onClick={openCmpf311DatePicker}><Calendar size={14} strokeWidth={2.25} aria-hidden /></button>}>
+            <Input id="cmpf311-reference-letter-date" type="date" aria-label="Reference Letter Date" className={issueDateInputClass} value={value.referenceLetterDate} disabled={disabled} onChange={(event) => patch('referenceLetterDate', event.target.value)} />
+          </LimsFieldWithAdd>
+        </label>
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
             <Button type="button" variant="outline" size="sm" className={cn(limsOutlineBtnClass, 'h-8')} disabled={disabled || generating} onClick={() => setManualPickerOpen(true)}>
               Use Another PDF
             </Button>
-            <FileText className="h-4 w-4 text-amber-800" aria-hidden />
-            <button type="button" className="min-w-0 flex-1 truncate text-left text-sm text-blue-800 underline decoration-blue-400 underline-offset-2 hover:text-blue-950 disabled:cursor-default disabled:text-stone-500 disabled:no-underline" title={manualFiles.map((file) => file.fileName).join('\n') || 'No PDF selected'} disabled={!manualFiles.length} onClick={() => openSelectedManual()}>
-              {selectedFileName || 'No PDF selected'}
-            </button>
-            {manualFiles.length ? <span className="text-xs text-emerald-800">{manualFiles.length} PDF{manualFiles.length === 1 ? '' : 's'} ready for extraction</span> : null}
+            {/* The chosen PDFs are shown in the picker; no need to list them here. */}
+            <span className="min-w-0 flex-1" />
             <select className={cn(limsFieldClass, 'h-8 w-44')} value={generateTarget} disabled={disabled || generating} onChange={(event) => setGenerateTarget(event.target.value as GenerateTarget)}>
               <option value="all">All Documents</option>
               <option value="annexure-c">Annexure C</option>
@@ -315,6 +285,7 @@ export function Cmpf311ModuleFields({
             <Button type="button" size="sm" className="h-8 rounded-none bg-amber-700 text-white hover:bg-amber-800" disabled={disabled || generating || !manualFiles.length} onClick={() => void generate()}>
               <Sparkles className="mr-1.5 h-4 w-4" aria-hidden /> {generating ? `Generating ${generatingLabel}…` : 'Generate'}
             </Button>
+            </div>
           </section>
 
           <Dialog open={manualPickerOpen} onOpenChange={setManualPickerOpen}>
@@ -344,7 +315,15 @@ export function Cmpf311ModuleFields({
                         <span className="block truncate font-medium">{file.fileName}</span>
                         <span className="block text-xs text-stone-500">{file.documentKind}{isPdf ? ' · PDF' : ' · Not a PDF'}</span>
                       </span>
-                      {downloadingMasterFileId === file.id ? <span className="text-xs text-stone-500">Loading…</span> : isCurrent ? <Check className="h-4 w-4 text-emerald-700" aria-label="Selected" /> : null}
+                      {downloadingMasterFileId === file.id ? <span className="text-xs text-stone-500">Loading…</span> : null}
+                      <span
+                        role="switch"
+                        aria-checked={isCurrent}
+                        aria-label={`${isCurrent ? 'Selected' : 'Not selected'}: ${file.fileName}`}
+                        className={cn('relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors', isCurrent ? 'border-amber-700 bg-amber-700' : 'border-stone-400 bg-stone-200')}
+                      >
+                        <span className={cn('inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform', isCurrent ? 'translate-x-[18px]' : 'translate-x-0.5')} />
+                      </span>
                     </button>
                   )
                 }) : <p className="border border-dashed border-stone-300 p-3 text-sm text-stone-500">{!currentMasterData && isCodeId ? 'Loading IS Code Master files…' : 'No files are attached to this IS Code in the master.'}</p>}
@@ -356,7 +335,7 @@ export function Cmpf311ModuleFields({
                     <Button type="button" variant="outline" size="sm" className="h-7 rounded-none px-2 text-red-700" disabled={disabled || generating} onClick={() => removeSelectedManual(index)}>Remove</Button>
                   </div>)}
                 </div> : null}
-                <div className="border-t border-stone-200 pt-3">
+                <div className="flex items-center gap-2 border-t border-stone-200 pt-3">
                   <input
                     ref={manualInputRef}
                     type="file"
@@ -369,13 +348,13 @@ export function Cmpf311ModuleFields({
                       event.target.value = ''
                     }}
                   />
-                  <Button type="button" variant="outline" className={cn(limsOutlineBtnClass, 'h-9 w-full justify-start')} disabled={disabled || generating} onClick={() => manualInputRef.current?.click()}>
-                    <Laptop className="mr-2 h-4 w-4" aria-hidden /> Browse multiple PDFs from this computer
+                  <Button type="button" variant="outline" className={cn(limsOutlineBtnClass, 'h-9 min-w-0 flex-1 justify-center px-3')} title="Browse multiple PDF files from this computer" disabled={disabled || generating} onClick={() => manualInputRef.current?.click()}>
+                    <Laptop className="mr-2 h-4 w-4" aria-hidden /> Browse
+                  </Button>
+                  <Button type="button" className="h-9 min-w-0 flex-1 rounded-none border border-amber-700 bg-amber-700 px-3 text-white hover:bg-amber-800" disabled={disabled || generating || !manualFiles.length} onClick={() => setManualPickerOpen(false)}>
+                    Use Selected PDFs ({manualFiles.length})
                   </Button>
                 </div>
-                <Button type="button" className="h-9 w-full rounded-none bg-amber-700 text-white hover:bg-amber-800" disabled={disabled || generating || !manualFiles.length} onClick={() => setManualPickerOpen(false)}>
-                  Use Selected PDFs ({manualFiles.length})
-                </Button>
               </div>
             </DialogContent>
           </Dialog>

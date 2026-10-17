@@ -11,6 +11,7 @@ import { IsCodesForm } from './IsCodesForm'
 import { IsCodesTable, type IsCodeSortDir, type IsCodeSortKey } from './IsCodesTable'
 import { AuditHistoryDialog } from '@/components/lims/AuditHistoryDialog'
 import { IsCodesTableFooterBar } from './IsCodesFooterBar'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { IsCodesFilesDialog, type IsCodeViewFile } from './IsCodesFilesDialog'
 import { buildIsCodesListAssistantContext, formatIsCodeLabel } from './buildIsCodeAssistantContext'
 import {
@@ -379,6 +380,7 @@ function rowToIsCodeForm(row: IsCodeRow): IsCodeForm {
 }
 
 export default function IsCodesMasterPage() {
+  const [confirmAction, confirmDialog] = useConfirmDialog()
   const { editId, viewId, setEdit, setView } = useMasterUiSearchState()
   const [saveLoading, setSaveLoading] = useState(false)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
@@ -1264,9 +1266,8 @@ export default function IsCodesMasterPage() {
   const handleFilesDialogDelete = (file: IsCodeViewFile) => {
     const isCodeId = viewId
     if (!file.storage_path) return
-    const ok = window.confirm(`Delete file ${file.file_name}?`)
-    if (!ok) return
     void (async () => {
+      if (!(await confirmAction(`Delete file ${file.file_name}?`, { title: 'Delete file' }))) return
       setSaveLoading(true)
       setFilesDialogStatus(null)
       try {
@@ -1799,6 +1800,7 @@ export default function IsCodesMasterPage() {
         </DialogContent>
       </Dialog>
 
+      {confirmDialog}
       <IsCodesFilesDialog
         open={viewId != null}
         onOpenChange={(open) => {

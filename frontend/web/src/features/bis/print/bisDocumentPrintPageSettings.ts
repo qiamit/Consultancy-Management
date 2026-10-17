@@ -641,6 +641,14 @@ export function applyBisDocumentPrintPageSettings(
     page-break-before: auto !important;
     break-before: auto !important;
   }
+  /* Sheets wrapped in a section (merged documents) are not spaced by the body's flex gap: keep a 3 mm gap there too. */
+  :not(body) > .pd-sheet + .pd-sheet,
+  :not(body) > .pd-sheet + .al-sheet,
+  :not(body) > .al-sheet + .pd-sheet,
+  :not(body) > .al-sheet + .al-sheet,
+  :not(body) > .f1-sheet + .f1-sheet {
+    margin-top: 3mm !important;
+  }
 }
 @media print {
   html, body {
@@ -659,7 +667,8 @@ export function applyBisDocumentPrintPageSettings(
     max-width: none !important;
     min-width: 0 !important;
     height: auto !important;
-    min-height: calc(${heightMm}mm - ${mt}mm - ${mb}mm) !important;
+    /* 1 mm slack: an exact fit can overflow by a sub-pixel and add a blank page. */
+    min-height: calc(${heightMm}mm - ${mt}mm - ${mb}mm - 1mm) !important;
     max-height: none !important;
     margin: 0 auto !important;
     padding: ${pad}mm ${pad}mm ${Math.max(pad + 6, 8)}mm ${pad}mm !important;
@@ -701,7 +710,9 @@ export function applyBisDocumentPrintPageSettings(
   .al-sheet + .pd-sheet,
   .al-sheet + .al-sheet,
   .f1-sheet + .f1-sheet {
-    margin-top: 3mm !important;
+    /* The 3 mm gap is a screen-only separator. In print each sheet starts a new physical page, and a margin here would push
+       the sheet past the page height so its absolutely positioned page number spilled onto an extra, nearly empty PDF page. */
+    margin-top: 0 !important;
     page-break-before: always;
     break-before: page;
   }

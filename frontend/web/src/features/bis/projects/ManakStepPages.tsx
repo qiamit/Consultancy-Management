@@ -7,7 +7,10 @@ import { supabase } from '@/lib/supabaseClient'
 import { listClientCertificates, type ClientCertificateFile } from '@/features/masters/clients/clientsApi'
 import { fetchBisModulePayload } from './bisModuleDataApi'
 import { listSites, type ClientSiteRow } from '@/features/masters/clients/clientLinkApi'
+import { listBisBranchOffices, type BisBranchOfficeRow } from '@/features/masters/bis-branch-offices/bisBranchOfficesApi'
 import { ManakGeneralStep } from './ManakGeneralStep'
+import { ManakVarietiesTable } from './ManakVarietiesTable'
+import { ManakSitRow } from './ManakSitRow'
 import { CORRESPONDENCE_KIND, ManakManagementStep } from './ManakManagementStep'
 import type { BisProjectRow } from './types'
 
@@ -47,15 +50,19 @@ export function ManakSubPanel({
   title,
   children,
   onEdit,
+  headerExtra,
 }: {
   title: string
   children: ReactNode
   onEdit?: () => void
+  /** Extra control shown on the right of the header (for example a checkbox). */
+  headerExtra?: ReactNode
 }) {
   return (
     <div className="border border-stone-300 bg-white">
       <div className="flex items-center justify-between bg-stone-800 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-amber-200">
         <span>{title}</span>
+        {headerExtra}
         {onEdit ? (
           <button
             type="button"
@@ -71,16 +78,62 @@ export function ManakSubPanel({
   )
 }
 
-export function ManakFields({ items }: { items: Array<[string, ReactNode]> }) {
-  // Grid layout: label | value | label | value. Label columns shrink to their text; value columns share the rest.
-  const rows: Array<Array<[string, ReactNode] | null>> = []
-  for (let i = 0; i < items.length; i += 2) rows.push([items[i], items[i + 1] ?? null])
-  const labelCls =
-    'w-[1%] whitespace-nowrap border border-[#e7e0d4] bg-[#f7f3eb] px-3 py-1.5 text-left align-top text-sm font-bold text-stone-800'
-  const valueCls = 'w-[49%] break-words border border-[#e7e0d4] px-3 py-1.5 align-top text-sm text-stone-700'
+/**
+ * Lay fields out in three columns, grouping labels of similar length so each label column is only as
+ * wide as its own longest label (short labels together, long labels together). Order inside a column is kept.
+ */
+export function arrangeByLabelLength<T>(items: Array<[string, T]>, columnCount = 3): Array<Array<[string, T] | null>> {
+  const perColumn = Math.ceil(items.length / columnCount)
+  const byLength = items.map((item, index) => ({ item, index })).sort((a, b) => a.item[0].length - b.item[0].length || a.index - b.index)
+  const columns: Array<Array<[string, T]>> = Array.from({ length: columnCount }, (_, c) =>
+    byLength
+      .slice(c * perColumn, (c + 1) * perColumn)
+      .sort((a, b) => a.index - b.index)
+      .map((x) => x.item),
+  )
+  const rows: Array<Array<[string, T] | null>> = []
+  for (let r = 0; r < perColumn; r += 1) rows.push(columns.map((col) => col[r] ?? null))
+  return rows
+}
+
+export function ManakFields({
+  items,
+  singleLine = false,
+  lines,
+}: {
+  items: Array<[string, ReactNode]>
+  singleLine?: boolean
+  /** Explicit lines of labels; a line with one label spans the whole row. */
+  lines?: string[][]
+}) {
+  // Grid layout: three label | value pairs per row. Label columns shrink to their text; value columns share the rest.
+  // singleLine keeps every pair on one row and never wraps the text.
+  const rows = lines
+    ? lines.map((labels) => labels.map((l) => items.find(([label]) => label === l) ?? null))
+    : singleLine
+      ? [items]
+      : arrangeByLabelLength(items)
+  const labelCls = cn(
+    lines ? 'w-auto' : 'w-[1%]',
+    'whitespace-nowrap border border-[#e7e0d4] bg-[#f7f3eb] px-3 py-1.5 text-left align-top text-sm font-bold text-stone-800',
+  )
+  const valueCls = cn(
+    singleLine || lines ? 'whitespace-nowrap' : 'break-words',
+    lines ? 'w-auto' : 'w-[32%]',
+    'border border-[#e7e0d4] px-3 py-1.5 align-top text-sm text-stone-700',
+  )
   return (
     <div className="overflow-x-auto">
-      <table className="w-full table-auto border-collapse">
+      <table className={cn('w-full border-collapse', lines ? 'table-fixed' : 'table-auto')}>
+        {lines ? (
+          // The first pair takes two thirds of the row, the second pair one third.
+          <colgroup>
+            <col style={{ width: '15%' }} />
+            <col style={{ width: '51.67%' }} />
+            <col style={{ width: '15%' }} />
+            <col style={{ width: '18.33%' }} />
+          </colgroup>
+        ) : null}
         <tbody>
           {rows.map((pair, i) => (
             <tr key={i}>
@@ -90,7 +143,7 @@ export function ManakFields({ items }: { items: Array<[string, ReactNode]> }) {
                     <th scope="row" className={labelCls}>
                       {cell[0]}:
                     </th>
-                    <td className={valueCls}>
+                    <td className={valueCls} colSpan={lines && pair.length === 1 ? 3 : undefined}>
                       {cell[1] || <span className="text-stone-400">—</span>}
                     </td>
                   </Fragment>
@@ -176,29 +229,33 @@ type StepData = {
   clientRaw: Record<string, unknown> | null
   certificates: ClientCertificateFile[]
   sites: ClientSiteRow[]
+  projectRaw: Record<string, unknown> | null
+  branches: BisBranchOfficeRow[]
   payloads: Partial<Record<BisPrintDocumentKind, Payload>>
   loading: boolean
   error: string
 }
 
 function useStepData(row: BisProjectRow | null, refreshKey: number): StepData {
-  const [state, setState] = useState<StepData>({ print: null, clientRaw: null, certificates: [], sites: [], payloads: {}, loading: false, error: '' })
+  const [state, setState] = useState<StepData>({ print: null, clientRaw: null, certificates: [], sites: [], projectRaw: null, branches: [], payloads: {}, loading: false, error: '' })
   useEffect(() => {
     if (!row?.id) {
-      setState({ print: null, clientRaw: null, certificates: [], sites: [], payloads: {}, loading: false, error: '' })
+      setState({ print: null, clientRaw: null, certificates: [], sites: [], projectRaw: null, branches: [], payloads: {}, loading: false, error: '' })
       return
     }
     let cancelled = false
     setState((s) => ({ ...s, loading: true, error: '' }))
     void (async () => {
       try {
-        const [print, clientRes, certs, siteRows, ...loaded] = await Promise.all([
+        const [print, clientRes, certs, siteRows, projectRes, branchRows, ...loaded] = await Promise.all([
           loadBisPrintData(row),
           row.client_id
             ? supabase.from('clients').select('*').eq('id', row.client_id).maybeSingle()
             : Promise.resolve({ data: null }),
           row.client_id ? listClientCertificates(row.client_id).catch(() => []) : Promise.resolve([]),
           row.client_id ? listSites(row.client_id) : Promise.resolve([]),
+          supabase.from('bis_projects').select('*').eq('id', row.id).maybeSingle(),
+          listBisBranchOffices().catch(() => [] as BisBranchOfficeRow[]),
           ...STEP_MODULES.map((k) => fetchBisModulePayload(row.id, k).catch(() => null)),
         ])
         if (cancelled) return
@@ -211,13 +268,15 @@ function useStepData(row: BisProjectRow | null, refreshKey: number): StepData {
           clientRaw: (clientRes.data as Record<string, unknown> | null) ?? null,
           certificates: certs,
           sites: siteRows,
+          projectRaw: (projectRes.data as Record<string, unknown> | null) ?? null,
+          branches: branchRows,
           payloads,
           loading: false,
           error: '',
         })
       } catch (err) {
         if (!cancelled) {
-          setState({ print: null, clientRaw: null, certificates: [], sites: [], payloads: {}, loading: false, error: err instanceof Error ? err.message : 'Could not load data' })
+          setState({ print: null, clientRaw: null, certificates: [], sites: [], projectRaw: null, branches: [], payloads: {}, loading: false, error: err instanceof Error ? err.message : 'Could not load data' })
         }
       }
     })()
@@ -247,6 +306,10 @@ export function ManakStepPage({
   refreshKey,
   onEdit,
   documents,
+  onLocationMapPreview,
+  onLocationMapPdf,
+  onProjectSaved,
+  onScopeDocument,
 }: {
   stepId: string
   row: BisProjectRow | null
@@ -254,9 +317,15 @@ export function ManakStepPage({
   onEdit: (kind: BisPrintDocumentKind) => void
   /** Existing document rows (view / print / PDF / generate) for this step. */
   documents: ReactNode
+  /** Location map preview (single click) and PDF download (double click) from the documents dialog. */
+  onLocationMapPreview?: () => void
+  onLocationMapPdf?: () => void
+  onProjectSaved?: () => void
+  /** Undertaking for Manufacturing Scope: preview / PDF / Word actions. */
+  onScopeDocument?: { preview: () => void; pdf: () => void; word: () => void }
 }) {
   const [reloadTick, setReloadTick] = useState(0)
-  const { print, clientRaw, certificates, sites, payloads, loading, error } = useStepData(row, refreshKey + reloadTick)
+  const { print, clientRaw, certificates, sites, projectRaw, branches, payloads, loading, error } = useStepData(row, refreshKey + reloadTick)
   const edit = (kind: BisPrintDocumentKind) => () => onEdit(kind)
   const c = print?.client
   const isCode = print?.isCode
@@ -276,24 +345,44 @@ export function ManakStepPage({
         certificates={certificates}
         sites={sites}
         linked={linked}
+        projectRaw={projectRaw}
+        branches={branches}
+        onLocationMapPreview={onLocationMapPreview}
+        onLocationMapPdf={onLocationMapPdf}
+        onProjectSaved={onProjectSaved}
         onChanged={() => setReloadTick((t) => t + 1)}
       >
         <ManakSubPanel title="Indian Standard Details">
           <ManakFields
+            lines={[['Standard Title', 'Standard Number']]}
             items={[
-              ['Standard Number', isCode?.label],
               ['Standard Title', isCode?.title],
-              ['Product Manual', isCode?.productManualNumber],
+              ['Standard Number', isCode?.label],
             ]}
           />
-        </ManakSubPanel>
-        <ManakSubPanel title="Varieties" onEdit={edit('osl-sample-requirements')}>
-          <ManakTable
-            head={['S.No.', 'Variety applied for']}
-            rows={varieties.map((v, i) => [i + 1, v])}
-            empty="No varieties yet — they come from Sample Requirements."
+          <ManakSitRow
+            projectId={row?.id ?? null}
+            isCodeId={row?.is_code_id ?? null}
+            masterManualNumber={s(isCode?.productManualNumber)}
+            payload={payloads['cmpf-311'] ?? null}
+            onChanged={() => setReloadTick((t) => t + 1)}
+            onOpenOwnSit={edit('cmpf-311')}
           />
         </ManakSubPanel>
+        <ManakVarietiesTable
+          projectId={row?.id ?? null}
+          isCodeId={row?.is_code_id ?? null}
+          isNumber={isCode?.label || isCode?.isNumber || ''}
+          varieties={varieties}
+          scopeDocument={onScopeDocument}
+          scopeNotes={s(projectRaw?.notes)}
+          onScopeSaved={() => setReloadTick((t) => t + 1)}
+          panel={(headerExtra, body) => (
+            <ManakSubPanel title="Varieties" headerExtra={headerExtra}>
+              {body}
+            </ManakSubPanel>
+          )}
+        />
       </ManakGeneralStep>
     )
   } else if (stepId === 'management') {
@@ -422,7 +511,8 @@ export function ManakStepPage({
       {loading ? <p className="mb-2 text-xs text-stone-500">Loading application data…</p> : null}
       {error ? <p className="mb-2 text-xs text-red-700">{error}</p> : null}
       <div className={cn(loading && 'opacity-60')}>{body}</div>
-      <ManakPanel title="Documents (create · view · print · download)">{documents}</ManakPanel>
+      {/* Step 1 no longer needs the documents list: everything is edited in place above. */}
+      {stepId !== 'general' ? <ManakPanel title="Documents (create · view · print · download)">{documents}</ManakPanel> : null}
     </div>
   )
 }

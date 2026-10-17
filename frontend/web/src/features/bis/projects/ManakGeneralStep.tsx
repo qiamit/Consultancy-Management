@@ -1,16 +1,48 @@
-import { Fragment, useEffect, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { Calendar, FileText, MapPin, Upload } from 'lucide-react'
 import { toast } from 'sonner'
+import { LimsFieldWithAdd } from '@/components/lims/LimsFieldWithAdd'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { limsFieldAddBtnClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { isValidGstin, isValidPan } from '@/lib/indiaValidators'
+import { supabase } from '@/lib/supabaseClient'
 import { patchClient, patchSite, type ClientSiteRow } from '@/features/masters/clients/clientLinkApi'
-import { updateClientCertificateDetails, type ClientCertificateFile } from '@/features/masters/clients/clientsApi'
+import {
+  deleteClientCertificate,
+  openClientCertificate,
+  updateClientCertificateDetails,
+  uploadClientCertificate,
+  type ClientCertificateFile,
+} from '@/features/masters/clients/clientsApi'
 import { CLIENT_SECTORS, COMPANY_SCALES } from '@/features/masters/clients/types'
+import { type BisBranchOfficeRow } from '@/features/masters/bis-branch-offices/bisBranchOfficesApi'
 import type { BisPrintClient } from '../print/loadBisPrintData'
-import { ManakSubPanel } from './ManakStepPages'
+import { ManakApplicationPanel } from './ManakApplicationPanel'
+import { ManakSubPanel, arrangeByLabelLength } from './ManakStepPages'
 import type { BisProjectRow } from './types'
 
 type Rec = Record<string, unknown>
+
+/** Hide the browser's own calendar glyph; the calendar button sits on the right like Client Master. */
+const dateInputClass =
+  'min-w-0 border-0 bg-transparent pr-1 tabular-nums shadow-none focus-visible:ring-0 [&::-webkit-calendar-picker-indicator]:pointer-events-none [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:h-0 [&::-webkit-calendar-picker-indicator]:w-0 [&::-webkit-calendar-picker-indicator]:opacity-0'
+
+function openDatePicker(id: string) {
+  const el = document.getElementById(id)
+  if (!(el instanceof HTMLInputElement) || el.disabled) return
+  try {
+    if (typeof el.showPicker === 'function') {
+      el.showPicker()
+      return
+    }
+  } catch {
+    // showPicker is blocked outside a user gesture; fall back to focus.
+  }
+  el.focus()
+}
 
 const NATURE_OF_FIRM = ['Pvt. Limited', 'Public Limited', 'LLP', 'Partnership', 'Proprietorship', 'Trust / Society', 'Government']
 const YES_NO = ['Yes', 'No']
@@ -19,7 +51,7 @@ const str = (v: unknown) => (typeof v === 'string' ? v.trim() : v == null ? '' :
 
 /** Legal-document names that serve as Manak's Proof of Establishment / Address Proof. */
 export const ESTABLISHMENT_DOC =
-  /incorporation|partnership|llp|udyam|udyog|registration of firm|establishment|msme|shop\s*&?\s*establishment/i
+  /incorporation|partnership|llp|registration of firm|establishment|shop\s*&?\s*establishment/i
 export const ADDRESS_DOC = /gst|address|electricity|light bill|rent|lease|property tax/i
 
 type EditableProps = {
@@ -40,6 +72,7 @@ function EditableValue({ value, onSave, type = 'text', options, disabled, title,
   const [focused, setFocused] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const dateId = useId()
 
   useEffect(() => {
     if (!focused) setDraft(value)
@@ -80,7 +113,6 @@ function EditableValue({ value, onSave, type = 'text', options, disabled, title,
   return (
     <div className="min-w-0" title={title}>
       <div className="flex items-center gap-1">
-        {prefix ? <span className="shrink-0 text-xs text-stone-500">{prefix}</span> : null}
         {type === 'select' ? (
           <select
             className={cn(cls, 'border px-2')}
@@ -99,27 +131,75 @@ function EditableValue({ value, onSave, type = 'text', options, disabled, title,
               </option>
             ))}
           </select>
+        ) : type === 'date' ? (
+          <LimsFieldWithAdd
+            className={cn('w-full', error && '!border-red-600 !bg-red-50', busy && 'opacity-60')}
+            addButton={
+              <button
+                type="button"
+                className={limsFieldAddBtnClass}
+                aria-label="Open calendar"
+                title="Pick date"
+                disabled={disabled}
+                onClick={() => openDatePicker(dateId)}
+              >
+                <Calendar size={14} strokeWidth={2.25} aria-hidden />
+              </button>
+            }
+          >
+            <Input
+              id={dateId}
+              type="date"
+              value={draft}
+              disabled={disabled}
+              className={dateInputClass}
+              onFocus={() => setFocused(true)}
+              onChange={(e) => {
+                setDraft(e.target.value)
+                // Picking from the calendar saves right away; typing waits for blur.
+                if (document.activeElement !== e.target) void commit(e.target.value)
+              }}
+              onBlur={() => {
+                setFocused(false)
+                void commit(draft)
+              }}
+            />
+          </LimsFieldWithAdd>
         ) : (
-          <Input
-            className={cls}
-            type={type === 'date' ? 'date' : 'text'}
-            value={draft}
-            placeholder={placeholder}
-            disabled={disabled}
-            onFocus={() => setFocused(true)}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={() => {
-              setFocused(false)
-              void commit(draft)
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
-              if (e.key === 'Escape') {
-                setDraft(value)
-                setError('')
-              }
-            }}
-          />
+          <div
+            className={cn(
+              'flex h-8 w-full items-center rounded-none border bg-white text-sm focus-within:border-amber-600 focus-within:ring-2 focus-within:ring-amber-500/20',
+              error ? 'border-red-600 bg-red-50' : 'border-stone-300',
+              busy && 'opacity-60',
+              disabled && 'opacity-50',
+            )}
+          >
+            {/* Prefix (country code) sits inside the field as part of the text. */}
+            {prefix ? <span className="shrink-0 select-none pl-2 text-stone-700">{prefix}</span> : null}
+            <Input
+              className={cn(
+                'h-full min-w-0 flex-1 rounded-none border-0 bg-transparent py-0 shadow-none focus-visible:ring-0',
+                prefix ? 'pl-1.5 pr-2' : 'px-2',
+              )}
+              type="text"
+              value={draft}
+              placeholder={placeholder}
+              disabled={disabled}
+              onFocus={() => setFocused(true)}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={() => {
+                setFocused(false)
+                void commit(draft)
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                if (e.key === 'Escape') {
+                  setDraft(value)
+                  setError('')
+                }
+              }}
+            />
+          </div>
         )}
       </div>
       {error ? <p className="mt-0.5 text-[11px] text-red-700">{error}</p> : null}
@@ -127,16 +207,355 @@ function EditableValue({ value, onSave, type = 'text', options, disabled, title,
   )
 }
 
-/** Grid layout: label | value | label | value. Same look as ManakFields, with editable values. */
-function FieldGrid({ items }: { items: Array<[string, ReactNode]> }) {
-  const rows: Array<Array<[string, ReactNode] | null>> = []
-  for (let i = 0; i < items.length; i += 2) rows.push([items[i], items[i + 1] ?? null])
+
+/**
+ * One button for a proof document kept in Client Master's Legal Documents table.
+ * No file: click uploads from the computer, double-click imports a file already in this client's other legal documents.
+ * File attached: click views (new tab), double-click offers delete.
+ */
+function ProofButton({
+  doc,
+  certName,
+  clientId,
+  disabled,
+  defaultNumber,
+  available = [],
+  onChanged,
+}: {
+  doc: ClientCertificateFile | undefined
+  certName: string
+  clientId: string | null
+  disabled?: boolean
+  /** Document number written to a new row (for example the GST number already on the client). */
+  defaultNumber?: string
+  /** All legal documents of the client, offered for import when this proof has no file. */
+  available?: ClientCertificateFile[]
+  onChanged: () => void
+}) {
+  const fileRef = useRef<HTMLInputElement>(null)
+  const timer = useRef<number | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
+  const hasFile = Boolean(doc?.storage_path)
+
+  useEffect(() => () => {
+    if (timer.current) window.clearTimeout(timer.current)
+  }, [])
+
+  const upload = async (file: File) => {
+    if (!clientId) return
+    setBusy(true)
+    try {
+      const today = new Date().toISOString().slice(0, 10)
+      await uploadClientCertificate(clientId, {
+        certName,
+        documentNumber: doc?.document_number ?? defaultNumber ?? '',
+        issuedOn: doc?.issued_on || today,
+        file,
+        existing: doc,
+      })
+      toast.success(`${certName} uploaded to Client Master`)
+      onChanged()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Upload failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const view = async () => {
+    if (!doc) return
+    try {
+      await openClientCertificate(doc)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not open the file')
+    }
+  }
+
+  const remove = async () => {
+    if (!doc) return
+    setBusy(true)
+    try {
+      await deleteClientCertificate(doc)
+      toast.success(`${certName} deleted`)
+      setConfirmDelete(false)
+      onChanged()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not delete')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const importFrom = async (source: ClientCertificateFile) => {
+    setBusy(true)
+    try {
+      const { data, error } = await supabase.storage.from('client-certificates').download(source.storage_path)
+      if (error || !data) throw error ?? new Error('Could not read the file')
+      const file = new File([data], source.file_name || 'document', { type: source.mime_type || data.type || 'application/pdf' })
+      await upload(file)
+      setImportOpen(false)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Import failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const onClick = () => {
+    if (disabled || busy) return
+    // Wait briefly so a double-click does not also trigger the single-click action.
+    if (timer.current) window.clearTimeout(timer.current)
+    timer.current = window.setTimeout(() => {
+      timer.current = null
+      if (hasFile) void view()
+      else fileRef.current?.click()
+    }, 250)
+  }
+
+  const onDoubleClick = () => {
+    if (disabled || busy) return
+    if (timer.current) {
+      window.clearTimeout(timer.current)
+      timer.current = null
+    }
+    if (hasFile) setConfirmDelete(true)
+    else setImportOpen(true)
+  }
+
+  return (
+    <>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="application/pdf,image/jpeg,image/png,image/webp"
+        className="sr-only"
+        onChange={(e) => {
+          const file = e.target.files?.[0]
+          e.target.value = ''
+          if (file) void upload(file)
+        }}
+      />
+      <button
+        type="button"
+        disabled={disabled || busy}
+        onClick={onClick}
+        onDoubleClick={onDoubleClick}
+        title={
+          hasFile
+            ? `${certName}: click to view, double-click to delete`
+            : `${certName} required: click to upload from computer, double-click to import from Client Master`
+        }
+        aria-label={hasFile ? `View ${certName}` : `Upload ${certName}`}
+        className={cn(
+          'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-none border bg-white text-amber-900 transition-colors hover:bg-amber-50 disabled:opacity-50',
+          hasFile ? 'border-emerald-600 text-emerald-800' : 'border-red-500 text-red-700',
+        )}
+      >
+        {hasFile ? <FileText size={15} aria-hidden /> : <Upload size={15} aria-hidden />}
+      </button>
+      <Dialog open={importOpen} onOpenChange={setImportOpen}>
+        <DialogContent className="max-w-md rounded-none">
+          <DialogHeader>
+            <DialogTitle>Import {certName}</DialogTitle>
+            <DialogDescription>
+              Pick a file already saved in this client's other Legal Documents. A copy is attached as {certName}.
+            </DialogDescription>
+          </DialogHeader>
+          <ul className="max-h-64 divide-y divide-stone-200 overflow-y-auto border border-stone-300">
+            {available.filter((d) => d.storage_path && d.id !== doc?.id).length === 0 ? (
+              <li className="px-3 py-4 text-center text-sm text-stone-500">No other documents with a file in Client Master.</li>
+            ) : (
+              available
+                .filter((d) => d.storage_path && d.id !== doc?.id)
+                .map((d) => (
+                  <li key={d.id}>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void importFrom(d)}
+                      className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-amber-50 disabled:opacity-50"
+                    >
+                      <span className="min-w-0 truncate font-medium">{d.cert_name}</span>
+                      <span className="shrink-0 truncate text-xs text-stone-500">{d.file_name}</span>
+                    </button>
+                  </li>
+                ))
+            )}
+          </ul>
+          <DialogFooter>
+            <Button type="button" variant="outline" className="rounded-none" onClick={() => setImportOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <DialogContent className="max-w-sm rounded-none">
+          <DialogHeader>
+            <DialogTitle>Delete {certName}?</DialogTitle>
+            <DialogDescription>
+              This removes the file from Client Master as well. You can upload it again afterwards.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" className="rounded-none" onClick={() => setConfirmDelete(false)}>
+              Cancel
+            </Button>
+            <Button type="button" className="rounded-none bg-red-700 text-white hover:bg-red-800" disabled={busy} onClick={() => void remove()}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
+
+/** Map pin: click previews the location map, double-click downloads it as a PDF. */
+function MapButton({ onPreview, onPdf }: { onPreview?: () => void; onPdf?: () => void }) {
+  const timer = useRef<number | null>(null)
+  useEffect(() => () => {
+    if (timer.current) window.clearTimeout(timer.current)
+  }, [])
+  return (
+    <button
+      type="button"
+      disabled={!onPreview}
+      title="Location map: click to preview, double-click to download PDF"
+      aria-label="Location map"
+      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-none border border-stone-400 bg-white text-amber-800 transition-colors hover:bg-amber-50 disabled:opacity-50"
+      onClick={() => {
+        if (timer.current) window.clearTimeout(timer.current)
+        timer.current = window.setTimeout(() => {
+          timer.current = null
+          onPreview?.()
+        }, 250)
+      }}
+      onDoubleClick={() => {
+        if (timer.current) {
+          window.clearTimeout(timer.current)
+          timer.current = null
+        }
+        onPdf?.()
+      }}
+    >
+      <MapPin size={15} aria-hidden />
+    </button>
+  )
+}
+
+/** Grid layout: three label | value pairs per row. Same look as ManakFields, with editable values. */
+function FieldGrid({
+  items,
+  fullRows = [],
+  columns = 3,
+  topLines = [],
+  leadLines = [],
+  tailLines = [],
+  alignFirstLabel = false,
+  alignFullRowLabel = false,
+}: {
+  items: Array<[string, ReactNode]>
+  /** Label | value pairs per row (2 or 3). */
+  columns?: 2 | 3
+  /** Fields that take a whole row (label + one wide value), shown above the three-column grid. */
+  fullRows?: Array<[string, ReactNode]>
+  /** Labels shown together on one first line (equal-width columns), above the grid. */
+  topLines?: string[][]
+  /** Like topLines, but shown above the full-width rows. */
+  leadLines?: string[][]
+  /** Like topLines, but shown after the grid. */
+  tailLines?: string[][]
+  /** Give the first label of every line the width of a three-field line's label (a sixth of the row). */
+  alignFirstLabel?: boolean
+  /** Give only the full-width rows' label the same sixth-of-the-row width. */
+  alignFullRowLabel?: boolean
+}) {
+  const topTaken = [...leadLines.flat(), ...topLines.flat(), ...tailLines.flat()]
+  const toGroups = (lines: string[][]) =>
+    lines.map((labels) =>
+      labels.map((l) => items.find(([label]) => label === l)).filter((x): x is [string, ReactNode] => Boolean(x)),
+    )
+  const topGroups = toGroups(topLines)
+  const leadGroups = toGroups(leadLines)
+  const tailGroups = toGroups(tailLines)
+  const rows = arrangeByLabelLength(
+    items.filter(([label]) => !topTaken.includes(label)),
+    columns,
+  )
   const labelCls =
     'w-[1%] whitespace-nowrap border border-[#e7e0d4] bg-[#f7f3eb] px-3 py-1.5 text-left align-middle text-sm font-bold text-stone-800'
-  const valueCls = 'w-[49%] border border-[#e7e0d4] px-2 py-1 align-middle text-sm text-stone-700'
+  const valueCls = cn(
+    columns === 2 ? 'w-[49%]' : 'w-[32%]',
+    'border border-[#e7e0d4] px-2 py-1 align-middle text-sm text-stone-700',
+  )
+  const renderGroups = (groups: Array<Array<[string, ReactNode]>>, gap: boolean) =>
+    groups.map((group, g) => (
+      <table key={g} className={cn('w-full table-fixed border-collapse', (g > 0 || gap) && '-mt-px')}>
+        <colgroup>
+          {Array.from({ length: group.length * 2 }, (_, k) => {
+            const n = group.length * 2
+            const first = alignFirstLabel && group.length !== 3
+            const width = first ? (k === 0 ? 100 / 6 : (100 - 100 / 6) / (n - 1)) : 100 / n
+            return <col key={k} style={{ width: `${width}%` }} />
+          })}
+        </colgroup>
+        <tbody>
+          <tr>
+            {group.map(([label, node]) => (
+              <Fragment key={label}>
+                <th
+                  scope="row"
+                  className={cn(labelCls, 'w-auto whitespace-normal', group.length > 3 && 'whitespace-nowrap px-2 text-xs')}
+                >
+                  {label}:
+                </th>
+                <td className="border border-[#e7e0d4] px-2 py-1 align-middle text-sm text-stone-700">{node}</td>
+              </Fragment>
+            ))}
+          </tr>
+        </tbody>
+      </table>
+    ))
   return (
     <div className="overflow-x-auto">
-      <table className="w-full table-auto border-collapse">
+      {renderGroups(leadGroups, false)}
+      {fullRows.length > 0 ? (
+        <table
+          className={cn(
+            'w-full border-collapse',
+            alignFirstLabel || alignFullRowLabel ? 'table-fixed' : 'table-auto',
+            leadGroups.length > 0 && '-mt-px',
+          )}
+        >
+          {alignFirstLabel || alignFullRowLabel ? (
+            <colgroup>
+              <col style={{ width: `${100 / 6}%` }} />
+            </colgroup>
+          ) : null}
+          <tbody>
+            {fullRows.map(([label, node]) => (
+              <tr key={label}>
+                <th scope="row" className={labelCls}>
+                  {label}:
+                </th>
+                <td colSpan={columns * 2 - 1} className="border border-[#e7e0d4] px-2 py-1 align-middle text-sm text-stone-700">
+                  {node}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : null}
+      {renderGroups(topGroups, fullRows.length > 0 || leadGroups.length > 0)}
+      <table
+        className={cn(
+          'w-full table-auto border-collapse',
+          (topGroups.length > 0 || fullRows.length > 0 || leadGroups.length > 0) && '-mt-px',
+        )}
+      >
         <tbody>
           {rows.map((pair, i) => (
             <tr key={i}>
@@ -152,6 +571,7 @@ function FieldGrid({ items }: { items: Array<[string, ReactNode]> }) {
           ))}
         </tbody>
       </table>
+      {renderGroups(tailGroups, true)}
     </div>
   )
 }
@@ -163,6 +583,11 @@ export function ManakGeneralStep({
   certificates,
   sites,
   linked,
+  projectRaw,
+  branches,
+  onLocationMapPreview,
+  onLocationMapPdf,
+  onProjectSaved,
   onChanged,
   children,
 }: {
@@ -173,6 +598,11 @@ export function ManakGeneralStep({
   sites: ClientSiteRow[]
   /** True until the application becomes a licence (licence number generated). */
   linked: boolean
+  projectRaw: Rec | null
+  branches: BisBranchOfficeRow[]
+  onLocationMapPreview?: () => void
+  onLocationMapPdf?: () => void
+  onProjectSaved?: () => void
   onChanged: () => void
   /** Indian Standard / Varieties panels rendered below. */
   children: ReactNode
@@ -194,6 +624,9 @@ export function ManakGeneralStep({
   const addressDoc = certificates.find((d) => ADDRESS_DOC.test(d.cert_name))
   const gstDoc = certificates.find((d) => /^gst/i.test(d.cert_name.trim()))
   const panDoc = certificates.find((d) => /^pan/i.test(d.cert_name.trim()))
+  const msmeDoc = certificates.find((d) => /msme|udyam|udyog/i.test(d.cert_name))
+  const startupDoc = certificates.find((d) => /startup/i.test(d.cert_name))
+  const womenDoc = certificates.find((d) => /women/i.test(d.cert_name))
 
   const certField = (doc: ClientCertificateFile | undefined, key: 'cert_name' | 'document_number' | 'issued_on') =>
     async (v: string) => {
@@ -213,6 +646,7 @@ export function ManakGeneralStep({
     if (!clientId) return
     await patchClient(clientId, clientPatch)
     if (sites.some((s) => s.site_role === 'Registered Office' || s.is_primary)) await patchSite(clientId, 'Registered Office', patch)
+    if (sameAsOffice) await patchSite(clientId, 'Factory', patch, siteId)
   }
   const factorySite = sites.find((s) => (siteId && s.id === siteId) || s.site_role === 'Factory')
   const factory = (patch: Partial<Pick<ClientSiteRow, 'address' | 'district' | 'state' | 'pin_code'>>) => async () => {
@@ -221,29 +655,45 @@ export function ManakGeneralStep({
   }
   const officeSite = sites.find((s) => s.is_primary) ?? sites.find((s) => s.site_role === 'Registered Office')
 
+  const norm = (x: unknown) => str(x).toLowerCase().replace(/\s+/g, ' ')
+  const officeAddr = str(officeSite?.address) || str(client?.officeAddress) || str(client?.address)
+  const officeDistrict = str(officeSite?.district) || str(client?.district)
+  const officeState = str(officeSite?.state) || str(client?.state)
+  const officePin = str(officeSite?.pin_code) || str(client?.pinCode)
+  /** Same convention as Client Master: factory is "same as office" when its address matches the office address. */
+  const derivedSame =
+    !factorySite ||
+    (norm(factorySite.address) === norm(officeAddr) &&
+      norm(factorySite.district) === norm(officeDistrict) &&
+      norm(factorySite.state) === norm(officeState) &&
+      norm(factorySite.pin_code) === norm(officePin))
+  const [sameAsOffice, setSameAsOffice] = useState(derivedSame)
+  useEffect(() => {
+    if (!derivedSame) setSameAsOffice(false)
+  }, [derivedSame])
+  const factoryLocked = locked || sameAsOffice
+
+  const toggleSame = async (checked: boolean) => {
+    setSameAsOffice(checked)
+    if (!checked || !clientId) return
+    try {
+      await patchSite(clientId, 'Factory', {
+        address: officeAddr || null,
+        district: officeDistrict || null,
+        state: officeState || null,
+        pin_code: officePin || null,
+      }, siteId)
+      toast.success('Factory address now follows the office address')
+      onChanged()
+    } catch (err) {
+      setSameAsOffice(false)
+      toast.error(err instanceof Error ? err.message : 'Could not save')
+    }
+  }
+
   const sectorOptions = [...CLIENT_SECTORS]
   const mobile = str(raw.mobile)
   const countryCode = str(raw.country_code)
-
-  const contactCell = (
-    <div className="space-y-1">
-      <EditableValue
-        value={str(raw.landline)}
-        prefix="LandLine:"
-        placeholder="-"
-        disabled={locked}
-        onSave={col('landline')}
-      />
-      <EditableValue
-        value={mobile}
-        prefix={`Mobile: ${countryCode}`}
-        disabled={locked}
-        normalize={(v) => v.replace(/[^0-9]/g, '').slice(0, 10)}
-        validate={(v) => (v && v.length !== 10 ? 'Enter a 10 digit mobile number' : null)}
-        onSave={col('mobile')}
-      />
-    </div>
-  )
 
   const v = (
     value: string,
@@ -251,11 +701,47 @@ export function ManakGeneralStep({
     extra: Partial<EditableProps> = {},
   ) => <EditableValue value={value} onSave={onSave} disabled={locked} {...extra} />
 
-  const yesNoFlag = (textCol: string, flagCol: string, current: string) =>
-    v(current, async (next) => {
-      if (!clientId) return
-      await done(() => patchClient(clientId, { [textCol]: next || 'No', [flagCol]: next.toLowerCase() === 'yes' }))
-    }, { type: 'select', options: YES_NO })
+  const landlineCell = v(str(raw.landline), col('landline'), { placeholder: '-' })
+  const mobileCell = v(mobile, col('mobile'), {
+    prefix: countryCode,
+    normalize: (x) => x.replace(/[^0-9]/g, '').slice(0, 10),
+    validate: (x) => (x && x.length !== 10 ? 'Enter a 10 digit mobile number' : null),
+  })
+
+  const yesNoFlag = (
+    textCol: string,
+    flagCol: string,
+    current: string,
+    proof: { doc: ClientCertificateFile | undefined; certName: string },
+  ) => (
+    <div className="flex items-center gap-1">
+      <div className="min-w-0 flex-1">
+        {v(current, async (next) => {
+          if (!clientId) return
+          await done(() => patchClient(clientId, { [textCol]: next || 'No', [flagCol]: next.toLowerCase() === 'yes' }))
+        }, { type: 'select', options: YES_NO })}
+      </div>
+      {current.toLowerCase() === 'yes' ? (
+        <ProofButton doc={proof.doc} certName={proof.certName} clientId={clientId} disabled={locked} available={certificates} onChanged={onChanged} />
+      ) : null}
+    </div>
+  )
+
+  /** Field + proof-document button (upload / view / double-click delete) for a legal document. */
+  const withProof = (node: ReactNode, doc: ClientCertificateFile | undefined, fallbackName: string, defaultNumber?: string) => (
+    <div className="flex items-center gap-1">
+      <div className="min-w-0 flex-1">{node}</div>
+      <ProofButton doc={doc} certName={doc?.cert_name || fallbackName} clientId={clientId} disabled={locked} defaultNumber={defaultNumber} available={certificates} onChanged={onChanged} />
+    </div>
+  )
+
+  const withMap = (node: ReactNode) => (
+    <div className="flex items-center gap-1">
+      <div className="min-w-0 flex-1">{node}</div>
+      <MapButton onPreview={onLocationMapPreview} onPdf={onLocationMapPdf} />
+    </div>
+  )
+
 
   const gstValue = str(client?.gstNumber)
   const panValue = str(raw.pan)
@@ -266,23 +752,45 @@ export function ManakGeneralStep({
         <p className="border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs text-amber-900">
           This application is no longer linked to Client Master (a licence number exists), so these details are read-only here.
         </p>
-      ) : (
-        <p className="text-xs text-stone-600">
-          Linked to Client Master: changes here update the client, and client changes show here, until the licence number is generated.
-        </p>
-      )}
+      ) : null}
+
+      <ManakApplicationPanel row={row} projectRaw={projectRaw} branches={branches} onSaved={onProjectSaved} />
 
       <ManakSubPanel title="Registration Details">
         <FieldGrid
+          columns={2}
+          topLines={[['User Id', 'Sector', 'Scale']]}
           items={[
             ['User Id', v(str(raw.manak_user_id), col('manak_user_id'))],
             ['Nature of Firm', v(str(raw.constitution), col('constitution'), { type: 'select', options: NATURE_OF_FIRM })],
             [
               'Proof of Establishment of Firm',
-              v(str(proofDoc?.cert_name), certField(proofDoc, 'cert_name'), { disabled: locked || !proofDoc, title: proofDoc ? undefined : noDoc }),
+              withProof(
+                v(str(proofDoc?.cert_name), certField(proofDoc, 'cert_name'), { disabled: locked || !proofDoc, title: proofDoc ? undefined : noDoc }),
+                proofDoc,
+                'Certificate of Incorporation',
+              ),
             ],
             ['Sector', v(str(client?.sector), col('sector'), { type: 'select', options: sectorOptions })],
-            ['Scale', v(str(client?.scale), col('company_scale'), { type: 'select', options: [...COMPANY_SCALES] })],
+            [
+              'Scale',
+              <div key="scale" className="flex items-center gap-1">
+                <div className="min-w-0 flex-1">
+                  {v(str(client?.scale), col('company_scale'), { type: 'select', options: [...COMPANY_SCALES] })}
+                </div>
+                {/* The MSME / Udyam certificate decides the scale; Large needs no document. */}
+                {str(client?.scale) && str(client?.scale).toLowerCase() !== 'large' ? (
+                  <ProofButton
+                    doc={msmeDoc}
+                    certName={msmeDoc?.cert_name || 'MSME Certificate'}
+                    clientId={clientId}
+                    disabled={locked}
+                    available={certificates}
+                    onChanged={onChanged}
+                  />
+                ) : null}
+              </div>,
+            ],
             [
               'Registration Number',
               v(str(proofDoc?.document_number) || str(raw.cin) || str(raw.llpin), certField(proofDoc, 'document_number'), {
@@ -300,6 +808,7 @@ export function ManakGeneralStep({
             ],
             [
               'GST Number',
+              withProof(
               v(
                 gstValue,
                 async (next) => {
@@ -320,9 +829,14 @@ export function ManakGeneralStep({
                   validate: (x) => (x && !isValidGstin(x) ? 'Invalid GST number' : null),
                 },
               ),
+              gstDoc,
+              'GST Certificate',
+              gstValue,
+              ),
             ],
             [
               'PAN Number',
+              withProof(
               v(
                 panValue,
                 async (next) => {
@@ -343,59 +857,49 @@ export function ManakGeneralStep({
                   validate: (x) => (x && !isValidPan(x) ? 'Invalid PAN' : null),
                 },
               ),
+              panDoc,
+              'PAN Card',
+              panValue,
+              ),
             ],
             [
               'Women Entrepreneur',
-              yesNoFlag('women_entrepreneur', 'is_women_entrepreneur', str(raw.women_entrepreneur) || (raw.is_women_entrepreneur ? 'Yes' : 'No')),
-            ],
-            ['Startup', yesNoFlag('startup_status', 'is_startup', str(raw.startup_status) || (raw.is_startup ? 'Yes' : 'No'))],
-          ]}
-        />
-      </ManakSubPanel>
-
-      <ManakSubPanel title="Factory Details">
-        <FieldGrid
-          items={[
-            [
-              'Factory Address',
-              v(str(client?.factoryAddress), async (next) => done(factory({ address: next || null })), {
-                title: factorySite ? undefined : 'Saving creates a separate Factory site for this client',
+              yesNoFlag('women_entrepreneur', 'is_women_entrepreneur', str(raw.women_entrepreneur) || (raw.is_women_entrepreneur ? 'Yes' : 'No'), {
+                doc: womenDoc,
+                certName: 'Women Entrepreneur Certificate',
               }),
             ],
-            ['City', v(str(raw.city), col('city'))],
-            ['District', v(str(client?.factoryDistrict), async (next) => done(factory({ district: next || null })))],
-            ['State', v(str(client?.factoryState), async (next) => done(factory({ state: next || null })))],
-            ['Country', v(str(client?.country), col('country'))],
             [
-              'PinCode',
-              v(str(client?.factoryPin), async (next) => done(factory({ pin_code: next || null })), {
-                normalize: (x) => x.replace(/[^0-9]/g, '').slice(0, 6),
-                validate: (x) => (x && x.length !== 6 ? 'Enter a 6 digit PIN code' : null),
+              'Startup',
+              yesNoFlag('startup_status', 'is_startup', str(raw.startup_status) || (raw.is_startup ? 'Yes' : 'No'), {
+                doc: startupDoc,
+                certName: 'Startup Certificate',
               }),
             ],
-            ['E-MailId', v(str(client?.email), col('email'))],
-            ['Contact No.', contactCell],
-            [
-              'Address Proof Type',
-              v(str(addressDoc?.cert_name), certField(addressDoc, 'cert_name'), { disabled: locked || !addressDoc, title: addressDoc ? undefined : noDoc }),
-            ],
-            ['Latitude', v(str(client?.latitude), col('latitude'))],
-            ['Longitude', v(str(client?.longitude), col('longitude'))],
           ]}
         />
       </ManakSubPanel>
 
       <ManakSubPanel title="Office/Firm Details">
         <FieldGrid
-          items={[
+          columns={2}
+          alignFirstLabel
+          leadLines={[['CEO Name', 'E-MailId', 'Mobile No.']]}
+          topLines={[
+            ['PinCode', 'City', 'District', 'State'],
+            ['Country', 'Landline', 'Address Proof Type'],
+          ]}
+          fullRows={[
             ['Firm Name', v(str(client?.companyName), col('company_name'))],
-            ['CEO Name', v(str(client?.contactPerson), col('contact_person_name'))],
             [
               'Firm Address',
               v(str(officeSite?.address) || str(client?.officeAddress) || str(client?.address), async (next) =>
                 done(office({ address: next || null }, { address: next || null })),
               ),
             ],
+          ]}
+          items={[
+            ['CEO Name', v(str(client?.contactPerson), col('contact_person_name'))],
             ['City', v(str(raw.city), col('city'))],
             [
               'District',
@@ -414,11 +918,76 @@ export function ManakGeneralStep({
               }),
             ],
             ['E-MailId', v(str(client?.email), col('email'))],
-            ['Contact No.', contactCell],
+            ['Landline', landlineCell],
+            ['Mobile No.', mobileCell],
             [
               'Address Proof Type',
-              v(str(addressDoc?.cert_name), certField(addressDoc, 'cert_name'), { disabled: locked || !addressDoc, title: addressDoc ? undefined : noDoc }),
+              withProof(
+                v(str(addressDoc?.cert_name), certField(addressDoc, 'cert_name'), { disabled: locked || !addressDoc, title: addressDoc ? undefined : noDoc }),
+                addressDoc,
+                'GST Certificate',
+              ),
             ],
+          ]}
+        />
+      </ManakSubPanel>
+
+      <ManakSubPanel
+        title="Factory Details"
+        headerExtra={
+          <label className="flex cursor-pointer items-center gap-1.5 text-[11px] font-medium normal-case tracking-normal text-amber-100">
+            <input
+              type="checkbox"
+              className="h-3.5 w-3.5 accent-amber-600"
+              checked={sameAsOffice}
+              disabled={locked}
+              onChange={(e) => void toggleSame(e.target.checked)}
+            />
+            Same as Office Address
+          </label>
+        }
+      >
+        <FieldGrid
+          columns={2}
+          alignFullRowLabel
+          topLines={[['PinCode', 'City', 'District', 'State']]}
+          leadLines={[['E-MailId', 'Mobile No.']]}
+          tailLines={[['Address Proof Type', 'Latitude', 'Longitude']]}
+          fullRows={[
+            [
+              'Factory Address',
+              v(str(client?.factoryAddress), async (next) => done(factory({ address: next || null })), {
+                disabled: factoryLocked,
+                title: sameAsOffice ? 'Same as Office Address (untick to edit separately)' : factorySite ? undefined : 'Saving creates a separate Factory site for this client',
+              }),
+            ],
+          ]}
+          items={[
+            ['City', v(str(raw.city), col('city'))],
+            ['District', v(str(client?.factoryDistrict), async (next) => done(factory({ district: next || null })), { disabled: factoryLocked })],
+            ['State', v(str(client?.factoryState), async (next) => done(factory({ state: next || null })), { disabled: factoryLocked })],
+            ['Country', v(str(client?.country), col('country'))],
+            [
+              'PinCode',
+              v(str(client?.factoryPin), async (next) => done(factory({ pin_code: next || null })), {
+                disabled: factoryLocked,
+                normalize: (x) => x.replace(/[^0-9]/g, '').slice(0, 6),
+                validate: (x) => (x && x.length !== 6 ? 'Enter a 6 digit PIN code' : null),
+              }),
+            ],
+            ['E-MailId', v(str(client?.email), col('email'))],
+            ['Landline', landlineCell],
+            ['Mobile No.', mobileCell],
+            [
+              'Address Proof Type',
+              withProof(
+                v(str(addressDoc?.cert_name), certField(addressDoc, 'cert_name'), { disabled: locked || !addressDoc, title: addressDoc ? undefined : noDoc }),
+                addressDoc,
+                'GST Certificate',
+              ),
+            ],
+            ['Latitude', withMap(v(str(client?.latitude), col('latitude')))],
+            ['Longitude', withMap(v(str(client?.longitude), col('longitude')))],
           ]}
         />
       </ManakSubPanel>
