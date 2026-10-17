@@ -752,10 +752,11 @@ export function ManakGeneralStep({
     </div>
   )
 
-  const withMap = (node: ReactNode, kind: 'preview' | 'pdf') => (
+  const withMapActions = (node: ReactNode) => (
     <div className="flex items-center gap-1">
       <div className="min-w-0 flex-1">{node}</div>
-      <MapButton kind={kind} onPreview={onLocationMapPreview} onPdf={onLocationMapPdf} />
+      <MapButton kind="preview" onPreview={onLocationMapPreview} onPdf={onLocationMapPdf} />
+      <MapButton kind="pdf" onPreview={onLocationMapPreview} onPdf={onLocationMapPdf} />
       <GoogleMapsLink query={str(client?.companyName)} />
     </div>
   )
@@ -968,6 +969,7 @@ export function ManakGeneralStep({
         <FieldGrid
           columns={2}
           alignFullRowLabel
+          valueWeights={{ Latitude: 0.8, Longitude: 1.6 }}
           topLines={[['PinCode', 'City', 'District', 'State']]}
           leadLines={[['E-MailId', 'Mobile No.']]}
           tailLines={[['Address Proof Type', 'Latitude', 'Longitude']]}
@@ -1004,8 +1006,8 @@ export function ManakGeneralStep({
                 'GST Certificate',
               ),
             ],
-            ['Latitude', withMap(v(str(client?.latitude), col('latitude')), 'preview')],
-            ['Longitude', withMap(v(str(client?.longitude), col('longitude')), 'pdf')],
+            ['Latitude', v(str(client?.latitude), col('latitude'))],
+            ['Longitude', withMapActions(v(str(client?.longitude), col('longitude')))],
           ]}
         />
       </ManakSubPanel>
