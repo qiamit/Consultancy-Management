@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Check, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { Check, Download, Eye, FileType, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -290,6 +290,7 @@ export function ManakManagementStep({
   correspondence,
   onChanged,
   onOpenModule,
+  onTopManagement,
 }: {
   projectId: string
   client: BisPrintClient | undefined
@@ -298,6 +299,7 @@ export function ManakManagementStep({
   correspondence: Rec | null | undefined
   onChanged: () => void
   onOpenModule: (kind: BisPrintDocumentKind) => void
+  onTopManagement?: { preview: () => void; pdf: () => void; word: () => void }
 }) {
   const tmRows = rowsOf(topManagement)
   const firstTm = tmRows.find((r) => str(r.personName).trim())
@@ -346,7 +348,33 @@ export function ManakManagementStep({
 
   return (
     <>
-      <ManakPanel title="Firm's Management Details" onEdit={() => onOpenModule('top-management')} editLabel="Open module">
+      <ManakPanel
+        title="Firm's Management Details"
+        headerExtra={
+          onTopManagement ? (
+            <div className="flex shrink-0 items-center gap-1">
+              {(
+                [
+                  ['Preview Top Management Details', onTopManagement.preview, Eye],
+                  ['Download Top Management Details as PDF', onTopManagement.pdf, Download],
+                  ['Download Top Management Details as Word', onTopManagement.word, FileType],
+                ] as const
+              ).map(([label, handler, Icon]) => (
+                <button
+                  key={label}
+                  type="button"
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-none border border-stone-400 bg-white text-amber-800 transition-colors hover:bg-amber-50"
+                  title={label}
+                  aria-label={label}
+                  onClick={handler}
+                >
+                  <Icon size={15} aria-hidden />
+                </button>
+              ))}
+            </div>
+          ) : null
+        }
+      >
         <ManakSubPanel title="Top Management Details">
           <EditableRows
             projectId={projectId}

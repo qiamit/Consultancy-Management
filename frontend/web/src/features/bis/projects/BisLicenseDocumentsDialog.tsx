@@ -899,6 +899,11 @@ export function BisLicenseDocumentsDialog({
                     pdf: () => void runDownload('marking-fee-acceptance', 'pdf', true),
                     word: () => void runDownload('marking-fee-acceptance', 'word', true),
                   }}
+                  onTopManagement={{
+                    preview: () => handlePreview('top-management'),
+                    pdf: () => void runDownload('top-management', 'pdf', true),
+                    word: () => void runDownload('top-management', 'word', true),
+                  }}
                   onScopeDocument={{
                     preview: () => void previewScopeUndertaking(),
                     pdf: () => void downloadScopeUndertakingPdf(),

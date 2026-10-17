@@ -26,16 +26,20 @@ export function ManakPanel({
   children,
   onEdit,
   editLabel = 'Edit',
+  headerExtra,
 }: {
   title: string
   children: ReactNode
   onEdit?: () => void
   editLabel?: string
+  /** Extra controls shown on the right of the header. */
+  headerExtra?: ReactNode
 }) {
   return (
     <section className="mb-4 border-2 border-stone-500 bg-[#fffcf7] ring-1 ring-amber-700/20">
       <header className="flex items-center justify-between bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-3 py-2 text-sm text-white">
         <h3 className="font-semibold tracking-tight">{title}</h3>
+        {headerExtra}
         {onEdit ? (
           <button
             type="button"
@@ -318,6 +322,7 @@ export function ManakStepPage({
   onProjectSaved,
   onScopeDocument,
   onMarkingFee,
+  onTopManagement,
 }: {
   stepId: string
   row: BisProjectRow | null
@@ -333,6 +338,8 @@ export function ManakStepPage({
   onScopeDocument?: { preview: () => void; pdf: () => void; word: () => void }
   /** Undertaking for Minimum Marking Fee: edit (opens its form) and preview / PDF / Word. */
   onMarkingFee?: { edit: () => void; preview: () => void; pdf: () => void; word: () => void }
+  /** Top Management Details document: preview / PDF / Word. */
+  onTopManagement?: { preview: () => void; pdf: () => void; word: () => void }
 }) {
   const [reloadTick, setReloadTick] = useState(0)
   const { print, clientRaw, certificates, sites, projectRaw, branches, payloads, loading, error } = useStepData(row, refreshKey + reloadTick)
@@ -501,6 +508,7 @@ export function ManakStepPage({
         correspondence={payloads[CORRESPONDENCE_KIND]}
         onChanged={() => setReloadTick((t) => t + 1)}
         onOpenModule={onEdit}
+        onTopManagement={onTopManagement}
       />
     ) : null
   } else if (stepId === 'manufacturing') {
