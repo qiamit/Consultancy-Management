@@ -454,6 +454,7 @@ function FieldGrid({
   topLines = [],
   leadLines = [],
   tailLines = [],
+  alignFirstLabel = false,
 }: {
   items: Array<[string, ReactNode]>
   /** Label | value pairs per row (2 or 3). */
@@ -466,6 +467,8 @@ function FieldGrid({
   leadLines?: string[][]
   /** Like topLines, but shown after the grid. */
   tailLines?: string[][]
+  /** Give the first label of every line the width of a three-field line's label (a sixth of the row). */
+  alignFirstLabel?: boolean
 }) {
   const topTaken = [...leadLines.flat(), ...topLines.flat(), ...tailLines.flat()]
   const toGroups = (lines: string[][]) =>
@@ -489,9 +492,12 @@ function FieldGrid({
     groups.map((group, g) => (
       <table key={g} className={cn('w-full table-fixed border-collapse', (g > 0 || gap) && '-mt-px')}>
         <colgroup>
-          {Array.from({ length: group.length * 2 }, (_, k) => (
-            <col key={k} style={{ width: `${100 / (group.length * 2)}%` }} />
-          ))}
+          {Array.from({ length: group.length * 2 }, (_, k) => {
+            const n = group.length * 2
+            const first = alignFirstLabel && group.length !== 3
+            const width = first ? (k === 0 ? 100 / 6 : (100 - 100 / 6) / (n - 1)) : 100 / n
+            return <col key={k} style={{ width: `${width}%` }} />
+          })}
         </colgroup>
         <tbody>
           <tr>
@@ -514,7 +520,18 @@ function FieldGrid({
     <div className="overflow-x-auto">
       {renderGroups(leadGroups, false)}
       {fullRows.length > 0 ? (
-        <table className={cn('w-full table-auto border-collapse', leadGroups.length > 0 && '-mt-px')}>
+        <table
+          className={cn(
+            'w-full border-collapse',
+            alignFirstLabel ? 'table-fixed' : 'table-auto',
+            leadGroups.length > 0 && '-mt-px',
+          )}
+        >
+          {alignFirstLabel ? (
+            <colgroup>
+              <col style={{ width: `${100 / 6}%` }} />
+            </colgroup>
+          ) : null}
           <tbody>
             {fullRows.map(([label, node]) => (
               <tr key={label}>
@@ -863,6 +880,7 @@ export function ManakGeneralStep({
       <ManakSubPanel title="Office/Firm Details">
         <FieldGrid
           columns={2}
+          alignFirstLabel
           leadLines={[['CEO Name', 'E-MailId', 'Mobile No.']]}
           topLines={[
             ['PinCode', 'City', 'District', 'State'],
