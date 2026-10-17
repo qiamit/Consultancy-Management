@@ -47,15 +47,19 @@ export function ManakSubPanel({
   title,
   children,
   onEdit,
+  headerExtra,
 }: {
   title: string
   children: ReactNode
   onEdit?: () => void
+  /** Extra control shown on the right of the header (for example a checkbox). */
+  headerExtra?: ReactNode
 }) {
   return (
     <div className="border border-stone-300 bg-white">
       <div className="flex items-center justify-between bg-stone-800 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-amber-200">
         <span>{title}</span>
+        {headerExtra}
         {onEdit ? (
           <button
             type="button"

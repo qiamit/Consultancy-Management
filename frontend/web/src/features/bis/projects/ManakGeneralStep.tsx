@@ -1,13 +1,21 @@
-import { Fragment, useEffect, useId, useState, type ReactNode } from 'react'
-import { Calendar } from 'lucide-react'
+import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { Calendar, FileText, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { LimsFieldWithAdd } from '@/components/lims/LimsFieldWithAdd'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { limsFieldAddBtnClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { isValidGstin, isValidPan } from '@/lib/indiaValidators'
 import { patchClient, patchSite, type ClientSiteRow } from '@/features/masters/clients/clientLinkApi'
-import { updateClientCertificateDetails, type ClientCertificateFile } from '@/features/masters/clients/clientsApi'
+import {
+  deleteClientCertificate,
+  openClientCertificate,
+  updateClientCertificateDetails,
+  uploadClientCertificate,
+  type ClientCertificateFile,
+} from '@/features/masters/clients/clientsApi'
 import { CLIENT_SECTORS, COMPANY_SCALES } from '@/features/masters/clients/types'
 import type { BisPrintClient } from '../print/loadBisPrintData'
 import { ManakSubPanel, arrangeByLabelLength } from './ManakStepPages'
@@ -196,6 +204,158 @@ function EditableValue({ value, onSave, type = 'text', options, disabled, title,
   )
 }
 
+
+/**
+ * One button for a proof document kept in Client Master's Legal Documents table.
+ * No file: click uploads. File attached: click views, double-click offers delete.
+ */
+function ProofButton({
+  doc,
+  certName,
+  clientId,
+  disabled,
+  defaultNumber,
+  onChanged,
+}: {
+  doc: ClientCertificateFile | undefined
+  certName: string
+  clientId: string | null
+  disabled?: boolean
+  /** Document number written to a new row (for example the GST number already on the client). */
+  defaultNumber?: string
+  onChanged: () => void
+}) {
+  const fileRef = useRef<HTMLInputElement>(null)
+  const timer = useRef<number | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const hasFile = Boolean(doc?.storage_path)
+
+  useEffect(() => () => {
+    if (timer.current) window.clearTimeout(timer.current)
+  }, [])
+
+  const upload = async (file: File) => {
+    if (!clientId) return
+    setBusy(true)
+    try {
+      const today = new Date().toISOString().slice(0, 10)
+      await uploadClientCertificate(clientId, {
+        certName,
+        documentNumber: doc?.document_number ?? defaultNumber ?? '',
+        issuedOn: doc?.issued_on || today,
+        file,
+        existing: doc,
+      })
+      toast.success(`${certName} uploaded to Client Master`)
+      onChanged()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Upload failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const view = async () => {
+    if (!doc) return
+    try {
+      await openClientCertificate(doc)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not open the file')
+    }
+  }
+
+  const remove = async () => {
+    if (!doc) return
+    setBusy(true)
+    try {
+      await deleteClientCertificate(doc)
+      toast.success(`${certName} deleted`)
+      setConfirmDelete(false)
+      onChanged()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not delete')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const onClick = () => {
+    if (disabled || busy) return
+    if (!hasFile) {
+      fileRef.current?.click()
+      return
+    }
+    // Wait briefly so a double-click does not also open the file.
+    if (timer.current) window.clearTimeout(timer.current)
+    timer.current = window.setTimeout(() => {
+      timer.current = null
+      void view()
+    }, 250)
+  }
+
+  const onDoubleClick = () => {
+    if (disabled || busy || !hasFile) return
+    if (timer.current) {
+      window.clearTimeout(timer.current)
+      timer.current = null
+    }
+    setConfirmDelete(true)
+  }
+
+  return (
+    <>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="application/pdf,image/jpeg,image/png,image/webp"
+        className="sr-only"
+        onChange={(e) => {
+          const file = e.target.files?.[0]
+          e.target.value = ''
+          if (file) void upload(file)
+        }}
+      />
+      <button
+        type="button"
+        disabled={disabled || busy}
+        onClick={onClick}
+        onDoubleClick={onDoubleClick}
+        title={
+          hasFile
+            ? `${certName}: click to view, double-click to delete`
+            : `${certName} required: click to upload (PDF / image)`
+        }
+        aria-label={hasFile ? `View ${certName}` : `Upload ${certName}`}
+        className={cn(
+          'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-none border bg-white text-amber-900 transition-colors hover:bg-amber-50 disabled:opacity-50',
+          hasFile ? 'border-emerald-600 text-emerald-800' : 'border-red-500 text-red-700',
+        )}
+      >
+        {hasFile ? <FileText size={15} aria-hidden /> : <Upload size={15} aria-hidden />}
+      </button>
+      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <DialogContent className="max-w-sm rounded-none">
+          <DialogHeader>
+            <DialogTitle>Delete {certName}?</DialogTitle>
+            <DialogDescription>
+              This removes the file from Client Master as well. You can upload it again afterwards.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" className="rounded-none" onClick={() => setConfirmDelete(false)}>
+              Cancel
+            </Button>
+            <Button type="button" className="rounded-none bg-red-700 text-white hover:bg-red-800" disabled={busy} onClick={() => void remove()}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
+
 /** Grid layout: three label | value pairs per row. Same look as ManakFields, with editable values. */
 function FieldGrid({
   items,
@@ -279,6 +439,8 @@ export function ManakGeneralStep({
   const addressDoc = certificates.find((d) => ADDRESS_DOC.test(d.cert_name))
   const gstDoc = certificates.find((d) => /^gst/i.test(d.cert_name.trim()))
   const panDoc = certificates.find((d) => /^pan/i.test(d.cert_name.trim()))
+  const startupDoc = certificates.find((d) => /startup/i.test(d.cert_name))
+  const womenDoc = certificates.find((d) => /women/i.test(d.cert_name))
 
   const certField = (doc: ClientCertificateFile | undefined, key: 'cert_name' | 'document_number' | 'issued_on') =>
     async (v: string) => {
@@ -298,6 +460,7 @@ export function ManakGeneralStep({
     if (!clientId) return
     await patchClient(clientId, clientPatch)
     if (sites.some((s) => s.site_role === 'Registered Office' || s.is_primary)) await patchSite(clientId, 'Registered Office', patch)
+    if (sameAsOffice) await patchSite(clientId, 'Factory', patch, siteId)
   }
   const factorySite = sites.find((s) => (siteId && s.id === siteId) || s.site_role === 'Factory')
   const factory = (patch: Partial<Pick<ClientSiteRow, 'address' | 'district' | 'state' | 'pin_code'>>) => async () => {
@@ -305,6 +468,42 @@ export function ManakGeneralStep({
     await patchSite(clientId, 'Factory', patch, siteId)
   }
   const officeSite = sites.find((s) => s.is_primary) ?? sites.find((s) => s.site_role === 'Registered Office')
+
+  const norm = (x: unknown) => str(x).toLowerCase().replace(/\s+/g, ' ')
+  const officeAddr = str(officeSite?.address) || str(client?.officeAddress) || str(client?.address)
+  const officeDistrict = str(officeSite?.district) || str(client?.district)
+  const officeState = str(officeSite?.state) || str(client?.state)
+  const officePin = str(officeSite?.pin_code) || str(client?.pinCode)
+  /** Same convention as Client Master: factory is "same as office" when its address matches the office address. */
+  const derivedSame =
+    !factorySite ||
+    (norm(factorySite.address) === norm(officeAddr) &&
+      norm(factorySite.district) === norm(officeDistrict) &&
+      norm(factorySite.state) === norm(officeState) &&
+      norm(factorySite.pin_code) === norm(officePin))
+  const [sameAsOffice, setSameAsOffice] = useState(derivedSame)
+  useEffect(() => {
+    if (!derivedSame) setSameAsOffice(false)
+  }, [derivedSame])
+  const factoryLocked = locked || sameAsOffice
+
+  const toggleSame = async (checked: boolean) => {
+    setSameAsOffice(checked)
+    if (!checked || !clientId) return
+    try {
+      await patchSite(clientId, 'Factory', {
+        address: officeAddr || null,
+        district: officeDistrict || null,
+        state: officeState || null,
+        pin_code: officePin || null,
+      }, siteId)
+      toast.success('Factory address now follows the office address')
+      onChanged()
+    } catch (err) {
+      setSameAsOffice(false)
+      toast.error(err instanceof Error ? err.message : 'Could not save')
+    }
+  }
 
   const sectorOptions = [...CLIENT_SECTORS]
   const mobile = str(raw.mobile)
@@ -323,11 +522,32 @@ export function ManakGeneralStep({
     validate: (x) => (x && x.length !== 10 ? 'Enter a 10 digit mobile number' : null),
   })
 
-  const yesNoFlag = (textCol: string, flagCol: string, current: string) =>
-    v(current, async (next) => {
-      if (!clientId) return
-      await done(() => patchClient(clientId, { [textCol]: next || 'No', [flagCol]: next.toLowerCase() === 'yes' }))
-    }, { type: 'select', options: YES_NO })
+  const yesNoFlag = (
+    textCol: string,
+    flagCol: string,
+    current: string,
+    proof: { doc: ClientCertificateFile | undefined; certName: string },
+  ) => (
+    <div className="flex items-center gap-1">
+      <div className="min-w-0 flex-1">
+        {v(current, async (next) => {
+          if (!clientId) return
+          await done(() => patchClient(clientId, { [textCol]: next || 'No', [flagCol]: next.toLowerCase() === 'yes' }))
+        }, { type: 'select', options: YES_NO })}
+      </div>
+      {current.toLowerCase() === 'yes' ? (
+        <ProofButton doc={proof.doc} certName={proof.certName} clientId={clientId} disabled={locked} onChanged={onChanged} />
+      ) : null}
+    </div>
+  )
+
+  /** Field + proof-document button (upload / view / double-click delete) for a legal document. */
+  const withProof = (node: ReactNode, doc: ClientCertificateFile | undefined, fallbackName: string, defaultNumber?: string) => (
+    <div className="flex items-center gap-1">
+      <div className="min-w-0 flex-1">{node}</div>
+      <ProofButton doc={doc} certName={doc?.cert_name || fallbackName} clientId={clientId} disabled={locked} defaultNumber={defaultNumber} onChanged={onChanged} />
+    </div>
+  )
 
   const gstValue = str(client?.gstNumber)
   const panValue = str(raw.pan)
@@ -347,7 +567,11 @@ export function ManakGeneralStep({
             ['Nature of Firm', v(str(raw.constitution), col('constitution'), { type: 'select', options: NATURE_OF_FIRM })],
             [
               'Proof of Establishment of Firm',
-              v(str(proofDoc?.cert_name), certField(proofDoc, 'cert_name'), { disabled: locked || !proofDoc, title: proofDoc ? undefined : noDoc }),
+              withProof(
+                v(str(proofDoc?.cert_name), certField(proofDoc, 'cert_name'), { disabled: locked || !proofDoc, title: proofDoc ? undefined : noDoc }),
+                proofDoc,
+                'Certificate of Incorporation',
+              ),
             ],
             ['Sector', v(str(client?.sector), col('sector'), { type: 'select', options: sectorOptions })],
             ['Scale', v(str(client?.scale), col('company_scale'), { type: 'select', options: [...COMPANY_SCALES] })],
@@ -368,6 +592,7 @@ export function ManakGeneralStep({
             ],
             [
               'GST Number',
+              withProof(
               v(
                 gstValue,
                 async (next) => {
@@ -388,9 +613,14 @@ export function ManakGeneralStep({
                   validate: (x) => (x && !isValidGstin(x) ? 'Invalid GST number' : null),
                 },
               ),
+              gstDoc,
+              'GST Certificate',
+              gstValue,
+              ),
             ],
             [
               'PAN Number',
+              withProof(
               v(
                 panValue,
                 async (next) => {
@@ -411,12 +641,25 @@ export function ManakGeneralStep({
                   validate: (x) => (x && !isValidPan(x) ? 'Invalid PAN' : null),
                 },
               ),
+              panDoc,
+              'PAN Card',
+              panValue,
+              ),
             ],
             [
               'Women Entrepreneur',
-              yesNoFlag('women_entrepreneur', 'is_women_entrepreneur', str(raw.women_entrepreneur) || (raw.is_women_entrepreneur ? 'Yes' : 'No')),
+              yesNoFlag('women_entrepreneur', 'is_women_entrepreneur', str(raw.women_entrepreneur) || (raw.is_women_entrepreneur ? 'Yes' : 'No'), {
+                doc: womenDoc,
+                certName: 'Women Entrepreneur Certificate',
+              }),
             ],
-            ['Startup', yesNoFlag('startup_status', 'is_startup', str(raw.startup_status) || (raw.is_startup ? 'Yes' : 'No'))],
+            [
+              'Startup',
+              yesNoFlag('startup_status', 'is_startup', str(raw.startup_status) || (raw.is_startup ? 'Yes' : 'No'), {
+                doc: startupDoc,
+                certName: 'Startup Certificate',
+              }),
+            ],
           ]}
         />
       </ManakSubPanel>
@@ -456,28 +699,48 @@ export function ManakGeneralStep({
             ['Mobile No.', mobileCell],
             [
               'Address Proof Type',
-              v(str(addressDoc?.cert_name), certField(addressDoc, 'cert_name'), { disabled: locked || !addressDoc, title: addressDoc ? undefined : noDoc }),
+              withProof(
+                v(str(addressDoc?.cert_name), certField(addressDoc, 'cert_name'), { disabled: locked || !addressDoc, title: addressDoc ? undefined : noDoc }),
+                addressDoc,
+                'GST Certificate',
+              ),
             ],
           ]}
         />
       </ManakSubPanel>
 
-      <ManakSubPanel title="Factory Details">
+      <ManakSubPanel
+        title="Factory Details"
+        headerExtra={
+          <label className="flex cursor-pointer items-center gap-1.5 text-[11px] font-medium normal-case tracking-normal text-amber-100">
+            <input
+              type="checkbox"
+              className="h-3.5 w-3.5 accent-amber-600"
+              checked={sameAsOffice}
+              disabled={locked}
+              onChange={(e) => void toggleSame(e.target.checked)}
+            />
+            Same as Office Address
+          </label>
+        }
+      >
         <FieldGrid
           items={[
             [
               'Factory Address',
               v(str(client?.factoryAddress), async (next) => done(factory({ address: next || null })), {
-                title: factorySite ? undefined : 'Saving creates a separate Factory site for this client',
+                disabled: factoryLocked,
+                title: sameAsOffice ? 'Same as Office Address (untick to edit separately)' : factorySite ? undefined : 'Saving creates a separate Factory site for this client',
               }),
             ],
             ['City', v(str(raw.city), col('city'))],
-            ['District', v(str(client?.factoryDistrict), async (next) => done(factory({ district: next || null })))],
-            ['State', v(str(client?.factoryState), async (next) => done(factory({ state: next || null })))],
+            ['District', v(str(client?.factoryDistrict), async (next) => done(factory({ district: next || null })), { disabled: factoryLocked })],
+            ['State', v(str(client?.factoryState), async (next) => done(factory({ state: next || null })), { disabled: factoryLocked })],
             ['Country', v(str(client?.country), col('country'))],
             [
               'PinCode',
               v(str(client?.factoryPin), async (next) => done(factory({ pin_code: next || null })), {
+                disabled: factoryLocked,
                 normalize: (x) => x.replace(/[^0-9]/g, '').slice(0, 6),
                 validate: (x) => (x && x.length !== 6 ? 'Enter a 6 digit PIN code' : null),
               }),
@@ -487,7 +750,11 @@ export function ManakGeneralStep({
             ['Mobile No.', mobileCell],
             [
               'Address Proof Type',
-              v(str(addressDoc?.cert_name), certField(addressDoc, 'cert_name'), { disabled: locked || !addressDoc, title: addressDoc ? undefined : noDoc }),
+              withProof(
+                v(str(addressDoc?.cert_name), certField(addressDoc, 'cert_name'), { disabled: locked || !addressDoc, title: addressDoc ? undefined : noDoc }),
+                addressDoc,
+                'GST Certificate',
+              ),
             ],
             ['Latitude', v(str(client?.latitude), col('latitude'))],
             ['Longitude', v(str(client?.longitude), col('longitude'))],
