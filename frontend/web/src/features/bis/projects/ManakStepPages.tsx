@@ -7,7 +7,9 @@ import { supabase } from '@/lib/supabaseClient'
 import { listClientCertificates, type ClientCertificateFile } from '@/features/masters/clients/clientsApi'
 import { fetchBisModulePayload } from './bisModuleDataApi'
 import { listSites, type ClientSiteRow } from '@/features/masters/clients/clientLinkApi'
+import { listBisBranchOffices, type BisBranchOfficeRow } from '@/features/masters/bis-branch-offices/bisBranchOfficesApi'
 import { ManakGeneralStep } from './ManakGeneralStep'
+import { ManakVarietiesTable } from './ManakVarietiesTable'
 import { CORRESPONDENCE_KIND, ManakManagementStep } from './ManakManagementStep'
 import type { BisProjectRow } from './types'
 
@@ -197,29 +199,33 @@ type StepData = {
   clientRaw: Record<string, unknown> | null
   certificates: ClientCertificateFile[]
   sites: ClientSiteRow[]
+  projectRaw: Record<string, unknown> | null
+  branches: BisBranchOfficeRow[]
   payloads: Partial<Record<BisPrintDocumentKind, Payload>>
   loading: boolean
   error: string
 }
 
 function useStepData(row: BisProjectRow | null, refreshKey: number): StepData {
-  const [state, setState] = useState<StepData>({ print: null, clientRaw: null, certificates: [], sites: [], payloads: {}, loading: false, error: '' })
+  const [state, setState] = useState<StepData>({ print: null, clientRaw: null, certificates: [], sites: [], projectRaw: null, branches: [], payloads: {}, loading: false, error: '' })
   useEffect(() => {
     if (!row?.id) {
-      setState({ print: null, clientRaw: null, certificates: [], sites: [], payloads: {}, loading: false, error: '' })
+      setState({ print: null, clientRaw: null, certificates: [], sites: [], projectRaw: null, branches: [], payloads: {}, loading: false, error: '' })
       return
     }
     let cancelled = false
     setState((s) => ({ ...s, loading: true, error: '' }))
     void (async () => {
       try {
-        const [print, clientRes, certs, siteRows, ...loaded] = await Promise.all([
+        const [print, clientRes, certs, siteRows, projectRes, branchRows, ...loaded] = await Promise.all([
           loadBisPrintData(row),
           row.client_id
             ? supabase.from('clients').select('*').eq('id', row.client_id).maybeSingle()
             : Promise.resolve({ data: null }),
           row.client_id ? listClientCertificates(row.client_id).catch(() => []) : Promise.resolve([]),
           row.client_id ? listSites(row.client_id) : Promise.resolve([]),
+          supabase.from('bis_projects').select('*').eq('id', row.id).maybeSingle(),
+          listBisBranchOffices().catch(() => [] as BisBranchOfficeRow[]),
           ...STEP_MODULES.map((k) => fetchBisModulePayload(row.id, k).catch(() => null)),
         ])
         if (cancelled) return
@@ -232,13 +238,15 @@ function useStepData(row: BisProjectRow | null, refreshKey: number): StepData {
           clientRaw: (clientRes.data as Record<string, unknown> | null) ?? null,
           certificates: certs,
           sites: siteRows,
+          projectRaw: (projectRes.data as Record<string, unknown> | null) ?? null,
+          branches: branchRows,
           payloads,
           loading: false,
           error: '',
         })
       } catch (err) {
         if (!cancelled) {
-          setState({ print: null, clientRaw: null, certificates: [], sites: [], payloads: {}, loading: false, error: err instanceof Error ? err.message : 'Could not load data' })
+          setState({ print: null, clientRaw: null, certificates: [], sites: [], projectRaw: null, branches: [], payloads: {}, loading: false, error: err instanceof Error ? err.message : 'Could not load data' })
         }
       }
     })()
@@ -268,6 +276,9 @@ export function ManakStepPage({
   refreshKey,
   onEdit,
   documents,
+  onLocationMapPreview,
+  onLocationMapPdf,
+  onProjectSaved,
 }: {
   stepId: string
   row: BisProjectRow | null
@@ -275,9 +286,13 @@ export function ManakStepPage({
   onEdit: (kind: BisPrintDocumentKind) => void
   /** Existing document rows (view / print / PDF / generate) for this step. */
   documents: ReactNode
+  /** Location map preview (single click) and PDF download (double click) from the documents dialog. */
+  onLocationMapPreview?: () => void
+  onLocationMapPdf?: () => void
+  onProjectSaved?: () => void
 }) {
   const [reloadTick, setReloadTick] = useState(0)
-  const { print, clientRaw, certificates, sites, payloads, loading, error } = useStepData(row, refreshKey + reloadTick)
+  const { print, clientRaw, certificates, sites, projectRaw, branches, payloads, loading, error } = useStepData(row, refreshKey + reloadTick)
   const edit = (kind: BisPrintDocumentKind) => () => onEdit(kind)
   const c = print?.client
   const isCode = print?.isCode
@@ -297,6 +312,11 @@ export function ManakStepPage({
         certificates={certificates}
         sites={sites}
         linked={linked}
+        projectRaw={projectRaw}
+        branches={branches}
+        onLocationMapPreview={onLocationMapPreview}
+        onLocationMapPdf={onLocationMapPdf}
+        onProjectSaved={onProjectSaved}
         onChanged={() => setReloadTick((t) => t + 1)}
       >
         <ManakSubPanel title="Indian Standard Details">
@@ -309,10 +329,11 @@ export function ManakStepPage({
           />
         </ManakSubPanel>
         <ManakSubPanel title="Varieties" onEdit={edit('osl-sample-requirements')}>
-          <ManakTable
-            head={['S.No.', 'Variety applied for']}
-            rows={varieties.map((v, i) => [i + 1, v])}
-            empty="No varieties yet — they come from Sample Requirements."
+          <ManakVarietiesTable
+            projectId={row?.id ?? null}
+            isCodeId={row?.is_code_id ?? null}
+            isNumber={isCode?.label || isCode?.isNumber || ''}
+            varieties={varieties}
           />
         </ManakSubPanel>
       </ManakGeneralStep>

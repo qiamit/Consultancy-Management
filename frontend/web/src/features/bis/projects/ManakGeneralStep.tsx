@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from 'react'
-import { Calendar, FileText, Upload } from 'lucide-react'
+import { Calendar, FileText, MapPin, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { LimsFieldWithAdd } from '@/components/lims/LimsFieldWithAdd'
 import { Button } from '@/components/ui/button'
@@ -18,6 +18,7 @@ import {
   type ClientCertificateFile,
 } from '@/features/masters/clients/clientsApi'
 import { CLIENT_SECTORS, COMPANY_SCALES } from '@/features/masters/clients/types'
+import { type BisBranchOfficeRow } from '@/features/masters/bis-branch-offices/bisBranchOfficesApi'
 import type { BisPrintClient } from '../print/loadBisPrintData'
 import { ManakSubPanel, arrangeByLabelLength } from './ManakStepPages'
 import type { BisProjectRow } from './types'
@@ -411,6 +412,39 @@ function ProofButton({
   )
 }
 
+/** Map pin: click previews the location map, double-click downloads it as a PDF. */
+function MapButton({ onPreview, onPdf }: { onPreview?: () => void; onPdf?: () => void }) {
+  const timer = useRef<number | null>(null)
+  useEffect(() => () => {
+    if (timer.current) window.clearTimeout(timer.current)
+  }, [])
+  return (
+    <button
+      type="button"
+      disabled={!onPreview}
+      title="Location map: click to preview, double-click to download PDF"
+      aria-label="Location map"
+      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-none border border-stone-400 bg-white text-amber-800 transition-colors hover:bg-amber-50 disabled:opacity-50"
+      onClick={() => {
+        if (timer.current) window.clearTimeout(timer.current)
+        timer.current = window.setTimeout(() => {
+          timer.current = null
+          onPreview?.()
+        }, 250)
+      }}
+      onDoubleClick={() => {
+        if (timer.current) {
+          window.clearTimeout(timer.current)
+          timer.current = null
+        }
+        onPdf?.()
+      }}
+    >
+      <MapPin size={15} aria-hidden />
+    </button>
+  )
+}
+
 /** Grid layout: three label | value pairs per row. Same look as ManakFields, with editable values. */
 function FieldGrid({
   items,
@@ -463,6 +497,11 @@ export function ManakGeneralStep({
   certificates,
   sites,
   linked,
+  projectRaw,
+  branches,
+  onLocationMapPreview,
+  onLocationMapPdf,
+  onProjectSaved,
   onChanged,
   children,
 }: {
@@ -473,6 +512,11 @@ export function ManakGeneralStep({
   sites: ClientSiteRow[]
   /** True until the application becomes a licence (licence number generated). */
   linked: boolean
+  projectRaw: Rec | null
+  branches: BisBranchOfficeRow[]
+  onLocationMapPreview?: () => void
+  onLocationMapPdf?: () => void
+  onProjectSaved?: () => void
   onChanged: () => void
   /** Indian Standard / Varieties panels rendered below. */
   children: ReactNode
@@ -605,6 +649,122 @@ export function ManakGeneralStep({
     </div>
   )
 
+  const withMap = (node: ReactNode) => (
+    <div className="flex items-center gap-1">
+      <div className="min-w-0 flex-1">{node}</div>
+      <MapButton onPreview={onLocationMapPreview} onPdf={onLocationMapPdf} />
+    </div>
+  )
+
+
+  /* ---- Branch & Application details (columns on the BIS project itself) ---- */
+  const projectId = row?.id ?? null
+  const proj = projectRaw ?? {}
+  const appLocked = !projectId
+  const saveProject = (patch: Rec) => async () => {
+    if (!projectId) return
+    const { error } = await supabase.from('bis_projects').update(patch).eq('id', projectId).select('id')
+    if (error) throw new Error(error.message)
+    onProjectSaved?.()
+    onChanged()
+  }
+  const pf = (
+    column: string,
+    value: string,
+    extra: Partial<EditableProps> = {},
+    patchFor?: (next: string) => Rec,
+  ) => (
+    <EditableValue
+      value={value}
+      disabled={appLocked}
+      onSave={async (next) => saveProject(patchFor ? patchFor(next) : { [column]: next || null })()}
+      {...extra}
+    />
+  )
+  const money = (x: string) => {
+    const cleaned = x.replace(/,/g, '').replace(/[^\d.]/g, '')
+    const [whole = '', ...fraction] = cleaned.split('.')
+    return fraction.length ? `${whole}.${fraction.join('')}` : whole
+  }
+  const productionValueOf = (actual: string, rate: string) => {
+    if (!actual.trim() || !rate.trim()) return ''
+    const n = Number(actual) * Number(rate)
+    return Number.isFinite(n) ? n.toFixed(2) : ''
+  }
+  const installedCap = str(proj.installed_capacity)
+  const actualCap = str(proj.actual_capacity)
+  const rateVal = str(proj.production_rate)
+  const branchNames = branches.map((b) => b.name)
+  const applicationItems: Array<[string, ReactNode]> = [
+    [
+      'Application Process',
+      pf('application_process', str(proj.application_process) === 'normal' ? 'Normal' : 'Simplified', { type: 'select', options: ['Simplified', 'Normal'] }, (n) => ({
+        application_process: n === 'Normal' ? 'normal' : 'simplified',
+      })),
+    ],
+    ['Application Number', pf('application_number', str(proj.application_number), { normalize: (x) => x.replace(/\D/g, '') })],
+    ['Application Date', pf('application_date', str(proj.application_date).slice(0, 10), { type: 'date' })],
+    ['Inspection Date', pf('inspection_date', str(proj.inspection_date).slice(0, 10), { type: 'date' })],
+    ['Type of Inspection', pf('type_of_inspection', str(proj.type_of_inspection))],
+    ['Production Unit', pf('production_unit', str(proj.production_unit))],
+    [
+      'Installed Capacity',
+      pf(
+        'installed_capacity',
+        installedCap,
+        { normalize: money },
+        (n) => {
+          const clearActual = n && actualCap && Number(actualCap) >= Number(n)
+          const nextActual = clearActual ? '' : actualCap
+          return {
+            installed_capacity: n || null,
+            actual_capacity: nextActual || null,
+            production_value: productionValueOf(nextActual, rateVal) || null,
+          }
+        },
+      ),
+    ],
+    [
+      'Actual Capacity',
+      pf(
+        'actual_capacity',
+        actualCap,
+        {
+          normalize: money,
+          validate: (n) => (n && installedCap && Number(n) >= Number(installedCap) ? 'Must be less than installed capacity' : null),
+        },
+        (n) => ({ actual_capacity: n || null, production_value: productionValueOf(n, rateVal) || null }),
+      ),
+    ],
+    [
+      'Rate per Unit',
+      pf('production_rate', rateVal, { normalize: money }, (n) => ({
+        production_rate: n || null,
+        production_value: productionValueOf(actualCap, n) || null,
+      })),
+    ],
+    ['Production Value', <EditableValue key="pv" value={productionValueOf(actualCap, rateVal) || str(proj.production_value)} disabled onSave={async () => undefined} />],
+    [
+      'Branch Name',
+      pf(
+        'branch_name',
+        str(proj.branch_name),
+        { type: 'select', options: branchNames },
+        (n) => {
+          const office = branches.find((b) => b.name === n)
+          return { branch_name: n || null, branch_state: (office?.state ?? (n ? str(proj.branch_state) : '')) || null }
+        },
+      ),
+    ],
+    ['Branch State', <EditableValue key="bs" value={str(proj.branch_state)} disabled onSave={async () => undefined} />],
+    ['Branch Head Name', pf('branch_head_name', str(proj.branch_head_name))],
+    ['Branch Head Designation', pf('branch_head_designation', str(proj.branch_head_designation))],
+    ['Inspection Officer Name', pf('inspection_officer_name', str(proj.inspection_officer_name))],
+    ['Inspection Officer Designation', pf('inspection_officer_designation', str(proj.inspection_officer_designation))],
+    ['Dealing Officer Name', pf('dealing_officer_name', str(proj.dealing_officer_name))],
+    ['Dealing Officer Designation', pf('dealing_officer_designation', str(proj.dealing_officer_designation))],
+  ]
+
   const gstValue = str(client?.gstNumber)
   const panValue = str(raw.pan)
 
@@ -615,6 +775,10 @@ export function ManakGeneralStep({
           This application is no longer linked to Client Master (a licence number exists), so these details are read-only here.
         </p>
       ) : null}
+
+      <ManakSubPanel title="Branch & Application Details">
+        <FieldGrid items={applicationItems} />
+      </ManakSubPanel>
 
       <ManakSubPanel title="Registration Details">
         <FieldGrid
@@ -830,8 +994,8 @@ export function ManakGeneralStep({
                 'GST Certificate',
               ),
             ],
-            ['Latitude', v(str(client?.latitude), col('latitude'))],
-            ['Longitude', v(str(client?.longitude), col('longitude'))],
+            ['Latitude', withMap(v(str(client?.latitude), col('latitude')))],
+            ['Longitude', withMap(v(str(client?.longitude), col('longitude')))],
           ]}
         />
       </ManakSubPanel>

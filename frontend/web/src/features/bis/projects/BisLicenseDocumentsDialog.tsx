@@ -1061,6 +1061,9 @@ export function BisLicenseDocumentsDialog({
                   row={row}
                   refreshKey={refreshKey}
                   onEdit={handleModuleEdit}
+                  onLocationMapPreview={() => handlePreview('location-map')}
+                  onLocationMapPdf={() => void runDownload('location-map', 'pdf')}
+                  onProjectSaved={onProjectSaved}
                   documents={
                     <div className="border border-stone-300 bg-[#fffcf7]">
                     {currentKinds.length === 0 ? (
