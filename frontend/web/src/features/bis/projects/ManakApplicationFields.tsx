@@ -321,9 +321,8 @@ export function ManakApplicationFields({
   const labelCls =
     'w-[1%] whitespace-nowrap border border-[#e7e0d4] bg-[#f7f3eb] px-3 py-1.5 text-left align-middle text-sm font-bold text-stone-800'
   const valueCls = 'border border-[#e7e0d4] px-2 py-1.5 align-middle text-sm text-stone-700'
-  // One shared six-column table so label and value columns line up across every row.
-  // Three-field lines use all six cells; two-field lines stretch the second value over the last three.
-  // Fixed order on these two lines (no re-sorting by label length).
+  // Three-field lines share one table; two-field lines get their own table split into four equal parts
+  // (label | value | label | value, 25% each).
   const threeUp = lineItems
   return (
     <div className="overflow-x-auto">
@@ -341,18 +340,26 @@ export function ManakApplicationFields({
               ))}
             </tr>
           ))}
+        </tbody>
+      </table>
+      <table className="-mt-px w-full table-fixed border-collapse">
+        <colgroup>
+          <col className="w-1/4" />
+          <col className="w-1/4" />
+          <col className="w-1/4" />
+          <col className="w-1/4" />
+        </colgroup>
+        <tbody>
           {pairItems.map((pair, i) => (
             <tr key={`w${i}`}>
-              <th scope="row" className={labelCls}>
+              <th scope="row" className={cn(labelCls, 'w-auto whitespace-normal')}>
                 {pair[0] ? `${pair[0][0]}:` : ''}
               </th>
-              <td className={cn(valueCls, 'w-[22%]')}>{pair[0] ? pair[0][1] : null}</td>
-              <th scope="row" className={labelCls}>
+              <td className={valueCls}>{pair[0] ? pair[0][1] : null}</td>
+              <th scope="row" className={cn(labelCls, 'w-auto whitespace-normal')}>
                 {pair[1] ? `${pair[1][0]}:` : ''}
               </th>
-              <td colSpan={3} className={valueCls}>
-                {pair[1] ? pair[1][1] : null}
-              </td>
+              <td className={valueCls}>{pair[1] ? pair[1][1] : null}</td>
             </tr>
           ))}
         </tbody>
