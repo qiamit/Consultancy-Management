@@ -9,7 +9,8 @@ import { fetchBisModulePayload } from './bisModuleDataApi'
 import { listSites, type ClientSiteRow } from '@/features/masters/clients/clientLinkApi'
 import { listBisBranchOffices, type BisBranchOfficeRow } from '@/features/masters/bis-branch-offices/bisBranchOfficesApi'
 import { ManakGeneralStep } from './ManakGeneralStep'
-import { ManakVarietiesTable, ProductManualValue } from './ManakVarietiesTable'
+import { ManakVarietiesTable } from './ManakVarietiesTable'
+import { ManakSitRow } from './ManakSitRow'
 import { CORRESPONDENCE_KIND, ManakManagementStep } from './ManakManagementStep'
 import type { BisProjectRow } from './types'
 
@@ -350,12 +351,19 @@ export function ManakStepPage({
       >
         <ManakSubPanel title="Indian Standard Details">
           <ManakFields
-            lines={[['Standard Title', 'Standard Number'], ['Product Manual']]}
+            lines={[['Standard Title', 'Standard Number']]}
             items={[
               ['Standard Title', isCode?.title],
-              ['Product Manual', <ProductManualValue key="pm" isCodeId={row?.is_code_id ?? null} value={isCode?.productManualNumber} />],
               ['Standard Number', isCode?.label],
             ]}
+          />
+          <ManakSitRow
+            projectId={row?.id ?? null}
+            isCodeId={row?.is_code_id ?? null}
+            masterManualNumber={s(isCode?.productManualNumber)}
+            payload={payloads['cmpf-311'] ?? null}
+            onChanged={() => setReloadTick((t) => t + 1)}
+            onOpenOwnSit={edit('cmpf-311')}
           />
         </ManakSubPanel>
         <ManakVarietiesTable

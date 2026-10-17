@@ -74,7 +74,16 @@ function openProductManualOnline(isNumber: string, setBusy: (busy: boolean) => v
 }
 
 /** Product manual number with a view button when a manual PDF is attached to the IS Code master (opens in a new tab, no download). */
-export function ProductManualValue({ isCodeId, value }: { isCodeId: string | null; value?: string | null }) {
+export function ProductManualValue({
+  isCodeId,
+  value,
+  buttonOnly = false,
+}: {
+  isCodeId: string | null
+  value?: string | null
+  /** Show only the view button (the number is shown elsewhere). */
+  buttonOnly?: boolean
+}) {
   const [manual, setManual] = useState<IsCodeFileLink | null>(null)
   useEffect(() => {
     const id = (isCodeId ?? '').trim()
@@ -95,7 +104,7 @@ export function ProductManualValue({ isCodeId, value }: { isCodeId: string | nul
   const missing = Boolean(manual) && !manual?.url?.trim()
   return (
     <span className="inline-flex items-center gap-2">
-      <span>{value || <span className="text-stone-400">—</span>}</span>
+      {buttonOnly ? null : <span>{value || <span className="text-stone-400">—</span>}</span>}
       {manual ? (
         <button
           type="button"
