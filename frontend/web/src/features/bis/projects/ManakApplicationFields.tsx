@@ -312,9 +312,9 @@ export function ManakApplicationFields({
     ['Production Unit', 'Production Value'],
     ['Branch Name', 'Branch State'],
     ['Branch Head Name', 'Branch Head Designation'],
+    ['Dealing Officer Name', 'Dealing Officer Designation'],
     ['Inspection Officer Name', 'Inspection Officer Designation'],
     ['Inspection Date', 'Type of Inspection'],
-    ['Dealing Officer Name', 'Dealing Officer Designation'],
   ]
   const find = (l: string) => items.find(([label]) => label === l)
   const pairItems = pairLines.map((labels) => labels.map(find).filter((x): x is [string, ReactNode] => Boolean(x)))
