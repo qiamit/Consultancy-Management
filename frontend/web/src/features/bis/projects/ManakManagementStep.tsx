@@ -533,7 +533,7 @@ export function ManakManagementStep({
               { key: 'designation', label: 'Designation' },
               { key: 'mobile', label: 'Contact No.' },
               { key: 'email', label: 'Email ID' },
-              { key: 'din', label: 'DIN (if applicable)', placeholder: '8 digit DIN', optional: true, digits: 8 },
+              { key: 'din', label: 'DIN', placeholder: '8 digit DIN', optional: true, digits: 8, width: '7.5rem' },
             ]}
             extraColumns={[
               {
