@@ -476,8 +476,24 @@ function FieldGrid({
   )
   return (
     <div className="overflow-x-auto">
+      {fullRows.length > 0 ? (
+        <table className="w-full table-auto border-collapse">
+          <tbody>
+          {fullRows.map(([label, node]) => (
+            <tr key={label}>
+              <th scope="row" className={labelCls}>
+                {label}:
+              </th>
+              <td colSpan={columns * 2 - 1} className="border border-[#e7e0d4] px-2 py-1 align-middle text-sm text-stone-700">
+                {node}
+              </td>
+            </tr>
+          ))}
+          </tbody>
+        </table>
+      ) : null}
       {topItems.length > 0 ? (
-        <table className="w-full table-fixed border-collapse">
+        <table className={cn('w-full table-fixed border-collapse', fullRows.length > 0 && '-mt-px')}>
           <colgroup>
             {Array.from({ length: topItems.length * 2 }, (_, k) => (
               <col key={k} style={{ width: `${100 / (topItems.length * 2)}%` }} />
@@ -497,18 +513,8 @@ function FieldGrid({
           </tbody>
         </table>
       ) : null}
-      <table className={cn('w-full table-auto border-collapse', topItems.length > 0 && '-mt-px')}>
+      <table className={cn('w-full table-auto border-collapse', (topItems.length > 0 || fullRows.length > 0) && '-mt-px')}>
         <tbody>
-          {fullRows.map(([label, node]) => (
-            <tr key={label}>
-              <th scope="row" className={labelCls}>
-                {label}:
-              </th>
-              <td colSpan={columns * 2 - 1} className="border border-[#e7e0d4] px-2 py-1 align-middle text-sm text-stone-700">
-                {node}
-              </td>
-            </tr>
-          ))}
           {rows.map((pair, i) => (
             <tr key={i}>
               {pair.map((cell, j) => (
@@ -834,6 +840,7 @@ export function ManakGeneralStep({
       <ManakSubPanel title="Office/Firm Details">
         <FieldGrid
           columns={2}
+          topLabels={['CEO Name', 'E-MailId', 'Mobile No.']}
           fullRows={[
             ['Firm Name', v(str(client?.companyName), col('company_name'))],
             [
