@@ -2501,8 +2501,7 @@ export function LegalDocumentsModuleDialog({
               {onPreviewDocument ? (
                 <Button
                   type="button"
-                  variant="outline"
-                  className={cn(limsOutlineBtnClass, 'h-9 gap-1.5 px-4 text-sm')}
+                        className={cn(limsPrimaryBtnClass, 'h-9 gap-1.5 px-4 text-sm')}
                   disabled={!row?.id || busy || saving || loading}
                   title="Save and preview the SIT acceptance document"
                   onClick={() => void handleSave().then(() => onPreviewDocument(printKind))}
@@ -2513,8 +2512,7 @@ export function LegalDocumentsModuleDialog({
               {onPdfDocument ? (
                 <Button
                   type="button"
-                  variant="outline"
-                  className={cn(limsOutlineBtnClass, 'h-9 gap-1.5 px-4 text-sm')}
+                        className={cn(limsPrimaryBtnClass, 'h-9 gap-1.5 px-4 text-sm')}
                   disabled={!row?.id || busy || saving || loading}
                   title="Save and download the SIT acceptance document as PDF"
                   onClick={() => void handleSave().then(() => onPdfDocument(printKind))}
@@ -2526,8 +2524,7 @@ export function LegalDocumentsModuleDialog({
           ) : null}
           <Button
             type="button"
-            variant="outline"
-            className={cn(limsOutlineBtnClass, 'h-9 px-4 text-sm')}
+            className={cn(limsPrimaryBtnClass, 'h-9 px-4 text-sm')}
             disabled={busy || saving}
             onClick={() => onOpenChange(false)}
           >
