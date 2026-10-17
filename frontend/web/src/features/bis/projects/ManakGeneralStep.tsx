@@ -451,7 +451,7 @@ function FieldGrid({
   items,
   fullRows = [],
   columns = 3,
-  topLabels = [],
+  topLines = [],
 }: {
   items: Array<[string, ReactNode]>
   /** Label | value pairs per row (2 or 3). */
@@ -459,13 +459,14 @@ function FieldGrid({
   /** Fields that take a whole row (label + one wide value), shown above the three-column grid. */
   fullRows?: Array<[string, ReactNode]>
   /** Labels shown together on one first line (equal-width columns), above the grid. */
-  topLabels?: string[]
+  topLines?: string[][]
 }) {
-  const topItems = topLabels
-    .map((l) => items.find(([label]) => label === l))
-    .filter((x): x is [string, ReactNode] => Boolean(x))
+  const topTaken = topLines.flat()
+  const topGroups = topLines.map((labels) =>
+    labels.map((l) => items.find(([label]) => label === l)).filter((x): x is [string, ReactNode] => Boolean(x)),
+  )
   const rows = arrangeByLabelLength(
-    items.filter(([label]) => !topLabels.includes(label)),
+    items.filter(([label]) => !topTaken.includes(label)),
     columns,
   )
   const labelCls =
@@ -492,8 +493,11 @@ function FieldGrid({
           </tbody>
         </table>
       ) : null}
-      {topItems.length > 0 ? (
-        <table className={cn('w-full table-fixed border-collapse', fullRows.length > 0 && '-mt-px')}>
+      {topGroups.map((topItems, g) => (
+        <table
+          key={g}
+          className={cn('w-full table-fixed border-collapse', (g > 0 || fullRows.length > 0) && '-mt-px')}
+        >
           <colgroup>
             {Array.from({ length: topItems.length * 2 }, (_, k) => (
               <col key={k} style={{ width: `${100 / (topItems.length * 2)}%` }} />
@@ -503,7 +507,10 @@ function FieldGrid({
             <tr>
               {topItems.map(([label, node]) => (
                 <Fragment key={label}>
-                  <th scope="row" className={cn(labelCls, 'w-auto whitespace-normal')}>
+                  <th
+                    scope="row"
+                    className={cn(labelCls, 'w-auto whitespace-normal', topItems.length > 3 && 'whitespace-nowrap px-2 text-xs')}
+                  >
                     {label}:
                   </th>
                   <td className="border border-[#e7e0d4] px-2 py-1 align-middle text-sm text-stone-700">{node}</td>
@@ -512,8 +519,8 @@ function FieldGrid({
             </tr>
           </tbody>
         </table>
-      ) : null}
-      <table className={cn('w-full table-auto border-collapse', (topItems.length > 0 || fullRows.length > 0) && '-mt-px')}>
+      ))}
+      <table className={cn('w-full table-auto border-collapse', (topGroups.length > 0 || fullRows.length > 0) && '-mt-px')}>
         <tbody>
           {rows.map((pair, i) => (
             <tr key={i}>
@@ -716,7 +723,7 @@ export function ManakGeneralStep({
       <ManakSubPanel title="Registration Details">
         <FieldGrid
           columns={2}
-          topLabels={['User Id', 'Sector', 'Scale']}
+          topLines={[['User Id', 'Sector', 'Scale']]}
           items={[
             ['User Id', v(str(raw.manak_user_id), col('manak_user_id'))],
             ['Nature of Firm', v(str(raw.constitution), col('constitution'), { type: 'select', options: NATURE_OF_FIRM })],
@@ -840,7 +847,10 @@ export function ManakGeneralStep({
       <ManakSubPanel title="Office/Firm Details">
         <FieldGrid
           columns={2}
-          topLabels={['CEO Name', 'E-MailId', 'Mobile No.']}
+          topLines={[
+            ['CEO Name', 'E-MailId', 'Mobile No.'],
+            ['City', 'District', 'State', 'Country', 'PinCode'],
+          ]}
           fullRows={[
             ['Firm Name', v(str(client?.companyName), col('company_name'))],
             [
