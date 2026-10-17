@@ -11,6 +11,8 @@ import {
   fetchBisModulePayload,
   saveBisModulePayload,
 } from './bisModuleDataApi'
+import { MasterOptionFieldWithAdd } from './MasterOptionFieldWithAdd'
+import type { BisMasterOptionCategory } from './bisMasterOptions'
 import { ManakPanel, ManakSubPanel } from './ManakStepPages'
 
 type Rec = Record<string, unknown>
@@ -47,6 +49,8 @@ type Field = {
   optional?: boolean
   /** Digits only, exactly this many when filled in. */
   digits?: number
+  /** Select-or-add drop-down backed by a shared master list (the + button adds to it). */
+  master?: BisMasterOptionCategory
 }
 
 const cleanField = (f: Field, value: string) => (f.digits ? value.replace(/[^0-9]/g, '').slice(0, f.digits) : value)
@@ -199,6 +203,19 @@ function EditableRows({
               <td className={tdCls} />
               {fields.map((f) => (
                 <td key={f.key} className={tdCls}>
+                  {f.master ? (
+                    <MasterOptionFieldWithAdd
+                      category={f.master}
+                      label={f.label}
+                      manageTitle={f.label}
+                      showLabel={false}
+                      inputId={`er-${kind}-${f.key}-new`}
+                      listId={`er-${kind}-${f.key}-new-list`}
+                      value={str(draft[f.key])}
+                      onChange={(v) => setDraft((d) => ({ ...d, [f.key]: v }))}
+                      placeholder="Select or Add"
+                    />
+                  ) : (
                   <Input
                     className={inputCls}
                     placeholder={f.placeholder ?? f.label}
@@ -210,6 +227,7 @@ function EditableRows({
                       if (e.key === 'Enter') add()
                     }}
                   />
+                  )}
                 </td>
               ))}
               {extraColumns?.map((c) => (
@@ -253,7 +271,19 @@ function EditableRows({
                     </td>
                     {fields.map((f) => (
                       <td key={f.key} className={cn(tdCls, 'text-center')}>
-                        {editing ? (
+                        {editing && f.master ? (
+                          <MasterOptionFieldWithAdd
+                            category={f.master}
+                            label={f.label}
+                            manageTitle={f.label}
+                            showLabel={false}
+                            inputId={`er-${kind}-${f.key}-${index}`}
+                            listId={`er-${kind}-${f.key}-${index}-list`}
+                            value={str(editDraft[f.key])}
+                            onChange={(v) => setEditDraft((d) => ({ ...d, [f.key]: v }))}
+                            placeholder="Select or Add"
+                          />
+                        ) : editing ? (
                           <Input
                             className={inputCls}
                             value={str(editDraft[f.key])}
@@ -494,9 +524,9 @@ export function ManakManagementStep({
           kind={'technical-staff' as BisPrintDocumentKind}
           fields={[
             { key: 'personName', label: 'Name' },
-            { key: 'designation', label: 'Designation' },
+            { key: 'designation', label: 'Designation', master: 'designation', width: '12rem' },
             { key: 'educationalQualification', label: 'Qualification' },
-            { key: 'experienceYears', label: 'Experience (in years)', width: '9rem' },
+            { key: 'experienceYears', label: 'Experience (in years)', master: 'experience', width: '11rem' },
           ]}
           blank={() => ({ ...emptyTechnicalStaffRow() })}
           extraColumns={[

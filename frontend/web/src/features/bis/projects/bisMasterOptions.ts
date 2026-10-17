@@ -60,7 +60,7 @@ function sortMasterOptions(dbRows: BisMasterOption[]): BisMasterOption[] {
     byKey.set(opt.label.toLowerCase(), opt)
   }
   return [...byKey.values()].sort((a, b) =>
-    a.label.localeCompare(b.label, 'en', { sensitivity: 'base' }),
+    a.label.localeCompare(b.label, 'en', { sensitivity: 'base', numeric: true }),
   )
 }
 
