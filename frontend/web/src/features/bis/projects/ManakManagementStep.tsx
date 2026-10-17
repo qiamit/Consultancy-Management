@@ -38,7 +38,25 @@ async function patchPayload(
   await saveBisModulePayload(projectId, kind, mutate({ ...current }))
 }
 
-type Field = { key: string; label: string; placeholder?: string; width?: string }
+type Field = {
+  key: string
+  label: string
+  placeholder?: string
+  width?: string
+  /** Not mandatory: no asterisk, and it may stay empty. */
+  optional?: boolean
+  /** Digits only, exactly this many when filled in. */
+  digits?: number
+}
+
+const cleanField = (f: Field, value: string) => (f.digits ? value.replace(/[^0-9]/g, '').slice(0, f.digits) : value)
+const fieldError = (fields: Field[], values: Rec): string | null => {
+  for (const f of fields) {
+    const v = str(values[f.key]).trim()
+    if (f.digits && v && v.length !== f.digits) return `${f.label} must be ${f.digits} digits.`
+  }
+  return null
+}
 
 /**
  * Manak-style editable table: an input row on top with "+", then saved rows
@@ -92,6 +110,11 @@ function EditableRows({
       toast.error(`${fields[0]?.label ?? 'Name'} is required.`)
       return
     }
+    const bad = fieldError(fields, draft)
+    if (bad) {
+      toast.error(bad)
+      return
+    }
     void run(async () => {
       await patchPayload(projectId, kind, (p) => {
         const list = rowsOf(p).filter((r) => fields.some((f) => str(r[f.key]).trim()))
@@ -103,6 +126,11 @@ function EditableRows({
 
   const saveEdit = () => {
     if (editIndex == null) return
+    const bad = fieldError(fields, editDraft)
+    if (bad) {
+      toast.error(bad)
+      return
+    }
     void run(async () => {
       await patchPayload(projectId, kind, (p) => {
         const list = rowsOf(p).map((r, i) => (i === editIndex ? { ...r, ...editDraft } : r))
@@ -155,7 +183,7 @@ function EditableRows({
               {fields.map((f) => (
                 <th key={f.key} className={cn(thCls, 'text-center')} style={f.width ? { width: f.width } : undefined}>
                   {f.label}
-                  <span className="text-red-400">*</span>
+                  {f.optional ? null : <span className="text-red-400">*</span>}
                 </th>
               ))}
               {extraColumns?.map((c) => (
@@ -175,7 +203,9 @@ function EditableRows({
                     className={inputCls}
                     placeholder={f.placeholder ?? f.label}
                     value={str(draft[f.key])}
-                    onChange={(e) => setDraft({ ...draft, [f.key]: e.target.value })}
+                    onChange={(e) => setDraft({ ...draft, [f.key]: cleanField(f, e.target.value) })}
+                    inputMode={f.digits ? 'numeric' : undefined}
+                    maxLength={f.digits}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') add()
                     }}
@@ -227,7 +257,9 @@ function EditableRows({
                           <Input
                             className={inputCls}
                             value={str(editDraft[f.key])}
-                            onChange={(e) => setEditDraft({ ...editDraft, [f.key]: e.target.value })}
+                            onChange={(e) => setEditDraft({ ...editDraft, [f.key]: cleanField(f, e.target.value) })}
+                            inputMode={f.digits ? 'numeric' : undefined}
+                            maxLength={f.digits}
                           />
                         ) : (
                           str(r[f.key]) || <span className="text-stone-400">—</span>
@@ -340,6 +372,7 @@ export function ManakManagementStep({
     designation: '',
     mobile: '',
     email: '',
+    din: '',
     signatureFileId: '',
     signatureFileName: '',
     signatureStoragePath: '',
@@ -384,6 +417,7 @@ export function ManakManagementStep({
               { key: 'designation', label: 'Designation' },
               { key: 'mobile', label: 'Contact No.' },
               { key: 'email', label: 'Email ID' },
+              { key: 'din', label: 'DIN (if applicable)', placeholder: '8 digit DIN', optional: true, digits: 8 },
             ]}
             blank={blankTm}
             saved={tmRows}
