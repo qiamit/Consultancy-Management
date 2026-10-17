@@ -303,13 +303,13 @@ export function ManakApplicationFields({
   // everything else follows in two columns.
   const lines: string[][] = [
     ['Application Process', 'Application Number', 'Application Date'],
-    ['Installed Capacity', 'Actual Capacity', 'Rate / Unit'],
+    ['Installed Capacity', 'Actual Capacity', 'Rate / Unit', 'Production Value'],
   ]
   const lineItems = lines.map((labels) =>
     labels.map((l) => items.find(([label]) => label === l)).filter((x): x is [string, ReactNode] => Boolean(x)),
   )
   const pairLines: string[][] = [
-    ['Production Unit', 'Production Value'],
+    ['Production Unit'],
     ['Branch Name', 'Branch State'],
     ['Branch Head Name', 'Branch Head Designation'],
     ['Dealing Officer Name', 'Dealing Officer Designation'],
@@ -323,25 +323,26 @@ export function ManakApplicationFields({
   const valueCls = 'border border-[#e7e0d4] px-2 py-1.5 align-middle text-sm text-stone-700'
   // Three-field lines share one table; two-field lines get their own table split into four equal parts
   // (label | value | label | value, 25% each).
-  const threeUp = lineItems
+  const lineTable = (list: Array<[string, ReactNode]>, valueWidth: string, first: boolean) => (
+    <table className={cn('w-full table-auto border-collapse', !first && '-mt-px')}>
+      <tbody>
+        <tr>
+          {list.map((cell, j) => (
+            <Fragment key={j}>
+              <th scope="row" className={labelCls}>
+                {cell[0]}:
+              </th>
+              <td className={cn(valueCls, valueWidth)}>{cell[1]}</td>
+            </Fragment>
+          ))}
+        </tr>
+      </tbody>
+    </table>
+  )
   return (
     <div className="overflow-x-auto">
-      <table className="w-full table-auto border-collapse">
-        <tbody>
-          {threeUp.map((pair, i) => (
-            <tr key={`t${i}`}>
-              {pair.map((cell, j) => (
-                <Fragment key={j}>
-                  <th scope="row" className={labelCls}>
-                    {cell ? `${cell[0]}:` : ''}
-                  </th>
-                  <td className={cn(valueCls, 'w-[22%]')}>{cell ? cell[1] : null}</td>
-                </Fragment>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {lineTable(lineItems[0] ?? [], 'w-[22%]', true)}
+      {lineTable(lineItems[1] ?? [], 'w-[15%]', false)}
       <table className="-mt-px w-full table-fixed border-collapse">
         <colgroup>
           <col className="w-1/4" />
