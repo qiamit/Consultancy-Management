@@ -250,7 +250,7 @@ export function Cmpf311ModuleFields({
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-2 sm:p-3">
       {/* SIT type and Product Manual number are chosen on the application step (Select SIT row). */}
-      <section className="grid gap-2 border border-stone-300 bg-[#fffcf7] p-3 lg:grid-cols-2">
+      <section className="grid gap-2 border border-stone-300 bg-[#fffcf7] p-3 sm:grid-cols-2">
         <label className="flex flex-col gap-1 text-xs font-semibold text-stone-700">
           Reference Letter Number
           <Input className={cn(limsFieldClass, 'h-9')} value={value.referenceLetterNo} disabled={disabled} onChange={(event) => patch('referenceLetterNo', event.target.value)} />

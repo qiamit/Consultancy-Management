@@ -1,10 +1,17 @@
-import { useEffect, useState } from 'react'
-import { ClipboardList } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { ClipboardList, Eye, Trash2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { saveBisModulePayload } from './bisModuleDataApi'
+import {
+  deleteBisProjectFile,
+  formatBisProjectFilesError,
+  listBisProjectFiles,
+  uploadBisProjectFile,
+  type BisProjectViewFile,
+} from './bisProjectFilesApi'
 import { parseCmpf311Payload } from './cmpf311Model'
 import { ProductManualValue } from './ManakVarietiesTable'
 
@@ -62,6 +69,7 @@ export function ManakSitRow({
     .join(' · ')
 
   return (
+    <>
     <table className="-mt-px w-full table-fixed border-collapse">
       {/* Labels are the same width as the Standard Title label above (15%). */}
       <colgroup>
@@ -125,6 +133,124 @@ export function ManakSitRow({
                   <ClipboardList className="h-[15px] w-[15px]" aria-hidden />
                 </Button>
               )}
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    <ConsentLetterRow projectId={projectId} />
+    </>
+  )
+}
+
+/** Consent letter upload line: applies to BIS SIT and Own SIT alike, so it lives outside the SIT module. */
+function ConsentLetterRow({ projectId }: { projectId: string | null }) {
+  const inputRef = useRef<HTMLInputElement | null>(null)
+  const [files, setFiles] = useState<BisProjectViewFile[]>([])
+  const [busy, setBusy] = useState(false)
+
+  const reload = useCallback(async (id: string) => {
+    setFiles(await listBisProjectFiles(id, 'consent-letter'))
+  }, [])
+
+  useEffect(() => {
+    if (!projectId) {
+      setFiles([])
+      return
+    }
+    let active = true
+    void listBisProjectFiles(projectId, 'consent-letter')
+      .then((list) => {
+        if (active) setFiles(list)
+      })
+      .catch((error: unknown) => {
+        if (active) toast.error(formatBisProjectFilesError(error))
+      })
+    return () => {
+      active = false
+    }
+  }, [projectId])
+
+  const upload = async (file?: File) => {
+    if (!projectId || !file) return
+    setBusy(true)
+    try {
+      await uploadBisProjectFile(projectId, file, 'consent-letter')
+      await reload(projectId)
+      toast.success('Consent letter uploaded.')
+    } catch (error) {
+      toast.error(formatBisProjectFilesError(error))
+    } finally {
+      setBusy(false)
+      if (inputRef.current) inputRef.current.value = ''
+    }
+  }
+
+  const remove = async (file: BisProjectViewFile) => {
+    if (!projectId) return
+    setBusy(true)
+    try {
+      await deleteBisProjectFile(file)
+      await reload(projectId)
+    } catch (error) {
+      toast.error(formatBisProjectFilesError(error))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <table className="-mt-px w-full table-fixed border-collapse">
+      <colgroup>
+        <col style={{ width: '15%' }} />
+        <col style={{ width: '85%' }} />
+      </colgroup>
+      <tbody>
+        <tr>
+          <th scope="row" className={labelCls}>
+            Consent Letter:
+          </th>
+          <td className={valueCls}>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                ref={inputRef}
+                type="file"
+                accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
+                className="hidden"
+                disabled={!projectId || busy}
+                onChange={(event) => void upload(event.target.files?.[0])}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 rounded-none border-stone-400 bg-white text-xs text-amber-800 shadow-none hover:bg-amber-50"
+                disabled={!projectId || busy}
+                onClick={() => inputRef.current?.click()}
+              >
+                <Upload className="mr-1.5 h-4 w-4" aria-hidden /> Upload Consent Letter
+              </Button>
+              {files.map((file) => (
+                <span key={file.id} className="inline-flex max-w-full items-center gap-1 border border-stone-300 bg-white px-2 py-1 text-xs">
+                  <span className="max-w-[240px] truncate" title={file.file_name}>
+                    {file.file_name}
+                  </span>
+                  {file.viewUrl ? (
+                    <a className="inline-flex h-6 w-6 items-center justify-center text-amber-800" href={file.viewUrl} target="_blank" rel="noreferrer" aria-label={`View ${file.file_name}`}>
+                      <Eye size={14} />
+                    </a>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="inline-flex h-6 w-6 items-center justify-center text-red-700 disabled:opacity-50"
+                    disabled={busy}
+                    onClick={() => void remove(file)}
+                    aria-label={`Remove ${file.file_name}`}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </span>
+              ))}
             </div>
           </td>
         </tr>
