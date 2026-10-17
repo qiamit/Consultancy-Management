@@ -474,7 +474,7 @@ export const PRINT_PAGE_FRAME_CSS = `
     .al-sheet + .pd-sheet,
     .al-sheet + .al-sheet,
     .f1-sheet + .f1-sheet {
-      margin-top: 3mm;
+      margin-top: 0;
     }
   }
 `
