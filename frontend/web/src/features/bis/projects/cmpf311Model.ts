@@ -201,12 +201,13 @@ export async function loadCmpf311MasterData(isCodeId: string): Promise<{
     ? availableFiles.find((file) => file.id === manualPdf.id)
     : undefined
   if (manualOption) {
-    productManualFile = await downloadCmpf311MasterFile(manualOption)
+    // A manual that is listed in the master but missing from storage must not hide the other master files.
+    productManualFile = await downloadCmpf311MasterFile(manualOption).catch(() => null)
   }
   return {
     productManualNumber: text((codeResult.data as { product_manual_number?: unknown } | null)?.product_manual_number),
     productManualFile,
-    productManualFileId: manualOption?.id ?? null,
+    productManualFileId: productManualFile ? manualOption?.id ?? null : null,
     availableFiles,
   }
 }
