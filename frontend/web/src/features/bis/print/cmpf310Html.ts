@@ -11,6 +11,7 @@ import {
   type PrintApplicantContext,
 } from './printDocumentShared'
 import { parseCmpf310Payload } from '../projects/cmpf310Model'
+import type { UndertakingMinimumMarkingFeeData } from './undertakingMinimumMarkingFeeHtml'
 
 export type Cmpf310Data = { isNumber: string; feePerYear: string; unit: string }
 
@@ -52,6 +53,8 @@ export function buildCmpf310Html(data: Cmpf310Data): string {
   })
 }
 
+const ACCEPTANCE_STYLES = `${CMPF_FORM_STYLES}\n.mf-acceptance-page{font-size:11pt}.mf-acceptance-page .pd-title{text-decoration:none;margin-bottom:9px}.mf-acceptance-page .pd-to-row{margin-bottom:8px}.mf-acceptance-page .pd-body{text-align:justify;line-height:1.45;margin-bottom:8px}.mf-accept-summary{width:100%;border-collapse:collapse;margin:8px 0}.mf-accept-summary th,.mf-accept-summary td{border:1px solid #222;padding:5px 7px;text-align:left}.mf-accept-summary th{width:45%}.mf-accept-term{display:flex;gap:7px;margin:5px 0;text-align:justify;line-height:1.35}.mf-accept-closing{margin:9px 0;text-align:justify}.mf-accept-sign{width:78mm;margin:6mm 0 0 auto;text-align:right;page-break-inside:avoid;break-inside:avoid}.mf-accept-sign .pd-signatory{width:100%;text-align:right;margin-left:auto}.mf-accept-sign .pd-sign-space{justify-content:flex-end}.mf-accept-sign .pd-sign-line{margin-left:auto}`
+
 export function buildCmpf310AcceptanceLetterHtml(data: Cmpf310AcceptanceLetterData): string {
   const letterDate = inspectionDateOrToday(data.dateOfInspection)
   const referenceNumber = data.referenceLetterNo.trim() || '________________'
@@ -84,7 +87,61 @@ export function buildCmpf310AcceptanceLetterHtml(data: Cmpf310AcceptanceLetterDa
   return buildPrintPage({
     title: `Acceptance of Marking Fee — ${data.applicantName || 'Applicant'}`,
     body,
-    styles: `${CMPF_FORM_STYLES}\n.mf-acceptance-page{font-size:11pt}.mf-acceptance-page .pd-title{text-decoration:none;margin-bottom:9px}.mf-acceptance-page .pd-to-row{margin-bottom:8px}.mf-acceptance-page .pd-body{text-align:justify;line-height:1.45;margin-bottom:8px}.mf-accept-summary{width:100%;border-collapse:collapse;margin:8px 0}.mf-accept-summary th,.mf-accept-summary td{border:1px solid #222;padding:5px 7px;text-align:left}.mf-accept-summary th{width:45%}.mf-accept-term{display:flex;gap:7px;margin:5px 0;text-align:justify;line-height:1.35}.mf-accept-closing{margin:9px 0;text-align:justify}.mf-accept-sign{width:78mm;margin:6mm 0 0 auto;text-align:right;page-break-inside:avoid;break-inside:avoid}.mf-accept-sign .pd-signatory{width:100%;text-align:right;margin-left:auto}.mf-accept-sign .pd-sign-space{justify-content:flex-end}.mf-accept-sign .pd-sign-line{margin-left:auto}`,
+    styles: ACCEPTANCE_STYLES,
+  })
+}
+
+/** Annex-4 of the Marking Fee SOP: acceptance of the tentative marking fee for an All India First application. */
+export function buildTentativeMarkingFeeAcceptanceHtml(
+  data: Cmpf310AcceptanceLetterData & { productTitle: string; isLabel: string; fee: UndertakingMinimumMarkingFeeData },
+): string {
+  const letterDate = inspectionDateOrToday(data.dateOfInspection)
+  const referenceNumber = data.referenceLetterNo.trim() || '………………………'
+  const referenceDate = data.referenceLetterDate.trim() ? dateOrNa(data.referenceLetterDate) : '………………………'
+  const blank = '________________'
+  const unit = (data.fee.unitOfSale || '').trim() || 'unit'
+  const minimumFeeRows = [
+    ['Minimum marking fee — Large Scale', data.fee.mmfLarge.trim() || blank],
+    ['Minimum marking fee — MSME', data.fee.mmfMsme.trim() ? (/^\D*\d[\d,.]*$/.test(data.fee.mmfMsme.trim()) ? `Rs. ${esc(data.fee.mmfMsme.trim())}` : esc(data.fee.mmfMsme.trim())) : blank],
+    ['Unit of marking', `1 ${esc(unit)}`],
+    ['Slab-1', esc(data.fee.slab1Text.trim() || blank)],
+    ['Slab-2', esc(data.fee.slab2Text.trim() || 'Rs. ______ per unit for next ______ units')],
+    ['Slab-3', esc(data.fee.slab3Text.trim() || 'Rs. ______ per unit for remaining ______ units')],
+  ]
+    .map(([label, value]) => `<tr><th>${label}</th><td>${value}</td></tr>`)
+    .join('')
+  const signatory = signatoryHtml({
+    firmName: data.applicantName,
+    name: data.signatoryName || data.contactPerson,
+    designation: data.signatoryDesignation,
+    signatureImageUrl: data.signatureImageUrl,
+  })
+  const terms = [
+    ['a', 'The minimum marking fee shall be paid in advance for the validity period of the licence.'],
+    ['b', 'Actual marking fee for the first year shall be calculated by multiplying the unit rate with the quantity (units) marked during the first nine months.'],
+    ['c', 'Actual marking fee for subsequent years shall be calculated on year-to-year basis after the first nine months.'],
+    ['d', 'In case actual marking fee of the operative period exceeds advance minimum marking fee paid, difference between the actual marking fee calculated on the basis of quantum of production marked and minimum marking fee shall be paid to BIS by the licensee annually during renewal of licence.'],
+    ['e', 'After the marking fee against the above mentioned Indian Standard is specified under Scheme-I of Schedule-II in Bureau of Indian Standards (Conformity Assessment) Regulations, 2018, variation, if any, between the values specified and the above tentative marking fee will also be accepted and increase, if any, therein shall also be borne by us from its effective date without any contestation.'],
+    ['f', 'In case the marking fee is less than tentative marking fee no request for refund for the elapsed period will be raised by us.'],
+  ]
+    .map(([n, t]) => `<p class="mf-accept-term"><strong>(${n})</strong> ${t}</p>`)
+    .join('')
+  const body = `<div class="pd-sheet mf-acceptance-page">
+    ${letterheadHtml(data)}
+    <h1 class="pd-title">ACCEPTANCE OF RATE OF TENTATIVE MARKING FEE</h1>
+    <div class="pd-to-row"><div class="pd-to-block">${toBlockHtml(data.bisBranchName, data.bisBranchState)}</div><div class="pd-date-block"><div><strong>Date:</strong> ${esc(letterDate)}</div><div><strong>Application No.:</strong> ${esc(data.applicationNumber || '—')}</div></div></div>
+    <p class="pd-body">This is with reference to your letter No. <strong>${esc(referenceNumber)}</strong> dated <strong>${esc(referenceDate)}</strong> on the subject mentioned above. We hereby agree to pay the tentative marking fee to Bureau of Indian Standards after grant of licence to use the Standard Mark on <strong>${esc(data.productTitle || blank)}</strong> according to <strong>${esc(data.isLabel || blank)}</strong> at the following rates and in the manner stipulated as under till the time Marking Fee is specified under Scheme-I of Schedule-II in Bureau of Indian Standards (Conformity Assessment) Regulations, 2018:</p>
+    <p class="mf-accept-term"><strong>i)</strong> Rate of marking fee:</p>
+    <table class="mf-accept-summary"><tbody>${minimumFeeRows}</tbody></table>
+    <p class="mf-accept-term"><strong>ii)</strong> The marking fee is payable as follows:</p>
+    ${terms}
+    <div class="mf-accept-sign">${signatory}</div>
+    <p class="mf-accept-closing">Place: ${blank}&nbsp;&nbsp;&nbsp;&nbsp;Date: ${esc(letterDate)}&nbsp;&nbsp;&nbsp;&nbsp;Seal:</p>
+  </div>`
+  return buildPrintPage({
+    title: `Acceptance of Rate of Tentative Marking Fee — ${data.applicantName || 'Applicant'}`,
+    body,
+    styles: ACCEPTANCE_STYLES,
   })
 }
 

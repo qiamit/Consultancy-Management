@@ -11,7 +11,7 @@ import { buildCmpf305Html, cmpf305DataFromPrintData } from './cmpf305Html'
 import { buildCmpf306Html, cmpf306DataFromPrintData } from './cmpf306Html'
 import { buildCmpf307Html, cmpf307DataFromPrintData } from './cmpf307Html'
 import { parseCmpf310Payload } from '../projects/cmpf310Model'
-import { buildCmpf310AcceptanceLetterHtml, buildCmpf310Html, cmpf310DataFromPrintData, minimumMarkingFeeForScale } from './cmpf310Html'
+import { buildCmpf310AcceptanceLetterHtml, buildTentativeMarkingFeeAcceptanceHtml, buildCmpf310Html, cmpf310DataFromPrintData, minimumMarkingFeeForScale } from './cmpf310Html'
 import { buildCmpf311Html, cmpf311DataFromPrintData } from './cmpf311Html'
 import {
   buildCertifiedReferenceMaterialsHtml,
@@ -609,10 +609,19 @@ export async function buildBisDocumentHtml(
     if (marking.allIndiaFirst === 'Yes') {
       // All India First: Annexure 1 (Undertaking for Minimum Marking Fee) goes with the acceptance.
       const minimumFee = await fetchBisModulePayload(row.id, 'undertaking-mmf').catch(() => null)
-      const annexure = buildUndertakingMinimumMarkingFeeHtml(
-        undertakingMinimumMarkingFeeDataFromPrintData({ ...data, modulePayload: minimumFee }),
-      )
-      html = combinePrintHtmlDocuments('Acceptance of Marking Fee', [acceptance, annexure])
+      const feeData = undertakingMinimumMarkingFeeDataFromPrintData({ ...data, modulePayload: minimumFee })
+      const annexure = buildUndertakingMinimumMarkingFeeHtml(feeData)
+      // The tentative rate acceptance (SOP Annex-4) replaces the regular acceptance; Annex-1 follows it.
+      const tentative = buildTentativeMarkingFeeAcceptanceHtml({
+        ...cmpf311DataFromPrintData(data),
+        minimumMarkingFee: minimumMarkingFeeForScale(data.isCode, data.client.scale),
+        unit: marking.unit || data.isCode.unitOfIs,
+        firmScale: data.client.scale,
+        productTitle: data.isCode.title,
+        isLabel: data.isCode.label || data.isCode.isNumber,
+        fee: feeData,
+      })
+      html = combinePrintHtmlDocuments('Acceptance of Marking Fee', [tentative, annexure])
     } else {
       html = acceptance
     }

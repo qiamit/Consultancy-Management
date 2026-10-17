@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState, type ReactNode } from 'react'
-import { Download, Eye, FileType, Pencil, type LucideIcon } from 'lucide-react'
+import { ClipboardList, Download, Eye, FileType, Pencil, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { loadBisPrintData, type BisPrintData } from '../print/loadBisPrintData'
 import { BIS_PRINT_DOCUMENT_LABEL, type BisPrintDocumentKind } from '../print/printBisDocument'
@@ -355,7 +355,6 @@ export function ManakStepPage({
   const plainText = (value: string | null | undefined) => <span>{value || <span className="text-stone-400">—</span>}</span>
   const markingFeeActions: Array<[string, string, () => void, LucideIcon]> = onMarkingFee
     ? [
-        ...(allIndiaFirst ? ([['Edit Annexure 1 (Undertaking for Minimum Marking Fee)', 'Edit Annexure 1', onMarkingFee.edit, Pencil]] as Array<[string, string, () => void, LucideIcon]>) : []),
         ['Preview the Acceptance of Marking Fee', 'Preview acceptance of marking fee', onMarkingFee.preview, Eye],
         ['Acceptance of Marking Fee — PDF', 'Acceptance of marking fee PDF', onMarkingFee.pdf, Download],
         ['Acceptance of Marking Fee — Word', 'Acceptance of marking fee Word', onMarkingFee.word, FileType],
@@ -370,15 +369,28 @@ export function ManakStepPage({
       ['Minimum Marking Fee', plainText(markingFee ? `Rs. ${markingFee} per Year` : '')],
       [
         'All India First',
-        <Select key="aif" value={allIndiaFirst ? 'yes' : 'no'} disabled={!row?.id} onValueChange={(v) => void setAllIndiaFirst(v === 'yes' ? 'Yes' : 'No')}>
-          <SelectTrigger className="h-8 w-28 rounded-none border-stone-300 bg-white text-sm" aria-label="All India First">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="no">No</SelectItem>
-            <SelectItem value="yes">Yes</SelectItem>
-          </SelectContent>
-        </Select>,
+        <div key="aif" className="flex items-center gap-2">
+          <Select value={allIndiaFirst ? 'yes' : 'no'} disabled={!row?.id} onValueChange={(v) => void setAllIndiaFirst(v === 'yes' ? 'Yes' : 'No')}>
+            <SelectTrigger className="h-8 w-28 rounded-none border-stone-300 bg-white text-sm" aria-label="All India First">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="no">No</SelectItem>
+              <SelectItem value="yes">Yes</SelectItem>
+            </SelectContent>
+          </Select>
+          {allIndiaFirst && onMarkingFee ? (
+            <button
+              type="button"
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-none border border-stone-400 bg-white text-amber-800 transition-colors hover:bg-amber-50"
+              title="Open the All India First marking fee form (Annexure 1: capacity, costs, testing charges, unit rate)"
+              aria-label="Open All India First marking fee form"
+              onClick={onMarkingFee.edit}
+            >
+              <ClipboardList size={15} aria-hidden />
+            </button>
+          ) : null}
+        </div>,
       ],
     ],
     ...(allIndiaFirst
