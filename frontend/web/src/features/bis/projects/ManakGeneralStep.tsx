@@ -48,7 +48,7 @@ const str = (v: unknown) => (typeof v === 'string' ? v.trim() : v == null ? '' :
 
 /** Legal-document names that serve as Manak's Proof of Establishment / Address Proof. */
 export const ESTABLISHMENT_DOC =
-  /incorporation|partnership|llp|udyam|udyog|registration of firm|establishment|msme|shop\s*&?\s*establishment/i
+  /incorporation|partnership|llp|registration of firm|establishment|shop\s*&?\s*establishment/i
 export const ADDRESS_DOC = /gst|address|electricity|light bill|rent|lease|property tax/i
 
 type EditableProps = {
@@ -439,6 +439,7 @@ export function ManakGeneralStep({
   const addressDoc = certificates.find((d) => ADDRESS_DOC.test(d.cert_name))
   const gstDoc = certificates.find((d) => /^gst/i.test(d.cert_name.trim()))
   const panDoc = certificates.find((d) => /^pan/i.test(d.cert_name.trim()))
+  const msmeDoc = certificates.find((d) => /msme|udyam|udyog/i.test(d.cert_name))
   const startupDoc = certificates.find((d) => /startup/i.test(d.cert_name))
   const womenDoc = certificates.find((d) => /women/i.test(d.cert_name))
 
@@ -574,7 +575,24 @@ export function ManakGeneralStep({
               ),
             ],
             ['Sector', v(str(client?.sector), col('sector'), { type: 'select', options: sectorOptions })],
-            ['Scale', v(str(client?.scale), col('company_scale'), { type: 'select', options: [...COMPANY_SCALES] })],
+            [
+              'Scale',
+              <div key="scale" className="flex items-center gap-1">
+                <div className="min-w-0 flex-1">
+                  {v(str(client?.scale), col('company_scale'), { type: 'select', options: [...COMPANY_SCALES] })}
+                </div>
+                {/* The MSME / Udyam certificate decides the scale; Large needs no document. */}
+                {str(client?.scale) && str(client?.scale).toLowerCase() !== 'large' ? (
+                  <ProofButton
+                    doc={msmeDoc}
+                    certName={msmeDoc?.cert_name || 'MSME Certificate'}
+                    clientId={clientId}
+                    disabled={locked}
+                    onChanged={onChanged}
+                  />
+                ) : null}
+              </div>,
+            ],
             [
               'Registration Number',
               v(str(proofDoc?.document_number) || str(raw.cin) || str(raw.llpin), certField(proofDoc, 'document_number'), {
