@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Check, Download, Eye, FileDown, FileType, Pencil, Plus, Printer, Trash2, Upload, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -236,17 +236,17 @@ function newDraft(): DraftRow {
   return { id: crypto.randomUUID(), name: '' }
 }
 
-function UndertakingCurrencyField({ label, value, disabled, onChange }: {
+function UndertakingCurrencyField({ label, value, disabled, onChange, bare = false }: {
+  bare?: boolean
   label: string
   value: string
   disabled: boolean
   onChange: (value: string) => void
 }) {
   const [focused, setFocused] = useState(false)
-  return (
-    <label className="grid gap-1 text-sm font-medium text-stone-700">
-      {label}
-      <span className="flex h-8 min-w-0 overflow-hidden rounded-none border border-stone-500 bg-stone-50 focus-within:border-amber-600 focus-within:bg-white focus-within:ring-2 focus-within:ring-amber-500/20">
+  const field = (
+    <>
+      <span className="flex h-8 min-w-0 overflow-hidden rounded-none border border-stone-300 bg-white focus-within:border-amber-600 focus-within:bg-white focus-within:ring-2 focus-within:ring-amber-500/20">
         <span className="inline-flex shrink-0 items-center border-r border-stone-500 bg-stone-100 px-2.5 text-sm font-semibold text-stone-700" aria-hidden>{getCurrencySymbol()}</span>
         <Input
           type="text"
@@ -261,8 +261,9 @@ function UndertakingCurrencyField({ label, value, disabled, onChange }: {
           aria-label={`${label} in ${getCurrencyCode()}`}
         />
       </span>
-    </label>
+    </>
   )
+  return bare ? field : <label className="grid gap-1 text-sm font-medium text-stone-700">{label}{field}</label>
 }
 
 const UNDERTAKING_OPTIONS: Array<{
@@ -1837,10 +1838,10 @@ export function LegalDocumentsModuleDialog({
               </nav>
               )}
               {UNDERTAKING_OPTIONS.filter((option) => option.kind === selectedUndertaking).map((option) => (
-                <section key={option.kind} className="min-h-0 flex-1 overflow-y-auto border border-stone-300 bg-white p-5 sm:p-8">
-                  <div className="flex items-center justify-between gap-4">
-                    <h2 className="text-xl font-semibold text-stone-900">{option.title}</h2>
-                    <label className="flex shrink-0 cursor-pointer items-center gap-2 text-sm font-medium text-stone-700" title={`Show ${option.title} in preview`}>
+                <section key={option.kind} className={cn('min-h-0 flex-1 overflow-y-auto border border-stone-300 bg-white', option.kind === 'undertaking-mmf' ? 'p-0' : 'p-5 sm:p-8')}>
+                  <div className={cn('flex items-center justify-between gap-4', option.kind === 'undertaking-mmf' && 'bg-stone-800 px-3 py-1.5')}>
+                    <h2 className={option.kind === 'undertaking-mmf' ? 'text-[11px] font-bold uppercase tracking-[0.14em] text-amber-200' : 'text-xl font-semibold text-stone-900'}>{option.title}</h2>
+                    <label className={cn('flex shrink-0 cursor-pointer items-center gap-2 text-sm font-medium', option.kind === 'undertaking-mmf' ? 'text-[11px] text-amber-100' : 'text-stone-700')} title={`Show ${option.title} in preview`}>
                       <input
                         type="checkbox"
                         className="h-4 w-4 accent-amber-600"
@@ -1894,27 +1895,58 @@ export function LegalDocumentsModuleDialog({
                       </div>
                     </div>
                   ) : null}
-                  {option.kind === 'undertaking-mmf' ? (
-                    <div className="mt-5 grid max-w-6xl gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                      <label className="grid gap-1 text-sm font-medium text-stone-700">Firm Status<Input value={companyFirmStatus === 'LS' ? 'Large Scale' : companyFirmStatus} placeholder="Set company scale in Company Master" readOnly disabled={loading || printingUndertaking} /></label>
-                      <label className="grid gap-1 text-sm font-medium text-stone-700">Annual Production Capacity<Input value={undertakingMinimumFee.annualProductionCapacity} disabled={loading || printingUndertaking} onChange={(event) => setUndertakingMinimumFee((current) => ({ ...current, annualProductionCapacity: event.target.value }))} /></label>
-                      <UndertakingCurrencyField label="Value of Production per Unit" value={undertakingMinimumFee.valueOfProductionPerUnit} disabled={loading || printingUndertaking} onChange={(value) => setUndertakingMinimumFee((current) => ({ ...current, valueOfProductionPerUnit: value }))} />
-                      <UndertakingCurrencyField label="Cost of Production per Unit" value={undertakingMinimumFee.costOfProductionPerUnit} disabled={loading || printingUndertaking} onChange={(value) => setUndertakingMinimumFee((current) => ({ ...current, costOfProductionPerUnit: value }))} />
-                      <label className="grid gap-1 text-sm font-medium text-stone-700">Market Surveillance Plan<Textarea value={undertakingMinimumFee.marketSurveillancePlan} disabled={loading || printingUndertaking} onChange={(event) => setUndertakingMinimumFee((current) => ({ ...current, marketSurveillancePlan: event.target.value }))} className="min-h-8 h-8 rounded-none border-stone-500 py-1" /></label>
-                      {undertakingMinimumFee.factoryTestingBasis !== 'Yes' ? <>
-                        <label className="grid gap-1 text-sm font-medium text-stone-700">Testing Charge Basis<select className="h-8 rounded-none border border-stone-400 bg-white px-2 text-sm" value={undertakingMinimumFee.testingChargeBasis} disabled={loading || printingUndertaking} onChange={(event) => setUndertakingMinimumFee((current) => ({ ...current, testingChargeBasis: event.target.value }))}><option value="">Select charge basis</option><option value="BIS Lab">BIS laboratory charges</option><option value="OSL Complete Testing">OSL average (complete testing)</option><option value="OSL Maximum Parameters">OSL average (maximum available parameters)</option></select></label>
-                        {undertakingMinimumFee.testingChargeBasis === 'BIS Lab' ? <UndertakingCurrencyField label="BIS Laboratory Testing Charge per Sample" value={undertakingMinimumFee.bisLabTestingCharges} disabled={loading || printingUndertaking} onChange={(value) => setUndertakingMinimumFee((current) => ({ ...current, bisLabTestingCharges: value }))} /> : null}
-                        {undertakingMinimumFee.testingChargeBasis.startsWith('OSL') ? <UndertakingCurrencyField label="Average OSL Testing Charge per Sample" value={undertakingMinimumFee.oslAvgTestingCharges} disabled={loading || printingUndertaking} onChange={(value) => setUndertakingMinimumFee((current) => ({ ...current, oslAvgTestingCharges: value }))} /> : null}
-                      </> : null}
-                      <label className="grid gap-1 text-sm font-medium text-stone-700">Quantity per Market Sample<Input value={undertakingMinimumFee.marketSampleQuantity} disabled={loading || printingUndertaking} onChange={(event) => setUndertakingMinimumFee((current) => ({ ...current, marketSampleQuantity: event.target.value }))} /></label>
-                      <UndertakingCurrencyField label="Cost of One Market Sample" value={undertakingMinimumFee.marketSampleCost} disabled={loading || printingUndertaking} onChange={(value) => setUndertakingMinimumFee((current) => ({ ...current, marketSampleCost: value }))} />
-                      <label className="grid gap-1 text-sm font-medium text-stone-700">Factory Testing Basis<select className="h-8 rounded-none border border-stone-400 bg-white px-2 text-sm" value={undertakingMinimumFee.factoryTestingBasis} disabled={loading || printingUndertaking} onChange={(event) => setUndertakingMinimumFee((current) => ({ ...current, factoryTestingBasis: event.target.value }))}><option value="No">No</option><option value="Yes">Yes</option></select></label>
-                      {undertakingMinimumFee.factoryTestingBasis === 'Yes' ? <>
-                        <label className="grid gap-1 text-sm font-medium text-stone-700">BIS Testing Mandays per Visit<Input inputMode="decimal" value={undertakingMinimumFee.factoryMandays} disabled={loading || printingUndertaking} onChange={(event) => setUndertakingMinimumFee((current) => ({ ...current, factoryMandays: event.target.value }))} /></label>
-                        <UndertakingCurrencyField label="BIS Officer Visit Charge per Manday" value={undertakingMinimumFee.factoryVisitRate} disabled={loading || printingUndertaking} onChange={(value) => setUndertakingMinimumFee((current) => ({ ...current, factoryVisitRate: value }))} />
-                      </> : null}
-                    </div>
-                  ) : null}
+                  {option.kind === 'undertaking-mmf' ? (() => {
+                    const u = undertakingMinimumFee
+                    const off = loading || printingUndertaking
+                    const set = (patch: Partial<typeof u>) => setUndertakingMinimumFee((current) => ({ ...current, ...patch }))
+                    const fieldCls = 'h-8 w-full rounded-none border-stone-300 bg-white text-sm'
+                    const selCls = 'h-8 w-full rounded-none border border-stone-300 bg-white px-2 text-sm focus:border-amber-600 focus:outline-none'
+                    const cur = (label: string, value: string, key: keyof typeof u) => <UndertakingCurrencyField bare label={label} value={value} disabled={off} onChange={(value) => set({ [key]: value } as Partial<typeof u>)} />
+                    const cells: Array<[string, ReactNode]> = [
+                      ['Firm Status', <Input key="fs" className={fieldCls} value={companyFirmStatus === 'LS' ? 'Large Scale' : companyFirmStatus} placeholder="Set company scale in Company Master" readOnly disabled={off} />],
+                      ['Annual Production Capacity', <Input key="apc" className={fieldCls} value={u.annualProductionCapacity} disabled={off} onChange={(event) => set({ annualProductionCapacity: event.target.value })} />],
+                      ['Value of Production per Unit', cur('Value of Production per Unit', u.valueOfProductionPerUnit, 'valueOfProductionPerUnit')],
+                      ['Cost of Production per Unit', cur('Cost of Production per Unit', u.costOfProductionPerUnit, 'costOfProductionPerUnit')],
+                      ['Market Surveillance Plan', <Textarea key="msp" value={u.marketSurveillancePlan} disabled={off} onChange={(event) => set({ marketSurveillancePlan: event.target.value })} className="min-h-8 h-8 rounded-none border-stone-300 bg-white py-1" />],
+                    ]
+                    if (u.factoryTestingBasis !== 'Yes') {
+                      cells.push(['Testing Charge Basis', <select key="tcb" className={selCls} value={u.testingChargeBasis} disabled={off} onChange={(event) => set({ testingChargeBasis: event.target.value })}><option value="">Select charge basis</option><option value="BIS Lab">BIS laboratory charges</option><option value="OSL Complete Testing">OSL average (complete testing)</option><option value="OSL Maximum Parameters">OSL average (maximum available parameters)</option></select>])
+                      if (u.testingChargeBasis === 'BIS Lab') cells.push(['BIS Laboratory Testing Charge per Sample', cur('BIS Laboratory Testing Charge per Sample', u.bisLabTestingCharges, 'bisLabTestingCharges')])
+                      if (u.testingChargeBasis.startsWith('OSL')) cells.push(['Average OSL Testing Charge per Sample', cur('Average OSL Testing Charge per Sample', u.oslAvgTestingCharges, 'oslAvgTestingCharges')])
+                    }
+                    cells.push(
+                      ['Quantity per Market Sample', <Input key="qms" className={fieldCls} value={u.marketSampleQuantity} disabled={off} onChange={(event) => set({ marketSampleQuantity: event.target.value })} />],
+                      ['Cost of One Market Sample', cur('Cost of One Market Sample', u.marketSampleCost, 'marketSampleCost')],
+                      ['Factory Testing Basis', <select key="ftb" className={selCls} value={u.factoryTestingBasis} disabled={off} onChange={(event) => set({ factoryTestingBasis: event.target.value })}><option value="No">No</option><option value="Yes">Yes</option></select>],
+                    )
+                    if (u.factoryTestingBasis === 'Yes') {
+                      cells.push(
+                        ['BIS Testing Mandays per Visit', <Input key="fm" className={fieldCls} inputMode="decimal" value={u.factoryMandays} disabled={off} onChange={(event) => set({ factoryMandays: event.target.value })} />],
+                        ['BIS Officer Visit Charge per Manday', cur('BIS Officer Visit Charge per Manday', u.factoryVisitRate, 'factoryVisitRate')],
+                      )
+                    }
+                    const rows: Array<Array<[string, ReactNode]>> = []
+                    for (let n = 0; n < cells.length; n += 2) rows.push(cells.slice(n, n + 2))
+                    return (
+                      <div className="m-3 overflow-x-auto">
+                        <table className="w-full table-fixed border-collapse text-sm">
+                          <tbody>
+                            {rows.map((pair, ri) => (
+                              <tr key={ri}>
+                                {pair.map(([label, node]) => (
+                                  <Fragment key={label}>
+                                    <th scope="row" className="w-[22%] border border-[#e7e0d4] bg-[#f7f3eb] px-3 py-1.5 text-left align-middle font-bold text-stone-800">{label}:</th>
+                                    <td className="w-[28%] border border-[#e7e0d4] px-2 py-1 align-middle text-stone-700">{node}</td>
+                                  </Fragment>
+                                ))}
+                                {pair.length < 2 ? <><th className="w-[22%] border border-[#e7e0d4] bg-[#f7f3eb]" /><td className="w-[28%] border border-[#e7e0d4]" /></> : null}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )
+                  })() : null}
                   {option.kind === 'self-evaluation-form' ? (
                     <div className="mt-5 grid max-w-5xl gap-4">
                       <div className="border border-stone-300">
