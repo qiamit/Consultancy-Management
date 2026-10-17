@@ -453,6 +453,7 @@ function FieldGrid({
   columns = 3,
   topLines = [],
   leadLines = [],
+  tailLines = [],
 }: {
   items: Array<[string, ReactNode]>
   /** Label | value pairs per row (2 or 3). */
@@ -463,14 +464,17 @@ function FieldGrid({
   topLines?: string[][]
   /** Like topLines, but shown above the full-width rows. */
   leadLines?: string[][]
+  /** Like topLines, but shown after the grid. */
+  tailLines?: string[][]
 }) {
-  const topTaken = [...leadLines.flat(), ...topLines.flat()]
+  const topTaken = [...leadLines.flat(), ...topLines.flat(), ...tailLines.flat()]
   const toGroups = (lines: string[][]) =>
     lines.map((labels) =>
       labels.map((l) => items.find(([label]) => label === l)).filter((x): x is [string, ReactNode] => Boolean(x)),
     )
   const topGroups = toGroups(topLines)
   const leadGroups = toGroups(leadLines)
+  const tailGroups = toGroups(tailLines)
   const rows = arrangeByLabelLength(
     items.filter(([label]) => !topTaken.includes(label)),
     columns,
@@ -547,6 +551,7 @@ function FieldGrid({
           ))}
         </tbody>
       </table>
+      {renderGroups(tailGroups, true)}
     </div>
   )
 }
@@ -924,7 +929,8 @@ export function ManakGeneralStep({
         <FieldGrid
           columns={2}
           topLines={[['PinCode', 'City', 'District', 'State']]}
-          leadLines={[['Address Proof Type', 'Latitude', 'Longitude']]}
+          leadLines={[['E-MailId', 'Mobile No.']]}
+          tailLines={[['Address Proof Type', 'Latitude', 'Longitude']]}
           fullRows={[
             [
               'Factory Address',
