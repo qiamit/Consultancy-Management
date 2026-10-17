@@ -159,7 +159,7 @@ export function ManakApplicationFields({
         <Input
           id="app-number"
           inputMode="numeric"
-          placeholder="Application number"
+          placeholder="0000000000"
           className={cn(plainInput, 'font-mono tabular-nums')}
           value={form.applicationNumber}
           disabled={disabled}
