@@ -455,6 +455,7 @@ function FieldGrid({
   leadLines = [],
   tailLines = [],
   alignFirstLabel = false,
+  alignFullRowLabel = false,
 }: {
   items: Array<[string, ReactNode]>
   /** Label | value pairs per row (2 or 3). */
@@ -469,6 +470,8 @@ function FieldGrid({
   tailLines?: string[][]
   /** Give the first label of every line the width of a three-field line's label (a sixth of the row). */
   alignFirstLabel?: boolean
+  /** Give only the full-width rows' label the same sixth-of-the-row width. */
+  alignFullRowLabel?: boolean
 }) {
   const topTaken = [...leadLines.flat(), ...topLines.flat(), ...tailLines.flat()]
   const toGroups = (lines: string[][]) =>
@@ -523,11 +526,11 @@ function FieldGrid({
         <table
           className={cn(
             'w-full border-collapse',
-            alignFirstLabel ? 'table-fixed' : 'table-auto',
+            alignFirstLabel || alignFullRowLabel ? 'table-fixed' : 'table-auto',
             leadGroups.length > 0 && '-mt-px',
           )}
         >
-          {alignFirstLabel ? (
+          {alignFirstLabel || alignFullRowLabel ? (
             <colgroup>
               <col style={{ width: `${100 / 6}%` }} />
             </colgroup>
@@ -946,6 +949,7 @@ export function ManakGeneralStep({
       >
         <FieldGrid
           columns={2}
+          alignFullRowLabel
           topLines={[['PinCode', 'City', 'District', 'State']]}
           leadLines={[['E-MailId', 'Mobile No.']]}
           tailLines={[['Address Proof Type', 'Latitude', 'Longitude']]}
