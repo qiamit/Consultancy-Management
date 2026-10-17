@@ -332,6 +332,7 @@ export function LegalDocumentsModuleDialog({
   onLocationMapPrint,
   onPreviewDocument,
   onPdfDocument,
+  onWordDocument,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -350,6 +351,7 @@ export function LegalDocumentsModuleDialog({
   /** Preview / PDF of the module's own print document (used by the SIT acceptance module). */
   onPreviewDocument?: (kind: BisPrintDocumentKind) => void
   onPdfDocument?: (kind: BisPrintDocumentKind) => void
+  onWordDocument?: (kind: BisPrintDocumentKind) => void
 }) {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const uploadTargetRef = useRef<{ type: 'draft' | 'file'; id: string } | null>(null)
@@ -2496,7 +2498,7 @@ export function LegalDocumentsModuleDialog({
         </div>
 
         <DialogFooter className="shrink-0 gap-2 border-t border-stone-300 bg-stone-50 px-4 py-3 sm:justify-end sm:px-5">
-          {showCmpf311Fields && printKind && (onPreviewDocument || onPdfDocument) ? (
+          {showCmpf311Fields && printKind && (onPreviewDocument || onPdfDocument || onWordDocument) ? (
             <div className="mr-auto flex gap-2">
               {onPreviewDocument ? (
                 <Button
@@ -2518,6 +2520,17 @@ export function LegalDocumentsModuleDialog({
                   onClick={() => void handleSave().then(() => onPdfDocument(printKind))}
                 >
                   <Download className="h-4 w-4" aria-hidden /> PDF
+                </Button>
+              ) : null}
+              {onWordDocument ? (
+                <Button
+                  type="button"
+                  className={cn(limsPrimaryBtnClass, 'h-9 gap-1.5 px-4 text-sm')}
+                  disabled={!row?.id || busy || saving || loading}
+                  title="Save and download an editable Word copy (backup if the software cannot be used)"
+                  onClick={() => void handleSave().then(() => onWordDocument(printKind))}
+                >
+                  <FileType className="h-4 w-4" aria-hidden /> Word
                 </Button>
               ) : null}
             </div>

@@ -788,12 +788,13 @@ export function BisLicenseDocumentsDialog({
   const runDownload = async (
     kind: BisPrintDocumentKind,
     format: 'excel' | 'word' | 'pdf',
+    onlyThisKind = false,
   ) => {
     if (!row) return
     const label = BIS_PRINT_DOCUMENT_LABEL[kind]
     const base = safeFileBase(label, cmL)
     if (format === 'pdf') {
-      void downloadPdfDocuments(kind)
+      void downloadPdfDocuments(kind, onlyThisKind ? [kind] : undefined)
       return
     }
     setDownloadBusy(true)
@@ -801,7 +802,7 @@ export function BisLicenseDocumentsDialog({
       const settings = await loadBisProjectPrintPageSettings(row.id).catch(
         () => DEFAULT_BIS_DOCUMENT_PRINT_PAGE_SETTINGS,
       )
-      const kinds = format === 'word' || format === 'excel' ? selectedDocumentKinds(kind) : [kind]
+      const kinds = !onlyThisKind && (format === 'word' || format === 'excel') ? selectedDocumentKinds(kind) : [kind]
       const htmlDocuments = await Promise.all(
         kinds.map(async (documentKind) => applyBisDocumentPrintPageSettings(
           await buildBisDocumentHtml(row, documentKind),
@@ -1201,7 +1202,8 @@ export function BisLicenseDocumentsDialog({
       onLocationMapPdf={() => void runDownload('location-map', 'pdf')}
       onLocationMapPrint={() => handlePrint('location-map')}
       onPreviewDocument={(kind) => handlePreview(kind)}
-      onPdfDocument={(kind) => void runDownload(kind, 'pdf')}
+      onPdfDocument={(kind) => void runDownload(kind, 'pdf', true)}
+      onWordDocument={(kind) => void runDownload(kind, 'word', true)}
     />
 
     <BisDocumentPrintPreviewDialog
