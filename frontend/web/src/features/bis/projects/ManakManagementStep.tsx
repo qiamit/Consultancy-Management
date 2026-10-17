@@ -153,7 +153,7 @@ function EditableRows({
             <tr>
               <th className={cn(thCls, 'w-8 px-1 text-center')} aria-label="Select" />
               {fields.map((f) => (
-                <th key={f.key} className={thCls} style={f.width ? { width: f.width } : undefined}>
+                <th key={f.key} className={cn(thCls, 'text-center')} style={f.width ? { width: f.width } : undefined}>
                   {f.label}
                   <span className="text-red-400">*</span>
                 </th>
@@ -222,7 +222,7 @@ function EditableRows({
                       />
                     </td>
                     {fields.map((f) => (
-                      <td key={f.key} className={tdCls}>
+                      <td key={f.key} className={cn(tdCls, 'text-center')}>
                         {editing ? (
                           <Input
                             className={inputCls}
