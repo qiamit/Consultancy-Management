@@ -1351,6 +1351,7 @@ export function LegalDocumentsModuleDialog({
         await saveBisModulePayload(row.id, printKind, {
           feePerYear: cmpf310.feePerYear.trim(),
           unit: cmpf310.unit.trim(),
+          allIndiaFirst: cmpf310.allIndiaFirst,
         })
         onProjectSaved?.()
         toast.success(`${title} saved.`)

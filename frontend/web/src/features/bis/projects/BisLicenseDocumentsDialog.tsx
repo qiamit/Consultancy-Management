@@ -895,9 +895,9 @@ export function BisLicenseDocumentsDialog({
                       handleModuleEdit('all-required-undertakings')
                       setUndertakingFocus('undertaking-mmf')
                     },
-                    preview: () => handlePreview('undertaking-mmf'),
-                    pdf: () => void runDownload('undertaking-mmf', 'pdf', true),
-                    word: () => void runDownload('undertaking-mmf', 'word', true),
+                    preview: () => handlePreview('marking-fee-acceptance'),
+                    pdf: () => void runDownload('marking-fee-acceptance', 'pdf', true),
+                    word: () => void runDownload('marking-fee-acceptance', 'word', true),
                   }}
                   onScopeDocument={{
                     preview: () => void previewScopeUndertaking(),

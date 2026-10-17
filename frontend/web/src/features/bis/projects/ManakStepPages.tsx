@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState, type ReactNode } from 'react'
-import { Download, Eye, FileType, Pencil } from 'lucide-react'
+import { Download, Eye, FileType, Pencil, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { loadBisPrintData, type BisPrintData } from '../print/loadBisPrintData'
 import { BIS_PRINT_DOCUMENT_LABEL, type BisPrintDocumentKind } from '../print/printBisDocument'
@@ -13,6 +13,10 @@ import { ManakVarietiesTable } from './ManakVarietiesTable'
 import { ManakSitRow } from './ManakSitRow'
 import { minimumMarkingFeeForScale } from '../print/cmpf310Html'
 import { parseUndertakingMinimumFeePayload } from './undertakingPayloadModels'
+import { parseCmpf310Payload } from './cmpf310Model'
+import { saveBisModulePayload } from './bisModuleDataApi'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { toast } from 'sonner'
 import { CORRESPONDENCE_KIND, ManakManagementStep } from './ManakManagementStep'
 import type { BisProjectRow } from './types'
 
@@ -224,6 +228,7 @@ const STEP_MODULES: BisPrintDocumentKind[] = [
   'cmpf-311',
   'osl-sample-requirements',
   'undertaking-mmf',
+  'cmpf-310',
   CORRESPONDENCE_KIND,
 ]
 
@@ -336,6 +341,50 @@ export function ManakStepPage({
   const c = print?.client
   const isCode = print?.isCode
   const markingFee = isCode && c?.scale ? minimumMarkingFeeForScale(isCode, c.scale) : ''
+  const markingFeeSaved = parseCmpf310Payload(payloads['cmpf-310'] ?? null)
+  const allIndiaFirst = markingFeeSaved.allIndiaFirst === 'Yes'
+  const setAllIndiaFirst = async (value: 'Yes' | 'No') => {
+    if (!row?.id) return
+    try {
+      await saveBisModulePayload(row.id, 'cmpf-310', { ...markingFeeSaved, allIndiaFirst: value })
+      setReloadTick((t) => t + 1)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not save All India First')
+    }
+  }
+  const plainText = (value: string | null | undefined) => <span>{value || <span className="text-stone-400">—</span>}</span>
+  const markingFeeActions: Array<[string, string, () => void, LucideIcon]> = onMarkingFee
+    ? [
+        ...(allIndiaFirst ? ([['Edit Annexure 1 (Undertaking for Minimum Marking Fee)', 'Edit Annexure 1', onMarkingFee.edit, Pencil]] as Array<[string, string, () => void, LucideIcon]>) : []),
+        ['Preview the Acceptance of Marking Fee', 'Preview acceptance of marking fee', onMarkingFee.preview, Eye],
+        ['Acceptance of Marking Fee — PDF', 'Acceptance of marking fee PDF', onMarkingFee.pdf, Download],
+        ['Acceptance of Marking Fee — Word', 'Acceptance of marking fee Word', onMarkingFee.word, FileType],
+      ]
+    : []
+  const markingFeeRows: Array<Array<[string, ReactNode]>> = [
+    [
+      ['Production Unit', plainText(isCode?.unitOfIs)],
+      ['Firm Scale', plainText(c?.scale)],
+    ],
+    [
+      ['Minimum Marking Fee', plainText(markingFee ? `Rs. ${markingFee} per Year` : '')],
+      [
+        'All India First',
+        <Select key="aif" value={allIndiaFirst ? 'yes' : 'no'} disabled={!row?.id} onValueChange={(v) => void setAllIndiaFirst(v === 'yes' ? 'Yes' : 'No')}>
+          <SelectTrigger className="h-8 w-28 rounded-none border-stone-300 bg-white text-sm" aria-label="All India First">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="no">No</SelectItem>
+            <SelectItem value="yes">Yes</SelectItem>
+          </SelectContent>
+        </Select>,
+      ],
+    ],
+    ...(allIndiaFirst
+      ? [[['Annual Production Capacity', plainText(parseUndertakingMinimumFeePayload(payloads['undertaking-mmf'] ?? null).annualProductionCapacity)] as [string, ReactNode]]]
+      : []),
+  ]
 
   let body: ReactNode = null
 
@@ -364,38 +413,42 @@ export function ManakStepPage({
           headerExtra={
             onMarkingFee ? (
               <div className="flex shrink-0 items-center gap-1">
-                {(
-                  [
-                    ['Edit the Undertaking for Minimum Marking Fee', 'Edit marking fee undertaking', onMarkingFee.edit, Pencil],
-                    ['Preview the Undertaking for Minimum Marking Fee', 'Preview marking fee undertaking', onMarkingFee.preview, Eye],
-                    ['Undertaking for Minimum Marking Fee — PDF', 'Marking fee undertaking PDF', onMarkingFee.pdf, Download],
-                    ['Undertaking for Minimum Marking Fee — Word', 'Marking fee undertaking Word', onMarkingFee.word, FileType],
-                  ] as const
-                ).map(([title, label, handler, Icon]) => (
-                  <button
-                    key={label}
-                    type="button"
-                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-none border border-stone-400 bg-white text-amber-800 transition-colors hover:bg-amber-50"
-                    title={title}
-                    aria-label={label}
-                    onClick={handler}
-                  >
-                    <Icon size={15} aria-hidden />
-                  </button>
-                ))}
+                {markingFeeActions
+                  .map(([title, label, handler, Icon]) => (
+                    <button
+                      key={label}
+                      type="button"
+                      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-none border border-stone-400 bg-white text-amber-800 transition-colors hover:bg-amber-50"
+                      title={title}
+                      aria-label={label}
+                      onClick={handler}
+                    >
+                      <Icon size={15} aria-hidden />
+                    </button>
+                  ))}
               </div>
             ) : null
           }
         >
-          <ManakFields
-            lines={[['Production Unit', 'Firm Scale'], ['Minimum Marking Fee', 'Annual Production Capacity']]}
-            items={[
-              ['Production Unit', isCode?.unitOfIs],
-              ['Firm Scale', c?.scale],
-              ['Minimum Marking Fee', markingFee ? `Rs. ${markingFee} per Year` : ''],
-              ['Annual Production Capacity', parseUndertakingMinimumFeePayload(payloads['undertaking-mmf'] ?? null).annualProductionCapacity],
-            ]}
-          />
+          {/* Label and value columns size to their content, so no label is wider than its cell. */}
+          <div className="overflow-x-auto">
+            <table className="w-full table-auto border-collapse text-sm">
+              <tbody>
+                {markingFeeRows.map((cells, rowIndex) => (
+                  <tr key={rowIndex}>
+                    {cells.map(([label, node]) => (
+                      <Fragment key={label}>
+                        <th scope="row" className="w-[1%] whitespace-nowrap border border-[#e7e0d4] bg-[#f7f3eb] px-3 py-1.5 text-left align-middle font-bold text-stone-800">
+                          {label}:
+                        </th>
+                        <td className="border border-[#e7e0d4] px-2 py-1 align-middle text-stone-700">{node}</td>
+                      </Fragment>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </ManakSubPanel>
         <ManakSubPanel title="Indian Standard Details">
           <ManakFields
