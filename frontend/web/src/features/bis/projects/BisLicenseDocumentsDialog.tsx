@@ -729,11 +729,18 @@ export function BisLicenseDocumentsDialog({
               <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
               <div className="relative flex min-w-0 flex-col gap-1.5">
                 <div className="flex min-w-0 flex-nowrap items-center gap-1.5 sm:gap-2.5">
-                  <DialogHeader className="min-w-0 flex-1 space-y-0 text-left">
+                  <DialogHeader className="space-y-0 text-left">
                     <DialogTitle className="sr-only">
                       Online Application for Grant of License
                     </DialogTitle>
                   </DialogHeader>
+                  <span className="hidden w-[82px] shrink-0 sm:block" aria-hidden />
+                  <p
+                    className="min-w-0 flex-1 truncate px-1 text-center text-sm font-semibold text-stone-100 sm:text-base md:text-lg"
+                    title={subtitle}
+                  >
+                    {subtitle || '—'}
+                  </p>
                   <Button
                     type="button"
                     variant="outline"
@@ -746,12 +753,6 @@ export function BisLicenseDocumentsDialog({
                     <span className="hidden sm:inline">Close</span>
                   </Button>
                 </div>
-                <p
-                  className="truncate px-1 text-center text-sm font-semibold text-stone-100 sm:text-base md:text-lg"
-                  title={subtitle}
-                >
-                  {subtitle || '—'}
-                </p>
               </div>
             </div>
           </div>
