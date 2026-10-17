@@ -747,7 +747,7 @@ export function BisLicenseDocumentsDialog({
                   </Button>
                 </div>
                 <p
-                  className="truncate px-1 text-center text-xs font-medium text-stone-200 sm:text-sm"
+                  className="truncate px-1 text-center text-sm font-semibold text-stone-100 sm:text-base md:text-lg"
                   title={subtitle}
                 >
                   {subtitle || '—'}
