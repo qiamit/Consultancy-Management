@@ -1200,6 +1200,8 @@ export function BisLicenseDocumentsDialog({
       onLocationMapWord={() => void runDownload('location-map', 'word')}
       onLocationMapPdf={() => void runDownload('location-map', 'pdf')}
       onLocationMapPrint={() => handlePrint('location-map')}
+      onPreviewDocument={(kind) => handlePreview(kind)}
+      onPdfDocument={(kind) => void runDownload(kind, 'pdf')}
     />
 
     <BisDocumentPrintPreviewDialog
