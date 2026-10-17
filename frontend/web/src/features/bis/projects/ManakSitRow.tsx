@@ -9,8 +9,8 @@ import { parseCmpf311Payload } from './cmpf311Model'
 import { ProductManualValue } from './ManakVarietiesTable'
 
 const labelCls =
-  'w-1/4 whitespace-nowrap border border-[#e7e0d4] bg-[#f7f3eb] px-3 py-1.5 text-left align-middle text-sm font-bold text-stone-800'
-const valueCls = 'w-1/4 border border-[#e7e0d4] px-2 py-1 align-middle text-sm text-stone-700'
+  'whitespace-nowrap border border-[#e7e0d4] bg-[#f7f3eb] px-3 py-1.5 text-left align-middle text-sm font-bold text-stone-800'
+const valueCls = 'border border-[#e7e0d4] px-2 py-1 align-middle text-sm text-stone-700'
 
 /**
  * "Select SIT" line of the Indian Standard panel.
@@ -61,6 +61,13 @@ export function ManakSitRow({
 
   return (
     <table className="-mt-px w-full table-fixed border-collapse">
+      {/* Labels are the same width as the Standard Title label above (15%). */}
+      <colgroup>
+        <col style={{ width: '15%' }} />
+        <col style={{ width: '35%' }} />
+        <col style={{ width: '15%' }} />
+        <col style={{ width: '35%' }} />
+      </colgroup>
       <tbody>
         <tr>
           <th scope="row" className={labelCls}>
@@ -84,42 +91,37 @@ export function ManakSitRow({
               </SelectContent>
             </Select>
           </td>
-          {bisSit ? (
-            <>
-              <th scope="row" className={labelCls}>
-                Product Manual:
-              </th>
-              <td className={valueCls}>
-                <div className="flex items-center gap-2">
-                <Input
-                  className="h-8 min-w-0 flex-1 rounded-none border-stone-300 bg-white text-sm"
-                  aria-label="Product Manual number"
-                  value={number}
-                  disabled={!projectId}
-                  onChange={(e) => setNumber(e.target.value)}
-                  onBlur={() => {
-                    if (number.trim() !== (storedNumber || masterManualNumber)) void save({ mode: 'bis-sit', productManualNumber: number.trim() })
-                  }}
-                />
+          <th scope="row" className={labelCls}>
+            {bisSit ? 'Product Manual:' : 'Own SIT:'}
+          </th>
+          <td className={valueCls}>
+            <div className="flex items-center gap-2">
+              <Input
+                className="h-8 min-w-0 flex-1 rounded-none border-stone-300 bg-white text-sm"
+                aria-label="Product Manual number"
+                value={number}
+                disabled={!projectId}
+                onChange={(e) => setNumber(e.target.value)}
+                onBlur={() => {
+                  if (number.trim() !== (storedNumber || masterManualNumber)) void save({ productManualNumber: number.trim() })
+                }}
+              />
+              {bisSit ? (
                 <ProductManualValue isCodeId={isCodeId} buttonOnly />
-                </div>
-              </td>
-            </>
-          ) : (
-            <>
-              <th scope="row" className={labelCls}>
-                Own SIT:
-              </th>
-              <td className={valueCls}>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button type="button" size="sm" className="h-8 rounded-none bg-amber-700 text-white hover:bg-amber-800" onClick={onOpenOwnSit}>
-                    <Sparkles className="mr-1.5 h-4 w-4" aria-hidden /> View / Generate
-                  </Button>
-                  <span className="text-xs text-stone-600">{ownSummary || 'Not generated yet'}</span>
-                </div>
-              </td>
-            </>
-          )}
+              ) : (
+                <Button
+                  type="button"
+                  size="icon"
+                  className="h-8 w-8 shrink-0 rounded-none bg-amber-700 text-white hover:bg-amber-800"
+                  title={ownSummary ? `Open Acceptance of SIT (${ownSummary})` : 'Open Acceptance of SIT: select Product Manual, generate Annexure C, SIT table and notes'}
+                  aria-label="Open Own SIT"
+                  onClick={onOpenOwnSit}
+                >
+                  <Sparkles className="h-4 w-4" aria-hidden />
+                </Button>
+              )}
+            </div>
+          </td>
         </tr>
       </tbody>
     </table>
