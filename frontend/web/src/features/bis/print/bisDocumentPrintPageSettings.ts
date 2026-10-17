@@ -641,6 +641,14 @@ export function applyBisDocumentPrintPageSettings(
     page-break-before: auto !important;
     break-before: auto !important;
   }
+  /* Sheets wrapped in a section (merged documents) are not spaced by the body's flex gap: keep a 3 mm gap there too. */
+  :not(body) > .pd-sheet + .pd-sheet,
+  :not(body) > .pd-sheet + .al-sheet,
+  :not(body) > .al-sheet + .pd-sheet,
+  :not(body) > .al-sheet + .al-sheet,
+  :not(body) > .f1-sheet + .f1-sheet {
+    margin-top: 3mm !important;
+  }
 }
 @media print {
   html, body {

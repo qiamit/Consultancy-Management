@@ -31,7 +31,7 @@ export type Cmpf311Data = PrintApplicantContext & {
 }
 
 const BLANK = '________________'
-const CMPF311_TABLE_PAGE_BUDGET_MM = 170
+const CMPF311_TABLE_PAGE_BUDGET_MM = 195
 const CMPF311_TABLE_COLUMN_WIDTHS_MM = [9, 27, 18, 18, 18, 18, 72]
 
 function estimatedCmpf311RowHeightMm(row: Cmpf311TestRow): number {
@@ -41,6 +41,39 @@ function estimatedCmpf311RowHeightMm(row: Cmpf311TestRow): number {
     return Math.max(maximum, Math.ceil(String(value ?? '').length / charsPerLine))
   }, 1)
   return lineCount * 5.6 + 3
+}
+
+/** A4 content area below the letterhead and title is about 235 mm; the signature block needs about 42 mm. */
+const CMPF311_ANNEX_PAGE_BUDGET_MM = 232
+const CMPF311_ANNEX_SIGN_RESERVE_MM = 42
+
+function estimatedAnnexureSectionHeightMm(section: { title: string; content: string }): number {
+  const length = `${section.title}: ${section.content}`.length + 4
+  return Math.max(1, Math.ceil(length / 104)) * 5.1 + 3.7
+}
+
+/** Splits Annexure C sections over A4 pages so no page needs an inner scroll; the last page keeps room for the signature. */
+function paginateCmpf311Annexure<T extends { title: string; content: string }>(sections: T[]): Array<Array<{ item: T; number: number }>> {
+  const pages: Array<Array<{ item: T; number: number }>> = []
+  let page: Array<{ item: T; number: number }> = []
+  let used = 0
+  sections.forEach((item, index) => {
+    const height = estimatedAnnexureSectionHeightMm(item)
+    if (page.length && used + height > CMPF311_ANNEX_PAGE_BUDGET_MM) {
+      pages.push(page)
+      page = []
+      used = 0
+    }
+    page.push({ item, number: index + 1 })
+    used += height
+  })
+  // Keep the signature on the same page as the last section when it fits, otherwise move the last section forward.
+  if (page.length > 1 && used + CMPF311_ANNEX_SIGN_RESERVE_MM > CMPF311_ANNEX_PAGE_BUDGET_MM) {
+    pages.push(page.slice(0, -1))
+    page = page.slice(-1)
+  }
+  if (page.length || pages.length === 0) pages.push(page)
+  return pages
 }
 
 function paginateCmpf311TestRows(rows: Cmpf311TestRow[], reserveMm = 0): Cmpf311TestRow[][] {
@@ -84,9 +117,6 @@ function buildBody(data: Cmpf311Data): string {
   })
 
   if (data.mode === 'on-sit') {
-    const sections = data.annexureSections
-      .map((section, index) => `<p class="cmpf311-annex-section"><strong>${index + 1}. ${esc(section.title)}:</strong> ${esc(section.content).replace(/\n/g, '<br/>') || '&nbsp;'}</p>`)
-      .join('')
     const notes = data.notes.map((note) => `<p class="cmpf311-note"><strong>${esc(note.title)}${note.title ? '. ' : ''}</strong>${esc(note.description)}</p>`).join('')
     const reserveForSign = notes ? 0 : 45
     const tablePages = paginateCmpf311TestRows(data.testRows, reserveForSign)
@@ -106,6 +136,16 @@ function buildBody(data: Cmpf311Data): string {
   <div class="cmpf-sign-right">${signatoryHtml({ firmName: data.applicantName, name: sigName, designation: data.signatoryDesignation })}</div>
   ${preparedByHtml(data.preparedBy)}
 </div>` : ''
+    const annexPages = paginateCmpf311Annexure(data.annexureSections)
+    const annexPageHtml = annexPages.map((entries, index) => `
+<div class="pd-sheet cmpf311-onsit-page cmpf311-annex-page">
+  ${letterheadHtml(data)}
+  <h1 class="pd-title">Annexure C${index > 0 ? ' (Continued)' : ''}</h1>
+  ${entries.length
+    ? entries.map(({ item, number }) => `<p class="cmpf311-annex-section"><strong>${number}. ${esc(item.title)}:</strong> ${esc(item.content).replace(/\n/g, '<br/>') || '&nbsp;'}</p>`).join('')
+    : '<p class="cmpf311-empty">No Annexure C content generated yet.</p>'}
+  ${index === annexPages.length - 1 ? `<div class="cmpf311-cover-sign cmpf311-annex-sign">${signature}</div>${preparedByHtml(data.preparedBy)}` : ''}
+</div>`).join('')
     return `
 <div class="pd-sheet cmpf311-onsit-page">
   ${letterheadHtml(data)}
@@ -115,13 +155,7 @@ function buildBody(data: Cmpf311Data): string {
   <p class="pd-body cmpf311-declaration">This independently prepared Scheme of Inspection and Testing (SIT) sets out the inspection controls, control-unit definition, sampling, test methods, equipment requirements, frequency, records and responsibilities proposed by <strong>${esc(data.applicantName || 'the applicant firm')}</strong> for products conforming to <strong>${esc(licenceFor)}</strong>. It has been prepared with reference to SIT No. <strong>${esc(productManualNo)}</strong>, the applicable Indian Standard and the firm’s manufacturing and quality-control processes. Annexure C, the test table and the accompanying notes form an integral part of this proposal and shall be read together. The firm undertakes to implement the stated controls, maintain complete and traceable inspection and test records, ensure measuring and test equipment remains suitable and calibrated, and make relevant facilities, records and samples available to BIS during assessment or surveillance. Proposed controls shall be reviewed whenever changes may affect product conformity. Any change requiring BIS review or approval shall be submitted in accordance with applicable requirements. This On-SIT is submitted for BIS review and shall be followed as approved.</p>
   <div class="cmpf311-cover-sign">${signature}</div>
 </div>
-<div class="pd-sheet cmpf311-onsit-page cmpf311-annex-page">
-  ${letterheadHtml(data)}
-  <h1 class="pd-title">Annexure C</h1>
-  ${sections || '<p class="cmpf311-empty">No Annexure C content generated yet.</p>'}
-  <div class="cmpf311-cover-sign cmpf311-annex-sign">${signature}</div>
-  ${preparedByHtml(data.preparedBy)}
-</div>
+${annexPageHtml}
 ${tablePageHtml}${notesPageHtml}`
   }
 
