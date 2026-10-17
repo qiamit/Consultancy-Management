@@ -693,7 +693,7 @@ export async function saveBisApplicationDetails(
   const licenseDigits = form.licenseNumberDigits.replace(/\D/g, '').slice(0, 10)
   const applicationNumber = form.applicationNumber.replace(/\D/g, '')
   const payload = {
-    application_process: form.applicationProcess === 'normal' ? 'normal' : 'simplified',
+    application_process: form.applicationProcess === 'simplified' ? 'simplified' : 'normal',
     application_number: applicationNumber || null,
     application_date: form.applicationDate || null,
     inspection_date: form.inspectionDate || null,
