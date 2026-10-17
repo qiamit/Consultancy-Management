@@ -675,7 +675,6 @@ export function ManakVarietiesTable({
             </DialogHeader>
           </div>
           <div className={cn(limsRegistryFormClass, 'space-y-3 px-4 py-4')}>
-            <p className="text-sm text-stone-600">Copy of scope, drawings or any other supporting file for this application.</p>
             <ul className="max-h-56 divide-y divide-[#e7e0d4] overflow-y-auto border border-[#e7e0d4] bg-[#fffcf7]">
               {scopeFiles.length === 0 ? (
                 <li className="px-3 py-4 text-center text-sm text-stone-500">No files uploaded yet.</li>
