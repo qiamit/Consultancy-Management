@@ -524,7 +524,7 @@ export function ManakVarietiesTable({
                     ) : null}
                   </th>
                 ))}
-                <th className={cn(th, 'w-[1%] whitespace-nowrap')}>Action</th>
+                <th className={cn(th, 'w-[1%] whitespace-nowrap text-center')}>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -547,8 +547,8 @@ export function ManakVarietiesTable({
                     />
                   </td>
                 ))}
-                <td className={cn(td, 'whitespace-nowrap')}>
-                  <div className="flex items-center gap-1">
+                <td className={cn(td, 'whitespace-nowrap text-center')}>
+                  <div className="flex items-center justify-center gap-1">
                     <button type="button" className={cn(iconBtn, 'border-stone-400 text-amber-800')} disabled={!projectId} title="Add row" aria-label="Add scope row" onClick={addRow}>
                       <Plus size={15} aria-hidden />
                     </button>
@@ -592,8 +592,8 @@ export function ManakVarietiesTable({
                           )}
                         </td>
                       ))}
-                      <td className={cn(td, 'whitespace-nowrap')}>
-                        <div className="flex items-center gap-1">
+                      <td className={cn(td, 'whitespace-nowrap text-center')}>
+                        <div className="flex items-center justify-center gap-1">
                           {editing ? (
                             <button type="button" className={cn(iconBtn, 'border-emerald-600 text-emerald-800')} title="Save row" aria-label={`Save scope row ${index + 1}`} onClick={saveEdit}>
                               <Check size={15} aria-hidden />
