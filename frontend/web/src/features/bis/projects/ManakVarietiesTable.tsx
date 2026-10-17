@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { limsDarkBarGlowStyle, limsManageDialogClass, limsOutlineBtnClass, limsPrimaryBtnClass, limsRegistryFormClass } from '@/lib/limsThemeUi'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { loadIsCodeFileLinks, type IsCodeFileLink } from '@/features/masters/is-codes/loadIsCodeFileLinks'
 import { cn } from '@/lib/utils'
 import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
@@ -666,57 +666,72 @@ export function ManakVarietiesTable({
         </DialogContent>
       </Dialog>
       <Dialog open={filesOpen} onOpenChange={setFilesOpen}>
-        <DialogContent className="max-w-lg rounded-none">
-          <DialogHeader>
-            <DialogTitle>Scope files</DialogTitle>
-            <DialogDescription>Copy of scope, drawings or any other supporting file for this application.</DialogDescription>
-          </DialogHeader>
-          <ul className="max-h-56 divide-y divide-stone-200 overflow-y-auto border border-stone-300">
-            {scopeFiles.length === 0 ? (
-              <li className="px-3 py-4 text-center text-sm text-stone-500">No files uploaded yet.</li>
-            ) : (
-              scopeFiles.map((f) => (
-                <li key={f.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
-                  <span className="min-w-0 truncate" title={f.file_name}>
-                    <span className="mr-2 inline-block rounded-none bg-stone-800 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-200">
-                      {typeOf(f)}
-                    </span>
-                    {f.file_name.replace(`${typeOf(f)} - `, '')}
-                  </span>
-                  <span className="inline-flex shrink-0 gap-1">
-                    <button type="button" className={cn(iconBtn, 'h-7 w-7 border-stone-400 text-amber-800')} title="View" aria-label="View file" onClick={() => viewFile(f.viewUrl, f.file_name, f.error || 'File is unavailable.')}>
-                      <Eye size={14} aria-hidden />
-                    </button>
-                    <button type="button" className={cn(iconBtn, 'h-7 w-7 border-red-300 text-red-700')} title="Delete" aria-label="Delete file" disabled={busy} onClick={() => void removeFile(f)}>
-                      <Trash2 size={14} aria-hidden />
-                    </button>
-                  </span>
-                </li>
-              ))
-            )}
-          </ul>
-          <div className="flex items-center gap-2">
-            <select
-              className="h-8 flex-1 rounded-none border border-stone-400 bg-white px-2 text-sm"
-              value={fileType}
-              onChange={(e) => setFileType(e.target.value as (typeof FILE_TYPES)[number])}
-              aria-label="Type of file"
-            >
-              {FILE_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-            <Button type="button" className="rounded-none bg-amber-700 text-white hover:bg-amber-800" disabled={busy} onClick={() => fileRef.current?.click()}>
-              <Upload size={14} className="mr-1.5" aria-hidden /> {busy ? 'Uploading…' : 'Upload file'}
-            </Button>
+        <DialogContent persistOnFocusLoss layer="stacked" aria-describedby={undefined} className={cn(limsManageDialogClass, 'max-w-lg bg-white')}>
+          <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white">
+            <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={limsDarkBarGlowStyle} />
+            <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
+            <DialogHeader className="relative pr-10 text-left">
+              <DialogTitle className="text-base font-semibold tracking-tight text-white">Scope files</DialogTitle>
+            </DialogHeader>
           </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" className="rounded-none" onClick={() => setFilesOpen(false)}>
-              Close
-            </Button>
-          </DialogFooter>
+          <div className={cn(limsRegistryFormClass, 'space-y-3 px-4 py-4')}>
+            <p className="text-sm text-stone-600">Copy of scope, drawings or any other supporting file for this application.</p>
+            <ul className="max-h-56 divide-y divide-[#e7e0d4] overflow-y-auto border border-[#e7e0d4] bg-[#fffcf7]">
+              {scopeFiles.length === 0 ? (
+                <li className="px-3 py-4 text-center text-sm text-stone-500">No files uploaded yet.</li>
+              ) : (
+                scopeFiles.map((f) => (
+                  <li key={f.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                    <span className="min-w-0 truncate" title={f.file_name}>
+                      <span className="mr-2 inline-block rounded-none bg-stone-800 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-200">
+                        {typeOf(f)}
+                      </span>
+                      {f.file_name.replace(`${typeOf(f)} - `, '')}
+                    </span>
+                    <span className="inline-flex shrink-0 gap-1">
+                      <button type="button" className={cn(iconBtn, 'h-7 w-7 border-stone-400 text-amber-800')} title="View" aria-label="View file" onClick={() => viewFile(f.viewUrl, f.file_name, f.error || 'File is unavailable.')}>
+                        <Eye size={14} aria-hidden />
+                      </button>
+                      <button
+                        type="button"
+                        className={cn(iconBtn, 'h-7 w-7 border-red-300 text-red-700')}
+                        title="Delete"
+                        aria-label="Delete file"
+                        disabled={busy}
+                        onClick={async () => {
+                          if (await confirmAction(`Delete ${f.file_name}?`, { title: 'Delete file' })) void removeFile(f)
+                        }}
+                      >
+                        <Trash2 size={14} aria-hidden />
+                      </button>
+                    </span>
+                  </li>
+                ))
+              )}
+            </ul>
+            <div className="flex items-center gap-2">
+              <Select value={fileType} onValueChange={(v) => setFileType(v as (typeof FILE_TYPES)[number])}>
+                <SelectTrigger className="h-9 flex-1 rounded-none text-sm font-medium" aria-label="Type of file">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {FILE_TYPES.map((t) => (
+                    <SelectItem key={t} value={t} className="text-sm">
+                      {t}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button type="button" className={cn(limsPrimaryBtnClass, 'h-9')} disabled={busy} onClick={() => fileRef.current?.click()}>
+                <Upload size={14} className="mr-1.5" aria-hidden /> {busy ? 'Uploading…' : 'Upload File'}
+              </Button>
+            </div>
+            <div className="flex justify-end pt-1">
+              <Button type="button" variant="outline" className={limsOutlineBtnClass} onClick={() => setFilesOpen(false)}>
+                Close
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </>
