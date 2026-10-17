@@ -737,9 +737,9 @@ export function BisLicenseDocumentsDialog({
                   <span className="hidden w-[82px] shrink-0 sm:block" aria-hidden />
                   <p
                     className="min-w-0 flex-1 truncate px-1 text-center text-sm font-semibold text-stone-100 sm:text-base md:text-lg"
-                    title={subtitle}
+                    title={subtitle ? `Online Application Process of ${subtitle}` : undefined}
                   >
-                    {subtitle || '—'}
+                    {subtitle ? `Online Application Process of ${subtitle}` : 'Online Application Process'}
                   </p>
                   <Button
                     type="button"
