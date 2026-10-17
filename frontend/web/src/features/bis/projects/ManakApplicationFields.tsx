@@ -10,7 +10,6 @@ import { formatMoneyInput, sanitizeMoneyInput } from '@/features/masters/product
 import { FilterCombobox, type FilterComboboxOption } from '@/features/sample-handling/receiving/FilterCombobox'
 import type { BisBranchOfficeRow } from '@/features/masters/bis-branch-offices/bisBranchOfficesApi'
 import { MasterOptionFieldWithAdd } from './MasterOptionFieldWithAdd'
-import { arrangeByLabelLength } from './ManakStepPages'
 import type { BisApplicationDetailsForm, BisApplicationProcess } from './types'
 
 /* Same behaviour as ApplicationDetailsFields (Add / Edit Application), laid out like the Registration Details grid. */
@@ -304,14 +303,21 @@ export function ManakApplicationFields({
   // everything else follows in two columns.
   const lines: string[][] = [
     ['Application Process', 'Application Number', 'Application Date'],
-    ['Production Unit', 'Inspection Date', 'Type of Inspection'],
     ['Installed Capacity', 'Actual Capacity', 'Rate / Unit'],
   ]
   const lineItems = lines.map((labels) =>
     labels.map((l) => items.find(([label]) => label === l)).filter((x): x is [string, ReactNode] => Boolean(x)),
   )
-  const used = new Set(lines.flat())
-  const rest = items.filter(([label]) => !used.has(label))
+  const pairLines: string[][] = [
+    ['Production Unit', 'Production Value'],
+    ['Branch Name', 'Branch State'],
+    ['Branch Head Name', 'Branch Head Designation'],
+    ['Inspection Officer Name', 'Inspection Officer Designation'],
+    ['Inspection Date', 'Type of Inspection'],
+    ['Dealing Officer Name', 'Dealing Officer Designation'],
+  ]
+  const find = (l: string) => items.find(([label]) => label === l)
+  const pairItems = pairLines.map((labels) => labels.map(find).filter((x): x is [string, ReactNode] => Boolean(x)))
   const labelCls =
     'w-[1%] whitespace-nowrap border border-[#e7e0d4] bg-[#f7f3eb] px-3 py-1.5 text-left align-middle text-sm font-bold text-stone-800'
   const valueCls = 'border border-[#e7e0d4] px-2 py-1.5 align-middle text-sm text-stone-700'
@@ -319,7 +325,6 @@ export function ManakApplicationFields({
   // Three-field lines use all six cells; two-field lines stretch the second value over the last three.
   // Fixed order on these two lines (no re-sorting by label length).
   const threeUp = lineItems
-  const twoUp = arrangeByLabelLength(rest, 2)
   return (
     <div className="overflow-x-auto">
       <table className="w-full table-auto border-collapse">
@@ -336,7 +341,7 @@ export function ManakApplicationFields({
               ))}
             </tr>
           ))}
-          {twoUp.map((pair, i) => (
+          {pairItems.map((pair, i) => (
             <tr key={`w${i}`}>
               <th scope="row" className={labelCls}>
                 {pair[0] ? `${pair[0][0]}:` : ''}
