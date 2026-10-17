@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from 'react'
-import { Calendar, FileText, MapPin, Upload } from 'lucide-react'
+import { Calendar, Download, Eye, FileText, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { LimsFieldWithAdd } from '@/components/lims/LimsFieldWithAdd'
 import { Button } from '@/components/ui/button'
@@ -413,36 +413,45 @@ function ProofButton({
   )
 }
 
-/** Map pin: click previews the location map, double-click downloads it as a PDF. */
-function MapButton({ onPreview, onPdf }: { onPreview?: () => void; onPdf?: () => void }) {
-  const timer = useRef<number | null>(null)
-  useEffect(() => () => {
-    if (timer.current) window.clearTimeout(timer.current)
-  }, [])
+/** Location map actions: the Latitude button previews the map, the Longitude button downloads it as a PDF. */
+function MapButton({ kind, onPreview, onPdf }: { kind: 'preview' | 'pdf'; onPreview?: () => void; onPdf?: () => void }) {
+  const handler = kind === 'preview' ? onPreview : onPdf
+  const Icon = kind === 'preview' ? Eye : Download
+  const label = kind === 'preview' ? 'Preview location map' : 'Download location map as PDF'
   return (
     <button
       type="button"
-      disabled={!onPreview}
-      title="Location map: click to preview, double-click to download PDF"
-      aria-label="Location map"
+      disabled={!handler}
+      title={label}
+      aria-label={label}
       className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-none border border-stone-400 bg-white text-amber-800 transition-colors hover:bg-amber-50 disabled:opacity-50"
-      onClick={() => {
-        if (timer.current) window.clearTimeout(timer.current)
-        timer.current = window.setTimeout(() => {
-          timer.current = null
-          onPreview?.()
-        }, 250)
-      }}
-      onDoubleClick={() => {
-        if (timer.current) {
-          window.clearTimeout(timer.current)
-          timer.current = null
-        }
-        onPdf?.()
-      }}
+      onClick={handler}
     >
-      <MapPin size={15} aria-hidden />
+      <Icon size={15} aria-hidden />
     </button>
+  )
+}
+
+/** Google Maps logo: opens Google Maps with the firm name already in the search box. */
+function GoogleMapsLink({ query }: { query: string }) {
+  const name = query.trim()
+  return (
+    <a
+      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name)}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={name ? `Open Google Maps and search “${name}”` : 'Open Google Maps'}
+      aria-label="Open in Google Maps"
+      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-none border border-stone-400 bg-white transition-colors hover:bg-amber-50"
+    >
+      <svg width="15" height="15" viewBox="0 0 92.3 132.3" aria-hidden="true">
+        <path fill="#1a73e8" d="M60.2 2.2C55.8.8 51 0 46.1 0 32 0 19.3 6.4 10.8 16.5l21.8 18.3L60.2 2.2z" />
+        <path fill="#ea4335" d="M10.8 16.5C4.1 24.5 0 34.9 0 46.1c0 8.7 1.7 15.7 4.6 22l28-33.3-21.8-18.3z" />
+        <path fill="#4285f4" d="M46.2 28.5c9.8 0 17.7 7.9 17.7 17.7 0 4.3-1.6 8.3-4.2 11.4 0 0 13.9-16.6 27.5-32.7-5.6-10.8-15.3-19-27-22.7L32.6 34.8c3.3-3.8 8.1-6.3 13.6-6.3" />
+        <path fill="#fbbc04" d="M46.2 63.8c-9.8 0-17.7-7.9-17.7-17.7 0-4.3 1.5-8.3 4.1-11.3l-28 33.3c4.8 10.6 12.8 19.2 21 29.9l34.1-40.5c-3.3 3.9-8.1 6.3-13.5 6.3" />
+        <path fill="#34a853" d="M59.1 109.2c15.4-24.1 33.3-35 33.3-63 0-7.7-1.9-14.9-5.2-21.3L25.6 98c2.6 3.4 5.3 7.3 7.9 11.3 9.3 14.5 6.7 23.1 23.2 23.1 16.5 0 13.9-8.6 23.2-23.1z" />
+      </svg>
+    </a>
   )
 }
 
@@ -743,13 +752,13 @@ export function ManakGeneralStep({
     </div>
   )
 
-  const withMap = (node: ReactNode) => (
+  const withMap = (node: ReactNode, kind: 'preview' | 'pdf') => (
     <div className="flex items-center gap-1">
       <div className="min-w-0 flex-1">{node}</div>
-      <MapButton onPreview={onLocationMapPreview} onPdf={onLocationMapPdf} />
+      <MapButton kind={kind} onPreview={onLocationMapPreview} onPdf={onLocationMapPdf} />
+      <GoogleMapsLink query={str(client?.companyName)} />
     </div>
   )
-
 
   const gstValue = str(client?.gstNumber)
   const panValue = str(raw.pan)
@@ -995,8 +1004,8 @@ export function ManakGeneralStep({
                 'GST Certificate',
               ),
             ],
-            ['Latitude', withMap(v(str(client?.latitude), col('latitude')))],
-            ['Longitude', withMap(v(str(client?.longitude), col('longitude')))],
+            ['Latitude', withMap(v(str(client?.latitude), col('latitude')), 'preview')],
+            ['Longitude', withMap(v(str(client?.longitude), col('longitude')), 'pdf')],
           ]}
         />
       </ManakSubPanel>
