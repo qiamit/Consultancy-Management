@@ -629,8 +629,8 @@ export function ManakStepPage({
       {loading ? <p className="mb-2 text-xs text-stone-500">Loading application data…</p> : null}
       {error ? <p className="mb-2 text-xs text-red-700">{error}</p> : null}
       <div className={cn(loading && 'opacity-60')}>{body}</div>
-      {/* Step 1 no longer needs the documents list: everything is edited in place above. */}
-      {stepId !== 'general' ? <ManakPanel title="Documents (create · view · print · download)">{documents}</ManakPanel> : null}
+      {/* Steps 1 and 2 no longer need the documents list: everything is edited / generated in place above. */}
+      {stepId !== 'general' && stepId !== 'management' ? <ManakPanel title="Documents (create · view · print · download)">{documents}</ManakPanel> : null}
     </div>
   )
 }
