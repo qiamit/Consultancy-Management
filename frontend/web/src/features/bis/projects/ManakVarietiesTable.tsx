@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
-import { BookOpen, Check, Columns3, Download, Eye, ExternalLink, FileText, FileType, Paperclip, Pencil, Plus, Trash2, Upload, X } from 'lucide-react'
+import { BookOpen, Check, Columns3, Download, Eye, ExternalLink, FileText, FileType, Globe, LogIn, Paperclip, Pencil, Plus, Trash2, Upload, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -493,6 +493,26 @@ export function ManakVarietiesTable({
       >
         <ExternalLink size={15} aria-hidden />
       </button>
+      <a
+        className={cn(iconBtn, 'border-stone-400 text-amber-800')}
+        href="https://standards.bis.gov.in/website"
+        target="_blank"
+        rel="noopener noreferrer"
+        title="BIS Standards website (standards.bis.gov.in)"
+        aria-label="BIS Standards website"
+      >
+        <Globe size={15} aria-hidden />
+      </a>
+      <a
+        className={cn(iconBtn, 'border-stone-400 text-amber-800')}
+        href="https://standardsbis.bsbedge.com/BIS_Login"
+        target="_blank"
+        rel="noopener noreferrer"
+        title="BIS portal login (standardsbis.bsbedge.com)"
+        aria-label="BIS portal login"
+      >
+        <LogIn size={15} aria-hidden />
+      </a>
       <button
         type="button"
         className={cn(iconBtn, 'border-stone-400 text-amber-800')}
