@@ -192,11 +192,12 @@ function EditableRows({
                   type="button"
                   size="sm"
                   disabled={busy}
-                  className="h-7 rounded-none bg-amber-700 px-2 text-xs text-white hover:bg-amber-800"
+                  className="h-7 w-7 rounded-none bg-amber-700 p-0 text-white hover:bg-amber-800"
                   onClick={add}
                   title={addLabel}
+                  aria-label={addLabel}
                 >
-                  <Plus className="mr-1 h-3 w-3" aria-hidden /> Add
+                  <Plus className="h-4 w-4" aria-hidden />
                 </Button>
               </td>
             </tr>
