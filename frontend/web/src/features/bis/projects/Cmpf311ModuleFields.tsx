@@ -315,7 +315,15 @@ export function Cmpf311ModuleFields({
                         <span className="block truncate font-medium">{file.fileName}</span>
                         <span className="block text-xs text-stone-500">{file.documentKind}{isPdf ? ' · PDF' : ' · Not a PDF'}</span>
                       </span>
-                      {downloadingMasterFileId === file.id ? <span className="text-xs text-stone-500">Loading…</span> : isCurrent ? <Check className="h-4 w-4 text-emerald-700" aria-label="Selected" /> : null}
+                      {downloadingMasterFileId === file.id ? <span className="text-xs text-stone-500">Loading…</span> : null}
+                      <span
+                        role="switch"
+                        aria-checked={isCurrent}
+                        aria-label={`${isCurrent ? 'Selected' : 'Not selected'}: ${file.fileName}`}
+                        className={cn('relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors', isCurrent ? 'border-amber-700 bg-amber-700' : 'border-stone-400 bg-stone-200')}
+                      >
+                        <span className={cn('inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform', isCurrent ? 'translate-x-[18px]' : 'translate-x-0.5')} />
+                      </span>
                     </button>
                   )
                 }) : <p className="border border-dashed border-stone-300 p-3 text-sm text-stone-500">{!currentMasterData && isCodeId ? 'Loading IS Code Master files…' : 'No files are attached to this IS Code in the master.'}</p>}
