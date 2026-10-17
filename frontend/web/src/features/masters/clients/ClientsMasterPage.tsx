@@ -1844,7 +1844,13 @@ export default function ClientsMasterPage() {
               .then(() => {
                 setCertificates((prev) => prev.map((item) => (
                   item.id === row.id
-                    ? { ...item, cert_name: input.certName.trim(), document_number: input.documentNumber.trim(), issued_on: input.issuedOn }
+                    ? {
+                        ...item,
+                        cert_name: input.certName.trim(),
+                        document_number: input.documentNumber.trim(),
+                        issued_on: input.issuedOn,
+                        ...(input.docTitle === undefined ? {} : { doc_title: input.docTitle.trim() }),
+                      }
                     : item
                 )))
               })
