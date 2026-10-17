@@ -95,14 +95,27 @@ export function arrangeByLabelLength<T>(items: Array<[string, T]>, columnCount =
   return rows
 }
 
-export function ManakFields({ items, singleLine = false }: { items: Array<[string, ReactNode]>; singleLine?: boolean }) {
+export function ManakFields({
+  items,
+  singleLine = false,
+  lines,
+}: {
+  items: Array<[string, ReactNode]>
+  singleLine?: boolean
+  /** Explicit lines of labels; a line with one label spans the whole row. */
+  lines?: string[][]
+}) {
   // Grid layout: three label | value pairs per row. Label columns shrink to their text; value columns share the rest.
   // singleLine keeps every pair on one row and never wraps the text.
-  const rows = singleLine ? [items] : arrangeByLabelLength(items)
+  const rows = lines
+    ? lines.map((labels) => labels.map((l) => items.find(([label]) => label === l) ?? null))
+    : singleLine
+      ? [items]
+      : arrangeByLabelLength(items)
   const labelCls =
     'w-[1%] whitespace-nowrap border border-[#e7e0d4] bg-[#f7f3eb] px-3 py-1.5 text-left align-top text-sm font-bold text-stone-800'
   const valueCls = cn(
-    singleLine ? 'whitespace-nowrap' : 'break-words',
+    singleLine || lines ? 'whitespace-nowrap' : 'break-words',
     'w-[32%] border border-[#e7e0d4] px-3 py-1.5 align-top text-sm text-stone-700',
   )
   return (
@@ -117,7 +130,7 @@ export function ManakFields({ items, singleLine = false }: { items: Array<[strin
                     <th scope="row" className={labelCls}>
                       {cell[0]}:
                     </th>
-                    <td className={valueCls}>
+                    <td className={valueCls} colSpan={lines && pair.length === 1 ? 3 : undefined}>
                       {cell[1] || <span className="text-stone-400">—</span>}
                     </td>
                   </Fragment>
@@ -325,7 +338,7 @@ export function ManakStepPage({
       >
         <ManakSubPanel title="Indian Standard Details">
           <ManakFields
-            singleLine
+            lines={[['Standard Title', 'Standard Number'], ['Product Manual']]}
             items={[
               ['Standard Title', isCode?.title],
               ['Product Manual', isCode?.productManualNumber],
