@@ -300,11 +300,11 @@ export function ManakApplicationFields({
     ['Dealing Officer Designation', master('designation', 'Dealing Officer Designation', 'app-deal-desig', form.dealingOfficerDesignation, (v) => set('dealingOfficerDesignation', v), 'Designation')],
   ]
 
-  // First two lines hold three fields each (process + dates, then number + unit + inspection type);
+  // First two lines hold three fields each (process, number, date; then unit, inspection date, type);
   // everything else follows in two columns.
   const lines: string[][] = [
-    ['Application Process', 'Application Date', 'Inspection Date'],
-    ['Application Number', 'Production Unit', 'Type of Inspection'],
+    ['Application Process', 'Application Number', 'Application Date'],
+    ['Production Unit', 'Inspection Date', 'Type of Inspection'],
   ]
   const lineItems = lines.map((labels) =>
     labels.map((l) => items.find(([label]) => label === l)).filter((x): x is [string, ReactNode] => Boolean(x)),
@@ -316,7 +316,8 @@ export function ManakApplicationFields({
   const valueCls = 'border border-[#e7e0d4] px-2 py-1.5 align-middle text-sm text-stone-700'
   // One shared six-column table so label and value columns line up across every row.
   // Three-field lines use all six cells; two-field lines stretch the second value over the last three.
-  const threeUp = lineItems.map((list) => arrangeByLabelLength(list, 3)[0] ?? [])
+  // Fixed order on these two lines (no re-sorting by label length).
+  const threeUp = lineItems
   const twoUp = arrangeByLabelLength(rest, 2)
   return (
     <div className="overflow-x-auto">
