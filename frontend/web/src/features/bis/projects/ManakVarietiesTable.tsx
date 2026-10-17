@@ -180,18 +180,8 @@ export function ManakVarietiesTable({
   const th = 'border border-stone-700 bg-stone-800 px-2 py-1.5 text-left text-[11px] font-bold uppercase tracking-[0.1em] text-amber-200'
   const td = 'border border-[#e7e0d4] px-2 py-1.5 align-top text-sm text-stone-700'
 
-  const actions = (
-    <div className="flex items-center gap-1">
-      <button
-        type="button"
-        className={cn(iconBtn, 'border-stone-400 text-amber-800')}
-        disabled={!onEdit}
-        title="Edit varieties (Sample Requirements)"
-        aria-label="Edit varieties"
-        onClick={onEdit}
-      >
-        <Pencil size={14} aria-hidden />
-      </button>
+  const docButtons = (
+    <div className="flex shrink-0 items-center gap-1">
       <button
         type="button"
         className={cn(iconBtn, 'border-stone-400 text-amber-800')}
@@ -221,6 +211,21 @@ export function ManakVarietiesTable({
         onClick={() => openProductManualOnline(isNumber, setSearchBusy)}
       >
         <ExternalLink size={15} aria-hidden />
+      </button>
+    </div>
+  )
+
+  const actions = (
+    <div className="flex items-center gap-1">
+      <button
+        type="button"
+        className={cn(iconBtn, 'border-stone-400 text-amber-800')}
+        disabled={!onEdit}
+        title="Edit varieties (Sample Requirements)"
+        aria-label="Edit varieties"
+        onClick={onEdit}
+      >
+        <Pencil size={14} aria-hidden />
       </button>
       <button
         type="button"
@@ -268,7 +273,12 @@ export function ManakVarietiesTable({
               rows.map((v, i) => (
                 <tr key={i} className={i % 2 ? 'bg-[#f7f3eb]' : 'bg-[#fffcf7]'}>
                   <td className={cn(td, 'px-1 text-center')}>{i + 1}</td>
-                  <td className={td}>{v}</td>
+                  <td className={td}>
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="min-w-0">{v}</span>
+                      {docButtons}
+                    </div>
+                  </td>
                   <td className={cn(td, 'whitespace-nowrap')}>{actions}</td>
                 </tr>
               ))
