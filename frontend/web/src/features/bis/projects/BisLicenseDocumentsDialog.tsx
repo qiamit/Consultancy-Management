@@ -331,6 +331,8 @@ export function BisLicenseDocumentsDialog({
   const [previewKind, setPreviewKind] = useState<BisPrintDocumentKind | null>(null)
   // Generated letterhead HTML to preview instead of attached files (Undertaking for Manufacturing Scope).
   const [previewGeneratedHtml, setPreviewGeneratedHtml] = useState<string | null>(null)
+  // Undertaking the All Undertakings module opens on (set when it is opened from the Marking Fee section).
+  const [undertakingFocus, setUndertakingFocus] = useState<'undertaking-mmf' | null>(null)
   const [importKind, setImportKind] = useState<BisPrintDocumentKind | null>(null)
 
   const client = row ? clientDisplayName(row) || '—' : '—'
@@ -385,6 +387,7 @@ export function BisLicenseDocumentsDialog({
   }
 
   const handleModuleEdit = (kind: BisPrintDocumentKind) => {
+    setUndertakingFocus(null)
     if (!row?.id) {
       toast.error('Save the license first, then open the document module.')
       return
@@ -887,6 +890,15 @@ export function BisLicenseDocumentsDialog({
                   onLocationMapPreview={() => handlePreview('location-map')}
                   onLocationMapPdf={() => void runDownload('location-map', 'pdf')}
                   onProjectSaved={onProjectSaved}
+                  onMarkingFee={{
+                    edit: () => {
+                      handleModuleEdit('all-required-undertakings')
+                      setUndertakingFocus('undertaking-mmf')
+                    },
+                    preview: () => handlePreview('undertaking-mmf'),
+                    pdf: () => void runDownload('undertaking-mmf', 'pdf', true),
+                    word: () => void runDownload('undertaking-mmf', 'word', true),
+                  }}
                   onScopeDocument={{
                     preview: () => void previewScopeUndertaking(),
                     pdf: () => void downloadScopeUndertakingPdf(),
@@ -1028,6 +1040,7 @@ export function BisLicenseDocumentsDialog({
       onLocationMapWord={() => void runDownload('location-map', 'word')}
       onLocationMapPdf={() => void runDownload('location-map', 'pdf')}
       onLocationMapPrint={() => handlePrint('location-map')}
+      initialUndertaking={undertakingFocus}
       onPreviewDocument={(kind) => handlePreview(kind)}
       onPdfDocument={(kind) => void runDownload(kind, 'pdf', true)}
       onWordDocument={(kind) => void runDownload(kind, 'word', true)}

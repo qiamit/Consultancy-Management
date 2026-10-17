@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState, type ReactNode } from 'react'
-import { Pencil } from 'lucide-react'
+import { Download, Eye, FileType, Pencil } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { loadBisPrintData, type BisPrintData } from '../print/loadBisPrintData'
 import { BIS_PRINT_DOCUMENT_LABEL, type BisPrintDocumentKind } from '../print/printBisDocument'
@@ -11,6 +11,8 @@ import { listBisBranchOffices, type BisBranchOfficeRow } from '@/features/master
 import { ManakGeneralStep } from './ManakGeneralStep'
 import { ManakVarietiesTable } from './ManakVarietiesTable'
 import { ManakSitRow } from './ManakSitRow'
+import { minimumMarkingFeeForScale } from '../print/cmpf310Html'
+import { parseUndertakingMinimumFeePayload } from './undertakingPayloadModels'
 import { CORRESPONDENCE_KIND, ManakManagementStep } from './ManakManagementStep'
 import type { BisProjectRow } from './types'
 
@@ -221,6 +223,7 @@ const STEP_MODULES: BisPrintDocumentKind[] = [
   'cmpf-307',
   'cmpf-311',
   'osl-sample-requirements',
+  'undertaking-mmf',
   CORRESPONDENCE_KIND,
 ]
 
@@ -310,6 +313,7 @@ export function ManakStepPage({
   onLocationMapPdf,
   onProjectSaved,
   onScopeDocument,
+  onMarkingFee,
 }: {
   stepId: string
   row: BisProjectRow | null
@@ -323,12 +327,15 @@ export function ManakStepPage({
   onProjectSaved?: () => void
   /** Undertaking for Manufacturing Scope: preview / PDF / Word actions. */
   onScopeDocument?: { preview: () => void; pdf: () => void; word: () => void }
+  /** Undertaking for Minimum Marking Fee: edit (opens its form) and preview / PDF / Word. */
+  onMarkingFee?: { edit: () => void; preview: () => void; pdf: () => void; word: () => void }
 }) {
   const [reloadTick, setReloadTick] = useState(0)
   const { print, clientRaw, certificates, sites, projectRaw, branches, payloads, loading, error } = useStepData(row, refreshKey + reloadTick)
   const edit = (kind: BisPrintDocumentKind) => () => onEdit(kind)
   const c = print?.client
   const isCode = print?.isCode
+  const markingFee = isCode && c?.scale ? minimumMarkingFeeForScale(isCode, c.scale) : ''
 
   let body: ReactNode = null
 
@@ -352,6 +359,44 @@ export function ManakStepPage({
         onProjectSaved={onProjectSaved}
         onChanged={() => setReloadTick((t) => t + 1)}
       >
+        <ManakSubPanel
+          title="Marking Fee"
+          headerExtra={
+            onMarkingFee ? (
+              <div className="flex shrink-0 items-center gap-1">
+                {(
+                  [
+                    ['Edit the Undertaking for Minimum Marking Fee', 'Edit marking fee undertaking', onMarkingFee.edit, Pencil],
+                    ['Preview the Undertaking for Minimum Marking Fee', 'Preview marking fee undertaking', onMarkingFee.preview, Eye],
+                    ['Undertaking for Minimum Marking Fee — PDF', 'Marking fee undertaking PDF', onMarkingFee.pdf, Download],
+                    ['Undertaking for Minimum Marking Fee — Word', 'Marking fee undertaking Word', onMarkingFee.word, FileType],
+                  ] as const
+                ).map(([title, label, handler, Icon]) => (
+                  <button
+                    key={label}
+                    type="button"
+                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-none border border-stone-400 bg-white text-amber-800 transition-colors hover:bg-amber-50"
+                    title={title}
+                    aria-label={label}
+                    onClick={handler}
+                  >
+                    <Icon size={15} aria-hidden />
+                  </button>
+                ))}
+              </div>
+            ) : null
+          }
+        >
+          <ManakFields
+            lines={[['Production Unit', 'Firm Scale'], ['Minimum Marking Fee', 'Annual Production Capacity']]}
+            items={[
+              ['Production Unit', isCode?.unitOfIs],
+              ['Firm Scale', c?.scale],
+              ['Minimum Marking Fee', markingFee ? `Rs. ${markingFee} per Year` : ''],
+              ['Annual Production Capacity', parseUndertakingMinimumFeePayload(payloads['undertaking-mmf'] ?? null).annualProductionCapacity],
+            ]}
+          />
+        </ManakSubPanel>
         <ManakSubPanel title="Indian Standard Details">
           <ManakFields
             lines={[['Standard Title', 'Standard Number']]}

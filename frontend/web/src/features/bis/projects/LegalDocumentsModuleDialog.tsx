@@ -333,6 +333,7 @@ export function LegalDocumentsModuleDialog({
   onPreviewDocument,
   onPdfDocument,
   onWordDocument,
+  initialUndertaking = null,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -352,6 +353,8 @@ export function LegalDocumentsModuleDialog({
   onPreviewDocument?: (kind: BisPrintDocumentKind) => void
   onPdfDocument?: (kind: BisPrintDocumentKind) => void
   onWordDocument?: (kind: BisPrintDocumentKind) => void
+  /** Undertaking shown first when the All Undertakings module opens (for example the Minimum Marking Fee one from step 1). */
+  initialUndertaking?: (typeof UNDERTAKING_OPTIONS)[number]['kind'] | null
 }) {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const uploadTargetRef = useRef<{ type: 'draft' | 'file'; id: string } | null>(null)
@@ -423,6 +426,9 @@ export function LegalDocumentsModuleDialog({
   const [busy, setBusy] = useState(false)
   const [printingUndertaking, setPrintingUndertaking] = useState(false)
   const [selectedUndertaking, setSelectedUndertaking] = useState<(typeof UNDERTAKING_OPTIONS)[number]['kind']>('self-evaluation-form')
+  useEffect(() => {
+    if (open && showAllUndertakingsFields && initialUndertaking) setSelectedUndertaking(initialUndertaking)
+  }, [open, showAllUndertakingsFields, initialUndertaking])
   const [undertakingPreviewOptions, setUndertakingPreviewOptions] = useState<UndertakingPreviewOptions>(DEFAULT_UNDERTAKING_PREVIEW_OPTIONS)
   const [undertakingPreviewOptionsLoadedFor, setUndertakingPreviewOptionsLoadedFor] = useState<string | null>(null)
   const [undertakingPreviewOptionsTouched, setUndertakingPreviewOptionsTouched] = useState(false)
