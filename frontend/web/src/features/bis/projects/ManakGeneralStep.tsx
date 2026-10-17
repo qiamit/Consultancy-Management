@@ -849,7 +849,8 @@ export function ManakGeneralStep({
           columns={2}
           topLines={[
             ['CEO Name', 'E-MailId', 'Mobile No.'],
-            ['City', 'District', 'State', 'Country', 'PinCode'],
+            ['City', 'District', 'State', 'PinCode'],
+            ['Country', 'Landline', 'Address Proof Type'],
           ]}
           fullRows={[
             ['Firm Name', v(str(client?.companyName), col('company_name'))],
