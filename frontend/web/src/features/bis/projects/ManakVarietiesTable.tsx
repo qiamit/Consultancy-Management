@@ -2,6 +2,9 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { BookOpen, Columns3, Eye, ExternalLink, FileText, Paperclip, Pencil, Trash2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { limsDarkBarGlowStyle, limsManageDialogClass, limsOutlineBtnClass, limsPrimaryBtnClass, limsRegistryFormClass } from '@/lib/limsThemeUi'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { loadIsCodeFileLinks, type IsCodeFileLink } from '@/features/masters/is-codes/loadIsCodeFileLinks'
 import { cn } from '@/lib/utils'
@@ -371,31 +374,39 @@ export function ManakVarietiesTable({
         </div>,
       )}
       <Dialog open={columnOpen} onOpenChange={setColumnOpen}>
-        <DialogContent className="max-w-sm rounded-none">
-          <DialogHeader>
-            <DialogTitle>Add Columns</DialogTitle>
-            <DialogDescription>Number of columns for the Notes / License Scope.</DialogDescription>
-          </DialogHeader>
-          <select
-            className="h-9 w-full rounded-none border border-stone-400 bg-white px-2 text-sm"
-            value={columnDraft}
-            onChange={(e) => setColumnDraft(e.target.value)}
-            aria-label="Number of columns"
-          >
-            {BIS_NOTES_COLUMN_COUNT_OPTIONS.map((n) => (
-              <option key={n} value={String(n)}>
-                {n === 1 ? '1 Column — Plain Text' : `${n} Columns — Table Layout`}
-              </option>
-            ))}
-          </select>
-          <DialogFooter>
-            <Button type="button" variant="outline" className="rounded-none" onClick={() => setColumnOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="button" className="rounded-none" onClick={() => void applyColumns()}>
-              Add
-            </Button>
-          </DialogFooter>
+        <DialogContent persistOnFocusLoss layer="stacked" aria-describedby={undefined} className={cn(limsManageDialogClass, 'max-w-sm bg-white')}>
+          <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white">
+            <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={limsDarkBarGlowStyle} />
+            <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
+            <DialogHeader className="relative pr-10 text-left">
+              <DialogTitle className="text-base font-semibold tracking-tight text-white">Add Columns</DialogTitle>
+            </DialogHeader>
+          </div>
+          <div className={cn(limsRegistryFormClass, 'space-y-3 px-4 py-4')}>
+            <div className="space-y-2">
+              <Label htmlFor="varieties-column-count">Number of columns</Label>
+              <Select value={columnDraft} onValueChange={setColumnDraft}>
+                <SelectTrigger id="varieties-column-count" className="h-9 rounded-none text-sm font-medium">
+                  <SelectValue placeholder="Select columns" />
+                </SelectTrigger>
+                <SelectContent>
+                  {BIS_NOTES_COLUMN_COUNT_OPTIONS.map((n) => (
+                    <SelectItem key={n} value={String(n)} className="text-sm">
+                      {n === 1 ? '1 Column — Plain Text' : `${n} Columns — Table Layout`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button type="button" variant="outline" className={limsOutlineBtnClass} onClick={() => setColumnOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="button" className={limsPrimaryBtnClass} onClick={() => void applyColumns()}>
+                Add
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
       <Dialog open={filesOpen} onOpenChange={setFilesOpen}>

@@ -187,6 +187,9 @@ function ConsentLetterControl({ projectId }: { projectId: string | null }) {
     setBusy(true)
     try {
       await uploadBisProjectFile(projectId, file, 'consent-letter')
+      // One consent letter is enough: a new upload replaces the earlier ones.
+      const latest = await listBisProjectFiles(projectId, 'consent-letter')
+      await Promise.allSettled(latest.slice(1).map(deleteBisProjectFile))
       await reload(projectId)
       toast.success('Consent letter uploaded.')
     } catch (error) {
@@ -245,7 +248,7 @@ function ConsentLetterControl({ projectId }: { projectId: string | null }) {
           <Paperclip className="h-[15px] w-[15px]" aria-hidden />
         </Button>
       ) : (
-        files.map((file) => (
+        [files[0]!].map((file) => (
           <Button
             key={file.id}
             type="button"
