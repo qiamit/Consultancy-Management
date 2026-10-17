@@ -1841,6 +1841,7 @@ export function LegalDocumentsModuleDialog({
                 <section key={option.kind} className={cn('min-h-0 flex-1 overflow-y-auto border border-stone-300 bg-white', option.kind === 'undertaking-mmf' ? 'p-0' : 'p-5 sm:p-8')}>
                   <div className={cn('flex items-center justify-between gap-4', option.kind === 'undertaking-mmf' && 'bg-stone-800 px-3 py-1.5')}>
                     <h2 className={option.kind === 'undertaking-mmf' ? 'text-[11px] font-bold uppercase tracking-[0.14em] text-amber-200' : 'text-xl font-semibold text-stone-900'}>{option.title}</h2>
+                    {mmfOnly ? null : (
                     <label className={cn('flex shrink-0 cursor-pointer items-center gap-2 text-sm font-medium', option.kind === 'undertaking-mmf' ? 'text-[11px] text-amber-100' : 'text-stone-700')} title={`Show ${option.title} in preview`}>
                       <input
                         type="checkbox"
@@ -1855,6 +1856,7 @@ export function LegalDocumentsModuleDialog({
                       />
                       <span>Show in Preview</span>
                     </label>
+                    )}
                   </div>
                   {option.kind === 'undertaking-option-2' ? <p className="mt-4 border border-stone-200 bg-stone-50 p-3 text-sm text-stone-700">No additional inputs are required. The undertaking is prepared directly from this project’s saved application details.</p> : null}
                   {option.kind === 'undertaking-general' ? (
