@@ -36,8 +36,8 @@ export function ManakSitRow({
   const saved = parseCmpf311Payload(payload)
   const bisSit = saved.mode === 'bis-sit'
   const storedNumber = payload ? saved.productManualNumber : ''
-  // Yes (BIS SIT): the IS Code master's number unless edited; No (Own SIT): only what was typed.
-  const shownDefault = bisSit ? storedNumber || masterManualNumber : storedNumber
+  // Yes (BIS SIT): always the Product Manual number maintained in IS Code master; No (Own SIT): only what is typed here.
+  const shownDefault = bisSit ? masterManualNumber : storedNumber
   const [number, setNumber] = useState(shownDefault)
   useEffect(() => {
     setNumber(shownDefault)
@@ -103,11 +103,12 @@ export function ManakSitRow({
                 className="h-8 min-w-0 flex-1 rounded-none border-stone-300 bg-white text-sm"
                 aria-label="Product Manual number"
                 value={number}
-                placeholder={bisSit ? '' : 'Enter Product Manual / SIT number'}
-                disabled={!projectId}
+                placeholder={bisSit ? 'Set Product Manual Number in IS Code master' : 'Enter Product Manual / SIT number'}
+                disabled={!projectId || bisSit}
+                title={bisSit ? 'Comes from the selected IS Code master' : undefined}
                 onChange={(e) => setNumber(e.target.value)}
                 onBlur={() => {
-                  if (number.trim() !== shownDefault) void save({ productManualNumber: number.trim() })
+                  if (!bisSit && number.trim() !== shownDefault) void save({ productManualNumber: number.trim() })
                 }}
               />
               {bisSit ? (
