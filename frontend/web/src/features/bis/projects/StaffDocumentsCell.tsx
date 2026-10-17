@@ -232,6 +232,45 @@ export function StaffDocumentsCell({
     }
   }
 
+  const showGenerated = async () => {
+    if (!projectRow) return
+    try {
+      const html = await buildAppointmentLetterHtmlForTechnicalStaff(projectRow, {
+        personName: str(row.personName),
+        designation: str(row.designation),
+        educationalQualification: str(row.educationalQualification),
+        experienceYears: str(row.experienceYears),
+        appointmentDate: str(row.appointmentDate),
+        appointmentReferenceNo: str(row.appointmentReferenceNo),
+      })
+      setPreviewHtml(html)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not prepare Appointment Letter.')
+    }
+  }
+  const deleteGenerated = async () => {
+    if (!(await confirm(`Delete the generated Appointment Letter of ${str(row.personName) || 'this person'}?`, { title: 'Delete Appointment Letter', confirmLabel: 'Delete', destructive: true }))) return
+    try {
+      await patchRow({ appointmentDate: '', appointmentReferenceNo: '' })
+      toast.success('Appointment Letter deleted')
+      onChanged()
+    } catch (err) {
+      toast.error(formatBisProjectFilesError(err))
+    }
+  }
+  const onGeneratedClick = () => {
+    if (clickTimer.current) clearTimeout(clickTimer.current)
+    clickTimer.current = setTimeout(() => {
+      clickTimer.current = null
+      void showGenerated()
+    }, 250)
+  }
+  const onGeneratedDoubleClick = () => {
+    if (clickTimer.current) clearTimeout(clickTimer.current)
+    clickTimer.current = null
+    void deleteGenerated()
+  }
+
   const openGenerate = () => {
     if (!projectRow) {
       toast.warning('Save the license first, then create the Appointment Letter.')
@@ -261,6 +300,7 @@ export function StaffDocumentsCell({
       await patchRow({ appointmentDate: genDate.trim(), appointmentReferenceNo: genRef.trim() })
       setGenOpen(false)
       setPreviewHtml(html)
+      if (!onDraftChange) onChanged()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not prepare Appointment Letter.')
     } finally {
@@ -270,23 +310,39 @@ export function StaffDocumentsCell({
 
   return (
     <div className="flex items-center justify-center gap-1">
-      {onDraftChange && !isTop ? (
-        <button
-          type="button"
-          className={cn(btnCls, 'border-stone-400 text-amber-800 hover:bg-amber-50')}
-          title="Generate Appointment Letter"
-          aria-label="Generate Appointment Letter"
-          onClick={openGenerate}
-        >
-          <FilePlus2 size={14} aria-hidden />
-        </button>
-      ) : null}
       {slots.map((s) => {
         const attached = Boolean(str(row[s.keys.id]).trim())
         const Icon = s.icon
         const loading = busy === s.slot
+        const isAppointment = s.slot === 'appointment' && !isTop
+        const generated = isAppointment && !attached && Boolean(str(row.appointmentDate).trim())
         return (
-          <span key={s.slot} className="inline-flex">
+          <span key={s.slot} className="inline-flex gap-1">
+            {isAppointment ? (
+              generated ? (
+                <button
+                  type="button"
+                  className={cn(btnCls, 'border-emerald-600 text-emerald-700 hover:bg-emerald-50')}
+                  title="View the generated Appointment Letter (double click to delete)"
+                  aria-label="View generated Appointment Letter"
+                  onClick={onGeneratedClick}
+                  onDoubleClick={onGeneratedDoubleClick}
+                >
+                  <Eye size={14} aria-hidden />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={attached}
+                  className={cn(btnCls, 'border-stone-400 text-amber-800 hover:bg-amber-50')}
+                  title={attached ? 'An Appointment Letter is already uploaded' : 'Generate Appointment Letter'}
+                  aria-label="Generate Appointment Letter"
+                  onClick={openGenerate}
+                >
+                  <FilePlus2 size={14} aria-hidden />
+                </button>
+              )
+            ) : null}
             <input
               ref={(el) => {
                 inputs.current[s.slot] = el
@@ -312,9 +368,9 @@ export function StaffDocumentsCell({
             ) : (
               <button
                 type="button"
-                disabled={loading}
+                disabled={loading || generated}
                 className={cn(btnCls, 'border-stone-400 text-amber-800 hover:bg-amber-50')}
-                title={`Upload ${s.label}`}
+                title={generated ? 'An Appointment Letter is already generated' : `Upload ${s.label}`}
                 aria-label={`Upload ${s.label}`}
                 onClick={() => inputs.current[s.slot]?.click()}
               >
@@ -339,7 +395,7 @@ export function StaffDocumentsCell({
       </label>
       {viewer}
       {confirmDialog}
-      {onDraftChange && !isTop ? (
+      {!isTop ? (
         <>
           <Dialog open={genOpen} onOpenChange={(next) => !genBusy && setGenOpen(next)}>
             <DialogContent

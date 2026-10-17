@@ -138,6 +138,8 @@ type Field = {
   label: string
   placeholder?: string
   width?: string
+  /** Left-align the saved value (default is centred). */
+  alignLeft?: boolean
   /** Not mandatory: no asterisk, and it may stay empty. */
   optional?: boolean
   /** Digits only, exactly this many when filled in. */
@@ -380,7 +382,7 @@ function EditableRows({
                       />
                     </td>
                     {fields.map((f) => (
-                      <td key={f.key} className={cn(tdCls, 'text-center')}>
+                      <td key={f.key} className={cn(tdCls, f.alignLeft ? 'text-left' : 'text-center')}>
                         {editing && f.master ? (
                           <MasterOptionFieldWithAdd
                             category={f.master}
@@ -529,7 +531,7 @@ export function ManakManagementStep({
             projectId={projectId}
             kind={'top-management' as BisPrintDocumentKind}
             fields={[
-              { key: 'personName', label: 'Name' },
+              { key: 'personName', label: 'Name', alignLeft: true },
               { key: 'designation', label: 'Designation' },
               { key: 'mobile', label: 'Contact No.', width: '9rem' },
               { key: 'email', label: 'Email ID', width: '17rem' },
@@ -632,7 +634,7 @@ export function ManakManagementStep({
           projectId={projectId}
           kind={'technical-staff' as BisPrintDocumentKind}
           fields={[
-            { key: 'personName', label: 'Name' },
+            { key: 'personName', label: 'Name', alignLeft: true },
             { key: 'designation', label: 'Designation', master: 'designation', width: '12rem' },
             { key: 'educationalQualification', label: 'Qualification', master: 'education', width: '12rem' },
             { key: 'experienceYears', label: 'Experience', master: 'experience', width: '11rem' },
@@ -641,7 +643,7 @@ export function ManakManagementStep({
           extraColumns={[
             {
               label: 'Documents',
-              render: (r, index) => <StaffDocumentsCell projectId={projectId} rowIndex={index} row={r} onChanged={onChanged} />,
+              render: (r, index) => <StaffDocumentsCell projectId={projectId} rowIndex={index} row={r} onChanged={onChanged} projectRow={projectRow} />,
               renderDraft: (draft, patchDraft) => (
                 <StaffDocumentsCell projectId={projectId} rowIndex={-1} row={draft} onChanged={onChanged} onDraftChange={patchDraft} projectRow={projectRow} />
               ),
