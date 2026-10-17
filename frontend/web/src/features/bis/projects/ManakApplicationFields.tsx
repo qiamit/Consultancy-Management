@@ -300,28 +300,47 @@ export function ManakApplicationFields({
     ['Dealing Officer Designation', master('designation', 'Dealing Officer Designation', 'app-deal-desig', form.dealingOfficerDesignation, (v) => set('dealingOfficerDesignation', v), 'Designation')],
   ]
 
-  const rows = arrangeByLabelLength(items, 2)
+  // First two lines hold three fields each (process + dates, then number + unit + inspection type);
+  // everything else follows in two columns.
+  const lines: string[][] = [
+    ['Application Process', 'Application Date', 'Inspection Date'],
+    ['Application Number', 'Production Unit', 'Type of Inspection'],
+  ]
+  const lineItems = lines.map((labels) =>
+    labels.map((l) => items.find(([label]) => label === l)).filter((x): x is [string, ReactNode] => Boolean(x)),
+  )
+  const used = new Set(lines.flat())
+  const rest = items.filter(([label]) => !used.has(label))
   const labelCls =
     'w-[1%] whitespace-nowrap border border-[#e7e0d4] bg-[#f7f3eb] px-3 py-1.5 text-left align-middle text-sm font-bold text-stone-800'
-  const valueCls = 'w-[49%] border border-[#e7e0d4] px-2 py-1.5 align-middle text-sm text-stone-700'
+  const table = (list: Array<[string, ReactNode]>, columns: 2 | 3, valueWidth: string) => (
+    <table className="w-full table-auto border-collapse">
+      <tbody>
+        {arrangeByLabelLength(list, columns).map((pair, i) => (
+          <tr key={i}>
+            {pair.map((cell, j) => (
+              <Fragment key={j}>
+                <th scope="row" className={labelCls}>
+                  {cell ? `${cell[0]}:` : ''}
+                </th>
+                <td className={cn(valueWidth, 'border border-[#e7e0d4] px-2 py-1.5 align-middle text-sm text-stone-700')}>
+                  {cell ? cell[1] : null}
+                </td>
+              </Fragment>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
   return (
     <div className="overflow-x-auto">
-      <table className="w-full table-auto border-collapse">
-        <tbody>
-          {rows.map((pair, i) => (
-            <tr key={i}>
-              {pair.map((cell, j) => (
-                <Fragment key={j}>
-                  <th scope="row" className={labelCls}>
-                    {cell ? `${cell[0]}:` : ''}
-                  </th>
-                  <td className={valueCls}>{cell ? cell[1] : null}</td>
-                </Fragment>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {lineItems.map((list, i) => (
+        <div key={i} className={i > 0 ? '-mt-px' : undefined}>
+          {table(list, 3, 'w-[32%]')}
+        </div>
+      ))}
+      <div className="-mt-px">{table(rest, 2, 'w-[49%]')}</div>
     </div>
   )
 }
