@@ -118,7 +118,7 @@ function AuthorizedSignatoryCell({
   }
   return (
     <label
-      className="inline-flex items-center gap-1.5 text-[11px] font-medium text-stone-700"
+      className="inline-flex items-center justify-center"
       title="Make this person the Authorized Signatory (the Authorization Letter is added to Preview / PDF / Word)"
     >
       <input
@@ -175,6 +175,8 @@ function EditableRows({
   blank: () => Rec
   extraColumns?: Array<{
     label: string
+    /** Centre the cells and shrink the column to its minimum width. */
+    compact?: boolean
     render: (row: Rec, index: number) => React.ReactNode
     /** Cell for the input (draft) row; when absent a hint is shown. */
     renderDraft?: (draft: Rec, patchDraft: (patch: Rec) => void) => React.ReactNode
@@ -299,7 +301,7 @@ function EditableRows({
                 </th>
               ))}
               {extraColumns?.map((c) => (
-                <th key={c.label} className={thCls}>
+                <th key={c.label} className={cn(thCls, c.compact && 'w-[1%] text-center')}>
                   {c.label}
                 </th>
               ))}
@@ -339,7 +341,7 @@ function EditableRows({
                 </td>
               ))}
               {extraColumns?.map((c) => (
-                <td key={c.label} className={cn(tdCls, c.renderDraft ? 'text-center' : 'text-center text-xs text-stone-400')}>
+                <td key={c.label} className={cn(tdCls, c.renderDraft ? 'text-center' : 'text-center text-xs text-stone-400', c.compact && 'w-[1%]')}>
                   {c.renderDraft ? c.renderDraft(draft, (patch) => setDraft((d) => ({ ...d, ...patch }))) : 'Add the row, then attach documents'}
                 </td>
               ))}
@@ -405,7 +407,7 @@ function EditableRows({
                       </td>
                     ))}
                     {extraColumns?.map((c) => (
-                      <td key={c.label} className={tdCls}>
+                      <td key={c.label} className={cn(tdCls, c.compact && 'w-[1%] text-center')}>
                         {c.render(r, index)}
                       </td>
                     ))}
@@ -536,6 +538,7 @@ export function ManakManagementStep({
             extraColumns={[
               {
                 label: 'Authorized Signatory',
+                compact: true,
                 render: (r, index) => <AuthorizedSignatoryCell projectId={projectId} rowIndex={index} row={r} onChanged={onChanged} />,
                 renderDraft: (draft, patchDraft) => (
                   <AuthorizedSignatoryCell projectId={projectId} rowIndex={-1} row={draft} onChanged={onChanged} onDraftChange={patchDraft} />
