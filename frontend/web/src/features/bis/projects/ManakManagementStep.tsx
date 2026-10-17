@@ -531,8 +531,8 @@ export function ManakManagementStep({
             fields={[
               { key: 'personName', label: 'Name' },
               { key: 'designation', label: 'Designation' },
-              { key: 'mobile', label: 'Contact No.' },
-              { key: 'email', label: 'Email ID' },
+              { key: 'mobile', label: 'Contact No.', width: '9rem' },
+              { key: 'email', label: 'Email ID', width: '17rem' },
               { key: 'din', label: 'DIN', placeholder: '8 digit DIN', optional: true, digits: 8, width: '7.5rem' },
             ]}
             extraColumns={[
