@@ -1,4 +1,5 @@
 import { PDFDocument } from 'pdf-lib'
+import { loadPdfjs } from '@/lib/pdfjsLoader'
 import { supabase } from '@/lib/supabaseClient'
 import {
   mapPageSizeToPlaywrightFormat,
@@ -19,11 +20,7 @@ const APPLICATION_PACK_FILE_KINDS = ['application', 'legal'] as const
 /** Exclude only the unrelated courier slip that was accidentally attached to this project. */
 async function isUnrelatedCourierSlip(bytes: Uint8Array): Promise<boolean> {
   try {
-    const [{ getDocument, GlobalWorkerOptions }, { default: workerUrl }] = await Promise.all([
-      import('pdfjs-dist'),
-      import('pdfjs-dist/build/pdf.worker.min.mjs?url'),
-    ])
-    GlobalWorkerOptions.workerSrc = workerUrl
+    const { getDocument } = await loadPdfjs()
     const pdf = await getDocument({ data: new Uint8Array(bytes) }).promise
     const text: string[] = []
     for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {

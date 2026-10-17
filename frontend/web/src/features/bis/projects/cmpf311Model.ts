@@ -1,5 +1,6 @@
 import { sendQiAssistantMessage } from '@/components/qi-assistant/qiAssistantApi'
 import { supabase } from '@/lib/supabaseClient'
+import { loadPdfjs } from '@/lib/pdfjsLoader'
 import { resolveIsCodeFileDocumentKind } from '@/features/masters/is-codes/types'
 import { toProperTitleCase } from '@/features/masters/clients/types'
 
@@ -245,11 +246,7 @@ export async function downloadCmpf311MasterFile(option: Cmpf311MasterFileOption)
 export async function extractProductManualText(file: File): Promise<string> {
   if (!file.name.toLowerCase().endsWith('.pdf')) throw new Error('The Product Manual must be a PDF file.')
   if (file.size > 20 * 1024 * 1024) throw new Error('The Product Manual PDF must be 20 MB or smaller.')
-  const [{ getDocument, GlobalWorkerOptions }, { default: pdfWorkerUrl }] = await Promise.all([
-    import('pdfjs-dist'),
-    import('pdfjs-dist/build/pdf.worker.min.mjs?url'),
-  ])
-  GlobalWorkerOptions.workerSrc = pdfWorkerUrl
+  const { getDocument } = await loadPdfjs()
   const pdf = await getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise
   const pages: string[] = []
   for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
