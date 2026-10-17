@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { PDFDocument } from 'pdf-lib'
 import * as XLSX from 'xlsx'
 import {
@@ -340,20 +340,53 @@ export function BisLicenseDocumentsDialog({
   const cmL = row ? formatCmL(row.cm_l_digits) : ''
   const subtitle = [client, isLabel, cmL].filter((part) => Boolean(part) && part !== '—').join(' · ')
 
-  useEffect(() => {
-    if (!open) {
-      setSelectedKinds(new Set())
-      setDownloadBusy(false)
-      setStep(0)
-      setPreviewKind(null)
-      setImportKind(null)
+  // The step the user is on survives a page refresh (kept per application until the dialog is closed).
+  const stepKey = row?.id ? `bis-application-step:${row.id}` : null
+  const wasOpen = useRef(false)
+  const readSavedStep = () => {
+    try {
+      const n = Number(stepKey ? window.localStorage.getItem(stepKey) : null)
+      return Number.isInteger(n) && n >= 0 && n < stepLabels.length ? n : 0
+    } catch {
+      return 0
     }
+  }
+
+  useEffect(() => {
+    if (open) {
+      wasOpen.current = true
+      return
+    }
+    if (wasOpen.current) {
+      wasOpen.current = false
+      try {
+        if (stepKey) window.localStorage.removeItem(stepKey)
+      } catch {
+        /* storage unavailable */
+      }
+    }
+    setSelectedKinds(new Set())
+    setDownloadBusy(false)
+    setStep(0)
+    setPreviewKind(null)
+    setImportKind(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
   useEffect(() => {
     setSelectedKinds(new Set())
-    setStep(0)
+    setStep(readSavedStep())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [row?.id])
+
+  useEffect(() => {
+    if (!open || !stepKey) return
+    try {
+      window.localStorage.setItem(stepKey, String(step))
+    } catch {
+      /* storage unavailable */
+    }
+  }, [open, stepKey, step])
 
   const allKinds = useMemo<BisPrintDocumentKind[]>(
     () =>
