@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { limsFieldAddBtnClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { isValidGstin, isValidPan } from '@/lib/indiaValidators'
+import { supabase } from '@/lib/supabaseClient'
 import { patchClient, patchSite, type ClientSiteRow } from '@/features/masters/clients/clientLinkApi'
 import {
   deleteClientCertificate,
@@ -207,7 +208,8 @@ function EditableValue({ value, onSave, type = 'text', options, disabled, title,
 
 /**
  * One button for a proof document kept in Client Master's Legal Documents table.
- * No file: click uploads. File attached: click views, double-click offers delete.
+ * No file: click uploads from the computer, double-click imports a file already in this client's other legal documents.
+ * File attached: click views (new tab), double-click offers delete.
  */
 function ProofButton({
   doc,
@@ -215,6 +217,7 @@ function ProofButton({
   clientId,
   disabled,
   defaultNumber,
+  available = [],
   onChanged,
 }: {
   doc: ClientCertificateFile | undefined
@@ -223,12 +226,15 @@ function ProofButton({
   disabled?: boolean
   /** Document number written to a new row (for example the GST number already on the client). */
   defaultNumber?: string
+  /** All legal documents of the client, offered for import when this proof has no file. */
+  available?: ClientCertificateFile[]
   onChanged: () => void
 }) {
   const fileRef = useRef<HTMLInputElement>(null)
   const timer = useRef<number | null>(null)
   const [busy, setBusy] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const hasFile = Boolean(doc?.storage_path)
 
   useEffect(() => () => {
@@ -280,27 +286,40 @@ function ProofButton({
     }
   }
 
+  const importFrom = async (source: ClientCertificateFile) => {
+    setBusy(true)
+    try {
+      const { data, error } = await supabase.storage.from('client-certificates').download(source.storage_path)
+      if (error || !data) throw error ?? new Error('Could not read the file')
+      const file = new File([data], source.file_name || 'document', { type: source.mime_type || data.type || 'application/pdf' })
+      await upload(file)
+      setImportOpen(false)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Import failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const onClick = () => {
     if (disabled || busy) return
-    if (!hasFile) {
-      fileRef.current?.click()
-      return
-    }
-    // Wait briefly so a double-click does not also open the file.
+    // Wait briefly so a double-click does not also trigger the single-click action.
     if (timer.current) window.clearTimeout(timer.current)
     timer.current = window.setTimeout(() => {
       timer.current = null
-      void view()
+      if (hasFile) void view()
+      else fileRef.current?.click()
     }, 250)
   }
 
   const onDoubleClick = () => {
-    if (disabled || busy || !hasFile) return
+    if (disabled || busy) return
     if (timer.current) {
       window.clearTimeout(timer.current)
       timer.current = null
     }
-    setConfirmDelete(true)
+    if (hasFile) setConfirmDelete(true)
+    else setImportOpen(true)
   }
 
   return (
@@ -324,7 +343,7 @@ function ProofButton({
         title={
           hasFile
             ? `${certName}: click to view, double-click to delete`
-            : `${certName} required: click to upload (PDF / image)`
+            : `${certName} required: click to upload from computer, double-click to import from Client Master`
         }
         aria-label={hasFile ? `View ${certName}` : `Upload ${certName}`}
         className={cn(
@@ -334,6 +353,42 @@ function ProofButton({
       >
         {hasFile ? <FileText size={15} aria-hidden /> : <Upload size={15} aria-hidden />}
       </button>
+      <Dialog open={importOpen} onOpenChange={setImportOpen}>
+        <DialogContent className="max-w-md rounded-none">
+          <DialogHeader>
+            <DialogTitle>Import {certName}</DialogTitle>
+            <DialogDescription>
+              Pick a file already saved in this client's other Legal Documents. A copy is attached as {certName}.
+            </DialogDescription>
+          </DialogHeader>
+          <ul className="max-h-64 divide-y divide-stone-200 overflow-y-auto border border-stone-300">
+            {available.filter((d) => d.storage_path && d.id !== doc?.id).length === 0 ? (
+              <li className="px-3 py-4 text-center text-sm text-stone-500">No other documents with a file in Client Master.</li>
+            ) : (
+              available
+                .filter((d) => d.storage_path && d.id !== doc?.id)
+                .map((d) => (
+                  <li key={d.id}>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void importFrom(d)}
+                      className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-amber-50 disabled:opacity-50"
+                    >
+                      <span className="min-w-0 truncate font-medium">{d.cert_name}</span>
+                      <span className="shrink-0 truncate text-xs text-stone-500">{d.file_name}</span>
+                    </button>
+                  </li>
+                ))
+            )}
+          </ul>
+          <DialogFooter>
+            <Button type="button" variant="outline" className="rounded-none" onClick={() => setImportOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <DialogContent className="max-w-sm rounded-none">
           <DialogHeader>
@@ -537,7 +592,7 @@ export function ManakGeneralStep({
         }, { type: 'select', options: YES_NO })}
       </div>
       {current.toLowerCase() === 'yes' ? (
-        <ProofButton doc={proof.doc} certName={proof.certName} clientId={clientId} disabled={locked} onChanged={onChanged} />
+        <ProofButton doc={proof.doc} certName={proof.certName} clientId={clientId} disabled={locked} available={certificates} onChanged={onChanged} />
       ) : null}
     </div>
   )
@@ -546,7 +601,7 @@ export function ManakGeneralStep({
   const withProof = (node: ReactNode, doc: ClientCertificateFile | undefined, fallbackName: string, defaultNumber?: string) => (
     <div className="flex items-center gap-1">
       <div className="min-w-0 flex-1">{node}</div>
-      <ProofButton doc={doc} certName={doc?.cert_name || fallbackName} clientId={clientId} disabled={locked} defaultNumber={defaultNumber} onChanged={onChanged} />
+      <ProofButton doc={doc} certName={doc?.cert_name || fallbackName} clientId={clientId} disabled={locked} defaultNumber={defaultNumber} available={certificates} onChanged={onChanged} />
     </div>
   )
 
@@ -588,6 +643,7 @@ export function ManakGeneralStep({
                     certName={msmeDoc?.cert_name || 'MSME Certificate'}
                     clientId={clientId}
                     disabled={locked}
+                    available={certificates}
                     onChanged={onChanged}
                   />
                 ) : null}
