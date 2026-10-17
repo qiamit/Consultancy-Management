@@ -300,10 +300,10 @@ export function ManakApplicationFields({
     ['Dealing Officer Designation', master('designation', 'Dealing Officer Designation', 'app-deal-desig', form.dealingOfficerDesignation, (v) => set('dealingOfficerDesignation', v), 'Designation')],
   ]
 
-  const rows = arrangeByLabelLength(items)
+  const rows = arrangeByLabelLength(items, 2)
   const labelCls =
     'w-[1%] whitespace-nowrap border border-[#e7e0d4] bg-[#f7f3eb] px-3 py-1.5 text-left align-middle text-sm font-bold text-stone-800'
-  const valueCls = 'w-[32%] border border-[#e7e0d4] px-2 py-1 align-middle text-sm text-stone-700'
+  const valueCls = 'w-[49%] border border-[#e7e0d4] px-2 py-1.5 align-middle text-sm text-stone-700'
   return (
     <div className="overflow-x-auto">
       <table className="w-full table-auto border-collapse">

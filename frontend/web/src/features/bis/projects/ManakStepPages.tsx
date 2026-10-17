@@ -81,10 +81,10 @@ export function ManakSubPanel({
  * Lay fields out in three columns, grouping labels of similar length so each label column is only as
  * wide as its own longest label (short labels together, long labels together). Order inside a column is kept.
  */
-export function arrangeByLabelLength<T>(items: Array<[string, T]>): Array<Array<[string, T] | null>> {
-  const perColumn = Math.ceil(items.length / 3)
+export function arrangeByLabelLength<T>(items: Array<[string, T]>, columnCount = 3): Array<Array<[string, T] | null>> {
+  const perColumn = Math.ceil(items.length / columnCount)
   const byLength = items.map((item, index) => ({ item, index })).sort((a, b) => a.item[0].length - b.item[0].length || a.index - b.index)
-  const columns: Array<Array<[string, T]>> = [0, 1, 2].map((c) =>
+  const columns: Array<Array<[string, T]>> = Array.from({ length: columnCount }, (_, c) =>
     byLength
       .slice(c * perColumn, (c + 1) * perColumn)
       .sort((a, b) => a.index - b.index)
