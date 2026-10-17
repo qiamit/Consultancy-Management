@@ -11,6 +11,7 @@ import {
   fetchBisModulePayload,
   saveBisModulePayload,
 } from './bisModuleDataApi'
+import { StaffDocumentsCell } from './StaffDocumentsCell'
 import { MasterOptionFieldWithAdd } from './MasterOptionFieldWithAdd'
 import type { BisMasterOptionCategory } from './bisMasterOptions'
 import { ManakPanel, ManakSubPanel } from './ManakStepPages'
@@ -107,7 +108,7 @@ function EditableRows({
   kind: BisPrintDocumentKind
   fields: Field[]
   blank: () => Rec
-  extraColumns?: Array<{ label: string; render: (row: Rec) => React.ReactNode }>
+  extraColumns?: Array<{ label: string; render: (row: Rec, index: number) => React.ReactNode }>
   saved: Rec[]
   onChanged: () => void
   addLabel: string
@@ -258,8 +259,8 @@ function EditableRows({
                 </td>
               ))}
               {extraColumns?.map((c) => (
-                <td key={c.label} className={cn(tdCls, 'text-xs text-stone-400')}>
-                  via Edit module
+                <td key={c.label} className={cn(tdCls, 'text-center text-xs text-stone-400')}>
+                  Add the row, then attach documents
                 </td>
               ))}
               <td className={cn(tdCls, 'text-center')}>
@@ -325,7 +326,7 @@ function EditableRows({
                     ))}
                     {extraColumns?.map((c) => (
                       <td key={c.label} className={tdCls}>
-                        {c.render(r)}
+                        {c.render(r, index)}
                       </td>
                     ))}
                     <td className={cn(tdCls, 'text-center')}>
@@ -421,7 +422,6 @@ export function ManakManagementStep({
     }
   }
 
-  const yes = (v: unknown) => (str(v).trim() ? 'Yes' : 'No')
   const blankTm = (): Rec => ({
     personName: '',
     designation: '',
@@ -538,8 +538,10 @@ export function ManakManagementStep({
           ]}
           blank={() => ({ ...emptyTechnicalStaffRow() })}
           extraColumns={[
-            { label: 'Qualification Document', render: (r) => yes(r.educationCertificateFileId) },
-            { label: 'Photo', render: (r) => yes(r.photoFileId) },
+            {
+              label: 'Documents',
+              render: (r, index) => <StaffDocumentsCell projectId={projectId} rowIndex={index} row={r} onChanged={onChanged} />,
+            },
           ]}
           saved={rowsOf(technicalStaff)}
           onChanged={onChanged}
