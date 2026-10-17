@@ -451,14 +451,23 @@ function FieldGrid({
   items,
   fullRows = [],
   columns = 3,
+  topLabels = [],
 }: {
   items: Array<[string, ReactNode]>
   /** Label | value pairs per row (2 or 3). */
   columns?: 2 | 3
   /** Fields that take a whole row (label + one wide value), shown above the three-column grid. */
   fullRows?: Array<[string, ReactNode]>
+  /** Labels shown together on one first line (equal-width columns), above the grid. */
+  topLabels?: string[]
 }) {
-  const rows = arrangeByLabelLength(items, columns)
+  const topItems = topLabels
+    .map((l) => items.find(([label]) => label === l))
+    .filter((x): x is [string, ReactNode] => Boolean(x))
+  const rows = arrangeByLabelLength(
+    items.filter(([label]) => !topLabels.includes(label)),
+    columns,
+  )
   const labelCls =
     'w-[1%] whitespace-nowrap border border-[#e7e0d4] bg-[#f7f3eb] px-3 py-1.5 text-left align-middle text-sm font-bold text-stone-800'
   const valueCls = cn(
@@ -467,7 +476,28 @@ function FieldGrid({
   )
   return (
     <div className="overflow-x-auto">
-      <table className="w-full table-auto border-collapse">
+      {topItems.length > 0 ? (
+        <table className="w-full table-fixed border-collapse">
+          <colgroup>
+            {Array.from({ length: topItems.length * 2 }, (_, k) => (
+              <col key={k} style={{ width: `${100 / (topItems.length * 2)}%` }} />
+            ))}
+          </colgroup>
+          <tbody>
+            <tr>
+              {topItems.map(([label, node]) => (
+                <Fragment key={label}>
+                  <th scope="row" className={cn(labelCls, 'w-auto whitespace-normal')}>
+                    {label}:
+                  </th>
+                  <td className="border border-[#e7e0d4] px-2 py-1 align-middle text-sm text-stone-700">{node}</td>
+                </Fragment>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+      ) : null}
+      <table className={cn('w-full table-auto border-collapse', topItems.length > 0 && '-mt-px')}>
         <tbody>
           {fullRows.map(([label, node]) => (
             <tr key={label}>
@@ -680,6 +710,7 @@ export function ManakGeneralStep({
       <ManakSubPanel title="Registration Details">
         <FieldGrid
           columns={2}
+          topLabels={['User Id', 'Sector', 'Scale']}
           items={[
             ['User Id', v(str(raw.manak_user_id), col('manak_user_id'))],
             ['Nature of Firm', v(str(raw.constitution), col('constitution'), { type: 'select', options: NATURE_OF_FIRM })],
