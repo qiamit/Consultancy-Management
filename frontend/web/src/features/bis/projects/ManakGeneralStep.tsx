@@ -863,8 +863,8 @@ export function ManakGeneralStep({
       <ManakSubPanel title="Office/Firm Details">
         <FieldGrid
           columns={2}
+          leadLines={[['CEO Name', 'E-MailId', 'Mobile No.']]}
           topLines={[
-            ['CEO Name', 'E-MailId', 'Mobile No.'],
             ['PinCode', 'City', 'District', 'State'],
             ['Country', 'Landline', 'Address Proof Type'],
           ]}
