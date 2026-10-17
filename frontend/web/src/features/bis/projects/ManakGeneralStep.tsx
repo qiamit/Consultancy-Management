@@ -452,6 +452,7 @@ function FieldGrid({
   fullRows = [],
   columns = 3,
   topLines = [],
+  leadLines = [],
 }: {
   items: Array<[string, ReactNode]>
   /** Label | value pairs per row (2 or 3). */
@@ -460,11 +461,16 @@ function FieldGrid({
   fullRows?: Array<[string, ReactNode]>
   /** Labels shown together on one first line (equal-width columns), above the grid. */
   topLines?: string[][]
+  /** Like topLines, but shown above the full-width rows. */
+  leadLines?: string[][]
 }) {
-  const topTaken = topLines.flat()
-  const topGroups = topLines.map((labels) =>
-    labels.map((l) => items.find(([label]) => label === l)).filter((x): x is [string, ReactNode] => Boolean(x)),
-  )
+  const topTaken = [...leadLines.flat(), ...topLines.flat()]
+  const toGroups = (lines: string[][]) =>
+    lines.map((labels) =>
+      labels.map((l) => items.find(([label]) => label === l)).filter((x): x is [string, ReactNode] => Boolean(x)),
+    )
+  const topGroups = toGroups(topLines)
+  const leadGroups = toGroups(leadLines)
   const rows = arrangeByLabelLength(
     items.filter(([label]) => !topTaken.includes(label)),
     columns,
@@ -475,52 +481,57 @@ function FieldGrid({
     columns === 2 ? 'w-[49%]' : 'w-[32%]',
     'border border-[#e7e0d4] px-2 py-1 align-middle text-sm text-stone-700',
   )
+  const renderGroups = (groups: Array<Array<[string, ReactNode]>>, gap: boolean) =>
+    groups.map((group, g) => (
+      <table key={g} className={cn('w-full table-fixed border-collapse', (g > 0 || gap) && '-mt-px')}>
+        <colgroup>
+          {Array.from({ length: group.length * 2 }, (_, k) => (
+            <col key={k} style={{ width: `${100 / (group.length * 2)}%` }} />
+          ))}
+        </colgroup>
+        <tbody>
+          <tr>
+            {group.map(([label, node]) => (
+              <Fragment key={label}>
+                <th
+                  scope="row"
+                  className={cn(labelCls, 'w-auto whitespace-normal', group.length > 3 && 'whitespace-nowrap px-2 text-xs')}
+                >
+                  {label}:
+                </th>
+                <td className="border border-[#e7e0d4] px-2 py-1 align-middle text-sm text-stone-700">{node}</td>
+              </Fragment>
+            ))}
+          </tr>
+        </tbody>
+      </table>
+    ))
   return (
     <div className="overflow-x-auto">
+      {renderGroups(leadGroups, false)}
       {fullRows.length > 0 ? (
-        <table className="w-full table-auto border-collapse">
+        <table className={cn('w-full table-auto border-collapse', leadGroups.length > 0 && '-mt-px')}>
           <tbody>
-          {fullRows.map(([label, node]) => (
-            <tr key={label}>
-              <th scope="row" className={labelCls}>
-                {label}:
-              </th>
-              <td colSpan={columns * 2 - 1} className="border border-[#e7e0d4] px-2 py-1 align-middle text-sm text-stone-700">
-                {node}
-              </td>
-            </tr>
-          ))}
+            {fullRows.map(([label, node]) => (
+              <tr key={label}>
+                <th scope="row" className={labelCls}>
+                  {label}:
+                </th>
+                <td colSpan={columns * 2 - 1} className="border border-[#e7e0d4] px-2 py-1 align-middle text-sm text-stone-700">
+                  {node}
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       ) : null}
-      {topGroups.map((topItems, g) => (
-        <table
-          key={g}
-          className={cn('w-full table-fixed border-collapse', (g > 0 || fullRows.length > 0) && '-mt-px')}
-        >
-          <colgroup>
-            {Array.from({ length: topItems.length * 2 }, (_, k) => (
-              <col key={k} style={{ width: `${100 / (topItems.length * 2)}%` }} />
-            ))}
-          </colgroup>
-          <tbody>
-            <tr>
-              {topItems.map(([label, node]) => (
-                <Fragment key={label}>
-                  <th
-                    scope="row"
-                    className={cn(labelCls, 'w-auto whitespace-normal', topItems.length > 3 && 'whitespace-nowrap px-2 text-xs')}
-                  >
-                    {label}:
-                  </th>
-                  <td className="border border-[#e7e0d4] px-2 py-1 align-middle text-sm text-stone-700">{node}</td>
-                </Fragment>
-              ))}
-            </tr>
-          </tbody>
-        </table>
-      ))}
-      <table className={cn('w-full table-auto border-collapse', (topGroups.length > 0 || fullRows.length > 0) && '-mt-px')}>
+      {renderGroups(topGroups, fullRows.length > 0 || leadGroups.length > 0)}
+      <table
+        className={cn(
+          'w-full table-auto border-collapse',
+          (topGroups.length > 0 || fullRows.length > 0 || leadGroups.length > 0) && '-mt-px',
+        )}
+      >
         <tbody>
           {rows.map((pair, i) => (
             <tr key={i}>
@@ -913,6 +924,7 @@ export function ManakGeneralStep({
         <FieldGrid
           columns={2}
           topLines={[['PinCode', 'City', 'District', 'State']]}
+          leadLines={[['E-MailId', 'Address Proof Type']]}
           fullRows={[
             [
               'Factory Address',
