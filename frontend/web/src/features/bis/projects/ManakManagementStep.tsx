@@ -129,7 +129,6 @@ function AuthorizedSignatoryCell({
         onChange={(e) => void toggle(e.target.checked)}
         aria-label="Authorized Signatory"
       />
-      Auth. Sign
     </label>
   )
 }

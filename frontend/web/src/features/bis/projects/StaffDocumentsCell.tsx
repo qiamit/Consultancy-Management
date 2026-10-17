@@ -336,7 +336,6 @@ export function StaffDocumentsCell({
           onChange={(e) => void setApply(e.target.checked)}
           aria-label="Apply signature to test reports"
         />
-        Sign
       </label>
       {viewer}
       {confirmDialog}
