@@ -338,11 +338,7 @@ export function ManakGeneralStep({
         <p className="border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs text-amber-900">
           This application is no longer linked to Client Master (a licence number exists), so these details are read-only here.
         </p>
-      ) : (
-        <p className="text-xs text-stone-600">
-          Linked to Client Master: changes here update the client, and client changes show here, until the licence number is generated.
-        </p>
-      )}
+      ) : null}
 
       <ManakSubPanel title="Registration Details">
         <FieldGrid
