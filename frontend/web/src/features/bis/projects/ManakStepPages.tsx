@@ -6,6 +6,8 @@ import { BIS_PRINT_DOCUMENT_LABEL, type BisPrintDocumentKind } from '../print/pr
 import { supabase } from '@/lib/supabaseClient'
 import { listClientCertificates, type ClientCertificateFile } from '@/features/masters/clients/clientsApi'
 import { fetchBisModulePayload } from './bisModuleDataApi'
+import { listSites, type ClientSiteRow } from '@/features/masters/clients/clientLinkApi'
+import { ManakGeneralStep } from './ManakGeneralStep'
 import { CORRESPONDENCE_KIND, ManakManagementStep } from './ManakManagementStep'
 import type { BisProjectRow } from './types'
 
@@ -156,9 +158,6 @@ export function ManakTable({
 
 type Payload = Record<string, unknown> | null
 
-/** Legal-document names that serve as Manak's Proof of Establishment / Address Proof. */
-const ESTABLISHMENT_DOC = /incorporation|partnership|llp|udyam|udyog|registration of firm|establishment|msme|shop\s*&?\s*establishment/i
-const ADDRESS_DOC = /gst|address|electricity|light bill|rent|lease|property tax/i
 
 const STEP_MODULES: BisPrintDocumentKind[] = [
   'top-management',
@@ -176,28 +175,30 @@ type StepData = {
   print: BisPrintData | null
   clientRaw: Record<string, unknown> | null
   certificates: ClientCertificateFile[]
+  sites: ClientSiteRow[]
   payloads: Partial<Record<BisPrintDocumentKind, Payload>>
   loading: boolean
   error: string
 }
 
 function useStepData(row: BisProjectRow | null, refreshKey: number): StepData {
-  const [state, setState] = useState<StepData>({ print: null, clientRaw: null, certificates: [], payloads: {}, loading: false, error: '' })
+  const [state, setState] = useState<StepData>({ print: null, clientRaw: null, certificates: [], sites: [], payloads: {}, loading: false, error: '' })
   useEffect(() => {
     if (!row?.id) {
-      setState({ print: null, clientRaw: null, certificates: [], payloads: {}, loading: false, error: '' })
+      setState({ print: null, clientRaw: null, certificates: [], sites: [], payloads: {}, loading: false, error: '' })
       return
     }
     let cancelled = false
     setState((s) => ({ ...s, loading: true, error: '' }))
     void (async () => {
       try {
-        const [print, clientRes, certs, ...loaded] = await Promise.all([
+        const [print, clientRes, certs, siteRows, ...loaded] = await Promise.all([
           loadBisPrintData(row),
           row.client_id
             ? supabase.from('clients').select('*').eq('id', row.client_id).maybeSingle()
             : Promise.resolve({ data: null }),
           row.client_id ? listClientCertificates(row.client_id).catch(() => []) : Promise.resolve([]),
+          row.client_id ? listSites(row.client_id) : Promise.resolve([]),
           ...STEP_MODULES.map((k) => fetchBisModulePayload(row.id, k).catch(() => null)),
         ])
         if (cancelled) return
@@ -209,13 +210,14 @@ function useStepData(row: BisProjectRow | null, refreshKey: number): StepData {
           print,
           clientRaw: (clientRes.data as Record<string, unknown> | null) ?? null,
           certificates: certs,
+          sites: siteRows,
           payloads,
           loading: false,
           error: '',
         })
       } catch (err) {
         if (!cancelled) {
-          setState({ print: null, clientRaw: null, certificates: [], payloads: {}, loading: false, error: err instanceof Error ? err.message : 'Could not load data' })
+          setState({ print: null, clientRaw: null, certificates: [], sites: [], payloads: {}, loading: false, error: err instanceof Error ? err.message : 'Could not load data' })
         }
       }
     })()
@@ -254,7 +256,7 @@ export function ManakStepPage({
   documents: ReactNode
 }) {
   const [reloadTick, setReloadTick] = useState(0)
-  const { print, clientRaw, certificates, payloads, loading, error } = useStepData(row, refreshKey + reloadTick)
+  const { print, clientRaw, certificates, sites, payloads, loading, error } = useStepData(row, refreshKey + reloadTick)
   const edit = (kind: BisPrintDocumentKind) => () => onEdit(kind)
   const c = print?.client
   const isCode = print?.isCode
@@ -265,73 +267,17 @@ export function ManakStepPage({
     const varieties = list(payloads['osl-sample-requirements'], 'rows')
       .map((r) => s(r.gradeTypeVariety))
       .filter(Boolean)
-    const raw = clientRaw ?? {}
-    const editClient = () => {
-      if (row?.client_id) window.open(`/masters/clients?edit=${encodeURIComponent(row.client_id)}`, '_blank', 'noopener')
-    }
-    const contact = (
-      <>
-        {s(raw.landline) ? `LandLine: ${s(raw.landline)}` : 'LandLine: -'}
-        <br />
-        Mobile: {c?.mobile || '—'}
-      </>
-    )
-    const proofDoc = certificates.find((d) => ESTABLISHMENT_DOC.test(d.cert_name))
-    const addressDoc = certificates.find((d) => ADDRESS_DOC.test(d.cert_name))
-    const regNo = s(proofDoc?.document_number) || s(raw.cin) || s(raw.llpin)
+    const linked = !s(row?.cm_l_digits) && row?.project_kind !== 'Licence'
     body = (
-      <div className="space-y-4">
-        <ManakSubPanel title="Registration Details" onEdit={editClient}>
-          <ManakFields
-            items={[
-              ['User Id', s(raw.manak_user_id)],
-              ['Nature of Firm', s(raw.constitution)],
-              ['Proof of Establishment of Firm', s(proofDoc?.cert_name)],
-              ['Sector', c?.sector],
-              ['Scale', c?.scale],
-              ['Registration Number', regNo],
-              ['Date of Registration', s(proofDoc?.issued_on).slice(0, 10)],
-              ['GST Number', c?.gstNumber],
-              ['PAN Number', s(raw.pan)],
-              ['Women Entrepreneur', s(raw.women_entrepreneur) || (raw.is_women_entrepreneur ? 'Yes' : 'No')],
-              ['Startup', s(raw.startup_status) || (raw.is_startup ? 'Yes' : 'No')],
-            ]}
-          />
-        </ManakSubPanel>
-        <ManakSubPanel title="Factory Details" onEdit={editClient}>
-          <ManakFields
-            items={[
-              ['Factory Address', c?.factoryAddress],
-              ['City', s(raw.city)],
-              ['District', c?.factoryDistrict],
-              ['State', c?.factoryState],
-              ['Country', c?.country],
-              ['PinCode', c?.factoryPin],
-              ['E-MailId', c?.email],
-              ['Contact No.', contact],
-              ['Address Proof Type', s(addressDoc?.cert_name)],
-              ['Latitude', c?.latitude],
-              ['Longitude', c?.longitude],
-            ]}
-          />
-        </ManakSubPanel>
-        <ManakSubPanel title="Office/Firm Details" onEdit={editClient}>
-          <ManakFields
-            items={[
-              ['Firm Name', c?.companyName],
-              ['CEO Name', c?.contactPerson],
-              ['Firm Address', c?.officeAddress || c?.address],
-              ['City', s(raw.city)],
-              ['District', c?.district],
-              ['State', c?.state],
-              ['Country', c?.country],
-              ['PinCode', c?.pinCode],
-              ['E-MailId', c?.email],
-              ['Contact No.', contact],
-              ['Address Proof Type', s(addressDoc?.cert_name)],
-            ]}
-          />
-        </ManakSubPanel>
+      <ManakGeneralStep
+        row={row}
+        client={c}
+        clientRaw={clientRaw}
+        certificates={certificates}
+        sites={sites}
+        linked={linked}
+        onChanged={() => setReloadTick((t) => t + 1)}
+      >
         <ManakSubPanel title="Indian Standard Details">
           <ManakFields
             items={[
@@ -348,7 +294,7 @@ export function ManakStepPage({
             empty="No varieties yet — they come from Sample Requirements."
           />
         </ManakSubPanel>
-      </div>
+      </ManakGeneralStep>
     )
   } else if (stepId === 'management') {
     body = row?.id ? (
