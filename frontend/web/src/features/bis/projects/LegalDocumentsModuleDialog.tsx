@@ -369,6 +369,8 @@ export function LegalDocumentsModuleDialog({
   const showCmpf305Fields = printKind === 'cmpf-305'
   const showCmpf306Fields = printKind === 'cmpf-306'
   const showCmpf311Fields = printKind === 'cmpf-311'
+  // Opened from the All India First button: only the Undertaking for Minimum Marking Fee (Annexure 1) form is shown.
+  const mmfOnly = printKind === 'all-required-undertakings' && initialUndertaking === 'undertaking-mmf'
   const showCmpf307Fields = printKind === 'cmpf-307'
   const showCmpf310Fields = printKind === 'cmpf-310'
   const showRawMaterialReferenceFields = printKind === 'raw-material-reference'
@@ -1811,6 +1813,7 @@ export function LegalDocumentsModuleDialog({
 
           {showAllUndertakingsFields ? (
             <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
+              {mmfOnly ? null : (
               <nav aria-label="Undertaking types" className="grid shrink-0 grid-cols-5 gap-1 border-b border-stone-400 bg-stone-800 p-1">
                 {UNDERTAKING_OPTIONS.map((option) => (
                   <Button
@@ -1832,6 +1835,7 @@ export function LegalDocumentsModuleDialog({
                   </Button>
                 ))}
               </nav>
+              )}
               {UNDERTAKING_OPTIONS.filter((option) => option.kind === selectedUndertaking).map((option) => (
                 <section key={option.kind} className="min-h-0 flex-1 overflow-y-auto border border-stone-300 bg-white p-5 sm:p-8">
                   <div className="flex items-center justify-between gap-4">
@@ -2505,7 +2509,7 @@ export function LegalDocumentsModuleDialog({
         </div>
 
         <DialogFooter className="shrink-0 gap-2 border-t border-stone-300 bg-stone-50 px-4 py-3 sm:justify-end sm:px-5">
-          {showCmpf311Fields && printKind && (onPreviewDocument || onPdfDocument || onWordDocument) ? (
+          {(showCmpf311Fields || mmfOnly) && printKind && (onPreviewDocument || onPdfDocument || onWordDocument) ? (
             <div className="mr-auto flex gap-2">
               {onPreviewDocument ? (
                 <Button
@@ -2513,7 +2517,7 @@ export function LegalDocumentsModuleDialog({
                         className={cn(limsPrimaryBtnClass, 'h-9 gap-1.5 px-4 text-sm')}
                   disabled={!row?.id || busy || saving || loading}
                   title="Save and preview the SIT acceptance document"
-                  onClick={() => void handleSave().then(() => onPreviewDocument(printKind))}
+                  onClick={() => void handleSave().then(() => onPreviewDocument(mmfOnly ? 'marking-fee-acceptance' : printKind))}
                 >
                   <Eye className="h-4 w-4" aria-hidden /> Preview
                 </Button>
@@ -2524,7 +2528,7 @@ export function LegalDocumentsModuleDialog({
                         className={cn(limsPrimaryBtnClass, 'h-9 gap-1.5 px-4 text-sm')}
                   disabled={!row?.id || busy || saving || loading}
                   title="Save and download the SIT acceptance document as PDF"
-                  onClick={() => void handleSave().then(() => onPdfDocument(printKind))}
+                  onClick={() => void handleSave().then(() => onPdfDocument(mmfOnly ? 'marking-fee-acceptance' : printKind))}
                 >
                   <Download className="h-4 w-4" aria-hidden /> PDF
                 </Button>
@@ -2535,7 +2539,7 @@ export function LegalDocumentsModuleDialog({
                   className={cn(limsPrimaryBtnClass, 'h-9 gap-1.5 px-4 text-sm')}
                   disabled={!row?.id || busy || saving || loading}
                   title="Save and download an editable Word copy (backup if the software cannot be used)"
-                  onClick={() => void handleSave().then(() => onWordDocument(printKind))}
+                  onClick={() => void handleSave().then(() => onWordDocument(mmfOnly ? 'marking-fee-acceptance' : printKind))}
                 >
                   <FileType className="h-4 w-4" aria-hidden /> Word
                 </Button>

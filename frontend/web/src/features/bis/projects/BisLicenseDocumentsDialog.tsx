@@ -1029,7 +1029,11 @@ export function BisLicenseDocumentsDialog({
         }
       }}
       row={row}
-      title={activeModuleTitle}
+      title={
+        undertakingFocus === 'undertaking-mmf' && activeModuleKind === 'all-required-undertakings'
+          ? 'Undertaking for Minimum Marking Fee (All India First)'
+          : activeModuleTitle
+      }
       docKind={activeDocKind}
       printKind={activeModuleKind}
       onProjectSaved={() => {
