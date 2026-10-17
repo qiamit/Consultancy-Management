@@ -450,15 +450,21 @@ function MapButton({ onPreview, onPdf }: { onPreview?: () => void; onPdf?: () =>
 function FieldGrid({
   items,
   fullRows = [],
+  columns = 3,
 }: {
   items: Array<[string, ReactNode]>
+  /** Label | value pairs per row (2 or 3). */
+  columns?: 2 | 3
   /** Fields that take a whole row (label + one wide value), shown above the three-column grid. */
   fullRows?: Array<[string, ReactNode]>
 }) {
-  const rows = arrangeByLabelLength(items)
+  const rows = arrangeByLabelLength(items, columns)
   const labelCls =
     'w-[1%] whitespace-nowrap border border-[#e7e0d4] bg-[#f7f3eb] px-3 py-1.5 text-left align-middle text-sm font-bold text-stone-800'
-  const valueCls = 'w-[32%] border border-[#e7e0d4] px-2 py-1 align-middle text-sm text-stone-700'
+  const valueCls = cn(
+    columns === 2 ? 'w-[49%]' : 'w-[32%]',
+    'border border-[#e7e0d4] px-2 py-1 align-middle text-sm text-stone-700',
+  )
   return (
     <div className="overflow-x-auto">
       <table className="w-full table-auto border-collapse">
@@ -468,7 +474,7 @@ function FieldGrid({
               <th scope="row" className={labelCls}>
                 {label}:
               </th>
-              <td colSpan={5} className="border border-[#e7e0d4] px-2 py-1 align-middle text-sm text-stone-700">
+              <td colSpan={columns * 2 - 1} className="border border-[#e7e0d4] px-2 py-1 align-middle text-sm text-stone-700">
                 {node}
               </td>
             </tr>
@@ -673,6 +679,7 @@ export function ManakGeneralStep({
 
       <ManakSubPanel title="Registration Details">
         <FieldGrid
+          columns={2}
           items={[
             ['User Id', v(str(raw.manak_user_id), col('manak_user_id'))],
             ['Nature of Firm', v(str(raw.constitution), col('constitution'), { type: 'select', options: NATURE_OF_FIRM })],
