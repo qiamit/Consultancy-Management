@@ -3,6 +3,7 @@ import { ClipboardList, Eye, Paperclip } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { saveBisModulePayload } from './bisModuleDataApi'
 import {
@@ -155,6 +156,7 @@ export function ManakSitRow({
  * replaces it. Single click views the letter, double click deletes it.
  */
 function ConsentLetterControl({ projectId }: { projectId: string | null }) {
+  const [confirmAction, confirmDialog] = useConfirmDialog()
   const inputRef = useRef<HTMLInputElement | null>(null)
   const clickTimer = useRef<number | null>(null)
   const [files, setFiles] = useState<BisProjectViewFile[]>([])
@@ -210,7 +212,7 @@ function ConsentLetterControl({ projectId }: { projectId: string | null }) {
 
   const remove = async (file: BisProjectViewFile) => {
     if (!projectId) return
-    if (!window.confirm(`Delete ${file.file_name}?`)) return
+    if (!(await confirmAction(`Delete ${file.file_name}?`, { title: 'Delete consent letter' }))) return
     setBusy(true)
     try {
       await deleteBisProjectFile(file)
@@ -227,6 +229,7 @@ function ConsentLetterControl({ projectId }: { projectId: string | null }) {
 
   return (
     <div className="flex items-center gap-1">
+      {confirmDialog}
       <input
         ref={inputRef}
         type="file"
