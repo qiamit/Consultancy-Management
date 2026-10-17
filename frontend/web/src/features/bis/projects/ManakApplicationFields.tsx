@@ -335,7 +335,10 @@ export function ManakApplicationFields({
         <tr>
           {list.map((cell, j) => (
             <Fragment key={j}>
-              <th scope="row" className={cn(labelCls, 'w-auto whitespace-normal')}>
+              <th
+                scope="row"
+                className={cn(labelCls, 'w-auto whitespace-normal', list.length > 3 && 'whitespace-nowrap px-2 text-xs')}
+              >
                 {cell[0]}:
               </th>
               <td className={valueCls}>{cell[1]}</td>
