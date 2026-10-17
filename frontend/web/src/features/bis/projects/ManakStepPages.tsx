@@ -12,7 +12,6 @@ import { ManakGeneralStep } from './ManakGeneralStep'
 import { ManakVarietiesTable } from './ManakVarietiesTable'
 import { ManakSitRow } from './ManakSitRow'
 import { minimumMarkingFeeForScale } from '../print/cmpf310Html'
-import { parseUndertakingMinimumFeePayload } from './undertakingPayloadModels'
 import { parseCmpf310Payload } from './cmpf310Model'
 import { saveBisModulePayload } from './bisModuleDataApi'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -393,9 +392,6 @@ export function ManakStepPage({
         </div>,
       ],
     ],
-    ...(allIndiaFirst
-      ? [[['Annual Production Capacity', plainText(parseUndertakingMinimumFeePayload(payloads['undertaking-mmf'] ?? null).annualProductionCapacity)] as [string, ReactNode]]]
-      : []),
   ]
 
   let body: ReactNode = null
