@@ -850,6 +850,11 @@ export function BisLicenseDocumentsDialog({
                   onLocationMapPreview={() => handlePreview('location-map')}
                   onLocationMapPdf={() => void runDownload('location-map', 'pdf')}
                   onProjectSaved={onProjectSaved}
+                  onScopeDocument={{
+                    preview: () => handlePreview('manufacturing-scope'),
+                    pdf: () => void runDownload('manufacturing-scope', 'pdf', true),
+                    word: () => void runDownload('manufacturing-scope', 'word', true),
+                  }}
                   documents={
                     <div className="border border-stone-300 bg-[#fffcf7]">
                     {currentKinds.length === 0 ? (

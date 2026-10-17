@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
+import { usePdfViewer } from '@/components/ui/usePdfViewer'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { saveBisModulePayload } from './bisModuleDataApi'
 import {
@@ -157,6 +158,7 @@ export function ManakSitRow({
  */
 function ConsentLetterControl({ projectId }: { projectId: string | null }) {
   const [confirmAction, confirmDialog] = useConfirmDialog()
+  const [viewFile, viewer] = usePdfViewer()
   const inputRef = useRef<HTMLInputElement | null>(null)
   const clickTimer = useRef<number | null>(null)
   const [files, setFiles] = useState<BisProjectViewFile[]>([])
@@ -202,13 +204,7 @@ function ConsentLetterControl({ projectId }: { projectId: string | null }) {
     }
   }
 
-  const view = (file: BisProjectViewFile) => {
-    if (!file.viewUrl) {
-      toast.warning('Consent letter file is unavailable.')
-      return
-    }
-    window.open(file.viewUrl, '_blank', 'noopener,noreferrer')
-  }
+  const view = (file: BisProjectViewFile) => viewFile(file.viewUrl, file.file_name, 'Consent letter file is unavailable.')
 
   const remove = async (file: BisProjectViewFile) => {
     if (!projectId) return
@@ -230,6 +226,7 @@ function ConsentLetterControl({ projectId }: { projectId: string | null }) {
   return (
     <div className="flex items-center gap-1">
       {confirmDialog}
+      {viewer}
       <input
         ref={inputRef}
         type="file"

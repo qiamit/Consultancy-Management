@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { BookOpen, Columns3, Eye, ExternalLink, FileText, Paperclip, Pencil, Trash2, Upload } from 'lucide-react'
+import { BookOpen, Check, Columns3, Download, Eye, ExternalLink, FileText, FileType, Paperclip, Pencil, Plus, Trash2, Upload, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -8,6 +8,9 @@ import { limsDarkBarGlowStyle, limsManageDialogClass, limsOutlineBtnClass, limsP
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { loadIsCodeFileLinks, type IsCodeFileLink } from '@/features/masters/is-codes/loadIsCodeFileLinks'
 import { cn } from '@/lib/utils'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
+import { usePdfViewer } from '@/components/ui/usePdfViewer'
+import { Input } from '@/components/ui/input'
 import {
   deleteBisProjectFile,
   formatBisProjectFilesError,
@@ -17,7 +20,13 @@ import {
 } from './bisProjectFilesApi'
 import { isQeExtensionPresent } from './manakExtensionBridge'
 import { saveBisProjectNotes } from './bisProjectsApi'
-import { BIS_NOTES_COLUMN_COUNT_OPTIONS, bisNotesScopeColumnCount, sanitizeBisLicenseScopeNotes, setBisNotesScopeColumnCount } from './types'
+import {
+  BIS_NOTES_COLUMN_COUNT_OPTIONS,
+  parseBisNotesScope,
+  sanitizeBisLicenseScopeNotes,
+  serializeBisNotesScope,
+  setBisNotesScopeColumnCount,
+} from './types'
 
 const iconBtn =
   'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-none border bg-white transition-colors hover:bg-amber-50 disabled:opacity-40'
@@ -31,14 +40,6 @@ function pickIsFile(files: IsCodeFileLink[], kind: 'manual' | 'standard'): IsCod
   return kind === 'manual'
     ? pool.find((f) => isManualName(f.file_name)) ?? null
     : pool.find((f) => !isManualName(f.file_name)) ?? null
-}
-
-function openUrl(url: string | undefined, missing: string) {
-  if (!url?.trim()) {
-    toast.warning(missing)
-    return
-  }
-  window.open(url, '_blank', 'noopener,noreferrer')
 }
 
 /** Opens BIS Product Manuals online; the QE extension searches the IS number when installed. */
@@ -90,6 +91,7 @@ export function ProductManualValue({
   buttonOnly?: boolean
 }) {
   const [manual, setManual] = useState<IsCodeFileLink | null>(null)
+  const [viewFile, viewer] = usePdfViewer()
   useEffect(() => {
     const id = (isCodeId ?? '').trim()
     if (!id) {
@@ -109,6 +111,7 @@ export function ProductManualValue({
   const missing = Boolean(manual) && !manual?.url?.trim()
   return (
     <span className="inline-flex items-center gap-2">
+      {viewer}
       {buttonOnly ? null : <span>{value || <span className="text-stone-400">—</span>}</span>}
       {manual ? (
         <button
@@ -117,7 +120,11 @@ export function ProductManualValue({
           title={missing ? `${manual.file_name} is attached in IS Code master but the file is missing in storage` : `View product manual: ${manual.file_name}`}
           aria-label="View product manual PDF"
           onClick={() =>
-            openUrl(manual.url, `${manual.file_name} is attached to this IS Code but the file is missing in storage. Re-upload it in IS Code master.`)
+            viewFile(
+              manual.url,
+              manual.file_name,
+              `${manual.file_name} is attached to this IS Code but the file is missing in storage. Re-upload it in IS Code master.`,
+            )
           }
         >
           <Eye size={14} aria-hidden />
@@ -139,30 +146,85 @@ export function ManakVarietiesTable({
   isCodeId,
   isNumber,
   varieties,
-  onEdit,
   panel,
   scopeNotes = '',
   onScopeSaved,
+  scopeDocument,
 }: {
   projectId: string | null
   isCodeId: string | null
   isNumber: string
   varieties: string[]
-  /** Opens the Sample Requirements module that holds the varieties. */
-  onEdit?: () => void
   /** Wraps the table in its panel; the specification / manual / online buttons go in the panel header. */
   panel: (headerExtra: ReactNode, body: ReactNode) => ReactNode
   /** Notes / License Scope of the project; the Column button switches it between plain text and a 2-6 column table. */
   scopeNotes?: string
   onScopeSaved?: () => void
+  /** Undertaking for Manufacturing Scope: preview / PDF / Word of the scope declaration, generated from the same scope table. */
+  scopeDocument?: { preview: () => void; pdf: () => void; word: () => void }
 }) {
+  const [viewFile, viewer] = usePdfViewer()
+  const [confirmAction, confirmDialog] = useConfirmDialog()
   const [columnOpen, setColumnOpen] = useState(false)
   const [columnDraft, setColumnDraft] = useState('2')
-  const currentColumns = scopeNotes.trim() ? bisNotesScopeColumnCount(scopeNotes) : 2
+  // Until the scope has been edited here, the varieties from Sample Requirements are shown as its rows.
+  const [notesOverride, setNotesOverride] = useState<string | null>(null)
+  const baseNotes = scopeNotes.trim() ? scopeNotes : varieties.join('\n')
+  const effectiveNotes = notesOverride ?? baseNotes
+  const scope = parseBisNotesScope(effectiveNotes)
+  const headers = scope.mode === 'table' ? scope.headers : ['Variety applied for']
+  const scopeRows: string[][] = scope.mode === 'table' ? scope.rows : scope.text.split('\n').map((line) => line.trim()).filter(Boolean).map((line) => [line])
+  const currentColumns = headers.length
+  const [editingIndex, setEditingIndex] = useState<number | null>(null)
+  const [editDraft, setEditDraft] = useState<string[]>([])
+  const [newDraft, setNewDraft] = useState<string[]>([])
+  const emptyDraft = () => headers.map(() => '')
+  const saveScope = async (notes: string) => {
+    if (!projectId) return
+    const clean = sanitizeBisLicenseScopeNotes(notes)
+    setNotesOverride(clean)
+    try {
+      await saveBisProjectNotes(projectId, clean)
+      onScopeSaved?.()
+    } catch (error) {
+      setNotesOverride(null)
+      toast.error(error instanceof Error ? error.message : 'Could not save the License Scope.')
+    }
+  }
+  const commitRows = (rows: string[][]) =>
+    saveScope(
+      scope.mode === 'table'
+        ? serializeBisNotesScope({ mode: 'table', headers: scope.headers, rows: rows.length ? rows : [headers.map(() => '')] })
+        : rows.map((row) => row[0] ?? '').filter(Boolean).join('\n'),
+    )
+  const addRow = () => {
+    const values = headers.map((_, i) => (newDraft[i] ?? '').trim())
+    if (!values.some(Boolean)) {
+      toast.warning('Enter the scope text first.')
+      return
+    }
+    void commitRows([...scopeRows, values])
+    setNewDraft(emptyDraft())
+  }
+  const saveEdit = () => {
+    if (editingIndex == null) return
+    const values = headers.map((_, i) => (editDraft[i] ?? '').trim())
+    void commitRows(scopeRows.map((row, i) => (i === editingIndex ? values : row)))
+    setEditingIndex(null)
+  }
+  const deleteRow = async (index: number) => {
+    if (!(await confirmAction('Delete this scope row?', { title: 'Delete row' }))) return
+    void commitRows(scopeRows.filter((_, i) => i !== index))
+    setEditingIndex(null)
+  }
   const applyColumns = async () => {
     if (!projectId) return
     try {
-      await saveBisProjectNotes(projectId, setBisNotesScopeColumnCount(sanitizeBisLicenseScopeNotes(scopeNotes), Number(columnDraft)))
+      const converted = setBisNotesScopeColumnCount(sanitizeBisLicenseScopeNotes(effectiveNotes), Number(columnDraft))
+      setNotesOverride(converted)
+      setEditingIndex(null)
+      setNewDraft([])
+      await saveBisProjectNotes(projectId, converted)
       setColumnOpen(false)
       toast.success(`License scope set to ${columnDraft} column${columnDraft === '1' ? '' : 's'}`)
       onScopeSaved?.()
@@ -252,7 +314,6 @@ export function ManakVarietiesTable({
     }
   }
 
-  const rows = varieties.length > 0 ? varieties : []
   const th = 'border border-stone-700 bg-stone-800 px-2 py-1.5 text-left text-[11px] font-bold uppercase tracking-[0.1em] text-amber-200'
   const td = 'border border-[#e7e0d4] px-2 py-1.5 align-top text-sm text-stone-700'
 
@@ -264,7 +325,7 @@ export function ManakVarietiesTable({
         disabled={filesLoading || !standardFile?.url}
         title={standardFile?.file_name ? `View specification: ${standardFile.file_name}` : 'No specification attached to this IS Code'}
         aria-label="View specification"
-        onClick={() => openUrl(standardFile?.url, 'Specification file not found for this IS Code.')}
+        onClick={() => viewFile(standardFile?.url, standardFile?.file_name || 'Specification', 'Specification file not found for this IS Code.')}
       >
         <BookOpen size={15} aria-hidden />
       </button>
@@ -274,7 +335,7 @@ export function ManakVarietiesTable({
         disabled={filesLoading || !manualFile?.url}
         title={manualFile?.file_name ? `View product manual: ${manualFile.file_name}` : 'No product manual attached to this IS Code'}
         aria-label="View product manual"
-        onClick={() => openUrl(manualFile?.url, 'Product manual file not found for this IS Code.')}
+        onClick={() => viewFile(manualFile?.url, manualFile?.file_name || 'Product manual', 'Product manual file not found for this IS Code.')}
       >
         <FileText size={15} aria-hidden />
       </button>
@@ -301,32 +362,34 @@ export function ManakVarietiesTable({
       >
         <Columns3 size={15} aria-hidden />
       </button>
+      {scopeDocument ? (
+        <>
+          <span className="mx-1 h-6 w-px bg-stone-500" aria-hidden />
+          <button type="button" className={cn(iconBtn, 'border-stone-400 text-amber-800')} title="Undertaking for Manufacturing Scope — preview / print" aria-label="Preview undertaking for scope" onClick={scopeDocument.preview}>
+            <Eye size={15} aria-hidden />
+          </button>
+          <button type="button" className={cn(iconBtn, 'border-stone-400 text-amber-800')} title="Undertaking for Manufacturing Scope — PDF" aria-label="Undertaking for scope PDF" onClick={scopeDocument.pdf}>
+            <Download size={15} aria-hidden />
+          </button>
+          <button type="button" className={cn(iconBtn, 'border-stone-400 text-amber-800')} title="Undertaking for Manufacturing Scope — Word" aria-label="Undertaking for scope Word" onClick={scopeDocument.word}>
+            <FileType size={15} aria-hidden />
+          </button>
+        </>
+      ) : null}
     </div>
   )
 
-  const actions = (
-    <div className="flex items-center gap-1">
-      <button
-        type="button"
-        className={cn(iconBtn, 'border-stone-400 text-amber-800')}
-        disabled={!onEdit}
-        title="Edit varieties (Sample Requirements)"
-        aria-label="Edit varieties"
-        onClick={onEdit}
-      >
-        <Pencil size={14} aria-hidden />
-      </button>
-      <button
-        type="button"
-        className={cn(iconBtn, scopeFiles.length > 0 ? 'border-emerald-600 text-emerald-800' : 'border-stone-400 text-amber-800')}
-        disabled={!projectId}
-        title={scopeFiles.length > 0 ? `Scope files (${scopeFiles.length}): view, upload or delete` : 'Upload copy of scope, drawing or other file'}
-        aria-label="Scope files"
-        onClick={() => setFilesOpen(true)}
-      >
-        <Paperclip size={15} aria-hidden />
-      </button>
-    </div>
+  const attachButton = (
+    <button
+      type="button"
+      className={cn(iconBtn, scopeFiles.length > 0 ? 'border-emerald-600 text-emerald-800' : 'border-stone-400 text-amber-800')}
+      disabled={!projectId}
+      title={scopeFiles.length > 0 ? `Scope files (${scopeFiles.length}): view, upload or delete` : 'Upload copy of scope, drawing or other file'}
+      aria-label="Scope files"
+      onClick={() => setFilesOpen(true)}
+    >
+      <Paperclip size={15} aria-hidden />
+    </button>
   )
 
   return (
@@ -345,34 +408,115 @@ export function ManakVarietiesTable({
       {panel(
         docButtons,
         <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr>
-              <th className={cn(th, 'w-8 px-1 text-center')}>#</th>
-              <th className={th}>Variety applied for</th>
-              <th className={cn(th, 'w-[1%] whitespace-nowrap')}>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 ? (
+          <table className="w-full border-collapse text-sm">
+            <thead>
               <tr>
-                <td colSpan={3} className={cn(td, 'py-3 text-center text-stone-500')}>
-                  No varieties yet — they come from Sample Requirements.
+                <th className={cn(th, 'w-8 px-1 text-center')}>#</th>
+                {headers.map((header, i) => (
+                  <th key={i} className={th}>
+                    {header}
+                  </th>
+                ))}
+                <th className={cn(th, 'w-[1%] whitespace-nowrap')}>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="bg-[#fffcf7]">
+                <td className={cn(td, 'px-1 text-center text-stone-400')}>+</td>
+                {headers.map((header, i) => (
+                  <td key={i} className={cn(td, 'p-1')}>
+                    <Input
+                      aria-label={`New scope ${header}`}
+                      className="h-8 w-full rounded-none border-stone-500 bg-stone-50 px-2 text-sm"
+                      value={newDraft[i] ?? ''}
+                      disabled={!projectId}
+                      placeholder={i === 0 ? 'Enter scope / variety' : header}
+                      onChange={(e) => setNewDraft((prev) => headers.map((_, k) => (k === i ? e.target.value : prev[k] ?? '')))}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') addRow()
+                      }}
+                    />
+                  </td>
+                ))}
+                <td className={cn(td, 'whitespace-nowrap')}>
+                  <div className="flex items-center gap-1">
+                    <button type="button" className={cn(iconBtn, 'border-stone-400 text-amber-800')} disabled={!projectId} title="Add row" aria-label="Add scope row" onClick={addRow}>
+                      <Plus size={15} aria-hidden />
+                    </button>
+                    {attachButton}
+                    <button type="button" className={cn(iconBtn, 'border-red-300 text-red-700')} title="Clear the new row" aria-label="Clear new scope row" onClick={() => setNewDraft(emptyDraft())}>
+                      <Trash2 size={14} aria-hidden />
+                    </button>
+                  </div>
                 </td>
               </tr>
-            ) : (
-              rows.map((v, i) => (
-                <tr key={i} className={i % 2 ? 'bg-[#f7f3eb]' : 'bg-[#fffcf7]'}>
-                  <td className={cn(td, 'px-1 text-center')}>{i + 1}</td>
-                  <td className={td}>{v}</td>
-                  <td className={cn(td, 'whitespace-nowrap')}>{actions}</td>
+              {scopeRows.length === 0 ? (
+                <tr>
+                  <td colSpan={headers.length + 2} className={cn(td, 'py-3 text-center text-stone-500')}>
+                    No scope rows yet — add the first one above.
+                  </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                scopeRows.map((row, index) => {
+                  const editing = editingIndex === index
+                  return (
+                    <tr key={index} className={index % 2 ? 'bg-[#f7f3eb]' : 'bg-[#fffcf7]'}>
+                      <td className={cn(td, 'px-1 text-center')}>{index + 1}</td>
+                      {headers.map((_, i) => (
+                        <td key={i} className={cn(td, editing && 'p-1')}>
+                          {editing ? (
+                            <Input
+                              aria-label={`Scope row ${index + 1} ${headers[i] ?? ''}`}
+                              className="h-8 w-full rounded-none border-stone-500 bg-white px-2 text-sm"
+                              value={editDraft[i] ?? ''}
+                              onChange={(e) => setEditDraft((prev) => headers.map((__, k) => (k === i ? e.target.value : prev[k] ?? '')))}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') saveEdit()
+                                if (e.key === 'Escape') setEditingIndex(null)
+                              }}
+                            />
+                          ) : (
+                            row[i] ?? ''
+                          )}
+                        </td>
+                      ))}
+                      <td className={cn(td, 'whitespace-nowrap')}>
+                        <div className="flex items-center gap-1">
+                          {editing ? (
+                            <button type="button" className={cn(iconBtn, 'border-emerald-600 text-emerald-800')} title="Save row" aria-label={`Save scope row ${index + 1}`} onClick={saveEdit}>
+                              <Check size={15} aria-hidden />
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className={cn(iconBtn, 'border-stone-400 text-amber-800')}
+                              disabled={!projectId}
+                              title="Edit row"
+                              aria-label={`Edit scope row ${index + 1}`}
+                              onClick={() => {
+                                setEditingIndex(index)
+                                setEditDraft(headers.map((_, i) => row[i] ?? ''))
+                              }}
+                            >
+                              <Pencil size={14} aria-hidden />
+                            </button>
+                          )}
+                          <button type="button" className={cn(iconBtn, 'border-red-300 text-red-700')} disabled={!projectId} title="Delete row" aria-label={`Delete scope row ${index + 1}`} onClick={() => void deleteRow(index)}>
+                            {editing ? <X size={14} aria-hidden /> : <Trash2 size={14} aria-hidden />}
+                          </button>
+                          {attachButton}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })
+              )}
+            </tbody>
+          </table>
         </div>,
       )}
+      {viewer}
+      {confirmDialog}
       <Dialog open={columnOpen} onOpenChange={setColumnOpen}>
         <DialogContent persistOnFocusLoss layer="stacked" aria-describedby={undefined} className={cn(limsManageDialogClass, 'max-w-sm bg-white')}>
           <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white">
@@ -428,7 +572,7 @@ export function ManakVarietiesTable({
                     {f.file_name.replace(`${typeOf(f)} - `, '')}
                   </span>
                   <span className="inline-flex shrink-0 gap-1">
-                    <button type="button" className={cn(iconBtn, 'h-7 w-7 border-stone-400 text-amber-800')} title="View" aria-label="View file" onClick={() => openUrl(f.viewUrl, f.error || 'File is unavailable.')}>
+                    <button type="button" className={cn(iconBtn, 'h-7 w-7 border-stone-400 text-amber-800')} title="View" aria-label="View file" onClick={() => viewFile(f.viewUrl, f.file_name, f.error || 'File is unavailable.')}>
                       <Eye size={14} aria-hidden />
                     </button>
                     <button type="button" className={cn(iconBtn, 'h-7 w-7 border-red-300 text-red-700')} title="Delete" aria-label="Delete file" disabled={busy} onClick={() => void removeFile(f)}>

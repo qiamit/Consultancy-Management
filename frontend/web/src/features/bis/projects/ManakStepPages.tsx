@@ -309,6 +309,7 @@ export function ManakStepPage({
   onLocationMapPreview,
   onLocationMapPdf,
   onProjectSaved,
+  onScopeDocument,
 }: {
   stepId: string
   row: BisProjectRow | null
@@ -320,6 +321,8 @@ export function ManakStepPage({
   onLocationMapPreview?: () => void
   onLocationMapPdf?: () => void
   onProjectSaved?: () => void
+  /** Undertaking for Manufacturing Scope: preview / PDF / Word actions. */
+  onScopeDocument?: { preview: () => void; pdf: () => void; word: () => void }
 }) {
   const [reloadTick, setReloadTick] = useState(0)
   const { print, clientRaw, certificates, sites, projectRaw, branches, payloads, loading, error } = useStepData(row, refreshKey + reloadTick)
@@ -367,11 +370,11 @@ export function ManakStepPage({
           />
         </ManakSubPanel>
         <ManakVarietiesTable
-          onEdit={edit('osl-sample-requirements')}
           projectId={row?.id ?? null}
           isCodeId={row?.is_code_id ?? null}
           isNumber={isCode?.label || isCode?.isNumber || ''}
           varieties={varieties}
+          scopeDocument={onScopeDocument}
           scopeNotes={s(projectRaw?.notes)}
           onScopeSaved={() => setReloadTick((t) => t + 1)}
           panel={(headerExtra, body) => (
