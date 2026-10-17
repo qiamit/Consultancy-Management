@@ -59,6 +59,7 @@ export type ClientRow = {
   address: string | null
   pin_code: string | null
   district: string | null
+  city?: string | null
   state: string | null
   country: string | null
   opening_balance: number | null
@@ -83,6 +84,8 @@ export type ClientForm = {
   email: string
   address: string
   pinCode: string
+  /** Shown on the BIS application (Factory / Office City). */
+  city: string
   district: string
   state: string
   country: string
@@ -104,6 +107,8 @@ export type ClientForm = {
   msmeCategory: string
   udyamDate: string
   constitution: string
+  /** Manak landline. Registration / proof / address proof come from the legal documents table. */
+  landline: string
   sector: ClientSector
   isStartup: boolean
   startupStatus: string
@@ -274,6 +279,7 @@ export const emptyClientForm = (): ClientForm => ({
   email: '',
   address: '',
   pinCode: '',
+  city: '',
   district: 'Raipur',
   state: DEFAULT_STATE,
   country: DEFAULT_COUNTRY,
@@ -294,6 +300,7 @@ export const emptyClientForm = (): ClientForm => ({
   msmeCategory: '',
   udyamDate: '',
   constitution: '',
+  landline: '',
   sector: 'Private',
   isStartup: false,
   startupStatus: 'No',

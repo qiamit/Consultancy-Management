@@ -161,3 +161,10 @@ backend/database/baseline_from_*.sql
 # SQLite / session junk
 :memory:.ses
 *.ses
+
+# ── Claude Code local state (launch.json is shared) ───────────────────
+.claude/worktrees/
+.claude/settings.local.json
+# symlinked/real node_modules in any workspace (the trailing-slash rules above skip symlinks)
+node_modules
+frontend/web/node_modules

@@ -250,6 +250,13 @@ async function loadClientForForm(id: string): Promise<ClientRow> {
     if (!missingColumnError(result.error)) throw result.error ?? new Error('Client not found')
   }
   if (!row) throw lastError ?? new Error('Client not found')
+  // Manak registration fields — tolerate databases where the migration is not applied yet.
+  const manakExtras = await supabase
+    .from('clients')
+    .select('city, landline')
+    .eq('id', id)
+    .maybeSingle()
+  if (!manakExtras.error && manakExtras.data) row = { ...row, ...(manakExtras.data as object) } as ClientRow
   if (!('manak_user_id' in row)) {
     const manak = await supabase.from('clients').select('manak_user_id, manak_password_set').eq('id', id).maybeSingle()
     if (!manak.error && manak.data) return { ...row, ...(manak.data as { manak_user_id?: string | null; manak_password_set?: boolean | null }) }
@@ -317,6 +324,7 @@ function rowToClientForm(row: ClientRow): ClientFormType {
     email: row.email ?? '',
     address: row.address ?? '',
     pinCode: row.pin_code ?? '',
+    city: String((row as { city?: string | null }).city ?? ''),
     district: row.district ?? '',
     state: row.state ?? DEFAULT_STATE,
     country: row.country ?? DEFAULT_COUNTRY,
@@ -337,6 +345,7 @@ function rowToClientForm(row: ClientRow): ClientFormType {
     msmeCategory: String((row as { msme_category?: string | null }).msme_category ?? ''),
     udyamDate: String((row as { udyam_date?: string | null }).udyam_date ?? '').slice(0, 10),
     constitution: String((row as { constitution?: string | null }).constitution ?? ''),
+    landline: String((row as { landline?: string | null }).landline ?? ''),
     sector: ((row.sector ?? '') as ClientFormType['sector']) || '',
     ...yesNoFormFields(row),
     startupDpiitNo: String((row as { startup_dpiit_no?: string | null }).startup_dpiit_no ?? ''),
@@ -392,6 +401,7 @@ export default function ClientsMasterPage() {
   const [states, setStates] = useState<Array<{ id: string; label: string }>>(() => [])
   const [countries, setCountries] = useState<Array<{ id: string; label: string }>>(() => [])
   const [districts, setDistricts] = useState<Array<{ id: string; label: string }>>(() => [])
+  const [cities, setCities] = useState<Array<{ id: string; label: string }>>(() => [])
   const [pinCodes, setPinCodes] = useState<Array<{ id: string; label: string }>>(() => [])
   const [addressDirectory, setAddressDirectory] = useState<ClientAddressDirectory>({
     byPin: new Map(),
@@ -414,6 +424,9 @@ export default function ClientsMasterPage() {
 
   const [districtDialogOpen, setDistrictDialogOpen] = useState(false)
   const [newDistrictName, setNewDistrictName] = useState('')
+
+  const [cityDialogOpen, setCityDialogOpen] = useState(false)
+  const [newCityName, setNewCityName] = useState('')
 
   const [pinCodeDialogOpen, setPinCodeDialogOpen] = useState(false)
   const [newPinCode, setNewPinCode] = useState('')
@@ -509,6 +522,9 @@ export default function ClientsMasterPage() {
 
       const districtRows = byCategory('district')
       setDistricts(() => districtRows.map((r) => ({ id: r.id, label: r.label })).sort((a, b) => a.label.localeCompare(b.label)))
+
+      const cityRows = byCategory('city')
+      setCities(() => cityRows.map((r) => ({ id: r.id, label: r.label })).sort((a, b) => a.label.localeCompare(b.label)))
 
       const pinRows = byCategory('pin_code')
       setPinCodes(() => pinRows.map((r) => ({ id: r.id, label: r.label })).sort((a, b) => a.label.localeCompare(b.label)))
@@ -696,6 +712,37 @@ export default function ClientsMasterPage() {
     })()
   }
 
+  const handleAddCity = (close = true) => {
+    if (!canEdit) {
+      setSaveMessage(VIEW_ONLY_MSG)
+      return
+    }
+    const name = normalizeText(newCityName)
+    if (!name) return
+    void (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('client_master_options')
+          .insert({ category: 'city', label: name, value: name })
+          .select('id')
+          .single()
+        if (error) throw error
+        const id = (data as { id: string } | null)?.id ?? `tmp-${name}`
+        setCities((prev) => {
+          const merged = [...prev, { id, label: name }]
+          const uniq = new Map(merged.map((x) => [x.label.toLowerCase(), x]))
+          return Array.from(uniq.values()).sort((a, b) => a.label.localeCompare(b.label))
+        })
+        setForm((prev) => ({ ...prev, city: name }))
+      } catch (err) {
+        setSaveMessage(err instanceof Error ? err.message : 'Unable to add city')
+      } finally {
+        setNewCityName('')
+        if (close) setCityDialogOpen(false)
+      }
+    })()
+  }
+
   const handleAddPinCode = (close = true) => {
     if (!canEdit) {
       setSaveMessage(VIEW_ONLY_MSG)
@@ -754,6 +801,10 @@ export default function ClientsMasterPage() {
           setDistricts((prev) => prev.filter((item) => item.id !== id))
           return
         }
+        if (category === 'city' && id.startsWith('default-')) {
+          setCities((prev) => prev.filter((item) => item.id !== id))
+          return
+        }
         if (category === 'pin_code' && id.startsWith('default-')) {
           setPinCodes((prev) => prev.filter((item) => item.id !== id))
           return
@@ -765,6 +816,7 @@ export default function ClientsMasterPage() {
         if (category === 'state') setStates((prev) => prev.filter((x) => x.id !== id))
         if (category === 'country') setCountries((prev) => prev.filter((x) => x.id !== id))
         if (category === 'district') setDistricts((prev) => prev.filter((x) => x.id !== id))
+        if (category === 'city') setCities((prev) => prev.filter((x) => x.id !== id))
         if (category === 'pin_code') setPinCodes((prev) => prev.filter((x) => x.id !== id))
         if (category === 'country_code') setCountryCodes((prev) => prev.filter((x) => x.id !== id))
         if (category === 'company_type') setCompanyTypes((prev) => prev.filter((x) => x.id !== id))
@@ -782,6 +834,7 @@ export default function ClientsMasterPage() {
     state: 'state',
     country: 'country',
     district: 'district',
+    city: 'city',
     pin_code: 'pin_code',
     country_code: 'country_code',
     company_type: 'company_type',
@@ -811,6 +864,7 @@ export default function ClientsMasterPage() {
           if (category === 'state') return states.find((x) => x.id === id)?.label
           if (category === 'country') return countries.find((x) => x.id === id)?.label
           if (category === 'district') return districts.find((x) => x.id === id)?.label
+          if (category === 'city') return cities.find((x) => x.id === id)?.label
           if (category === 'pin_code') return pinCodes.find((x) => x.id === id)?.label
           if (category === 'country_code') return countryCodes.find((x) => x.id === id)?.value
           if (category === 'company_type') return companyTypes.find((x) => x.id === id)?.label
@@ -836,6 +890,7 @@ export default function ClientsMasterPage() {
         if (category === 'state') setStates((prev) => sortByLabel(prev.map((x) => (x.id === id ? { ...x, label: name } : x))))
         if (category === 'country') setCountries((prev) => sortByLabel(prev.map((x) => (x.id === id ? { ...x, label: name } : x))))
         if (category === 'district') setDistricts((prev) => sortByLabel(prev.map((x) => (x.id === id ? { ...x, label: name } : x))))
+        if (category === 'city') setCities((prev) => sortByLabel(prev.map((x) => (x.id === id ? { ...x, label: name } : x))))
         if (category === 'pin_code') setPinCodes((prev) => sortByLabel(prev.map((x) => (x.id === id ? { ...x, label: name } : x))))
         if (category === 'country_code') {
           setCountryCodes((prev) =>
@@ -852,6 +907,7 @@ export default function ClientsMasterPage() {
         if (clientField && oldLabel && oldLabel !== name) {
           setForm((prev) => {
             if (category === 'district' && prev.district === oldLabel) return { ...prev, district: name }
+            if (category === 'city' && prev.city === oldLabel) return { ...prev, city: name }
             if (category === 'state' && prev.state === oldLabel) return { ...prev, state: name }
             if (category === 'country' && prev.country === oldLabel) return { ...prev, country: name }
             if (category === 'pin_code' && prev.pinCode === oldLabel) return { ...prev, pinCode: name }
@@ -905,6 +961,10 @@ export default function ClientsMasterPage() {
         if (category === 'district') {
           setNewDistrictName('')
           setDistrictDialogOpen(false)
+        }
+        if (category === 'city') {
+          setNewCityName('')
+          setCityDialogOpen(false)
         }
         if (category === 'pin_code') {
           setNewPinCode('')
@@ -1036,6 +1096,7 @@ export default function ClientsMasterPage() {
           email: form.email.trim() || null,
           address: toContinuousText(toProperTitleCase(form.address)) || null,
           pin_code: form.pinCode.trim() || null,
+          city: form.city.trim() || null,
           district: form.district.trim() || null,
           state: form.state || null,
           country: form.country || null,
@@ -1053,6 +1114,7 @@ export default function ClientsMasterPage() {
           msme_category: form.msmeCategory.trim() || null,
           udyam_date: form.udyamDate || null,
           constitution: form.constitution.trim() || null,
+          landline: form.landline.trim() || null,
           sector: form.sector || null,
           is_startup: form.startupStatus.trim().toLowerCase() === 'yes',
           startup_status: form.startupStatus.trim() || 'No',
@@ -1084,7 +1146,13 @@ export default function ClientsMasterPage() {
         let savedId: string | null = null
         // Coordinates are now part of the required client schema. Never retry a
         // save without them, or the form can close while silently losing values.
-        const optionalColumns = ['women_entrepreneur', 'startup_status', 'manak_user_id']
+        const optionalColumns = [
+          'women_entrepreneur',
+          'startup_status',
+          'manak_user_id',
+          'city',
+          'landline',
+        ]
         const row: Record<string, unknown> = { ...payload }
         for (let attempt = 0; attempt < optionalColumns.length + 1; attempt += 1) {
           try {
@@ -1795,6 +1863,7 @@ export default function ClientsMasterPage() {
             states={states}
             countries={countries}
             districts={districts}
+            cities={cities}
             pinCodes={pinCodes}
             pinAutoFill={addressDirectory.byPin}
             knownPlaces={addressDirectory}
@@ -1823,6 +1892,13 @@ export default function ClientsMasterPage() {
             onAddDistrict={handleAddDistrict}
             onUpdateDistrict={(id: string) => updateMasterOption(id, 'district', newDistrictName)}
             onDeleteDistrict={(id: string) => deleteMasterOption(id, 'district')}
+            cityDialogOpen={cityDialogOpen}
+            setCityDialogOpen={setCityDialogOpen}
+            newCityName={newCityName}
+            setNewCityName={setNewCityName}
+            onAddCity={handleAddCity}
+            onUpdateCity={(id: string) => updateMasterOption(id, 'city', newCityName)}
+            onDeleteCity={(id: string) => deleteMasterOption(id, 'city')}
             pinCodeDialogOpen={pinCodeDialogOpen}
             setPinCodeDialogOpen={setPinCodeDialogOpen}
             newPinCode={newPinCode}

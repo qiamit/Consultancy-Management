@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { PDFDocument } from 'pdf-lib'
 import * as XLSX from 'xlsx'
 import {
+  Check,
   ChevronLeft,
   ChevronRight,
   Eye,
@@ -13,21 +14,11 @@ import {
   Pencil,
   Printer,
   ScanEye,
-  Search,
   X,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import {
   mapPageSizeToPlaywrightFormat,
   renderPdfViaPlaywright,
@@ -40,9 +31,7 @@ import {
 } from '../print/bisDocumentPrintPageSettings'
 import {
   limsDarkBarBtnClass,
-  limsDarkBarFieldClass,
   limsDarkBarGlowStyle,
-  limsDarkBarSearchClass,
   limsPageShellClass,
   limsPanelClass,
 } from '@/lib/limsThemeUi'
@@ -57,6 +46,12 @@ import {
   printKindToStorageDocKind,
   type BisPrintDocumentKind,
 } from '../print/printBisDocument'
+import { ManakStepPage } from './ManakStepPages'
+import {
+  BIS_APPLICATION_STEPS,
+  BIS_PREVIEW_STEP_LABEL,
+  unassignedKinds,
+} from './bisApplicationSteps'
 import { BisDocumentPrintPreviewDialog } from './BisDocumentPrintPreviewDialog'
 import { buildApplicationDetailsPackPdf } from './buildApplicationDetailsPackPdf'
 import { loadBisProjectPrintPageSettings } from './bisPrintPageSettingsApi'
@@ -82,24 +77,13 @@ function isHybridFileViewKind(kind: BisPrintDocumentKind): boolean {
 }
 import { clientDisplayName, formatCmL, isCodeDisplayLabel, type BisProjectRow } from './types'
 
-const thBase =
-  'bg-stone-800 text-center text-[11px] font-bold uppercase tracking-[0.14em] text-amber-200'
-
 const checkboxClass =
   'h-4 w-4 rounded-none border-stone-500 text-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/30'
 
-const rowEvenClass = 'bg-[#f7f3eb] hover:bg-[#f3e9d8]'
-const rowOddClass = 'bg-[#fffcf7] hover:bg-[#f3e9d8]'
 const rowSelectedClass = 'bg-[#fde68a]/80 hover:bg-[#fde68a]/80'
 
 const actionBtnClass =
   'h-8 w-8 rounded-none border border-stone-400 bg-white/70 p-0 text-amber-800 shadow-sm hover:border-amber-600 hover:bg-amber-50 hover:text-amber-950 focus-visible:ring-2 focus-visible:ring-amber-500/40'
-
-/** ~10″ / desktop: row table. Below that: cards. */
-const TABLE_MQ_SHOW = 'hidden xl:block'
-const CARDS_MQ_SHOW = 'xl:hidden'
-
-const PAGE_SIZE_OPTIONS = [10, 20, 25, 50] as const
 
 function safeFileBase(label: string, cmL: string): string {
   const raw = [label, cmL]
@@ -555,12 +539,10 @@ export function BisLicenseDocumentsDialog({
   onModuleKindChange?: (kind: BisPrintDocumentKind | null) => void
   onProjectSaved?: () => void
 }) {
-  const [search, setSearch] = useState('')
   const [selectedKinds, setSelectedKinds] = useState<Set<BisPrintDocumentKind>>(() => new Set())
   const [downloadBusy, setDownloadBusy] = useState(false)
-  const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(20)
-  const [jumpTo, setJumpTo] = useState('')
+  const [step, setStep] = useState(0)
+  const [refreshKey, setRefreshKey] = useState(0)
   const [previewKind, setPreviewKind] = useState<BisPrintDocumentKind | null>(null)
   const [importKind, setImportKind] = useState<BisPrintDocumentKind | null>(null)
 
@@ -571,11 +553,9 @@ export function BisLicenseDocumentsDialog({
 
   useEffect(() => {
     if (!open) {
-      setSearch('')
       setSelectedKinds(new Set())
       setDownloadBusy(false)
-      setPage(1)
-      setJumpTo('')
+      setStep(0)
       setPreviewKind(null)
       setImportKind(null)
     }
@@ -583,43 +563,29 @@ export function BisLicenseDocumentsDialog({
 
   useEffect(() => {
     setSelectedKinds(new Set())
-    setSearch('')
-    setPage(1)
-    setJumpTo('')
+    setStep(0)
   }, [row?.id])
 
-  const filteredKinds = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    const kinds = ALL_BIS_PRINT_KINDS.filter(
-      (kind) => kind !== 'legal-documents' && kind !== 'location-map' && kind !== 'updated-sit',
-    )
-    if (!q) return kinds
-    return kinds.filter((kind) =>
-      BIS_PRINT_DOCUMENT_LABEL[kind]
-        .toLowerCase()
-        .includes(q),
-    )
-  }, [search])
+  const allKinds = useMemo<BisPrintDocumentKind[]>(
+    () =>
+      ALL_BIS_PRINT_KINDS.filter(
+        (kind) => kind !== 'legal-documents' && kind !== 'location-map' && kind !== 'updated-sit',
+      ),
+    [],
+  )
 
-  const pageCount = Math.max(1, Math.ceil(filteredKinds.length / pageSize))
-  const safePage = Math.min(page, pageCount)
+  /** Documents on a wizard step; leftovers not mapped to any step show on Declaration. */
+  const stepKinds = (index: number): BisPrintDocumentKind[] => {
+    const s = BIS_APPLICATION_STEPS[index]
+    if (!s) return []
+    const own = s.kinds.filter((k) => allKinds.includes(k))
+    return s.id === 'declaration' ? [...own, ...unassignedKinds(allKinds)] : own
+  }
 
-  useEffect(() => {
-    setPage(1)
-  }, [search, pageSize])
-
-  useEffect(() => {
-    if (page > pageCount) setPage(pageCount)
-  }, [page, pageCount])
-
-  const pageKinds = useMemo(() => {
-    const start = (safePage - 1) * pageSize
-    return filteredKinds.slice(start, start + pageSize)
-  }, [filteredKinds, safePage, pageSize])
-
-  const allChecked =
-    pageKinds.length > 0 && pageKinds.every((kind) => selectedKinds.has(kind))
-  const someChecked = pageKinds.some((kind) => selectedKinds.has(kind))
+  const stepLabels = [...BIS_APPLICATION_STEPS.map((s) => s.label), BIS_PREVIEW_STEP_LABEL]
+  const isPreviewStep = step >= BIS_APPLICATION_STEPS.length
+  const currentStep = BIS_APPLICATION_STEPS[Math.min(step, BIS_APPLICATION_STEPS.length - 1)]
+  const currentKinds = isPreviewStep ? [] : stepKinds(step)
   const actionsDisabled = !row || busy || downloadBusy
 
   const toggleKind = (kind: BisPrintDocumentKind) => {
@@ -629,20 +595,6 @@ export function BisLicenseDocumentsDialog({
       else next.add(kind)
       return next
     })
-  }
-
-  const toggleAll = (checked: boolean) => {
-    setSelectedKinds((prev) => {
-      const next = new Set(prev)
-      if (checked) pageKinds.forEach((kind) => next.add(kind))
-      else pageKinds.forEach((kind) => next.delete(kind))
-      return next
-    })
-  }
-
-  const handleJumpToGo = () => {
-    const n = Number.parseInt(jumpTo, 10)
-    if (Number.isFinite(n) && n >= 1 && n <= pageCount) setPage(n)
   }
 
   const handleModuleEdit = (kind: BisPrintDocumentKind) => {
@@ -802,9 +754,13 @@ export function BisLicenseDocumentsDialog({
     })
   }
 
-  const downloadPdfDocuments = async (clickedKind: BisPrintDocumentKind) => {
+  const downloadPdfDocuments = async (
+    clickedKind: BisPrintDocumentKind,
+    overrideKinds?: BisPrintDocumentKind[],
+    bundleName = 'Selected BIS Documents',
+  ) => {
     if (!row) return
-    const kinds = selectedDocumentKinds(clickedKind)
+    const kinds = overrideKinds ?? selectedDocumentKinds(clickedKind)
     setDownloadBusy(true)
     try {
       const settings = await loadBisProjectPrintPageSettings(row.id).catch(
@@ -815,7 +771,7 @@ export function BisLicenseDocumentsDialog({
       const output = pdfs.length === 1 ? pdfs[0] : await mergePdfBlobs(pdfs)
       const filename = pdfs.length === 1
         ? `${safeFileBase(BIS_PRINT_DOCUMENT_LABEL[kinds[0]], cmL)}.pdf`
-        : `${safeFileBase('Selected BIS Documents', cmL)}.pdf`
+        : `${safeFileBase(bundleName, cmL)}.pdf`
       triggerPdfDownload(output, filename)
       toast.success(
         pdfs.length === 1
@@ -937,7 +893,7 @@ export function BisLicenseDocumentsDialog({
             'flex h-full min-h-0 flex-col overflow-hidden !space-y-0 gap-2 p-2 sm:gap-3 sm:p-3 md:gap-3 md:p-4',
           )}
         >
-          {/* Header — Client Master style */}
+          {/* Header */}
           <div className={cn(limsPanelClass, 'shrink-0')}>
             <div className="relative overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-2 py-2 text-white sm:px-4 sm:py-2.5 md:px-5">
               <div
@@ -947,50 +903,11 @@ export function BisLicenseDocumentsDialog({
               <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
               <div className="relative flex min-w-0 flex-col gap-1.5">
                 <div className="flex min-w-0 flex-nowrap items-center gap-1.5 sm:gap-2.5">
-                  <DialogHeader className="min-w-0 shrink space-y-0 text-left">
+                  <DialogHeader className="min-w-0 flex-1 space-y-0 text-left">
                     <DialogTitle className="truncate text-sm font-semibold tracking-tight text-white sm:text-base md:text-lg">
-                      View Documents
+                      Online Application for Grant of License
                     </DialogTitle>
                   </DialogHeader>
-                  <div className="relative min-w-0 flex-1 basis-0">
-                    <Search
-                      className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-stone-500 sm:left-3 sm:h-4 sm:w-4"
-                      aria-hidden
-                    />
-                    <Input
-                      type="search"
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      placeholder="Search Documents"
-                      aria-label="Search documents"
-                      className={cn(
-                        limsDarkBarSearchClass,
-                        'h-8 min-w-0 pl-7 text-xs sm:pl-9 sm:text-sm',
-                      )}
-                    />
-                  </div>
-                  <Select
-                    value={String(pageSize)}
-                    onValueChange={(v) => setPageSize(Number(v))}
-                  >
-                    <SelectTrigger
-                      className={cn(
-                        limsDarkBarFieldClass,
-                        'h-8 w-[3.5rem] shrink-0 px-1 text-[11px] tabular-nums sm:w-[4.25rem] sm:px-2 sm:text-xs',
-                      )}
-                      aria-label="Rows per page"
-                      title={`${pageSize} per page`}
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent align="end">
-                      {PAGE_SIZE_OPTIONS.map((n) => (
-                        <SelectItem key={n} value={String(n)}>
-                          {n}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
                   <Button
                     type="button"
                     variant="outline"
@@ -1013,110 +930,157 @@ export function BisLicenseDocumentsDialog({
             </div>
           </div>
 
-          {/* Table / cards panel */}
+          {/* Stepper — same order as Manak Online */}
+          <div className={cn(limsPanelClass, 'shrink-0 bg-[#f7f3eb] px-2 py-1.5 font-jakarta sm:px-4')}>
+            <ol className="flex items-center gap-1 overflow-x-auto">
+              {stepLabels.map((label, i) => {
+                const done = i < step
+                const current = i === step
+                return (
+                  <li key={label} className="relative flex min-w-[2.5rem] flex-1 flex-col items-center">
+                    {i > 0 ? (
+                      <span
+                        aria-hidden
+                        className={cn(
+                          'absolute left-[-50%] top-1/2 h-0.5 w-full -translate-y-1/2',
+                          i <= step ? 'bg-amber-600' : 'bg-stone-300',
+                        )}
+                      />
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => setStep(i)}
+                      aria-current={current ? 'step' : undefined}
+                      aria-label={`Step ${i + 1}: ${label}`}
+                      title={label}
+                      className={cn(
+                        'relative z-[1] flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs font-bold transition-colors',
+                        current
+                          ? 'border-amber-700 bg-amber-600 text-white ring-2 ring-amber-400/50'
+                          : done
+                            ? 'border-amber-700 bg-amber-700 text-white'
+                            : 'border-stone-300 bg-white text-stone-600 hover:border-amber-600',
+                      )}
+                    >
+                      {done ? <Check className="h-4 w-4" aria-hidden /> : i + 1}
+                    </button>
+                  </li>
+                )
+              })}
+            </ol>
+          </div>
+
+          {/* Step body */}
           <div className={cn(limsPanelClass, 'flex min-h-0 flex-1 flex-col bg-[#f7f3eb]')}>
-            <div className="min-h-0 flex-1 overflow-y-auto overflow-x-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
-              {pageKinds.length === 0 ? (
-                <p className="px-3 py-8 text-center text-sm text-stone-500">
-                  No documents match your search.
-                </p>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 sm:p-4">
+              {isPreviewStep ? (
+                <div className="space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <h3 className="text-base font-bold text-stone-900">Application Submission - Preview</h3>
+                      <p className="text-xs text-stone-600">
+                        Review every section, then enter the application on Manak Online (Pay Fee is step 9 there).
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="rounded-none bg-amber-700 text-white hover:bg-amber-800"
+                      disabled={actionsDisabled || allKinds.length === 0}
+                      onClick={() => void downloadPdfDocuments(allKinds[0], allKinds, 'Complete Application')}
+                    >
+                      <FileDown size={15} className="mr-1.5" aria-hidden />
+                      Download complete application (PDF)
+                    </Button>
+                  </div>
+                  {BIS_APPLICATION_STEPS.map((s, si) => {
+                    const kinds = stepKinds(si)
+                    if (kinds.length === 0) return null
+                    return (
+                      <section key={s.id} className="border border-stone-400 bg-[#fffcf7]">
+                        <header className="flex items-center justify-between bg-stone-800 px-3 py-1.5">
+                          <h4 className="text-xs font-bold uppercase tracking-[0.12em] text-amber-200">
+                            {si + 1}. {s.title}
+                          </h4>
+                          <button
+                            type="button"
+                            className="text-[11px] font-semibold text-amber-200 underline-offset-2 hover:underline"
+                            onClick={() => setStep(si)}
+                          >
+                            Edit step
+                          </button>
+                        </header>
+                        <ul className="divide-y divide-[#e7e0d4]">
+                          {kinds.map((kind) => (
+                            <li key={kind} className="flex items-center justify-between gap-2 px-3 py-1.5">
+                              <span className="flex min-w-0 items-center gap-2 text-sm font-semibold text-[#1c1917]">
+                                <FileText className="h-4 w-4 shrink-0 text-amber-800" aria-hidden />
+                                <span className="truncate">{BIS_PRINT_DOCUMENT_LABEL[kind]}</span>
+                              </span>
+                              <span className="inline-flex shrink-0 gap-0.5">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  className={actionBtnClass}
+                                  disabled={actionsDisabled}
+                                  title={`View — ${BIS_PRINT_DOCUMENT_LABEL[kind]}`}
+                                  aria-label={`View ${BIS_PRINT_DOCUMENT_LABEL[kind]}`}
+                                  onClick={() => handleView(kind)}
+                                >
+                                  <Eye size={15} />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  className={actionBtnClass}
+                                  disabled={actionsDisabled}
+                                  title={`PDF Download — ${BIS_PRINT_DOCUMENT_LABEL[kind]}`}
+                                  aria-label={`PDF Download ${BIS_PRINT_DOCUMENT_LABEL[kind]}`}
+                                  onClick={() => void downloadPdfDocuments(kind, [kind])}
+                                >
+                                  <FileDown size={15} />
+                                </Button>
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </section>
+                    )
+                  })}
+                </div>
               ) : (
                 <>
-                  {/* Cards — &lt; ~10″ */}
-                  <div className={cn(CARDS_MQ_SHOW, 'space-y-2 p-2 sm:p-3')}>
-                    {pageKinds.map((kind, index) => {
-                      const selected = selectedKinds.has(kind)
-                      const label = BIS_PRINT_DOCUMENT_LABEL[kind]
-                      return (
-                        <article
-                          key={kind}
-                          className={cn(
-                            'border border-stone-400 p-2.5',
-                            selected
-                              ? 'bg-[#fde68a]/80'
-                              : index % 2 === 0
-                                ? 'bg-[#f7f3eb]'
-                                : 'bg-[#fffcf7]',
-                          )}
-                        >
-                          <div className="mb-2 flex min-w-0 items-start gap-2">
-                            <input
-                              type="checkbox"
-                              className={cn(checkboxClass, 'mt-0.5')}
-                              aria-label={`Select ${label}`}
-                              checked={selected}
-                              onChange={() => toggleKind(kind)}
-                            />
-                            <div className="flex min-w-0 flex-1 items-center gap-2">
-                              <FileText
-                                className="h-4 w-4 shrink-0 text-amber-800"
-                                aria-hidden
-                              />
-                              <p className="min-w-0 break-words text-sm font-semibold leading-snug text-[#1c1917]">
-                                {label}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex justify-end overflow-x-auto">
-                            <DocRowActions
-                              kind={kind}
-                              disabled={actionsDisabled}
-                              onModuleEdit={handleModuleEdit}
-                              onView={handleView}
-                              onPreview={handlePreview}
-                              onImport={handleImport}
-                              onPrint={handlePrint}
-                              onExcel={(k) => void runDownload(k, 'excel')}
-                              onWord={(k) => void runDownload(k, 'word')}
-                              onPdf={(k) => void runDownload(k, 'pdf')}
-                            />
-                          </div>
-                        </article>
-                      )
-                    })}
-                  </div>
-
-                  {/* Table — ~10″ / lg+ */}
-                  <div className={TABLE_MQ_SHOW}>
-                    <Table className="w-full min-w-[640px] table-fixed border-collapse font-jakarta [&_th]:border [&_td]:border [&_th]:border-stone-700 [&_td]:border-[#e7e0d4] [&_th]:p-[1mm] [&_td]:!p-[1mm] [&_th]:sticky [&_th]:top-0 [&_th]:z-[1]">
-                      <TableHeader>
-                        <TableRow className="hover:bg-transparent">
-                          <TableHead className={cn(thBase, 'w-[4%]')}>
-                            <input
-                              type="checkbox"
-                              className={checkboxClass}
-                              aria-label="Select all documents"
-                              checked={allChecked}
-                              ref={(el) => {
-                                if (el) el.indeterminate = !allChecked && someChecked
-                              }}
-                              onChange={(e) => toggleAll(e.target.checked)}
-                            />
-                          </TableHead>
-                          <TableHead className={cn(thBase, 'text-left')}>
-                            Documents Description
-                          </TableHead>
-                          <TableHead className={cn(thBase, 'w-[20.5rem]')}>Action</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {pageKinds.map((kind, index) => {
+                <div className="mb-3 text-center font-jakarta">
+                  <h3 className="text-xl font-bold text-stone-900">Online Application for Grant of License</h3>
+                  <p className="text-right text-xs text-red-600">* Mandatory Fields</p>
+                </div>
+                <ManakStepPage
+                  stepId={currentStep.id}
+                  row={row}
+                  refreshKey={refreshKey}
+                  onEdit={handleModuleEdit}
+                  documents={
+                    <div className="border border-stone-300 bg-[#fffcf7]">
+                    {currentKinds.length === 0 ? (
+                      <p className="px-3 py-6 text-center text-sm text-stone-500">
+                        No documents on this step.
+                      </p>
+                    ) : (
+                      <ul className="divide-y divide-[#e7e0d4]">
+                        {currentKinds.map((kind) => {
                           const selected = selectedKinds.has(kind)
                           const label = BIS_PRINT_DOCUMENT_LABEL[kind]
                           return (
-                            <TableRow
+                            <li
                               key={kind}
-                              data-state={selected ? 'selected' : undefined}
                               className={cn(
-                                'border-b border-[#e7e0d4]',
-                                selected
-                                  ? rowSelectedClass
-                                  : index % 2 === 0
-                                    ? rowEvenClass
-                                    : rowOddClass,
+                                'flex flex-wrap items-center justify-between gap-2 px-3 py-2',
+                                selected ? rowSelectedClass : 'hover:bg-[#f3e9d8]',
                               )}
                             >
-                              <TableCell className="px-2 py-2 text-center align-middle">
+                              <div className="flex min-w-0 items-center gap-2.5">
                                 <input
                                   type="checkbox"
                                   className={checkboxClass}
@@ -1124,19 +1088,12 @@ export function BisLicenseDocumentsDialog({
                                   checked={selected}
                                   onChange={() => toggleKind(kind)}
                                 />
-                              </TableCell>
-                              <TableCell className="px-3 py-2 text-left align-middle">
-                                <div className="flex min-w-0 items-center gap-2.5">
-                                  <FileText
-                                    className="h-4 w-4 shrink-0 text-amber-800"
-                                    aria-hidden
-                                  />
-                                  <p className="min-w-0 truncate text-sm font-semibold text-[#1c1917]">
-                                    {label}
-                                  </p>
-                                </div>
-                              </TableCell>
-                              <TableCell className="px-2 py-2 text-center align-middle">
+                                <FileText className="h-4 w-4 shrink-0 text-amber-800" aria-hidden />
+                                <p className="min-w-0 break-words text-sm font-semibold text-[#1c1917]">
+                                  {label}
+                                </p>
+                              </div>
+                              <div className="flex max-w-full justify-end overflow-x-auto">
                                 <DocRowActions
                                   kind={kind}
                                   labelOverride={label}
@@ -1150,19 +1107,21 @@ export function BisLicenseDocumentsDialog({
                                   onWord={(k) => void runDownload(k, 'word')}
                                   onPdf={(k) => void runDownload(k, 'pdf')}
                                 />
-                              </TableCell>
-                            </TableRow>
+                              </div>
+                            </li>
                           )
                         })}
-                      </TableBody>
-                    </Table>
-                  </div>
+                      </ul>
+                    )}
+                    </div>
+                  }
+                />
                 </>
               )}
             </div>
           </div>
 
-          {/* Footer */}
+          {/* Footer — Back / Next */}
           <div className={cn(limsPanelClass, 'shrink-0')}>
             <div className="relative overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-3 py-2 text-white sm:px-4">
               <div
@@ -1170,70 +1129,47 @@ export function BisLicenseDocumentsDialog({
                 style={limsDarkBarGlowStyle}
               />
               <div className="absolute top-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
-              <div className="relative flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2">
-                <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-                  <span className="whitespace-nowrap text-xs font-medium text-stone-200">
-                    {filteredKinds.length.toLocaleString('en-IN')} documents
-                    {selectedKinds.size > 0
-                      ? ` · ${selectedKinds.size} selected (PDF / Word action bundles selection)`
-                      : ''}
-                  </span>
+              <div className="relative flex min-w-0 flex-wrap items-center justify-between gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className={cn(limsDarkBarBtnClass, 'h-8 gap-1 px-3')}
+                  onClick={() => setStep((s) => Math.max(0, s - 1))}
+                  disabled={step === 0}
+                >
+                  <ChevronLeft size={16} aria-hidden /> Back
+                </Button>
+                <span className="text-xs font-medium text-stone-200">
+                  Step {step + 1} of {stepLabels.length}
+                  {selectedKinds.size > 0 ? ` · ${selectedKinds.size} selected (PDF / Word / Excel bundle selection)` : ''}
                   {downloadBusy || busy ? (
-                    <span className="text-xs text-amber-200">
+                    <span className="ml-2 text-amber-200">
                       {downloadBusy ? 'Preparing download…' : 'Preparing document…'}
                     </span>
                   ) : null}
-                </div>
-
-                {pageCount > 1 ? (
-                  <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
-                    <span className="mr-1 whitespace-nowrap text-xs font-medium text-stone-300">
-                      Page {safePage} of {pageCount}
-                    </span>
-                    <Input
-                      aria-label="Jump to page"
-                      placeholder="Page"
-                      value={jumpTo}
-                      onChange={(e) => setJumpTo(e.target.value.replace(/[^0-9]/g, ''))}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleJumpToGo()
-                      }}
-                      className={cn(limsDarkBarFieldClass, 'h-8 w-14 text-xs')}
-                      inputMode="numeric"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className={cn(limsDarkBarBtnClass, 'h-8 px-2.5 text-xs')}
-                      onClick={handleJumpToGo}
-                    >
-                      Go
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      aria-label="Previous page"
-                      className={cn(limsDarkBarBtnClass, 'h-8 w-8')}
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
-                      disabled={safePage <= 1}
-                    >
-                      <ChevronLeft size={16} />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      aria-label="Next page"
-                      className={cn(limsDarkBarBtnClass, 'h-8 w-8')}
-                      onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
-                      disabled={safePage >= pageCount}
-                    >
-                      <ChevronRight size={16} />
-                    </Button>
-                  </div>
-                ) : null}
+                </span>
+                {isPreviewStep ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className={cn(limsDarkBarBtnClass, 'h-8 gap-1 px-3')}
+                    onClick={() => onOpenChange(false)}
+                  >
+                    Done
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className={cn(limsDarkBarBtnClass, 'h-8 gap-1 px-3')}
+                    onClick={() => setStep((s) => Math.min(stepLabels.length - 1, s + 1))}
+                  >
+                    Next <ChevronRight size={16} aria-hidden />
+                  </Button>
+                )}
               </div>
             </div>
           </div>
@@ -1244,13 +1180,19 @@ export function BisLicenseDocumentsDialog({
     <LegalDocumentsModuleDialog
       open={activeModuleKind != null && row != null}
       onOpenChange={(next) => {
-        if (!next) onModuleKindChange?.(null)
+        if (!next) {
+          onModuleKindChange?.(null)
+          setRefreshKey((k) => k + 1)
+        }
       }}
       row={row}
       title={activeModuleTitle}
       docKind={activeDocKind}
       printKind={activeModuleKind}
-      onProjectSaved={onProjectSaved}
+      onProjectSaved={() => {
+        setRefreshKey((k) => k + 1)
+        onProjectSaved?.()
+      }}
       onLocationMapPreview={() => handlePreview('location-map')}
       onLocationMapWord={() => void runDownload('location-map', 'word')}
       onLocationMapPdf={() => void runDownload('location-map', 'pdf')}

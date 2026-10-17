@@ -13,6 +13,8 @@ export type ClientCertificateFile = {
   client_id: string
   cert_name: string
   document_number: string
+  /** Free-text name of the document (cert_name holds the document type). */
+  doc_title: string
   issued_on: string
   file_name: string
   storage_path: string
@@ -25,6 +27,7 @@ export type ClientCertificateInput = {
   certName: string
   documentNumber: string
   issuedOn: string
+  docTitle?: string
   file: File
   existing?: ClientCertificateFile
 }
@@ -249,6 +252,7 @@ export async function saveClientContacts(clientId: string, contacts: ClientConta
   }
 }
 
+const CERT_COLUMNS_TITLE = 'id, client_id, cert_name, doc_title, document_number, issued_on, file_name, storage_path, file_size, mime_type, created_at'
 const CERT_COLUMNS = 'id, client_id, cert_name, document_number, issued_on, file_name, storage_path, file_size, mime_type, created_at'
 const CERT_COLUMNS_BASE = 'id, client_id, cert_name, file_name, storage_path, file_size, mime_type, created_at'
 
@@ -262,6 +266,7 @@ function mapCertificate(row: Record<string, unknown>): ClientCertificateFile {
     id: String(row.id ?? ''),
     client_id: String(row.client_id ?? ''),
     cert_name: String(row.cert_name ?? ''),
+    doc_title: row.doc_title == null ? '' : String(row.doc_title),
     document_number: row.document_number == null ? '' : String(row.document_number),
     issued_on: row.issued_on == null ? '' : String(row.issued_on).slice(0, 10),
     file_name: String(row.file_name ?? ''),
@@ -273,6 +278,12 @@ function mapCertificate(row: Record<string, unknown>): ClientCertificateFile {
 }
 
 export async function listClientCertificates(clientId: string): Promise<ClientCertificateFile[]> {
+  const titled = await supabase
+    .from('client_certificate_files')
+    .select(CERT_COLUMNS_TITLE)
+    .eq('client_id', clientId)
+    .order('cert_name', { ascending: true })
+  if (!titled.error) return (Array.isArray(titled.data) ? titled.data : []).map((row) => mapCertificate(row as unknown as Record<string, unknown>))
   const first = await supabase
     .from('client_certificate_files')
     .select(CERT_COLUMNS)
@@ -293,11 +304,13 @@ export async function listClientCertificates(clientId: string): Promise<ClientCe
   return (Array.isArray(second.data) ? second.data : []).map((row) => mapCertificate(row as unknown as Record<string, unknown>))
 }
 
-function certificateDetails(input: Pick<ClientCertificateInput, 'certName' | 'documentNumber' | 'issuedOn'>) {
+function certificateDetails(input: Pick<ClientCertificateInput, 'certName' | 'documentNumber' | 'issuedOn' | 'docTitle'>) {
   return {
     cert_name: input.certName.trim(),
     document_number: input.documentNumber.trim() || null,
     issued_on: input.issuedOn || null,
+    // Only written when the caller passes a title, so other edits never wipe it.
+    ...(input.docTitle === undefined ? {} : { doc_title: input.docTitle.trim() || null }),
   }
 }
 
@@ -337,6 +350,25 @@ export async function uploadClientCertificate(clientId: string, input: ClientCer
     return
   }
   if (!missingCertColumn(inserted.error)) throw inserted.error
+  const { doc_title: _omitTitle, ...detailsNoTitle } = details as typeof details & { doc_title?: string | null }
+  void _omitTitle
+  const noTitle = await supabase.from('client_certificate_files').insert({
+    id: stored.fileId,
+    client_id: clientId,
+    ...detailsNoTitle,
+    file_name: stored.safeName,
+    storage_path: stored.storagePath,
+    file_size: input.file.size,
+    mime_type: input.file.type,
+  })
+  if (!noTitle.error) {
+    if (input.existing?.storage_path) {
+      await supabase.storage.from(CERT_BUCKET).remove([input.existing.storage_path])
+      await supabase.from('client_certificate_files').delete().eq('id', input.existing.id)
+    }
+    return
+  }
+  if (!missingCertColumn(noTitle.error)) throw noTitle.error
   const retry = await supabase.from('client_certificate_files').insert({
     id: stored.fileId,
     client_id: clientId,
@@ -351,13 +383,18 @@ export async function uploadClientCertificate(clientId: string, input: ClientCer
 
 export async function updateClientCertificateDetails(
   id: string,
-  input: Pick<ClientCertificateInput, 'certName' | 'documentNumber' | 'issuedOn'>,
+  input: Pick<ClientCertificateInput, 'certName' | 'documentNumber' | 'issuedOn' | 'docTitle'>,
 ): Promise<void> {
   const details = certificateDetails(input)
   if (!details.cert_name) throw new Error('Document name is required.')
   const first = await supabase.from('client_certificate_files').update(details).eq('id', id)
   if (!first.error) return
   if (!missingCertColumn(first.error)) throw first.error
+  const { doc_title: _omitTitle, ...detailsNoTitle } = details as typeof details & { doc_title?: string | null }
+  void _omitTitle
+  const noTitle = await supabase.from('client_certificate_files').update(detailsNoTitle).eq('id', id)
+  if (!noTitle.error) return
+  if (!missingCertColumn(noTitle.error)) throw noTitle.error
   const second = await supabase.from('client_certificate_files').update({ cert_name: details.cert_name }).eq('id', id)
   if (second.error) throw second.error
 }

@@ -181,6 +181,7 @@ export function ClientsForm({
   states,
   countries,
   districts,
+  cities = [],
   pinCodes,
   pinAutoFill,
   knownPlaces = EMPTY_KNOWN_PLACES,
@@ -211,6 +212,13 @@ export function ClientsForm({
   onAddDistrict,
   onUpdateDistrict,
   onDeleteDistrict,
+  cityDialogOpen = false,
+  setCityDialogOpen,
+  newCityName = '',
+  setNewCityName,
+  onAddCity,
+  onUpdateCity,
+  onDeleteCity,
   pinCodeDialogOpen,
   setPinCodeDialogOpen,
   newPinCode,
@@ -273,7 +281,7 @@ export function ClientsForm({
   clientSaved?: boolean
   certificates?: ClientCertificateFile[]
   onUploadCertificate?: (input: ClientCertificateInput) => Promise<void>
-  onUpdateCertificate?: (row: ClientCertificateFile, input: Pick<ClientCertificateInput, 'certName' | 'documentNumber' | 'issuedOn'>) => Promise<void>
+  onUpdateCertificate?: (row: ClientCertificateFile, input: Pick<ClientCertificateInput, 'certName' | 'documentNumber' | 'issuedOn' | 'docTitle'>) => Promise<void>
   onDeleteCertificate?: (row: ClientCertificateFile) => void
   onOpenCertificate?: (row: ClientCertificateFile) => void
   hideFooter?: boolean
@@ -282,6 +290,8 @@ export function ClientsForm({
   states: Array<{ id: string; label: string }>
   countries: Array<{ id: string; label: string }>
   districts: Array<{ id: string; label: string }>
+  /** City master options. Optional: callers without city handlers get a plain text field. */
+  cities?: Array<{ id: string; label: string }>
   pinCodes: Array<{ id: string; label: string }>
   pinAutoFill: Map<string, { district?: string; state?: string; country?: string }>
   /** District, state, and country names already stored on clients. The + dialog stays on master options. */
@@ -313,6 +323,13 @@ export function ClientsForm({
   onAddDistrict: (close?: boolean) => void
   onUpdateDistrict: (id: string) => void
   onDeleteDistrict: (id: string) => void
+  cityDialogOpen?: boolean
+  setCityDialogOpen?: (open: boolean) => void
+  newCityName?: string
+  setNewCityName?: (value: string) => void
+  onAddCity?: (close?: boolean) => void
+  onUpdateCity?: (id: string) => void
+  onDeleteCity?: (id: string) => void
   pinCodeDialogOpen: boolean
   setPinCodeDialogOpen: (open: boolean) => void
   newPinCode: string
@@ -365,6 +382,7 @@ export function ClientsForm({
 }) {
   const [pinOpen, setPinOpen] = useState(false)
   const [districtOpen, setDistrictOpen] = useState(false)
+  const [cityOpen, setCityOpen] = useState(false)
   const [stateOpen, setStateOpen] = useState(false)
   const [countryCodeOpen, setCountryCodeOpen] = useState(false)
   const [paymentTermOpen, setPaymentTermOpen] = useState(false)
@@ -463,6 +481,15 @@ export function ClientsForm({
     return filtered.map((d) => ({ id: d, label: d }))
   }, [districts, knownPlaces.districts, pinAutoFill, form.district])
 
+  const cityOptions = useMemo(() => {
+    const all = Array.from(new Set(cities.map((x) => String(x.label ?? '').trim()).filter((v) => v.length > 0))).sort((a, b) =>
+      a.localeCompare(b),
+    )
+    const q = form.city.trim().toLowerCase()
+    const filtered = q ? all.filter((c) => c.toLowerCase().includes(q)) : all
+    return filtered.map((c) => ({ id: c, label: c }))
+  }, [cities, form.city])
+
   const stateOptions = useMemo(() => {
     const all = Array.from(
       new Set(
@@ -532,11 +559,15 @@ export function ClientsForm({
     })
   }
 
+  const hasDocTable = Boolean(!compact && onUploadCertificate && onUpdateCertificate && onDeleteCertificate && onOpenCertificate)
+
   return (
     <div className={clientRegistryFormClass}>
       <div className={cn(compact ? 'space-y-2' : 'space-y-5')}>
         <div className={cn('grid grid-cols-12', compact ? 'gap-2' : 'gap-x-4 gap-y-3 sm:gap-y-4')}>
-          <div className={cn('col-span-12 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5', compact ? 'gap-2' : 'gap-x-4 gap-y-3')}>
+          <div className={cn('col-span-12 grid grid-cols-1 sm:grid-cols-2', hasDocTable ? 'xl:grid-cols-4' : 'xl:grid-cols-6', compact ? 'gap-2' : 'gap-x-4 gap-y-3')}>
+          {!hasDocTable ? (
+            <>
           <div className={cn('min-w-0', compact ? 'space-y-1' : 'space-y-2')}>
             <Label htmlFor="gst">GST Number</Label>
             <LimsFieldWithAdd
@@ -581,6 +612,8 @@ export function ClientsForm({
             />
             {panError ? <p className="text-xs text-destructive">{panError}</p> : null}
           </div>
+            </>
+          ) : null}
 
           <div className={cn('min-w-0', compact ? 'space-y-1' : 'space-y-2')}>
             <Label htmlFor="client-sector">Sector</Label>
@@ -592,6 +625,21 @@ export function ClientsForm({
                 <SelectItem value="none">Not set</SelectItem>
                 {CLIENT_SECTORS.map((sector) => (
                   <SelectItem key={sector} value={sector}>{sector}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className={cn('min-w-0', compact ? 'space-y-1' : 'space-y-2')}>
+            <Label htmlFor="client-nature">Nature of Firm</Label>
+            <Select value={form.constitution || 'none'} onValueChange={(v) => onChange({ ...form, constitution: v === 'none' ? '' : v })}>
+              <SelectTrigger id="client-nature">
+                <SelectValue placeholder="Not set" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Not set</SelectItem>
+                {['Pvt. Limited', 'Public Limited', 'LLP', 'Partnership', 'Proprietorship', 'Trust / Society', 'Government'].map((n) => (
+                  <SelectItem key={n} value={n}>{n}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -844,7 +892,8 @@ export function ClientsForm({
             />
           </div>
 
-          <div className={cn('col-span-12 min-w-0 sm:col-span-6 xl:col-span-3', compact ? 'space-y-1' : 'space-y-2')}>
+          <div className={cn('col-span-12 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5', compact ? 'gap-2' : 'gap-x-4 gap-y-3')}>
+          <div className={cn('min-w-0', compact ? 'space-y-1' : 'space-y-2')}>
             <Label htmlFor="pin" className="text-xs">PIN Code</Label>
             <Dialog open={pinCodeDialogOpen} onOpenChange={setPinCodeDialogOpen}>
               <LimsFieldWithAdd
@@ -895,7 +944,59 @@ export function ClientsForm({
             {pinError && <p className="text-xs text-destructive">{pinError}</p>}
           </div>
 
-          <div className={cn('col-span-12 min-w-0 sm:col-span-6 xl:col-span-3', compact ? 'space-y-1' : 'space-y-2')}>
+          <div className={cn('min-w-0', compact ? 'space-y-1' : 'space-y-2')}>
+            <Label htmlFor="client-city" className="text-xs">City</Label>
+            {onAddCity && setCityDialogOpen && setNewCityName && onUpdateCity && onDeleteCity ? (
+              <Dialog open={cityDialogOpen} onOpenChange={setCityDialogOpen}>
+                <LimsFieldWithAdd
+                  addButton={
+                    <DialogTrigger asChild>
+                      <LimsFieldAddButton aria-label="Add city" />
+                    </DialogTrigger>
+                  }
+                >
+                  <FilterCombobox
+                    value={form.city}
+                    onValueChange={(v) => onChange({ ...form, city: v })}
+                    options={cityOptions}
+                    onSelectOption={(opt) => onChange({ ...form, city: opt.label })}
+                    open={cityOpen}
+                    onOpenChange={setCityOpen}
+                    placeholder="Type or select City"
+                    listId="client-city-combobox"
+                    inputId="client-city"
+                    inputClassName="h-10"
+                  />
+                </LimsFieldWithAdd>
+                <ClientManageDialogContent
+                  open={cityDialogOpen}
+                  title="Manage Cities"
+                  addLabel="Add City"
+                  inputId="new-city"
+                  placeholder="Enter City"
+                  value={newCityName}
+                  onValueChange={setNewCityName}
+                  inlineAdd
+                  onInlineAdd={() => onAddCity(false)}
+                  onSave={() => onAddCity(true)}
+                  onUpdate={onUpdateCity}
+                  saveDisabled={!newCityName.trim()}
+                  items={cities}
+                  canDelete={() => true}
+                  onDelete={onDeleteCity}
+                />
+              </Dialog>
+            ) : (
+              <Input
+                id="client-city"
+                placeholder="City"
+                value={form.city}
+                onChange={(e) => onChange({ ...form, city: e.target.value })}
+              />
+            )}
+          </div>
+
+          <div className={cn('min-w-0', compact ? 'space-y-1' : 'space-y-2')}>
             <Label htmlFor="district" className="text-xs">District</Label>
             <Dialog open={districtDialogOpen} onOpenChange={setDistrictDialogOpen}>
               <LimsFieldWithAdd
@@ -938,7 +1039,7 @@ export function ClientsForm({
             </Dialog>
           </div>
 
-          <div className={cn('col-span-12 min-w-0 sm:col-span-6 xl:col-span-3', compact ? 'space-y-1' : 'space-y-2')}>
+          <div className={cn('min-w-0', compact ? 'space-y-1' : 'space-y-2')}>
             <Label htmlFor="state" className="text-xs">State</Label>
             <Dialog open={stateDialogOpen} onOpenChange={setStateDialogOpen}>
               <LimsFieldWithAdd
@@ -981,7 +1082,7 @@ export function ClientsForm({
             </Dialog>
           </div>
 
-          <div className={cn('col-span-12 min-w-0 sm:col-span-6 xl:col-span-3', compact ? 'space-y-1' : 'space-y-2')}>
+          <div className={cn('min-w-0', compact ? 'space-y-1' : 'space-y-2')}>
             <Label htmlFor="country" className="text-xs">Country</Label>
             <Dialog open={countryDialogOpen} onOpenChange={setCountryDialogOpen}>
               <LimsFieldWithAdd
@@ -1023,8 +1124,18 @@ export function ClientsForm({
               />
             </Dialog>
           </div>
+          </div>
 
-          <div className={cn('col-span-12 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3', compact ? 'gap-2' : 'gap-x-4 gap-y-3 sm:gap-y-4')}>
+          <div className={cn('col-span-12 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4', compact ? 'gap-2' : 'gap-x-4 gap-y-3 sm:gap-y-4')}>
+            <div className={cn('flex min-w-0 flex-col', compact ? 'space-y-1' : 'space-y-2')}>
+              <Label htmlFor="client-landline">Landline</Label>
+              <Input
+                id="client-landline"
+                inputMode="tel"
+                value={form.landline}
+                onChange={(e) => onChange({ ...form, landline: e.target.value })}
+              />
+            </div>
             <div className={cn('flex min-w-0 flex-col', compact ? 'space-y-1' : 'space-y-2')}>
               <Label htmlFor="contact-person">Name of the Contact Person</Label>
               <Input
@@ -1346,12 +1457,14 @@ export function ClientsForm({
           </div>
         </div>
       </div>
-      {!compact && onUploadCertificate && onUpdateCertificate && onDeleteCertificate && onOpenCertificate ? (
+      {hasDocTable && onUploadCertificate && onUpdateCertificate && onDeleteCertificate && onOpenCertificate ? (
         <div className="mt-5">
           <ClientIdentitySections
             certificates={certificates}
             gstNumber={form.gstNumber}
             onGstNumberChange={applyGstNumber}
+            pan={form.pan}
+            onPanChange={(value) => onChange({ ...form, pan: value, panFromGstin: false })}
             onUploadCertificate={onUploadCertificate}
             onUpdateCertificate={onUpdateCertificate}
             onDeleteCertificate={onDeleteCertificate}

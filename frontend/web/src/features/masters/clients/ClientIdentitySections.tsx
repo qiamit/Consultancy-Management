@@ -7,12 +7,14 @@ import { Input } from '@/components/ui/input'
 import { FilterCombobox } from '@/features/sample-handling/receiving/FilterCombobox'
 import { limsFieldAddBtnClass } from '@/lib/limsThemeUi'
 import { supabase } from '@/lib/supabaseClient'
+import { isValidGstin as isValidGst, isValidPan } from '@/lib/indiaValidators'
 import { ClientManageDialogContent } from './ClientManageDialogContent'
 import type { ClientCertificateFile, ClientCertificateInput } from './clientsApi'
 
 type DraftDocument = {
   key: string
   name: string
+  title: string
   issuedOn: string
   documentNumber: string
 }
@@ -58,17 +60,23 @@ function todayIsoDate() {
 }
 
 function blankDraft(): DraftDocument {
-  return { key: crypto.randomUUID(), name: '', issuedOn: todayIsoDate(), documentNumber: '' }
+  return { key: crypto.randomUUID(), name: '', title: '', issuedOn: todayIsoDate(), documentNumber: '' }
 }
 
 function isGstCertificate(name: string) {
   return name.trim().toLowerCase() === 'gst certificate'
 }
 
+function isPanCard(name: string) {
+  return /^pan(\s*card)?$/i.test(name.trim())
+}
+
 export function ClientIdentitySections({
   certificates,
   gstNumber,
   onGstNumberChange,
+  pan = '',
+  onPanChange,
   onUploadCertificate,
   onUpdateCertificate,
   onDeleteCertificate,
@@ -77,14 +85,17 @@ export function ClientIdentitySections({
   certificates: ClientCertificateFile[]
   gstNumber: string
   onGstNumberChange: (value: string) => void
+  /** PAN is edited on the "PAN" document row. */
+  pan?: string
+  onPanChange?: (value: string) => void
   onUploadCertificate: (input: ClientCertificateInput) => Promise<void>
-  onUpdateCertificate: (row: ClientCertificateFile, input: Pick<ClientCertificateInput, 'certName' | 'documentNumber' | 'issuedOn'>) => Promise<void>
+  onUpdateCertificate: (row: ClientCertificateFile, input: Pick<ClientCertificateInput, 'certName' | 'documentNumber' | 'issuedOn' | 'docTitle'>) => Promise<void>
   onDeleteCertificate: (row: ClientCertificateFile) => void
   onOpenCertificate: (row: ClientCertificateFile) => void
 }) {
   const [drafts, setDrafts] = useState<DraftDocument[]>([blankDraft()])
   const [selected, setSelected] = useState<string[]>([])
-  const [savedEdits, setSavedEdits] = useState<Record<string, { name?: string; documentNumber?: string }>>({})
+  const [savedEdits, setSavedEdits] = useState<Record<string, { name?: string; title?: string; documentNumber?: string }>>({})
   const [documentNames, setDocumentNames] = useState<NameOption[]>([])
   const [openNameKey, setOpenNameKey] = useState<string | null>(null)
   const [nameDialogOpen, setNameDialogOpen] = useState(false)
@@ -137,6 +148,7 @@ export function ClientIdentitySections({
       ? (savedEdits[saved.id]?.documentNumber ?? saved.document_number)
       : (drafts.find((draft) => draft.key === key)?.documentNumber ?? '')
     const linked = isGstCertificate(label)
+    if (isPanCard(label) && onPanChange && !pan.trim() && currentNumber.trim()) onPanChange(currentNumber.toUpperCase().replace(/\s/g, '').slice(0, 10))
     if (linked && !gstNumber.trim() && currentNumber.trim()) onGstNumberChange(currentNumber)
     const documentNumber = linked && gstNumber.trim() ? gstNumber : currentNumber
     if (!saved) {
@@ -202,7 +214,7 @@ export function ClientIdentitySections({
             />
             Select all
           </label>
-          <div className="hidden grid-cols-[2.5rem_minmax(0,1.5fr)_11rem_minmax(0,1fr)_7.25rem_5rem] bg-stone-800 text-center text-[11px] font-bold uppercase leading-tight tracking-wide text-amber-200 xl:grid">
+          <div className="hidden grid-cols-[2.5rem_minmax(0,1.2fr)_minmax(0,1.2fr)_11rem_minmax(0,1fr)_7.25rem_5rem] bg-stone-800 text-center text-[11px] font-bold uppercase leading-tight tracking-wide text-amber-200 xl:grid">
             <div className="flex items-center justify-center border border-stone-700 px-1 py-2">
               <input
                 type="checkbox"
@@ -212,6 +224,7 @@ export function ClientIdentitySections({
                 onChange={() => setSelected(allSelected ? [] : rows.map((row) => row.key))}
               />
             </div>
+            <div className="border border-stone-700 px-1.5 py-2">Type of Document</div>
             <div className="border border-stone-700 px-1.5 py-2">Name of the Document</div>
             <div className="border border-stone-700 px-1.5 py-2">Date of Issue</div>
             <div className="border border-stone-700 px-1.5 py-2">Documents Number</div>
@@ -225,11 +238,16 @@ export function ClientIdentitySections({
                 const name = saved ? (savedEdits[saved.id]?.name ?? saved.cert_name) : (draft?.name ?? '')
                 const issuedOn = saved?.issued_on ?? draft?.issuedOn ?? ''
                 const ownDocumentNumber = saved ? (savedEdits[saved.id]?.documentNumber ?? saved.document_number) : (draft?.documentNumber ?? '')
+                const title = saved ? (savedEdits[saved.id]?.title ?? saved.doc_title) : (draft?.title ?? '')
                 const linkedGst = isGstCertificate(name)
-                const documentNumber = linkedGst ? gstNumber : ownDocumentNumber
+                const linkedPan = isPanCard(name) && Boolean(onPanChange)
+                const documentNumber = linkedGst ? gstNumber : linkedPan ? pan : ownDocumentNumber
+                const numberInvalid =
+                  documentNumber.trim().length > 0 &&
+                  ((linkedGst && !isValidGst(documentNumber)) || (linkedPan && !isValidPan(documentNumber)))
                 const hasFile = Boolean(saved?.storage_path)
                 return (
-                  <div key={entry.key} className="grid grid-cols-[2.5rem_minmax(0,1fr)] items-center gap-2 border border-stone-300 bg-white p-2 xl:grid-cols-[2.5rem_minmax(0,1.5fr)_11rem_minmax(0,1fr)_7.25rem_5rem] xl:gap-0 xl:border-0 xl:p-0">
+                  <div key={entry.key} className="grid grid-cols-[2.5rem_minmax(0,1fr)] items-center gap-2 border border-stone-300 bg-white p-2 xl:grid-cols-[2.5rem_minmax(0,1.2fr)_minmax(0,1.2fr)_11rem_minmax(0,1fr)_7.25rem_5rem] xl:gap-0 xl:border-0 xl:p-0">
                     <div className="flex items-center justify-center xl:h-full xl:border xl:border-stone-300">
                       <input
                         type="checkbox"
@@ -240,13 +258,13 @@ export function ClientIdentitySections({
                       />
                     </div>
                     <div className="min-w-0 xl:border xl:border-stone-300 xl:px-1.5 xl:py-1.5">
-                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-stone-500 xl:hidden">Name of the Document</p>
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-stone-500 xl:hidden">Type of Document</p>
                       <LimsFieldWithAdd
                         addButton={
                           <DialogTrigger asChild>
                             <LimsFieldAddButton
-                              aria-label="Add document name"
-                              title="Add document name"
+                              aria-label="Add document type"
+                              title="Add document type"
                               onClick={() => {
                                 setNameDialogRowKey(entry.key)
                                 setNewDocumentName(name)
@@ -284,13 +302,38 @@ export function ClientIdentitySections({
                               })
                             })
                           }}
-                          placeholder="Name of the Document"
+                          placeholder="Type of Document"
                           showSerialNumbers={false}
                           listId={`document-name-${entry.key}`}
                           inputId={`document-name-${entry.key}`}
                           inputClassName="h-8 border-0 bg-transparent px-3 shadow-none focus-visible:ring-0"
                         />
                       </LimsFieldWithAdd>
+                    </div>
+                    <div className="col-span-2 min-w-0 xl:col-span-1 xl:border xl:border-stone-300 xl:px-1.5 xl:py-1.5">
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-stone-500 xl:hidden">Name of the Document</p>
+                      <Input
+                        value={title}
+                        aria-label="Name of the Document"
+                        placeholder="Name of the Document"
+                        onChange={(event) => {
+                          const next = event.target.value
+                          if (draft) patchDraft(draft.key, { title: next })
+                          if (saved) setSavedEdits((prev) => ({ ...prev, [saved.id]: { ...prev[saved.id], title: next } }))
+                        }}
+                        onBlur={(event) => {
+                          if (!saved) return
+                          const next = event.target.value
+                          if (next === saved.doc_title) return
+                          void onUpdateCertificate(saved, { certName: name, documentNumber, issuedOn, docTitle: next }).then(() => {
+                            setSavedEdits((prev) => {
+                              const copy = { ...prev }
+                              delete copy[saved.id]
+                              return copy
+                            })
+                          })
+                        }}
+                      />
                     </div>
                     <div className="col-span-2 min-w-0 xl:col-span-1 xl:border xl:border-stone-300 xl:px-1.5 xl:py-1.5">
                       <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-stone-500 xl:hidden">Date of Issue</p>
@@ -327,8 +370,17 @@ export function ClientIdentitySections({
                         value={documentNumber}
                         aria-label="Documents Number"
                         placeholder="Documents Number"
-                        maxLength={linkedGst ? 15 : undefined}
+                        maxLength={linkedGst ? 15 : linkedPan ? 10 : undefined}
+                        aria-invalid={numberInvalid}
+                        className={numberInvalid ? '!border-red-600 !bg-red-50' : undefined}
                         onChange={(event) => {
+                          if (linkedPan && onPanChange) {
+                            const next = event.target.value.toUpperCase().replace(/\s/g, '').slice(0, 10)
+                            onPanChange(next)
+                            if (draft) patchDraft(draft.key, { documentNumber: next })
+                            if (saved) setSavedEdits((prev) => ({ ...prev, [saved.id]: { ...prev[saved.id], documentNumber: next } }))
+                            return
+                          }
                           if (linkedGst) {
                             const next = event.target.value.toUpperCase().replace(/\s/g, '').slice(0, 15)
                             onGstNumberChange(next)
@@ -342,7 +394,7 @@ export function ClientIdentitySections({
                         }}
                         onBlur={(event) => {
                           if (!saved) return
-                          const next = linkedGst ? gstNumber : event.target.value
+                          const next = linkedGst ? gstNumber : linkedPan ? pan : event.target.value
                           if (next === saved.document_number) return
                           void onUpdateCertificate(saved, { certName: name, documentNumber: next, issuedOn }).then(() => {
                             setSavedEdits((prev) => {
@@ -353,6 +405,11 @@ export function ClientIdentitySections({
                           })
                         }}
                       />
+                      {numberInvalid ? (
+                        <p className="mt-0.5 text-[11px] text-red-700">
+                          {linkedGst ? 'Invalid GST number' : 'Invalid PAN'}
+                        </p>
+                      ) : null}
                     </div>
                     <div className="col-span-2 grid grid-cols-2 gap-3 xl:contents">
                     <div className="min-w-0 xl:border xl:border-stone-300 xl:px-0.5 xl:py-1.5">
@@ -368,7 +425,7 @@ export function ClientIdentitySections({
                             event.target.value = ''
                             if (!file || !name.trim()) return
                             uploadFile(
-                              { certName: name, documentNumber, issuedOn, file, existing: saved ?? undefined },
+                              { certName: name, documentNumber, issuedOn, docTitle: title, file, existing: saved ?? undefined },
                               draft?.key,
                             )
                           }}
