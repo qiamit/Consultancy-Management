@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { BookOpen, Eye, ExternalLink, FileText, Paperclip, Pencil, Trash2, Upload } from 'lucide-react'
+import { BookOpen, Columns3, Eye, ExternalLink, FileText, Paperclip, Pencil, Trash2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -13,6 +13,8 @@ import {
   type BisProjectViewFile,
 } from './bisProjectFilesApi'
 import { isQeExtensionPresent } from './manakExtensionBridge'
+import { saveBisProjectNotes } from './bisProjectsApi'
+import { BIS_NOTES_COLUMN_COUNT_OPTIONS, bisNotesScopeColumnCount, sanitizeBisLicenseScopeNotes, setBisNotesScopeColumnCount } from './types'
 
 const iconBtn =
   'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-none border bg-white transition-colors hover:bg-amber-50 disabled:opacity-40'
@@ -136,6 +138,8 @@ export function ManakVarietiesTable({
   varieties,
   onEdit,
   panel,
+  scopeNotes = '',
+  onScopeSaved,
 }: {
   projectId: string | null
   isCodeId: string | null
@@ -145,7 +149,24 @@ export function ManakVarietiesTable({
   onEdit?: () => void
   /** Wraps the table in its panel; the specification / manual / online buttons go in the panel header. */
   panel: (headerExtra: ReactNode, body: ReactNode) => ReactNode
+  /** Notes / License Scope of the project; the Column button switches it between plain text and a 2-6 column table. */
+  scopeNotes?: string
+  onScopeSaved?: () => void
 }) {
+  const [columnOpen, setColumnOpen] = useState(false)
+  const [columnDraft, setColumnDraft] = useState('2')
+  const currentColumns = scopeNotes.trim() ? bisNotesScopeColumnCount(scopeNotes) : 2
+  const applyColumns = async () => {
+    if (!projectId) return
+    try {
+      await saveBisProjectNotes(projectId, setBisNotesScopeColumnCount(sanitizeBisLicenseScopeNotes(scopeNotes), Number(columnDraft)))
+      setColumnOpen(false)
+      toast.success(`License scope set to ${columnDraft} column${columnDraft === '1' ? '' : 's'}`)
+      onScopeSaved?.()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not save the License Scope columns.')
+    }
+  }
   const [isFiles, setIsFiles] = useState<IsCodeFileLink[]>([])
   const [filesLoading, setFilesLoading] = useState(false)
   const [scopeFiles, setScopeFiles] = useState<BisProjectViewFile[]>([])
@@ -264,6 +285,19 @@ export function ManakVarietiesTable({
       >
         <ExternalLink size={15} aria-hidden />
       </button>
+      <button
+        type="button"
+        className={cn(iconBtn, 'border-stone-400 text-amber-800')}
+        disabled={!projectId}
+        title="Set License Scope columns (1 = plain text, 2+ = table)"
+        aria-label="License scope columns"
+        onClick={() => {
+          setColumnDraft(String(currentColumns))
+          setColumnOpen(true)
+        }}
+      >
+        <Columns3 size={15} aria-hidden />
+      </button>
     </div>
   )
 
@@ -336,6 +370,34 @@ export function ManakVarietiesTable({
         </table>
         </div>,
       )}
+      <Dialog open={columnOpen} onOpenChange={setColumnOpen}>
+        <DialogContent className="max-w-sm rounded-none">
+          <DialogHeader>
+            <DialogTitle>Add Columns</DialogTitle>
+            <DialogDescription>Number of columns for the Notes / License Scope.</DialogDescription>
+          </DialogHeader>
+          <select
+            className="h-9 w-full rounded-none border border-stone-400 bg-white px-2 text-sm"
+            value={columnDraft}
+            onChange={(e) => setColumnDraft(e.target.value)}
+            aria-label="Number of columns"
+          >
+            {BIS_NOTES_COLUMN_COUNT_OPTIONS.map((n) => (
+              <option key={n} value={String(n)}>
+                {n === 1 ? '1 Column — Plain Text' : `${n} Columns — Table Layout`}
+              </option>
+            ))}
+          </select>
+          <DialogFooter>
+            <Button type="button" variant="outline" className="rounded-none" onClick={() => setColumnOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="button" className="rounded-none" onClick={() => void applyColumns()}>
+              Add
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog open={filesOpen} onOpenChange={setFilesOpen}>
         <DialogContent className="max-w-lg rounded-none">
           <DialogHeader>

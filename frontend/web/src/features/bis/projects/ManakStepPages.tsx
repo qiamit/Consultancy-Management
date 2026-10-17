@@ -372,6 +372,8 @@ export function ManakStepPage({
           isCodeId={row?.is_code_id ?? null}
           isNumber={isCode?.label || isCode?.isNumber || ''}
           varieties={varieties}
+          scopeNotes={s(projectRaw?.notes)}
+          onScopeSaved={() => setReloadTick((t) => t + 1)}
           panel={(headerExtra, body) => (
             <ManakSubPanel title="Varieties" headerExtra={headerExtra}>
               {body}
