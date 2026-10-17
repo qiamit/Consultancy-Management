@@ -305,6 +305,7 @@ export function ManakApplicationFields({
   const lines: string[][] = [
     ['Application Process', 'Application Number', 'Application Date'],
     ['Production Unit', 'Inspection Date', 'Type of Inspection'],
+    ['Installed Capacity', 'Actual Capacity', 'Rate / Unit'],
   ]
   const lineItems = lines.map((labels) =>
     labels.map((l) => items.find(([label]) => label === l)).filter((x): x is [string, ReactNode] => Boolean(x)),
