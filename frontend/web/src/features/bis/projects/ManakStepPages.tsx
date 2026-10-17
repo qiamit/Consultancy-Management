@@ -328,8 +328,9 @@ export function ManakStepPage({
             ]}
           />
         </ManakSubPanel>
-        <ManakSubPanel title="Varieties" onEdit={edit('osl-sample-requirements')}>
+        <ManakSubPanel title="Varieties">
           <ManakVarietiesTable
+            onEdit={edit('osl-sample-requirements')}
             projectId={row?.id ?? null}
             isCodeId={row?.is_code_id ?? null}
             isNumber={isCode?.label || isCode?.isNumber || ''}

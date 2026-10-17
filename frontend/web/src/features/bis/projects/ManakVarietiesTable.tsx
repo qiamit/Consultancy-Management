@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { BookOpen, ExternalLink, FileText, ScrollText, Upload } from 'lucide-react'
+import { BookOpen, Eye, ExternalLink, FileText, Paperclip, Pencil, Trash2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -73,30 +73,35 @@ function openProductManualOnline(isNumber: string, setBusy: (busy: boolean) => v
   window.postMessage({ type: 'QE_PRODUCT_MANUAL_SEARCH', requestId, isNumber: selected }, window.location.origin)
 }
 
+const FILE_TYPES = ['Copy of Scope', 'Drawing', 'Other'] as const
+const typeOf = (file: BisProjectViewFile) => FILE_TYPES.find((t) => file.file_name.startsWith(`${t} - `)) ?? 'Copy of Scope'
+
 /**
  * Varieties with an Action column: view the specification, view the product manual file,
- * open the standard / product manual online, and the copy of scope PDF
- * (click uploads or views, double-click offers delete).
+ * open the standard / product manual online, and attach scope files (copy of scope, drawings, other).
  */
 export function ManakVarietiesTable({
   projectId,
   isCodeId,
   isNumber,
   varieties,
+  onEdit,
 }: {
   projectId: string | null
   isCodeId: string | null
   isNumber: string
   varieties: string[]
+  /** Opens the Sample Requirements module that holds the varieties. */
+  onEdit?: () => void
 }) {
   const [isFiles, setIsFiles] = useState<IsCodeFileLink[]>([])
   const [filesLoading, setFilesLoading] = useState(false)
-  const [scopeFile, setScopeFile] = useState<BisProjectViewFile | null>(null)
+  const [scopeFiles, setScopeFiles] = useState<BisProjectViewFile[]>([])
+  const [filesOpen, setFilesOpen] = useState(false)
+  const [fileType, setFileType] = useState<(typeof FILE_TYPES)[number]>('Copy of Scope')
   const [busy, setBusy] = useState(false)
   const [searchBusy, setSearchBusy] = useState(false)
-  const [confirmDelete, setConfirmDelete] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
-  const timer = useRef<number | null>(null)
 
   useEffect(() => {
     const id = (isCodeId ?? '').trim()
@@ -122,35 +127,35 @@ export function ManakVarietiesTable({
     let cancelled = false
     void listBisProjectFiles(projectId, 'manufacturing-scope')
       .then((files) => {
-        if (!cancelled) setScopeFile(files[0] ?? null)
+        if (!cancelled) setScopeFiles(files)
       })
       .catch(() => {
-        if (!cancelled) setScopeFile(null)
+        if (!cancelled) setScopeFiles([])
       })
     return () => {
       cancelled = true
     }
   }, [projectId])
 
-  useEffect(() => () => {
-    if (timer.current) window.clearTimeout(timer.current)
-  }, [])
-
   const standardFile = pickIsFile(isFiles, 'standard')
   const manualFile = pickIsFile(isFiles, 'manual')
 
   const upload = async (file?: File) => {
     if (!projectId || !file) return
-    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
-      toast.error('Copy of scope must be a PDF file.')
+    const okType = file.type === 'application/pdf' || /^image\//.test(file.type) || /\.(pdf|png|jpe?g|webp)$/i.test(file.name)
+    if (!okType) {
+      toast.error('Upload a PDF or image file.')
       return
     }
     setBusy(true)
     try {
-      const uploaded = await uploadBisProjectFile(projectId, file, 'manufacturing-scope', { displayName: 'Manufacturing Scope.pdf' })
-      if (scopeFile && scopeFile.id !== uploaded.id) await deleteBisProjectFile(scopeFile).catch(() => undefined)
-      setScopeFile(uploaded)
-      toast.success('Copy of scope uploaded')
+      const displayName = `${fileType} - ${file.name}`
+      const uploaded = await uploadBisProjectFile(projectId, file, 'manufacturing-scope', { displayName })
+      // A new "Copy of Scope" replaces the previous one; drawings and other files are kept.
+      const replaced = fileType === 'Copy of Scope' ? scopeFiles.filter((f) => typeOf(f) === 'Copy of Scope' && f.id !== uploaded.id) : []
+      await Promise.allSettled(replaced.map(deleteBisProjectFile))
+      setScopeFiles([...scopeFiles.filter((f) => !replaced.some((r) => r.id === f.id)), uploaded])
+      toast.success(`${fileType} uploaded`)
     } catch (error) {
       toast.error(formatBisProjectFilesError(error))
     } finally {
@@ -158,37 +163,17 @@ export function ManakVarietiesTable({
     }
   }
 
-  const removeScope = async () => {
-    if (!scopeFile) return
+  const removeFile = async (file: BisProjectViewFile) => {
     setBusy(true)
     try {
-      await deleteBisProjectFile(scopeFile)
-      setScopeFile(null)
-      setConfirmDelete(false)
-      toast.success('Copy of scope deleted')
+      await deleteBisProjectFile(file)
+      setScopeFiles((prev) => prev.filter((f) => f.id !== file.id))
+      toast.success('File deleted')
     } catch (error) {
       toast.error(formatBisProjectFilesError(error))
     } finally {
       setBusy(false)
     }
-  }
-
-  const onScopeClick = () => {
-    if (busy || !projectId) return
-    if (timer.current) window.clearTimeout(timer.current)
-    timer.current = window.setTimeout(() => {
-      timer.current = null
-      if (scopeFile) openUrl(scopeFile.viewUrl, scopeFile.error || 'Copy of scope is unavailable.')
-      else fileRef.current?.click()
-    }, 250)
-  }
-  const onScopeDouble = () => {
-    if (busy || !projectId || !scopeFile) return
-    if (timer.current) {
-      window.clearTimeout(timer.current)
-      timer.current = null
-    }
-    setConfirmDelete(true)
   }
 
   const rows = varieties.length > 0 ? varieties : []
@@ -197,6 +182,16 @@ export function ManakVarietiesTable({
 
   const actions = (
     <div className="flex items-center gap-1">
+      <button
+        type="button"
+        className={cn(iconBtn, 'border-stone-400 text-amber-800')}
+        disabled={!onEdit}
+        title="Edit varieties (Sample Requirements)"
+        aria-label="Edit varieties"
+        onClick={onEdit}
+      >
+        <Pencil size={14} aria-hidden />
+      </button>
       <button
         type="button"
         className={cn(iconBtn, 'border-stone-400 text-amber-800')}
@@ -229,14 +224,13 @@ export function ManakVarietiesTable({
       </button>
       <button
         type="button"
-        className={cn(iconBtn, scopeFile ? 'border-emerald-600 text-emerald-800' : 'border-red-500 text-red-700')}
-        disabled={busy || !projectId}
-        title={scopeFile ? 'Copy of scope: click to view, double-click to delete' : 'Copy of scope: click to upload PDF'}
-        aria-label={scopeFile ? 'View copy of scope' : 'Upload copy of scope'}
-        onClick={onScopeClick}
-        onDoubleClick={onScopeDouble}
+        className={cn(iconBtn, scopeFiles.length > 0 ? 'border-emerald-600 text-emerald-800' : 'border-stone-400 text-amber-800')}
+        disabled={!projectId}
+        title={scopeFiles.length > 0 ? `Scope files (${scopeFiles.length}): view, upload or delete` : 'Upload copy of scope, drawing or other file'}
+        aria-label="Scope files"
+        onClick={() => setFilesOpen(true)}
       >
-        {scopeFile ? <ScrollText size={15} aria-hidden /> : <Upload size={15} aria-hidden />}
+        <Paperclip size={15} aria-hidden />
       </button>
     </div>
   )
@@ -246,7 +240,7 @@ export function ManakVarietiesTable({
       <input
         ref={fileRef}
         type="file"
-        accept="application/pdf,.pdf"
+        accept="application/pdf,image/png,image/jpeg,image/webp,.pdf"
         className="sr-only"
         onChange={(e) => {
           const file = e.target.files?.[0]
@@ -282,18 +276,56 @@ export function ManakVarietiesTable({
           </tbody>
         </table>
       </div>
-      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-        <DialogContent className="max-w-sm rounded-none">
+      <Dialog open={filesOpen} onOpenChange={setFilesOpen}>
+        <DialogContent className="max-w-lg rounded-none">
           <DialogHeader>
-            <DialogTitle>Delete copy of scope?</DialogTitle>
-            <DialogDescription>The uploaded scope PDF is removed from this application. You can upload it again afterwards.</DialogDescription>
+            <DialogTitle>Scope files</DialogTitle>
+            <DialogDescription>Copy of scope, drawings or any other supporting file for this application.</DialogDescription>
           </DialogHeader>
-          <DialogFooter className="gap-2">
-            <Button type="button" variant="outline" className="rounded-none" onClick={() => setConfirmDelete(false)}>
-              Cancel
+          <ul className="max-h-56 divide-y divide-stone-200 overflow-y-auto border border-stone-300">
+            {scopeFiles.length === 0 ? (
+              <li className="px-3 py-4 text-center text-sm text-stone-500">No files uploaded yet.</li>
+            ) : (
+              scopeFiles.map((f) => (
+                <li key={f.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                  <span className="min-w-0 truncate" title={f.file_name}>
+                    <span className="mr-2 inline-block rounded-none bg-stone-800 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-200">
+                      {typeOf(f)}
+                    </span>
+                    {f.file_name.replace(`${typeOf(f)} - `, '')}
+                  </span>
+                  <span className="inline-flex shrink-0 gap-1">
+                    <button type="button" className={cn(iconBtn, 'h-7 w-7 border-stone-400 text-amber-800')} title="View" aria-label="View file" onClick={() => openUrl(f.viewUrl, f.error || 'File is unavailable.')}>
+                      <Eye size={14} aria-hidden />
+                    </button>
+                    <button type="button" className={cn(iconBtn, 'h-7 w-7 border-red-300 text-red-700')} title="Delete" aria-label="Delete file" disabled={busy} onClick={() => void removeFile(f)}>
+                      <Trash2 size={14} aria-hidden />
+                    </button>
+                  </span>
+                </li>
+              ))
+            )}
+          </ul>
+          <div className="flex items-center gap-2">
+            <select
+              className="h-8 flex-1 rounded-none border border-stone-400 bg-white px-2 text-sm"
+              value={fileType}
+              onChange={(e) => setFileType(e.target.value as (typeof FILE_TYPES)[number])}
+              aria-label="Type of file"
+            >
+              {FILE_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+            <Button type="button" className="rounded-none bg-amber-700 text-white hover:bg-amber-800" disabled={busy} onClick={() => fileRef.current?.click()}>
+              <Upload size={14} className="mr-1.5" aria-hidden /> {busy ? 'Uploading…' : 'Upload file'}
             </Button>
-            <Button type="button" className="rounded-none bg-red-700 text-white hover:bg-red-800" disabled={busy} onClick={() => void removeScope()}>
-              Delete
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" className="rounded-none" onClick={() => setFilesOpen(false)}>
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>
