@@ -924,7 +924,7 @@ export function ManakGeneralStep({
         <FieldGrid
           columns={2}
           topLines={[['PinCode', 'City', 'District', 'State']]}
-          leadLines={[['E-MailId', 'Address Proof Type']]}
+          leadLines={[['Address Proof Type', 'Latitude', 'Longitude']]}
           fullRows={[
             [
               'Factory Address',
