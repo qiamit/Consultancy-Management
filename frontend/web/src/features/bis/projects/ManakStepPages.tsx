@@ -95,12 +95,16 @@ export function arrangeByLabelLength<T>(items: Array<[string, T]>, columnCount =
   return rows
 }
 
-export function ManakFields({ items }: { items: Array<[string, ReactNode]> }) {
+export function ManakFields({ items, singleLine = false }: { items: Array<[string, ReactNode]>; singleLine?: boolean }) {
   // Grid layout: three label | value pairs per row. Label columns shrink to their text; value columns share the rest.
-  const rows = arrangeByLabelLength(items)
+  // singleLine keeps every pair on one row and never wraps the text.
+  const rows = singleLine ? [items] : arrangeByLabelLength(items)
   const labelCls =
     'w-[1%] whitespace-nowrap border border-[#e7e0d4] bg-[#f7f3eb] px-3 py-1.5 text-left align-top text-sm font-bold text-stone-800'
-  const valueCls = 'w-[32%] break-words border border-[#e7e0d4] px-3 py-1.5 align-top text-sm text-stone-700'
+  const valueCls = cn(
+    singleLine ? 'whitespace-nowrap' : 'break-words',
+    'w-[32%] border border-[#e7e0d4] px-3 py-1.5 align-top text-sm text-stone-700',
+  )
   return (
     <div className="overflow-x-auto">
       <table className="w-full table-auto border-collapse">
@@ -321,10 +325,11 @@ export function ManakStepPage({
       >
         <ManakSubPanel title="Indian Standard Details">
           <ManakFields
+            singleLine
             items={[
-              ['Standard Number', isCode?.label],
               ['Standard Title', isCode?.title],
               ['Product Manual', isCode?.productManualNumber],
+              ['Standard Number', isCode?.label],
             ]}
           />
         </ManakSubPanel>
