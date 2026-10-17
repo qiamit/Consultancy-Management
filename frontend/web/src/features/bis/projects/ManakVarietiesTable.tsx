@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { BookOpen, Check, Columns3, Download, Eye, ExternalLink, FileText, FileType, Paperclip, Pencil, Plus, Trash2, Upload, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -10,7 +10,6 @@ import { loadIsCodeFileLinks, type IsCodeFileLink } from '@/features/masters/is-
 import { cn } from '@/lib/utils'
 import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { usePdfViewer } from '@/components/ui/usePdfViewer'
-import { Input } from '@/components/ui/input'
 import {
   deleteBisProjectFile,
   formatBisProjectFilesError,
@@ -131,6 +130,46 @@ export function ProductManualValue({
         </button>
       ) : null}
     </span>
+  )
+}
+
+/** Single-purpose text box whose height follows its content (wraps long scope text instead of scrolling sideways). */
+function AutoGrowInput({
+  value,
+  onChange,
+  onKeyDown,
+  className,
+  ...rest
+}: {
+  value: string
+  onChange: (value: string) => void
+  onKeyDown?: (event: KeyboardEvent<HTMLTextAreaElement>) => void
+  className?: string
+  'aria-label'?: string
+  placeholder?: string
+  disabled?: boolean
+}) {
+  const ref = useRef<HTMLTextAreaElement | null>(null)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    // An empty box stays one line high (a wrapping placeholder must not make it taller).
+    el.style.height = value ? 'auto' : '2rem'
+    if (value) el.style.height = `${el.scrollHeight}px`
+  }, [value])
+  return (
+    <textarea
+      ref={ref}
+      rows={1}
+      value={value}
+      className={cn(
+        'block min-h-8 w-full resize-none overflow-hidden rounded-none border border-stone-500 bg-stone-50 px-2 py-1.5 text-sm leading-5 text-stone-800 shadow-none placeholder:text-stone-400 focus-visible:border-amber-600 focus-visible:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50',
+        className,
+      )}
+      onChange={(e) => onChange(e.target.value.replace(/\n/g, ' '))}
+      onKeyDown={onKeyDown}
+      {...rest}
+    />
   )
 }
 
@@ -425,15 +464,17 @@ export function ManakVarietiesTable({
                 <td className={cn(td, 'px-1 text-center text-stone-400')}>+</td>
                 {headers.map((header, i) => (
                   <td key={i} className={cn(td, 'p-1')}>
-                    <Input
+                    <AutoGrowInput
                       aria-label={`New scope ${header}`}
-                      className="h-8 w-full rounded-none border-stone-500 bg-stone-50 px-2 text-sm"
                       value={newDraft[i] ?? ''}
                       disabled={!projectId}
                       placeholder={i === 0 ? 'Enter scope / variety' : header}
-                      onChange={(e) => setNewDraft((prev) => headers.map((_, k) => (k === i ? e.target.value : prev[k] ?? '')))}
+                      onChange={(next) => setNewDraft((prev) => headers.map((_, k) => (k === i ? next : prev[k] ?? '')))}
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter') addRow()
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          addRow()
+                        }
                       }}
                     />
                   </td>
@@ -465,13 +506,16 @@ export function ManakVarietiesTable({
                       {headers.map((_, i) => (
                         <td key={i} className={cn(td, editing && 'p-1')}>
                           {editing ? (
-                            <Input
+                            <AutoGrowInput
                               aria-label={`Scope row ${index + 1} ${headers[i] ?? ''}`}
-                              className="h-8 w-full rounded-none border-stone-500 bg-white px-2 text-sm"
+                              className="bg-white"
                               value={editDraft[i] ?? ''}
-                              onChange={(e) => setEditDraft((prev) => headers.map((__, k) => (k === i ? e.target.value : prev[k] ?? '')))}
+                              onChange={(next) => setEditDraft((prev) => headers.map((__, k) => (k === i ? next : prev[k] ?? '')))}
                               onKeyDown={(e) => {
-                                if (e.key === 'Enter') saveEdit()
+                                if (e.key === 'Enter') {
+                                  e.preventDefault()
+                                  saveEdit()
+                                }
                                 if (e.key === 'Escape') setEditingIndex(null)
                               }}
                             />
