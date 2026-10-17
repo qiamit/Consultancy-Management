@@ -146,8 +146,8 @@ export function ManakApplicationFields({
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="simplified">Option 1</SelectItem>
-          <SelectItem value="normal">Option 2</SelectItem>
+          <SelectItem value="normal">Option 1</SelectItem>
+          <SelectItem value="simplified">Option 2</SelectItem>
         </SelectContent>
       </Select>,
     ],
