@@ -250,18 +250,20 @@ export function Cmpf311ModuleFields({
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-2 sm:p-3">
       {/* SIT type and Product Manual number are chosen on the application step (Select SIT row). */}
-      <section className="grid gap-2 border border-stone-300 bg-[#fffcf7] p-3 sm:grid-cols-2">
-        <label className="flex flex-col gap-1 text-xs font-semibold text-stone-700">
+      {value.mode === 'bis-sit' ? (
+        <section className="flex flex-wrap items-end gap-3 border border-stone-300 bg-[#fffcf7] p-3">
+        <label className="flex w-56 shrink-0 flex-col gap-1 text-xs font-semibold text-stone-700">
           Reference Letter Number
           <Input className={cn(limsFieldClass, 'h-9')} value={value.referenceLetterNo} disabled={disabled} onChange={(event) => patch('referenceLetterNo', event.target.value)} />
         </label>
-        <label className="flex flex-col gap-1 text-xs font-semibold text-stone-700">
+        <label className="flex w-56 shrink-0 flex-col gap-1 text-xs font-semibold text-stone-700">
           Reference Letter Date
           <LimsFieldWithAdd addButton={<button type="button" className={limsFieldAddBtnClass} aria-label="Open calendar" title="Pick date" disabled={disabled} onClick={openCmpf311DatePicker}><Calendar size={14} strokeWidth={2.25} aria-hidden /></button>}>
             <Input id="cmpf311-reference-letter-date" type="date" aria-label="Reference Letter Date" className={issueDateInputClass} value={value.referenceLetterDate} disabled={disabled} onChange={(event) => patch('referenceLetterDate', event.target.value)} />
           </LimsFieldWithAdd>
         </label>
-      </section>
+        </section>
+      ) : null}
 
       {value.mode === 'bis-sit' ? (
         <div className="border border-stone-300 bg-white p-3 text-sm text-stone-700">
@@ -269,7 +271,18 @@ export function Cmpf311ModuleFields({
         </div>
       ) : (
         <>
-          <section className="flex flex-wrap items-center gap-2 border border-stone-300 bg-[#fffcf7] p-3">
+          <section className="flex flex-wrap items-end gap-3 border border-stone-300 bg-[#fffcf7] p-3">
+        <label className="flex w-56 shrink-0 flex-col gap-1 text-xs font-semibold text-stone-700">
+          Reference Letter Number
+          <Input className={cn(limsFieldClass, 'h-9')} value={value.referenceLetterNo} disabled={disabled} onChange={(event) => patch('referenceLetterNo', event.target.value)} />
+        </label>
+        <label className="flex w-56 shrink-0 flex-col gap-1 text-xs font-semibold text-stone-700">
+          Reference Letter Date
+          <LimsFieldWithAdd addButton={<button type="button" className={limsFieldAddBtnClass} aria-label="Open calendar" title="Pick date" disabled={disabled} onClick={openCmpf311DatePicker}><Calendar size={14} strokeWidth={2.25} aria-hidden /></button>}>
+            <Input id="cmpf311-reference-letter-date" type="date" aria-label="Reference Letter Date" className={issueDateInputClass} value={value.referenceLetterDate} disabled={disabled} onChange={(event) => patch('referenceLetterDate', event.target.value)} />
+          </LimsFieldWithAdd>
+        </label>
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
             <Button type="button" variant="outline" size="sm" className={cn(limsOutlineBtnClass, 'h-8')} disabled={disabled || generating} onClick={() => setManualPickerOpen(true)}>
               Use Another PDF
             </Button>
@@ -287,6 +300,7 @@ export function Cmpf311ModuleFields({
             <Button type="button" size="sm" className="h-8 rounded-none bg-amber-700 text-white hover:bg-amber-800" disabled={disabled || generating || !manualFiles.length} onClick={() => void generate()}>
               <Sparkles className="mr-1.5 h-4 w-4" aria-hidden /> {generating ? `Generating ${generatingLabel}…` : 'Generate'}
             </Button>
+            </div>
           </section>
 
           <Dialog open={manualPickerOpen} onOpenChange={setManualPickerOpen}>
