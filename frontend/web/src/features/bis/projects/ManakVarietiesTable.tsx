@@ -75,31 +75,36 @@ function openProductManualOnline(isNumber: string, setBusy: (busy: boolean) => v
 
 /** Product manual number with a view button when a manual PDF is attached to the IS Code master (opens in a new tab, no download). */
 export function ProductManualValue({ isCodeId, value }: { isCodeId: string | null; value?: string | null }) {
-  const [url, setUrl] = useState<string | null>(null)
+  const [manual, setManual] = useState<IsCodeFileLink | null>(null)
   useEffect(() => {
     const id = (isCodeId ?? '').trim()
     if (!id) {
-      setUrl(null)
+      setManual(null)
       return
     }
     let cancelled = false
     void loadIsCodeFileLinks(id).then((files) => {
-      if (!cancelled) setUrl(pickIsFile(files, 'manual')?.url?.trim() || null)
+      if (cancelled) return
+      // Prefer a manual whose file can be opened; otherwise still show the attached record.
+      setManual(files.find((f) => isManualName(f.file_name) && f.url?.trim()) ?? files.find((f) => isManualName(f.file_name)) ?? null)
     })
     return () => {
       cancelled = true
     }
   }, [isCodeId])
+  const missing = Boolean(manual) && !manual?.url?.trim()
   return (
     <span className="inline-flex items-center gap-2">
       <span>{value || <span className="text-stone-400">—</span>}</span>
-      {url ? (
+      {manual ? (
         <button
           type="button"
-          className={cn(iconBtn, 'h-7 w-7 border-stone-400 text-amber-800')}
-          title="View product manual PDF"
+          className={cn(iconBtn, 'h-7 w-7 border-stone-400 text-amber-800', missing && 'opacity-50')}
+          title={missing ? `${manual.file_name} is attached in IS Code master but the file is missing in storage` : `View product manual: ${manual.file_name}`}
           aria-label="View product manual PDF"
-          onClick={() => openUrl(url, 'Product manual file not found for this IS Code.')}
+          onClick={() =>
+            openUrl(manual.url, `${manual.file_name} is attached to this IS Code but the file is missing in storage. Re-upload it in IS Code master.`)
+          }
         >
           <Eye size={14} aria-hidden />
         </button>
