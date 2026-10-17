@@ -303,18 +303,17 @@ export function ManakApplicationFields({
   // everything else follows in two columns.
   const lines: string[][] = [
     ['Application Process', 'Application Number', 'Application Date'],
+    ['Production Unit', 'Inspection Date', 'Type of Inspection'],
     ['Installed Capacity', 'Actual Capacity', 'Rate / Unit', 'Production Value'],
   ]
   const lineItems = lines.map((labels) =>
     labels.map((l) => items.find(([label]) => label === l)).filter((x): x is [string, ReactNode] => Boolean(x)),
   )
   const pairLines: string[][] = [
-    ['Production Unit'],
     ['Branch Name', 'Branch State'],
     ['Branch Head Name', 'Branch Head Designation'],
     ['Dealing Officer Name', 'Dealing Officer Designation'],
     ['Inspection Officer Name', 'Inspection Officer Designation'],
-    ['Inspection Date', 'Type of Inspection'],
   ]
   const find = (l: string) => items.find(([label]) => label === l)
   const pairItems = pairLines.map((labels) => labels.map(find).filter((x): x is [string, ReactNode] => Boolean(x)))
@@ -342,7 +341,8 @@ export function ManakApplicationFields({
   return (
     <div className="overflow-x-auto">
       {lineTable(lineItems[0] ?? [], 'w-[22%]', true)}
-      {lineTable(lineItems[1] ?? [], 'w-[15%]', false)}
+      {lineTable(lineItems[1] ?? [], 'w-[22%]', false)}
+      {lineTable(lineItems[2] ?? [], 'w-[15%]', false)}
       <table className="-mt-px w-full table-fixed border-collapse">
         <colgroup>
           <col className="w-1/4" />
