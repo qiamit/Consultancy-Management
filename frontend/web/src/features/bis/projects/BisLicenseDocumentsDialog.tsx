@@ -937,6 +937,11 @@ export function BisLicenseDocumentsDialog({
                     pdf: () => void runDownload('top-management', 'pdf', true),
                     word: () => void runDownload('top-management', 'word', true),
                   }}
+                  onTechnicalStaff={{
+                    preview: () => handlePreview('technical-staff'),
+                    pdf: () => void runDownload('technical-staff', 'pdf', true),
+                    word: () => void runDownload('technical-staff', 'word', true),
+                  }}
                   onScopeDocument={{
                     preview: () => void previewScopeUndertaking(),
                     pdf: () => void downloadScopeUndertakingPdf(),

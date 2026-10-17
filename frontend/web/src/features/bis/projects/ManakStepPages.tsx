@@ -323,6 +323,7 @@ export function ManakStepPage({
   onScopeDocument,
   onMarkingFee,
   onTopManagement,
+  onTechnicalStaff,
 }: {
   stepId: string
   row: BisProjectRow | null
@@ -340,6 +341,7 @@ export function ManakStepPage({
   onMarkingFee?: { edit: () => void; preview: () => void; pdf: () => void; word: () => void }
   /** Top Management Details document: preview / PDF / Word. */
   onTopManagement?: { preview: () => void; pdf: () => void; word: () => void }
+  onTechnicalStaff?: { preview: () => void; pdf: () => void; word: () => void }
 }) {
   const [reloadTick, setReloadTick] = useState(0)
   const { print, clientRaw, certificates, sites, projectRaw, branches, payloads, loading, error } = useStepData(row, refreshKey + reloadTick)
@@ -509,6 +511,7 @@ export function ManakStepPage({
         onChanged={() => setReloadTick((t) => t + 1)}
         onOpenModule={onEdit}
         onTopManagement={onTopManagement}
+        onTechnicalStaff={onTechnicalStaff}
       />
     ) : null
   } else if (stepId === 'manufacturing') {

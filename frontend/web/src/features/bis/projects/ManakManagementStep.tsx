@@ -40,6 +40,33 @@ async function patchPayload(
   await saveBisModulePayload(projectId, kind, mutate({ ...current }))
 }
 
+/** Preview / PDF / Word icon buttons shown in a panel header. */
+function DocActions({ what, actions }: { what: string; actions?: { preview: () => void; pdf: () => void; word: () => void } }) {
+  if (!actions) return null
+  return (
+    <div className="flex shrink-0 items-center gap-1">
+      {(
+        [
+          [`Preview ${what}`, actions.preview, Eye],
+          [`Download ${what} as PDF`, actions.pdf, Download],
+          [`Download ${what} as Word`, actions.word, FileType],
+        ] as const
+      ).map(([label, handler, Icon]) => (
+        <button
+          key={label}
+          type="button"
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-none border border-stone-400 bg-white text-amber-800 transition-colors hover:bg-amber-50"
+          title={label}
+          aria-label={label}
+          onClick={handler}
+        >
+          <Icon size={15} aria-hidden />
+        </button>
+      ))}
+    </div>
+  )
+}
+
 type Field = {
   key: string
   label: string
@@ -351,8 +378,8 @@ export function ManakManagementStep({
   technicalStaff,
   correspondence,
   onChanged,
-  onOpenModule,
   onTopManagement,
+  onTechnicalStaff,
 }: {
   projectId: string
   client: BisPrintClient | undefined
@@ -360,8 +387,9 @@ export function ManakManagementStep({
   technicalStaff: Rec | null | undefined
   correspondence: Rec | null | undefined
   onChanged: () => void
-  onOpenModule: (kind: BisPrintDocumentKind) => void
+  onOpenModule?: (kind: BisPrintDocumentKind) => void
   onTopManagement?: { preview: () => void; pdf: () => void; word: () => void }
+  onTechnicalStaff?: { preview: () => void; pdf: () => void; word: () => void }
 }) {
   const tmRows = rowsOf(topManagement)
   const firstTm = tmRows.find((r) => str(r.personName).trim())
@@ -410,30 +438,7 @@ export function ManakManagementStep({
     <>
       <ManakPanel
         title="Firm's Management Details"
-        headerExtra={
-          onTopManagement ? (
-            <div className="flex shrink-0 items-center gap-1">
-              {(
-                [
-                  ['Preview Top Management Details', onTopManagement.preview, Eye],
-                  ['Download Top Management Details as PDF', onTopManagement.pdf, Download],
-                  ['Download Top Management Details as Word', onTopManagement.word, FileType],
-                ] as const
-              ).map(([label, handler, Icon]) => (
-                <button
-                  key={label}
-                  type="button"
-                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-none border border-stone-400 bg-white text-amber-800 transition-colors hover:bg-amber-50"
-                  title={label}
-                  aria-label={label}
-                  onClick={handler}
-                >
-                  <Icon size={15} aria-hidden />
-                </button>
-              ))}
-            </div>
-          ) : null
-        }
+        headerExtra={<DocActions what="Top Management Details" actions={onTopManagement} />}
       >
         <ManakSubPanel title="Top Management Details">
           <EditableRows
@@ -518,7 +523,10 @@ export function ManakManagementStep({
         </ManakSubPanel>
       </ManakPanel>
 
-      <ManakPanel title="Technical Management / Quality Assurance / Control Personnel Details" onEdit={() => onOpenModule('technical-staff')} editLabel="Open module">
+      <ManakPanel
+        title="Technical Management / Quality Assurance / Control Personnel Details"
+        headerExtra={<DocActions what="Technical Staff Details" actions={onTechnicalStaff} />}
+      >
         <EditableRows
           projectId={projectId}
           kind={'technical-staff' as BisPrintDocumentKind}
