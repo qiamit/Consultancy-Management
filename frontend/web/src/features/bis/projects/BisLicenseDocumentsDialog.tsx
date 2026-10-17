@@ -880,7 +880,6 @@ export function BisLicenseDocumentsDialog({
               ) : (
                 <>
                 <div className="mb-3 text-center font-jakarta">
-                  <h3 className="text-xl font-bold text-stone-900">Online Application for Grant of License</h3>
                   <p className="text-right text-xs text-red-600">* Mandatory Fields</p>
                 </div>
                 <ManakStepPage
