@@ -303,8 +303,8 @@ export function ManakApplicationFields({
   // everything else follows in two columns.
   const lines: string[][] = [
     ['Application Process', 'Application Number', 'Application Date'],
-    ['Production Unit', 'Inspection Date', 'Type of Inspection'],
     ['Installed Capacity', 'Actual Capacity', 'Rate / Unit', 'Production Value'],
+    ['Production Unit', 'Inspection Date', 'Type of Inspection'],
   ]
   const lineItems = lines.map((labels) =>
     labels.map((l) => items.find(([label]) => label === l)).filter((x): x is [string, ReactNode] => Boolean(x)),
@@ -322,16 +322,23 @@ export function ManakApplicationFields({
   const valueCls = 'border border-[#e7e0d4] px-2 py-1.5 align-middle text-sm text-stone-700'
   // Three-field lines share one table; two-field lines get their own table split into four equal parts
   // (label | value | label | value, 25% each).
-  const lineTable = (list: Array<[string, ReactNode]>, valueWidth: string, first: boolean) => (
-    <table className={cn('w-full table-auto border-collapse', !first && '-mt-px')}>
+  // Every row with the same number of fields uses equal-width columns (label and value alike):
+  // 3 fields -> six equal columns, 4 fields -> eight, 2 fields -> four.
+  const lineTable = (list: Array<[string, ReactNode]>, first: boolean) => (
+    <table className={cn('w-full table-fixed border-collapse', !first && '-mt-px')}>
+      <colgroup>
+        {Array.from({ length: list.length * 2 }, (_, k) => (
+          <col key={k} style={{ width: `${100 / (list.length * 2)}%` }} />
+        ))}
+      </colgroup>
       <tbody>
         <tr>
           {list.map((cell, j) => (
             <Fragment key={j}>
-              <th scope="row" className={labelCls}>
+              <th scope="row" className={cn(labelCls, 'w-auto whitespace-normal')}>
                 {cell[0]}:
               </th>
-              <td className={cn(valueCls, valueWidth)}>{cell[1]}</td>
+              <td className={valueCls}>{cell[1]}</td>
             </Fragment>
           ))}
         </tr>
@@ -340,9 +347,9 @@ export function ManakApplicationFields({
   )
   return (
     <div className="overflow-x-auto">
-      {lineTable(lineItems[0] ?? [], 'w-[22%]', true)}
-      {lineTable(lineItems[1] ?? [], 'w-[22%]', false)}
-      {lineTable(lineItems[2] ?? [], 'w-[15%]', false)}
+      {lineItems.map((list, i) => (
+        <Fragment key={i}>{lineTable(list, i === 0)}</Fragment>
+      ))}
       <table className="-mt-px w-full table-fixed border-collapse">
         <colgroup>
           <col className="w-1/4" />
