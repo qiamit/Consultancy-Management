@@ -218,6 +218,12 @@ export function ManakVarietiesTable({
   const [editDraft, setEditDraft] = useState<string[]>([])
   const [newDraft, setNewDraft] = useState<string[]>([])
   const emptyDraft = () => headers.map(() => '')
+  // Column widths follow the length of their content (header, rows and the row being typed), within sensible limits.
+  const columnWeights = headers.map((header, i) => {
+    const longest = Math.max(header.length, newDraft[i]?.length ?? 0, editingIndex != null ? editDraft[i]?.length ?? 0 : 0, ...scopeRows.map((row) => row[i]?.length ?? 0))
+    return Math.min(90, Math.max(14, longest))
+  })
+  const weightTotal = columnWeights.reduce((sum, weight) => sum + weight, 0) || 1
   const saveScope = async (notes: string) => {
     if (!projectId) return
     const clean = sanitizeBisLicenseScopeNotes(notes)
@@ -447,7 +453,14 @@ export function ManakVarietiesTable({
       {panel(
         docButtons,
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm">
+          <table className="w-full table-fixed border-collapse text-sm">
+            <colgroup>
+              <col style={{ width: '3%' }} />
+              {columnWeights.map((weight, i) => (
+                <col key={i} style={{ width: `${(84 * weight) / weightTotal}%` }} />
+              ))}
+              <col style={{ width: '13%' }} />
+            </colgroup>
             <thead>
               <tr>
                 <th className={cn(th, 'w-8 px-1 text-center')}>#</th>
