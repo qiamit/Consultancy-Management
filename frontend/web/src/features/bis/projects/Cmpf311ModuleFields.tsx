@@ -340,10 +340,10 @@ export function Cmpf311ModuleFields({
                       event.target.value = ''
                     }}
                   />
-                  <Button type="button" variant="outline" className={cn(limsOutlineBtnClass, 'h-9 min-w-0 flex-1 justify-start px-3')} title="Browse multiple PDF files from this computer" disabled={disabled || generating} onClick={() => manualInputRef.current?.click()}>
+                  <Button type="button" variant="outline" className={cn(limsOutlineBtnClass, 'h-9 min-w-0 flex-1 justify-center px-3')} title="Browse multiple PDF files from this computer" disabled={disabled || generating} onClick={() => manualInputRef.current?.click()}>
                     <Laptop className="mr-2 h-4 w-4" aria-hidden /> Browse
                   </Button>
-                  <Button type="button" className="h-9 shrink-0 rounded-none bg-amber-700 px-3 text-white hover:bg-amber-800" disabled={disabled || generating || !manualFiles.length} onClick={() => setManualPickerOpen(false)}>
+                  <Button type="button" className="h-9 min-w-0 flex-1 rounded-none border border-amber-700 bg-amber-700 px-3 text-white hover:bg-amber-800" disabled={disabled || generating || !manualFiles.length} onClick={() => setManualPickerOpen(false)}>
                     Use Selected PDFs ({manualFiles.length})
                   </Button>
                 </div>
