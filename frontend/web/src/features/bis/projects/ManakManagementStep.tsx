@@ -533,7 +533,7 @@ export function ManakManagementStep({
           fields={[
             { key: 'personName', label: 'Name' },
             { key: 'designation', label: 'Designation', master: 'designation', width: '12rem' },
-            { key: 'educationalQualification', label: 'Qualification' },
+            { key: 'educationalQualification', label: 'Qualification', master: 'education', width: '12rem' },
             { key: 'experienceYears', label: 'Experience', master: 'experience', width: '11rem' },
           ]}
           blank={() => ({ ...emptyTechnicalStaffRow() })}
