@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { BookOpen, Check, Columns3, Download, Eye, ExternalLink, FileText, FileType, Paperclip, Pencil, Plus, Trash2, Upload, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -224,6 +224,50 @@ export function ManakVarietiesTable({
     return Math.min(90, Math.max(14, longest))
   })
   const weightTotal = columnWeights.reduce((sum, weight) => sum + weight, 0) || 1
+  // Manually dragged column widths (percent of the table) win over the content-based ones; remembered per project in this browser.
+  const widthKey = `scope-col-widths:${projectId ?? ''}:${headers.length}`
+  const [manualShares, setManualShares] = useState<number[] | null>(() => {
+    try {
+      const raw = window.localStorage.getItem(widthKey)
+      const parsed = raw ? (JSON.parse(raw) as unknown) : null
+      return Array.isArray(parsed) && parsed.length === headers.length && parsed.every((n) => typeof n === 'number') ? (parsed as number[]) : null
+    } catch {
+      return null
+    }
+  })
+  const shares =
+    manualShares && manualShares.length === headers.length ? manualShares : columnWeights.map((weight) => (84 * weight) / weightTotal)
+  const persistShares = (next: number[] | null) => {
+    setManualShares(next)
+    try {
+      if (next) window.localStorage.setItem(widthKey, JSON.stringify(next))
+      else window.localStorage.removeItem(widthKey)
+    } catch {
+      /* private mode: widths simply are not remembered */
+    }
+  }
+  const startColumnResize = (index: number, event: ReactPointerEvent<HTMLElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    const table = event.currentTarget.closest('table')
+    if (!table) return
+    const tableWidth = table.getBoundingClientRect().width || 1
+    const startX = event.clientX
+    const base = [...shares]
+    const pair = (base[index] ?? 0) + (base[index + 1] ?? 0)
+    let latest: number[] = base
+    const move = (e: PointerEvent) => {
+      const left = Math.min(pair - 6, Math.max(6, (base[index] ?? 0) + ((e.clientX - startX) / tableWidth) * 100))
+      latest = base.map((share, i) => (i === index ? left : i === index + 1 ? pair - left : share))
+      setManualShares(latest)
+    }
+    const up = () => {
+      window.removeEventListener('pointermove', move)
+      persistShares(latest)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up, { once: true })
+  }
   const saveScope = async (notes: string) => {
     if (!projectId) return
     const clean = sanitizeBisLicenseScopeNotes(notes)
@@ -456,8 +500,8 @@ export function ManakVarietiesTable({
           <table className="w-full table-fixed border-collapse text-sm">
             <colgroup>
               <col style={{ width: '3%' }} />
-              {columnWeights.map((weight, i) => (
-                <col key={i} style={{ width: `${(84 * weight) / weightTotal}%` }} />
+              {headers.map((_, i) => (
+                <col key={i} style={{ width: `${shares[i] ?? 0}%` }} />
               ))}
               <col style={{ width: '13%' }} />
             </colgroup>
@@ -465,8 +509,19 @@ export function ManakVarietiesTable({
               <tr>
                 <th className={cn(th, 'w-8 px-1 text-center')}>#</th>
                 {headers.map((header, i) => (
-                  <th key={i} className={th}>
+                  <th key={i} className={cn(th, 'relative')}>
                     {header}
+                    {i < headers.length - 1 ? (
+                      <span
+                        role="separator"
+                        aria-orientation="vertical"
+                        aria-label={`Resize ${header} column (double-click to reset)`}
+                        title="Drag to resize the column · double-click to reset"
+                        className="absolute -right-1 top-0 z-10 h-full w-2 cursor-col-resize touch-none hover:bg-amber-400/60"
+                        onPointerDown={(e) => startColumnResize(i, e)}
+                        onDoubleClick={() => persistShares(null)}
+                      />
+                    ) : null}
                   </th>
                 ))}
                 <th className={cn(th, 'w-[1%] whitespace-nowrap')}>Action</th>
