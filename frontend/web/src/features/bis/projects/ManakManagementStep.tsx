@@ -467,6 +467,15 @@ export function ManakManagementStep({
               { key: 'email', label: 'Email ID' },
               { key: 'din', label: 'DIN (if applicable)', placeholder: '8 digit DIN', optional: true, digits: 8 },
             ]}
+            extraColumns={[
+              {
+                label: 'Signature',
+                render: (r, index) => <StaffDocumentsCell payloadKind="top-management" projectId={projectId} rowIndex={index} row={r} onChanged={onChanged} />,
+                renderDraft: (draft, patchDraft) => (
+                  <StaffDocumentsCell payloadKind="top-management" projectId={projectId} rowIndex={-1} row={draft} onChanged={onChanged} onDraftChange={patchDraft} />
+                ),
+              },
+            ]}
             blank={blankTm}
             saved={tmRows}
             onChanged={onChanged}

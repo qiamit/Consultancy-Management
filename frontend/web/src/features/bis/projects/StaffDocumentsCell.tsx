@@ -84,6 +84,7 @@ export function StaffDocumentsCell({
   onChanged,
   onDraftChange,
   projectRow = null,
+  payloadKind = 'technical-staff',
 }: {
   projectId: string
   rowIndex: number
@@ -92,7 +93,11 @@ export function StaffDocumentsCell({
   /** Draft (input) row: changes stay in the draft until the row is added, and the Generate Appointment Letter button shows. */
   onDraftChange?: (patch: Rec) => void
   projectRow?: BisProjectRow | null
+  /** 'top-management' shows only the signature slot (and its apply checkbox). */
+  payloadKind?: 'technical-staff' | 'top-management'
 }) {
+  const isTop = payloadKind === 'top-management'
+  const slots = isTop ? SLOTS.filter((x) => x.slot === 'signature').map((x) => ({ ...x, docKind: 'top-management-signature' })) : SLOTS
   const [genOpen, setGenOpen] = useState(false)
   const [genDate, setGenDate] = useState('')
   const [genRef, setGenRef] = useState('')
@@ -109,12 +114,12 @@ export function StaffDocumentsCell({
       onDraftChange(patch)
       return
     }
-    const current = (await fetchBisModulePayload(projectId, 'technical-staff')) ?? {}
+    const current = (await fetchBisModulePayload(projectId, payloadKind)) ?? {}
     const rows = Array.isArray((current as Rec).rows) ? ([...((current as Rec).rows as Rec[])] as Rec[]) : []
     if (!rows[rowIndex]) throw new Error('This row is no longer available.')
     rows[rowIndex] = { ...rows[rowIndex], ...patch }
     const next = mutatePayload ? mutatePayload({ ...(current as Rec), rows }) : { ...(current as Rec), rows }
-    await saveBisModulePayload(projectId, 'technical-staff', next)
+    await saveBisModulePayload(projectId, payloadKind, next)
   }
 
   const upload = async (s: (typeof SLOTS)[number], file: File | undefined) => {
@@ -242,7 +247,7 @@ export function StaffDocumentsCell({
 
   return (
     <div className="flex items-center justify-center gap-1">
-      {onDraftChange ? (
+      {onDraftChange && !isTop ? (
         <button
           type="button"
           className={cn(btnCls, 'border-stone-400 text-amber-800 hover:bg-amber-50')}
@@ -253,7 +258,7 @@ export function StaffDocumentsCell({
           <FilePlus2 size={14} aria-hidden />
         </button>
       ) : null}
-      {SLOTS.map((s) => {
+      {slots.map((s) => {
         const attached = Boolean(str(row[s.keys.id]).trim())
         const Icon = s.icon
         const loading = busy === s.slot
@@ -312,7 +317,7 @@ export function StaffDocumentsCell({
       </label>
       {viewer}
       {confirmDialog}
-      {onDraftChange ? (
+      {onDraftChange && !isTop ? (
         <>
           <Dialog open={genOpen} onOpenChange={(next) => !genBusy && setGenOpen(next)}>
             <DialogContent
