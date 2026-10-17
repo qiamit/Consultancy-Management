@@ -197,7 +197,14 @@ function EditableValue({ value, onSave, type = 'text', options, disabled, title,
 }
 
 /** Grid layout: three label | value pairs per row. Same look as ManakFields, with editable values. */
-function FieldGrid({ items }: { items: Array<[string, ReactNode]> }) {
+function FieldGrid({
+  items,
+  fullRows = [],
+}: {
+  items: Array<[string, ReactNode]>
+  /** Fields that take a whole row (label + one wide value), shown above the three-column grid. */
+  fullRows?: Array<[string, ReactNode]>
+}) {
   const rows = arrangeByLabelLength(items)
   const labelCls =
     'w-[1%] whitespace-nowrap border border-[#e7e0d4] bg-[#f7f3eb] px-3 py-1.5 text-left align-middle text-sm font-bold text-stone-800'
@@ -206,6 +213,16 @@ function FieldGrid({ items }: { items: Array<[string, ReactNode]> }) {
     <div className="overflow-x-auto">
       <table className="w-full table-auto border-collapse">
         <tbody>
+          {fullRows.map(([label, node]) => (
+            <tr key={label}>
+              <th scope="row" className={labelCls}>
+                {label}:
+              </th>
+              <td colSpan={5} className="border border-[#e7e0d4] px-2 py-1 align-middle text-sm text-stone-700">
+                {node}
+              </td>
+            </tr>
+          ))}
           {rows.map((pair, i) => (
             <tr key={i}>
               {pair.map((cell, j) => (
@@ -408,6 +425,47 @@ export function ManakGeneralStep({
         />
       </ManakSubPanel>
 
+      <ManakSubPanel title="Office/Firm Details">
+        <FieldGrid
+          fullRows={[
+            ['Firm Name', v(str(client?.companyName), col('company_name'))],
+            [
+              'Firm Address',
+              v(str(officeSite?.address) || str(client?.officeAddress) || str(client?.address), async (next) =>
+                done(office({ address: next || null }, { address: next || null })),
+              ),
+            ],
+          ]}
+          items={[
+            ['CEO Name', v(str(client?.contactPerson), col('contact_person_name'))],
+            ['City', v(str(raw.city), col('city'))],
+            [
+              'District',
+              v(str(client?.district), async (next) => done(office({ district: next || null }, { district: next || null }))),
+            ],
+            [
+              'State',
+              v(str(client?.state), async (next) => done(office({ state: next || null }, { state: next || null }))),
+            ],
+            ['Country', v(str(client?.country), col('country'))],
+            [
+              'PinCode',
+              v(str(client?.pinCode), async (next) => done(office({ pin_code: next || null }, { pin_code: next || null })), {
+                normalize: (x) => x.replace(/[^0-9]/g, '').slice(0, 6),
+                validate: (x) => (x && x.length !== 6 ? 'Enter a 6 digit PIN code' : null),
+              }),
+            ],
+            ['E-MailId', v(str(client?.email), col('email'))],
+            ['Landline', landlineCell],
+            ['Mobile No.', mobileCell],
+            [
+              'Address Proof Type',
+              v(str(addressDoc?.cert_name), certField(addressDoc, 'cert_name'), { disabled: locked || !addressDoc, title: addressDoc ? undefined : noDoc }),
+            ],
+          ]}
+        />
+      </ManakSubPanel>
+
       <ManakSubPanel title="Factory Details">
         <FieldGrid
           items={[
@@ -437,45 +495,6 @@ export function ManakGeneralStep({
             ],
             ['Latitude', v(str(client?.latitude), col('latitude'))],
             ['Longitude', v(str(client?.longitude), col('longitude'))],
-          ]}
-        />
-      </ManakSubPanel>
-
-      <ManakSubPanel title="Office/Firm Details">
-        <FieldGrid
-          items={[
-            ['Firm Name', v(str(client?.companyName), col('company_name'))],
-            ['CEO Name', v(str(client?.contactPerson), col('contact_person_name'))],
-            [
-              'Firm Address',
-              v(str(officeSite?.address) || str(client?.officeAddress) || str(client?.address), async (next) =>
-                done(office({ address: next || null }, { address: next || null })),
-              ),
-            ],
-            ['City', v(str(raw.city), col('city'))],
-            [
-              'District',
-              v(str(client?.district), async (next) => done(office({ district: next || null }, { district: next || null }))),
-            ],
-            [
-              'State',
-              v(str(client?.state), async (next) => done(office({ state: next || null }, { state: next || null }))),
-            ],
-            ['Country', v(str(client?.country), col('country'))],
-            [
-              'PinCode',
-              v(str(client?.pinCode), async (next) => done(office({ pin_code: next || null }, { pin_code: next || null })), {
-                normalize: (x) => x.replace(/[^0-9]/g, '').slice(0, 6),
-                validate: (x) => (x && x.length !== 6 ? 'Enter a 6 digit PIN code' : null),
-              }),
-            ],
-            ['E-MailId', v(str(client?.email), col('email'))],
-            ['Landline', landlineCell],
-            ['Mobile No.', mobileCell],
-            [
-              'Address Proof Type',
-              v(str(addressDoc?.cert_name), certField(addressDoc, 'cert_name'), { disabled: locked || !addressDoc, title: addressDoc ? undefined : noDoc }),
-            ],
           ]}
         />
       </ManakSubPanel>
