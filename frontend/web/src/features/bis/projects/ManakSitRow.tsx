@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Sparkles } from 'lucide-react'
+import { ClipboardList } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -116,13 +116,13 @@ export function ManakSitRow({
               ) : (
                 <Button
                   type="button"
-                  size="icon"
-                  className="h-8 w-8 shrink-0 rounded-none bg-amber-700 text-white hover:bg-amber-800"
+                  variant="outline"
+                  className="h-8 w-8 shrink-0 rounded-none border-stone-400 bg-white p-0 text-amber-800 shadow-none hover:bg-amber-50"
                   title={ownSummary ? `Open Acceptance of SIT (${ownSummary})` : 'Open Acceptance of SIT: select Product Manual, generate Annexure C, SIT table and notes'}
                   aria-label="Open Own SIT"
                   onClick={onOpenOwnSit}
                 >
-                  <Sparkles className="h-4 w-4" aria-hidden />
+                  <ClipboardList className="h-[15px] w-[15px]" aria-hidden />
                 </Button>
               )}
             </div>
