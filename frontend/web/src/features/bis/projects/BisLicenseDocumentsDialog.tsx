@@ -329,6 +329,8 @@ export function BisLicenseDocumentsDialog({
   const [step, setStep] = useState(0)
   const [refreshKey, setRefreshKey] = useState(0)
   const [previewKind, setPreviewKind] = useState<BisPrintDocumentKind | null>(null)
+  // Generated letterhead HTML to preview instead of attached files (Undertaking for Manufacturing Scope).
+  const [previewGeneratedHtml, setPreviewGeneratedHtml] = useState<string | null>(null)
   const [importKind, setImportKind] = useState<BisPrintDocumentKind | null>(null)
 
   const client = row ? clientDisplayName(row) || '—' : '—'
@@ -464,7 +466,42 @@ export function BisLicenseDocumentsDialog({
       toast.error('Select a license first.')
       return
     }
+    setPreviewGeneratedHtml(null)
     setPreviewKind(kind)
+  }
+
+  /** The generated Undertaking for Manufacturing Scope on letterhead (never the uploaded scope files). */
+  const previewScopeUndertaking = async () => {
+    if (!row) return
+    try {
+      setPreviewGeneratedHtml(await buildBisDocumentHtml(row, 'manufacturing-scope'))
+      setPreviewKind('manufacturing-scope')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not build the undertaking')
+    }
+  }
+
+  const downloadScopeUndertakingPdf = async () => {
+    if (!row) return
+    setDownloadBusy(true)
+    try {
+      const settings = await loadBisProjectPrintPageSettings(row.id).catch(() => DEFAULT_BIS_DOCUMENT_PRINT_PAGE_SETTINGS)
+      const html = applyBisDocumentPrintPageSettings(await buildBisDocumentHtml(row, 'manufacturing-scope'), settings)
+      const filename = `${safeFileBase('Undertaking for Manufacturing Scope', cmL)}.pdf`
+      const blob = await renderPdfViaPlaywright({
+        html,
+        filename,
+        format: mapPageSizeToPlaywrightFormat(settings.pageSize),
+        landscape: settings.orientation === 'landscape',
+        margin: { top: '0mm', right: '0mm', bottom: '0mm', left: '0mm' },
+      })
+      triggerPdfDownload(blob, filename)
+      toast.success('PDF downloaded: Undertaking for Manufacturing Scope')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'PDF download failed')
+    } finally {
+      setDownloadBusy(false)
+    }
   }
 
   const handleImport = (kind: BisPrintDocumentKind) => {
@@ -851,8 +888,8 @@ export function BisLicenseDocumentsDialog({
                   onLocationMapPdf={() => void runDownload('location-map', 'pdf')}
                   onProjectSaved={onProjectSaved}
                   onScopeDocument={{
-                    preview: () => handlePreview('manufacturing-scope'),
-                    pdf: () => void runDownload('manufacturing-scope', 'pdf', true),
+                    preview: () => void previewScopeUndertaking(),
+                    pdf: () => void downloadScopeUndertakingPdf(),
                     word: () => void runDownload('manufacturing-scope', 'word', true),
                   }}
                   documents={
@@ -999,10 +1036,14 @@ export function BisLicenseDocumentsDialog({
     <BisDocumentPrintPreviewDialog
       open={previewKind != null}
       onOpenChange={(next) => {
-        if (!next) setPreviewKind(null)
+        if (!next) {
+          setPreviewKind(null)
+          setPreviewGeneratedHtml(null)
+        }
       }}
       row={row}
       kind={previewKind}
+      generatedHtml={previewGeneratedHtml}
     />
 
     <BisModuleImportDialog
