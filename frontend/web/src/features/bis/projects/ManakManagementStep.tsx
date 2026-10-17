@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Check, Download, Eye, FileType, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -350,9 +350,6 @@ export function ManakManagementStep({
   const [corrBusy, setCorrBusy] = useState(false)
   useEffect(() => setCorr(initial), [initial])
 
-  const addressFor = (type: string) =>
-    type === 'Factory' ? client?.factoryAddress || client?.address : client?.officeAddress || client?.address
-
   const saveCorr = async () => {
     setCorrBusy(true)
     try {
@@ -425,58 +422,78 @@ export function ManakManagementStep({
             addLabel="Add top management person"
           />
         </ManakSubPanel>
-        <ManakSubPanel title="Correspondence Details">
-          <div className="grid grid-cols-1 gap-x-8 gap-y-2 text-sm md:grid-cols-2">
-            <label className="grid grid-cols-[minmax(8rem,12rem)_1fr] items-center gap-2">
-              <span className="font-bold text-stone-800">Correspondence Address Communication*:</span>
-              <select
-                className={cn(inputCls, 'w-full border px-2')}
-                value={corr.addressType}
-                onChange={(e) => setCorr({ ...corr, addressType: e.target.value })}
-              >
-                {ADDRESS_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="grid grid-cols-[minmax(8rem,12rem)_1fr] items-center gap-2">
-              <span className="font-bold text-stone-800">Address:</span>
-              <span className="min-w-0 break-words text-stone-700">{addressFor(corr.addressType) || '—'}</span>
-            </div>
-            {(
-              [
-                ['name', 'Name of Contact Person*'],
-                ['designation', 'Designation of Contact Person*'],
-                ['email', 'E-Mail Id*'],
-                ['mobile', 'Contact Number*'],
-              ] as const
-            ).map(([key, label]) => (
-              <label key={key} className="grid grid-cols-[minmax(8rem,12rem)_1fr] items-center gap-2">
-                <span className="font-bold text-stone-800">{label}:</span>
-                <Input
-                  className={inputCls}
-                  value={corr[key]}
-                  onChange={(e) => setCorr({ ...corr, [key]: e.target.value })}
-                />
-              </label>
-            ))}
-          </div>
-          <div className="mt-3 flex items-center justify-between gap-2">
-            <p className="text-xs text-stone-600">
-              Kindly note that the above correspondence will be used for all communications / alerts from BIS.
-            </p>
+        <ManakSubPanel
+          title="Correspondence Details"
+          headerExtra={
             <Button
               type="button"
               size="sm"
               disabled={corrBusy}
-              className="h-7 rounded-none bg-amber-700 px-3 text-xs text-white hover:bg-amber-800"
+              className="h-7 rounded-none border border-amber-500/40 bg-amber-700 px-3 text-xs font-medium normal-case tracking-normal text-white hover:bg-amber-800"
               onClick={() => void saveCorr()}
             >
               Save
             </Button>
-          </div>
+          }
+        >
+          {(() => {
+            const cells: Array<[string, ReactNode]> = [
+              [
+                'Correspondence Address Communication*',
+                <select
+                  key="at"
+                  className={cn(inputCls, 'w-full border px-2')}
+                  value={corr.addressType}
+                  onChange={(e) => setCorr({ ...corr, addressType: e.target.value })}
+                >
+                  {ADDRESS_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>,
+              ],
+              ...(
+                [
+                  ['name', 'Name of Contact Person*'],
+                  ['designation', 'Designation of Contact Person*'],
+                  ['email', 'E-Mail Id*'],
+                  ['mobile', 'Contact Number*'],
+                ] as const
+              ).map(([key, label]): [string, ReactNode] => [
+                label,
+                <Input key={key} className={inputCls} value={corr[key]} onChange={(e) => setCorr({ ...corr, [key]: e.target.value })} />,
+              ]),
+            ]
+            const rows: Array<Array<[string, ReactNode]>> = []
+            for (let n = 0; n < cells.length; n += 2) rows.push(cells.slice(n, n + 2))
+            return (
+              <div className="overflow-x-auto">
+                <table className="w-full table-fixed border-collapse text-sm">
+                  <tbody>
+                    {rows.map((pair, ri) => (
+                      <tr key={ri}>
+                        {pair.map(([label, node]) => (
+                          <Fragment key={label}>
+                            <th scope="row" className="w-[22%] border border-[#e7e0d4] bg-[#f7f3eb] px-3 py-1.5 text-left align-middle font-bold text-stone-800">
+                              {label}:
+                            </th>
+                            <td className="w-[28%] border border-[#e7e0d4] px-2 py-1 align-middle text-stone-700">{node}</td>
+                          </Fragment>
+                        ))}
+                        {pair.length < 2 ? (
+                          <>
+                            <th className="w-[22%] border border-[#e7e0d4] bg-[#f7f3eb]" />
+                            <td className="w-[28%] border border-[#e7e0d4]" />
+                          </>
+                        ) : null}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )
+          })()}
         </ManakSubPanel>
       </ManakPanel>
 
