@@ -912,6 +912,7 @@ export function ManakGeneralStep({
       >
         <FieldGrid
           columns={2}
+          topLines={[['PinCode', 'City', 'District', 'State']]}
           fullRows={[
             [
               'Factory Address',
