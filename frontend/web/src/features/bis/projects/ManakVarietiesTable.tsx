@@ -615,7 +615,7 @@ export function ManakVarietiesTable({
                       aria-label={`New scope ${header}`}
                       value={newDraft[i] ?? ''}
                       disabled={!projectId}
-                      placeholder={i === 0 ? 'Enter scope / variety' : header}
+                      placeholder={i === 0 ? 'Enter Scope / Varieties' : header}
                       onChange={(next) => setNewDraft((prev) => headers.map((_, k) => (k === i ? next : prev[k] ?? '')))}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
