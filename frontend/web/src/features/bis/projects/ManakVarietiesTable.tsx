@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { BookOpen, Eye, ExternalLink, FileText, Paperclip, Pencil, Trash2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -73,6 +73,41 @@ function openProductManualOnline(isNumber: string, setBusy: (busy: boolean) => v
   window.postMessage({ type: 'QE_PRODUCT_MANUAL_SEARCH', requestId, isNumber: selected }, window.location.origin)
 }
 
+/** Product manual number with a view button when a manual PDF is attached to the IS Code master (opens in a new tab, no download). */
+export function ProductManualValue({ isCodeId, value }: { isCodeId: string | null; value?: string | null }) {
+  const [url, setUrl] = useState<string | null>(null)
+  useEffect(() => {
+    const id = (isCodeId ?? '').trim()
+    if (!id) {
+      setUrl(null)
+      return
+    }
+    let cancelled = false
+    void loadIsCodeFileLinks(id).then((files) => {
+      if (!cancelled) setUrl(pickIsFile(files, 'manual')?.url?.trim() || null)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [isCodeId])
+  return (
+    <span className="inline-flex items-center gap-2">
+      <span>{value || <span className="text-stone-400">—</span>}</span>
+      {url ? (
+        <button
+          type="button"
+          className={cn(iconBtn, 'h-7 w-7 border-stone-400 text-amber-800')}
+          title="View product manual PDF"
+          aria-label="View product manual PDF"
+          onClick={() => openUrl(url, 'Product manual file not found for this IS Code.')}
+        >
+          <Eye size={14} aria-hidden />
+        </button>
+      ) : null}
+    </span>
+  )
+}
+
 const FILE_TYPES = ['Copy of Scope', 'Drawing', 'Other'] as const
 const typeOf = (file: BisProjectViewFile) => FILE_TYPES.find((t) => file.file_name.startsWith(`${t} - `)) ?? 'Copy of Scope'
 
@@ -86,6 +121,7 @@ export function ManakVarietiesTable({
   isNumber,
   varieties,
   onEdit,
+  panel,
 }: {
   projectId: string | null
   isCodeId: string | null
@@ -93,6 +129,8 @@ export function ManakVarietiesTable({
   varieties: string[]
   /** Opens the Sample Requirements module that holds the varieties. */
   onEdit?: () => void
+  /** Wraps the table in its panel; the specification / manual / online buttons go in the panel header. */
+  panel: (headerExtra: ReactNode, body: ReactNode) => ReactNode
 }) {
   const [isFiles, setIsFiles] = useState<IsCodeFileLink[]>([])
   const [filesLoading, setFilesLoading] = useState(false)
@@ -253,7 +291,9 @@ export function ManakVarietiesTable({
           void upload(file)
         }}
       />
-      <div className="overflow-x-auto">
+      {panel(
+        docButtons,
+        <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr>
@@ -273,19 +313,15 @@ export function ManakVarietiesTable({
               rows.map((v, i) => (
                 <tr key={i} className={i % 2 ? 'bg-[#f7f3eb]' : 'bg-[#fffcf7]'}>
                   <td className={cn(td, 'px-1 text-center')}>{i + 1}</td>
-                  <td className={td}>
-                    <div className="flex items-start justify-between gap-3">
-                      <span className="min-w-0">{v}</span>
-                      {docButtons}
-                    </div>
-                  </td>
+                  <td className={td}>{v}</td>
                   <td className={cn(td, 'whitespace-nowrap')}>{actions}</td>
                 </tr>
               ))
             )}
           </tbody>
         </table>
-      </div>
+        </div>,
+      )}
       <Dialog open={filesOpen} onOpenChange={setFilesOpen}>
         <DialogContent className="max-w-lg rounded-none">
           <DialogHeader>

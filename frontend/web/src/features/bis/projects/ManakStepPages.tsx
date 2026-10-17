@@ -9,7 +9,7 @@ import { fetchBisModulePayload } from './bisModuleDataApi'
 import { listSites, type ClientSiteRow } from '@/features/masters/clients/clientLinkApi'
 import { listBisBranchOffices, type BisBranchOfficeRow } from '@/features/masters/bis-branch-offices/bisBranchOfficesApi'
 import { ManakGeneralStep } from './ManakGeneralStep'
-import { ManakVarietiesTable } from './ManakVarietiesTable'
+import { ManakVarietiesTable, ProductManualValue } from './ManakVarietiesTable'
 import { CORRESPONDENCE_KIND, ManakManagementStep } from './ManakManagementStep'
 import type { BisProjectRow } from './types'
 
@@ -353,20 +353,23 @@ export function ManakStepPage({
             lines={[['Standard Title', 'Standard Number'], ['Product Manual']]}
             items={[
               ['Standard Title', isCode?.title],
-              ['Product Manual', isCode?.productManualNumber],
+              ['Product Manual', <ProductManualValue key="pm" isCodeId={row?.is_code_id ?? null} value={isCode?.productManualNumber} />],
               ['Standard Number', isCode?.label],
             ]}
           />
         </ManakSubPanel>
-        <ManakSubPanel title="Varieties">
-          <ManakVarietiesTable
-            onEdit={edit('osl-sample-requirements')}
-            projectId={row?.id ?? null}
-            isCodeId={row?.is_code_id ?? null}
-            isNumber={isCode?.label || isCode?.isNumber || ''}
-            varieties={varieties}
-          />
-        </ManakSubPanel>
+        <ManakVarietiesTable
+          onEdit={edit('osl-sample-requirements')}
+          projectId={row?.id ?? null}
+          isCodeId={row?.is_code_id ?? null}
+          isNumber={isCode?.label || isCode?.isNumber || ''}
+          varieties={varieties}
+          panel={(headerExtra, body) => (
+            <ManakSubPanel title="Varieties" headerExtra={headerExtra}>
+              {body}
+            </ManakSubPanel>
+          )}
+        />
       </ManakGeneralStep>
     )
   } else if (stepId === 'management') {
