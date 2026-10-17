@@ -802,6 +802,7 @@ export function ManakGeneralStep({
 
       <ManakSubPanel title="Office/Firm Details">
         <FieldGrid
+          columns={2}
           fullRows={[
             ['Firm Name', v(str(client?.companyName), col('company_name'))],
             [
@@ -861,6 +862,7 @@ export function ManakGeneralStep({
         }
       >
         <FieldGrid
+          columns={2}
           items={[
             [
               'Factory Address',
