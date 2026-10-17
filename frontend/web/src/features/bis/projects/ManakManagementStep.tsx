@@ -531,7 +531,7 @@ export function ManakManagementStep({
                       </td>
                       <th scope="row" className={thC}>Designation*:</th>
                       <td className={tdC}>{field('designation')}</td>
-                      <th scope="row" className={thC}>Contact Number*:</th>
+                      <th scope="row" className={thC}>Mobile*:</th>
                       <td className={tdC}>{field('mobile')}</td>
                     </tr>
                     <tr>
