@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Check, Download, Eye, FileType, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -437,58 +437,49 @@ export function ManakManagementStep({
           }
         >
           {(() => {
-            const cells: Array<[string, ReactNode]> = [
-              [
-                'Correspondence Address Communication*',
-                <select
-                  key="at"
-                  className={cn(inputCls, 'w-full border px-2')}
-                  value={corr.addressType}
-                  onChange={(e) => setCorr({ ...corr, addressType: e.target.value })}
-                >
-                  {ADDRESS_TYPES.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>,
-              ],
-              ...(
-                [
-                  ['name', 'Name of Contact Person*'],
-                  ['designation', 'Designation of Contact Person*'],
-                  ['email', 'E-Mail Id*'],
-                  ['mobile', 'Contact Number*'],
-                ] as const
-              ).map(([key, label]): [string, ReactNode] => [
-                label,
-                <Input key={key} className={inputCls} value={corr[key]} onChange={(e) => setCorr({ ...corr, [key]: e.target.value })} />,
-              ]),
-            ]
-            const rows: Array<Array<[string, ReactNode]>> = []
-            for (let n = 0; n < cells.length; n += 2) rows.push(cells.slice(n, n + 2))
+            const field = (key: 'name' | 'designation' | 'email' | 'mobile') => (
+              <Input className={inputCls} value={corr[key]} onChange={(e) => setCorr({ ...corr, [key]: e.target.value })} />
+            )
+            const thC = 'border border-[#e7e0d4] bg-[#f7f3eb] px-3 py-1.5 text-left align-middle font-bold text-stone-800'
+            const tdC = 'border border-[#e7e0d4] px-2 py-1 align-middle text-stone-700'
             return (
               <div className="overflow-x-auto">
                 <table className="w-full table-fixed border-collapse text-sm">
+                  <colgroup>
+                    <col style={{ width: '13%' }} />
+                    <col style={{ width: '20%' }} />
+                    <col style={{ width: '14%' }} />
+                    <col style={{ width: '20%' }} />
+                    <col style={{ width: '13%' }} />
+                    <col style={{ width: '20%' }} />
+                  </colgroup>
                   <tbody>
-                    {rows.map((pair, ri) => (
-                      <tr key={ri}>
-                        {pair.map(([label, node]) => (
-                          <Fragment key={label}>
-                            <th scope="row" className="w-[22%] border border-[#e7e0d4] bg-[#f7f3eb] px-3 py-1.5 text-left align-middle font-bold text-stone-800">
-                              {label}:
-                            </th>
-                            <td className="w-[28%] border border-[#e7e0d4] px-2 py-1 align-middle text-stone-700">{node}</td>
-                          </Fragment>
-                        ))}
-                        {pair.length < 2 ? (
-                          <>
-                            <th className="w-[22%] border border-[#e7e0d4] bg-[#f7f3eb]" />
-                            <td className="w-[28%] border border-[#e7e0d4]" />
-                          </>
-                        ) : null}
-                      </tr>
-                    ))}
+                    <tr>
+                      <th scope="row" className={thC}>Address for Communication*:</th>
+                      <td className={tdC}>
+                        <select
+                          className={cn(inputCls, 'w-full border px-2')}
+                          value={corr.addressType}
+                          onChange={(e) => setCorr({ ...corr, addressType: e.target.value })}
+                        >
+                          {ADDRESS_TYPES.map((t) => (
+                            <option key={t} value={t}>
+                              {t}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <th scope="row" className={thC}>Designation of Contact Person*:</th>
+                      <td className={tdC}>{field('designation')}</td>
+                      <th scope="row" className={thC}>Contact Number*:</th>
+                      <td className={tdC}>{field('mobile')}</td>
+                    </tr>
+                    <tr>
+                      <th scope="row" className={thC}>Name of Contact Person*:</th>
+                      <td className={tdC} colSpan={2}>{field('name')}</td>
+                      <th scope="row" className={thC}>E-Mail Id*:</th>
+                      <td className={tdC} colSpan={2}>{field('email')}</td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
