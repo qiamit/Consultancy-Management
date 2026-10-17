@@ -1,6 +1,8 @@
 import { useCallback, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { limsDarkBarGlowStyle, limsManageDialogClass } from '@/lib/limsThemeUi'
+import { cn } from '@/lib/utils'
 
 /**
  * View-only PDF/image viewer shown inside the app. Opening a file with window.open does nothing in embedded browsers
@@ -18,12 +20,20 @@ export function usePdfViewer(): [(url: string | undefined, title?: string, missi
   }, [])
   const element = (
     <Dialog open={state != null} onOpenChange={(open) => !open && setState(null)}>
-      <DialogContent className="flex h-[88vh] w-[min(64rem,calc(100vw-2rem))] max-w-none flex-col gap-2 rounded-none p-3">
-        <DialogHeader className="shrink-0 pr-8">
-          <DialogTitle className="truncate text-base">{state?.title}</DialogTitle>
-          <DialogDescription className="sr-only">Document viewer</DialogDescription>
-        </DialogHeader>
-        {state ? <iframe title={state.title} src={state.url} className="min-h-0 w-full flex-1 border border-stone-300 bg-white" /> : null}
+      <DialogContent
+        persistOnFocusLoss
+        layer="stacked"
+        aria-describedby={undefined}
+        className={cn(limsManageDialogClass, 'flex h-[88vh] w-[min(64rem,calc(100vw-2rem))] max-w-none flex-col gap-0 bg-white p-0')}
+      >
+        <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white">
+          <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={limsDarkBarGlowStyle} />
+          <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
+          <DialogHeader className="relative pr-10 text-left">
+            <DialogTitle className="truncate text-base font-semibold tracking-tight text-white">{state?.title}</DialogTitle>
+          </DialogHeader>
+        </div>
+        {state ? <iframe title={state.title} src={state.url} className="m-3 min-h-0 flex-1 border border-stone-300 bg-white" /> : null}
       </DialogContent>
     </Dialog>
   )

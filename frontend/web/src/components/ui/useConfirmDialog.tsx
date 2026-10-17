@@ -1,6 +1,8 @@
 import { useCallback, useRef, useState, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { limsDarkBarGlowStyle, limsManageDialogClass, limsOutlineBtnClass, limsPrimaryBtnClass, limsRegistryFormClass } from '@/lib/limsThemeUi'
+import { cn } from '@/lib/utils'
 
 type ConfirmOptions = { title?: string; confirmLabel?: string; destructive?: boolean }
 
@@ -29,23 +31,29 @@ export function useConfirmDialog(): [(message: string, options?: ConfirmOptions)
 
   const element = (
     <Dialog open={state != null} onOpenChange={(open) => !open && settle(false)}>
-      <DialogContent className="max-w-sm rounded-none">
-        <DialogHeader>
-          <DialogTitle>{state?.title ?? 'Please confirm'}</DialogTitle>
-          <DialogDescription>{state?.message}</DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button type="button" variant="outline" className="rounded-none" onClick={() => settle(false)}>
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            className={state?.destructive === false ? 'rounded-none' : 'rounded-none bg-red-700 text-white hover:bg-red-800'}
-            onClick={() => settle(true)}
-          >
-            {state?.confirmLabel ?? 'Delete'}
-          </Button>
-        </DialogFooter>
+      <DialogContent persistOnFocusLoss layer="stacked" aria-describedby={undefined} className={cn(limsManageDialogClass, 'max-w-sm bg-white')}>
+        <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white">
+          <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={limsDarkBarGlowStyle} />
+          <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
+          <DialogHeader className="relative pr-10 text-left">
+            <DialogTitle className="text-base font-semibold tracking-tight text-white">{state?.title ?? 'Please confirm'}</DialogTitle>
+          </DialogHeader>
+        </div>
+        <div className={cn(limsRegistryFormClass, 'space-y-4 px-4 py-4')}>
+          <p className="text-sm text-stone-700">{state?.message}</p>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" className={limsOutlineBtnClass} onClick={() => settle(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className={cn(limsPrimaryBtnClass, state?.destructive !== false && 'bg-red-700 hover:bg-red-800')}
+              onClick={() => settle(true)}
+            >
+              {state?.confirmLabel ?? 'Delete'}
+            </Button>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   )
