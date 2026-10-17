@@ -91,7 +91,6 @@ export function Cmpf311ModuleFields({
     ? [{ fileName: currentMasterData.fileName, fileId: currentMasterData.fileId, file: currentMasterData.file }]
     : []
   const manualFiles = selectedManuals?.isCodeId === isCodeId ? selectedManuals.files : defaultMasterFile
-  const selectedFileName = manualFiles.length === 1 ? manualFiles[0]!.fileName : `${manualFiles.length} PDFs selected`
 
   useEffect(() => {
     let active = true
@@ -236,17 +235,6 @@ export function Cmpf311ModuleFields({
     setEditingNoteIndex(null)
   }
 
-  const openSelectedManual = (file = manualFiles[0]?.file) => {
-    if (!file) return
-    const fileUrl = URL.createObjectURL(file)
-    const link = document.createElement('a')
-    link.href = fileUrl
-    link.target = '_blank'
-    link.rel = 'noopener noreferrer'
-    link.click()
-    window.setTimeout(() => URL.revokeObjectURL(fileUrl), 60_000)
-  }
-
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-2 sm:p-3">
       {/* SIT type and Product Manual number are chosen on the application step (Select SIT row). */}
@@ -286,11 +274,8 @@ export function Cmpf311ModuleFields({
             <Button type="button" variant="outline" size="sm" className={cn(limsOutlineBtnClass, 'h-8')} disabled={disabled || generating} onClick={() => setManualPickerOpen(true)}>
               Use Another PDF
             </Button>
-            <FileText className="h-4 w-4 text-amber-800" aria-hidden />
-            <button type="button" className="min-w-0 flex-1 truncate text-left text-sm text-blue-800 underline decoration-blue-400 underline-offset-2 hover:text-blue-950 disabled:cursor-default disabled:text-stone-500 disabled:no-underline" title={manualFiles.map((file) => file.fileName).join('\n') || 'No PDF selected'} disabled={!manualFiles.length} onClick={() => openSelectedManual()}>
-              {selectedFileName || 'No PDF selected'}
-            </button>
-            {manualFiles.length ? <span className="text-xs text-emerald-800">{manualFiles.length} PDF{manualFiles.length === 1 ? '' : 's'} ready for extraction</span> : null}
+            {/* The chosen PDFs are shown in the picker; no need to list them here. */}
+            <span className="min-w-0 flex-1" />
             <select className={cn(limsFieldClass, 'h-8 w-44')} value={generateTarget} disabled={disabled || generating} onChange={(event) => setGenerateTarget(event.target.value as GenerateTarget)}>
               <option value="all">All Documents</option>
               <option value="annexure-c">Annexure C</option>
