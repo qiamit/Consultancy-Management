@@ -792,6 +792,11 @@ function appendGeneratedTechnicalStaffLetters(
 }
 
 function shouldIncludeAuthorizationLetter(tm: Record<string, unknown>): boolean {
+  // Authorized Signatory chosen in the Top Management table: the letter follows that tick only.
+  if (tm.authorizedSignatoryMode === 'table') {
+    const rows = Array.isArray(tm.rows) ? tm.rows : []
+    return rows.some((r) => r && typeof r === 'object' && Boolean((r as Record<string, unknown>).isAuthorizedSignatory))
+  }
   if (Boolean(tm.includeAuthorizedSignatory)) return true
   return Boolean(
     String(tm.authorizedSignatoryName ?? '').trim() ||

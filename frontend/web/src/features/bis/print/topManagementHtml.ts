@@ -25,6 +25,8 @@ export type TopManagementRow = {
   signatureStoragePath: string
   /** When true, this person's signature is applied on all BIS documents. */
   applySignatureToDocuments: boolean
+  /** Chosen as Authorized Signatory in the Top Management table (adds the Authorization Letter). */
+  isAuthorizedSignatory?: boolean
 }
 
 export type TopManagementData = PrintApplicantContext & {

@@ -69,6 +69,71 @@ function DocActions({ what, actions }: { what: string; actions?: { preview: () =
   )
 }
 
+/** Marks one top-management row as the Authorized Signatory (exclusive) and fills the fields the Authorization Letter reads. */
+function withAuthorizedSignatory(payload: Rec, index: number | null): Rec {
+  const rows: Rec[] = (Array.isArray(payload.rows) ? (payload.rows as Rec[]) : []).map((r, i) => ({ ...r, isAuthorizedSignatory: index === i }))
+  const chosen = index == null ? null : rows[index]
+  return {
+    ...payload,
+    rows,
+    authorizedSignatoryMode: 'table',
+    includeAuthorizedSignatory: Boolean(chosen),
+    authorizedSignatoryName: chosen ? str(chosen.personName) : '',
+    authorizedSignatoryDesignation: chosen ? str(chosen.designation) : '',
+    authorizedSignatoryEmail: chosen ? str(chosen.email) : '',
+    authorizedSignatoryMobile: chosen ? str(chosen.mobile) : '',
+  }
+}
+
+function AuthorizedSignatoryCell({
+  projectId,
+  rowIndex,
+  row,
+  onChanged,
+  onDraftChange,
+}: {
+  projectId: string
+  rowIndex: number
+  row: Rec
+  onChanged: () => void
+  onDraftChange?: (patch: Rec) => void
+}) {
+  const [busy, setBusy] = useState(false)
+  const checked = Boolean(row.isAuthorizedSignatory)
+  const toggle = async (next: boolean) => {
+    if (onDraftChange) {
+      onDraftChange({ isAuthorizedSignatory: next })
+      return
+    }
+    setBusy(true)
+    try {
+      await patchPayload(projectId, 'top-management' as BisPrintDocumentKind, (p) => withAuthorizedSignatory(p, next ? rowIndex : null))
+      toast.success(next ? 'Authorized Signatory set — the Authorization Letter is included in the documents' : 'Authorized Signatory removed')
+      onChanged()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not save')
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <label
+      className="inline-flex items-center gap-1.5 text-[11px] font-medium text-stone-700"
+      title="Make this person the Authorized Signatory (the Authorization Letter is added to Preview / PDF / Word)"
+    >
+      <input
+        type="checkbox"
+        className="h-4 w-4 rounded-none accent-amber-600"
+        disabled={busy}
+        checked={checked}
+        onChange={(e) => void toggle(e.target.checked)}
+        aria-label="Authorized Signatory"
+      />
+      Auth. Sign
+    </label>
+  )
+}
+
 type Field = {
   key: string
   label: string
@@ -156,15 +221,17 @@ function EditableRows({
     void run(async () => {
       await patchPayload(projectId, kind, (p) => {
         const list = rowsOf(p).filter((r) => fields.some((f) => str(r[f.key]).trim()))
+        let next: Rec = { ...p, rows: [...list, { ...blank(), ...draft }] }
         if (draft.applySignatureToDocuments) {
-          return {
-            ...p,
-            rows: [...list.map((r) => ({ ...r, applySignatureToDocuments: false })), { ...blank(), ...draft }],
+          next = {
+            ...next,
+            rows: (next.rows as Rec[]).map((r, i, all) => ({ ...r, applySignatureToDocuments: i === all.length - 1 })),
             signatoryName: str(draft.personName) || str(p.signatoryName),
             signatoryDesignation: str(draft.designation) || str(p.signatoryDesignation),
           }
         }
-        return { ...p, rows: [...list, { ...blank(), ...draft }] }
+        if (draft.isAuthorizedSignatory) next = withAuthorizedSignatory(next, (next.rows as Rec[]).length - 1)
+        return next
       })
       setDraft(blank())
     }, 'Row added')
@@ -468,6 +535,13 @@ export function ManakManagementStep({
               { key: 'din', label: 'DIN (if applicable)', placeholder: '8 digit DIN', optional: true, digits: 8 },
             ]}
             extraColumns={[
+              {
+                label: 'Authorized Signatory',
+                render: (r, index) => <AuthorizedSignatoryCell projectId={projectId} rowIndex={index} row={r} onChanged={onChanged} />,
+                renderDraft: (draft, patchDraft) => (
+                  <AuthorizedSignatoryCell projectId={projectId} rowIndex={-1} row={draft} onChanged={onChanged} onDraftChange={patchDraft} />
+                ),
+              },
               {
                 label: 'Signature',
                 render: (r, index) => <StaffDocumentsCell payloadKind="top-management" projectId={projectId} rowIndex={index} row={r} onChanged={onChanged} />,

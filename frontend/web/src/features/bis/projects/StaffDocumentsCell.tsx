@@ -1,13 +1,14 @@
 import { useRef, useState } from 'react'
-import { Camera, Eye, FilePlus2, FileText, GraduationCap, Loader2, PenLine } from 'lucide-react'
+import { Calendar, Camera, Eye, FilePlus2, FileText, GraduationCap, Loader2, PenLine } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { LimsFieldWithAdd } from '@/components/lims/LimsFieldWithAdd'
 import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { usePdfViewer } from '@/components/ui/usePdfViewer'
-import { limsDarkBarGlowStyle, limsDialogClass, limsFieldClass, limsOutlineBtnClass, limsPrimaryBtnClass } from '@/lib/limsThemeUi'
+import { limsDarkBarGlowStyle, limsDialogClass, limsFieldAddBtnClass, limsFieldClass, limsOutlineBtnClass, limsPrimaryBtnClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { buildAppointmentLetterHtmlForTechnicalStaff } from '../print/printBisDocument'
 import { BisDocumentPrintPreviewDialog } from './BisDocumentPrintPreviewDialog'
@@ -68,6 +69,27 @@ const SLOTS: Array<{
   },
 ]
 
+const dateInputClass = cn(
+  limsFieldClass,
+  'min-w-0 pr-2 tabular-nums',
+  '[&::-webkit-calendar-picker-indicator]:pointer-events-none',
+  '[&::-webkit-calendar-picker-indicator]:opacity-0',
+)
+
+function openDatePicker(el: HTMLInputElement | null) {
+  if (!el || el.disabled) return
+  try {
+    if (typeof el.showPicker === 'function') {
+      el.showPicker()
+      return
+    }
+  } catch {
+    /* fall through */
+  }
+  el.focus()
+  el.click()
+}
+
 const btnCls =
   'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-none border bg-white transition-colors disabled:opacity-50'
 
@@ -102,6 +124,7 @@ export function StaffDocumentsCell({
   const [genDate, setGenDate] = useState('')
   const [genRef, setGenRef] = useState('')
   const [genBusy, setGenBusy] = useState(false)
+  const genDateRef = useRef<HTMLInputElement>(null)
   const [previewHtml, setPreviewHtml] = useState<string | null>(null)
   const [busy, setBusy] = useState<Slot | null>(null)
   const [viewFile, viewer] = usePdfViewer()
@@ -341,7 +364,22 @@ export function StaffDocumentsCell({
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div className="min-w-0 space-y-1.5">
                     <Label htmlFor="sdc-date" className="text-[11px] font-semibold uppercase tracking-wide text-stone-600">Date of Joining</Label>
-                    <Input id="sdc-date" type="date" value={genDate} onChange={(e) => setGenDate(e.target.value)} disabled={genBusy} className={limsFieldClass} />
+                    <LimsFieldWithAdd
+                      addButton={
+                        <button
+                          type="button"
+                          className={limsFieldAddBtnClass}
+                          aria-label="Open calendar"
+                          title="Pick date"
+                          disabled={genBusy}
+                          onClick={() => openDatePicker(genDateRef.current)}
+                        >
+                          <Calendar size={14} strokeWidth={2.25} aria-hidden />
+                        </button>
+                      }
+                    >
+                      <Input ref={genDateRef} id="sdc-date" type="date" value={genDate} onChange={(e) => setGenDate(e.target.value)} disabled={genBusy} className={dateInputClass} />
+                    </LimsFieldWithAdd>
                   </div>
                   <div className="min-w-0 space-y-1.5">
                     <Label htmlFor="sdc-ref" className="text-[11px] font-semibold uppercase tracking-wide text-stone-600">Reference Number</Label>
