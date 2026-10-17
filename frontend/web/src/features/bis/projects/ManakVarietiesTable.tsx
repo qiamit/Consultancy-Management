@@ -14,6 +14,7 @@ import {
   deleteBisProjectFile,
   formatBisProjectFilesError,
   listBisProjectFiles,
+  updateBisProjectFileName,
   uploadBisProjectFile,
   type BisProjectViewFile,
 } from './bisProjectFilesApi'
@@ -174,7 +175,20 @@ function AutoGrowInput({
 }
 
 const FILE_TYPES = ['Copy of Scope', 'Drawing', 'Other'] as const
-const typeOf = (file: BisProjectViewFile) => FILE_TYPES.find((t) => file.file_name.startsWith(`${t} - `)) ?? 'Copy of Scope'
+type RowKey = 'draft' | number
+const KEY_TAG = /^\[(draft|r(\d+))\] /
+/**
+ * Every scope file belongs to one scope row. Its name starts with [draft] (the new row, not added yet) or [r<index>];
+ * older files without a tag belong to the first row.
+ */
+const rowKeyOf = (file: BisProjectViewFile): RowKey => {
+  const match = file.file_name.match(KEY_TAG)
+  if (!match) return 0
+  return match[1] === 'draft' ? 'draft' : Number(match[2])
+}
+const stripKey = (name: string) => name.replace(KEY_TAG, '')
+const tagFor = (key: RowKey) => (key === 'draft' ? '[draft] ' : `[r${key}] `)
+const typeOf = (file: BisProjectViewFile) => FILE_TYPES.find((t) => stripKey(file.file_name).startsWith(`${t} - `)) ?? 'Copy of Scope'
 
 /**
  * Varieties with an Action column: view the specification, view the product manual file,
@@ -286,14 +300,37 @@ export function ManakVarietiesTable({
         ? serializeBisNotesScope({ mode: 'table', headers: scope.headers, rows: rows.length ? rows : [headers.map(() => '')] })
         : rows.map((row) => row[0] ?? '').filter(Boolean).join('\n'),
     )
-  const addRow = () => {
+  const retag = async (file: BisProjectViewFile, key: RowKey): Promise<BisProjectViewFile> => {
+    const name = `${tagFor(key)}${stripKey(file.file_name)}`
+    await updateBisProjectFileName(file.id, name)
+    return { ...file, file_name: name }
+  }
+  const addRow = async () => {
     const values = headers.map((_, i) => (newDraft[i] ?? '').trim())
     if (!values.some(Boolean)) {
       toast.warning('Enter the scope text first.')
       return
     }
+    const newIndex = scopeRows.length
+    const pending = scopeFiles.filter((f) => rowKeyOf(f) === 'draft')
     void commitRows([...scopeRows, values])
     setNewDraft(emptyDraft())
+    if (pending.length) {
+      // Files attached to the new row move to the row that has just been added.
+      try {
+        const moved = await Promise.all(pending.map((f) => retag(f, newIndex)))
+        setScopeFiles((prev) => prev.map((f) => moved.find((m) => m.id === f.id) ?? f))
+      } catch (error) {
+        toast.error(formatBisProjectFilesError(error))
+      }
+    }
+  }
+  const clearNewRow = async () => {
+    setNewDraft(emptyDraft())
+    const pending = scopeFiles.filter((f) => rowKeyOf(f) === 'draft')
+    if (!pending.length) return
+    await Promise.allSettled(pending.map(deleteBisProjectFile))
+    setScopeFiles((prev) => prev.filter((f) => rowKeyOf(f) !== 'draft'))
   }
   const saveEdit = () => {
     if (editingIndex == null) return
@@ -302,9 +339,22 @@ export function ManakVarietiesTable({
     setEditingIndex(null)
   }
   const deleteRow = async (index: number) => {
-    if (!(await confirmAction('Delete this scope row?', { title: 'Delete row' }))) return
+    const own = scopeFiles.filter((f) => rowKeyOf(f) === index)
+    const message = own.length ? `Delete this scope row and its ${own.length} attached file${own.length === 1 ? '' : 's'}?` : 'Delete this scope row?'
+    if (!(await confirmAction(message, { title: 'Delete row' }))) return
     void commitRows(scopeRows.filter((_, i) => i !== index))
     setEditingIndex(null)
+    try {
+      await Promise.allSettled(own.map(deleteBisProjectFile))
+      // Rows below move up by one, and so do their files.
+      const later = scopeFiles.filter((f) => typeof rowKeyOf(f) === 'number' && (rowKeyOf(f) as number) > index)
+      const shifted = await Promise.all(later.map((f) => retag(f, (rowKeyOf(f) as number) - 1)))
+      setScopeFiles((prev) =>
+        prev.filter((f) => !own.some((o) => o.id === f.id)).map((f) => shifted.find((m) => m.id === f.id) ?? f),
+      )
+    } catch (error) {
+      toast.error(formatBisProjectFilesError(error))
+    }
   }
   const applyColumns = async () => {
     if (!projectId) return
@@ -324,7 +374,8 @@ export function ManakVarietiesTable({
   const [isFiles, setIsFiles] = useState<IsCodeFileLink[]>([])
   const [filesLoading, setFilesLoading] = useState(false)
   const [scopeFiles, setScopeFiles] = useState<BisProjectViewFile[]>([])
-  const [filesOpen, setFilesOpen] = useState(false)
+  // Which row's attachments the Scope files dialog shows (null = closed).
+  const [filesTarget, setFilesTarget] = useState<RowKey | null>(null)
   const [fileType, setFileType] = useState<(typeof FILE_TYPES)[number]>('Copy of Scope')
   const [busy, setBusy] = useState(false)
   const [searchBusy, setSearchBusy] = useState(false)
@@ -376,10 +427,14 @@ export function ManakVarietiesTable({
     }
     setBusy(true)
     try {
-      const displayName = `${fileType} - ${file.name}`
+      if (filesTarget == null) return
+      const displayName = `${tagFor(filesTarget)}${fileType} - ${file.name}`
       const uploaded = await uploadBisProjectFile(projectId, file, 'manufacturing-scope', { displayName })
-      // A new "Copy of Scope" replaces the previous one; drawings and other files are kept.
-      const replaced = fileType === 'Copy of Scope' ? scopeFiles.filter((f) => typeOf(f) === 'Copy of Scope' && f.id !== uploaded.id) : []
+      // A new "Copy of Scope" replaces the previous one of the same row; drawings and other files are kept.
+      const replaced =
+        fileType === 'Copy of Scope'
+          ? scopeFiles.filter((f) => rowKeyOf(f) === filesTarget && typeOf(f) === 'Copy of Scope' && f.id !== uploaded.id)
+          : []
       await Promise.allSettled(replaced.map(deleteBisProjectFile))
       setScopeFiles([...scopeFiles.filter((f) => !replaced.some((r) => r.id === f.id)), uploaded])
       toast.success(`${fileType} uploaded`)
@@ -468,18 +523,22 @@ export function ManakVarietiesTable({
     </div>
   )
 
-  const attachButton = (
-    <button
-      type="button"
-      className={cn(iconBtn, scopeFiles.length > 0 ? 'border-emerald-600 text-emerald-800' : 'border-stone-400 text-amber-800')}
-      disabled={!projectId}
-      title={scopeFiles.length > 0 ? `Scope files (${scopeFiles.length}): view, upload or delete` : 'Upload copy of scope, drawing or other file'}
-      aria-label="Scope files"
-      onClick={() => setFilesOpen(true)}
-    >
-      <Paperclip size={15} aria-hidden />
-    </button>
-  )
+  const filesOf = (key: RowKey) => scopeFiles.filter((f) => rowKeyOf(f) === key)
+  const attachButton = (key: RowKey) => {
+    const count = filesOf(key).length
+    return (
+      <button
+        type="button"
+        className={cn(iconBtn, count > 0 ? 'border-emerald-600 text-emerald-800' : 'border-stone-400 text-amber-800')}
+        disabled={!projectId}
+        title={count > 0 ? `Files of this row (${count}): view, upload or delete` : 'Attach a copy of scope, drawing or other file to this row'}
+        aria-label={key === 'draft' ? 'Scope files of the new row' : `Scope files of row ${key + 1}`}
+        onClick={() => setFilesTarget(key)}
+      >
+        <Paperclip size={15} aria-hidden />
+      </button>
+    )
+  }
 
   return (
     <>
@@ -541,7 +600,7 @@ export function ManakVarietiesTable({
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           e.preventDefault()
-                          addRow()
+                          void addRow()
                         }
                       }}
                     />
@@ -549,11 +608,11 @@ export function ManakVarietiesTable({
                 ))}
                 <td className={cn(td, 'whitespace-nowrap text-center')}>
                   <div className="flex items-center justify-center gap-1">
-                    <button type="button" className={cn(iconBtn, 'border-stone-400 text-amber-800')} disabled={!projectId} title="Add row" aria-label="Add scope row" onClick={addRow}>
+                    <button type="button" className={cn(iconBtn, 'border-stone-400 text-amber-800')} disabled={!projectId} title="Add row" aria-label="Add scope row" onClick={() => void addRow()}>
                       <Plus size={15} aria-hidden />
                     </button>
-                    {attachButton}
-                    <button type="button" className={cn(iconBtn, 'border-red-300 text-red-700')} title="Clear the new row" aria-label="Clear new scope row" onClick={() => setNewDraft(emptyDraft())}>
+                    {attachButton('draft')}
+                    <button type="button" className={cn(iconBtn, 'border-red-300 text-red-700')} title="Clear the new row (and its attachments)" aria-label="Clear new scope row" onClick={() => void clearNewRow()}>
                       <Trash2 size={14} aria-hidden />
                     </button>
                   </div>
@@ -616,7 +675,7 @@ export function ManakVarietiesTable({
                           <button type="button" className={cn(iconBtn, 'border-red-300 text-red-700')} disabled={!projectId} title="Delete row" aria-label={`Delete scope row ${index + 1}`} onClick={() => void deleteRow(index)}>
                             {editing ? <X size={14} aria-hidden /> : <Trash2 size={14} aria-hidden />}
                           </button>
-                          {attachButton}
+                          {attachButton(index)}
                         </div>
                       </td>
                     </tr>
@@ -665,27 +724,29 @@ export function ManakVarietiesTable({
           </div>
         </DialogContent>
       </Dialog>
-      <Dialog open={filesOpen} onOpenChange={setFilesOpen}>
+      <Dialog open={filesTarget != null} onOpenChange={(open) => !open && setFilesTarget(null)}>
         <DialogContent persistOnFocusLoss layer="stacked" aria-describedby={undefined} className={cn(limsManageDialogClass, 'max-w-lg bg-white')}>
           <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white">
             <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={limsDarkBarGlowStyle} />
             <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
             <DialogHeader className="relative pr-10 text-left">
-              <DialogTitle className="text-base font-semibold tracking-tight text-white">Scope files</DialogTitle>
+              <DialogTitle className="text-base font-semibold tracking-tight text-white">
+                {filesTarget === 'draft' || filesTarget == null ? 'Scope files — new row' : `Scope files — row ${filesTarget + 1}`}
+              </DialogTitle>
             </DialogHeader>
           </div>
           <div className={cn(limsRegistryFormClass, 'space-y-3 px-4 py-4')}>
             <ul className="max-h-56 divide-y divide-[#e7e0d4] overflow-y-auto border border-[#e7e0d4] bg-[#fffcf7]">
-              {scopeFiles.length === 0 ? (
-                <li className="px-3 py-4 text-center text-sm text-stone-500">No files uploaded yet.</li>
+              {filesTarget == null || filesOf(filesTarget).length === 0 ? (
+                <li className="px-3 py-4 text-center text-sm text-stone-500">No files attached to this row yet.</li>
               ) : (
-                scopeFiles.map((f) => (
+                filesOf(filesTarget).map((f) => (
                   <li key={f.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
                     <span className="min-w-0 truncate" title={f.file_name}>
                       <span className="mr-2 inline-block rounded-none bg-stone-800 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-200">
                         {typeOf(f)}
                       </span>
-                      {f.file_name.replace(`${typeOf(f)} - `, '')}
+                      {stripKey(f.file_name).replace(`${typeOf(f)} - `, '')}
                     </span>
                     <span className="inline-flex shrink-0 gap-1">
                       <button type="button" className={cn(iconBtn, 'h-7 w-7 border-stone-400 text-amber-800')} title="View" aria-label="View file" onClick={() => viewFile(f.viewUrl, f.file_name, f.error || 'File is unavailable.')}>
@@ -726,7 +787,7 @@ export function ManakVarietiesTable({
               </Button>
             </div>
             <div className="flex justify-end pt-1">
-              <Button type="button" variant="outline" className={limsOutlineBtnClass} onClick={() => setFilesOpen(false)}>
+              <Button type="button" variant="outline" className={limsOutlineBtnClass} onClick={() => setFilesTarget(null)}>
                 Close
               </Button>
             </div>
