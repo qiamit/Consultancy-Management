@@ -512,6 +512,7 @@ export function ManakStepPage({
         onOpenModule={onEdit}
         onTopManagement={onTopManagement}
         onTechnicalStaff={onTechnicalStaff}
+        projectRow={row}
       />
     ) : null
   } else if (stepId === 'manufacturing') {

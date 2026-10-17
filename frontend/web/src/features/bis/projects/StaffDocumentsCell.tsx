@@ -1,9 +1,17 @@
 import { useRef, useState } from 'react'
-import { Camera, Eye, FileText, GraduationCap, Loader2, PenLine } from 'lucide-react'
+import { Camera, Eye, FilePlus2, FileText, GraduationCap, Loader2, PenLine } from 'lucide-react'
 import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { usePdfViewer } from '@/components/ui/usePdfViewer'
+import { limsDarkBarGlowStyle, limsDialogClass, limsFieldClass, limsOutlineBtnClass, limsPrimaryBtnClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
+import { buildAppointmentLetterHtmlForTechnicalStaff } from '../print/printBisDocument'
+import { BisDocumentPrintPreviewDialog } from './BisDocumentPrintPreviewDialog'
+import type { BisProjectRow } from './types'
 import { fetchBisModulePayload, saveBisModulePayload } from './bisModuleDataApi'
 import {
   createBisProjectFileUrls,
@@ -74,12 +82,22 @@ export function StaffDocumentsCell({
   rowIndex,
   row,
   onChanged,
+  onDraftChange,
+  projectRow = null,
 }: {
   projectId: string
   rowIndex: number
   row: Rec
   onChanged: () => void
+  /** Draft (input) row: changes stay in the draft until the row is added, and the Generate Appointment Letter button shows. */
+  onDraftChange?: (patch: Rec) => void
+  projectRow?: BisProjectRow | null
 }) {
+  const [genOpen, setGenOpen] = useState(false)
+  const [genDate, setGenDate] = useState('')
+  const [genRef, setGenRef] = useState('')
+  const [genBusy, setGenBusy] = useState(false)
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null)
   const [busy, setBusy] = useState<Slot | null>(null)
   const [viewFile, viewer] = usePdfViewer()
   const [confirm, confirmDialog] = useConfirmDialog()
@@ -87,6 +105,10 @@ export function StaffDocumentsCell({
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const patchRow = async (patch: Rec, mutatePayload?: (payload: Rec) => Rec) => {
+    if (onDraftChange) {
+      onDraftChange(patch)
+      return
+    }
     const current = (await fetchBisModulePayload(projectId, 'technical-staff')) ?? {}
     const rows = Array.isArray((current as Rec).rows) ? ([...((current as Rec).rows as Rec[])] as Rec[]) : []
     if (!rows[rowIndex]) throw new Error('This row is no longer available.')
@@ -182,8 +204,55 @@ export function StaffDocumentsCell({
     }
   }
 
+  const openGenerate = () => {
+    if (!projectRow) {
+      toast.warning('Save the license first, then create the Appointment Letter.')
+      return
+    }
+    if (!str(row.personName).trim()) {
+      toast.warning('Enter the person name before creating the Appointment Letter.')
+      return
+    }
+    setGenDate(str(row.appointmentDate) || new Date().toISOString().slice(0, 10))
+    setGenRef(str(row.appointmentReferenceNo))
+    setGenOpen(true)
+  }
+
+  const generate = async () => {
+    if (!projectRow || !genDate.trim()) return
+    setGenBusy(true)
+    try {
+      const html = await buildAppointmentLetterHtmlForTechnicalStaff(projectRow, {
+        personName: str(row.personName),
+        designation: str(row.designation),
+        educationalQualification: str(row.educationalQualification),
+        experienceYears: str(row.experienceYears),
+        appointmentDate: genDate.trim(),
+        appointmentReferenceNo: genRef.trim(),
+      })
+      await patchRow({ appointmentDate: genDate.trim(), appointmentReferenceNo: genRef.trim() })
+      setGenOpen(false)
+      setPreviewHtml(html)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not prepare Appointment Letter.')
+    } finally {
+      setGenBusy(false)
+    }
+  }
+
   return (
     <div className="flex items-center justify-center gap-1">
+      {onDraftChange ? (
+        <button
+          type="button"
+          className={cn(btnCls, 'border-stone-400 text-amber-800 hover:bg-amber-50')}
+          title="Generate Appointment Letter"
+          aria-label="Generate Appointment Letter"
+          onClick={openGenerate}
+        >
+          <FilePlus2 size={14} aria-hidden />
+        </button>
+      ) : null}
       {SLOTS.map((s) => {
         const attached = Boolean(str(row[s.keys.id]).trim())
         const Icon = s.icon
@@ -243,6 +312,59 @@ export function StaffDocumentsCell({
       </label>
       {viewer}
       {confirmDialog}
+      {onDraftChange ? (
+        <>
+          <Dialog open={genOpen} onOpenChange={(next) => !genBusy && setGenOpen(next)}>
+            <DialogContent
+              persistOnFocusLoss
+              layer="stacked"
+              aria-describedby={undefined}
+              className={cn(limsDialogClass, 'w-[min(36rem,calc(100vw-1.5rem))] max-w-xl p-0')}
+            >
+              <div className="relative overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white">
+                <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={limsDarkBarGlowStyle} />
+                <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
+                <DialogHeader className="relative pr-10 text-left">
+                  <DialogTitle className="text-base font-semibold tracking-tight text-white">Create Appointment Letter</DialogTitle>
+                </DialogHeader>
+              </div>
+              <div className="space-y-3 bg-gradient-to-b from-stone-100/80 to-white px-4 py-4">
+                <p className="text-sm font-medium text-stone-800">
+                  {str(row.personName).trim()}
+                  {str(row.designation).trim() ? ` · ${str(row.designation).trim()}` : ''}
+                </p>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="min-w-0 space-y-1.5">
+                    <Label htmlFor="sdc-date" className="text-[11px] font-semibold uppercase tracking-wide text-stone-600">Date of Joining</Label>
+                    <Input id="sdc-date" type="date" value={genDate} onChange={(e) => setGenDate(e.target.value)} disabled={genBusy} className={limsFieldClass} />
+                  </div>
+                  <div className="min-w-0 space-y-1.5">
+                    <Label htmlFor="sdc-ref" className="text-[11px] font-semibold uppercase tracking-wide text-stone-600">Reference Number</Label>
+                    <Input id="sdc-ref" value={genRef} onChange={(e) => setGenRef(e.target.value)} disabled={genBusy} placeholder="Enter Reference Number" className={limsFieldClass} />
+                  </div>
+                </div>
+              </div>
+              <DialogFooter className="gap-2 border-t border-stone-200 bg-stone-50 px-4 py-3 sm:justify-end">
+                <Button type="button" variant="outline" className={cn(limsOutlineBtnClass, 'min-w-[6.5rem]')} onClick={() => setGenOpen(false)} disabled={genBusy}>
+                  Cancel
+                </Button>
+                <Button type="button" className={cn(limsPrimaryBtnClass, 'min-w-[8.5rem]')} onClick={() => void generate()} disabled={genBusy || !genDate.trim()}>
+                  {genBusy ? 'Preparing…' : 'Save'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          <BisDocumentPrintPreviewDialog
+            open={previewHtml != null}
+            onOpenChange={(next) => {
+              if (!next) setPreviewHtml(null)
+            }}
+            row={projectRow}
+            kind="appointment-letter"
+            generatedHtml={previewHtml}
+          />
+        </>
+      ) : null}
     </div>
   )
 }

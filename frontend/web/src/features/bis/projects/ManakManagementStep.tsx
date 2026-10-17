@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import type { BisPrintClient } from '../print/loadBisPrintData'
 import type { BisPrintDocumentKind } from '../print/printBisDocument'
+import type { BisProjectRow } from './types'
 import {
   emptyTechnicalStaffRow,
   fetchBisModulePayload,
@@ -108,7 +109,12 @@ function EditableRows({
   kind: BisPrintDocumentKind
   fields: Field[]
   blank: () => Rec
-  extraColumns?: Array<{ label: string; render: (row: Rec, index: number) => React.ReactNode }>
+  extraColumns?: Array<{
+    label: string
+    render: (row: Rec, index: number) => React.ReactNode
+    /** Cell for the input (draft) row; when absent a hint is shown. */
+    renderDraft?: (draft: Rec, patchDraft: (patch: Rec) => void) => React.ReactNode
+  }>
   saved: Rec[]
   onChanged: () => void
   addLabel: string
@@ -150,6 +156,14 @@ function EditableRows({
     void run(async () => {
       await patchPayload(projectId, kind, (p) => {
         const list = rowsOf(p).filter((r) => fields.some((f) => str(r[f.key]).trim()))
+        if (draft.applySignatureToDocuments) {
+          return {
+            ...p,
+            rows: [...list.map((r) => ({ ...r, applySignatureToDocuments: false })), { ...blank(), ...draft }],
+            signatoryName: str(draft.personName) || str(p.signatoryName),
+            signatoryDesignation: str(draft.designation) || str(p.signatoryDesignation),
+          }
+        }
         return { ...p, rows: [...list, { ...blank(), ...draft }] }
       })
       setDraft(blank())
@@ -259,8 +273,8 @@ function EditableRows({
                 </td>
               ))}
               {extraColumns?.map((c) => (
-                <td key={c.label} className={cn(tdCls, 'text-center text-xs text-stone-400')}>
-                  Add the row, then attach documents
+                <td key={c.label} className={cn(tdCls, c.renderDraft ? 'text-center' : 'text-center text-xs text-stone-400')}>
+                  {c.renderDraft ? c.renderDraft(draft, (patch) => setDraft((d) => ({ ...d, ...patch }))) : 'Add the row, then attach documents'}
                 </td>
               ))}
               <td className={cn(tdCls, 'text-center')}>
@@ -381,6 +395,7 @@ export function ManakManagementStep({
   onChanged,
   onTopManagement,
   onTechnicalStaff,
+  projectRow,
 }: {
   projectId: string
   client: BisPrintClient | undefined
@@ -391,6 +406,7 @@ export function ManakManagementStep({
   onOpenModule?: (kind: BisPrintDocumentKind) => void
   onTopManagement?: { preview: () => void; pdf: () => void; word: () => void }
   onTechnicalStaff?: { preview: () => void; pdf: () => void; word: () => void }
+  projectRow?: BisProjectRow | null
 }) {
   const tmRows = rowsOf(topManagement)
   const firstTm = tmRows.find((r) => str(r.personName).trim())
@@ -541,6 +557,9 @@ export function ManakManagementStep({
             {
               label: 'Documents',
               render: (r, index) => <StaffDocumentsCell projectId={projectId} rowIndex={index} row={r} onChanged={onChanged} />,
+              renderDraft: (draft, patchDraft) => (
+                <StaffDocumentsCell projectId={projectId} rowIndex={-1} row={draft} onChanged={onChanged} onDraftChange={patchDraft} projectRow={projectRow} />
+              ),
             },
           ]}
           saved={rowsOf(technicalStaff)}
