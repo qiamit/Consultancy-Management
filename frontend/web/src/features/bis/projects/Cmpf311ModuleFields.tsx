@@ -249,36 +249,8 @@ export function Cmpf311ModuleFields({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-2 sm:p-3">
-      <section className="grid gap-2 border border-stone-300 bg-[#fffcf7] p-3 lg:grid-cols-4">
-        <label className="flex flex-col gap-1 text-xs font-semibold text-stone-700">
-          SIT Type
-          <select
-            className={cn(limsFieldClass, 'h-9')}
-            value={value.mode}
-            disabled={disabled}
-            onChange={(event) => {
-              const mode = event.target.value === 'on-sit' ? 'on-sit' : 'bis-sit'
-              onChange({
-                ...value,
-                mode,
-                productManualNumber: mode === 'bis-sit' ? masterManualNumber : value.productManualNumber || masterManualNumber,
-              })
-            }}
-          >
-            <option value="bis-sit">BIS SIT</option>
-            <option value="on-sit">Own SIT</option>
-          </select>
-        </label>
-        <label className="flex flex-col gap-1 text-xs font-semibold text-stone-700">
-          Product Manual Number / SIT Number
-          <Input
-            className={cn(limsFieldClass, 'h-9')}
-            value={value.mode === 'bis-sit' ? masterManualNumber || value.productManualNumber : value.productManualNumber}
-            disabled={disabled || value.mode === 'bis-sit'}
-            placeholder={value.mode === 'bis-sit' ? 'Set Product Manual Number in IS Code master' : 'Enter Product Manual / SIT number'}
-            onChange={(event) => patch('productManualNumber', event.target.value)}
-          />
-        </label>
+      {/* SIT type and Product Manual number are chosen on the application step (Select SIT row). */}
+      <section className="grid gap-2 border border-stone-300 bg-[#fffcf7] p-3 lg:grid-cols-2">
         <label className="flex flex-col gap-1 text-xs font-semibold text-stone-700">
           Reference Letter Number
           <Input className={cn(limsFieldClass, 'h-9')} value={value.referenceLetterNo} disabled={disabled} onChange={(event) => patch('referenceLetterNo', event.target.value)} />
