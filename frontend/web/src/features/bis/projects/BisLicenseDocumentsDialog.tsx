@@ -730,7 +730,7 @@ export function BisLicenseDocumentsDialog({
               <div className="relative flex min-w-0 flex-col gap-1.5">
                 <div className="flex min-w-0 flex-nowrap items-center gap-1.5 sm:gap-2.5">
                   <DialogHeader className="min-w-0 flex-1 space-y-0 text-left">
-                    <DialogTitle className="truncate text-sm font-semibold tracking-tight text-white sm:text-base md:text-lg">
+                    <DialogTitle className="sr-only">
                       Online Application for Grant of License
                     </DialogTitle>
                   </DialogHeader>
