@@ -70,12 +70,24 @@
             </span>
             <span id="importQrLabel" class="tile-hint">OFF — enables after Login</span>
           </label>
+          <label class="tile tile-new-app" for="newAppToggle">
+            <span class="tile-top">
+              <span class="tile-title">New Application</span>
+              <span class="switch">
+                <input id="newAppToggle" type="checkbox" />
+                <span class="slider"></span>
+              </span>
+            </span>
+            <span id="newAppLabel" class="tile-hint">OFF — starts from Manak Assist in Consultancy Pro</span>
+          </label>
         </div>
         <p class="flow-note">
           <strong>Test Request:</strong> from Consultancy Pro 🧪 — auto-enables, login → fill → PDF + Sample Code, then turns OFF.
           <strong>Import QR:</strong> Import → Available list only (no samples / no Test Request).
+          <strong>New Application:</strong> from Manak Assist — login, then fills each licence step from the project. You click Next; it never submits or pays.
         </p>
         <p id="importQrStatus" class="import-qr-status" aria-live="polite"></p>
+        <p id="newAppStatus" class="import-qr-status" aria-live="polite"></p>
       </section>
 
       <section class="panel panel-bulk" aria-labelledby="fillTitle">

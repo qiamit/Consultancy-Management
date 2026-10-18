@@ -156,6 +156,22 @@ body.off.import-qr-off .tile-import-qr .tile-hint {
   color: #b91c1c;
 }
 
+.tile-new-app {
+  grid-column: 1 / -1;
+}
+
+.tile-new-app .tile-hint {
+  color: #0f766e;
+}
+
+body.new-app-off .tile-new-app .tile-hint {
+  color: #b91c1c;
+}
+
+body.new-app-wait .tile-new-app .tile-hint {
+  color: #b45309;
+}
+
 .import-qr-status {
   margin: 8px 0 0;
   padding: 8px 10px;

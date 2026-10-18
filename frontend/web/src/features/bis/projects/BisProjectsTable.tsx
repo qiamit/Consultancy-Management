@@ -12,6 +12,7 @@ import {
   Wallet,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { buildManakNewAppPayload } from './manakNewAppPayload'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -214,15 +215,27 @@ function RowActions({
         variant="ghost"
         className={actionGhostBtnClass}
         aria-label={`Manak Assist for ${client}`}
-        title="Manak Assist"
+        title="Manak Assist — login and fill the New Application on Manak"
         onClick={() => {
-          void openManakEbisAssist({
-            portalUserId: manakLoginFromProject(row).userId,
-            projectId: row.id,
-          })
+          const preparing = toast.loading('Preparing application data and documents for Manak…')
+          void buildManakNewAppPayload(row)
+            .finally(() => toast.dismiss(preparing))
+            .catch((err: unknown) => {
+              toast.warning('Could not load application data — opening Manak login only', {
+                description: err instanceof Error ? err.message : undefined,
+              })
+              return null
+            })
+            .then((newApp) =>
+              openManakEbisAssist({
+                portalUserId: manakLoginFromProject(row).userId,
+                projectId: row.id,
+                newApp,
+              }),
+            )
             .then(({ extensionUsed }) => {
               if (extensionUsed) {
-                toast.success('Opening Manak eBIS via extension')
+                toast.success('Opening Manak in a new tab — type the captcha, then open Apply for new licence')
               } else {
                 toast.warning('Extension not detected — opened Manak eBIS in a new tab', {
                   description: EXTENSION_MISSING_MSG,

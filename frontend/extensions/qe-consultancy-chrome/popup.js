@@ -4,6 +4,9 @@ const powerLabel = document.getElementById("powerLabel");
 const importQrToggle = document.getElementById("importQrToggle");
 const importQrLabel = document.getElementById("importQrLabel");
 const importQrStatus = document.getElementById("importQrStatus");
+const newAppToggle = document.getElementById("newAppToggle");
+const newAppLabel = document.getElementById("newAppLabel");
+const newAppStatus = document.getElementById("newAppStatus");
 const enableBypass = document.getElementById("enableBypass");
 const enableCtrlBypass = document.getElementById("enableCtrlBypass");
 const fieldNameInput = document.getElementById("fieldName");
@@ -45,6 +48,28 @@ function paintImportQr(on, waiting) {
   }
 }
 
+function paintNewApp(on, waiting, fill, log) {
+  document.body.classList.toggle("new-app-off", !on && !waiting);
+  document.body.classList.toggle("new-app-wait", Boolean(waiting));
+  if (newAppToggle) {
+    newAppToggle.checked = on || Boolean(waiting);
+    // Turning ON needs a project from Manak Assist; the switch here only turns it OFF.
+    newAppToggle.disabled = !on && !waiting;
+  }
+  if (newAppLabel) {
+    const who = fill && fill.firmName ? ` — ${fill.firmName}` : "";
+    newAppLabel.textContent = waiting
+      ? `Waiting for Manak Login…${who}`
+      : on
+        ? `ON — filling licence steps${who}`
+        : "OFF — starts from Manak Assist in Consultancy Pro";
+  }
+  if (newAppStatus) {
+    newAppStatus.textContent =
+      (on || waiting) && log && log.message ? `Last step: ${log.message}` : "";
+  }
+}
+
 function paintImportQrLast(result) {
   if (!importQrStatus) return;
   const codes = Array.isArray(result?.qr_codes) ? result.qr_codes.filter(Boolean) : [];
@@ -63,6 +88,10 @@ async function loadPower() {
     "qeManakImportQrEnabled",
     "qeManakImportQr",
     "manakQrImport",
+    "qeManakNewApp",
+    "qeManakNewAppEnabled",
+    "newAppFill",
+    "newAppLog",
   ]);
   // Default OFF — only explicit true means Manak auto-flow is active.
   paintPower(data.qeManakEnabled === true);
@@ -70,6 +99,12 @@ async function loadPower() {
   const on = data.qeManakImportQrEnabled === true;
   paintImportQr(on, waiting);
   paintImportQrLast(data.manakQrImport || null);
+  paintNewApp(
+    data.qeManakNewAppEnabled === true,
+    data.qeManakNewApp === true && data.qeManakNewAppEnabled !== true,
+    data.newAppFill || null,
+    data.newAppLog || null,
+  );
 }
 
 function init() {
@@ -103,6 +138,10 @@ function init() {
         qeManakImportQrEnabled: false,
         qeManakImportQrLanded: false,
         qeManakImportQrTabId: 0,
+        qeManakNewApp: false,
+        qeManakNewAppEnabled: false,
+        newAppFill: null,
+        newAppLog: null,
       });
       chrome.runtime.sendMessage({ type: "QE_MANAK_IDLE" }, () => {
         void chrome.runtime.lastError;
@@ -143,6 +182,21 @@ function init() {
     );
   });
 
+  newAppToggle.addEventListener("change", async () => {
+    if (newAppToggle.checked) return;
+    await chrome.storage.local.set({
+      qeManakNewApp: false,
+      qeManakNewAppEnabled: false,
+      newAppFill: null,
+      newAppLog: null,
+    });
+    chrome.runtime.sendMessage({ type: "QE_MANAK_IDLE" }, () => {
+      void chrome.runtime.lastError;
+    });
+    void loadPower();
+    setStatus("New Application OFF — Manak pages work normally.", false);
+  });
+
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
     if (changes.manakQrImport) {
@@ -152,7 +206,10 @@ function init() {
       changes.qeManakEnabled ||
       changes.qeManakArmed ||
       changes.qeManakImportQrEnabled ||
-      changes.qeManakImportQr
+      changes.qeManakImportQr ||
+      changes.qeManakNewApp ||
+      changes.qeManakNewAppEnabled ||
+      changes.newAppLog
     ) {
       void loadPower();
     }
