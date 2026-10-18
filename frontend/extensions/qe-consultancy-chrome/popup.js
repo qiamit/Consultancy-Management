@@ -7,6 +7,9 @@ const importQrStatus = document.getElementById("importQrStatus");
 const newAppToggle = document.getElementById("newAppToggle");
 const newAppLabel = document.getElementById("newAppLabel");
 const newAppStatus = document.getElementById("newAppStatus");
+const inclusionToggle = document.getElementById("inclusionToggle");
+const inclusionLabel = document.getElementById("inclusionLabel");
+const inclusionStatus = document.getElementById("inclusionStatus");
 const enableBypass = document.getElementById("enableBypass");
 const enableCtrlBypass = document.getElementById("enableCtrlBypass");
 const fieldNameInput = document.getElementById("fieldName");
@@ -70,6 +73,26 @@ function paintNewApp(on, waiting, fill, log) {
   }
 }
 
+function paintInclusion(on, waiting, fill, log) {
+  document.body.classList.toggle("inclusion-off", !on && !waiting);
+  if (inclusionToggle) {
+    inclusionToggle.checked = on || Boolean(waiting);
+    // Turning ON needs a licence from Manak Assist; the switch here only turns it OFF.
+    inclusionToggle.disabled = !on && !waiting;
+  }
+  if (inclusionLabel) {
+    const who = fill && fill.firmName ? ` — ${fill.firmName}` : "";
+    inclusionLabel.textContent = waiting
+      ? `Waiting for Manak Login…${who}`
+      : on
+        ? `ON — filling Change in Scope (Inclusion)${who}`
+        : "OFF — starts from Manak Assist on BIS New Inclusion";
+  }
+  if (inclusionStatus) {
+    inclusionStatus.textContent = log && log.message ? `Inclusion: ${log.message}` : "";
+  }
+}
+
 function paintImportQrLast(result) {
   if (!importQrStatus) return;
   const codes = Array.isArray(result?.qr_codes) ? result.qr_codes.filter(Boolean) : [];
@@ -92,6 +115,10 @@ async function loadPower() {
     "qeManakNewAppEnabled",
     "newAppFill",
     "newAppLog",
+    "qeManakInclusion",
+    "qeManakInclusionEnabled",
+    "inclusionFill",
+    "inclusionLog",
   ]);
   // Default OFF — only explicit true means Manak auto-flow is active.
   paintPower(data.qeManakEnabled === true);
@@ -104,6 +131,12 @@ async function loadPower() {
     data.qeManakNewApp === true && data.qeManakNewAppEnabled !== true,
     data.newAppFill || null,
     data.newAppLog || null,
+  );
+  paintInclusion(
+    data.qeManakInclusionEnabled === true,
+    data.qeManakInclusion === true && data.qeManakInclusionEnabled !== true,
+    data.inclusionFill || null,
+    data.inclusionLog || null,
   );
 }
 
@@ -142,6 +175,9 @@ function init() {
         qeManakNewAppEnabled: false,
         newAppFill: null,
         newAppLog: null,
+        qeManakInclusion: false,
+        qeManakInclusionEnabled: false,
+        inclusionFill: null,
       });
       chrome.runtime.sendMessage({ type: "QE_MANAK_IDLE" }, () => {
         void chrome.runtime.lastError;
@@ -197,6 +233,20 @@ function init() {
     setStatus("New Application OFF — Manak pages work normally.", false);
   });
 
+  inclusionToggle.addEventListener("change", async () => {
+    if (inclusionToggle.checked) return;
+    await chrome.storage.local.set({
+      qeManakInclusion: false,
+      qeManakInclusionEnabled: false,
+      inclusionFill: null,
+    });
+    chrome.runtime.sendMessage({ type: "QE_MANAK_IDLE" }, () => {
+      void chrome.runtime.lastError;
+    });
+    void loadPower();
+    setStatus("Inclusion OFF — Manak pages work normally.", false);
+  });
+
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
     if (changes.manakQrImport) {
@@ -209,7 +259,10 @@ function init() {
       changes.qeManakImportQr ||
       changes.qeManakNewApp ||
       changes.qeManakNewAppEnabled ||
-      changes.newAppLog
+      changes.newAppLog ||
+      changes.qeManakInclusion ||
+      changes.qeManakInclusionEnabled ||
+      changes.inclusionLog
     ) {
       void loadPower();
     }

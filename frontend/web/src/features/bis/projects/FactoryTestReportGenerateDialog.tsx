@@ -411,11 +411,11 @@ export function FactoryTestReportGenerateDialog({
             )}
           </div>
 
-          <DialogFooter className="shrink-0 gap-2 border-t border-stone-300 bg-stone-50 px-4 py-3 sm:justify-between">
+          <DialogFooter className="!flex-row shrink-0 items-center !justify-between gap-2 !space-x-0 border-t border-stone-300 bg-stone-50 px-4 py-2">
             <Button
               type="button"
               variant="outline"
-              className={cn(limsOutlineBtnClass, 'h-9')}
+              className={cn(limsOutlineBtnClass, 'h-8')}
               disabled={testReportGenerateBusy}
               onClick={() => {
                 closeDialog()
@@ -430,7 +430,7 @@ export function FactoryTestReportGenerateDialog({
               <Button
                 type="button"
                 variant="outline"
-                className={cn(limsOutlineBtnClass, 'h-9')}
+                className={cn(limsOutlineBtnClass, 'h-8')}
                 disabled={disabled || testReportGenerateBusy || testReportGenerateLoading}
                 onClick={handleGenerateTestReportSave}
               >
@@ -439,7 +439,7 @@ export function FactoryTestReportGenerateDialog({
               <Button
                 type="button"
                 variant="outline"
-                className={cn(limsOutlineBtnClass, 'h-9 gap-1.5')}
+                className={cn(limsOutlineBtnClass, 'h-8 gap-1.5')}
                 disabled={disabled || testReportGenerateBusy || testReportGenerateLoading}
                 onClick={handleGenerateTestReportPrint}
               >
@@ -447,7 +447,7 @@ export function FactoryTestReportGenerateDialog({
               </Button>
               <Button
                 type="button"
-                className={cn(limsPrimaryBtnClass, 'h-9 gap-1.5')}
+                className={cn(limsPrimaryBtnClass, 'h-8 gap-1.5')}
                 disabled={disabled || testReportGenerateBusy || testReportGenerateLoading}
                 onClick={handleGenerateTestReportDownload}
               >

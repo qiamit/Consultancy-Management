@@ -8,7 +8,7 @@ import { DEFAULT_BIS_DOCUMENT_PRINT_PAGE_SETTINGS } from '../print/bisDocumentPr
 import { loadBisPrintData } from '../print/loadBisPrintData'
 import { packagingMarkingFieldsFrom } from '../print/manufacturingStepDocumentsHtml'
 import { BIS_PRINT_DOCUMENT_LABEL, buildBisDocumentHtml, type BisPrintDocumentKind } from '../print/printBisDocument'
-import { loadApplicationDocumentRows, otherInformationDocumentRows } from './applicationDocuments'
+import { loadApplicationDocumentRows, otherInformationDocumentRows, otherInformationUploadChoice, otherInformationUploadOn } from './applicationDocuments'
 import { buildBisDocumentPdfBlob } from './bisDocumentPdf'
 import { buildExcelWorkbook } from './bisExcelWorkbook'
 import { fetchBisModulePayload } from './bisModuleDataApi'
@@ -394,7 +394,9 @@ export async function buildManakNewAppPayload(row: BisProjectRow): Promise<Manak
     let i = 0
     if (key === 'otherInformation') {
       // Every application document as a PDF (Step 8 list), then the files added by hand.
-      const docs = otherInformationDocumentRows(await loadApplicationDocumentRows(row).catch(() => []))
+      // Only the documents switched ON in Step 7 Other Information.
+      const choice = otherInformationUploadChoice(decl)
+      const docs = otherInformationDocumentRows(await loadApplicationDocumentRows(row).catch(() => [])).filter((d) => otherInformationUploadOn(d, choice))
       // Render three at a time (the PDF service handles parallel pages), keep Step 8 order for the rows.
       const paths: Array<{ path: string; fileName: string } | Error> = new Array(docs.length)
       let next = 0

@@ -890,7 +890,7 @@
       );
     });
     const again = root.getElementById("again");
-    if (again) again.addEventListener("click", () => void run(true));
+    if (again) again.addEventListener("click", () => safeRun(true));
     root.getElementById("off").addEventListener("click", () => {
       chrome.storage.local.set({ qeManakNewApp: false, qeManakNewAppEnabled: false, newAppFill: null, newAppLog: null });
       if (panelHost) panelHost.remove();
@@ -1043,6 +1043,25 @@
     chrome.runtime.sendMessage({ type: "QE_MANAK_IDLE" }, () => void chrome.runtime.lastError);
   }
 
+  /**
+   * After the extension is reloaded, scripts left in already-open tabs lose their connection ("Extension context
+   * invalidated"); they stop quietly instead of throwing. Refreshing the tab loads the new script.
+   */
+  const alive = () => {
+    try {
+      return Boolean(chrome.runtime && chrome.runtime.id);
+    } catch {
+      return false;
+    }
+  };
+
+  function safeRun(force) {
+    if (!alive()) return;
+    run(force).catch((error) => {
+      if (!/context invalidated/i.test(String(error && error.message))) console.warn("QE:", error);
+    });
+  }
+
   async function run(force) {
     if (running || finished) return;
     if (/ebislogin/i.test(location.pathname)) return;
@@ -1107,15 +1126,15 @@
 
   chrome.runtime.onMessage.addListener((msg) => {
     if (!msg || typeof msg !== "object") return;
-    if (msg.type === "QE_NEWAPP_REFRESH") void run(false);
+    if (msg.type === "QE_NEWAPP_REFRESH") safeRun(false);
     if (msg.type === "QE_MANAK_IDLE" && panelHost) panelHost.remove();
   });
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
-    if (changes.qeManakNewAppEnabled || changes.newAppFill) void run(false);
+    if (changes.qeManakNewAppEnabled || changes.newAppFill) safeRun(false);
   });
 
   // Steps render after page scripts; give them a moment.
-  setTimeout(() => void run(false), 1500);
+  setTimeout(() => safeRun(false), 1500);
 })();

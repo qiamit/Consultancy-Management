@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Check, Download, Eye, FileType, Import, Pencil, Plus, Printer, Trash2, X } from 'lucide-react'
+import { Check, ChevronDown, Download, Eye, FileType, Import, Pencil, Plus, Printer, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import type { BisPrintClient } from '../print/loadBisPrintData'
 import type { BisPrintDocumentKind } from '../print/printBisDocument'
@@ -167,6 +168,10 @@ export type Field = {
   master?: BisMasterOptionCategory
   /** Fixed drop-down choices. */
   options?: string[]
+  /** With options: tick several (saved as "a, b" in the options' order). */
+  multiple?: boolean
+  /** Applied to the value when a row is added or saved (e.g. "1" → "1 Nos"). */
+  normalize?: (value: string, row: Rec) => string
   /** Native input type (e.g. date). */
   type?: 'date'
   /** Free text with a suggestions drop-down (any other value can still be typed). */
@@ -222,6 +227,57 @@ function LookupCell({ field, id, row, onChange }: { field: Field; id: string; ro
         onChange={({ id: picked, label }) => onChange({ [field.key]: label, [lookup.idKey]: picked })}
       />
     </div>
+  )
+}
+
+const splitMulti = (value: string) => value.split(',').map((v) => v.trim()).filter(Boolean)
+
+/** Several fixed choices in one drop-down (ticks); the value is the ticked ones joined by ", ". */
+function MultiOptionSelect({ field, value, onChange }: { field: Field; value: string; onChange: (v: string) => void }) {
+  const picked = splitMulti(value)
+  const toggle = (o: string, on: boolean) => {
+    const next = (field.options ?? []).filter((x) => (x === o ? on : picked.includes(x)))
+    onChange(next.join(', '))
+  }
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label={field.label}
+          className="mx-auto flex h-8 w-full min-w-[6rem] items-center justify-between gap-1 rounded-none border border-stone-400 bg-white px-3 text-left text-sm text-foreground focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+        >
+          <span className={cn('min-w-0 flex-1 truncate', !picked.length && 'text-muted-foreground')}>{picked.length ? picked.join(', ') : 'Select'}</span>
+          <ChevronDown className="h-4 w-4 shrink-0 opacity-50" aria-hidden />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="min-w-[var(--radix-dropdown-menu-trigger-width)] rounded-none">
+        {(field.options ?? []).length ? (
+          (field.options ?? []).map((o) => (
+            <DropdownMenuCheckboxItem
+              key={o}
+              className="gap-2 pl-2 [&>span:first-child]:hidden"
+              checked={picked.includes(o)}
+              onCheckedChange={(on) => toggle(o, on === true)}
+              onSelect={(e) => e.preventDefault()}
+            >
+              <span
+                aria-hidden
+                className={cn(
+                  'flex h-4 w-4 shrink-0 items-center justify-center border',
+                  picked.includes(o) ? 'border-amber-700 bg-amber-700 text-white' : 'border-stone-400 bg-white',
+                )}
+              >
+                {picked.includes(o) ? <Check className="h-3 w-3" /> : null}
+              </span>
+              {o}
+            </DropdownMenuCheckboxItem>
+          ))
+        ) : (
+          <p className="px-2 py-1.5 text-sm text-stone-500">No choices</p>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
@@ -327,7 +383,12 @@ export function EditableRows({
         const list = listOf(p).filter(isFilled)
         const row: Rec = { ...blank(), ...draft }
         // A drop-down left on an invalid value saves the default shown on screen.
-        for (const f of fields) if (f.options && !f.options.includes(str(row[f.key]))) row[f.key] = blank()[f.key]
+        for (const f of fields) {
+          if (!f.options) continue
+          if (f.multiple) row[f.key] = splitMulti(str(row[f.key])).filter((v) => f.options!.includes(v)).join(', ')
+          else if (!f.options.includes(str(row[f.key]))) row[f.key] = blank()[f.key]
+        }
+        for (const f of fields) if (f.normalize) row[f.key] = f.normalize(str(row[f.key]), row)
         let next: Rec = { ...p, [rowsKey]: [...list, row] }
         if (draft.applySignatureToDocuments) {
           next = {
@@ -353,7 +414,8 @@ export function EditableRows({
     }
     void run(async () => {
       await patchPayload(projectId, kind, (p) => {
-        const list = listOf(p).map((r, i) => (i === editIndex ? { ...r, ...editDraft } : r))
+        const normalized = (r: Rec) => fields.reduce((acc, f) => (f.normalize ? { ...acc, [f.key]: f.normalize(str(acc[f.key]), acc) } : acc), r)
+        const list = listOf(p).map((r, i) => (i === editIndex ? normalized({ ...r, ...editDraft }) : r))
         return { ...p, [rowsKey]: list }
       })
       setEditIndex(null)
@@ -401,7 +463,7 @@ export function EditableRows({
             <tr>
               <th className={cn(thCls, 'w-8 px-1 text-center')} aria-label="Select" />
               {fields.map((f) => (
-                <th key={f.key} className={cn(thCls, 'text-center')} style={f.width ? { width: f.width } : undefined}>
+                <th key={f.key} className={cn(thCls, 'whitespace-pre-line text-center')} style={f.width ? { width: f.width } : undefined}>
                   {f.label}
                   {f.optional ? null : <span className="text-red-400">*</span>}
                 </th>
@@ -419,7 +481,9 @@ export function EditableRows({
               <td className={tdCls} />
               {fields.map((f) => (
                 <td key={f.key} className={tdCls}>
-                  {f.options ? (
+                  {f.options && f.multiple ? (
+                    <MultiOptionSelect field={f} value={str(draft[f.key])} onChange={(v) => setDraft((d) => ({ ...d, [f.key]: v }))} />
+                  ) : f.options ? (
                     <OptionSelect
                       field={f}
                       value={f.options.includes(str(draft[f.key])) ? str(draft[f.key]) : str(blank()[f.key])}
@@ -500,7 +564,9 @@ export function EditableRows({
                     </td>
                     {fields.map((f) => (
                       <td key={f.key} className={cn(tdCls, f.alignLeft ? 'text-left' : 'text-center')}>
-                        {editing && f.options ? (
+                        {editing && f.options && f.multiple ? (
+                          <MultiOptionSelect field={f} value={str(editDraft[f.key])} onChange={(v) => setEditDraft((d) => ({ ...d, [f.key]: v }))} />
+                        ) : editing && f.options ? (
                           <OptionSelect field={f} value={str(editDraft[f.key])} onChange={(v) => setEditDraft((d) => ({ ...d, [f.key]: v }))} />
                         ) : editing && f.suggestions ? (
                           <SuggestCell field={f} id={`er-${kind}-${f.key}-${index}`} value={str(editDraft[f.key])} onChange={(v) => setEditDraft((d) => ({ ...d, [f.key]: v }))} />

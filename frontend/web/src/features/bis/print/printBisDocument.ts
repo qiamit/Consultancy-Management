@@ -115,6 +115,12 @@ import {
   updatedSchemeOfInspectionDataFromPrintData,
 } from './updatedSchemeOfInspectionHtml'
 import {
+  buildInclusionRequestLetterHtml,
+  inclusionAdditionRows,
+  inclusionRequestLetterDataFromPrintData,
+} from './inclusionRequestLetterHtml'
+import { INCLUSION_COMPONENTS_KIND, INCLUSION_DETAILS_KIND, INCLUSION_OTHER_DOCS_KIND } from '../projects/inclusionModel'
+import {
   buildCalibrationCertificatesHtml,
   buildConsentLetterHtml,
 } from './bisFileAnnexHtml'
@@ -165,6 +171,9 @@ export type BisPrintDocumentKind =
   | 'raw-material-test-reports'
   | 'osl-offer-and-test-request'
   | 'application-copy'
+  | 'inclusion-request-letter'
+  | 'inclusion-cmpf-305'
+  | 'inclusion-cmpf-306'
 
 export const BIS_PRINT_DOCUMENT_LABEL: Record<BisPrintDocumentKind, string> = {
   'legal-documents': 'Legal Documents',
@@ -212,6 +221,9 @@ export const BIS_PRINT_DOCUMENT_LABEL: Record<BisPrintDocumentKind, string> = {
   'raw-material-test-reports': 'Raw Material Test Reports',
   'osl-offer-and-test-request': 'Sample Offer Letter & Test Request',
   'application-copy': 'Application Copy',
+  'inclusion-request-letter': 'Inclusion Request Letter & Undertaking',
+  'inclusion-cmpf-305': 'Additional Manufacturing Machinery (Inclusion)',
+  'inclusion-cmpf-306': 'Additional Testing Equipment (Inclusion)',
 }
 
 /** Documents offered in the "More prints" menu (Form-I and Authorization Letter have their own buttons). */
@@ -451,6 +463,10 @@ const HTML_BUILDERS: Record<BisPrintDocumentKind, (data: BisPrintData) => string
   // Step 6 "Sample Offer Letter & Test Request": the offer letter page only (no Test Request / Factory Test Report pages).
   'osl-offer-and-test-request': (d) => buildOslSampleRequirementsHtml(oslSampleRequirementsDataFromPrintData(d)),
   'all-required-undertakings': (d) => allRequiredUndertakingsHtml(d),
+  'inclusion-request-letter': (d) => buildInclusionRequestLetterHtml(inclusionRequestLetterDataFromPrintData(d)),
+  // Only the CMPF rows marked as added for the inclusion (the loader filters modulePayload.rows).
+  'inclusion-cmpf-305': (d) => buildCmpf305Html(cmpf305DataFromPrintData(d)),
+  'inclusion-cmpf-306': (d) => buildCmpf306Html(cmpf306DataFromPrintData(d)),
   'raw-material-reference': (d) => combinePrintHtmlDocuments('Raw Material & Reference Material', [
     buildRawMaterialDetailsHtml(rawMaterialDetailsDataFromPrintData(d)),
     buildCertifiedReferenceMaterialsHtml(certifiedReferenceMaterialsDataFromPrintData(d)),
@@ -477,7 +493,13 @@ export async function buildBisDocumentHtml(
             ? 'raw-material-reference'
             : kind === 'application-copy'
               ? 'application-details'
-              : kind
+              : kind === 'inclusion-request-letter'
+                ? INCLUSION_DETAILS_KIND
+                : kind === 'inclusion-cmpf-305'
+                  ? 'cmpf-305'
+                  : kind === 'inclusion-cmpf-306'
+                    ? 'cmpf-306'
+                    : kind
   const [
     printData,
     modulePayload,
@@ -565,6 +587,31 @@ export async function buildBisDocumentHtml(
               : longDurationUndertaking,
           minimumFee: minimumFeeUndertaking,
         },
+      },
+    }
+  }
+
+  if (kind === 'inclusion-cmpf-305' || kind === 'inclusion-cmpf-306') {
+    data = { ...data, modulePayload: { ...(data.modulePayload ?? {}), rows: inclusionAdditionRows(data.modulePayload) } }
+  }
+
+  if (kind === 'inclusion-request-letter') {
+    const { listBisProjectFiles } = await import('../projects/bisProjectFilesApi')
+    const [samples, components, machinery, equipment, otherFiles] = await Promise.all([
+      fetchBisModulePayload(row.id, 'osl-sample-requirements').catch(() => null),
+      fetchBisModulePayload(row.id, INCLUSION_COMPONENTS_KIND).catch(() => null),
+      fetchBisModulePayload(row.id, 'cmpf-305').catch(() => null),
+      fetchBisModulePayload(row.id, 'cmpf-306').catch(() => null),
+      listBisProjectFiles(row.id, INCLUSION_OTHER_DOCS_KIND).catch(() => []),
+    ])
+    data = {
+      ...data,
+      modulePayload: {
+        ...(data.modulePayload ?? {}),
+        __samples: samples,
+        __components: components,
+        __additions: { machinery: inclusionAdditionRows(machinery).length, equipment: inclusionAdditionRows(equipment).length },
+        __otherDocuments: otherFiles.map((f) => f.file_name),
       },
     }
   }

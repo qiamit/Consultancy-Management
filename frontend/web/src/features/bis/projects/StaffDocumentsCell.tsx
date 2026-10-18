@@ -402,7 +402,7 @@ export function StaffDocumentsCell({
               persistOnFocusLoss
               layer="stacked"
               aria-describedby={undefined}
-              className={cn(limsDialogClass, 'w-[min(36rem,calc(100vw-1.5rem))] max-w-xl p-0')}
+              className={cn(limsDialogClass, 'w-[min(36rem,calc(100vw_-_var(--app-dialog-overlay-left,0px)_-_1.5rem))] max-w-xl p-0')}
             >
               <div className="relative overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white">
                 <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={limsDarkBarGlowStyle} />

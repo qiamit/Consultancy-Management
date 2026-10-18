@@ -49,10 +49,10 @@ function tableHtml(rows: RawMaterialRow[]): string {
   <thead>
     <tr>
       <th style="width:6%">Sr. No.</th>
-      <th style="width:22.5%">Raw Material</th>
-      <th style="width:22.5%">Name of Supplier</th>
+      <th style="width:34%">Raw Material</th>
+      <th style="width:15%">Name of Supplier</th>
       <th style="width:16%">Conformity of Material</th>
-      <th style="width:16%">Record Maintained</th>
+      <th style="width:12%">Record Maintained</th>
       <th style="width:17%">How Received Batches / Lots Nature of Packaging</th>
     </tr>
   </thead>
@@ -105,7 +105,9 @@ function buildBody(data: RawMaterialDetailsData): string {
 }
 
 const STYLES = `
-  .rmd-table td { height: 7.5mm; font-size: 9.5px; }
+  /* Rows size to their text (no fixed height) so a typical list of raw materials stays on one page. */
+  /* The shared table style pads cells 4px (!important); 2px here keeps a typical list on one page. */
+  .pd-sheet table.rmd-table td { height: auto; padding-top: 2px !important; padding-bottom: 2px !important; line-height: 1.3; }
   .cmpf-sign-right { margin-top: 14px; text-align: right; }
   .cmpf-sign-right .pd-signatory { text-align: left; }
 `

@@ -47,6 +47,23 @@ export async function combineWordHtml(
     `<body>${pages.map((page) => `<section class="bis-word-document">${page.body}</section>`).join('')}</body>`,
     'text/html',
   )
+  // Sheet scripts (the flow chart's fit-to-page helper) would come through as text.
+  for (const script of Array.from(document.querySelectorAll('script'))) script.remove()
+  // Print-only repeating blocks (Factory Test Report: title + details in <thead>, signatures in <tfoot>) are one wide
+  // cell around whole blocks; html-to-docx tangles them with the table and drops the footer. Word gets them as plain
+  // blocks above / below the table.
+  for (const row of Array.from(document.querySelectorAll<HTMLTableRowElement>('thead > tr, tfoot > tr'))) {
+    const cells = Array.from(row.cells)
+    const table = row.closest('table')
+    if (cells.length !== 1 || cells[0]!.colSpan < 2 || !table) continue
+    const block = document.createElement('div')
+    while (cells[0]!.firstChild) block.appendChild(cells[0]!.firstChild)
+    if (row.parentElement?.tagName === 'THEAD') table.before(block)
+    else table.after(block)
+    const section = row.parentElement
+    row.remove()
+    if (section && !section.children.length) section.remove()
+  }
   for (const svg of Array.from(document.querySelectorAll('svg'))) {
     const replacement = await svgToWordImage(svg)
     if (replacement) svg.replaceWith(replacement)
@@ -111,6 +128,51 @@ export async function combineWordHtml(
   `
   const styleText = `${pages.map((page) => page.style).join('\n')}\n${wordLayoutCss}`
   return `<!doctype html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" lang="en"><head><meta charset="utf-8"/><meta http-equiv="Content-Type" content="text/html; charset=utf-8"/><meta name="ProgId" content="Word.Document"/><title>${safeTitle}</title><style>${styleText}</style><!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:DoNotOptimizeForBrowser/></w:WordDocument></xml><![endif]--></head>${document.body.outerHTML}</html>`
+}
+
+/**
+ * The process flow chart is a flexbox drawing that Word cannot lay out (it kept the boxes and lost the arrows), so it goes
+ * in as a picture: the drawing with the sheet's styles inside an SVG foreignObject, painted on a canvas.
+ */
+async function rasterizeFlowCharts(doc: Document) {
+  const css = Array.from(doc.querySelectorAll('style')).map((style) => style.textContent ?? '').join('\n')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+  for (const chart of Array.from(doc.querySelectorAll<HTMLElement>('.pfc-canvas'))) {
+    const width = Math.ceil(Math.max(chart.scrollWidth, chart.offsetWidth))
+    const height = Math.ceil(Math.max(chart.scrollHeight, chart.offsetHeight))
+    if (!width || !height) continue
+    const wrap = chart.closest<HTMLElement>('.pfc-drawing-wrap') ?? chart
+    const markup = new XMLSerializer().serializeToString(chart)
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><foreignObject x="0" y="0" width="${width}" height="${height}"><div xmlns="http://www.w3.org/1999/xhtml" style="font-family: Arial, sans-serif; font-size: ${chart.ownerDocument.defaultView?.getComputedStyle(chart).fontSize ?? '12px'}"><style>${css}</style>${markup}</div></foreignObject></svg>`
+    try {
+      const image = new Image()
+      image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
+      await image.decode()
+      const scale = 2
+      const canvas = document.createElement('canvas')
+      canvas.width = width * scale
+      canvas.height = height * scale
+      const context = canvas.getContext('2d')
+      if (!context) continue
+      context.fillStyle = '#fffdf8'
+      context.fillRect(0, 0, canvas.width, canvas.height)
+      context.scale(scale, scale)
+      context.drawImage(image, 0, 0, width, height)
+      const room = Math.max(50, wrap.clientWidth - 20)
+      // Same bounds as the sheet's fit-to-page script (at most 470px tall), so the letter and chart share one page.
+      const fit = Math.min(1, room / width, 470 / height)
+      const picture = doc.createElement('img')
+      picture.src = canvas.toDataURL('image/png')
+      picture.alt = 'Process flow chart'
+      picture.style.width = `${Math.round(width * fit)}px`
+      picture.style.height = `${Math.round(height * fit)}px`
+      picture.style.display = 'block'
+      picture.style.margin = '0 auto'
+      wrap.replaceChildren(picture)
+    } catch {
+      // Keep the boxes when the browser will not paint the drawing.
+    }
+  }
 }
 
 function millimetresToTwips(value: number): number {
@@ -334,6 +396,7 @@ async function inlineWordCompatibleStyles(
         }),
       ),
     )
+    await rasterizeFlowCharts(frameDocument)
     keepInlineGaps(frameDocument)
     const images: { element: HTMLImageElement; width: number; height: number }[] = []
     const transforms: { element: HTMLElement; transform: string }[] = []
@@ -403,6 +466,241 @@ async function inlineWordCompatibleStyles(
   }
 }
 
+const WORD_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+
+const wordChildren = (parent: Element, name: string) =>
+  Array.from(parent.children).filter((child) => child.namespaceURI === WORD_NS && child.localName === name)
+
+const wordChild = (parent: Element | undefined, name: string) => (parent ? wordChildren(parent, name)[0] : undefined)
+
+const wordInt = (element: Element | undefined, attribute = 'w') => {
+  const value = Number(element?.getAttributeNS(WORD_NS, attribute) ?? element?.getAttribute(`w:${attribute}`))
+  return Number.isFinite(value) ? value : 0
+}
+
+function setWordAttr(element: Element, name: string, value: string | number) {
+  element.setAttributeNS(WORD_NS, `w:${name}`, String(value))
+}
+
+/** Left + right cell margins of a table (tblCellMar), in twips. */
+function tableCellMargins(table: Element): number {
+  const margins = wordChild(wordChild(table, 'tblPr'), 'tblCellMar')
+  return wordInt(wordChild(margins, 'left')) + wordInt(wordChild(margins, 'right'))
+}
+
+/**
+ * html-to-docx writes every table grid as equal (often fractional) columns, leaves many cells without a width and turns a
+ * 100% nested table into a fixed 5000 twips. Word then discards the grid and auto-fits, so Form 1 and other tables collapse
+ * to their text width. Rebuild each grid from the measured cell widths and fix the layout so Word keeps the on-screen columns.
+ */
+function normalizeDocxTables(xml: string, textWidthTwips: number, pagePaddingTwips: number): string {
+  const doc = new DOMParser().parseFromString(xml, 'application/xml')
+  if (doc.getElementsByTagName('parsererror').length) return xml
+  const tables = Array.from(doc.getElementsByTagNameNS(WORD_NS, 'tbl'))
+  const widthOfCell = new Map<Element, number>()
+  for (const table of tables) {
+    // Document order: a parent table is fixed before the tables nested in its cells.
+    let parentCell: Element | null = table.parentElement
+    while (parentCell && !(parentCell.namespaceURI === WORD_NS && parentCell.localName === 'tc')) parentCell = parentCell.parentElement
+    let available = textWidthTwips
+    if (parentCell) {
+      const parentTable = parentCell.parentElement?.parentElement ?? null
+      const cellWidth = widthOfCell.get(parentCell) ?? wordInt(wordChild(wordChild(parentCell, 'tcPr'), 'tcW'))
+      const cellMar = wordChild(wordChild(parentCell, 'tcPr'), 'tcMar')
+      const margins = cellMar
+        ? wordInt(wordChild(cellMar, 'left')) + wordInt(wordChild(cellMar, 'right'))
+        : parentTable ? tableCellMargins(parentTable) : 0
+      if (cellWidth > 0) available = Math.max(200, cellWidth - margins)
+    }
+
+    let tblPr = wordChild(table, 'tblPr')
+    if (!tblPr) {
+      tblPr = doc.createElementNS(WORD_NS, 'w:tblPr')
+      table.insertBefore(tblPr, table.firstChild)
+    }
+    setTableCellMargins(doc, table, tblPr, !parentCell, pagePaddingTwips)
+    const rowsOfTable = wordChildren(table, 'tr')
+    if (!parentCell && rowsOfTable.length === 1 && wordChildren(rowsOfTable[0]!, 'tc').length === 1) {
+      // A page frame that runs a little longer in Word must flow on, not be clipped and pushed past a blank page.
+      for (const cantSplit of wordChildren(wordChild(rowsOfTable[0]!, 'trPr') ?? rowsOfTable[0]!, 'cantSplit')) cantSplit.remove()
+    }
+    let tblW = wordChild(tblPr, 'tblW')
+    const declared = tblW && (tblW.getAttributeNS(WORD_NS, 'type') ?? tblW.getAttribute('w:type')) === 'dxa' ? wordInt(tblW) : 0
+    // 5000 is html-to-docx's "100%" written as twips.
+    const tableWidth = Math.round(declared > 0 && declared !== 5000 ? Math.min(declared, available) : available)
+
+    const rows = wordChildren(table, 'tr')
+    const cellsOf = (row: Element) => wordChildren(row, 'tc').map((cell) => {
+      const tcPr = wordChild(cell, 'tcPr')
+      return { cell, span: Math.max(1, wordInt(wordChild(tcPr, 'gridSpan'), 'val') || 1), width: wordInt(wordChild(tcPr, 'tcW')) }
+    })
+    const columns = Math.max(1, ...rows.map((row) => cellsOf(row).reduce((sum, cell) => sum + cell.span, 0)))
+    const grid: (number | null)[] = Array.from({ length: columns }, () => null)
+    // Single-column cells give exact column widths; spanned cells fill what is still unknown.
+    for (const row of rows) {
+      let column = 0
+      for (const cell of cellsOf(row)) {
+        if (cell.span === 1 && cell.width > 0 && grid[column] == null) grid[column] = cell.width
+        column += cell.span
+      }
+    }
+    for (const row of rows) {
+      let column = 0
+      for (const cell of cellsOf(row)) {
+        const slots = grid.slice(column, column + cell.span)
+        const unknown = slots.filter((slot) => slot == null).length
+        if (unknown && cell.width > 0) {
+          const known = slots.reduce<number>((sum, slot) => sum + (slot ?? 0), 0)
+          const share = Math.max(0, cell.width - known) / unknown
+          for (let index = column; index < column + cell.span; index += 1) if (grid[index] == null) grid[index] = share
+        }
+        column += cell.span
+      }
+    }
+    const knownTotal = grid.reduce<number>((sum, slot) => sum + (slot ?? 0), 0)
+    const missing = grid.filter((slot) => slot == null || slot <= 0).length
+    const filler = missing ? Math.max(0, tableWidth - knownTotal) / missing || tableWidth / columns : 0
+    const raw = grid.map((slot) => (slot == null || slot <= 0 ? filler : slot))
+    const rawTotal = raw.reduce((sum, value) => sum + value, 0) || 1
+    const scaled = raw.map((value) => Math.max(1, Math.round((value * tableWidth) / rawTotal)))
+
+    let tblGrid = wordChild(table, 'tblGrid')
+    if (!tblGrid) {
+      tblGrid = doc.createElementNS(WORD_NS, 'w:tblGrid')
+      tblPr.after(tblGrid)
+    }
+    while (tblGrid.firstChild) tblGrid.removeChild(tblGrid.firstChild)
+    for (const width of scaled) {
+      const gridCol = doc.createElementNS(WORD_NS, 'w:gridCol')
+      setWordAttr(gridCol, 'w', width)
+      tblGrid.appendChild(gridCol)
+    }
+
+    if (!tblW) {
+      tblW = doc.createElementNS(WORD_NS, 'w:tblW')
+      tblPr.insertBefore(tblW, tblPr.firstChild)
+    }
+    setWordAttr(tblW, 'type', 'dxa')
+    setWordAttr(tblW, 'w', scaled.reduce((sum, value) => sum + value, 0))
+    let layout = wordChild(tblPr, 'tblLayout')
+    if (!layout) {
+      layout = doc.createElementNS(WORD_NS, 'w:tblLayout')
+      const before = wordChild(tblPr, 'tblCellMar') ?? wordChild(tblPr, 'tblLook') ?? null
+      tblPr.insertBefore(layout, before)
+    }
+    setWordAttr(layout, 'type', 'fixed')
+
+    for (const row of rows) {
+      let column = 0
+      for (const { cell, span } of cellsOf(row)) {
+        const width = scaled.slice(column, column + span).reduce((sum, value) => sum + value, 0)
+        column += span
+        let tcPr = wordChild(cell, 'tcPr')
+        if (!tcPr) {
+          tcPr = doc.createElementNS(WORD_NS, 'w:tcPr')
+          cell.insertBefore(tcPr, cell.firstChild)
+        }
+        let tcW = wordChild(tcPr, 'tcW')
+        if (!tcW) tcW = doc.createElementNS(WORD_NS, 'w:tcW')
+        tcPr.insertBefore(tcW, tcPr.firstChild)
+        setWordAttr(tcW, 'type', 'dxa')
+        setWordAttr(tcW, 'w', width)
+        widthOfCell.set(cell, width)
+      }
+    }
+  }
+  tidyPageBreaks(doc)
+  return new XMLSerializer().serializeToString(doc)
+}
+
+/**
+ * html-to-docx pads every cell 80 / 160 twips, including the invisible layout tables (letterhead, "To / Date", signature)
+ * that have no padding on screen, so sheets grew taller than a page in Word and left blank pages; narrow headers also broke
+ * mid-word. Pad by what the table is: page frame → page padding, bordered grid → the sheets' 4px 6px, rule → a little
+ * above / below, layout → none.
+ */
+function setTableCellMargins(doc: Document, table: Element, tblPr: Element, topLevel: boolean, pagePaddingTwips: number) {
+  const cells = wordChildren(table, 'tr').flatMap((row) => wordChildren(row, 'tc'))
+  const borderSidesOf = (cell: Element) => {
+    const borders = wordChild(wordChild(cell, 'tcPr'), 'tcBorders')
+    return borders
+      ? Array.from(borders.children).filter((side) => !['nil', 'none'].includes(side.getAttributeNS(WORD_NS, 'val') ?? side.getAttribute('w:val') ?? ''))
+      : []
+  }
+  const frame = topLevel && cells.length === 1
+  const grid = cells.filter((cell) => borderSidesOf(cell).length >= 4).length * 2 >= cells.length && cells.length > 0
+  const ruled = cells.some((cell) => borderSidesOf(cell).length > 0)
+  const [vertical, horizontal] = frame
+    ? [pagePaddingTwips, pagePaddingTwips]
+    : grid ? [60, 90] : ruled ? [40, 0] : [0, 0]
+  let cellMar = wordChild(tblPr, 'tblCellMar')
+  if (!cellMar) {
+    cellMar = doc.createElementNS(WORD_NS, 'w:tblCellMar')
+    tblPr.insertBefore(cellMar, wordChild(tblPr, 'tblLook') ?? null)
+  }
+  while (cellMar.firstChild) cellMar.removeChild(cellMar.firstChild)
+  for (const [side, width] of [['top', vertical], ['left', horizontal], ['bottom', vertical], ['right', horizontal]] as const) {
+    const margin = doc.createElementNS(WORD_NS, `w:${side}`)
+    setWordAttr(margin, 'w', width)
+    setWordAttr(margin, 'type', 'dxa')
+    cellMar.appendChild(margin)
+  }
+}
+
+const isEmptyParagraph = (node: Element) =>
+  node.namespaceURI === WORD_NS && node.localName === 'p'
+  && !['t', 'drawing', 'br', 'pict', 'object'].some((name) => node.getElementsByTagNameNS(WORD_NS, name).length)
+
+/**
+ * A page break written as "empty paragraph + paragraph with a page break" pushes an extra blank page whenever the sheet
+ * before it already fills its page. One 1pt paragraph with "page break before" starts the next sheet on a new page either way.
+ */
+function tidyPageBreaks(doc: Document) {
+  const body = doc.getElementsByTagNameNS(WORD_NS, 'body')[0]
+  if (!body) return
+  for (const paragraph of wordChildren(body, 'p')) {
+    const breaks = paragraph.getElementsByTagNameNS(WORD_NS, 'br')
+    const onlyPageBreak = breaks.length === 1
+      && (breaks[0]!.getAttributeNS(WORD_NS, 'type') ?? breaks[0]!.getAttribute('w:type')) === 'page'
+      && !paragraph.getElementsByTagNameNS(WORD_NS, 't').length
+    if (!onlyPageBreak) continue
+    for (let previous = paragraph.previousElementSibling; previous && isEmptyParagraph(previous); previous = paragraph.previousElementSibling) {
+      previous.remove()
+    }
+    for (let next = paragraph.nextElementSibling; next && isEmptyParagraph(next); next = paragraph.nextElementSibling) {
+      next.remove()
+    }
+    while (paragraph.firstChild) paragraph.removeChild(paragraph.firstChild)
+    const pPr = doc.createElementNS(WORD_NS, 'w:pPr')
+    pPr.appendChild(doc.createElementNS(WORD_NS, 'w:pageBreakBefore'))
+    const spacing = doc.createElementNS(WORD_NS, 'w:spacing')
+    setWordAttr(spacing, 'before', 0)
+    setWordAttr(spacing, 'after', 0)
+    setWordAttr(spacing, 'line', 20)
+    setWordAttr(spacing, 'lineRule', 'exact')
+    pPr.appendChild(spacing)
+    const rPr = doc.createElementNS(WORD_NS, 'w:rPr')
+    const size = doc.createElementNS(WORD_NS, 'w:sz')
+    setWordAttr(size, 'val', 2)
+    rPr.appendChild(size)
+    pPr.appendChild(rPr)
+    paragraph.appendChild(pPr)
+  }
+}
+
+async function fixDocxTableLayout(bytes: ArrayBuffer, textWidthTwips: number, pagePaddingTwips: number): Promise<ArrayBuffer> {
+  try {
+    const { default: JSZip } = await import('jszip')
+    const zip = await JSZip.loadAsync(bytes)
+    const part = zip.file('word/document.xml')
+    if (!part) return bytes
+    zip.file('word/document.xml', normalizeDocxTables(await part.async('string'), textWidthTwips, pagePaddingTwips))
+    return await zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' })
+  } catch {
+    return bytes
+  }
+}
+
 export async function buildWordDocx(html: string, title: string, settings: typeof DEFAULT_BIS_DOCUMENT_PRINT_PAGE_SETTINGS): Promise<Blob> {
   // The browser build of html-to-docx still reads the Node-style `global` name.
   // Define that alias before loading its lazy chunk so the ESM bundle can run in browsers.
@@ -444,7 +742,12 @@ export async function buildWordDocx(html: string, title: string, settings: typeo
     : wordDocument instanceof ArrayBuffer
       ? wordDocument
       : Uint8Array.from(wordDocument).buffer
-  return new Blob([bytes], {
+  const fixed = await fixDocxTableLayout(
+    bytes,
+    millimetresToTwips(size.widthMm - settings.marginLeftMm - settings.marginRightMm),
+    millimetresToTwips(Math.min(10, Math.max(0, settings.pageBorderPaddingMm))),
+  )
+  return new Blob([fixed], {
     type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   })
 }

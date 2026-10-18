@@ -117,7 +117,7 @@ export function ProjectFilesUploadCell({ projectId, docKind, label }: { projectI
       ) : null}
 
       <Dialog open={listOpen} onOpenChange={setListOpen}>
-        <DialogContent layer="stacked" aria-describedby={undefined} className={cn(limsDialogClass, 'w-[min(36rem,calc(100vw-1.5rem))] p-0')}>
+        <DialogContent layer="stacked" aria-describedby={undefined} className={cn(limsDialogClass, 'w-[min(36rem,calc(100vw_-_var(--app-dialog-overlay-left,0px)_-_1.5rem))] p-0')}>
           <DialogHeader className="bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 py-2.5 pl-4 pr-12 text-left">
             <DialogTitle className="text-base font-semibold tracking-tight text-white">{label}</DialogTitle>
           </DialogHeader>

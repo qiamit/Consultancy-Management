@@ -203,6 +203,9 @@ export function ManakVarietiesTable({
   scopeNotes = '',
   onScopeSaved,
   scopeDocument,
+  saveNotes,
+  filesDocKind = 'manufacturing-scope',
+  scopeDocumentLabel = 'Undertaking for Manufacturing Scope',
 }: {
   projectId: string | null
   isCodeId: string | null
@@ -215,7 +218,14 @@ export function ManakVarietiesTable({
   onScopeSaved?: () => void
   /** Undertaking for Manufacturing Scope: preview / PDF / Word of the scope declaration, generated from the same scope table. */
   scopeDocument?: { preview: () => void; pdf: () => void; word: () => void; print?: () => void }
+  /** Where the scope is saved (default: the project's Notes / License Scope). Inclusion keeps its New Scope apart. */
+  saveNotes?: (notes: string) => Promise<void>
+  /** Stored-file category of the row attachments (default: the application's manufacturing scope files). */
+  filesDocKind?: string
+  /** Name of the document behind the preview / PDF / Word / print buttons. */
+  scopeDocumentLabel?: string
 }) {
+  const persistNotes = (notes: string) => (saveNotes ? saveNotes(notes) : saveBisProjectNotes(projectId!, notes))
   const [viewFile, viewer] = usePdfViewer()
   const [confirmAction, confirmDialog] = useConfirmDialog()
   const [columnOpen, setColumnOpen] = useState(false)
@@ -287,7 +297,7 @@ export function ManakVarietiesTable({
     const clean = sanitizeBisLicenseScopeNotes(notes)
     setNotesOverride(clean)
     try {
-      await saveBisProjectNotes(projectId, clean)
+      await persistNotes(clean)
       onScopeSaved?.()
     } catch (error) {
       setNotesOverride(null)
@@ -363,7 +373,7 @@ export function ManakVarietiesTable({
       setNotesOverride(converted)
       setEditingIndex(null)
       setNewDraft([])
-      await saveBisProjectNotes(projectId, converted)
+      await persistNotes(converted)
       setColumnOpen(false)
       toast.success(`License scope set to ${columnDraft} column${columnDraft === '1' ? '' : 's'}`)
       onScopeSaved?.()
@@ -380,6 +390,7 @@ export function ManakVarietiesTable({
   const [busy, setBusy] = useState(false)
   const [searchBusy, setSearchBusy] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  const sharesTotal = shares.reduce((sum, share) => sum + share, 0) || 1
 
   useEffect(() => {
     const id = (isCodeId ?? '').trim()
@@ -403,7 +414,7 @@ export function ManakVarietiesTable({
   useEffect(() => {
     if (!projectId) return
     let cancelled = false
-    void listBisProjectFiles(projectId, 'manufacturing-scope')
+    void listBisProjectFiles(projectId, filesDocKind)
       .then((files) => {
         if (!cancelled) setScopeFiles(files)
       })
@@ -429,7 +440,7 @@ export function ManakVarietiesTable({
     try {
       if (filesTarget == null) return
       const displayName = `${tagFor(filesTarget)}${fileType} - ${file.name}`
-      const uploaded = await uploadBisProjectFile(projectId, file, 'manufacturing-scope', { displayName })
+      const uploaded = await uploadBisProjectFile(projectId, file, filesDocKind, { displayName })
       // A new "Copy of Scope" replaces the previous one of the same row; drawings and other files are kept.
       const replaced =
         fileType === 'Copy of Scope'
@@ -462,7 +473,7 @@ export function ManakVarietiesTable({
   const td = 'border border-[#e7e0d4] px-2 py-1.5 align-top text-sm text-stone-700'
 
   const docButtons = (
-    <div className="flex shrink-0 items-center gap-1">
+    <div className="flex flex-wrap items-center justify-end gap-1">
       <button
         type="button"
         className={cn(iconBtn, 'border-stone-400 text-amber-800')}
@@ -529,17 +540,17 @@ export function ManakVarietiesTable({
       {scopeDocument ? (
         <>
           <span className="mx-1 h-6 w-px bg-stone-500" aria-hidden />
-          <button type="button" className={cn(iconBtn, 'border-stone-400 text-amber-800')} title="Undertaking for Manufacturing Scope — preview / print" aria-label="Preview undertaking for scope" onClick={scopeDocument.preview}>
+          <button type="button" className={cn(iconBtn, 'border-stone-400 text-amber-800')} title={`${scopeDocumentLabel} — preview`} aria-label="Preview undertaking for scope" onClick={scopeDocument.preview}>
             <Eye size={15} aria-hidden />
           </button>
-          <button type="button" className={cn(iconBtn, 'border-stone-400 text-amber-800')} title="Undertaking for Manufacturing Scope — PDF" aria-label="Undertaking for scope PDF" onClick={scopeDocument.pdf}>
+          <button type="button" className={cn(iconBtn, 'border-stone-400 text-amber-800')} title={`${scopeDocumentLabel} — PDF`} aria-label="Undertaking for scope PDF" onClick={scopeDocument.pdf}>
             <Download size={15} aria-hidden />
           </button>
-          <button type="button" className={cn(iconBtn, 'border-stone-400 text-amber-800')} title="Undertaking for Manufacturing Scope — Word" aria-label="Undertaking for scope Word" onClick={scopeDocument.word}>
+          <button type="button" className={cn(iconBtn, 'border-stone-400 text-amber-800')} title={`${scopeDocumentLabel} — Word`} aria-label="Undertaking for scope Word" onClick={scopeDocument.word}>
             <FileType size={15} aria-hidden />
           </button>
           {scopeDocument.print ? (
-            <button type="button" className={cn(iconBtn, 'border-stone-400 text-amber-800')} title="Undertaking for Manufacturing Scope — Print" aria-label="Print undertaking for scope" onClick={scopeDocument.print}>
+            <button type="button" className={cn(iconBtn, 'border-stone-400 text-amber-800')} title={`${scopeDocumentLabel} — Print`} aria-label="Print undertaking for scope" onClick={scopeDocument.print}>
               <Printer size={15} aria-hidden />
             </button>
           ) : null}
@@ -583,11 +594,13 @@ export function ManakVarietiesTable({
         <div className="overflow-x-auto">
           <table className="w-full table-fixed border-collapse text-sm">
             <colgroup>
-              <col style={{ width: '3%' }} />
+              {/* # and Action are sized for their content (three 2rem buttons); the data columns share the rest,
+                  so the buttons never wrap or push the table wider than the panel on a small screen. */}
+              <col style={{ width: '2rem' }} />
               {headers.map((_, i) => (
-                <col key={i} style={{ width: `${shares[i] ?? 0}%` }} />
+                <col key={i} style={{ width: `calc((100% - 9.75rem) * ${(shares[i] ?? 0) / sharesTotal})` }} />
               ))}
-              <col style={{ width: '13%' }} />
+              <col style={{ width: '7.75rem' }} />
             </colgroup>
             <thead>
               <tr>
@@ -632,7 +645,7 @@ export function ManakVarietiesTable({
                   </td>
                 ))}
                 <td className={cn(td, 'whitespace-nowrap text-center')}>
-                  <div className="flex items-center justify-center gap-1">
+                  <div className="flex flex-nowrap items-center justify-center gap-1">
                     <button type="button" className={cn(iconBtn, 'border-stone-400 text-amber-800')} disabled={!projectId} title="Add row" aria-label="Add scope row" onClick={() => void addRow()}>
                       <Plus size={15} aria-hidden />
                     </button>
@@ -677,7 +690,7 @@ export function ManakVarietiesTable({
                         </td>
                       ))}
                       <td className={cn(td, 'whitespace-nowrap text-center')}>
-                        <div className="flex items-center justify-center gap-1">
+                        <div className="flex flex-nowrap items-center justify-center gap-1">
                           {editing ? (
                             <button type="button" className={cn(iconBtn, 'border-emerald-600 text-emerald-800')} title="Save row" aria-label={`Save scope row ${index + 1}`} onClick={saveEdit}>
                               <Check size={15} aria-hidden />

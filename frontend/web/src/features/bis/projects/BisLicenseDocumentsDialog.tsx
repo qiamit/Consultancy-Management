@@ -45,6 +45,14 @@ import {
 } from '../print/printBisDocument'
 import { openPendingPrintWindow, openPrintHtml } from '../print/openPrintHtml'
 import { ManakStepPage } from './ManakStepPages'
+import { InclusionStepPage } from './InclusionStepPages'
+import {
+  BIS_INCLUSION_PREVIEW_LABEL,
+  BIS_INCLUSION_STEPS,
+  buildInclusionDocumentRows,
+  INCLUSION_PREVIEW_KINDS,
+  inclusionStepTitle,
+} from './bisInclusionSteps'
 import { ManakDocumentActions } from './ManakDocumentActions'
 import { ManakPreviewStep, type PreviewFile, type PreviewSelection } from './ManakPreviewStep'
 import {
@@ -108,7 +116,7 @@ async function mergePdfBlobs(blobs: Blob[]): Promise<Blob> {
 }
 
 /** Documents downloaded as Excel instead of Word (tabular lists). */
-const EXCEL_DOCUMENT_KINDS: BisPrintDocumentKind[] = ['cmpf-305', 'manufacturing-subcontracting', 'cmpf-306']
+const EXCEL_DOCUMENT_KINDS: BisPrintDocumentKind[] = ['cmpf-305', 'manufacturing-subcontracting', 'cmpf-306', 'inclusion-cmpf-305', 'inclusion-cmpf-306']
 
 /** Compact Edit / Preview / PDF / Word (or Excel) buttons used by the in-step component tables. */
 function StepDocActions({
@@ -285,6 +293,7 @@ export function BisLicenseDocumentsDialog({
   moduleKind = null,
   onModuleKindChange,
   onProjectSaved,
+  inclusionMode = false,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -295,7 +304,10 @@ export function BisLicenseDocumentsDialog({
   moduleKind?: BisPrintDocumentKind | null
   onModuleKindChange?: (kind: BisPrintDocumentKind | null) => void
   onProjectSaved?: () => void
+  /** BIS New Inclusion: the Change in Scope (Inclusion) steps instead of the New Application steps. */
+  inclusionMode?: boolean
 }) {
+  const wizardSteps = inclusionMode ? BIS_INCLUSION_STEPS : BIS_APPLICATION_STEPS
   const [selectedKinds, setSelectedKinds] = useState<Set<BisPrintDocumentKind>>(() => new Set())
   const [downloadBusy, setDownloadBusy] = useState(false)
   const [step, setStep] = useState(0)
@@ -310,13 +322,14 @@ export function BisLicenseDocumentsDialog({
   const [importKind, setImportKind] = useState<BisPrintDocumentKind | null>(null)
   const [importBundle, setImportBundle] = useState<{ label: string; kinds: BisPrintDocumentKind[] } | null>(null)
 
+  const processTitle = inclusionMode ? 'Change in Scope (Inclusion)' : 'Online Application Process'
   const client = row ? clientDisplayName(row) || '—' : '—'
   const isLabel = row ? isCodeDisplayLabel(row) : ''
   const cmL = row ? formatCmL(row.cm_l_digits) : ''
   const subtitle = [client, isLabel, cmL].filter((part) => Boolean(part) && part !== '—').join(' · ')
 
   // The step the user is on survives a page refresh (kept per application until the dialog is closed).
-  const stepKey = row?.id ? `bis-application-step:${row.id}` : null
+  const stepKey = row?.id ? `${inclusionMode ? 'bis-inclusion-step' : 'bis-application-step'}:${row.id}` : null
   const wasOpen = useRef(false)
   const readSavedStep = () => {
     try {
@@ -374,15 +387,16 @@ export function BisLicenseDocumentsDialog({
 
   /** Documents on a wizard step; leftovers not mapped to any step show on Declaration. */
   const stepKinds = (index: number): BisPrintDocumentKind[] => {
-    const s = BIS_APPLICATION_STEPS[index]
+    const s = wizardSteps[index]
     if (!s) return []
+    if (inclusionMode) return s.kinds
     const own = s.kinds.filter((k) => allKinds.includes(k))
     return s.id === 'declaration' ? [...own, ...unassignedKinds(allKinds)] : own
   }
 
-  const stepLabels = [...BIS_APPLICATION_STEPS.map((s) => s.label), BIS_PREVIEW_STEP_LABEL]
-  const isPreviewStep = step >= BIS_APPLICATION_STEPS.length
-  const currentStep = BIS_APPLICATION_STEPS[Math.min(step, BIS_APPLICATION_STEPS.length - 1)]
+  const stepLabels = [...wizardSteps.map((s) => s.label), inclusionMode ? BIS_INCLUSION_PREVIEW_LABEL : BIS_PREVIEW_STEP_LABEL]
+  const isPreviewStep = step >= wizardSteps.length
+  const currentStep = wizardSteps[Math.min(step, wizardSteps.length - 1)]!
   const currentKinds = isPreviewStep ? [] : stepKinds(step)
   const actionsDisabled = !row || busy || downloadBusy
 
@@ -702,6 +716,24 @@ export function BisLicenseDocumentsDialog({
         setDownloadBusy(false)
       }
     }
+    if (sel.wordKinds.length && sel.excelKinds.length) {
+      // Browsers block a second automatic download, so Word + Excel go out as one ZIP.
+      const files: { blob: Blob; name: string }[] = []
+      const collect = (blob: Blob, name: string) => { files.push({ blob, name }) }
+      await runDownload(sel.wordKinds[0]!, 'word', false, sel.wordKinds, collect)
+      // One workbook per document, so each Excel stays a clean, separate file.
+      for (const excelKind of sel.excelKinds) await runDownload(excelKind, 'excel', true, [excelKind], collect)
+      if (!files.length) return
+      const { default: JSZip } = await import('jszip')
+      const zip = new JSZip()
+      for (const file of files) zip.file(file.name, file.blob)
+      triggerBlobDownload(
+        await zip.generateAsync({ type: 'blob' }),
+        `${safeFileBase('Selected BIS Documents', cmL)}.zip`,
+      )
+      toast.success(`ZIP downloaded: ${files.length} editable files`)
+      return
+    }
     if (sel.wordKinds.length) await runDownload(sel.wordKinds[0]!, 'word', false, sel.wordKinds)
     if (sel.excelKinds.length) await runDownload(sel.excelKinds[0]!, 'excel', false, sel.excelKinds)
   }
@@ -712,6 +744,8 @@ export function BisLicenseDocumentsDialog({
     onlyThisKind = false,
     /** Explicit document list (Step 8 Download Selected); otherwise the clicked / selected documents. */
     kindsOverride?: BisPrintDocumentKind[],
+    /** Hand the built file back (ZIP bundling) instead of downloading it. */
+    collect?: (blob: Blob, name: string) => void,
   ) => {
     if (!row) return
     const label = BIS_PRINT_DOCUMENT_LABEL[kind]
@@ -721,6 +755,8 @@ export function BisLicenseDocumentsDialog({
       return
     }
     setDownloadBusy(true)
+    const deliver = (blob: Blob, name: string) => (collect ? collect(blob, name) : triggerBlobDownload(blob, name))
+    const notify = (message: string) => { if (!collect) toast.success(message) }
     try {
       const settings = await loadBisProjectPrintPageSettings(row.id).catch(
         () => DEFAULT_BIS_DOCUMENT_PRINT_PAGE_SETTINGS,
@@ -744,13 +780,13 @@ export function BisLicenseDocumentsDialog({
           kinds.length === 1 ? label : 'Selected BIS Documents',
           settings,
         )
-        triggerBlobDownload(
+        deliver(
           wordBlob,
           kinds.length === 1
             ? `${base}.docx`
             : `${safeFileBase('Selected BIS Documents', cmL)}.docx`,
         )
-        toast.success(
+        notify(
           kinds.length === 1
             ? `Word downloaded: ${label}`
             : `Word downloaded: ${kinds.length} selected documents combined`,
@@ -761,8 +797,8 @@ export function BisLicenseDocumentsDialog({
         // Testing equipment: a plain list with the import headings (doubles as the fill-in template).
         const { buildCmpf306ExcelBlob } = await import('./cmpf306Model')
         const { fetchBisModulePayload } = await import('./bisModuleDataApi')
-        triggerBlobDownload(await buildCmpf306ExcelBlob(await fetchBisModulePayload(row.id, 'cmpf-306'), 'List of Testing Equipment'), `${base}.xlsx`)
-        toast.success(`Excel downloaded: ${label}`)
+        deliver(await buildCmpf306ExcelBlob(await fetchBisModulePayload(row.id, 'cmpf-306'), 'List of Testing Equipment'), `${base}.xlsx`)
+        notify(`Excel downloaded: ${label}`)
         return
       }
       if (format === 'excel') {
@@ -772,22 +808,22 @@ export function BisLicenseDocumentsDialog({
             : BIS_PRINT_DOCUMENT_LABEL[documentKind],
           html: htmlDocuments[index],
         })))
-        triggerBlobDownload(
+        deliver(
           excel,
           `${safeFileBase(kinds.length === 1 ? label : 'Selected BIS Documents', cmL)}.xlsx`,
         )
-        toast.success(
+        notify(
           kinds.length === 1
             ? `Excel downloaded: ${label}`
             : `Excel downloaded: ${kinds.length} selected documents combined`,
         )
         return
       }
-      triggerBlobDownload(
+      deliver(
         new Blob([htmlDocuments[0]], { type: 'application/vnd.ms-excel;charset=utf-8' }),
         `${base}.xls`,
       )
-      toast.success(`Excel downloaded: ${label}`)
+      notify(`Excel downloaded: ${label}`)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Download failed'
       toast.error(message)
@@ -844,9 +880,9 @@ export function BisLicenseDocumentsDialog({
                   <span className="hidden w-[82px] shrink-0 sm:block" aria-hidden />
                   <p
                     className="min-w-0 flex-1 truncate px-1 text-center text-sm font-semibold text-stone-100 sm:text-base md:text-lg"
-                    title={subtitle ? `Online Application Process of ${subtitle}` : undefined}
+                    title={subtitle ? `${processTitle} of ${subtitle}` : undefined}
                   >
-                    {subtitle ? `Online Application Process of ${subtitle}` : 'Online Application Process'}
+                    {subtitle ? `${processTitle} of ${subtitle}` : processTitle}
                   </p>
                   <Button
                     type="button"
@@ -922,6 +958,45 @@ export function BisLicenseDocumentsDialog({
                   onPrintSelected={(sel) => void printSelection(sel.printKinds, sel.printFiles)}
                   onDownloadSelected={(sel) => void downloadSelected({ ...sel, wordKinds: [], excelKinds: [] })}
                   onEditableSelected={(sel) => void downloadSelected({ ...sel, pdfKinds: [], pdfFiles: [] })}
+                  source={inclusionMode ? { kinds: INCLUSION_PREVIEW_KINDS, buildRows: buildInclusionDocumentRows, stepTitle: inclusionStepTitle, heading: 'Inclusion Submission — Preview' } : undefined}
+                />
+              ) : inclusionMode && currentStep.id.startsWith('inc-') ? (
+                <InclusionStepPage
+                  stepId={currentStep.id}
+                  row={row}
+                  refreshKey={refreshKey}
+                  onEdit={handleModuleEdit}
+                  onGoToStep={setStep}
+                  onProjectSaved={onProjectSaved}
+                  onScopeDocument={{
+                    preview: () => handlePreview('inclusion-request-letter'),
+                    pdf: () => void runDownload('inclusion-request-letter', 'pdf', true),
+                    word: () => void runDownload('inclusion-request-letter', 'word', true),
+                    print: () => printDocument('inclusion-request-letter'),
+                  }}
+                  renderDocActions={(kind, onModuleEdit) => (
+                    <StepDocActions
+                      kind={kind}
+                      disabled={actionsDisabled}
+                      onEdit={onModuleEdit}
+                      onPreview={handlePreview}
+                      onWord={(k) => void runDownload(k, 'word', true)}
+                      onExcel={(k) => void runDownload(k, 'excel', true)}
+                      onPdf={(k) => void runDownload(k, 'pdf', true)}
+                      onPrint={printDocument}
+                    />
+                  )}
+                  docSelection={{
+                    has: (kind) => selectedKinds.has(kind),
+                    set: (kind, selected) =>
+                      setSelectedKinds((prev) => {
+                        if (prev.has(kind) === selected) return prev
+                        const next = new Set(prev)
+                        if (selected) next.add(kind)
+                        else next.delete(kind)
+                        return next
+                      }),
+                  }}
                 />
               ) : (
                 <>
