@@ -1,3 +1,4 @@
+import { UndertakingGeneralFields } from './UndertakingGeneralFields'
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Check, Download, Eye, FileDown, FileType, Import, Pencil, Plus, Printer, Trash2, Upload, X } from 'lucide-react'
 import { toast } from 'sonner'
@@ -1893,18 +1894,7 @@ export function LegalDocumentsModuleDialog({
                     )}
                   </div>
                   {option.kind === 'undertaking-option-2' ? <p className="mt-4 border border-stone-200 bg-stone-50 p-3 text-sm text-stone-700">No additional inputs are required. The undertaking is prepared directly from this project’s saved application details.</p> : null}
-                  {option.kind === 'undertaking-general' ? (
-                    <div className="mt-5 grid max-w-5xl gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                      <label className="grid gap-1 text-sm font-medium text-stone-700">Weekly Holiday<select className="h-8 rounded-none border border-stone-400 bg-white px-2 text-sm" value={undertakingGeneral.weeklyOff} disabled={loading || printingUndertaking} onChange={(e) => setUndertakingGeneral((v) => ({ ...v, weeklyOff: e.target.value }))}>{['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((day) => <option key={day}>{day}</option>)}</select></label>
-                      <label className="grid gap-1 text-sm font-medium text-stone-700">Marking Clause<Input value={undertakingGeneral.markingClause} disabled={loading || printingUndertaking} onChange={(e) => setUndertakingGeneral((v) => ({ ...v, markingClause: e.target.value }))} /></label>
-                      <label className="grid gap-1 text-sm font-medium text-stone-700">Packaging Clause<Input value={undertakingGeneral.packagingClause} disabled={loading || printingUndertaking} onChange={(e) => setUndertakingGeneral((v) => ({ ...v, packagingClause: e.target.value }))} /></label>
-                      <label className="grid gap-1 text-sm font-medium text-stone-700">Water Supply<select className="h-8 rounded-none border border-stone-400 bg-white px-2 text-sm" value={undertakingGeneral.waterSupplySource} disabled={loading || printingUndertaking} onChange={(e) => setUndertakingGeneral((v) => ({ ...v, waterSupplySource: e.target.value }))}>{['Own', 'Rented', 'Municipal', 'Other'].map((source) => <option key={source}>{source}</option>)}</select></label>
-                      <label className="grid gap-1 text-sm font-medium text-stone-700">Electric Supply<select className="h-8 rounded-none border border-stone-400 bg-white px-2 text-sm" value={undertakingGeneral.electricSupplySource} disabled={loading || printingUndertaking} onChange={(e) => setUndertakingGeneral((v) => ({ ...v, electricSupplySource: e.target.value }))}>{['Electricity Board', 'Own'].map((source) => <option key={source}>{source}</option>)}</select></label>
-                      <label className="grid gap-1 text-sm font-medium text-stone-700">Generator Backup<select className="h-8 rounded-none border border-stone-400 bg-white px-2 text-sm" value={undertakingGeneral.generatorBackup} disabled={loading || printingUndertaking} onChange={(e) => setUndertakingGeneral((v) => ({ ...v, generatorBackup: e.target.value }))}>{['Yes', 'No'].map((choice) => <option key={choice}>{choice}</option>)}</select></label>
-                      <label className="grid gap-1 text-sm font-medium text-stone-700">Machinery &amp; Testing Equipment<select className="h-8 rounded-none border border-stone-400 bg-white px-2 text-sm" value={undertakingGeneral.machineryOwnership} disabled={loading || printingUndertaking} onChange={(e) => setUndertakingGeneral((v) => ({ ...v, machineryOwnership: e.target.value }))}>{['Owned by us', 'Rented'].map((choice) => <option key={choice}>{choice}</option>)}</select></label>
-                      <label className="grid gap-1 text-sm font-medium text-stone-700">Pollution Control System<select className="h-8 rounded-none border border-stone-400 bg-white px-2 text-sm" value={undertakingGeneral.pollutionControlArrangement} disabled={loading || printingUndertaking} onChange={(e) => setUndertakingGeneral((v) => ({ ...v, pollutionControlArrangement: e.target.value }))}>{['Own', 'Rented', 'Not Applicable'].map((choice) => <option key={choice}>{choice}</option>)}</select></label>
-                    </div>
-                  ) : null}
+                  {option.kind === 'undertaking-general' ? <div className="mt-5"><UndertakingGeneralFields value={undertakingGeneral} onChange={setUndertakingGeneral} disabled={loading || printingUndertaking} isNumber={row ? isCodeDisplayLabel(row) : ''} /></div> : null}
                   {option.kind === 'undertaking-long-duration' ? (
                     <div className="mt-5 grid max-w-6xl gap-4">
                       <div className="overflow-x-auto border border-stone-300">

@@ -20,3 +20,6 @@ export const TEST_REPORT_COMPONENTS_KIND = 'test-report-components' as BisPrintD
 
 /** Step 6: long duration tests in progress (with the relaxation choice). */
 export const LONG_DURATION_TESTS_KIND = 'long-duration-tests' as BisPrintDocumentKind
+
+/** Step 7: Manak Online declaration answers, supporting uploads and weekly off days. */
+export const APPLICATION_DECLARATION_KIND = 'application-declaration' as BisPrintDocumentKind

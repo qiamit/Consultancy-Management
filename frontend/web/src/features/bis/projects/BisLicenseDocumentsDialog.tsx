@@ -43,9 +43,13 @@ import {
   BIS_PRINT_DOCUMENT_LABEL,
   buildBisDocumentHtml,
   printKindToStorageDocKind,
+  combinePrintHtmlDocuments,
   type BisPrintDocumentKind,
 } from '../print/printBisDocument'
+import { openPendingPrintWindow, openPrintHtml } from '../print/openPrintHtml'
 import { ManakStepPage } from './ManakStepPages'
+import { ManakDocumentActions } from './ManakDocumentActions'
+import { ManakPreviewStep, type PreviewFile, type PreviewSelection } from './ManakPreviewStep'
 import {
   BIS_APPLICATION_STEPS,
   BIS_PREVIEW_STEP_LABEL,
@@ -61,6 +65,7 @@ import { isImportableBisModuleKind } from './bisModuleImportApi'
 import { LegalDocumentsModuleDialog } from './LegalDocumentsModuleDialog'
 import {
   buildMergedBisProjectFilesPdf,
+  writePdfViewerHtml,
   downloadMergedBisModulePdf,
   openMergedBisModulePdf,
 } from './mergeBisProjectFilesPdf'
@@ -200,6 +205,7 @@ function StepDocActions({
   onPdf,
   onWord,
   onExcel,
+  onPrint,
 }: {
   kind: BisPrintDocumentKind
   disabled?: boolean
@@ -208,6 +214,7 @@ function StepDocActions({
   onPdf: (kind: BisPrintDocumentKind) => void
   onWord: (kind: BisPrintDocumentKind) => void
   onExcel: (kind: BisPrintDocumentKind) => void
+  onPrint: (kind: BisPrintDocumentKind) => void
 }) {
   const label = BIS_PRINT_DOCUMENT_LABEL[kind]
   const buttons: Array<[string, () => void, typeof Pencil]> = [
@@ -217,26 +224,9 @@ function StepDocActions({
     EXCEL_DOCUMENT_KINDS.includes(kind)
       ? [`Download Excel — ${label}`, () => onExcel(kind), FileSpreadsheet]
       : [`Download Word — ${label}`, () => onWord(kind), FileType],
+    [`Print — ${label}`, () => onPrint(kind), Printer],
   ]
-  return (
-    <div className="inline-flex shrink-0 items-center justify-center gap-0.5">
-      {buttons.map(([title, handler, Icon]) => (
-        <Button
-          key={title}
-          type="button"
-          size="sm"
-          variant="ghost"
-          className={actionBtnClass}
-          disabled={disabled}
-          title={title}
-          aria-label={title}
-          onClick={handler}
-        >
-          <Icon size={15} />
-        </Button>
-      ))}
-    </div>
-  )
+  return <ManakDocumentActions disabled={disabled} actions={buttons.map(([label, onClick, icon]) => ({ label, onClick, icon }))} />
 }
 
 function DocRowActions({
@@ -399,6 +389,8 @@ export function BisLicenseDocumentsDialog({
   const [previewKind, setPreviewKind] = useState<BisPrintDocumentKind | null>(null)
   // Generated letterhead HTML to preview instead of attached files (Undertaking for Manufacturing Scope).
   const [previewGeneratedHtml, setPreviewGeneratedHtml] = useState<string | null>(null)
+  /** Documents in the open preview (several after Step 8 Preview Selected). */
+  const [previewKindsList, setPreviewKindsList] = useState<BisPrintDocumentKind[]>([])
   // Undertaking the All Undertakings module opens on (set when it is opened from the Marking Fee section).
   const [undertakingFocus, setUndertakingFocus] = useState<'undertaking-mmf' | null>(null)
   const [importKind, setImportKind] = useState<BisPrintDocumentKind | null>(null)
@@ -573,6 +565,7 @@ export function BisLicenseDocumentsDialog({
       toast.error('Select a license first.')
       return
     }
+    setPreviewKindsList([])
     setPreviewGeneratedHtml(null)
     setPreviewKind(kind)
   }
@@ -720,10 +713,125 @@ export function BisLicenseDocumentsDialog({
     }
   }
 
+  /**
+   * Print exactly what the preview shows: the same generated page with the project's page settings, split onto A4
+   * sheets like the preview, sent straight to the print dialog. Uploaded files print as one merged PDF.
+   */
+  const printSelection = async (kinds: BisPrintDocumentKind[], files: PreviewFile[] = []) => {
+    if (!row) return
+    if (kinds.length) {
+      const target = openPendingPrintWindow('Preparing to print…')
+      if (!target) toast.error('Allow popups to print.')
+      else {
+        try {
+          const settings = await loadBisProjectPrintPageSettings(row.id).catch(() => DEFAULT_BIS_DOCUMENT_PRINT_PAGE_SETTINGS)
+          const htmls = await Promise.all(kinds.map((kind) => buildBisDocumentHtml(row, kind)))
+          const html = htmls.length === 1 ? htmls[0]! : combinePrintHtmlDocuments('Selected Documents', htmls)
+          const error = openPrintHtml(applyBisDocumentPrintPageSettings(html, settings), { autoPrint: true, target })
+          if (error) toast.error(error)
+        } catch (err) {
+          target.close()
+          toast.error(err instanceof Error ? err.message : 'Print failed')
+        }
+      }
+    }
+    if (files.length) {
+      const target = openPendingPrintWindow('Preparing the selected files…')
+      if (!target) {
+        toast.error('Allow popups to print.')
+        return
+      }
+      try {
+        const blob = await uploadedFilesPdf(files)
+        if (!blob) throw new Error('No PDF or image files could be read from the selection.')
+        const url = URL.createObjectURL(blob)
+        writePdfViewerHtml(target, 'Selected Files', url, true)
+        window.setTimeout(() => URL.revokeObjectURL(url), 120_000)
+      } catch (err) {
+        target.close()
+        toast.error(err instanceof Error ? err.message : 'Print failed')
+      }
+    }
+  }
+
+  /** Row Print button: uploaded-file documents print their merged PDF, the rest print the generated page. */
+  const printDocument = (kind: BisPrintDocumentKind) => {
+    if (isMergePdfModuleKind(kind)) void runMergedModulePdf(kind, 'print')
+    else void printSelection([kind])
+  }
+
+  /** Step 8: preview the ticked documents together (generated pages in the preview; uploaded files as one PDF tab). */
+  const previewSelected = async (sel: PreviewSelection) => {
+    if (!row) return
+    setDownloadBusy(true)
+    try {
+      if (sel.previewKinds.length) {
+        const htmls = await Promise.all(sel.previewKinds.map((kind) => buildBisDocumentHtml(row, kind)))
+        setPreviewKindsList(sel.previewKinds)
+        setPreviewGeneratedHtml(htmls.length === 1 ? htmls[0] : combinePrintHtmlDocuments('Selected Documents', htmls))
+        setPreviewKind(sel.previewKinds[0])
+      }
+      if (sel.previewFiles.length) {
+        const target = openPendingPrintWindow('Preparing the selected files…')
+        const blob = await uploadedFilesPdf(sel.previewFiles)
+        if (!blob) throw new Error('No PDF or image files could be read from the selection.')
+        const url = URL.createObjectURL(blob)
+        const win = target ?? window.open('', '_blank')
+        if (win) writePdfViewerHtml(win, 'Selected Files', url, false)
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Preview failed')
+    } finally {
+      setDownloadBusy(false)
+    }
+  }
+
+  /** Uploaded project files merged into one PDF (images become pages). */
+  const uploadedFilesPdf = async (files: PreviewFile[]): Promise<Blob | null> => {
+    if (!row || files.length === 0) return null
+    const bytes = await buildMergedBisProjectFilesPdf(row.id, [...new Set(files.map((f) => f.doc_kind))], {
+      ignoreUnsupported: true,
+      storagePaths: files.map((f) => f.storage_path),
+    })
+    return bytes ? pdfBlob(bytes) : null
+  }
+
+  /** Step 8: one PDF of every ticked PDF (documents first, then uploaded files), plus Word / Excel of the ticked editable files. */
+  const downloadSelected = async (sel: PreviewSelection) => {
+    if (!row) return
+    if (sel.pdfKinds.length || sel.pdfFiles.length) {
+      setDownloadBusy(true)
+      try {
+        const settings = await loadBisProjectPrintPageSettings(row.id).catch(() => DEFAULT_BIS_DOCUMENT_PRINT_PAGE_SETTINGS)
+        const pdfs: Blob[] = []
+        for (const kind of sel.pdfKinds) pdfs.push(await buildDocumentPdf(kind, settings))
+        const files = await uploadedFilesPdf(sel.pdfFiles)
+        if (files) pdfs.push(files)
+        if (pdfs.length === 0) throw new Error('Nothing to download.')
+        const single = pdfs.length === 1 && sel.pdfKinds.length + sel.pdfFiles.length === 1
+        const name = single
+          ? sel.pdfKinds[0]
+            ? BIS_PRINT_DOCUMENT_LABEL[sel.pdfKinds[0]]
+            : sel.pdfFiles[0]!.file_name.replace(/\.[^.]+$/, '')
+          : 'Selected Application Documents'
+        triggerPdfDownload(pdfs.length === 1 ? pdfs[0]! : await mergePdfBlobs(pdfs), `${safeFileBase(name, cmL)}.pdf`)
+        toast.success(single ? `PDF downloaded: ${name}` : 'PDF downloaded: selected documents combined')
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'PDF download failed')
+      } finally {
+        setDownloadBusy(false)
+      }
+    }
+    if (sel.wordKinds.length) await runDownload(sel.wordKinds[0]!, 'word', false, sel.wordKinds)
+    if (sel.excelKinds.length) await runDownload(sel.excelKinds[0]!, 'excel', false, sel.excelKinds)
+  }
+
   const runDownload = async (
     kind: BisPrintDocumentKind,
     format: 'excel' | 'word' | 'pdf',
     onlyThisKind = false,
+    /** Explicit document list (Step 8 Download Selected); otherwise the clicked / selected documents. */
+    kindsOverride?: BisPrintDocumentKind[],
   ) => {
     if (!row) return
     const label = BIS_PRINT_DOCUMENT_LABEL[kind]
@@ -737,7 +845,7 @@ export function BisLicenseDocumentsDialog({
       const settings = await loadBisProjectPrintPageSettings(row.id).catch(
         () => DEFAULT_BIS_DOCUMENT_PRINT_PAGE_SETTINGS,
       )
-      const kinds = !onlyThisKind && (format === 'word' || format === 'excel') ? selectedDocumentKinds(kind) : [kind]
+      const kinds = kindsOverride ?? (!onlyThisKind && (format === 'word' || format === 'excel') ? selectedDocumentKinds(kind) : [kind])
       const htmlDocuments = await Promise.all(
         kinds.map(async (documentKind) => applyBisDocumentPrintPageSettings(
           await buildBisDocumentHtml(row, documentKind),
@@ -919,83 +1027,22 @@ export function BisLicenseDocumentsDialog({
           {/* Step body */}
           <div className={cn(limsPanelClass, 'flex min-h-0 flex-1 flex-col bg-[#f7f3eb]')}>
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 sm:p-4">
-              {isPreviewStep ? (
-                <div className="space-y-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <h3 className="text-base font-bold text-stone-900">Application Submission - Preview</h3>
-                      <p className="text-xs text-stone-600">
-                        Review every section, then enter the application on Manak Online (Pay Fee is step 9 there).
-                      </p>
-                    </div>
-                    <Button
-                      type="button"
-                      size="sm"
-                      className="rounded-none bg-amber-700 text-white hover:bg-amber-800"
-                      disabled={actionsDisabled || allKinds.length === 0}
-                      onClick={() => void downloadPdfDocuments(allKinds[0], allKinds, 'Complete Application')}
-                    >
-                      <FileDown size={15} className="mr-1.5" aria-hidden />
-                      Download complete application (PDF)
-                    </Button>
-                  </div>
-                  {BIS_APPLICATION_STEPS.map((s, si) => {
-                    const kinds = stepKinds(si)
-                    if (kinds.length === 0) return null
-                    return (
-                      <section key={s.id} className="border border-stone-400 bg-[#fffcf7]">
-                        <header className="flex items-center justify-between bg-stone-800 px-3 py-1.5">
-                          <h4 className="text-xs font-bold uppercase tracking-[0.12em] text-amber-200">
-                            {si + 1}. {s.title}
-                          </h4>
-                          <button
-                            type="button"
-                            className="text-[11px] font-semibold text-amber-200 underline-offset-2 hover:underline"
-                            onClick={() => setStep(si)}
-                          >
-                            Edit step
-                          </button>
-                        </header>
-                        <ul className="divide-y divide-[#e7e0d4]">
-                          {kinds.map((kind) => (
-                            <li key={kind} className="flex items-center justify-between gap-2 px-3 py-1.5">
-                              <span className="flex min-w-0 items-center gap-2 text-sm font-semibold text-[#1c1917]">
-                                <FileText className="h-4 w-4 shrink-0 text-amber-800" aria-hidden />
-                                <span className="truncate">{BIS_PRINT_DOCUMENT_LABEL[kind]}</span>
-                              </span>
-                              <span className="inline-flex shrink-0 gap-0.5">
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="ghost"
-                                  className={actionBtnClass}
-                                  disabled={actionsDisabled}
-                                  title={`View — ${BIS_PRINT_DOCUMENT_LABEL[kind]}`}
-                                  aria-label={`View ${BIS_PRINT_DOCUMENT_LABEL[kind]}`}
-                                  onClick={() => handleView(kind)}
-                                >
-                                  <Eye size={15} />
-                                </Button>
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="ghost"
-                                  className={actionBtnClass}
-                                  disabled={actionsDisabled}
-                                  title={`PDF Download — ${BIS_PRINT_DOCUMENT_LABEL[kind]}`}
-                                  aria-label={`PDF Download ${BIS_PRINT_DOCUMENT_LABEL[kind]}`}
-                                  onClick={() => void downloadPdfDocuments(kind, [kind])}
-                                >
-                                  <FileDown size={15} />
-                                </Button>
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      </section>
-                    )
-                  })}
-                </div>
+              {isPreviewStep && row ? (
+                <ManakPreviewStep
+                  row={row}
+                  refreshKey={refreshKey}
+                  excelKinds={EXCEL_DOCUMENT_KINDS}
+                  busy={actionsDisabled}
+                  onEditStep={setStep}
+                  onPreview={handlePreview}
+                  onPrint={printDocument}
+                  onPdf={(kind) => void downloadPdfDocuments(kind, [kind])}
+                  onEditable={(kind, format) => void runDownload(kind, format, true)}
+                  onPreviewSelected={(sel) => void previewSelected(sel)}
+                  onPrintSelected={(sel) => void printSelection(sel.printKinds, sel.printFiles)}
+                  onDownloadSelected={(sel) => void downloadSelected({ ...sel, wordKinds: [], excelKinds: [] })}
+                  onEditableSelected={(sel) => void downloadSelected({ ...sel, pdfKinds: [], pdfFiles: [] })}
+                />
               ) : (
                 <>
                 <div className="mb-3 text-center font-jakarta">
@@ -1017,16 +1064,19 @@ export function BisLicenseDocumentsDialog({
                     preview: () => handlePreview('marking-fee-acceptance'),
                     pdf: () => void runDownload('marking-fee-acceptance', 'pdf', true),
                     word: () => void runDownload('marking-fee-acceptance', 'word', true),
+                    print: () => printDocument('marking-fee-acceptance'),
                   }}
                   onTopManagement={{
                     preview: () => handlePreview('top-management'),
                     pdf: () => void runDownload('top-management', 'pdf', true),
                     word: () => void runDownload('top-management', 'word', true),
+                    print: () => printDocument('top-management'),
                   }}
                   onTechnicalStaff={{
                     preview: () => handlePreview('technical-staff'),
                     pdf: () => void runDownload('technical-staff', 'pdf', true),
                     word: () => void runDownload('technical-staff', 'word', true),
+                    print: () => printDocument('technical-staff'),
                   }}
                   renderDocActions={(kind, onModuleEdit) => (
                     <StepDocActions
@@ -1037,6 +1087,7 @@ export function BisLicenseDocumentsDialog({
                       onWord={(k) => void runDownload(k, 'word')}
                       onExcel={(k) => void runDownload(k, 'excel')}
                       onPdf={(k) => void runDownload(k, 'pdf')}
+                      onPrint={printDocument}
                     />
                   )}
                   onImportData={(bundle) => {
@@ -1062,6 +1113,7 @@ export function BisLicenseDocumentsDialog({
                     preview: () => void previewScopeUndertaking(),
                     pdf: () => void downloadScopeUndertakingPdf(),
                     word: () => void runDownload('manufacturing-scope', 'word', true),
+                    print: () => printDocument('manufacturing-scope'),
                   }}
                   documents={
                     <div className="border border-stone-300 bg-[#fffcf7]">
@@ -1220,6 +1272,13 @@ export function BisLicenseDocumentsDialog({
       row={row}
       kind={previewKind}
       generatedHtml={previewGeneratedHtml}
+      editable={(() => {
+        // Word / Excel for the previewed document(s), as on their row buttons.
+        const kinds = (previewKindsList.length ? previewKindsList : previewKind ? [previewKind] : []).filter((k) => !isMergePdfModuleKind(k))
+        if (!kinds.length) return null
+        const format: 'word' | 'excel' = kinds.every((k) => EXCEL_DOCUMENT_KINDS.includes(k)) ? 'excel' : 'word'
+        return { format, onDownload: () => void runDownload(kinds[0]!, format, kinds.length === 1, kinds.length > 1 ? kinds : undefined) }
+      })()}
     />
 
     <BisModuleImportDialog

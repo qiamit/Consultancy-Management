@@ -31,18 +31,6 @@ export type Cmpf311Data = PrintApplicantContext & {
 }
 
 const BLANK = '________________'
-const CMPF311_TABLE_PAGE_BUDGET_MM = 195
-const CMPF311_TABLE_COLUMN_WIDTHS_MM = [9, 27, 18, 18, 18, 18, 72]
-
-function estimatedCmpf311RowHeightMm(row: Cmpf311TestRow): number {
-  const values = [row.clause, row.requirement, [row.testMethod, row.testMethodClause].filter(Boolean).join(' — '), row.testEquipmentRequirement, row.noOfSample, row.frequency, row.remarks]
-  const lineCount = values.reduce((maximum, value, index) => {
-    const charsPerLine = Math.max(4, Math.floor((CMPF311_TABLE_COLUMN_WIDTHS_MM[index] ?? 8) * 0.55))
-    return Math.max(maximum, Math.ceil(String(value ?? '').length / charsPerLine))
-  }, 1)
-  return lineCount * 5.6 + 3
-}
-
 /** A4 content area below the letterhead and title is about 235 mm; the signature block needs about 42 mm. */
 const CMPF311_ANNEX_PAGE_BUDGET_MM = 232
 const CMPF311_ANNEX_SIGN_RESERVE_MM = 42
@@ -76,28 +64,9 @@ function paginateCmpf311Annexure<T extends { title: string; content: string }>(s
   return pages
 }
 
-function paginateCmpf311TestRows(rows: Cmpf311TestRow[], reserveMm = 0): Cmpf311TestRow[][] {
-  const pageBudget = Math.max(80, CMPF311_TABLE_PAGE_BUDGET_MM - reserveMm)
-  const pages: Cmpf311TestRow[][] = []
-  let page: Cmpf311TestRow[] = []
-  let usedMm = 0
-  for (const row of rows) {
-    const rowHeight = estimatedCmpf311RowHeightMm(row)
-    if (page.length && usedMm + rowHeight > pageBudget) {
-      pages.push(page)
-      page = []
-      usedMm = 0
-    }
-    page.push(row)
-    usedMm += rowHeight
-  }
-  if (page.length || pages.length === 0) pages.push(page)
-  return pages
-}
-
 function cmpf311TestTable(rows: Cmpf311TestRow[]): string {
   const bodyRows = rows.map((row) => `<tr><td>${esc(row.clause)}</td><td>${esc(row.requirement)}</td><td>${esc([row.testMethod, row.testMethodClause].filter(Boolean).join(' — '))}</td><td>${esc(row.testEquipmentRequirement)}</td><td>${esc(row.noOfSample)}</td><td>${esc(row.frequency)}</td><td>${esc(row.remarks)}</td></tr>`).join('')
-  return `<table class="pd-table cmpf311-test-table"><colgroup><col style="width:5%"/><col style="width:15%"/><col style="width:10%"/><col style="width:10%"/><col style="width:10%"/><col style="width:10%"/><col style="width:40%"/></colgroup><thead>
+  return `<table class="pd-table cmpf311-test-table"><colgroup><col style="width:10%"/><col style="width:30%"/><col style="width:10%"/><col style="width:10%"/><col style="width:10%"/><col style="width:10%"/><col style="width:20%"/></colgroup><thead>
     <tr><th colspan="3">Test Details</th><th rowspan="2">Test<br/>Equipment<br/>R / S</th><th colspan="3">Level of Control</th></tr>
     <tr><th>Clause</th><th>Requirements</th><th>Test Method &amp; Clause No</th><th>No of Samples</th><th>Frequency</th><th>Remarks</th></tr>
   </thead><tbody>${bodyRows || '<tr><td colspan="7">No SIT test rows generated yet.</td></tr>'}</tbody></table>`
@@ -118,24 +87,18 @@ function buildBody(data: Cmpf311Data): string {
 
   if (data.mode === 'on-sit') {
     const notes = data.notes.map((note) => `<p class="cmpf311-note"><strong>${esc(note.title)}${note.title ? '. ' : ''}</strong>${esc(note.description)}</p>`).join('')
-    const reserveForSign = notes ? 0 : 45
-    const tablePages = paginateCmpf311TestRows(data.testRows, reserveForSign)
+    // One sheet with every row: the shared paginator splits it by measured height and repeats the heading.
+    const tablePages = [data.testRows]
     const tablePageHtml = tablePages.map((rows, index) => `
 <div class="pd-sheet cmpf311-onsit-page cmpf311-table-page">
   ${letterheadHtml(data)}
-  <h1 class="pd-title">Scheme of Inspection &amp; Testing</h1>
-  <p class="cmpf311-manual-ref"><strong>SIT No.:</strong> ${esc(productManualNo)}</p>
+  <h1 class="pd-title pd-repeat-head">Scheme of Inspection &amp; Testing</h1>
+  <p class="cmpf311-manual-ref pd-repeat-head"><strong>SIT No.:</strong> ${esc(productManualNo)}</p>
   ${cmpf311TestTable(rows)}
-  ${!notes && index === tablePages.length - 1 ? `<div class="cmpf-sign-right">${signatoryHtml({ firmName: data.applicantName, name: sigName, designation: data.signatoryDesignation })}</div>${preparedByHtml(data.preparedBy)}` : ''}
+  ${index === tablePages.length - 1 ? `${notes ? `<h1 class="pd-title cmpf311-notes-title">Notes — Subcontracted Laboratory &amp; Process</h1>${notes}` : ''}<div class="cmpf-sign-right">${signatoryHtml({ firmName: data.applicantName, name: sigName, designation: data.signatoryDesignation })}</div>${preparedByHtml(data.preparedBy)}` : ''}
 </div>`).join('')
-    const notesPageHtml = notes ? `
-<div class="pd-sheet cmpf311-onsit-page cmpf311-notes-page">
-  ${letterheadHtml(data)}
-  <h1 class="pd-title">Notes — Subcontracted Laboratory &amp; Process</h1>
-  ${notes}
-  <div class="cmpf-sign-right">${signatoryHtml({ firmName: data.applicantName, name: sigName, designation: data.signatoryDesignation })}</div>
-  ${preparedByHtml(data.preparedBy)}
-</div>` : ''
+    // Notes and the signature follow the last test row on the same sheet (no near-empty page in between).
+    const notesPageHtml = ''
     const annexPages = paginateCmpf311Annexure(data.annexureSections)
     const annexPageHtml = annexPages.map((entries, index) => `
 <div class="pd-sheet cmpf311-onsit-page cmpf311-annex-page">
@@ -194,6 +157,7 @@ export function buildCmpf311Html(data: Cmpf311Data): string {
       .cmpf311-cover-sign .pd-sign-line { margin-left: auto; }
       .cmpf311-annex-sign { margin-top: 10mm; }
       .cmpf311-seal-label { font-size: 9pt; font-weight: 700; margin-top: 2px; }
+      .cmpf311-notes-title { margin-top: 14px; }
       .cmpf311-note { display: block; margin: 0 0 5px; text-align: justify; line-height: 1.45; }
       .cmpf311-notes-title { margin: 8px 0 3px; font-size: 12pt; }
       .cmpf311-test-table th, .cmpf311-test-table td { font-size: 9.5pt; padding: 4px; }

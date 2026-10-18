@@ -1,5 +1,6 @@
 import { formatDisplayDate, todayIsoDate } from '../projects/types'
 import type { BisPrintData } from './loadBisPrintData'
+import { authorizationLetterSources } from '../projects/authorizationLetterModel'
 import { escapeHtml as esc } from './openPrintHtml'
 import { applicationNumberForProject, PRINT_PAGE_FRAME_CSS, toBlockHtml } from './printDocumentShared'
 
@@ -26,6 +27,7 @@ export type AuthorizationLetterData = {
   signatoryName: string
   signatoryDesignation: string
   preparedBy: string
+  includeFirmSeal?: boolean
 }
 
 function blank(value: string, fallback = '________________'): string {
@@ -122,6 +124,7 @@ function buildBody(data: AuthorizationLetterData): string {
       <div class="al-sign-space al-sign-space-by"></div>
       <div class="al-sign-line"></div>
       <div>${byLine}</div>
+      ${data.includeFirmSeal ? '<div class="al-firm-seal"></div>' : ''}
     </div>
     <div class="al-signatory al-signatory-right">
       <div class="al-sign-label">Authorized Person</div>
@@ -183,6 +186,8 @@ const LETTER_STYLES = `
     background: transparent;
     mix-blend-mode: multiply;
   }
+  /* Standalone letter images follow its per-person Include Signature controls. */
+  .al-sign-space .pd-sign-img.al-selected-signature { display: inline-block !important; }
   .al-sign-line {
     display: block;
     border-top: 1px solid #111;
@@ -192,6 +197,8 @@ const LETTER_STYLES = `
     box-sizing: border-box;
   }
   .al-seal-note { font-size: 11px; color: #222; margin: 2px 0 4px; }
+  .al-firm-seal { margin-top: 3mm; }
+  .al-seal-img { display: block; max-height: 24mm; max-width: 48mm; object-fit: contain; background: transparent; mix-blend-mode: multiply; }
   .al-prepared { display: none !important; }
   .pd-page-num {
     position: absolute;
@@ -233,6 +240,8 @@ export function authorizationLetterDataFromPrintData(printData: BisPrintData): A
     .filter(Boolean)
     .join(', ')
   const tm = printData.topManagement
+  const configured = printData.modulePayload?.selectionVersion === 1
+  const { settings, person, authorizer } = authorizationLetterSources(printData.modulePayload, tm)
   const authName = String(tm?.authorizedSignatoryName ?? '').trim()
   const authDesig = String(tm?.authorizedSignatoryDesignation ?? '').trim()
   const authorizedBy = String(tm?.authorizedBy ?? '').trim()
@@ -258,15 +267,16 @@ export function authorizationLetterDataFromPrintData(printData: BisPrintData): A
     bisBranchName: (row.branch_name ?? '').trim(),
     bisBranchState: (row.branch_state ?? '').trim() || client.state,
     applicationNumber: applicationNumberForProject(row),
-    letterDate: todayIsoDate(),
+    letterDate: configured ? settings.letterDate : todayIsoDate(),
     isNumber: isCode.label,
     isTitle: isCode.title,
     // 1) Person being authorized (Top Management → Authorized Signatory).
-    authorizedName: authName || client.contactPerson,
-    authorizedDesignation: authDesig,
+    authorizedName: person?.name || (configured ? '' : authName || client.contactPerson),
+    authorizedDesignation: person?.designation || (configured ? '' : authDesig),
     // 2) Person who authorizes / signs for the firm (Top Management → Authorized By).
-    signatoryName: firmSigName,
-    signatoryDesignation: firmSigDesig,
+    signatoryName: authorizer?.name || (configured ? '' : firmSigName),
+    signatoryDesignation: authorizer?.designation || (configured ? '' : firmSigDesig),
     preparedBy: company.companyName,
+    includeFirmSeal: configured && settings.includeFirmSeal && !!settings.sealFile,
   }
 }

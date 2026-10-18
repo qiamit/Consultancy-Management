@@ -10,6 +10,7 @@ import type { BisPrintDocumentKind } from '../print/printBisDocument'
 import { fetchBisModulePayload, saveBisModulePayload } from './bisModuleDataApi'
 import { BisModuleImportDialog } from './BisModuleImportDialog'
 import { importCmpfSpreadsheetRows } from './cmpfSpreadsheetImport'
+import { copyProjectFileToProject } from './bisModuleImportApi'
 import { ManakPanel } from './ManakStepPages'
 import type { BisProjectRow } from './types'
 
@@ -40,8 +41,14 @@ export type StepComponent = {
   /** Module dialog opened by Edit; absent → the popup below. */
   editKind?: BisPrintDocumentKind
   defaultApplicable: YesNo
+  /** Custom editor opened by Edit (instead of editKind / popup). */
+  onEdit?: () => void
+  /** false: no bundle select box (upload-only rows that are not generated documents). */
+  selectable?: boolean
   /** Replaces the Edit / Preview / PDF / Word buttons (e.g. upload-only documents). */
-  actions?: () => ReactNode
+  actions?: (edit: () => void) => ReactNode
+  /** Extra popup header buttons (e.g. AI), shown before Import. */
+  popupHeaderExtra?: () => ReactNode
   /** Popup heading when it differs from the row label. */
   popupTitle?: string
   /** Popup body (tables edited in place). */
@@ -121,7 +128,8 @@ export function ManakComponentsTable({
   const excelInputRef = useRef<HTMLInputElement | null>(null)
 
   const editComponent = (c: StepComponent) => () => {
-    if (c.editKind) onEdit(c.editKind)
+    if (c.onEdit) c.onEdit()
+    else if (c.editKind) onEdit(c.editKind)
     else setPopup(c)
   }
 
@@ -156,14 +164,22 @@ export function ManakComponentsTable({
     if (!popup || !table) return
     const rowKey = (r: Rec) => table.idKeys.map((k) => str(r[k]).toLowerCase()).join('|')
     const isRow = (r: Rec) => table.idKeys.some((k) => str(r[k]))
-    const withoutFiles = (r: Rec) =>
-      Object.fromEntries(Object.entries(r).filter(([, v]) => !(v && typeof v === 'object' && 'storage_path' in (v as Rec))))
+    // Attached files are copied into this application (a failed copy drops just that file).
+    const withCopiedFiles = async (r: Rec): Promise<Rec> => {
+      const next: Rec = { ...r }
+      for (const [key, v] of Object.entries(r)) {
+        if (!v || typeof v !== 'object' || !('storage_path' in (v as Rec))) continue
+        const f = v as { id: string; file_name: string; storage_path: string }
+        next[key] = await copyProjectFileToProject(sourceProjectId, projectId, f, String(table.kind)).catch(() => null)
+      }
+      return next
+    }
     const sourceRows = rowsOf(await fetchBisModulePayload(sourceProjectId, table.kind), table.rowsKey).filter(isRow)
     if (sourceRows.length === 0) throw new Error(`The selected application has no ${popup.label}.`)
     const current = (await fetchBisModulePayload(projectId, table.kind)) ?? {}
     const existing = rowsOf(current, table.rowsKey).filter(isRow)
     const known = new Set(existing.map(rowKey))
-    const added = sourceRows.filter((r) => !known.has(rowKey(r))).map(withoutFiles)
+    const added = await Promise.all(sourceRows.filter((r) => !known.has(rowKey(r))).map(withCopiedFiles))
     if (added.length === 0) {
       toast.message('Nothing new to import', { description: `All ${popup.label} rows are already in this application.` })
       return
@@ -202,13 +218,13 @@ export function ManakComponentsTable({
                         type="checkbox"
                         className={checkCls}
                         aria-label={`Select ${c.label}`}
-                        disabled={!yes || !selection}
-                        checked={yes && Boolean(selection?.has(c.printKind))}
+                        disabled={!yes || !selection || c.selectable === false}
+                        checked={yes && c.selectable !== false && Boolean(selection?.has(c.printKind))}
                         onChange={(e) => selection?.set(c.printKind, e.target.checked)}
                       />
                     </td>
                     <td className={cn(tdCls, 'font-semibold text-stone-800')}>
-                      {yes && (c.editKind || c.popup) ? (
+                      {yes && (c.editKind || c.popup || c.onEdit) ? (
                         <button type="button" className="text-left font-semibold hover:text-amber-800 hover:underline" onClick={editComponent(c)}>
                           {c.label}
                         </button>
@@ -236,7 +252,7 @@ export function ManakComponentsTable({
                       </Select>
                     </td>
                     <td className={cn(tdCls, 'whitespace-nowrap text-center')}>
-                      {yes ? c.actions?.() ?? renderDocActions?.(c.printKind, editComponent(c)) ?? <span className="text-stone-400">—</span> : <span className="text-xs text-stone-400">{c.choice?.offText ?? 'Not applicable'}</span>}
+                      {yes ? c.actions?.(editComponent(c)) ?? renderDocActions?.(c.printKind, editComponent(c)) ?? <span className="text-stone-400">—</span> : <span className="text-xs text-stone-400">{c.choice?.offText ?? 'Not applicable'}</span>}
                     </td>
                   </tr>
                 )
@@ -282,6 +298,7 @@ export function ManakComponentsTable({
                   </Button>
                 </>
               ) : null}
+              {components.find((c) => c.key === popup?.key)?.popupHeaderExtra?.()}
               {popup?.importTable && projectRow?.id ? (
                 <Button
                   type="button"

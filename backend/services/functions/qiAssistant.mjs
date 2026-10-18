@@ -237,7 +237,9 @@ export function createQiAssistantHandler(deps) {
     const temperature = Number(model.temperature)
     const maxTokens = Number(model.max_tokens)
     const isCmpf311Request = body.page === 'bis/cmpf-311-on-sit'
-    const chatMaxTokens = isCmpf311Request ? 8192 : Number.isFinite(maxTokens) ? Math.min(maxTokens, 8192) : 4096
+    // Long source-PDF extractions: full output budget and no hidden reasoning, which can otherwise use up the tokens.
+    const isLongExtraction = isCmpf311Request || body.page === 'bis/undertaking-indian-standards' || body.page === 'bis/undertaking-other'
+    const chatMaxTokens = isLongExtraction ? 8192 : Number.isFinite(maxTokens) ? Math.min(maxTokens, 8192) : 4096
 
     const requestChatCompletion = (jsonMode) => fetch(`${apiBase}/chat/completions`, {
       method: 'POST',
@@ -251,7 +253,7 @@ export function createQiAssistantHandler(deps) {
         temperature: Number.isFinite(temperature) ? temperature : 0.7,
         max_tokens: chatMaxTokens,
         ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
-        ...(provider === 'deepseek' && isCmpf311Request ? { thinking: { type: 'disabled' } } : {}),
+        ...(provider === 'deepseek' && isLongExtraction ? { thinking: { type: 'disabled' } } : {}),
       }),
     })
 

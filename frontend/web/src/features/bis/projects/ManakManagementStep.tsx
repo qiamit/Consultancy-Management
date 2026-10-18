@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Check, Download, Eye, FileType, Import, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { Check, Download, Eye, FileType, Import, Pencil, Plus, Printer, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -55,7 +55,7 @@ function DocActions({
   onImport,
 }: {
   what: string
-  actions?: { preview: () => void; pdf: () => void; word: () => void }
+  actions?: { preview: () => void; pdf: () => void; word: () => void; print?: () => void }
   /** Import this panel's data from another Application / License. */
   onImport?: () => void
 }) {
@@ -69,6 +69,7 @@ function DocActions({
           [`Preview ${what}`, actions.preview, Eye],
           [`Download ${what} as PDF`, actions.pdf, Download],
           [`Download ${what} as Word`, actions.word, FileType],
+          ...(actions.print ? ([[`Print ${what}`, actions.print, Printer]] as const) : []),
           ] as const) : []),
         ] as const
       ).map(([label, handler, Icon]) => (
@@ -600,8 +601,8 @@ export function ManakManagementStep({
   correspondence: Rec | null | undefined
   onChanged: () => void
   onOpenModule?: (kind: BisPrintDocumentKind) => void
-  onTopManagement?: { preview: () => void; pdf: () => void; word: () => void }
-  onTechnicalStaff?: { preview: () => void; pdf: () => void; word: () => void }
+  onTopManagement?: { preview: () => void; pdf: () => void; word: () => void; print?: () => void }
+  onTechnicalStaff?: { preview: () => void; pdf: () => void; word: () => void; print?: () => void }
   projectRow?: BisProjectRow | null
   /** Opens the import dialog for a group of modules (any client's Application / License). */
   onImportData?: (bundle: ImportDataBundle) => void

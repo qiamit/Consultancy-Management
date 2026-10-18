@@ -539,13 +539,19 @@ export function applyBisDocumentPrintPageSettings(
   color: #000 !important;
   -webkit-text-fill-color: #000 !important;
 }
-.proc-points p, .ug-points p, .u2-conditions p {
-  font-size: 12.5px !important;
+/* Scan-legible body text (print → seal / sign → scan). */
+.pd-body, .al-body, .pd-to-block, .al-to-block, .pd-date-block, .al-date-block {
+  font-size: 13.5px !important;
   font-weight: 500 !important;
   line-height: 1.55 !important;
 }
+.proc-points p, .ug-points p, .u2-conditions p {
+  font-size: 13.5px !important;
+  font-weight: 500 !important;
+  line-height: 1.6 !important;
+}
 .pd-meta td, .pd-table th, .pd-table td {
-  font-size: 12px !important;
+  font-size: 12.5px !important;
   color: #000 !important;
   border-color: #000 !important;
   border-width: 1.25px !important;
@@ -580,10 +586,34 @@ export function applyBisDocumentPrintPageSettings(
   margin-left: auto !important;
   margin-right: 0 !important;
 }
+/* Seal + signature stamp: sized like a real stamp and centred on the signature line, overlapping the
+   "For …" and name lines the way a hand-applied stamp does (multiply keeps the text readable through it). */
+.pd-sign-space, .al-sign-space {
+  position: relative !important;
+  overflow: visible !important;
+}
 .pd-sign-img, .al-sign-space .pd-sign-img {
-  display: ${settings.showSignatureImage ? 'inline-block' : 'none'} !important;
-  max-height: ${Math.max(6, sigMm - 1)}mm !important;
+  display: ${settings.showSignatureImage ? 'block' : 'none'} !important;
+  position: absolute !important;
+  right: 24mm !important;
+  bottom: -7mm !important;
+  transform: translateX(50%) !important;
+  width: auto !important;
+  height: ${sigMm + 13}mm !important;
+  max-height: none !important;
+  max-width: 58mm !important;
+  object-fit: contain !important;
+  z-index: 2 !important;
+  pointer-events: none;
   background: transparent !important;
+  mix-blend-mode: multiply;
+}
+.cmpf307-sign-image, .c306-cont-sign-image {
+  position: relative !important;
+  z-index: 2 !important;
+  max-height: 25mm !important;
+  max-width: 58mm !important;
+  margin: -7mm 0 -7mm auto !important;
   mix-blend-mode: multiply;
 }
 .pd-seal-note, .al-seal-note {
@@ -695,9 +725,9 @@ export function applyBisDocumentPrintPageSettings(
     -webkit-text-fill-color: #111 !important;
   }
   .proc-points p, .ug-points p, .u2-conditions p, .pd-body, .al-body {
-    font-size: 12.5px !important;
+    font-size: 13.5px !important;
     font-weight: 500 !important;
-    line-height: 1.55 !important;
+    line-height: 1.6 !important;
     color: #000 !important;
     -webkit-text-fill-color: #000 !important;
   }
