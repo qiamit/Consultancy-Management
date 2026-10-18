@@ -493,11 +493,11 @@
       plan.push(scalar("Other request for consideration", dc.otherRequest || "No", [/^otherRequirementFlag$/], []));
       plan.push(scalar("Authorization letter", dc.authorizationLetter || "No", [/^authLetterFlag$/], []));
       files("auth-letter").forEach((f) => plan.push({ kind: "file", key: "Authorization letter", slot: "auth-letter", file: f }));
-      [["other-info", "otherInformationFile"], ["other-request", "otherRequirementFile"]].forEach(([slot, prefix]) =>
-        files(slot).forEach((f) =>
-          plan.push({ kind: "indexed", key: `${f.label || slot}`, index: f.row || 0, add: /a^/, cells: [], files: [{ ...f, idPrefix: prefix }] }),
-        ),
-      );
+      // Other Information = every application document (PDF) + extra files; Other Request = its files.
+      [["other-info", "otherInformationFile", "Other information"], ["other-request", "otherRequirementFile", "Other request"]].forEach(([slot, prefix, key]) => {
+        const list = files(slot);
+        if (list.length) plan.push({ kind: "file-rows", key, prefix, files: list });
+      });
       plan.push(scalar("I agree (undertaking)", "Yes", [/^agree$/], [], { type: "checkbox" }));
     }
     return plan;
@@ -695,6 +695,45 @@
           await sleep(2000);
         } else if (!ok) {
           report.missing.push(`${prefix}not added — complete the row in Consultancy Pro (conformity, QR)`);
+        }
+      } else if (item.kind === "file-rows") {
+        // Rows of (file name, PDF): ids <prefix>0, <prefix>1 …; the table's own "add" control appends the next row.
+        const isVisible = (el) => el && el.getBoundingClientRect().width > 0;
+        for (let i = 0; i < item.files.length; i += 1) {
+          const f = item.files[i];
+          const name = `${item.key} ${i + 1}: ${f.label || f.fileName}`;
+          let input = document.getElementById(`${item.prefix}${i}`);
+          if (!input && i > 0) {
+            const prev = document.getElementById(`${item.prefix}${i - 1}`);
+            const table = prev && prev.closest("table");
+            const add = table
+              ? Array.from(table.querySelectorAll("[onclick], button")).find((el) => {
+                  const b = `${el.getAttribute("onclick") || ""} ${el.id || ""} ${String(el.className || "")} ${el.title || ""}`;
+                  return /add/i.test(b) && !/delet|remov|trash/i.test(b) && isVisible(el);
+                })
+              : null;
+            if (add) {
+              add.click();
+              await sleep(900);
+              input = document.getElementById(`${item.prefix}${i}`);
+            }
+          }
+          if (!input) {
+            report.missing.push(`${name} — no row for it (add it yourself)`);
+            break;
+          }
+          const tr = input.closest("tr");
+          const nameBox = tr && Array.from(tr.querySelectorAll("input[type='text'], textarea")).find(isVisible);
+          if (nameBox) {
+            const res = setValue(nameBox, f.label || f.fileName);
+            if (String(res).startsWith("too-long")) setValue(nameBox, (f.label || f.fileName).slice(0, Number(String(res).split(":")[1]) || 50));
+          } else {
+            report.missing.push(`${name} — file name box`);
+          }
+          const res = await setFile(input, f);
+          if (res === "filled") report.filled.push(name);
+          else if (res !== "same") report.missing.push(`${name} (${res})`);
+          await sleep(300);
         }
       } else if (item.kind === "indexed") {
         const i = item.index;

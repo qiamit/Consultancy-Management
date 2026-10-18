@@ -3,13 +3,13 @@
  * The extension fills Manak's Apply-for-new-licence steps from this
  * (frontend/extensions/qe-consultancy-chrome/newapp-fill.js — keep the shape in sync).
  */
-import { mapPageSizeToPlaywrightFormat, renderPdfViaPlaywright } from '@/lib/playwrightPdfClient'
 import { supabase } from '@/lib/supabaseClient'
-import { paginateHtmlForDownload } from '../print/bisPreviewPagination'
-import { applyBisDocumentPrintPageSettings, DEFAULT_BIS_DOCUMENT_PRINT_PAGE_SETTINGS } from '../print/bisDocumentPrintPageSettings'
+import { DEFAULT_BIS_DOCUMENT_PRINT_PAGE_SETTINGS } from '../print/bisDocumentPrintPageSettings'
 import { loadBisPrintData } from '../print/loadBisPrintData'
 import { packagingMarkingFieldsFrom } from '../print/manufacturingStepDocumentsHtml'
 import { BIS_PRINT_DOCUMENT_LABEL, buildBisDocumentHtml, type BisPrintDocumentKind } from '../print/printBisDocument'
+import { loadApplicationDocumentRows, otherInformationDocumentRows } from './applicationDocuments'
+import { buildBisDocumentPdfBlob } from './bisDocumentPdf'
 import { buildExcelWorkbook } from './bisExcelWorkbook'
 import { fetchBisModulePayload } from './bisModuleDataApi'
 import { BIS_PROJECT_FILES_BUCKET } from './bisProjectFilesApi'
@@ -150,20 +150,20 @@ async function generateDocExcel(row: BisProjectRow, kind: BisPrintDocumentKind):
   return path
 }
 
-async function generateDocPdf(row: BisProjectRow, kind: BisPrintDocumentKind): Promise<string> {
-  const settings = await loadBisProjectPrintPageSettings(row.id).catch(() => DEFAULT_BIS_DOCUMENT_PRINT_PAGE_SETTINGS)
-  const html = await paginateHtmlForDownload(applyBisDocumentPrintPageSettings(await buildBisDocumentHtml(row, kind), settings))
-  const blob = await renderPdfViaPlaywright({
-    html,
-    filename: `${kind}.pdf`,
-    format: mapPageSizeToPlaywrightFormat(settings.pageSize),
-    landscape: settings.orientation === 'landscape',
-    margin: { top: '0mm', right: '0mm', bottom: '0mm', left: '0mm' },
-  })
-  const path = `${row.id}/manak-assist/${kind}.pdf`
-  const { error } = await supabase.storage.from(BIS_PROJECT_FILES_BUCKET).upload(path, blob, { upsert: true, contentType: 'application/pdf' })
-  if (error) throw error
-  return path
+/** Same PDF as the app's PDF button; one render per kind per Manak Assist click. */
+async function generateDocPdf(row: BisProjectRow, kind: BisPrintDocumentKind, cache: Map<string, Promise<string>>): Promise<string> {
+  const cached = cache.get(kind)
+  if (cached) return cached
+  const job = (async () => {
+    const settings = await loadBisProjectPrintPageSettings(row.id).catch(() => DEFAULT_BIS_DOCUMENT_PRINT_PAGE_SETTINGS)
+    const blob = await buildBisDocumentPdfBlob(row, kind, settings)
+    const path = `${row.id}/manak-assist/${kind}.pdf`
+    const { error } = await supabase.storage.from(BIS_PROJECT_FILES_BUCKET).upload(path, blob, { upsert: true, contentType: 'application/pdf' })
+    if (error) throw error
+    return path
+  })()
+  cache.set(kind, job)
+  return job
 }
 
 async function link(storagePath: string): Promise<string> {
@@ -369,7 +369,7 @@ export async function buildManakNewAppPayload(row: BisProjectRow): Promise<Manak
     designation: submitterDesignation,
     weeklyOffDays,
     statutoryPermissions: yn('statutoryPermissions', 'No'),
-    otherInformation: yn('otherInformation', 'No'),
+    otherInformation: yn('otherInformation', 'Yes'),
     otherRequest: yn('otherRequest', 'No'),
     authorizationLetter: yn('authorizationLetter', 'Yes'),
   }
@@ -384,6 +384,7 @@ export async function buildManakNewAppPayload(row: BisProjectRow): Promise<Manak
     if (f) await addFile('statutory', 'Statutory permissions', f.storagePath, f.fileName)
     else missingFiles.push({ step: 'declaration', label: 'Statutory permissions file (not attached in Step 7)' })
   }
+  const pdfCache = new Map<string, Promise<string>>()
   for (const [key, slot, label] of [
     ['otherInformation', 'other-info', 'Other information'],
     ['otherRequest', 'other-request', 'Other request'],
@@ -391,6 +392,38 @@ export async function buildManakNewAppPayload(row: BisProjectRow): Promise<Manak
     if (declaration[key] !== 'Yes') continue
     const rows = Array.isArray(decl[`${key}Rows`]) ? (decl[`${key}Rows`] as Rec[]) : []
     let i = 0
+    if (key === 'otherInformation') {
+      // Every application document as a PDF (Step 8 list), then the files added by hand.
+      const docs = otherInformationDocumentRows(await loadApplicationDocumentRows(row).catch(() => []))
+      // Render three at a time (the PDF service handles parallel pages), keep Step 8 order for the rows.
+      const paths: Array<{ path: string; fileName: string } | Error> = new Array(docs.length)
+      let next = 0
+      await Promise.all(
+        Array.from({ length: 3 }, async () => {
+          while (next < docs.length) {
+            const at = next++
+            const d = docs[at]
+            try {
+              paths[at] =
+                d.type === 'doc'
+                  ? { path: await generateDocPdf(row, d.kind, pdfCache), fileName: `${d.label}.pdf` }
+                  : { path: d.file.storage_path, fileName: d.file.file_name }
+            } catch (err) {
+              paths[at] = err instanceof Error ? err : new Error('error')
+            }
+          }
+        }),
+      )
+      for (const [at, d] of docs.entries()) {
+        const got = paths[at]
+        if (got instanceof Error) {
+          missingFiles.push({ step: 'declaration', label: `${d.label} (could not generate: ${got.message})` })
+          continue
+        }
+        await addFile(slot, d.label, got.path, got.fileName, i)
+        i += 1
+      }
+    }
     for (const r of rows) {
       const f = declFile(r.file) ?? declFile(r.upload)
       if (!f) continue
@@ -404,7 +437,7 @@ export async function buildManakNewAppPayload(row: BisProjectRow): Promise<Manak
   for (const doc of GENERATED_DOCS) {
     if (doc.when && !doc.when({ sitAccept, outsourcing, hygiene, inHouse, authorizationLetter: declaration.authorizationLetter })) continue
     try {
-      const path = doc.excel ? await generateDocExcel(row, doc.kind) : await generateDocPdf(row, doc.kind)
+      const path = doc.excel ? await generateDocExcel(row, doc.kind) : await generateDocPdf(row, doc.kind, pdfCache)
       await addFile(doc.slot, doc.label, path, `${doc.label}.${doc.excel ? 'xlsx' : 'pdf'}`)
     } catch (err) {
       missingFiles.push({ step: doc.step, label: `${doc.label} (could not generate: ${err instanceof Error ? err.message : 'error'})` })

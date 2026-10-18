@@ -217,7 +217,7 @@ function RowActions({
         aria-label={`Manak Assist for ${client}`}
         title="Manak Assist — login and fill the New Application on Manak"
         onClick={() => {
-          const preparing = toast.loading('Preparing application data and documents for Manak…')
+          const preparing = toast.loading('Preparing application data and all documents for Manak — this can take a minute or two…')
           void buildManakNewAppPayload(row)
             .finally(() => toast.dismiss(preparing))
             .catch((err: unknown) => {

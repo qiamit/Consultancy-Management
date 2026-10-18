@@ -99,3 +99,7 @@ Portal field map (exact ids; rows are numbered `…0, …1`, "+" appends a blank
 
 Lessons: Manak validates uploads by file-name extension; a malformed email blocks Next; lab names are ambiguous
 (two "Alpha Test House Private Limited") — match by OSL code; portal alerts are captured into the panel while the extension fills.
+
+Step 7 Other Information: Yes by default; it carries every application document as a PDF (the Step 8 list,
+`applicationDocuments.ts`, rendered with the Documents dialog's PDF routine `bisDocumentPdf.ts`) plus files added by hand.
+On Manak each becomes an `otherInformationFile#` row with its file name. Generating ~30 PDFs takes about a minute.

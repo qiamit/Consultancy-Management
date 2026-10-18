@@ -37,8 +37,6 @@ import { cn } from '@/lib/utils'
 import {
   ALL_BIS_PRINT_KINDS,
   BIS_FILE_MODULE_KINDS,
-  BIS_HYBRID_FILE_VIEW_KINDS,
-  BIS_MERGE_PDF_MODULE_KINDS,
   BIS_PRINT_DOCUMENT_LABEL,
   buildBisDocumentHtml,
   printKindToStorageDocKind,
@@ -55,7 +53,7 @@ import {
   unassignedKinds,
 } from './bisApplicationSteps'
 import { BisDocumentPrintPreviewDialog } from './BisDocumentPrintPreviewDialog'
-import { buildApplicationDetailsPackPdf } from './buildApplicationDetailsPackPdf'
+import { buildBisDocumentPdfBlob, isHybridFileViewKind, isMergePdfModuleKind, pdfBlob, safeFileBase } from './bisDocumentPdf'
 import { loadBisProjectPrintPageSettings } from './bisPrintPageSettingsApi'
 import { buildWordDocx, combineWordHtml } from './bisWordExport'
 import { BisModuleImportDialog } from './BisModuleImportDialog'
@@ -74,13 +72,6 @@ function isFileModuleKind(kind: BisPrintDocumentKind): boolean {
   return (BIS_FILE_MODULE_KINDS as readonly string[]).includes(kind)
 }
 
-function isMergePdfModuleKind(kind: BisPrintDocumentKind): boolean {
-  return (BIS_MERGE_PDF_MODULE_KINDS as readonly string[]).includes(kind)
-}
-
-function isHybridFileViewKind(kind: BisPrintDocumentKind): boolean {
-  return (BIS_HYBRID_FILE_VIEW_KINDS as readonly string[]).includes(kind)
-}
 import { clientDisplayName, formatCmL, isCodeDisplayLabel, type BisProjectRow } from './types'
 
 const checkboxClass =
@@ -90,19 +81,6 @@ const rowSelectedClass = 'bg-[#fde68a]/80 hover:bg-[#fde68a]/80'
 
 const actionBtnClass =
   'h-8 w-8 rounded-none border border-stone-400 bg-white/70 p-0 text-amber-800 shadow-sm hover:border-amber-600 hover:bg-amber-50 hover:text-amber-950 focus-visible:ring-2 focus-visible:ring-amber-500/40'
-
-function safeFileBase(label: string, cmL: string): string {
-  const raw = [label, cmL]
-    .map((part) => part.trim())
-    .filter((part) => part && !/^[-\u2012-\u2015]+$/.test(part))
-    .join('-')
-  return raw
-    .replace(/[\\/:*?"<>|]+/g, '_')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 80) || 'document'
-}
 
 function triggerBlobDownload(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
@@ -114,12 +92,6 @@ function triggerBlobDownload(blob: Blob, filename: string) {
   a.click()
   a.remove()
   window.setTimeout(() => URL.revokeObjectURL(url), 2_000)
-}
-
-function pdfBlob(bytes: Uint8Array): Blob {
-  const copy = new Uint8Array(bytes.byteLength)
-  copy.set(bytes)
-  return new Blob([copy.buffer], { type: 'application/pdf' })
 }
 
 async function mergePdfBlobs(blobs: Blob[]): Promise<Blob> {
@@ -587,41 +559,7 @@ export function BisLicenseDocumentsDialog({
     settings: typeof DEFAULT_BIS_DOCUMENT_PRINT_PAGE_SETTINGS,
   ): Promise<Blob> => {
     if (!row) throw new Error('Select a license first.')
-
-    if (kind === 'application-details') {
-      const html = await buildBisDocumentHtml(row, kind)
-      return buildApplicationDetailsPackPdf(
-        html,
-        row.id,
-        row.client_id,
-        settings,
-        `${safeFileBase(BIS_PRINT_DOCUMENT_LABEL[kind], cmL)}.pdf`,
-      )
-    }
-
-    if (isMergePdfModuleKind(kind) || isHybridFileViewKind(kind)) {
-      const attached = await buildMergedBisProjectFilesPdf(
-        row.id,
-        [printKindToStorageDocKind(kind)],
-        { strict: true },
-      )
-      if (attached) return pdfBlob(attached)
-      if (isMergePdfModuleKind(kind)) {
-        throw new Error(`No attached files found for ${BIS_PRINT_DOCUMENT_LABEL[kind]}.`)
-      }
-    }
-
-    // Same page breaks as the preview.
-    const html = await paginateHtmlForDownload(
-      applyBisDocumentPrintPageSettings(await buildBisDocumentHtml(row, kind), settings),
-    )
-    return renderPdfViaPlaywright({
-      html,
-      filename: `${safeFileBase(BIS_PRINT_DOCUMENT_LABEL[kind], cmL)}.pdf`,
-      format: mapPageSizeToPlaywrightFormat(settings.pageSize),
-      landscape: settings.orientation === 'landscape',
-      margin: { top: '0mm', right: '0mm', bottom: '0mm', left: '0mm' },
-    })
+    return buildBisDocumentPdfBlob(row, kind, settings)
   }
 
   const downloadPdfDocuments = async (

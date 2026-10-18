@@ -4,7 +4,7 @@ Merged extension: **Manak Test Request** + **Import QR** + **IS Code portal fetc
 
 ## Install (employees — use this)
 
-1. Ask Amit for the zip: **`QE-Consultancy-Chrome-2.4.3.zip`**
+1. Ask Amit for the zip: **`QE-Consultancy-Chrome-2.5.0.zip`**
    (or copy the folder `frontend/extensions/qe-consultancy-chrome` — **without** any `_metadata` folder inside).
 
 If this extension was already loaded from the old `extensions/` folder, remove that unpacked copy and **Load unpacked** again from `frontend/extensions/qe-consultancy-chrome`. The extension ID changes when the folder moves.
@@ -15,7 +15,7 @@ If this extension was already loaded from the old `extensions/` folder, remove t
 5. Click **Load unpacked**.
 6. Select the unzipped folder that **directly contains** `manifest.json`  
    (not the parent zip folder, and not a nested extra folder).
-7. Pin the extension. Version in the card should show **2.4.3**.
+7. Pin the extension. Version in the card should show **2.5.0**.
 
 ### Common install errors
 
