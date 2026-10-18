@@ -2,7 +2,7 @@ import { Fragment, useEffect, useState, type ReactNode } from 'react'
 import { ClipboardList, Download, Eye, FileType, Pencil, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { loadBisPrintData, type BisPrintData } from '../print/loadBisPrintData'
-import { BIS_PRINT_DOCUMENT_LABEL, type BisPrintDocumentKind } from '../print/printBisDocument'
+import type { BisPrintDocumentKind } from '../print/printBisDocument'
 import { supabase } from '@/lib/supabaseClient'
 import { listClientCertificates, type ClientCertificateFile } from '@/features/masters/clients/clientsApi'
 import { fetchBisModulePayload } from './bisModuleDataApi'
@@ -16,7 +16,19 @@ import { parseCmpf310Payload } from './cmpf310Model'
 import { saveBisModulePayload } from './bisModuleDataApi'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
-import { CORRESPONDENCE_KIND, ManakManagementStep } from './ManakManagementStep'
+import { ManakManagementStep, type ImportDataBundle } from './ManakManagementStep'
+import { ManakManufacturingStep } from './ManakManufacturingStep'
+import {
+  CORRESPONDENCE_KIND,
+  LONG_DURATION_TESTS_KIND,
+  MANUFACTURING_COMPONENTS_KIND,
+  PACKAGING_COMPONENTS_KIND,
+  TEST_REPORT_COMPONENTS_KIND,
+  TESTING_COMPONENTS_KIND,
+} from './manakModuleKinds'
+import { ManakPackagingStep } from './ManakPackagingStep'
+import { ManakTestingStep } from './ManakTestingStep'
+import { ManakTestReportsStep } from './ManakTestReportsStep'
 import type { BisProjectRow } from './types'
 
 /* ───────── Manak Online look: blue section bars, light-blue sub-panels, label / value grids ───────── */
@@ -232,7 +244,20 @@ const STEP_MODULES: BisPrintDocumentKind[] = [
   'osl-sample-requirements',
   'undertaking-mmf',
   'cmpf-310',
+  'process-flow-chart',
+  'plant-layout',
+  'manufacturing-subcontracting',
+  'hygiene-conditions',
   CORRESPONDENCE_KIND,
+  MANUFACTURING_COMPONENTS_KIND,
+  'packaging-marking',
+  PACKAGING_COMPONENTS_KIND,
+  'subcontracted-tests',
+  TESTING_COMPONENTS_KIND,
+  TEST_REPORT_COMPONENTS_KIND,
+  LONG_DURATION_TESTS_KIND,
+  'raw-material-test-reports',
+  'factory-test-report',
 ]
 
 type StepData = {
@@ -307,8 +332,6 @@ function list(p: Payload | undefined, key: string): Array<Record<string, unknown
   return Array.isArray(v) ? (v as Array<Record<string, unknown>>) : []
 }
 
-const yesNo = (v: unknown) => (s(v) ? 'Yes' : 'No')
-
 /* ───────── step pages ───────── */
 
 export function ManakStepPage({
@@ -324,6 +347,9 @@ export function ManakStepPage({
   onMarkingFee,
   onTopManagement,
   onTechnicalStaff,
+  renderDocActions,
+  docSelection,
+  onImportData,
 }: {
   stepId: string
   row: BisProjectRow | null
@@ -342,6 +368,12 @@ export function ManakStepPage({
   /** Top Management Details document: preview / PDF / Word. */
   onTopManagement?: { preview: () => void; pdf: () => void; word: () => void }
   onTechnicalStaff?: { preview: () => void; pdf: () => void; word: () => void }
+  /** Document action buttons (Edit / View / Preview / Print / Word / PDF) for one document kind. */
+  renderDocActions?: (kind: BisPrintDocumentKind, onModuleEdit: () => void) => ReactNode
+  /** PDF / Word / Excel bundle selection. */
+  docSelection?: { has: (kind: BisPrintDocumentKind) => boolean; set: (kind: BisPrintDocumentKind, selected: boolean) => void }
+  /** Import a group of modules from another Application / License. */
+  onImportData?: (bundle: ImportDataBundle) => void
 }) {
   const [reloadTick, setReloadTick] = useState(0)
   const { print, clientRaw, certificates, sites, projectRaw, branches, payloads, loading, error } = useStepData(row, refreshKey + reloadTick)
@@ -513,98 +545,54 @@ export function ManakStepPage({
         onTopManagement={onTopManagement}
         onTechnicalStaff={onTechnicalStaff}
         projectRow={row}
+        onImportData={onImportData}
       />
     ) : null
   } else if (stepId === 'manufacturing') {
-    const raw = list(payloads['raw-material-reference'], 'rawMaterials')
-    const mach = list(payloads['cmpf-305'], 'rows')
-    body = (
-      <>
-        <ManakPanel title="Manufacturing Process Details" onEdit={edit('raw-material-reference')}>
-          <ManakSubPanel title="Raw Material Details">
-            <ManakTable
-              head={['S.No.', 'Raw material (With Grade Details, if any)', 'Name of Supplier', 'Conformity of Material', 'How Received Batches/Lots Nature of Package']}
-              rows={raw.map((r, i) => [
-                i + 1,
-                s(r.rawMaterial),
-                s(r.supplierName),
-                [s(r.bisCertificationMark) && `ISI mark: ${s(r.bisCertificationMark)}`, s(r.testCertificate) && `Test certificate: ${s(r.testCertificate)}`]
-                  .filter(Boolean)
-                  .join(' · '),
-                s(r.batchesPackaging),
-              ])}
-            />
-          </ManakSubPanel>
-          <ManakSubPanel title="Process Flow-Chart · Layout Plan">
-            <p className="text-sm text-stone-700">
-              Generated from the {BIS_PRINT_DOCUMENT_LABEL['process-flow-chart']} and {BIS_PRINT_DOCUMENT_LABEL['plant-layout']} modules — use
-              the document rows below to create, view or download them (no upload needed).
-            </p>
-          </ManakSubPanel>
-        </ManakPanel>
-        <ManakPanel title="Manufacturing Machinery List" onEdit={edit('cmpf-305')}>
-          <ManakTable
-            head={['S.No.', 'Machinery', 'Make', 'Capacity / day', 'Number', 'Remarks']}
-            rows={mach.map((r, i) => [i + 1, s(r.machineryName), s(r.make), s(r.capacityPerDay), s(r.number), s(r.remarks)])}
-          />
-        </ManakPanel>
-      </>
-    )
+    body = row?.id ? (
+      <ManakManufacturingStep
+        projectId={row.id}
+        projectRow={row}
+        payloads={payloads}
+        onChanged={() => setReloadTick((t) => t + 1)}
+        onEdit={onEdit}
+        renderDocActions={renderDocActions}
+        selection={docSelection}
+      />
+    ) : null
   } else if (stepId === 'packaging') {
-    const brands = list(payloads['cmpf-307'], 'rows').filter((r) => s(r.brandName))
-    body = (
-      <ManakPanel title="Packaging And Brand Details" onEdit={edit('cmpf-307')}>
-        <ManakSubPanel title="Brand Details">
-          <ManakTable
-            head={['S.No.', 'Brand Names / Trademark(s)', 'Owned by self or others', 'Registered/Unregistered', 'Date of Registration/Introduction', 'Uploaded File']}
-            rows={brands.map((r, i) => [i + 1, s(r.brandName), s(r.ownedBy), s(r.registeredStatus), s(r.registrationDate), yesNo(r.trademarkFileId)])}
-          />
-        </ManakSubPanel>
-      </ManakPanel>
-    )
+    body = row?.id ? (
+      <ManakPackagingStep
+        projectRow={row}
+        payloads={payloads}
+        onChanged={() => setReloadTick((t) => t + 1)}
+        onEdit={onEdit}
+        renderDocActions={renderDocActions}
+        selection={docSelection}
+      />
+    ) : null
   } else if (stepId === 'testing') {
-    const eq = list(payloads['cmpf-306'], 'rows')
-    const p311 = payloads['cmpf-311']
-    body = (
-      <>
-        <ManakPanel title="Testing And Inspection" onEdit={edit('cmpf-306')}>
-          <ManakSubPanel title="List of Testing Equipment">
-            <ManakTable
-              head={['S.No.', 'Equipment', 'Make', 'Least count', 'Range', 'Calibration status', 'Clause No.', 'Qty']}
-              rows={eq.map((r, i) => [i + 1, s(r.equipmentName), s(r.make), s(r.leastCount), s(r.range), s(r.calibrationStatus), s(r.clauseNo), s(r.quantity)])}
-            />
-          </ManakSubPanel>
-        </ManakPanel>
-        <ManakPanel title="Scheme of Inspection & Testing / Sub-contracted tests" onEdit={edit('cmpf-311')}>
-          <ManakFields
-            items={[
-              ['Product Manual', s(p311?.productManualNumber)],
-              ['Test rows', String(list(p311, 'testRows').length)],
-              ['Sub-contracted laboratory', s(p311?.subcontractedLaboratoryName)],
-            ]}
-          />
-        </ManakPanel>
-      </>
-    )
+    body = row?.id ? (
+      <ManakTestingStep
+        projectRow={row}
+        payloads={payloads}
+        onChanged={() => setReloadTick((t) => t + 1)}
+        onEdit={onEdit}
+        renderDocActions={renderDocActions}
+        selection={docSelection}
+      />
+    ) : null
   } else if (stepId === 'test-reports') {
-    const rows = list(payloads['osl-sample-requirements'], 'rows')
-    body = (
-      <ManakPanel title="Test Report - Option 2" onEdit={edit('osl-sample-requirements')}>
-        <ManakTable
-          head={['S.No.', 'Product variety description', 'QR Code', 'Sample Code', 'Test Report', 'Test Request', 'Courier slip']}
-          rows={rows.map((r, i) => [
-            i + 1,
-            s(r.gradeTypeVariety) || s(r.sampleDescription),
-            s(r.qrCode),
-            s(r.sampleCode),
-            yesNo(r.testReportFileId),
-            yesNo(r.testRequestFileId),
-            yesNo(r.courierSlipFileId),
-          ])}
-          empty="No sample rows yet — add them in Sample Requirements."
-        />
-      </ManakPanel>
-    )
+    body = row?.id ? (
+      <ManakTestReportsStep
+        projectRow={row}
+        payloads={payloads}
+        onChanged={() => setReloadTick((t) => t + 1)}
+        onEdit={onEdit}
+        renderDocActions={renderDocActions}
+        selection={docSelection}
+      />
+    ) : null
   } else if (stepId === 'declaration') {
     const tm = payloads['top-management']
     body = (
@@ -629,8 +617,8 @@ export function ManakStepPage({
       {loading ? <p className="mb-2 text-xs text-stone-500">Loading application data…</p> : null}
       {error ? <p className="mb-2 text-xs text-red-700">{error}</p> : null}
       <div className={cn(loading && 'opacity-60')}>{body}</div>
-      {/* Steps 1 and 2 no longer need the documents list: everything is edited / generated in place above. */}
-      {stepId !== 'general' && stepId !== 'management' ? <ManakPanel title="Documents (create · view · print · download)">{documents}</ManakPanel> : null}
+      {/* Steps 1–6 no longer need the documents list: everything is edited / generated in place above. */}
+      {stepId === 'declaration' ? <ManakPanel title="Documents (create · view · print · download)">{documents}</ManakPanel> : null}
     </div>
   )
 }

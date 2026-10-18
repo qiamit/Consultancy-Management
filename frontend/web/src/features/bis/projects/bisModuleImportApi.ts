@@ -212,15 +212,15 @@ export function formatImportSourceLabel(row: BisProjectRow): string {
 
 /** Compact label once IS + Client are already chosen. */
 export function formatImportDataLabel(row: BisProjectRow): string {
-  const kind = (row.project_kind ?? '').trim() || 'Project'
   const cmL = String(row.cm_l_digits ?? '').replace(/\D/g, '')
   const appNo = String(row.application_number ?? '').replace(/\D/g, '')
-  const ref = cmL ? `CM/L-${cmL}` : appNo ? `CM/A-${appNo}` : 'No number'
+  const ref = cmL ? `CM/L-${cmL}` : appNo ? `CM/A-${appNo}` : ''
   const validity = row.license_validity_date
     ? `Valid till ${formatDisplayDate(row.license_validity_date)}`
     : null
   const title = (row.title ?? '').trim()
-  return [kind, ref, validity, title && title !== ref ? title : null].filter(Boolean).join(' · ')
+  const label = [ref, validity, title && title !== ref ? title : null].filter(Boolean).join(' · ')
+  return label || (row.project_kind ?? '').trim() || 'Project'
 }
 
 /** Clients that already have at least one Application / License. */
@@ -321,4 +321,134 @@ export async function fetchImportSourceProjects(opts: {
   const { data, error } = await query
   if (error) throw error
   return (Array.isArray(data) ? data : []) as unknown as BisProjectRow[]
+}
+
+type FileRef = { id: string; name: string; path: string }
+
+/** File references stored inside Top Management / Technical Staff rows and payloads. */
+const PERSON_FILE_KEYS: FileRef[] = [
+  { id: 'signatureFileId', name: 'signatureFileName', path: 'signatureStoragePath' },
+  { id: 'appointmentLetterFileId', name: 'appointmentLetterFileName', path: 'appointmentLetterStoragePath' },
+  { id: 'educationCertificateFileId', name: 'educationCertificateFileName', path: 'educationCertificateStoragePath' },
+  { id: 'photoFileId', name: 'photoFileName', path: 'photoStoragePath' },
+  { id: 'authorizedSignatureFileId', name: 'authorizedSignatureFileName', path: 'authorizedSignatureStoragePath' },
+]
+
+const text = (v: unknown) => (typeof v === 'string' ? v.trim() : v == null ? '' : String(v).trim())
+
+/**
+ * Copies one referenced file into the target project so the imported record owns its own copy
+ * (deleting it later must never remove the source application's file).
+ */
+async function duplicateReferencedFile(
+  sourceProjectId: string,
+  targetProjectId: string,
+  ref: { id: string; name: string; path: string },
+  fallbackDocKind: string,
+): Promise<{ id: string; path: string } | null> {
+  const { data: meta } = ref.id
+    ? await supabase
+        .from('bis_project_files')
+        .select('doc_kind, mime_type, file_size')
+        .eq('id', ref.id)
+        .eq('bis_project_id', sourceProjectId)
+        .maybeSingle()
+    : { data: null }
+  const { data: blob, error: dlErr } = await supabase.storage.from(BIS_PROJECT_FILES_BUCKET).download(ref.path)
+  if (dlErr || !blob) return null
+
+  const docKind = text((meta as { doc_kind?: unknown } | null)?.doc_kind) || fallbackDocKind
+  const fileName = ref.name || ref.path.split('/').pop() || 'file'
+  const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_') || 'file'
+  const path = `${targetProjectId}/${docKind}/${crypto.randomUUID()}_${safeName}`
+  const contentType = text((meta as { mime_type?: unknown } | null)?.mime_type) || blob.type || 'application/octet-stream'
+
+  const { error: upErr } = await supabase.storage.from(BIS_PROJECT_FILES_BUCKET).upload(path, blob, { upsert: false, contentType })
+  if (upErr) throw new Error(formatBisProjectFilesError(upErr))
+  const { data: inserted, error: metaErr } = await supabase
+    .from('bis_project_files')
+    .insert({
+      bis_project_id: targetProjectId,
+      doc_kind: docKind,
+      file_name: fileName,
+      storage_path: path,
+      file_size: blob.size,
+      mime_type: contentType,
+    })
+    .select('id')
+    .single()
+  if (metaErr) throw new Error(formatBisProjectFilesError(metaErr))
+  return { id: String((inserted as { id: unknown }).id), path }
+}
+
+/** Re-points every file reference in one record at a fresh copy in the target project. */
+async function withCopiedFiles(
+  record: Record<string, unknown>,
+  sourceProjectId: string,
+  targetProjectId: string,
+  fallbackDocKind: string,
+): Promise<{ record: Record<string, unknown>; files: number }> {
+  const next = { ...record }
+  let files = 0
+  for (const keys of PERSON_FILE_KEYS) {
+    const path = text(next[keys.path])
+    if (!path) continue
+    const copy = await duplicateReferencedFile(
+      sourceProjectId,
+      targetProjectId,
+      { id: text(next[keys.id]), name: text(next[keys.name]), path },
+      fallbackDocKind,
+    )
+    if (copy) {
+      next[keys.id] = copy.id
+      next[keys.path] = copy.path
+      files += 1
+    } else {
+      // Source file is gone: drop the dangling reference instead of pointing at nothing.
+      next[keys.id] = ''
+      next[keys.name] = ''
+      next[keys.path] = ''
+    }
+  }
+  return { record: next, files }
+}
+
+/**
+ * Imports Step 2 data (Top Management, Correspondence, Technical Staff) from any other
+ * Application / License — same or another manufacturer. Replaces the target's data for each kind
+ * that the source has, and copies signatures / documents so the two applications never share files.
+ */
+export async function importModulesWithFilesFromProject(opts: {
+  targetProjectId: string
+  sourceProjectId: string
+  kinds: BisPrintDocumentKind[]
+}): Promise<{ kindsCopied: number; recordsCopied: number; filesCopied: number }> {
+  const { targetProjectId, sourceProjectId, kinds } = opts
+  if (targetProjectId === sourceProjectId) {
+    throw new Error('Choose a different Application or License as the source.')
+  }
+  let kindsCopied = 0
+  let recordsCopied = 0
+  let filesCopied = 0
+  for (const kind of kinds) {
+    const payload = await fetchBisModulePayload(sourceProjectId, kind)
+    if (!payload) continue
+    const fallbackDocKind = kind === 'top-management' ? 'top-management-signature' : `${kind}-document`
+    const top = await withCopiedFiles(payload, sourceProjectId, targetProjectId, fallbackDocKind)
+    const next = top.record
+    filesCopied += top.files
+    if (Array.isArray(payload.rows)) {
+      const rows: Array<Record<string, unknown>> = []
+      for (const row of payload.rows as Array<Record<string, unknown>>) {
+        const copied = await withCopiedFiles(row && typeof row === 'object' ? row : {}, sourceProjectId, targetProjectId, fallbackDocKind)
+        rows.push(copied.record)
+        filesCopied += copied.files
+        if (Object.values(copied.record).some((v) => typeof v === 'string' && v.trim())) recordsCopied += 1
+      }
+      next.rows = rows
+    }
+    await saveBisModulePayload(targetProjectId, kind, next)
+    kindsCopied += 1
+  }
+  return { kindsCopied, recordsCopied, filesCopied }
 }

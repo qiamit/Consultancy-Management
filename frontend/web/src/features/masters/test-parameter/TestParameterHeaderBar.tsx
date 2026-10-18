@@ -23,6 +23,7 @@ export function TestParameterHeaderBar({
   isCodeOptions = [],
   onAddSymbol,
   canEdit = true,
+  reserveCloseButtonSpace = false,
 }: {
   search: string
   onSearchChange: (value: string) => void
@@ -33,10 +34,12 @@ export function TestParameterHeaderBar({
   isCodeOptions?: QiAssistantIsCodeOption[]
   onAddSymbol?: () => void
   canEdit?: boolean
+  /** Inside a dialog: keep clear of the dialog's top-right close button. */
+  reserveCloseButtonSpace?: boolean
 }) {
   return (
     <div className={cn(limsPanelClass)}>
-      <div className="relative overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-2 py-2 text-white sm:px-4 sm:py-2.5 md:px-5">
+      <div className={cn('relative overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-2 py-2 text-white sm:px-4 sm:py-2.5 md:px-5', reserveCloseButtonSpace && '!pr-12')}>
         <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={limsDarkBarGlowStyle} />
         <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
 

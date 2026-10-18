@@ -141,6 +141,21 @@ export function undertakingLongDurationDataFromPrintData(
     signatoryName: printSignatoryDefaults(printData).signatoryName,
     signatoryDesignation: printSignatoryDefaults(printData).signatoryDesignation,
     place: payload.place || printData.client.district || printData.client.state,
-    testRows: payload.testRows,
+    testRows: step6LongDurationRows(printData.modulePayload) ?? payload.testRows,
   }
+}
+
+/** Step 6 → Long Duration Tests rows (attached by the document builder as __longDurationTests), when any exist. */
+function step6LongDurationRows(modulePayload: unknown): LongDurationTestRow[] | null {
+  const raw = modulePayload && typeof modulePayload === 'object' ? (modulePayload as Record<string, unknown>).__longDurationTests : null
+  if (!Array.isArray(raw)) return null
+  const text = (v: unknown) => (typeof v === 'string' ? v.trim() : v == null ? '' : String(v).trim())
+  const rows = raw
+    .filter((r): r is Record<string, unknown> => !!r && typeof r === 'object' && Boolean(text((r as Record<string, unknown>).testName)))
+    .map((r) => ({
+      typeOfTest: text(r.clauseNo) ? `${text(r.testName)} (Clause ${text(r.clauseNo)})` : text(r.testName),
+      durationOfTest: text(r.duration),
+      dateOfCompletion: text(r.expectedDate),
+    }))
+  return rows.length ? rows : null
 }

@@ -56,6 +56,7 @@ import { buildApplicationDetailsPackPdf } from './buildApplicationDetailsPackPdf
 import { loadBisProjectPrintPageSettings } from './bisPrintPageSettingsApi'
 import { buildWordDocx, combineWordHtml } from './bisWordExport'
 import { BisModuleImportDialog } from './BisModuleImportDialog'
+import { paginateHtmlForDownload } from '../print/bisPreviewPagination'
 import { isImportableBisModuleKind } from './bisModuleImportApi'
 import { LegalDocumentsModuleDialog } from './LegalDocumentsModuleDialog'
 import {
@@ -148,6 +149,22 @@ function buildExcelWorkbook(
 
   for (const document of documents) {
     const parsed = new DOMParser().parseFromString(document.html, 'text/html')
+    // A table continued on later pages (same class, e.g. CMPF-305 machinery) becomes one sheet with one header row.
+    const firstByClass = new Map<string, HTMLTableElement>()
+    for (const table of Array.from(parsed.querySelectorAll('table'))) {
+      const key = table.className.trim()
+      const first = key ? firstByClass.get(key) : undefined
+      if (!key) continue
+      if (!first) {
+        firstByClass.set(key, table)
+        continue
+      }
+      const target = first.tBodies[0] ?? first.appendChild(parsed.createElement('tbody'))
+      // The first page's single-cell placeholder (e.g. "Separate Sheet Attached") is not a data row.
+      for (const tr of Array.from(target.rows)) if (tr.cells.length === 1 && tr.cells[0]!.colSpan > 1) tr.remove()
+      for (const body of Array.from(table.tBodies)) for (const tr of Array.from(body.rows)) target.appendChild(tr)
+      table.remove()
+    }
     const tables = Array.from(parsed.querySelectorAll('table'))
     if (tables.length > 0) {
       tables.forEach((table, index) => {
@@ -169,6 +186,57 @@ function buildExcelWorkbook(
   return new Blob([bytes], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   })
+}
+
+/** Documents downloaded as Excel instead of Word (tabular lists). */
+const EXCEL_DOCUMENT_KINDS: BisPrintDocumentKind[] = ['cmpf-305', 'manufacturing-subcontracting', 'cmpf-306']
+
+/** Compact Edit / Preview / PDF / Word (or Excel) buttons used by the in-step component tables. */
+function StepDocActions({
+  kind,
+  disabled,
+  onEdit,
+  onPreview,
+  onPdf,
+  onWord,
+  onExcel,
+}: {
+  kind: BisPrintDocumentKind
+  disabled?: boolean
+  onEdit: () => void
+  onPreview: (kind: BisPrintDocumentKind) => void
+  onPdf: (kind: BisPrintDocumentKind) => void
+  onWord: (kind: BisPrintDocumentKind) => void
+  onExcel: (kind: BisPrintDocumentKind) => void
+}) {
+  const label = BIS_PRINT_DOCUMENT_LABEL[kind]
+  const buttons: Array<[string, () => void, typeof Pencil]> = [
+    [`Edit — ${label}`, onEdit, Pencil],
+    [`Preview — ${label}`, () => onPreview(kind), Eye],
+    [`Download PDF — ${label}`, () => onPdf(kind), FileDown],
+    EXCEL_DOCUMENT_KINDS.includes(kind)
+      ? [`Download Excel — ${label}`, () => onExcel(kind), FileSpreadsheet]
+      : [`Download Word — ${label}`, () => onWord(kind), FileType],
+  ]
+  return (
+    <div className="inline-flex shrink-0 items-center justify-center gap-0.5">
+      {buttons.map(([title, handler, Icon]) => (
+        <Button
+          key={title}
+          type="button"
+          size="sm"
+          variant="ghost"
+          className={actionBtnClass}
+          disabled={disabled}
+          title={title}
+          aria-label={title}
+          onClick={handler}
+        >
+          <Icon size={15} />
+        </Button>
+      ))}
+    </div>
+  )
 }
 
 function DocRowActions({
@@ -334,6 +402,7 @@ export function BisLicenseDocumentsDialog({
   // Undertaking the All Undertakings module opens on (set when it is opened from the Marking Fee section).
   const [undertakingFocus, setUndertakingFocus] = useState<'undertaking-mmf' | null>(null)
   const [importKind, setImportKind] = useState<BisPrintDocumentKind | null>(null)
+  const [importBundle, setImportBundle] = useState<{ label: string; kinds: BisPrintDocumentKind[] } | null>(null)
 
   const client = row ? clientDisplayName(row) || '—' : '—'
   const isLabel = row ? isCodeDisplayLabel(row) : ''
@@ -370,6 +439,7 @@ export function BisLicenseDocumentsDialog({
     setStep(0)
     setPreviewKind(null)
     setImportKind(null)
+    setImportBundle(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
@@ -437,9 +507,10 @@ export function BisLicenseDocumentsDialog({
   const activeModuleKind =
     moduleKind && isFileModuleKind(moduleKind) ? moduleKind : null
   const activeModuleTitle =
-    activeModuleKind === 'process-flow-chart' ||
-    activeModuleKind === 'process-description'
-        ? 'Process Flow Chart & Description'
+    activeModuleKind === 'process-flow-chart'
+        ? 'Process Flow Chart'
+      : activeModuleKind === 'process-description'
+        ? 'Process Description'
       : activeModuleKind === 'location-map'
         ? 'Location Map'
       : activeModuleKind
@@ -522,7 +593,9 @@ export function BisLicenseDocumentsDialog({
     setDownloadBusy(true)
     try {
       const settings = await loadBisProjectPrintPageSettings(row.id).catch(() => DEFAULT_BIS_DOCUMENT_PRINT_PAGE_SETTINGS)
-      const html = applyBisDocumentPrintPageSettings(await buildBisDocumentHtml(row, 'manufacturing-scope'), settings)
+      const html = await paginateHtmlForDownload(
+        applyBisDocumentPrintPageSettings(await buildBisDocumentHtml(row, 'manufacturing-scope'), settings),
+      )
       const filename = `${safeFileBase('Undertaking for Manufacturing Scope', cmL)}.pdf`
       const blob = await renderPdfViaPlaywright({
         html,
@@ -567,7 +640,11 @@ export function BisLicenseDocumentsDialog({
 
   const selectedDocumentKinds = (clickedKind: BisPrintDocumentKind) =>
     selectedKinds.size > 0
-      ? ALL_BIS_PRINT_KINDS.filter((kind) => selectedKinds.has(kind))
+      ? [
+          ...ALL_BIS_PRINT_KINDS.filter((kind) => selectedKinds.has(kind)),
+          // Step-table documents outside the main list (e.g. Raw Material Details, CRM, Process Description).
+          ...[...selectedKinds].filter((kind) => !ALL_BIS_PRINT_KINDS.includes(kind)),
+        ]
       : [clickedKind]
 
   const buildDocumentPdf = async (
@@ -599,9 +676,9 @@ export function BisLicenseDocumentsDialog({
       }
     }
 
-    const html = applyBisDocumentPrintPageSettings(
-      await buildBisDocumentHtml(row, kind),
-      settings,
+    // Same page breaks as the preview.
+    const html = await paginateHtmlForDownload(
+      applyBisDocumentPrintPageSettings(await buildBisDocumentHtml(row, kind), settings),
     )
     return renderPdfViaPlaywright({
       html,
@@ -670,7 +747,8 @@ export function BisLicenseDocumentsDialog({
       if (format === 'word') {
         const wordHtml = await combineWordHtml(
           kinds.length === 1 ? label : 'Selected BIS Documents',
-          htmlDocuments,
+          // Same page breaks as the preview.
+          await Promise.all(htmlDocuments.map((html) => paginateHtmlForDownload(html))),
           settings,
         )
         const wordBlob = await buildWordDocx(
@@ -689,6 +767,14 @@ export function BisLicenseDocumentsDialog({
             ? `Word downloaded: ${label}`
             : `Word downloaded: ${kinds.length} selected documents combined`,
         )
+        return
+      }
+      if (format === 'excel' && kinds.length === 1 && kind === 'cmpf-306') {
+        // Testing equipment: a plain list with the import headings (doubles as the fill-in template).
+        const { buildCmpf306ExcelBlob } = await import('./cmpf306Model')
+        const { fetchBisModulePayload } = await import('./bisModuleDataApi')
+        triggerBlobDownload(await buildCmpf306ExcelBlob(await fetchBisModulePayload(row.id, 'cmpf-306'), 'List of Testing Equipment'), `${base}.xlsx`)
+        toast.success(`Excel downloaded: ${label}`)
         return
       }
       if (format === 'excel') {
@@ -942,6 +1028,36 @@ export function BisLicenseDocumentsDialog({
                     pdf: () => void runDownload('technical-staff', 'pdf', true),
                     word: () => void runDownload('technical-staff', 'word', true),
                   }}
+                  renderDocActions={(kind, onModuleEdit) => (
+                    <StepDocActions
+                      kind={kind}
+                      disabled={actionsDisabled}
+                      onEdit={onModuleEdit}
+                      onPreview={handlePreview}
+                      onWord={(k) => void runDownload(k, 'word')}
+                      onExcel={(k) => void runDownload(k, 'excel')}
+                      onPdf={(k) => void runDownload(k, 'pdf')}
+                    />
+                  )}
+                  onImportData={(bundle) => {
+                    if (!row?.id) {
+                      toast.error('Save the license first, then import data.')
+                      return
+                    }
+                    setImportKind(null)
+                    setImportBundle(bundle)
+                  }}
+                  docSelection={{
+                    has: (kind) => selectedKinds.has(kind),
+                    set: (kind, selected) =>
+                      setSelectedKinds((prev) => {
+                        if (prev.has(kind) === selected) return prev
+                        const next = new Set(prev)
+                        if (selected) next.add(kind)
+                        else next.delete(kind)
+                        return next
+                      }),
+                  }}
                   onScopeDocument={{
                     preview: () => void previewScopeUndertaking(),
                     pdf: () => void downloadScopeUndertakingPdf(),
@@ -1107,12 +1223,16 @@ export function BisLicenseDocumentsDialog({
     />
 
     <BisModuleImportDialog
-      open={importKind != null}
+      open={importKind != null || importBundle != null}
       onOpenChange={(next) => {
-        if (!next) setImportKind(null)
+        if (!next) {
+          setImportKind(null)
+          setImportBundle(null)
+        }
       }}
       targetRow={row}
       kind={importKind}
+      bundle={importBundle}
       onImported={onProjectSaved}
     />
     </>

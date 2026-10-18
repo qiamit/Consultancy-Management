@@ -21,10 +21,22 @@ export type RawMaterialReferencePayload = {
   certifiedReferenceMaterials: CertifiedReferenceMaterialRow[]
 }
 
+/** Conformity of Material choices (stored in `bisCertificationMark`). */
+export const RAW_MATERIAL_CONFORMITY_OPTIONS = [
+  'ISI Marked',
+  'Test Report From BIS Recognized Lab',
+  'Test Certificate from Supplier',
+  'Tested In House',
+  'Any Other',
+]
+
+/** Older rows stored With / Without BIS mark; "With" is the same as ISI Marked. */
+export const rawMaterialConformity = (value: string): string => (value.trim() === 'With' ? 'ISI Marked' : value)
+
 export const emptyRawMaterialSupplierRow = (): RawMaterialSupplierRow => ({
   rawMaterial: '',
   supplierName: '',
-  bisCertificationMark: 'With',
+  bisCertificationMark: 'ISI Marked',
   testCertificate: 'Yes',
   batchesPackaging: 'Batch',
 })
@@ -67,7 +79,7 @@ export function parseRawMaterialReferencePayload(
       emptyRawMaterialSupplierRow,
     ).map((row) => ({
       ...row,
-      bisCertificationMark: row.bisCertificationMark || 'With',
+      bisCertificationMark: rawMaterialConformity(row.bisCertificationMark) || 'ISI Marked',
       testCertificate: row.testCertificate || 'Yes',
       batchesPackaging: row.batchesPackaging || 'Batch',
     })),

@@ -15,10 +15,8 @@ import {
 } from './printDocumentShared'
 
 export type SubcontractedTestRow = {
-  testName: string
   clauseNo: string
-  testMethod: string
-  unit: string
+  testName: string
   laboratoryName: string
 }
 
@@ -28,41 +26,32 @@ export type SubcontractedTestsData = PrintApplicantContext & {
   signatoryDesignation: string
 }
 
-const MIN_ROWS = 8
-
 function tableHtml(rows: SubcontractedTestRow[]): string {
-  const filled = rows.filter((r) => Object.values(r).some((v) => v.trim()))
-  const body = filled
-    .map(
-      (r, i) => `<tr>
+  const filled = rows.filter((r) => r.testName.trim() || r.clauseNo.trim())
+  const body = filled.length
+    ? filled
+        .map(
+          (r, i) => `<tr>
       <td>${i + 1}</td>
-      <td class="pd-left">${esc(r.testName) || '&nbsp;'}</td>
       <td>${esc(r.clauseNo) || '&nbsp;'}</td>
-      <td>${esc(r.testMethod) || '&nbsp;'}</td>
-      <td>${esc(r.unit) || '&nbsp;'}</td>
+      <td class="pd-left">${esc(r.testName) || '&nbsp;'}</td>
       <td class="pd-left">${esc(r.laboratoryName) || '&nbsp;'}</td>
     </tr>`,
-    )
-    .join('')
-
-  let pad = ''
-  for (let i = filled.length; i < MIN_ROWS; i += 1) {
-    pad += `<tr><td>${i + 1}</td><td class="pd-left">&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td class="pd-left">&nbsp;</td></tr>`
-  }
+        )
+        .join('')
+    : '<tr><td colspan="4">No test is sub-contracted.</td></tr>'
 
   return `
 <table class="pd-table sct-table">
   <thead>
     <tr>
-      <th style="width:5%">Sr</th>
-      <th style="width:22%">Test Parameter</th>
-      <th style="width:10%">Clause</th>
-      <th style="width:18%">Test Method</th>
-      <th style="width:8%">Unit</th>
-      <th style="width:37%">Subcontract Laboratory</th>
+      <th style="width:6%">Sr. No.</th>
+      <th style="width:16%">Clause No. of IS</th>
+      <th style="width:39%">Test to be Sub-Contracted</th>
+      <th style="width:39%">Name of Lab (BIS Recognised / Empanelled)</th>
     </tr>
   </thead>
-  <tbody>${body}${pad}</tbody>
+  <tbody>${body}</tbody>
 </table>`
 }
 
@@ -129,8 +118,18 @@ export function subcontractedTestsDataFromPrintData(printData: BisPrintData): Su
   const ctx = applicantContextFromPrintData(printData)
   return {
     ...ctx,
-    rows: [],
+    rows: subcontractedRowsFrom(printData.modulePayload),
     signatoryName: printSignatoryDefaults(printData).signatoryName,
     signatoryDesignation: printSignatoryDefaults(printData).signatoryDesignation,
   }
+}
+
+function subcontractedRowsFrom(payload: unknown): SubcontractedTestRow[] {
+  const rows = payload && typeof payload === 'object' ? (payload as Record<string, unknown>).rows : null
+  if (!Array.isArray(rows)) return []
+  const text = (v: unknown) => (typeof v === 'string' ? v.trim() : v == null ? '' : String(v).trim())
+  return rows
+    .filter((r): r is Record<string, unknown> => !!r && typeof r === 'object')
+    .map((r) => ({ clauseNo: text(r.clauseNo), testName: text(r.testName), laboratoryName: text(r.laboratoryName) }))
+    .filter((r) => r.testName || r.clauseNo)
 }

@@ -11,8 +11,8 @@ import {
   ChevronDown,
   ChevronUp,
   CornerDownRight,
-  FileText,
   GitBranch,
+  Import,
   IndentDecrease,
   IndentIncrease,
   Plus,
@@ -26,31 +26,26 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import { Textarea } from '@/components/ui/textarea'
 import { useShowAiButtons } from '@/hooks/useShowAiAssistant'
 import {
-  limsDialogSidebarOverlayClass,
-  limsDialogSidebarPortalClass,
   limsFieldClass,
   limsOutlineBtnClass,
   limsPrimaryBtnClass,
 } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { ProcessDescriptionAiDialog } from './ProcessDescriptionAiDialog'
+import { BisModuleImportDialog } from './BisModuleImportDialog'
+import { DescriptionPointsRows } from './DescriptionPointsRows'
+import { cleanDescriptionPoints } from './descriptionPointsApi'
+import { fetchBisModulePayload } from './bisModuleDataApi'
+import type { BisProjectRow } from './types'
 import {
   defaultProcessFlowArrowStyle,
   defaultProcessFlowBoxStyle,
   emptyProcessFlowNode,
   fitProcessFlowFontSize,
   flattenProcessFlowTree,
-  groupProcessFlowSiblingRows,
+  layoutProcessFlowChart,
   normalizeProcessFlowHorizontal,
   PROCESS_FLOW_ARROW_DESIGNS,
   processFlowChildren,
@@ -179,127 +174,9 @@ function ProcessFlowArrowHead({
   )
 }
 
-function ProcessFlowDownArrow({
-  gapY,
-  design,
-  line,
-}: {
-  gapY: number
-  design: ProcessFlowArrowDesign
-  line: FlowLineProps
-}) {
-  return (
-    <div
-      className="flex shrink-0 flex-col items-center justify-end"
-      style={{ height: Math.max(0, gapY) }}
-      aria-hidden
-    >
-      <div className="flex w-full flex-1 justify-center">
-        <div className="h-full" style={flowVertLineStyle(line)} />
-      </div>
-      <ProcessFlowArrowHead
-        design={design}
-        color={line.color}
-        width={line.width}
-      />
-    </div>
-  )
-}
-
-function ProcessFlowBranchConnectors({
-  count,
-  gapY,
-  design,
-  line,
-  children,
-}: {
-  count: number
-  gapY: number
-  design: ProcessFlowArrowDesign
-  line: FlowLineProps
-  children: ReactNode
-}) {
-  if (count <= 1) {
-    return (
-      <div className="flex flex-col items-center">
-        <ProcessFlowDownArrow gapY={gapY} design={design} line={line} />
-        {children}
-      </div>
-    )
-  }
-  const gap = Math.max(0, gapY)
-  const stemH = Math.round(gap * 0.35)
-  const vert = flowVertLineStyle(line)
-  return (
-    <div className="flex w-max max-w-full flex-col items-center self-center">
-      <div
-        className="relative z-[1] shrink-0"
-        style={{
-          ...vert,
-          height: stemH + line.width,
-          marginBottom: -line.width,
-        }}
-        aria-hidden
-      />
-      <div className="relative flex items-start">
-        <div
-          className="pointer-events-none absolute top-0 z-0"
-          style={{
-            left: `calc(100% / ${count} / 2)`,
-            right: `calc(100% / ${count} / 2)`,
-            height: line.width,
-            backgroundColor: line.dashed ? 'transparent' : line.color,
-            backgroundImage: line.dashed
-              ? `repeating-linear-gradient(to right, ${line.color} 0 5px, transparent 5px 9px)`
-              : undefined,
-          }}
-          aria-hidden
-        />
-        {children}
-      </div>
-    </div>
-  )
-}
-
-function ProcessFlowBranchColumn({
-  count,
-  gapY,
-  design,
-  line,
-  children,
-}: {
-  index?: number
-  count: number
-  gapY: number
-  design: ProcessFlowArrowDesign
-  line: FlowLineProps
-  children: ReactNode
-}) {
-  if (count <= 1) {
-    return <div className="flex flex-col items-center">{children}</div>
-  }
-  const gap = Math.max(0, gapY)
-  const dropH = Math.max(0, gap - Math.round(gap * 0.35))
-  return (
-    <div className="relative z-[1] flex flex-col items-center px-2 sm:px-3">
-      <div
-        className="flex shrink-0 flex-col items-center"
-        style={{ height: dropH }}
-        aria-hidden
-      >
-        <div className="flex-1" style={flowVertLineStyle(line)} />
-        <ProcessFlowArrowHead
-          design={design}
-          color={line.color}
-          width={line.width}
-        />
-      </div>
-      {children}
-    </div>
-  )
-}
-
 export function ProcessFlowModuleFields({
+  mode = 'chart',
+  projectRow = null,
   value,
   onChange,
   disabled = false,
@@ -310,6 +187,10 @@ export function ProcessFlowModuleFields({
   licenseScope = '',
   isCodeId = null,
 }: {
+  /** 'chart' edits the flow chart; 'description' edits the Process Description points (Step 3 has a row for each). */
+  mode?: 'chart' | 'description'
+  /** Current application (enables Import from another Application in description mode). */
+  projectRow?: BisProjectRow | null
   value: ProcessFlowModulePayload
   onChange: (next: ProcessFlowModulePayload) => void
   disabled?: boolean
@@ -325,8 +206,8 @@ export function ProcessFlowModuleFields({
     const first = flattenProcessFlowTree(value.nodes)[0]?.node.id
     return first ? [first] : []
   })
-  const [descriptionOpen, setDescriptionOpen] = useState(false)
   const [descriptionAiOpen, setDescriptionAiOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   /** Adjacent settings rail — no modal windows. */
   const [settingsPanel, setSettingsPanel] = useState<'arrow' | 'box' | null>(
     null,
@@ -824,36 +705,6 @@ export function ProcessFlowModuleFields({
     applyPayload({ ...valueRef.current, descriptionPoints }, { record })
   }
 
-  const patchPoint = (index: number, text: string) => {
-    if (!labelHistoryArmedRef.current) {
-      recordHistory()
-      labelHistoryArmedRef.current = true
-    }
-    const current = valueRef.current
-    const next = {
-      ...current,
-      descriptionPoints: current.descriptionPoints.map((p, i) =>
-        i === index ? text : p,
-      ),
-    }
-    valueRef.current = next
-    onChange(next)
-  }
-
-  const addPoint = () => {
-    if (disabled) return
-    setPoints([...value.descriptionPoints, ''])
-  }
-
-  const removePoint = (index: number) => {
-    if (disabled) return
-    if (value.descriptionPoints.length <= 1) {
-      setPoints([''])
-      return
-    }
-    setPoints(value.descriptionPoints.filter((_, i) => i !== index))
-  }
-
   const applyAiPoints = (points: string[], mode: 'replace' | 'append') => {
     const next =
       mode === 'append' && valueRef.current.descriptionPoints.length > 0
@@ -921,20 +772,15 @@ export function ProcessFlowModuleFields({
     dashed: lineDash,
   }
 
-  const renderNodeColumn = (node: ProcessFlowNode): ReactNode => {
+  const renderBox = (node: ProcessFlowNode, size: { width: number; height: number }): ReactNode => {
     const isSelected = selectedIds.includes(node.id)
-    const kids = processFlowChildren(value.nodes, node.id)
-    const kidRows = groupProcessFlowSiblingRows(kids)
-    const size = resolveProcessFlowBoxSize(node, boxStyle)
     const displayLabel = editingId === node.id ? editingLabel : node.label
     const fontSize =
       editingId === node.id
         ? editingFontSizeRef.current
         : fitProcessFlowFontSize(displayLabel, size.width, size.height)
-
     return (
-      <div key={node.id} className="flex w-max flex-col items-center">
-        <input
+      <input
           ref={(el) => registerInput(node.id, el)}
           className={cn(
             'rounded-none border-2 bg-[#fffbeb] px-2 text-center font-bold text-[#78350f]',
@@ -977,33 +823,110 @@ export function ProcessFlowModuleFields({
           onKeyDown={(e) => onCanvasKeyDown(e, node)}
           onBlur={onLabelBlur}
         />
-        {kidRows.map((row, rowIndex) => (
-          <ProcessFlowBranchConnectors
-            key={`${node.id}-row-${rowIndex}`}
-            count={row.length}
-            gapY={boxStyle.gapY}
-            design={arrowDesign}
-            line={flowLine}
-          >
-            {row.map((child, childIndex) => (
-              <ProcessFlowBranchColumn
-                key={child.id}
-                index={childIndex}
-                count={row.length}
-                gapY={boxStyle.gapY}
-                design={arrowDesign}
-                line={flowLine}
-              >
-                {renderNodeColumn(child)}
-              </ProcessFlowBranchColumn>
-            ))}
-          </ProcessFlowBranchConnectors>
-        ))}
-      </div>
     )
   }
 
-  const rootRows = groupProcessFlowSiblingRows(processFlowChildren(value.nodes, null))
+  // Same layout as the printed chart, so the canvas and the document always match.
+  const chart = layoutProcessFlowChart(value.nodes, boxStyle)
+  const chartPad = 8
+
+
+  const descriptionAiDialog = (
+    <>
+      {showAiButtons ? (
+        <ProcessDescriptionAiDialog
+          open={descriptionAiOpen}
+          onOpenChange={setDescriptionAiOpen}
+          disabled={disabled}
+          applicantName={applicantName}
+          isNumber={isNumber}
+          isTitle={isTitle}
+          productName={productName}
+          licenseScope={licenseScope}
+          isCodeId={isCodeId}
+          nodes={value.nodes}
+          existingPoints={value.descriptionPoints}
+          onApplyPoints={applyAiPoints}
+        />
+      ) : null}
+    </>
+  )
+
+  if (mode === 'description') {
+    const points = cleanDescriptionPoints(value.descriptionPoints)
+    // Changes go into the open form; the module dialog's Save writes them.
+    const applyPoints = (mutate: (list: string[]) => string[]) => {
+      const current = valueRef.current
+      onChange({ ...current, descriptionPoints: mutate(cleanDescriptionPoints(current.descriptionPoints)) })
+    }
+    const headerBtn =
+      'h-8 w-8 shrink-0 rounded-none border border-amber-500/60 bg-stone-800 p-0 text-amber-200 shadow-sm transition-colors hover:border-amber-400 hover:bg-amber-600 hover:text-white'
+    return (
+      <>
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 py-3 sm:px-4 sm:py-4">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden border border-stone-400 bg-white">
+            <div className="flex shrink-0 items-center justify-between gap-2 bg-stone-800 px-3 py-1.5">
+              <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-amber-200">
+                Description Points{points.length ? ` (${points.length})` : ''}
+              </span>
+              <div className="flex items-center gap-1.5">
+                {projectRow?.id ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={disabled}
+                    className={headerBtn}
+                    title="Import from another Application"
+                    aria-label="Import from another Application"
+                    onClick={() => setImportOpen(true)}
+                  >
+                    <Import size={15} aria-hidden />
+                  </Button>
+                ) : null}
+                {showAiButtons ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={disabled}
+                    className={headerBtn}
+                    title="Generate description points with AI"
+                    aria-label="Generate description points with AI"
+                    onClick={() => setDescriptionAiOpen(true)}
+                  >
+                    <Sparkles size={15} aria-hidden />
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 overflow-auto p-3">
+              <DescriptionPointsRows points={points} apply={applyPoints} disabled={disabled} />
+            </div>
+          </div>
+        </div>
+        {descriptionAiDialog}
+        <BisModuleImportDialog
+          open={importOpen}
+          onOpenChange={setImportOpen}
+          targetRow={projectRow ?? null}
+          kind="process-description"
+          onPickSource={async (sourceProjectId) => {
+            const source = cleanDescriptionPoints((await fetchBisModulePayload(sourceProjectId, 'process-flow-chart'))?.descriptionPoints)
+            if (source.length === 0) throw new Error('The selected application has no Process Description.')
+            const known = new Set(points.map((p) => p.toLowerCase()))
+            const fresh = source.filter((p) => !known.has(p.toLowerCase()))
+            if (fresh.length === 0) {
+              toast.message('Nothing new to import', { description: 'All these points are already here.' })
+              return
+            }
+            applyPoints((list) => [...list, ...fresh])
+            toast.success(`Imported ${fresh.length} point${fresh.length === 1 ? '' : 's'}`, { description: 'Click Save to keep them.' })
+          }}
+        />
+      </>
+    )
+  }
 
   return (
     <>
@@ -1029,25 +952,6 @@ export function ProcessFlowModuleFields({
           <p className="shrink-0 text-[11px] font-bold uppercase tracking-[0.14em] text-stone-600">
             Process Flow Canvas
           </p>
-          <Button
-            type="button"
-            variant="outline"
-            className={cn(limsOutlineBtnClass, 'ml-auto h-8 gap-1.5 text-xs')}
-            onClick={() => {
-              if (valueRef.current.descriptionPoints.length === 0) {
-                setPoints([''], false)
-              }
-              setDescriptionOpen(true)
-            }}
-          >
-            <FileText className="h-3.5 w-3.5" />
-            Process Description
-            {value.descriptionPoints.filter((p) => p.trim()).length > 0 ? (
-              <span className="rounded-none bg-amber-100 px-1.5 text-[10px] font-bold text-amber-900">
-                {value.descriptionPoints.filter((p) => p.trim()).length}
-              </span>
-            ) : null}
-          </Button>
         </div>
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -1625,233 +1529,55 @@ export function ProcessFlowModuleFields({
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             <div className="min-h-0 flex-1 overflow-auto overscroll-contain p-4 sm:p-6">
               <div className="mx-auto flex w-full min-w-0 max-w-5xl flex-col items-center">
-                {rootRows.map((row, rowIndex) =>
-                  rowIndex === 0 ? (
-                    <div
-                      key={`root-row-${rowIndex}`}
-                      className="flex w-max max-w-full flex-wrap items-start justify-center"
-                    >
-                      {row.map((node, nodeIndex) => (
-                        <ProcessFlowBranchColumn
-                          key={node.id}
-                          index={nodeIndex}
-                          count={row.length}
-                          gapY={boxStyle.gapY}
-                          design={arrowDesign}
-                          line={flowLine}
-                        >
-                          {renderNodeColumn(node)}
-                        </ProcessFlowBranchColumn>
-                      ))}
-                    </div>
-                  ) : (
-                    <ProcessFlowBranchConnectors
-                      key={`root-row-${rowIndex}`}
-                      count={row.length}
-                      gapY={boxStyle.gapY}
-                      design={arrowDesign}
-                      line={flowLine}
-                    >
-                      {row.map((node, nodeIndex) => (
-                        <ProcessFlowBranchColumn
-                          key={node.id}
-                          index={nodeIndex}
-                          count={row.length}
-                          gapY={boxStyle.gapY}
-                          design={arrowDesign}
-                          line={flowLine}
-                        >
-                          {renderNodeColumn(node)}
-                        </ProcessFlowBranchColumn>
-                      ))}
-                    </ProcessFlowBranchConnectors>
-                  ),
-                )}
+                <div className="relative shrink-0" style={{ width: chart.width + chartPad * 2, height: chart.height + chartPad * 2 }}>
+                  {chart.items.map((it, i) => {
+                    if (it.kind === 'box') {
+                      return (
+                        <div key={it.node.id} className="absolute" style={{ left: it.x + chartPad, top: it.y + chartPad }}>
+                          {renderBox(it.node, { width: it.w, height: it.h })}
+                        </div>
+                      )
+                    }
+                    if (it.kind === 'hline') {
+                      return (
+                        <div
+                          key={`h-${i}`}
+                          className="pointer-events-none absolute"
+                          style={{
+                            left: it.x1 - flowLine.width / 2 + chartPad,
+                            top: it.y - flowLine.width + chartPad,
+                            width: it.x2 - it.x1 + flowLine.width,
+                            height: flowLine.width,
+                            backgroundColor: flowLine.dashed ? 'transparent' : flowLine.color,
+                            backgroundImage: flowLine.dashed
+                              ? `repeating-linear-gradient(to right, ${flowLine.color} 0 5px, transparent 5px 9px)`
+                              : undefined,
+                          }}
+                          aria-hidden
+                        />
+                      )
+                    }
+                    return (
+                      <div
+                        key={`v-${i}`}
+                        className="pointer-events-none absolute flex flex-col items-center"
+                        style={{ left: it.x - 12 + chartPad, top: it.y + chartPad, width: 24, height: it.h }}
+                        aria-hidden
+                      >
+                        <div className="flex-1" style={flowVertLineStyle(flowLine)} />
+                        {it.arrow ? <ProcessFlowArrowHead design={arrowDesign} color={flowLine.color} width={flowLine.width} /> : null}
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <Dialog open={descriptionOpen} onOpenChange={setDescriptionOpen}>
-        <DialogContent
-          persistOnFocusLoss
-          layer="stacked"
-          aria-describedby={undefined}
-          overlayClassName={limsDialogSidebarOverlayClass}
-          portalClassName={limsDialogSidebarPortalClass}
-          className={cn(
-            'flex !flex-col gap-0 overflow-hidden rounded-none border-0 bg-stone-100 p-0 shadow-none sm:rounded-none',
-            '!h-[100dvh] max-h-[100dvh] translate-x-0 translate-y-0',
-            'left-[var(--app-dialog-overlay-left,0px)] top-0 right-0',
-            'w-[calc(100vw-var(--app-dialog-overlay-left,0px))] max-w-none',
-            'border-stone-600 ring-1 ring-amber-700/20',
-          )}
-        >
-          <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white">
-            <DialogHeader className="relative pr-10 text-left">
-              <DialogTitle className="text-base font-semibold tracking-tight text-white">
-                Process Description
-              </DialogTitle>
-              <p className="mt-0.5 text-xs text-stone-300">
-                Points for the Process Description annex — edit, add, or generate
-                with AI.
-              </p>
-            </DialogHeader>
-          </div>
 
-          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden bg-gradient-to-b from-stone-100/80 to-white px-3 py-3 sm:px-4 sm:py-4">
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-none border-2 border-stone-500 bg-[#f7f3eb]">
-              <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-stone-400 bg-[#fffcf7] px-3 py-2">
-                <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-stone-600">
-                  Description Points
-                  {value.descriptionPoints.filter((p) => p.trim()).length > 0 ? (
-                    <span className="ml-2 font-semibold normal-case tracking-normal text-stone-500">
-                      ({value.descriptionPoints.filter((p) => p.trim()).length})
-                    </span>
-                  ) : null}
-                </p>
-                {showAiButtons ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={disabled}
-                    className={cn(limsOutlineBtnClass, 'h-8 gap-1 text-xs')}
-                    aria-haspopup="dialog"
-                    aria-expanded={descriptionAiOpen}
-                    onClick={() => setDescriptionAiOpen(true)}
-                  >
-                    <Sparkles className="h-3.5 w-3.5" />
-                    AI
-                  </Button>
-                ) : null}
-              </div>
-
-              <div className="min-h-0 flex-1 overflow-auto overscroll-contain">
-                <table className="w-full min-w-[640px] border-collapse">
-                  <thead className="sticky top-0 z-[1]">
-                    <tr className="bg-stone-800 text-left text-[10px] font-bold uppercase tracking-[0.12em] text-amber-200">
-                      <th className="w-14 border border-stone-700 px-2 py-2 text-center">
-                        #
-                      </th>
-                      <th className="border border-stone-700 px-2 py-2">
-                        Description Point
-                      </th>
-                      <th className="w-[7.5rem] border border-stone-700 px-2 py-2 text-center">
-                        Action
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(value.descriptionPoints.length > 0
-                      ? value.descriptionPoints
-                      : ['']
-                    ).map((point, index, rows) => {
-                      const isLast = index === rows.length - 1
-                      const canRemove = rows.length > 1
-                      return (
-                        <tr
-                          key={`pt-${index}`}
-                          className={
-                            index % 2 === 0 ? 'bg-[#f7f3eb]' : 'bg-[#fffcf7]'
-                          }
-                        >
-                          <td className="border border-stone-400 px-2 py-2 text-center text-xs font-semibold text-stone-700">
-                            {index + 1}
-                          </td>
-                          <td className="border border-stone-400 p-1.5">
-                            <Textarea
-                              className={cn(
-                                limsFieldClass,
-                                'min-h-[72px] resize-y border-stone-300 bg-white text-sm',
-                              )}
-                              value={point}
-                              disabled={disabled}
-                              placeholder="Type description point…"
-                              onChange={(e) => {
-                                if (value.descriptionPoints.length === 0) {
-                                  setPoints([e.target.value])
-                                  return
-                                }
-                                patchPoint(index, e.target.value)
-                              }}
-                              onBlur={onLabelBlur}
-                            />
-                          </td>
-                          <td className="border border-stone-400 px-1 py-1">
-                            <div className="flex flex-wrap items-center justify-center gap-1">
-                              {isLast ? (
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  disabled={disabled}
-                                  className={cn(
-                                    limsOutlineBtnClass,
-                                    'h-7 gap-1 px-2 text-[11px]',
-                                  )}
-                                  onClick={addPoint}
-                                >
-                                  <Plus className="h-3.5 w-3.5" />
-                                  Add Point
-                                </Button>
-                              ) : null}
-                              <button
-                                type="button"
-                                className={cn(
-                                  toolBtnClass,
-                                  'text-red-700',
-                                  !canRemove && 'opacity-40',
-                                )}
-                                disabled={disabled || !canRemove}
-                                aria-label={`Remove point ${index + 1}`}
-                                title={
-                                  canRemove
-                                    ? 'Remove point'
-                                    : 'At least one row is required'
-                                }
-                                onClick={() => removePoint(index)}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-
-          <DialogFooter className="shrink-0 border-t border-stone-300 bg-white px-4 py-3 sm:justify-end">
-            <Button
-              type="button"
-              className={limsPrimaryBtnClass}
-              onClick={() => setDescriptionOpen(false)}
-            >
-              Done
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {showAiButtons ? (
-        <ProcessDescriptionAiDialog
-          open={descriptionAiOpen}
-          onOpenChange={setDescriptionAiOpen}
-          disabled={disabled}
-          applicantName={applicantName}
-          isNumber={isNumber}
-          isTitle={isTitle}
-          productName={productName}
-          licenseScope={licenseScope}
-          isCodeId={isCodeId}
-          nodes={value.nodes}
-          existingPoints={value.descriptionPoints}
-          onApplyPoints={applyAiPoints}
-        />
-      ) : null}
+      {descriptionAiDialog}
     </>
   )
 }

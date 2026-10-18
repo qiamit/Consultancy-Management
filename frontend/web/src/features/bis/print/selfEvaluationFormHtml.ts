@@ -1,3 +1,4 @@
+import { packagingMarkingFieldsFrom, sefPackagingRowsFrom } from './manufacturingStepDocumentsHtml'
 import type { BisPrintData } from './loadBisPrintData'
 import { printSignatoryDefaults } from './loadBisPrintData'
 import { escapeHtml as esc } from './openPrintHtml'
@@ -107,12 +108,6 @@ function buildBody(data: SelfEvaluationFormData): string {
   <p class="sef-section"><strong>3. Packaging &amp; Marking</strong></p>
   ${packagingTableHtml(packaging)}
 
-  <div class="cmpf-sign-right">${signatoryHtml({ firmName: data.applicantName, name: sigName, designation: data.signatoryDesignation })}</div>
-</div>`
-
-  const page2 = `
-<div class="pd-sheet sef-page-two">
-  ${letterheadHtml(data)}
   <p class="sef-section"><strong>4. Details of Quality Control Staff</strong></p>
   ${dataTable(['', 'Name of the Person', 'Designation', 'Qualification', 'Experience'], data.qualityControlStaff.filter((row) => [row.personName, row.designation, row.qualification, row.experience].some((value) => value.trim())).map((row) => [row.personName, row.designation, row.qualification, row.experience]), ['6%', '24%', '24%', '24%', '22%'])}
 
@@ -135,7 +130,9 @@ function buildBody(data: SelfEvaluationFormData): string {
   ${preparedByHtml(data.preparedBy)}
 </div>`
 
-  return `${page1}${page2}`
+  // One continuous sheet: sections follow each other and pages break wherever A4 is full (split into pages by the
+  // shared paginator, as in the preview), with a single seal / signature at the end.
+  return page1
 }
 
 const STYLES = `
@@ -146,7 +143,6 @@ const STYLES = `
   .sef-blank { table-layout: fixed; }
   .sef-blank th:first-child, .sef-blank td:first-child { width: 6%; }
   .sef-points p { margin: 4px 0; font-size: 10px; line-height: 1.45; text-align: justify; }
-  .sef-page-two { margin-top: 2em !important; break-before: page; page-break-before: always; }
   .cmpf-sign-right { margin-top: 14px; text-align: right; }
   .cmpf-sign-right .pd-signatory { text-align: left; }
 `
@@ -175,7 +171,11 @@ export function selfEvaluationFormDataFromPrintData(printData: BisPrintData): Se
   const staffRows = rows(source.technicalStaff)
   const brandPayload = parseCmpf307Payload({ rows: source.brands, brandsWithoutMarkReasons: source.brandsWithoutMarkReasons })
   const brandRows = brandPayload.rows.filter(cmpf307RowHasContent)
-  const packageRows = Array.isArray(payload.packagingMarkingRows)
+  // Packaging & Marking comes from Step 4 (its standard values until details are saved there). The SEF's own
+  // rows only apply when that payload is not loaded (e.g. an older caller without __sefSources).
+  const packageRows = 'packagingMarking' in source
+    ? sefPackagingRowsFrom(packagingMarkingFieldsFrom(source.packagingMarking))
+    : Array.isArray(payload.packagingMarkingRows)
     ? payload.packagingMarkingRows.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object').map((item) => ({ label: String(item.label ?? ''), value: String(item.value ?? '') }))
     : defaultPackagingMarkingRows()
   return {

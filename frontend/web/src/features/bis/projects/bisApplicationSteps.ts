@@ -34,12 +34,14 @@ export const BIS_APPLICATION_STEPS: BisApplicationStep[] = [
     label: 'Manufacturing Process',
     title: 'Manufacturing Process',
     manakHint:
-      'Raw materials, process flow chart, factory layout plan, machinery list, production value and capacity.',
+      'Raw materials, CRMs, process flow chart and description, plant layout, machinery, sub-contracting, hygiene, production value and capacity.',
     kinds: [
       'raw-material-reference',
       'process-flow-chart',
       'plant-layout',
       'cmpf-305',
+      'manufacturing-subcontracting',
+      'hygiene-conditions',
       'manufacturing-scope',
     ],
   },
@@ -55,7 +57,7 @@ export const BIS_APPLICATION_STEPS: BisApplicationStep[] = [
     label: 'Testing and Inspection',
     title: 'Testing & Inspection Details',
     manakHint: 'In-house testing facility, list of testing equipment, sub-contracted tests with consent letters.',
-    kinds: ['cmpf-306', 'cmpf-311'],
+    kinds: ['cmpf-306', 'subcontracted-tests', 'calibration-certificates'],
   },
   {
     id: 'test-reports',
@@ -63,7 +65,15 @@ export const BIS_APPLICATION_STEPS: BisApplicationStep[] = [
     title: 'Test Reports',
     manakHint:
       'Independent test report per variety: QR code, sample code, issue date, report, completeness and conformity.',
-    kinds: ['osl-sample-requirements'],
+    kinds: [
+      'osl-offer-and-test-request',
+      'factory-test-report',
+      'undertaking-long-duration',
+      'raw-material-test-reports',
+      // Covered by "Sample Offer Letter & Test Request"; kept here so they don't fall to the Declaration step's list.
+      'osl-sample-requirements',
+      'osl-sample-test-request',
+    ],
   },
   {
     id: 'declaration',

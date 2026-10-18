@@ -13,7 +13,6 @@ import {
   type PrintApplicantContext,
 } from './printDocumentShared'
 import {
-  buildProcessDescriptionSheetHtml,
   PROCESS_DESCRIPTION_PRINT_STYLES,
 } from './processDescriptionHtml'
 import {
@@ -257,15 +256,12 @@ const STYLES = `
   }
 `
 
+// Process Description prints on its own (its own Step 3 row); this document is the chart only.
 export function buildProcessFlowChartHtml(data: ProcessFlowChartData): string {
-  const descriptionSheet = buildProcessDescriptionSheetHtml({
-    ...data,
-    descriptionPoints: data.descriptionPoints,
-  })
   return buildPrintPage({
-    title: `Process Flow Chart & Description — ${data.applicantName || 'Applicant'}`,
+    title: `Process Flow Chart — ${data.applicantName || 'Applicant'}`,
     styles: STYLES,
-    body: `${buildChartSheet(data)}${descriptionSheet}`,
+    body: buildChartSheet(data),
   })
 }
 

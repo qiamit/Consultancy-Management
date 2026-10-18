@@ -446,7 +446,9 @@ export function applyBisDocumentPrintPageSettings(
     : ''
 
   const override = `<style id="bis-print-preview-override">
-@page { size: ${settings.pageSize} ${settings.orientation}; margin: ${margin} !important; }
+/* Sheet documents keep their margins inside each sheet (as on screen), so a printed / PDF page is laid out exactly
+   like the preview. The continuous Form-I flows across pages and keeps the printer page margins. */
+@page { size: ${settings.pageSize} ${settings.orientation}; margin: ${continuousFormCss ? margin : '0'} !important; }
 .pd-letterhead, .al-letterhead, .f1-header {
   display: ${settings.showLetterhead ? 'block' : 'none'} !important;
   text-align: ${lhAlign} !important;
@@ -667,11 +669,12 @@ export function applyBisDocumentPrintPageSettings(
     max-width: none !important;
     min-width: 0 !important;
     height: auto !important;
-    /* 1 mm slack: an exact fit can overflow by a sub-pixel and add a blank page. */
-    min-height: calc(${heightMm}mm - ${mt}mm - ${mb}mm - 1mm) !important;
+    /* Same size and padding as the screen sheet; 1 mm slack: an exact fit can overflow by a sub-pixel and add a blank page. */
+    min-height: calc(${heightMm}mm - ${continuousFormCss ? mt + mb : 0}mm - 1mm) !important;
     max-height: none !important;
     margin: 0 auto !important;
-    padding: ${pad}mm ${pad}mm ${Math.max(pad + 6, 8)}mm ${pad}mm !important;
+    padding: ${continuousFormCss ? `${pad}mm ${pad}mm ${Math.max(pad + 6, 8)}mm ${pad}mm` : `${mt + pad}mm ${mr + pad}mm ${mb + pad}mm ${ml + pad}mm`} !important;
+    box-sizing: border-box !important;
     box-shadow: none !important;
     overflow: visible !important;
     position: relative !important;
@@ -699,8 +702,8 @@ export function applyBisDocumentPrintPageSettings(
     -webkit-text-fill-color: #000 !important;
   }
   .pd-page-num {
-    left: ${pad}mm !important;
-    right: ${pad}mm !important;
+    left: ${continuousFormCss ? pad : ml + pad}mm !important;
+    right: ${continuousFormCss ? pad : mr + pad}mm !important;
     bottom: ${pageNumBottom}mm !important;
     background: #fff !important;
   }

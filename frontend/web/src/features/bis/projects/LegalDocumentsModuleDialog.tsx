@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Check, Download, Eye, FileDown, FileType, Pencil, Plus, Printer, Trash2, Upload, X } from 'lucide-react'
+import { Check, Download, Eye, FileDown, FileType, Import, Pencil, Plus, Printer, Trash2, Upload, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
@@ -98,9 +98,11 @@ import {
 import { Cmpf311ModuleFields } from './Cmpf311ModuleFields'
 import { emptyCmpf311Payload, parseCmpf311Payload, type Cmpf311ModulePayload } from './cmpf311Model'
 import { Cmpf307ModuleFields } from './Cmpf307ModuleFields'
-import { cmpf307RowHasContent, emptyCmpf307Payload, parseCmpf307Payload, type Cmpf307ModulePayload } from './cmpf307Model'
+import { cmpf307RowHasContent, emptyCmpf307BrandRow, emptyCmpf307Payload, parseCmpf307Payload, type Cmpf307ModulePayload } from './cmpf307Model'
+import { BisModuleImportDialog } from './BisModuleImportDialog'
 import { Cmpf310ModuleFields } from './Cmpf310ModuleFields'
 import { RawMaterialReferenceModuleFields } from './RawMaterialReferenceModuleFields'
+import { packagingMarkingFieldsFrom, sefPackagingRowsFrom } from '../print/manufacturingStepDocumentsHtml'
 import {
   emptyRawMaterialReferencePayload,
   parseRawMaterialReferencePayload,
@@ -443,6 +445,22 @@ export function LegalDocumentsModuleDialog({
   const [undertakingMinimumFee, setUndertakingMinimumFee] = useState<UndertakingMinimumFeePayload>(() => emptyUndertakingMinimumFeePayload())
   const [companyFirmStatus, setCompanyFirmStatus] = useState('')
   const [selfEvaluation, setSelfEvaluation] = useState<SelfEvaluationPayload>(() => emptySelfEvaluationPayload())
+  // SEF "Packaging & Marking" follows Step 4 Packaging and Marking once that is saved.
+  const [linkedPackagingRows, setLinkedPackagingRows] = useState<Array<{ label: string; value: string }> | null>(null)
+  useEffect(() => {
+    if (!open || !row?.id) return
+    let cancelled = false
+    fetchBisModulePayload(row.id, 'packaging-marking')
+      .then((payload) => {
+        if (!cancelled) setLinkedPackagingRows(sefPackagingRowsFrom(packagingMarkingFieldsFrom(payload)))
+      })
+      .catch(() => {
+        if (!cancelled) setLinkedPackagingRows(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [open, row?.id])
   const [saving, setSaving] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
   const [appDetails, setAppDetails] = useState<BisApplicationDetailsForm>(() =>
@@ -481,6 +499,7 @@ export function LegalDocumentsModuleDialog({
   const [cmpf306, setCmpf306] = useState<Cmpf306ModulePayload>(() => emptyCmpf306Payload())
   const [cmpf311, setCmpf311] = useState<Cmpf311ModulePayload>(() => emptyCmpf311Payload())
   const [cmpf307, setCmpf307] = useState<Cmpf307ModulePayload>(() => emptyCmpf307Payload())
+  const [brandImportOpen, setBrandImportOpen] = useState(false)
   const [cmpf310, setCmpf310] = useState<Cmpf310ModulePayload>(() => emptyCmpf310Payload())
   const [rawMaterialReference, setRawMaterialReference] = useState<RawMaterialReferencePayload>(() => emptyRawMaterialReferencePayload())
   const [processFlow, setProcessFlow] = useState<ProcessFlowModulePayload>(() =>
@@ -1416,7 +1435,7 @@ export function LegalDocumentsModuleDialog({
         await saveBisModulePayload(row.id, 'process-flow-chart', payload)
         await saveBisModulePayload(row.id, 'process-description', payload)
         onProjectSaved?.()
-        toast.success('Process Flow Chart & Description saved.')
+        toast.success(printKind === 'process-description' ? 'Process Description saved.' : 'Process Flow Chart saved.')
         return
       }
 
@@ -1752,6 +1771,7 @@ export function LegalDocumentsModuleDialog({
   }
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         persistOnFocusLoss
@@ -1794,6 +1814,20 @@ export function LegalDocumentsModuleDialog({
               {subtitle}
             </p>
           </DialogHeader>
+          {showCmpf307Fields && row?.id ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={busy || saving}
+              className="absolute right-12 top-1/2 h-8 w-8 -translate-y-1/2 rounded-none border border-amber-500/60 bg-stone-800 p-0 text-amber-200 shadow-sm transition-colors hover:border-amber-400 hover:bg-amber-600 hover:text-white"
+              title="Import from another Application"
+              aria-label="Import from another Application"
+              onClick={() => setBrandImportOpen(true)}
+            >
+              <Import size={15} aria-hidden />
+            </Button>
+          ) : null}
         </div>
 
         <div
@@ -1953,7 +1987,23 @@ export function LegalDocumentsModuleDialog({
                     <div className="mt-5 grid max-w-5xl gap-4">
                       <div className="border border-stone-300">
                         <div className="bg-stone-100 p-3 text-sm font-semibold">Packaging &amp; Marking</div>
-                        {selfEvaluation.packagingMarkingRows.map((item, index) => <div key={index} className="grid gap-2 border-t border-stone-200 p-2 sm:grid-cols-2"><Input aria-label={`Packaging field ${index + 1}`} value={item.label} disabled={loading || printingUndertaking} onChange={(e) => setSelfEvaluation((v) => ({ ...v, packagingMarkingRows: v.packagingMarkingRows.map((r, i) => i === index ? { ...r, label: e.target.value } : r) }))} /><Input aria-label={`Packaging value ${index + 1}`} value={item.value} disabled={loading || printingUndertaking} onChange={(e) => setSelfEvaluation((v) => ({ ...v, packagingMarkingRows: v.packagingMarkingRows.map((r, i) => i === index ? { ...r, value: e.target.value } : r) }))} /></div>)}
+                        {linkedPackagingRows ? (
+                          <>
+                            <p className="border-t border-stone-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                              Linked to Step 4 · Packaging and Marking — edit the values there.
+                            </p>
+                            {linkedPackagingRows.map((item) => (
+                              <div key={item.label} className="grid gap-2 border-t border-stone-200 p-2 text-sm sm:grid-cols-2">
+                                <span className="font-semibold text-stone-700">{item.label}</span>
+                                <span className="text-stone-800">{item.value || '—'}</span>
+                              </div>
+                            ))}
+                          </>
+                        ) : (
+                          <>
+                            {selfEvaluation.packagingMarkingRows.map((item, index) => <div key={index} className="grid gap-2 border-t border-stone-200 p-2 sm:grid-cols-2"><Input aria-label={`Packaging field ${index + 1}`} value={item.label} disabled={loading || printingUndertaking} onChange={(e) => setSelfEvaluation((v) => ({ ...v, packagingMarkingRows: v.packagingMarkingRows.map((r, i) => i === index ? { ...r, label: e.target.value } : r) }))} /><Input aria-label={`Packaging value ${index + 1}`} value={item.value} disabled={loading || printingUndertaking} onChange={(e) => setSelfEvaluation((v) => ({ ...v, packagingMarkingRows: v.packagingMarkingRows.map((r, i) => i === index ? { ...r, value: e.target.value } : r) }))} /></div>)}
+                          </>
+                        )}
                       </div>
                     </div>
                   ) : null}
@@ -2377,6 +2427,7 @@ export function LegalDocumentsModuleDialog({
                   value={rawMaterialReference}
                   onChange={setRawMaterialReference}
                   disabled={busy || saving}
+                  row={row}
                 />
               )}
             </div>
@@ -2386,6 +2437,8 @@ export function LegalDocumentsModuleDialog({
                 <p className="py-6 text-center text-sm text-stone-500">Loading…</p>
               ) : (
                 <ProcessFlowModuleFields
+                  mode={printKind === 'process-description' ? 'description' : 'chart'}
+                  projectRow={row}
                   value={processFlow}
                   onChange={setProcessFlow}
                   disabled={busy || saving}
@@ -2599,5 +2652,31 @@ export function LegalDocumentsModuleDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    {showCmpf307Fields ? (
+      <BisModuleImportDialog
+        open={brandImportOpen}
+        onOpenChange={setBrandImportOpen}
+        targetRow={row}
+        kind="cmpf-307"
+        onPickSource={async (sourceProjectId) => {
+          const source = parseCmpf307Payload(await fetchBisModulePayload(sourceProjectId, 'cmpf-307'))
+          const sourceRows = source.rows.filter((r) => r.brandName.trim())
+          if (sourceRows.length === 0) throw new Error('The selected application has no brand names.')
+          const existing = cmpf307.rows.filter((r) => r.brandName.trim())
+          const known = new Set(existing.map((r) => r.brandName.trim().toLowerCase()))
+          // Attachments belong to the other application; imported rows come without them (upload here).
+          const fresh = sourceRows
+            .filter((r) => !known.has(r.brandName.trim().toLowerCase()))
+            .map((r) => ({ ...emptyCmpf307BrandRow(), brandName: r.brandName, ownedBy: r.ownedBy, registeredStatus: r.registeredStatus, registrationDate: r.registrationDate }))
+          if (fresh.length === 0) {
+            toast.message('Nothing new to import', { description: 'These brand names are already here.' })
+            return
+          }
+          setCmpf307({ ...cmpf307, rows: [...existing, ...fresh] })
+          toast.success(`Imported ${fresh.length} brand name${fresh.length === 1 ? '' : 's'}`, { description: 'Upload their certificates, then click Save.' })
+        }}
+      />
+    ) : null}
+    </>
   )
 }
