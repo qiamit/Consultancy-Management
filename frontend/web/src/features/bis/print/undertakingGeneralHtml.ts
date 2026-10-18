@@ -1,5 +1,6 @@
+import { parseUndertakingLines, resolvedUndertakingLine, type UndertakingLine } from '../projects/undertakingLines'
 import type { BisPrintData } from './loadBisPrintData'
-import { parseUndertakingGeneralPayload } from '../projects/undertakingPayloadModels'
+import { parseUndertakingGeneralPayload, type UndertakingGeneralPayload } from '../projects/undertakingPayloadModels'
 import { printSignatoryDefaults } from './loadBisPrintData'
 import { escapeHtml as esc } from './openPrintHtml'
 import {
@@ -15,6 +16,8 @@ import {
 } from './printDocumentShared'
 
 export type UndertakingGeneralData = PrintApplicantContext & {
+  lines?: UndertakingLine[] | null
+  documentTitle?: string
   markingClause: string
   packagingClause: string
   weeklyOff: string
@@ -27,7 +30,7 @@ export type UndertakingGeneralData = PrintApplicantContext & {
   signatoryDesignation: string
 }
 
-export function undertakingGeneralPoints(data: UndertakingGeneralData): string[] {
+export function undertakingGeneralDefaultPoints(data: Omit<UndertakingGeneralPayload, 'lines'> & { isNumber: string }): string[] {
   const isCode = data.isNumber.trim() || '________________'
   const markingRef = data.markingClause.trim() || 'Clause 13'
   const packagingRef = data.packagingClause.trim() || 'Clause 14'
@@ -55,6 +58,15 @@ export function undertakingGeneralPoints(data: UndertakingGeneralData): string[]
   ]
 }
 
+export function undertakingGeneralPoints(data: UndertakingGeneralData): string[] {
+  const defaults = undertakingGeneralDefaultPoints(data)
+  return data.lines === null || data.lines === undefined ? defaults : data.lines.map((line) => {
+    const text = resolvedUndertakingLine(line, defaults).trim()
+    const ref = [line.source, line.clause].filter(Boolean).join(' — ')
+    return text ? `${text}${line.agreementRequired ? ' Agreement between manufacturer and purchaser is required.' : ''}${ref ? ` (Reference: ${ref})` : ''}` : ''
+  }).filter(Boolean)
+}
+
 function buildBody(data: UndertakingGeneralData): string {
   const appNo = applicationNoDisplay(data.applicationNumber)
   const letterDate = inspectionDateOrToday(data.dateOfInspection)
@@ -64,7 +76,7 @@ function buildBody(data: UndertakingGeneralData): string {
   return `
 <div class="pd-sheet">
   ${letterheadHtml(data)}
-  <h1 class="pd-title">Undertaking for General &amp; ISS</h1>
+  <h1 class="pd-title">${esc(data.documentTitle || 'Undertaking for General')}</h1>
 
   <div class="pd-to-row">
     <div class="pd-to-block">${toBlockHtml(data.bisBranchName, data.bisBranchState)}</div>
@@ -93,7 +105,7 @@ const STYLES = `
 
 export function buildUndertakingGeneralHtml(data: UndertakingGeneralData): string {
   return buildPrintPage({
-    title: `Undertaking for General & ISS — ${data.applicantName || 'Applicant'}`,
+    title: `${data.documentTitle || 'Undertaking for General'} — ${data.applicantName || 'Applicant'}`,
     styles: STYLES,
     body: buildBody(data),
   })
@@ -105,6 +117,7 @@ export function undertakingGeneralDataFromPrintData(printData: BisPrintData): Un
   const payload = parseUndertakingGeneralPayload(printData.modulePayload ?? null)
   return {
     ...ctx,
+    lines: payload.lines,
     markingClause: payload.markingClause,
     packagingClause: payload.packagingClause,
     weeklyOff: payload.weeklyOff,
@@ -116,4 +129,20 @@ export function undertakingGeneralDataFromPrintData(printData: BisPrintData): Un
     signatoryName: printSignatoryDefaults(printData).signatoryName,
     signatoryDesignation: printSignatoryDefaults(printData).signatoryDesignation,
   }
+}
+
+export function buildUndertakingIndianStandardsHtml(data: BisPrintData): string {
+  return buildUndertakingGeneralHtml({
+    ...undertakingGeneralDataFromPrintData(data),
+    documentTitle: 'Undertaking as per Indian Standards',
+    lines: parseUndertakingLines(data.modulePayload?.lines) ?? [],
+  })
+}
+
+export function buildUndertakingOtherHtml(data: BisPrintData): string {
+  return buildUndertakingGeneralHtml({
+    ...undertakingGeneralDataFromPrintData(data),
+    documentTitle: String(data.modulePayload?.documentTitle ?? '').trim() || 'Undertaking Other if Required',
+    lines: parseUndertakingLines(data.modulePayload?.lines) ?? [],
+  })
 }

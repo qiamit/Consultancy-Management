@@ -46,6 +46,7 @@ import {
   type BisPrintDocumentKind,
 } from '../print/printBisDocument'
 import { ManakStepPage } from './ManakStepPages'
+import { ManakDocumentActions } from './ManakDocumentActions'
 import {
   BIS_APPLICATION_STEPS,
   BIS_PREVIEW_STEP_LABEL,
@@ -218,25 +219,7 @@ function StepDocActions({
       ? [`Download Excel — ${label}`, () => onExcel(kind), FileSpreadsheet]
       : [`Download Word — ${label}`, () => onWord(kind), FileType],
   ]
-  return (
-    <div className="inline-flex shrink-0 items-center justify-center gap-0.5">
-      {buttons.map(([title, handler, Icon]) => (
-        <Button
-          key={title}
-          type="button"
-          size="sm"
-          variant="ghost"
-          className={actionBtnClass}
-          disabled={disabled}
-          title={title}
-          aria-label={title}
-          onClick={handler}
-        >
-          <Icon size={15} />
-        </Button>
-      ))}
-    </div>
-  )
+  return <ManakDocumentActions disabled={disabled} actions={buttons.map(([label, onClick, icon]) => ({ label, onClick, icon }))} />
 }
 
 function DocRowActions({

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { FileCheck2, Loader2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { openPendingPrintWindow } from '../print/openPrintHtml'
 import {
   createBisProjectFileUrls,
   deleteBisProjectFile,
@@ -21,6 +22,7 @@ export function FileAttachButton({
   file,
   onChange,
   disabled = false,
+  onBusyChange,
 }: {
   projectId: string
   /** bis_project_files doc_kind for the upload. */
@@ -29,16 +31,19 @@ export function FileAttachButton({
   file: BisProjectViewFile | null
   onChange: (file: BisProjectViewFile | null) => Promise<void> | void
   disabled?: boolean
+  onBusyChange?: (busy: boolean) => void
 }) {
   const [busy, setBusy] = useState(false)
   const clickTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  useEffect(() => () => clearTimeout(clickTimer.current), [])
+  const setWorking = (value: boolean) => { setBusy(value); onBusyChange?.(value) }
 
   const upload = async (picked: File) => {
     if (picked.type !== 'application/pdf' && !picked.name.toLowerCase().endsWith('.pdf')) {
       toast.error('Please select a PDF file.')
       return
     }
-    setBusy(true)
+    setWorking(true)
     try {
       const uploaded = await uploadBisProjectFile(projectId, picked, docKind)
       await onChange(uploaded)
@@ -47,30 +52,34 @@ export function FileAttachButton({
     } catch (err) {
       toast.error(formatBisProjectFilesError(err))
     } finally {
-      setBusy(false)
+      setWorking(false)
     }
   }
 
   const view = async (f: BisProjectViewFile) => {
+    const target = openPendingPrintWindow(`Opening ${label}…`)
+    if (!target) { toast.error('Allow popups to view this PDF.'); return }
+    target.opener = null
     try {
       const urls = await createBisProjectFileUrls(f.storage_path, f.file_name)
       if (!urls.viewUrl) throw new Error('Unable to open this PDF.')
-      window.open(urls.viewUrl, '_blank', 'noopener,noreferrer')
+      target.location.replace(urls.viewUrl)
     } catch (err) {
+      target.close()
       toast.error(formatBisProjectFilesError(err))
     }
   }
 
   const remove = async (f: BisProjectViewFile) => {
-    setBusy(true)
+    setWorking(true)
     try {
-      await deleteBisProjectFile(f).catch(() => undefined)
       await onChange(null)
+      await deleteBisProjectFile(f)
       toast.success(`${label} removed.`)
     } catch (err) {
       toast.error(formatBisProjectFilesError(err))
     } finally {
-      setBusy(false)
+      setWorking(false)
     }
   }
 

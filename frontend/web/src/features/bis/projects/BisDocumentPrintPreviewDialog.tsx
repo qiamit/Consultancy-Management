@@ -1372,7 +1372,7 @@ export function BisDocumentPrintPreviewDialog({
                             }))
                           }
                         />
-                        <SettingToggle
+                        {kind === 'authorization-letter' ? <p className="border border-stone-300 bg-stone-50 p-2 text-xs text-stone-700">Use Include Signature for each person in the Authorization Letter editor to control signature images.</p> : <SettingToggle
                           id="bis-sig-img"
                           label="Show signature image"
                           checked={settings.showSignatureImage}
@@ -1383,7 +1383,7 @@ export function BisDocumentPrintPreviewDialog({
                               showSignatureImage: checked,
                             }))
                           }
-                        />
+                        />}
                         <div className="space-y-1">
                           <Label htmlFor="bis-sig-space" className="text-xs text-stone-700">
                             Signature space (mm)

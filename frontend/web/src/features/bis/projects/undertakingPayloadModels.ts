@@ -1,4 +1,7 @@
+import { parseUndertakingLines, type UndertakingLine } from './undertakingLines'
+
 export type UndertakingGeneralPayload = {
+  lines: UndertakingLine[] | null
   markingClause: string
   packagingClause: string
   weeklyOff: string
@@ -97,7 +100,7 @@ function text(value: unknown): string {
 
 export function emptyUndertakingGeneralPayload(): UndertakingGeneralPayload {
   return {
-    markingClause: '', packagingClause: '', weeklyOff: 'Sunday',
+    lines: null, markingClause: '', packagingClause: '', weeklyOff: 'Sunday',
     waterSupplySource: 'Own', electricSupplySource: 'Electricity Board',
     generatorBackup: 'Yes', machineryOwnership: 'Owned by us',
     pollutionControlArrangement: 'Own',
@@ -106,6 +109,7 @@ export function emptyUndertakingGeneralPayload(): UndertakingGeneralPayload {
 
 export function parseUndertakingGeneralPayload(raw: Record<string, unknown> | null): UndertakingGeneralPayload {
   return {
+    lines: parseUndertakingLines(raw?.lines),
     markingClause: text(raw?.markingClause ?? raw?.marking_clause),
     packagingClause: text(raw?.packagingClause ?? raw?.packaging_clause),
     weeklyOff: text(raw?.weeklyOff ?? raw?.weekly_off) || 'Sunday',

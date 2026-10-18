@@ -91,10 +91,17 @@ export async function buildMergedBisProjectFilesPdf(
   options: {
     ignoreUnsupported?: boolean
     strict?: boolean
+    /** Restrict a shared category to the files referenced by the selected document rows. */
+    storagePaths?: readonly string[]
     shouldIncludeFile?: (file: StoredFile, bytes: Uint8Array) => boolean | Promise<boolean>
   } = {},
 ): Promise<Uint8Array | null> {
-  const files = await listStoredFiles(projectId, docKinds)
+  const stored = await listStoredFiles(projectId, docKinds)
+  const requested = options.storagePaths ? new Set(options.storagePaths) : null
+  const files = requested ? stored.filter((file) => requested.has(file.storage_path)) : stored
+  if (options.strict && requested && requested.size !== new Set(files.map((file) => file.storage_path)).size) {
+    throw new Error('One or more selected attachments are no longer available. Reopen the document editor and upload them again.')
+  }
   if (files.length === 0) return null
   const merged = await PDFDocument.create()
   let added = 0

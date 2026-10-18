@@ -32,7 +32,7 @@ export type ClientCertificateInput = {
   existing?: ClientCertificateFile
 }
 
-const CERT_BUCKET = 'client-certificates'
+export const CERT_BUCKET = 'client-certificates'
 const CERT_MIME = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/webp'])
 const CERT_MAX = 25 * 1024 * 1024
 export function isSameFirmName(a: string, b: string): boolean {

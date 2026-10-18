@@ -29,6 +29,7 @@ import {
 import { ManakPackagingStep } from './ManakPackagingStep'
 import { ManakTestingStep } from './ManakTestingStep'
 import { ManakTestReportsStep } from './ManakTestReportsStep'
+import { ManakDeclarationStep } from './ManakDeclarationStep'
 import type { BisProjectRow } from './types'
 
 /* ───────── Manak Online look: blue section bars, light-blue sub-panels, label / value grids ───────── */
@@ -339,7 +340,6 @@ export function ManakStepPage({
   row,
   refreshKey,
   onEdit,
-  documents,
   onLocationMapPreview,
   onLocationMapPdf,
   onProjectSaved,
@@ -595,21 +595,18 @@ export function ManakStepPage({
     ) : null
   } else if (stepId === 'declaration') {
     const tm = payloads['top-management']
-    body = (
-      <ManakPanel title="Declaration and Undertaking" onEdit={edit('all-required-undertakings')}>
-        <ManakSubPanel title="Miscellaneous Declaration">
-          <ManakFields
-            items={[
-              ['Name of Person submitting the application', s(tm?.signatoryName) || c?.contactPerson],
-              ['Designation of Person submitting the application', s(tm?.signatoryDesignation)],
-            ]}
-          />
-        </ManakSubPanel>
-        <p className="text-sm text-stone-700">
-          Undertakings and the Self Evaluation Form are generated from the module — see the document rows below.
-        </p>
-      </ManakPanel>
-    )
+    body = row?.id ? (
+      <ManakDeclarationStep
+        key={row.id}
+        projectRow={row}
+        defaultName={s(tm?.signatoryName) || c?.contactPerson || ''}
+        defaultDesignation={s(tm?.signatoryDesignation)}
+        onManagementChanged={() => setReloadTick((tick) => tick + 1)}
+        onOpenUndertaking={(kind) => onEdit(kind)}
+        renderDocActions={renderDocActions}
+        selection={docSelection}
+      />
+    ) : null
   }
 
   return (
@@ -617,8 +614,6 @@ export function ManakStepPage({
       {loading ? <p className="mb-2 text-xs text-stone-500">Loading application data…</p> : null}
       {error ? <p className="mb-2 text-xs text-red-700">{error}</p> : null}
       <div className={cn(loading && 'opacity-60')}>{body}</div>
-      {/* Steps 1–6 no longer need the documents list: everything is edited / generated in place above. */}
-      {stepId === 'declaration' ? <ManakPanel title="Documents (create · view · print · download)">{documents}</ManakPanel> : null}
     </div>
   )
 }
