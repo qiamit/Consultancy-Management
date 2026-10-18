@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "QE Consultancy",
-  "version": "2.4.1",
+  "version": "2.4.3",
   "description": "Manak Test Request, Import QR, New Application fill, IS Code portal fetch and search, copy/paste bypass, and bulk field fill for Chrome, Edge, and other Chromium browsers.",
   "action": {
     "default_title": "QE Consultancy",

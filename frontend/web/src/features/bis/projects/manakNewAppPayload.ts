@@ -16,7 +16,7 @@ import { BIS_PROJECT_FILES_BUCKET } from './bisProjectFilesApi'
 import { loadBisProjectPrintPageSettings } from './bisPrintPageSettingsApi'
 import { parseCmpf311Payload } from './cmpf311Model'
 import { APPLICATION_DECLARATION_KIND, CORRESPONDENCE_KIND, MANUFACTURING_COMPONENTS_KIND, TESTING_COMPONENTS_KIND, TEST_REPORT_COMPONENTS_KIND } from './manakModuleKinds'
-import type { BisProjectRow } from './types'
+import { parseBisNotesScope, type BisProjectRow } from './types'
 
 type Rec = Record<string, unknown>
 type YesNo = 'Yes' | 'No'
@@ -217,13 +217,38 @@ export async function buildManakNewAppPayload(row: BisProjectRow): Promise<Manak
     files.push({ slot, row: rowIndex, label, url, fileName: name, mime: mimeFor(name) })
   }
 
-  /* Step 1 — General */
+  /* Step 1 — General: "Variety applied for" comes from the Varieties table (project License Scope), as shown on Step 1. */
   const samples = rowsOf(p['osl-sample-requirements'])
-  const varietyNames = Array.from(new Set(samples.map((r) => str(r.gradeTypeVariety)).filter(Boolean)))
+  const sampleVarieties = Array.from(new Set(samples.map((r) => str(r.gradeTypeVariety)).filter(Boolean)))
+  const notes = str(project.notes ?? row.notes)
+  const scopeTable = parseBisNotesScope(notes.trim() ? notes : sampleVarieties.join('\n'))
+  // Keep each row's index: scope files are tagged "[r<index>] " with that index (untagged = row 0).
+  const varietyRows: Array<{ index: number; value: string }> =
+    scopeTable.mode === 'plain'
+      ? scopeTable.text.split('\n').map((line, index) => ({ index, value: line.trim() }))
+      : scopeTable.rows.map((cells, index) => {
+          const rest = cells.slice(1).map((c) => c.trim()).filter(Boolean)
+          // 2 columns (Component | Value) → Value; 3+ columns → the columns after the first, joined.
+          return { index, value: (rest.length ? rest.join(' - ') : str(cells[0])).trim() }
+        })
+  const varietyList = varietyRows.filter((v) => v.value)
+  const varietyNames = varietyList.map((v) => v.value)
   const sit = parseCmpf311Payload(p['cmpf-311'])
-  // Manufacturing-scope undertaking is the supporting document for the varieties.
-  const scope = (Array.isArray(scopeFiles.data) ? scopeFiles.data : [])[0] as { file_name?: string; storage_path?: string } | undefined
-  await Promise.all(varietyNames.map((_, i) => (scope ? addFile('variety', `Variety ${i + 1} supporting document`, scope.storage_path, scope.file_name, i) : null)))
+  // Supporting document = the row's own attachment (prefer "Copy of Scope"), from the Varieties Action column.
+  const scopeFileRows = (Array.isArray(scopeFiles.data) ? scopeFiles.data : []) as Array<{ file_name?: string; storage_path?: string }>
+  const SCOPE_TAG = /^\[(draft|r(\d+))\] /
+  const scopeRowOf = (name: string) => {
+    const m = SCOPE_TAG.exec(name)
+    return m ? (m[1] === 'draft' ? -1 : Number(m[2])) : 0
+  }
+  await Promise.all(
+    varietyList.map((v, i) => {
+      const own = scopeFileRows.filter((f) => scopeRowOf(str(f.file_name)) === v.index)
+      const pick = own.find((f) => str(f.file_name).replace(SCOPE_TAG, '').startsWith('Copy of Scope')) ?? own[0]
+      return pick ? addFile('variety', `Variety ${i + 1} supporting document`, pick.storage_path, str(pick.file_name).replace(SCOPE_TAG, ''), i) : null
+    }),
+  )
+  const varietyDocMissing = varietyList.length > 0 && !files.some((f) => f.slot === 'variety')
 
   /* Step 2 — Management */
   const topManagement = rowsOf(p['top-management'])
@@ -291,7 +316,8 @@ export async function buildManakNewAppPayload(row: BisProjectRow): Promise<Manak
   const testReports = samples
     .filter((r) => str(r.qrCode))
     .map((r) => ({
-      variety: str(r.gradeTypeVariety),
+      // Manak's step 6 variety list is built from step 1's "Variety applied for" values.
+      variety: varietyNames.length === 1 ? varietyNames[0] : str(r.gradeTypeVariety),
       qrCode: str(r.qrCode),
       sampleCode: str(r.sampleCode),
       complete: str(r.testReportStoragePath) ? 'Yes' : '',
@@ -300,6 +326,7 @@ export async function buildManakNewAppPayload(row: BisProjectRow): Promise<Manak
     }))
 
   const missingFiles: ManakNewAppPayload['missingFiles'] = []
+  if (varietyDocMissing) missingFiles.push({ step: 'general', label: 'Variety supporting document (attach it on the Varieties row)' })
   const sitAccept: YesNo = sit.mode === 'bis-sit' ? 'Yes' : 'No'
   const outsourcing: YesNo = applicable.subcontracting === 'Yes' ? 'Yes' : 'No'
   const hygiene: YesNo = applicable.hygiene === 'Yes' ? 'Yes' : 'No'

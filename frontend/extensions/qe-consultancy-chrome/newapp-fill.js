@@ -210,6 +210,8 @@
       return "filled";
     }
     if (norm(el.value) === norm(value)) return "same";
+    // Setting .value bypasses maxlength; Manak would cut or reject it — let the user shorten it instead.
+    if (el.maxLength > 0 && String(value).length > el.maxLength) return `too-long:${el.maxLength}`;
     setText(el, value);
     nudgePage(el);
     return "filled";
@@ -518,6 +520,7 @@
       const res = setValue(el, cell.value);
       if (res === "filled") report.filled.push(`${prefix}${cell.key}`);
       else if (res === "no-option") report.missing.push(`${prefix}${cell.key} (no option "${cell.value}")`);
+      else if (String(res).startsWith("too-long")) report.missing.push(`${prefix}${cell.key} is ${String(cell.value).length} characters — Manak allows ${String(res).split(":")[1]}`);
       // A select change can reveal dependent fields — let the page react.
       if (el.tagName === "SELECT" && res === "filled") await sleep(400);
     }
@@ -670,6 +673,14 @@
             res = "filled";
           } else {
             res = setValue(el, cell.value);
+            // One real option (e.g. the single variety from step 1) — that is the one.
+            const real = el.tagName === "SELECT" ? Array.from(el.options).filter((o) => o.value && o.value !== "0" && !/^\s*-*\s*select/i.test(o.text)) : [];
+            if (res === "no-option" && real.length === 1) {
+              el.value = real[0].value;
+              el.dispatchEvent(new Event("change", { bubbles: true }));
+              nudgePage(el);
+              res = "filled";
+            }
           }
           if (res === "no-option") {
             report.missing.push(`${prefix}${cell.key} (no option "${cell.value}")`);
@@ -711,6 +722,9 @@
             const res = setValue(el, cell.value);
             if (res === "filled") report.filled.push(`${prefix}${cell.key}`);
             else if (res === "no-option") report.missing.push(`${prefix}${cell.key} (no option "${cell.value}")`);
+            else if (String(res).startsWith("too-long")) {
+              report.missing.push(`${prefix}${cell.key} is ${String(cell.value).length} characters — Manak allows ${String(res).split(":")[1]}; shorten it in Consultancy Pro`);
+            }
           }
         }
         for (const f of item.files || []) {
