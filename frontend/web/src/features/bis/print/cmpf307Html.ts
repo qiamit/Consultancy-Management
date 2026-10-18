@@ -10,7 +10,7 @@ import {
   toBlockHtml,
   type PrintApplicantContext,
 } from './printDocumentShared'
-import { todayIsoDate } from '../projects/types'
+import { formatDisplayDate, todayIsoDate } from '../projects/types'
 
 export type Cmpf307BrandRow = {
   rowId: string
@@ -46,7 +46,7 @@ function brandRows(rows: Cmpf307BrandRow[]): string {
     out.push(`<tr>
       <td>${i + 1}</td>
       <td class="pd-left">${cell(r?.brandName)}</td>
-      <td>${cell(r?.ownedBy)}</td><td>${cell(r?.registeredStatus)}</td><td>${cell(r?.registrationDate)}</td>
+      <td>${cell(r?.ownedBy)}</td><td>${cell(r?.registeredStatus)}</td><td>${cell(r?.registrationDate ? formatDisplayDate(r.registrationDate) : '')}</td>
     </tr>`)
   }
   return out.join('')

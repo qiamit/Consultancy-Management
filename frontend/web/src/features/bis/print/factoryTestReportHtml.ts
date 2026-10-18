@@ -147,7 +147,7 @@ function testNameCell(param: FactoryTestReportParamRow): string {
     .filter(Boolean)
     .join(' · ')
   return `<td class="pd-left"><strong>${esc(name)}</strong>${
-    sub ? `<br/><span class="ftr-sub">${esc(sub)}</span>` : ''
+    sub ? ` <span class="ftr-sub">· ${esc(sub)}</span>` : ''
   }</td>`
 }
 
@@ -211,8 +211,8 @@ function reportSheetHtml(data: FactoryTestReportData, report: FactoryTestReportE
 <div class="pd-sheet ftr-sheet">
   <table class="pd-table ftr-main">
     <colgroup>
-      <col style="width:25%"/><col style="width:10%"/><col style="width:35%"/>
-      <col style="width:20%"/><col style="width:10%"/>
+      <col style="width:36%"/><col style="width:8%"/><col style="width:30%"/>
+      <col style="width:16%"/><col style="width:10%"/>
     </colgroup>
     <thead>
       <tr class="ftr-repeat-head">
@@ -298,7 +298,10 @@ const STYLES = `
   .ftr-main > tbody > tr > td { height: 7mm; }
   .ftr-main > thead > tr > th { text-align: center; }
   .ftr-main td.ftr-td-center { text-align: center; white-space: pre-wrap; }
-  .ftr-sub { font-weight: 600; font-size: 9px; }
+  .ftr-sub { font-weight: 600; font-size: 11px !important; color: #000; white-space: nowrap; }
+  /* Large, solid-black results so the report stays legible after print → seal / sign → scan. */
+  .pd-sheet .ftr-main > tbody > tr > td { font-size: 13px !important; line-height: 1.35; }
+  .pd-sheet .ftr-main > thead > tr > th { font-size: 12.5px !important; }
   .ftr-end {
     text-align: center !important;
     font-weight: 700;

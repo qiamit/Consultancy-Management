@@ -93,6 +93,7 @@ export function FtrIsTestParameterDialog({
   isCodeLabel,
   selectedParamIds,
   onToggleParam,
+  onToggleParams,
   onParamCreated,
   disabled = false,
 }: {
@@ -102,6 +103,8 @@ export function FtrIsTestParameterDialog({
   isCodeLabel?: string | null
   selectedParamIds: Set<string>
   onToggleParam: (param: FtrMasterParam, checked: boolean) => void
+  /** Select All: toggles every listed parameter in one update. */
+  onToggleParams?: (params: FtrMasterParam[], checked: boolean) => void
   /** Called after a new master row is inserted (also selected onto FTR by parent). */
   onParamCreated: (param: FtrMasterParam) => void
   disabled?: boolean
@@ -379,6 +382,13 @@ export function FtrIsTestParameterDialog({
 
   const handleToggleAll = (checked: boolean) => {
     if (disabled) return
+    if (onToggleParams) {
+      const params = pagedRows
+        .map((row) => rows.find((r) => r.id === row.id))
+        .filter((param): param is FtrMasterParam => Boolean(param))
+      onToggleParams(params, checked)
+      return
+    }
     for (const row of pagedRows) {
       const param = rows.find((r) => r.id === row.id)
       if (!param) continue
@@ -410,6 +420,7 @@ export function FtrIsTestParameterDialog({
 
         <div className="shrink-0 border-b border-stone-600">
           <TestParameterHeaderBar
+            reserveCloseButtonSpace
             search={search}
             onSearchChange={(value) => {
               setSearch(value)

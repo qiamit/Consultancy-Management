@@ -1,4 +1,5 @@
 import { applyPrintScanFriendlyCss } from './printScanFriendlyCss'
+import { withPreviewPagination } from './bisPreviewPagination'
 
 export function escapeHtml(value: unknown): string {
   return String(value ?? '')
@@ -12,7 +13,7 @@ export function escapeHtml(value: unknown): string {
 const AUTO_PRINT_SCRIPT = `<script>
   window.addEventListener('load', function () {
     setTimeout(function () {
-      try { window.focus(); window.print(); } catch (e) {}
+      try { if (window.__bisPaginateNow) window.__bisPaginateNow(); window.focus(); window.print(); } catch (e) {}
     }, 300);
   });
 </script>`
@@ -46,7 +47,8 @@ export function openPrintHtml(
   const win = options?.target && !options.target.closed ? options.target : window.open('', '_blank')
   if (!win) return POPUP_BLOCKED_MESSAGE
 
-  const scanReadyHtml = applyPrintScanFriendlyCss(html)
+  // Long sheets are split into A4 pages exactly like the on-screen preview.
+  const scanReadyHtml = withPreviewPagination(applyPrintScanFriendlyCss(html))
   const doc =
     options?.autoPrint !== false && !scanReadyHtml.includes('window.print()')
       ? scanReadyHtml.replace(/<\/body>/i, `${AUTO_PRINT_SCRIPT}</body>`)

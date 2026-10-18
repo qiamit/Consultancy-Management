@@ -51,8 +51,8 @@ function tableHtml(rows: RawMaterialRow[]): string {
       <th style="width:6%">Sr. No.</th>
       <th style="width:22.5%">Raw Material</th>
       <th style="width:22.5%">Name of Supplier</th>
-      <th style="width:16%">With OR Without BIS Certification Mark</th>
-      <th style="width:16%">Test Certificate of The Supplier</th>
+      <th style="width:16%">Conformity of Material</th>
+      <th style="width:16%">Record Maintained</th>
       <th style="width:17%">How Received Batches / Lots Nature of Packaging</th>
     </tr>
   </thead>
@@ -87,8 +87,8 @@ function buildBody(data: RawMaterialDetailsData): string {
     ${data.applicantAddress ? ` having our factory at <strong>${esc(data.applicantAddress)}</strong>,` : ''}
     hereby furnish the following details of raw materials used in our manufacturing process
     ${isStdRef ? ` in connection with BIS certification under ${isStdRef}` : ' in connection with BIS certification'}.
-    The particulars regarding the name of supplier, with or without BIS Certification Mark on raw material,
-    test certificate of the supplier, and how received batches/lots with nature of packaging are as under:
+    The particulars regarding the name of supplier, conformity of material,
+    whether records are maintained, and how received batches/lots with nature of packaging are as under:
   </p>
 
   ${tableHtml(data.rows)}

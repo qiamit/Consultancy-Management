@@ -772,6 +772,152 @@ export function buildProcessFlowSvgMarkup(
 </svg>`
 }
 
+/** Horizontal space between side-by-side branches. */
+export const PROCESS_FLOW_BRANCH_GAP_X = 24
+
+export type ProcessFlowLayoutItem =
+  | { kind: 'box'; node: ProcessFlowNode; x: number; y: number; w: number; h: number }
+  /** Vertical connector from (x, y) down `h`; `arrow` puts the arrow head at its bottom. */
+  | { kind: 'vline'; x: number; y: number; h: number; arrow: boolean }
+  /** Horizontal connector of a split, from x1 to x2 at y (its bottom edge). */
+  | { kind: 'hline'; x1: number; x2: number; y: number }
+
+export type ProcessFlowLayout = { width: number; height: number; items: ProcessFlowLayoutItem[] }
+
+type ColumnShape = { minX: number; maxX: number; height: number; boxes: Array<{ x: number; y: number; w: number; h: number }> }
+
+/**
+ * Positions for the whole chart, shared by the editor canvas and the printed chart so they always match.
+ * A chain of steps runs straight down one spine (the centre of its boxes). At a split the step above sits centred
+ * between its branches: the arrow drops from its centre onto a bar that runs from the first branch's centre to the
+ * last one's. Branches are packed as close as their own contents allow, so they never drift far apart.
+ * x values are relative to the left edge of a column's own box and may be negative (branches left of it).
+ */
+export function layoutProcessFlowChart(
+  nodes: ProcessFlowNode[],
+  boxStyle: ProcessFlowBoxStyle,
+): ProcessFlowLayout {
+  const gap = Math.max(0, boxStyle.gapY)
+  const stemH = Math.round(gap * 0.35)
+  const sizeOf = (n: ProcessFlowNode) => resolveProcessFlowBoxSize(n, boxStyle)
+  const rowsOf = (id: string | null) => groupProcessFlowSiblingRows(processFlowChildren(nodes, id))
+  const shapes = new Map<string, ColumnShape>()
+
+  /** Branch offsets (relative to the parent box's left edge), centred under the parent's spine. */
+  const placeBranches = (row: ProcessFlowNode[], parentWidth: number) => {
+    const items: Array<{ x: number; w: number; shape: ColumnShape }> = []
+    row.forEach((child, i) => {
+      const shape = shapeOf(child)
+      const w = sizeOf(child).width
+      let x = 0
+      if (i > 0) {
+        // Just clear every earlier box that overlaps one of this branch's boxes vertically.
+        x = -Infinity
+        for (const prev of items) {
+          for (const p of prev.shape.boxes) {
+            for (const c of shape.boxes) {
+              if (p.y < c.y + c.h && c.y < p.y + p.h) x = Math.max(x, prev.x + p.x + p.w + PROCESS_FLOW_BRANCH_GAP_X - c.x)
+            }
+          }
+        }
+        if (!Number.isFinite(x)) {
+          const last = items[items.length - 1]!
+          x = last.x + last.shape.maxX + PROCESS_FLOW_BRANCH_GAP_X - shape.minX
+        }
+      }
+      items.push({ x, w, shape })
+    })
+    const firstSpine = items[0]!.x + items[0]!.w / 2
+    const lastSpine = items[items.length - 1]!.x + items[items.length - 1]!.w / 2
+    const shift = parentWidth / 2 - (firstSpine + lastSpine) / 2
+    for (const it of items) it.x += shift
+    return {
+      items,
+      minX: Math.min(...items.map((it) => it.x + it.shape.minX)),
+      maxX: Math.max(...items.map((it) => it.x + it.shape.maxX)),
+      height: Math.max(...items.map((it) => it.shape.height)),
+    }
+  }
+
+  function shapeOf(node: ProcessFlowNode): ColumnShape {
+    const cached = shapes.get(node.id)
+    if (cached) return cached
+    const size = sizeOf(node)
+    const boxes: ColumnShape['boxes'] = [{ x: 0, y: 0, w: size.width, h: size.height }]
+    let y = size.height
+    let minX = 0
+    let maxX = size.width
+    for (const row of rowsOf(node.id)) {
+      y += gap
+      if (row.length === 1) {
+        const child = shapeOf(row[0]!)
+        const dx = (size.width - sizeOf(row[0]!).width) / 2
+        for (const b of child.boxes) boxes.push({ ...b, x: b.x + dx, y: b.y + y })
+        minX = Math.min(minX, dx + child.minX)
+        maxX = Math.max(maxX, dx + child.maxX)
+        y += child.height
+      } else {
+        const placed = placeBranches(row, size.width)
+        for (const it of placed.items) for (const b of it.shape.boxes) boxes.push({ ...b, x: b.x + it.x, y: b.y + y })
+        minX = Math.min(minX, placed.minX)
+        maxX = Math.max(maxX, placed.maxX)
+        y += placed.height
+      }
+    }
+    const shape = { minX, maxX, height: y, boxes }
+    shapes.set(node.id, shape)
+    return shape
+  }
+
+  const items: ProcessFlowLayoutItem[] = []
+  /** Child rows under a box `parentWidth` wide whose left edge is at `ox`, starting at `y`; returns the new y. */
+  const emitRows = (rows: ProcessFlowNode[][], ox: number, parentWidth: number, y0: number): number => {
+    let y = y0
+    for (const row of rows) {
+      if (row.length === 1) {
+        const child = row[0]!
+        items.push({ kind: 'vline', x: ox + parentWidth / 2, y, h: gap, arrow: true })
+        emitColumn(child, ox + (parentWidth - sizeOf(child).width) / 2, y + gap)
+        y += gap + shapeOf(child).height
+      } else {
+        const placed = placeBranches(row, parentWidth)
+        const spines = placed.items.map((it) => ox + it.x + it.w / 2)
+        items.push({ kind: 'vline', x: ox + parentWidth / 2, y, h: stemH, arrow: false })
+        items.push({ kind: 'hline', x1: spines[0]!, x2: spines[spines.length - 1]!, y: y + stemH })
+        placed.items.forEach((it, i) => {
+          items.push({ kind: 'vline', x: spines[i]!, y: y + stemH, h: gap - stemH, arrow: true })
+          emitColumn(row[i]!, ox + it.x, y + gap)
+        })
+        y += gap + placed.height
+      }
+    }
+    return y
+  }
+  function emitColumn(node: ProcessFlowNode, x: number, y: number) {
+    const size = sizeOf(node)
+    items.push({ kind: 'box', node, x, y, w: size.width, h: size.height })
+    emitRows(rowsOf(node.id), x, size.width, y + size.height)
+  }
+
+  const rootRows = rowsOf(null)
+  const first = rootRows[0]
+  if (!first) return { width: 0, height: 0, items }
+  // The first root row sits side by side; later root rows hang under the first root step.
+  const top = placeBranches(first, sizeOf(first[0]!).width)
+  top.items.forEach((it, i) => emitColumn(first[i]!, it.x, 0))
+  emitRows(rootRows.slice(1), top.items[0]!.x, top.items[0]!.w, top.height)
+
+  // Shift so nothing sits left of 0, then measure.
+  const lefts = items.map((it) => (it.kind === 'box' ? it.x : it.kind === 'hline' ? it.x1 : it.x))
+  const minX = Math.min(0, ...lefts)
+  for (const it of items) {
+    if (it.kind === 'hline') { it.x1 -= minX; it.x2 -= minX } else it.x -= minX
+  }
+  const width = Math.max(...items.map((it) => (it.kind === 'box' ? it.x + it.w : it.kind === 'hline' ? it.x2 : it.x)))
+  const height = Math.max(...items.map((it) => (it.kind === 'box' ? it.y + it.h : it.kind === 'hline' ? it.y : it.y + it.h)))
+  return { width, height, items }
+}
+
 function prepareProcessFlowPrintNodes(nodes: ProcessFlowNode[]): ProcessFlowNode[] {
   const working = nodes.filter(processFlowNodeHasContent)
   if (working.length === 0) return []
@@ -838,7 +984,6 @@ export function buildProcessFlowHtmlMarkup(
   const lineW = Math.max(1.5, arrowStyle.width || 2.2)
   const dashed = Boolean(arrowStyle.dashed)
   const design = arrowStyle.design || 'triangle'
-  const gapY = Math.max(0, boxStyle.gapY)
   const lineStyle = dashed
     ? `width:${lineW}px;background-image:repeating-linear-gradient(to bottom,${escSvg(color)} 0 5px,transparent 5px 9px);background-color:transparent;`
     : `width:${lineW}px;background:${escSvg(color)};`
@@ -847,88 +992,24 @@ export function buildProcessFlowHtmlMarkup(
     : `height:${lineW}px;background:${escSvg(color)};`
   const head = processFlowArrowHeadHtml(design, color, lineW)
 
-  const renderDownArrow = () => `
-    <div class="pfc-down" style="height:${gapY}px">
+  const layout = layoutProcessFlowChart(printNodes, boxStyle)
+  const PAD = 8
+  const parts = layout.items.map((it) => {
+    if (it.kind === 'box') {
+      const fs = fitProcessFlowFontSize(it.node.label, it.w, it.h)
+      return `<div class="pfc-box" style="position:absolute;left:${it.x + PAD}px;top:${it.y + PAD}px;width:${it.w}px;height:${it.h}px;font-size:${fs}px">${escSvg(it.node.label.trim())}</div>`
+    }
+    if (it.kind === 'hline') {
+      return `<div class="pfc-hline" style="${hLineStyle}left:${it.x1 - lineW / 2 + PAD}px;top:${it.y - lineW + PAD}px;width:${it.x2 - it.x1 + lineW}px"></div>`
+    }
+    return `<div class="pfc-down" style="position:absolute;left:${it.x - 12 + PAD}px;top:${it.y + PAD}px;width:24px;height:${it.h}px">
       <div class="pfc-vline" style="${lineStyle}"></div>
-      ${head}
+      ${it.arrow ? head : ''}
     </div>`
-
-  const renderNode = (node: ProcessFlowNode): string => {
-    const size = resolveProcessFlowBoxSize(node, boxStyle)
-    const fs = fitProcessFlowFontSize(node.label, size.width, size.height)
-    const kids = processFlowChildren(printNodes, node.id)
-    const kidRows = groupProcessFlowSiblingRows(kids)
-    const branches = kidRows
-      .map((row) => {
-        const count = row.length
-        if (count <= 1) {
-          return `<div class="pfc-branch-single">${renderDownArrow()}${row
-            .map((c) => renderNode(c))
-            .join('')}</div>`
-        }
-        const stemH = Math.round(gapY * 0.35)
-        const dropH = Math.max(0, gapY - stemH)
-        const cols = row
-          .map(
-            (child) => `
-          <div class="pfc-branch-col">
-            <div class="pfc-drop" style="height:${dropH}px">
-              <div class="pfc-vline" style="${lineStyle}"></div>
-              ${head}
-            </div>
-            ${renderNode(child)}
-          </div>`,
-          )
-          .join('')
-        return `
-        <div class="pfc-branch-multi">
-          <div class="pfc-stem" style="${lineStyle}height:${stemH + lineW}px;margin-bottom:-${lineW}px"></div>
-          <div class="pfc-fork-row">
-            <div class="pfc-hline" style="${hLineStyle}left:calc(100% / ${count} / 2);right:calc(100% / ${count} / 2)"></div>
-            ${cols}
-          </div>
-        </div>`
-      })
-      .join('')
-
-    return `
-      <div class="pfc-node">
-        <div class="pfc-box" style="width:${size.width}px;height:${size.height}px;font-size:${fs}px">${escSvg(node.label.trim())}</div>
-        ${branches}
-      </div>`
-  }
-
-  const roots = processFlowChildren(printNodes, null)
-  const rootRows = groupProcessFlowSiblingRows(roots)
-  const body = rootRows
-    .map((row, ri) => {
-      const rowHtml = `<div class="pfc-root-row">${row.map((n) => renderNode(n)).join('')}</div>`
-      if (ri === 0) return rowHtml
-      if (row.length === 1) {
-        return `<div class="pfc-branch-single">${renderDownArrow()}${rowHtml}</div>`
-      }
-      return rowHtml
-    })
-    .join('')
-
-  // Natural pixel size (approx HTML flex layout).
-  const HTML_COL_GAP = 20 // .pfc-branch-col horizontal padding pair
-  let natW = boxStyle.width
-  let natH = 0
-  for (let ri = 0; ri < rootRows.length; ri++) {
-    const row = rootRows[ri]!
-    const sizes = row.map((n) =>
-      measureProcessFlowSubtree(printNodes, n, true, boxStyle),
-    )
-    const colGap = Math.max(SVG_GAP_X, HTML_COL_GAP)
-    const rowW =
-      sizes.reduce((s, z) => s + z.w, 0) + Math.max(0, sizes.length - 1) * colGap
-    const rowH = Math.max(...sizes.map((z) => z.h), boxStyle.height)
-    natW = Math.max(natW, rowW)
-    natH += rowH + (ri > 0 ? gapY : 0)
-  }
-  natW = Math.ceil(natW + 16)
-  natH = Math.ceil(natH + 16)
+  })
+  const body = parts.join('')
+  const natW = Math.ceil(layout.width + PAD * 2)
+  const natH = Math.ceil(layout.height + PAD * 2)
 
   // Fit inside A4 content chart area (~170mm × ~125mm @ 96dpi).
   const MAX_W = 640
@@ -939,7 +1020,7 @@ export function buildProcessFlowHtmlMarkup(
 
   return `<div class="pfc-fit" style="width:${fitW}px;height:${fitH}px">
   <div class="pfc-scale" style="width:${natW}px;height:${natH}px;transform:scale(${scale.toFixed(4)});transform-origin:top left">
-    <div class="pfc-canvas" role="img" aria-label="Process flow chart">${body}</div>
+    <div class="pfc-canvas" role="img" aria-label="Process flow chart" style="display:block;position:relative;width:${natW}px;height:${natH}px">${body}</div>
   </div>
 </div>
 <script>(function(){

@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Check, Download, Eye, FileType, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { Check, Download, Eye, FileType, Import, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import type { BisPrintClient } from '../print/loadBisPrintData'
 import type { BisPrintDocumentKind } from '../print/printBisDocument'
-import type { BisProjectRow } from './types'
+import { formatDisplayDate, type BisProjectRow } from './types'
 import {
   emptyTechnicalStaffRow,
   fetchBisModulePayload,
@@ -16,10 +17,13 @@ import { StaffDocumentsCell } from './StaffDocumentsCell'
 import { MasterOptionFieldWithAdd } from './MasterOptionFieldWithAdd'
 import type { BisMasterOptionCategory } from './bisMasterOptions'
 import { ManakPanel, ManakSubPanel } from './ManakStepPages'
+import { CORRESPONDENCE_KIND } from './manakModuleKinds'
+import { RemoteLookupCombobox } from '@/features/bis/shared/RemoteLookupCombobox'
+import { LimsDatePicker } from '@/components/lims/LimsDatePicker'
+import { FilterCombobox } from '@/features/sample-handling/receiving/FilterCombobox'
 
 type Rec = Record<string, unknown>
 
-const CORRESPONDENCE_KIND = 'application-correspondence' as BisPrintDocumentKind
 const ADDRESS_TYPES = ['Office', 'Factory'] as const
 
 const str = (v: unknown) => (typeof v === 'string' ? v : v == null ? '' : String(v))
@@ -42,16 +46,30 @@ async function patchPayload(
   await saveBisModulePayload(projectId, kind, mutate({ ...current }))
 }
 
-/** Preview / PDF / Word icon buttons shown in a panel header. */
-function DocActions({ what, actions }: { what: string; actions?: { preview: () => void; pdf: () => void; word: () => void } }) {
-  if (!actions) return null
+export type ImportDataBundle = { label: string; kinds: BisPrintDocumentKind[] }
+
+/** Import / Preview / PDF / Word icon buttons shown in a panel header. */
+function DocActions({
+  what,
+  actions,
+  onImport,
+}: {
+  what: string
+  actions?: { preview: () => void; pdf: () => void; word: () => void }
+  /** Import this panel's data from another Application / License. */
+  onImport?: () => void
+}) {
+  if (!actions && !onImport) return null
   return (
     <div className="flex shrink-0 items-center gap-1">
       {(
         [
+          ...(onImport ? ([[`Import ${what} from another Application / License`, onImport, Import]] as const) : []),
+          ...(actions ? ([
           [`Preview ${what}`, actions.preview, Eye],
           [`Download ${what} as PDF`, actions.pdf, Download],
           [`Download ${what} as Word`, actions.word, FileType],
+          ] as const) : []),
         ] as const
       ).map(([label, handler, Icon]) => (
         <button
@@ -133,7 +151,7 @@ function AuthorizedSignatoryCell({
   )
 }
 
-type Field = {
+export type Field = {
   key: string
   label: string
   placeholder?: string
@@ -146,6 +164,82 @@ type Field = {
   digits?: number
   /** Select-or-add drop-down backed by a shared master list (the + button adds to it). */
   master?: BisMasterOptionCategory
+  /** Fixed drop-down choices. */
+  options?: string[]
+  /** Native input type (e.g. date). */
+  type?: 'date'
+  /** Free text with a suggestions drop-down (any other value can still be typed). */
+  suggestions?: string[]
+  /** Type-to-search drop-down backed by a master (the selected record's id is kept in idKey). */
+  lookup?: { search: (term: string) => Promise<Array<{ id: string; label: string }>>; idKey: string; placeholder?: string }
+}
+
+/** Free-text cell with suggestions filtered as you type. */
+function SuggestCell({ field, id, value, onChange }: { field: Field; id: string; value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const term = value.trim().toLowerCase()
+  const options = (field.suggestions ?? [])
+    .filter((o, i, all) => o.trim() && all.indexOf(o) === i && (!term || o.toLowerCase().includes(term)))
+    .map((o) => ({ id: o, label: o }))
+  return (
+    <FilterCombobox
+      value={value}
+      onValueChange={(v) => {
+        onChange(v)
+        setOpen(true)
+      }}
+      options={options}
+      onSelectOption={(o) => {
+        onChange(o.label)
+        setOpen(false)
+      }}
+      open={open && options.length > 0}
+      onOpenChange={setOpen}
+      onInputFocus={() => setOpen(true)}
+      placeholder={field.placeholder ?? field.label}
+      inputId={id}
+      listId={`${id}-options`}
+      inputClassName={inputCls}
+      showSerialNumbers={false}
+    />
+  )
+}
+
+/** Searchable master drop-down for one EditableRows cell. */
+function LookupCell({ field, id, row, onChange }: { field: Field; id: string; row: Rec; onChange: (patch: Rec) => void }) {
+  const lookup = field.lookup!
+  return (
+    <div className="border border-stone-400 bg-white">
+      <RemoteLookupCombobox
+        inputId={id}
+        listId={`${id}-options`}
+        placeholder={lookup.placeholder ?? field.placeholder ?? field.label}
+        inputClassName="h-[30px] border-0 px-2 text-sm shadow-none focus-visible:ring-0"
+        label={str(row[field.key])}
+        selectedId={str(row[lookup.idKey])}
+        search={lookup.search}
+        onChange={({ id: picked, label }) => onChange({ [field.key]: label, [lookup.idKey]: picked })}
+      />
+    </div>
+  )
+}
+
+/** Fixed-choice drop-down styled like the other step controls. */
+function OptionSelect({ field, value, onChange }: { field: Field; value: string; onChange: (v: string) => void }) {
+  return (
+    <Select value={value || undefined} onValueChange={onChange}>
+      <SelectTrigger className="mx-auto h-8 w-full min-w-[6rem] rounded-none border-stone-400 bg-white text-sm" aria-label={field.label}>
+        <SelectValue placeholder="Select" />
+      </SelectTrigger>
+      <SelectContent>
+        {field.options?.map((o) => (
+          <SelectItem key={o} value={o}>
+            {o}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
 }
 
 const cleanField = (f: Field, value: string) => (f.digits ? value.replace(/[^0-9]/g, '').slice(0, f.digits) : value)
@@ -161,7 +255,7 @@ const fieldError = (fields: Field[], values: Rec): string | null => {
  * Manak-style editable table: an input row on top with "+", then saved rows
  * with Edit / Delete in the same row. A narrow checkbox column replaces S.No.
  */
-function EditableRows({
+export function EditableRows({
   projectId,
   kind,
   fields,
@@ -170,9 +264,12 @@ function EditableRows({
   saved,
   onChanged,
   addLabel,
+  rowsKey = 'rows',
 }: {
   projectId: string
   kind: BisPrintDocumentKind
+  /** Payload key holding the row list (default "rows"). */
+  rowsKey?: string
   fields: Field[]
   blank: () => Rec
   extraColumns?: Array<{
@@ -192,9 +289,12 @@ function EditableRows({
   const [editDraft, setEditDraft] = useState<Rec>({})
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [busy, setBusy] = useState(false)
+  const listOf = (p: Rec): Rec[] => (Array.isArray(p[rowsKey]) ? (p[rowsKey] as Rec[]) : [])
+  // A row counts once its first (required) column is filled; defaulted drop-downs alone do not.
+  const isFilled = (r: Rec) => Boolean(fields[0] && str(r[fields[0].key]).trim())
 
   const rows = useMemo(
-    () => saved.map((r, index) => ({ r, index })).filter(({ r }) => fields.some((f) => str(r[f.key]).trim())),
+    () => saved.map((r, index) => ({ r, index })).filter(({ r }) => Boolean(fields[0] && str(r[fields[0].key]).trim())),
     [saved, fields],
   )
 
@@ -223,8 +323,11 @@ function EditableRows({
     }
     void run(async () => {
       await patchPayload(projectId, kind, (p) => {
-        const list = rowsOf(p).filter((r) => fields.some((f) => str(r[f.key]).trim()))
-        let next: Rec = { ...p, rows: [...list, { ...blank(), ...draft }] }
+        const list = listOf(p).filter(isFilled)
+        const row: Rec = { ...blank(), ...draft }
+        // A drop-down left on an invalid value saves the default shown on screen.
+        for (const f of fields) if (f.options && !f.options.includes(str(row[f.key]))) row[f.key] = blank()[f.key]
+        let next: Rec = { ...p, [rowsKey]: [...list, row] }
         if (draft.applySignatureToDocuments) {
           next = {
             ...next,
@@ -249,8 +352,8 @@ function EditableRows({
     }
     void run(async () => {
       await patchPayload(projectId, kind, (p) => {
-        const list = rowsOf(p).map((r, i) => (i === editIndex ? { ...r, ...editDraft } : r))
-        return { ...p, rows: list }
+        const list = listOf(p).map((r, i) => (i === editIndex ? { ...r, ...editDraft } : r))
+        return { ...p, [rowsKey]: list }
       })
       setEditIndex(null)
     }, 'Row updated')
@@ -260,8 +363,8 @@ function EditableRows({
     if (indexes.length === 0) return
     void run(async () => {
       await patchPayload(projectId, kind, (p) => {
-        const list = rowsOf(p).filter((_, i) => !indexes.includes(i))
-        return { ...p, rows: list.length > 0 ? list : [blank()] }
+        const list = listOf(p).filter((_, i) => !indexes.includes(i))
+        return { ...p, [rowsKey]: list.length > 0 ? list : [blank()] }
       })
       setSelected(new Set())
     }, indexes.length > 1 ? 'Rows deleted' : 'Row deleted')
@@ -315,7 +418,19 @@ function EditableRows({
               <td className={tdCls} />
               {fields.map((f) => (
                 <td key={f.key} className={tdCls}>
-                  {f.master ? (
+                  {f.options ? (
+                    <OptionSelect
+                      field={f}
+                      value={f.options.includes(str(draft[f.key])) ? str(draft[f.key]) : str(blank()[f.key])}
+                      onChange={(v) => setDraft((d) => ({ ...d, [f.key]: v }))}
+                    />
+                  ) : f.type === 'date' ? (
+                    <LimsDatePicker aria-label={f.label} className="h-8 w-full" value={str(draft[f.key])} onChange={(v) => setDraft((d) => ({ ...d, [f.key]: v }))} />
+                  ) : f.suggestions ? (
+                    <SuggestCell field={f} id={`er-${kind}-${f.key}-new`} value={str(draft[f.key])} onChange={(v) => setDraft((d) => ({ ...d, [f.key]: v }))} />
+                  ) : f.lookup ? (
+                    <LookupCell field={f} id={`er-${kind}-${f.key}-new`} row={draft} onChange={(patch) => setDraft((d) => ({ ...d, ...patch }))} />
+                  ) : f.master ? (
                     <MasterOptionFieldWithAdd
                       category={f.master}
                       label={f.label}
@@ -330,6 +445,7 @@ function EditableRows({
                   ) : (
                   <Input
                     className={inputCls}
+                    type={f.type}
                     placeholder={f.placeholder ?? f.label}
                     value={str(draft[f.key])}
                     onChange={(e) => setDraft({ ...draft, [f.key]: cleanField(f, e.target.value) })}
@@ -383,7 +499,15 @@ function EditableRows({
                     </td>
                     {fields.map((f) => (
                       <td key={f.key} className={cn(tdCls, f.alignLeft ? 'text-left' : 'text-center')}>
-                        {editing && f.master ? (
+                        {editing && f.options ? (
+                          <OptionSelect field={f} value={str(editDraft[f.key])} onChange={(v) => setEditDraft((d) => ({ ...d, [f.key]: v }))} />
+                        ) : editing && f.suggestions ? (
+                          <SuggestCell field={f} id={`er-${kind}-${f.key}-${index}`} value={str(editDraft[f.key])} onChange={(v) => setEditDraft((d) => ({ ...d, [f.key]: v }))} />
+                        ) : editing && f.type === 'date' ? (
+                          <LimsDatePicker aria-label={f.label} className="h-8 w-full" value={str(editDraft[f.key])} onChange={(v) => setEditDraft((d) => ({ ...d, [f.key]: v }))} />
+                        ) : editing && f.lookup ? (
+                          <LookupCell field={f} id={`er-${kind}-${f.key}-${index}`} row={editDraft} onChange={(patch) => setEditDraft((d) => ({ ...d, ...patch }))} />
+                        ) : editing && f.master ? (
                           <MasterOptionFieldWithAdd
                             category={f.master}
                             label={f.label}
@@ -398,13 +522,14 @@ function EditableRows({
                         ) : editing ? (
                           <Input
                             className={inputCls}
+                            type={f.type}
                             value={str(editDraft[f.key])}
                             onChange={(e) => setEditDraft({ ...editDraft, [f.key]: cleanField(f, e.target.value) })}
                             inputMode={f.digits ? 'numeric' : undefined}
                             maxLength={f.digits}
                           />
                         ) : (
-                          str(r[f.key]) || <span className="text-stone-400">—</span>
+                          (f.type === 'date' && str(r[f.key]) ? formatDisplayDate(str(r[f.key])) : str(r[f.key])) || <span className="text-stone-400">—</span>
                         )}
                       </td>
                     ))}
@@ -466,6 +591,7 @@ export function ManakManagementStep({
   onTopManagement,
   onTechnicalStaff,
   projectRow,
+  onImportData,
 }: {
   projectId: string
   client: BisPrintClient | undefined
@@ -477,6 +603,8 @@ export function ManakManagementStep({
   onTopManagement?: { preview: () => void; pdf: () => void; word: () => void }
   onTechnicalStaff?: { preview: () => void; pdf: () => void; word: () => void }
   projectRow?: BisProjectRow | null
+  /** Opens the import dialog for a group of modules (any client's Application / License). */
+  onImportData?: (bundle: ImportDataBundle) => void
 }) {
   const tmRows = rowsOf(topManagement)
   const firstTm = tmRows.find((r) => str(r.personName).trim())
@@ -524,7 +652,13 @@ export function ManakManagementStep({
     <>
       <ManakPanel
         title="Firm's Management Details"
-        headerExtra={<DocActions what="Top Management Details" actions={onTopManagement} />}
+        headerExtra={
+          <DocActions
+            what="Firm's Management Details"
+            actions={onTopManagement}
+            onImport={onImportData ? () => onImportData({ label: "Firm's Management Details", kinds: ['top-management' as BisPrintDocumentKind, CORRESPONDENCE_KIND] }) : undefined}
+          />
+        }
       >
         <ManakSubPanel title="Top Management Details">
           <EditableRows
@@ -628,7 +762,13 @@ export function ManakManagementStep({
 
       <ManakPanel
         title="Technical Management / Quality Assurance / Control Personnel Details"
-        headerExtra={<DocActions what="Technical Staff Details" actions={onTechnicalStaff} />}
+        headerExtra={
+          <DocActions
+            what="Technical Staff Details"
+            actions={onTechnicalStaff}
+            onImport={onImportData ? () => onImportData({ label: 'Technical Staff Details', kinds: ['technical-staff' as BisPrintDocumentKind] }) : undefined}
+          />
+        }
       >
         <EditableRows
           projectId={projectId}
@@ -658,4 +798,3 @@ export function ManakManagementStep({
   )
 }
 
-export { CORRESPONDENCE_KIND }

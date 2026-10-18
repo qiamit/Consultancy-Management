@@ -33,6 +33,7 @@ import {
   type BisPrintOrientation,
   type BisPrintPageSize,
 } from '../print/bisDocumentPrintPageSettings'
+import { paginateHtmlForDownload, withPreviewPagination } from '../print/bisPreviewPagination'
 import { openPendingPrintWindow, openPrintHtml } from '../print/openPrintHtml'
 import { buildApplicationDetailsPackPdf } from './buildApplicationDetailsPackPdf'
 import {
@@ -407,6 +408,9 @@ export function BisDocumentPrintPreviewDialog({
     return applyBisDocumentPrintPageSettings(baseHtml, settings)
   }, [baseHtml, settings])
 
+  /** What the preview frame shows: the same page, with long content flowed onto extra A4 sheets (print / PDF use previewHtml). */
+  const previewFrameHtml = useMemo(() => (previewHtml ? withPreviewPagination(previewHtml) : null), [previewHtml])
+
   const hasPreview = Boolean(visiblePdfUrl || previewHtml)
 
   const setMargin =
@@ -468,7 +472,7 @@ export function BisDocumentPrintPreviewDialog({
       }
       if (!previewHtml) return
       const blob = await renderPdfViaPlaywright({
-        html: previewHtml,
+        html: await paginateHtmlForDownload(previewHtml),
         filename,
         format: mapPageSizeToPlaywrightFormat(settings.pageSize),
         landscape: settings.orientation === 'landscape',
@@ -638,7 +642,7 @@ export function BisDocumentPrintPreviewDialog({
               ) : previewHtml ? (
                 <iframe
                   title={`Preview ${title}`}
-                  srcDoc={previewHtml}
+                  srcDoc={previewFrameHtml ?? undefined}
                   className="h-full min-h-[16rem] w-full border-0 bg-[#a8a29e]"
                 />
               ) : null}

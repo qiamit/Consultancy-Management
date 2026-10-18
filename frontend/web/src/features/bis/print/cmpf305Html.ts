@@ -31,7 +31,45 @@ export type Cmpf305Data = PrintApplicantContext & {
   rows: Cmpf305MachineryRow[]
 }
 
-const ROWS_PER_CONTINUATION_PAGE = 25
+/*
+ * Continuation pages are filled by estimated row height (not a fixed row count) so the seal / signature at the
+ * bottom of each page always fits. Measured on A4 at 11pt: a one-line row is ~25px, each extra wrapped line
+ * ~18px, and ~738px is free for rows between the table header and the signature; the budget keeps a margin
+ * because print pages have slightly less room than the screen preview.
+ */
+const CONTINUATION_ROWS_BUDGET_PX = 700
+const ROW_BASE_PX = 25
+const ROW_EXTRA_LINE_PX = 18
+/** Characters that fit on one line in each column (Sr. No. excluded). */
+const COLUMN_CHARS = { machineryName: 25, make: 19, capacityPerDay: 19, number: 9, remarks: 16 } as const
+
+function estimatedRowHeight(row: Cmpf305MachineryRow): number {
+  const lines = Math.max(
+    1,
+    ...(Object.keys(COLUMN_CHARS) as Array<keyof typeof COLUMN_CHARS>).map((key) =>
+      Math.ceil((row[key] ?? '').trim().length / COLUMN_CHARS[key]) || 1,
+    ),
+  )
+  return ROW_BASE_PX + (lines - 1) * ROW_EXTRA_LINE_PX
+}
+
+function chunkRowsForPages(rows: Cmpf305MachineryRow[]): Cmpf305MachineryRow[][] {
+  const chunks: Cmpf305MachineryRow[][] = []
+  let current: Cmpf305MachineryRow[] = []
+  let used = 0
+  for (const row of rows) {
+    const h = estimatedRowHeight(row)
+    if (current.length > 0 && used + h > CONTINUATION_ROWS_BUDGET_PX) {
+      chunks.push(current)
+      current = []
+      used = 0
+    }
+    current.push(row)
+    used += h
+  }
+  if (current.length > 0) chunks.push(current)
+  return chunks
+}
 
 function dateOrNa(raw: string): string {
   const value = (raw ?? '').trim()
@@ -146,18 +184,13 @@ function buildBody(data: Cmpf305Data): string {
   const dateApp = dateOrNa(data.dateOfApplication)
   const dateInsp = inspectionDateOrToday(data.dateOfInspection)
   const rows = data.rows.filter((row) => Object.values(row).some((value) => value.trim()))
-  const chunks: Cmpf305MachineryRow[][] = []
-  const continuationCount = Math.ceil(rows.length / ROWS_PER_CONTINUATION_PAGE)
-  for (let i = 0; i < continuationCount; i += 1) {
-    chunks.push(rows.slice(i * ROWS_PER_CONTINUATION_PAGE, (i + 1) * ROWS_PER_CONTINUATION_PAGE))
-  }
-  return firstPage(data, appNo, dateApp, dateInsp) + chunks.map((chunk, index) => continuationPage(
-    data,
-    appNo,
-    dateInsp,
-    chunk,
-    index * ROWS_PER_CONTINUATION_PAGE,
-  )).join('')
+  const chunks = chunkRowsForPages(rows)
+  let start = 0
+  return firstPage(data, appNo, dateApp, dateInsp) + chunks.map((chunk) => {
+    const page = continuationPage(data, appNo, dateInsp, chunk, start)
+    start += chunk.length
+    return page
+  }).join('')
 }
 
 const STYLES = `

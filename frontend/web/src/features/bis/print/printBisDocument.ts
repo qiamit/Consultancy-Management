@@ -78,6 +78,16 @@ import {
   subcontractedTestsDataFromPrintData,
 } from './subcontractedTestsHtml'
 import {
+  buildHygieneConditionsHtml,
+  buildManufacturingSubcontractingHtml,
+  buildPackagingMarkingHtml,
+  buildRawMaterialTestReportsHtml,
+  hygieneConditionsDataFromPrintData,
+  manufacturingSubcontractingDataFromPrintData,
+  packagingMarkingDataFromPrintData,
+  rawMaterialTestReportsDataFromPrintData,
+} from './manufacturingStepDocumentsHtml'
+import {
   buildTechnicalStaffHtml,
   technicalStaffDataFromPrintData,
 } from './technicalStaffHtml'
@@ -146,6 +156,11 @@ export type BisPrintDocumentKind =
   | 'plant-layout'
   | 'osl-courier-labels'
   | 'location-map'
+  | 'manufacturing-subcontracting'
+  | 'hygiene-conditions'
+  | 'packaging-marking'
+  | 'raw-material-test-reports'
+  | 'osl-offer-and-test-request'
 
 export const BIS_PRINT_DOCUMENT_LABEL: Record<BisPrintDocumentKind, string> = {
   'legal-documents': 'Legal Documents',
@@ -185,6 +200,11 @@ export const BIS_PRINT_DOCUMENT_LABEL: Record<BisPrintDocumentKind, string> = {
   'plant-layout': 'Plant Layout',
   'osl-courier-labels': 'OSL Courier Labels',
   'location-map': 'Location Map',
+  'manufacturing-subcontracting': 'Sub-Contracting of Manufacturing Machinery',
+  'hygiene-conditions': 'Hygiene Conditions',
+  'packaging-marking': 'Packaging and Marking',
+  'raw-material-test-reports': 'Raw Material Test Reports',
+  'osl-offer-and-test-request': 'Sample Offer Letter & Test Request',
 }
 
 /** Documents offered in the "More prints" menu (Form-I and Authorization Letter have their own buttons). */
@@ -204,6 +224,8 @@ export const EXTRA_PRINT_KINDS: BisPrintDocumentKind[] = [
   'location-map',
   'plant-layout',
   'process-flow-chart',
+  'manufacturing-subcontracting',
+  'hygiene-conditions',
   'subcontracted-tests',
   'osl-sample-test-request',
   'osl-courier-labels',
@@ -255,7 +277,8 @@ export function printKindToStorageDocKind(kind: BisPrintDocumentKind): string {
 }
 
 /** Every View Documents row opens Module Edit. */
-export const BIS_FILE_MODULE_KINDS: BisPrintDocumentKind[] = [...ALL_BIS_PRINT_KINDS, 'form1']
+// Process Description has no list row of its own but opens its own editor (Step 3).
+export const BIS_FILE_MODULE_KINDS: BisPrintDocumentKind[] = [...ALL_BIS_PRINT_KINDS, 'form1', 'process-description']
 
 /**
  * Prefer merged uploaded PDFs when present.
@@ -405,6 +428,12 @@ const HTML_BUILDERS: Record<BisPrintDocumentKind, (data: BisPrintData) => string
   'plant-layout': (d) => buildPlantLayoutHtml(plantLayoutDataFromPrintData(d)),
   'osl-courier-labels': (d) => buildOslCourierLabelsHtml(oslCourierLabelsDataFromPrintData(d)),
   'location-map': (d) => buildLocationMapHtml(locationMapDataFromPrintData(d)),
+  'manufacturing-subcontracting': (d) => buildManufacturingSubcontractingHtml(manufacturingSubcontractingDataFromPrintData(d)),
+  'hygiene-conditions': (d) => buildHygieneConditionsHtml(hygieneConditionsDataFromPrintData(d)),
+  'packaging-marking': (d) => buildPackagingMarkingHtml(packagingMarkingDataFromPrintData(d)),
+  'raw-material-test-reports': (d) => buildRawMaterialTestReportsHtml(rawMaterialTestReportsDataFromPrintData(d)),
+  // Step 6 "Sample Offer Letter & Test Request": the offer letter page only (no Test Request / Factory Test Report pages).
+  'osl-offer-and-test-request': (d) => buildOslSampleRequirementsHtml(oslSampleRequirementsDataFromPrintData(d)),
   'all-required-undertakings': (d) => allRequiredUndertakingsHtml(d),
   'raw-material-reference': (d) => combinePrintHtmlDocuments('Raw Material & Reference Material', [
     buildRawMaterialDetailsHtml(rawMaterialDetailsDataFromPrintData(d)),
@@ -423,11 +452,13 @@ export async function buildBisDocumentHtml(
   const modulePayloadKind =
     kind === 'process-description'
       ? 'process-flow-chart'
-      : kind === 'osl-sample-test-request' || kind === 'osl-courier-labels'
+      : kind === 'osl-sample-test-request' || kind === 'osl-courier-labels' || kind === 'osl-offer-and-test-request'
         ? 'osl-sample-requirements'
         : kind === 'marking-fee-acceptance'
           ? 'cmpf-311'
-          : kind
+          : kind === 'raw-material-details' || kind === 'certified-reference-materials'
+            ? 'raw-material-reference'
+            : kind
   const [
     printData,
     modulePayload,
@@ -469,7 +500,7 @@ export async function buildBisDocumentHtml(
   }
 
   if (kind === 'self-evaluation-form' || kind === 'all-required-undertakings') {
-    const [rawMaterials, technicalStaff, brandData, selfEvaluation, generalUndertaking, longDurationUndertaking, minimumFeeUndertaking] = await Promise.all([
+    const [rawMaterials, technicalStaff, brandData, selfEvaluation, generalUndertaking, longDurationUndertaking, minimumFeeUndertaking, packagingMarking] = await Promise.all([
       fetchBisModulePayload(row.id, 'raw-material-reference').catch(() => null),
       fetchBisModulePayload(row.id, 'technical-staff').catch(() => null),
       fetchBisModulePayload(row.id, 'cmpf-307').catch(() => null),
@@ -485,6 +516,8 @@ export async function buildBisDocumentHtml(
       kind === 'all-required-undertakings'
         ? fetchBisModulePayload(row.id, 'undertaking-mmf').catch(() => null)
         : Promise.resolve(null),
+      // SEF "Packaging & Marking" is linked to Step 4 Packaging and Marking.
+      fetchBisModulePayload(row.id, 'packaging-marking').catch(() => null),
     ])
     data = {
       ...data,
@@ -496,14 +529,27 @@ export async function buildBisDocumentHtml(
           brands: brandData?.rows,
           brandsWithoutMarkReasons: brandData?.brandsWithoutMarkReasons,
           selfEvaluation,
+          packagingMarking,
         },
         __undertakingSources: {
           general: generalUndertaking,
-          longDuration: longDurationUndertaking,
+          longDuration:
+            kind === 'all-required-undertakings'
+              ? {
+                  ...(longDurationUndertaking ?? {}),
+                  __longDurationTests: (await fetchBisModulePayload(row.id, 'long-duration-tests' as BisPrintDocumentKind).catch(() => null))?.rows,
+                }
+              : longDurationUndertaking,
           minimumFee: minimumFeeUndertaking,
         },
       },
     }
+  }
+
+  // The Undertaking's test table comes from Step 6 → Long Duration Tests.
+  if (kind === 'undertaking-long-duration') {
+    const longDuration = await fetchBisModulePayload(row.id, 'long-duration-tests' as BisPrintDocumentKind).catch(() => null)
+    data = { ...data, modulePayload: { ...(data.modulePayload ?? {}), __longDurationTests: longDuration?.rows } }
   }
 
   if (kind === 'location-map') {

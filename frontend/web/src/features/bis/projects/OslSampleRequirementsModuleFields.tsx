@@ -4,16 +4,15 @@ import {
   Copy,
   Download,
   ExternalLink,
-  Eye,
+  FileCheck2,
   FileDown,
   FileText,
   FolderInput,
   Globe,
+  Loader2,
   Package,
   Pencil,
   Plus,
-  ScrollText,
-  Sparkles,
   Trash2,
   Upload,
 } from 'lucide-react'
@@ -21,14 +20,6 @@ import QRCode from 'qrcode'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -56,15 +47,11 @@ import { formatMoneyInput, sanitizeMoneyInput } from '@/features/masters/product
 import { RemoteLookupCombobox } from '@/features/bis/shared/RemoteLookupCombobox'
 import { MasterOptionFieldWithAdd } from './MasterOptionFieldWithAdd'
 import { fetchBisProjectById, fetchIsCodeTestingCharges, fetchTestingLaboratoryAddressByName } from './bisProjectsApi'
-import { fetchBisModulePayload, resolveTechnicalStaffForTestedBy, saveBisModulePayload } from './bisModuleDataApi'
-import { loadBisProjectPrintPageSettings } from './bisPrintPageSettingsApi'
-import { FactoryTestReportModuleFields, type FactoryTestReportPreviewContext } from './FactoryTestReportModuleFields'
+import { fetchBisModulePayload, resolveTechnicalStaffForTestedBy } from './bisModuleDataApi'
 import {
   applySampleToFactoryTestReport,
   emptyFactoryTestReportEntry,
-  emptyFactoryTestReportPayload,
   parseFactoryTestReportPayload,
-  type FactoryTestReportModulePayload,
 } from './factoryTestReportModel'
 import {
   buildOslCourierSlipHtml,
@@ -78,8 +65,7 @@ import {
   buildFactoryTestReportHtml,
   factoryTestReportDataFromPrintData,
 } from '../print/factoryTestReportHtml'
-import { applyBisDocumentPrintPageSettings } from '../print/bisDocumentPrintPageSettings'
-import { loadBisPrintData, printSignatoryDefaults } from '../print/loadBisPrintData'
+import { loadBisPrintData } from '../print/loadBisPrintData'
 import { openPendingPrintWindow, openPrintHtml } from '../print/openPrintHtml'
 import {
   buildManakTrPayload,
@@ -145,14 +131,6 @@ const CARDS_MQ_SHOW = 'xl:hidden'
 const cardFieldLabelClass =
   'mb-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-stone-500'
 
-const fileMenuContentClass =
-  'z-[80] min-w-[12.5rem] overflow-hidden rounded-none border-2 border-stone-600 bg-[#fffcf7] p-1 shadow-xl ring-1 ring-amber-700/25'
-const fileMenuLabelClass =
-  'px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-amber-900/80'
-const fileMenuItemClass =
-  'cursor-pointer gap-2.5 rounded-none px-2 py-2 text-[13px] font-semibold text-stone-800 focus:bg-amber-100 focus:text-amber-950 data-[disabled]:opacity-40'
-const fileMenuIconWrapClass =
-  'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-none border border-stone-400 bg-white text-amber-900'
 
 function openDatePicker(el: HTMLInputElement | null) {
   if (!el || el.disabled) return
@@ -239,6 +217,7 @@ export function OslSampleRequirementsModuleFields({
   const [declaredValueUploadBusy, setDeclaredValueUploadBusy] = useState(false)
   const [testingChargesFocused, setTestingChargesFocused] = useState(false)
   const declaredValueFileInputRef = useRef<HTMLInputElement | null>(null)
+  const declaredValueClickTimer = useRef<number | null>(null)
   const [labClientId, setLabClientId] = useState('')
   const manufacturingDateRef = useRef<HTMLInputElement | null>(null)
   const paymentDateRef = useRef<HTMLInputElement | null>(null)
@@ -269,15 +248,6 @@ export function OslSampleRequirementsModuleFields({
     isNumber: string
     applicationNo: string
   }>({ name: '', address: '', isNumber: '', applicationNo: '' })
-  const [testReportGenerateOpen, setTestReportGenerateOpen] = useState(false)
-  const [testReportGenerateBusy, setTestReportGenerateBusy] = useState(false)
-  const [testReportGenerateLoading, setTestReportGenerateLoading] = useState(false)
-  const [testReportGeneratePayload, setTestReportGeneratePayload] =
-    useState<FactoryTestReportModulePayload>(() => emptyFactoryTestReportPayload())
-  const [testReportGenerateSampleId, setTestReportGenerateSampleId] = useState<string | null>(null)
-  const [testReportPreviewContext, setTestReportPreviewContext] =
-    useState<FactoryTestReportPreviewContext | null>(null)
-  const [testReportQcSignatureUrl, setTestReportQcSignatureUrl] = useState('')
   const [extensionBusyId, setExtensionBusyId] = useState<string | null>(null)
   const [mergeBusy, setMergeBusy] = useState(false)
   const pendingManakTokensRef = useRef<Map<string, string>>(new Map())
@@ -839,31 +809,6 @@ export function OslSampleRequirementsModuleFields({
       })
   }
 
-  const downloadTestRequest = (row: OslSampleRequirementRow) => {
-    if (!row.testRequestStoragePath.trim()) {
-      toast.error('No Test Request PDF attached yet.')
-      return
-    }
-    const filename = row.testRequestFileName.trim() || 'Test_Request.pdf'
-    void createBisProjectFileUrls(row.testRequestStoragePath, filename)
-      .then(({ downloadUrl, viewUrl }) => {
-        const href = downloadUrl || viewUrl
-        if (!href) {
-          toast.error('Could not download Test Request PDF.')
-          return
-        }
-        const a = document.createElement('a')
-        a.href = href
-        a.download = filename
-        a.rel = 'noopener'
-        document.body.appendChild(a)
-        a.click()
-        a.remove()
-      })
-      .catch((err) => {
-        toast.error(err instanceof Error ? err.message : 'Could not download Test Request PDF.')
-      })
-  }
 
   const deleteTestRequest = (row: OslSampleRequirementRow) => {
     if (!row.testRequestStoragePath.trim() && !row.testRequestFileId.trim()) {
@@ -935,275 +880,6 @@ export function OslSampleRequirementsModuleFields({
       })
   }
 
-  const openGenerateTestReport = (row: OslSampleRequirementRow) => {
-    const pid = (projectId ?? '').trim()
-    if (!pid) {
-      toast.error('Save the BIS project first, then generate a Test Report.')
-      return
-    }
-    setTestReportGenerateSampleId(row.id)
-    setTestReportPreviewContext(null)
-    setTestReportQcSignatureUrl('')
-    setTestReportGenerateOpen(true)
-    setTestReportGenerateLoading(true)
-    void (async () => {
-      try {
-        const [raw, project, techRaw] = await Promise.all([
-          fetchBisModulePayload(pid, 'factory-test-report'),
-          fetchBisProjectById(pid),
-          fetchBisModulePayload(pid, 'technical-staff').catch(() => null),
-        ])
-        const parsed = parseFactoryTestReportPayload(raw)
-        const hasSample = parsed.reports.some((r) => r.sampleRowId === row.id)
-        let next: FactoryTestReportModulePayload = hasSample
-          ? parsed
-          : {
-              ...parsed,
-              reports: [
-                ...parsed.reports,
-                applySampleToFactoryTestReport(emptyFactoryTestReportEntry(), row),
-              ],
-            }
-        next = {
-          ...next,
-          reports: next.reports.map((r) =>
-            r.sampleRowId === row.id ? applySampleToFactoryTestReport(r, row) : r,
-          ),
-        }
-
-        const techPerson = resolveTechnicalStaffForTestedBy(techRaw)
-        let qcSignatureUrl = ''
-        if (techPerson?.applySignatureToDocuments && techPerson.signatureStoragePath) {
-          try {
-            const urls = await createBisProjectFileUrls(
-              techPerson.signatureStoragePath,
-              techPerson.signatureFileName || 'signature',
-            )
-            qcSignatureUrl = urls.viewUrl?.trim() || ''
-          } catch {
-            qcSignatureUrl = ''
-          }
-        }
-
-        if (project) {
-          const printData = await loadBisPrintData(project)
-          const ctx = factoryTestReportDataFromPrintData({
-            ...printData,
-            modulePayload: next as unknown as Record<string, unknown>,
-          })
-          const sig = printSignatoryDefaults(printData)
-
-          next = {
-            ...next,
-            // Witnessed By — Application Details (BIS project) is source of truth.
-            inspectionOfficerName:
-              (project.inspection_officer_name ?? '').trim() ||
-              next.inspectionOfficerName.trim() ||
-              ctx.inspectionOfficerName,
-            inspectionOfficerDesignation:
-              (project.inspection_officer_designation ?? '').trim() ||
-              next.inspectionOfficerDesignation.trim() ||
-              ctx.inspectionOfficerDesignation,
-            authorisedName: next.authorisedName.trim() || sig.signatoryName || ctx.authorisedName,
-            authorisedDesignation:
-              next.authorisedDesignation.trim() ||
-              sig.signatoryDesignation ||
-              ctx.authorisedDesignation,
-            // Tested By — Technical Staff module is source of truth.
-            testedByName:
-              (techPerson?.personName ?? '').trim() ||
-              next.testedByName.trim() ||
-              ctx.testedByName,
-            testedByDesignation:
-              (techPerson?.designation ?? '').trim() ||
-              (() => {
-                const fallback =
-                  (techPerson?.personName ? '' : next.testedByDesignation.trim()) ||
-                  ctx.testedByDesignation
-                return fallback === 'Technical Staff / Quality Control Incharge'
-                  ? ''
-                  : fallback
-              })(),
-          }
-
-          setTestReportPreviewContext({
-            applicantName: ctx.applicantName,
-            applicantAddress: ctx.applicantAddress,
-            applicationNumber: ctx.applicationNumber,
-            dateOfApplication: ctx.dateOfApplication,
-            dateOfInspection: ctx.dateOfInspection,
-            licenceNumber: ctx.applicationNumber,
-            isNumber: ctx.isNumber,
-            productTitle: ctx.productTitle || ctx.isTitle,
-            inspectionOfficerName:
-              (project.inspection_officer_name ?? '').trim() ||
-              next.inspectionOfficerName.trim(),
-            inspectionOfficerDesignation:
-              (project.inspection_officer_designation ?? '').trim() ||
-              next.inspectionOfficerDesignation.trim(),
-            testedByName: next.testedByName.trim(),
-            testedByDesignation: next.testedByDesignation.trim(),
-          })
-        } else if (techPerson) {
-          next = {
-            ...next,
-            testedByName: techPerson.personName || next.testedByName.trim(),
-            testedByDesignation: techPerson.designation || next.testedByDesignation.trim(),
-          }
-        }
-
-        setTestReportQcSignatureUrl(qcSignatureUrl)
-        setTestReportGeneratePayload(next)
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Could not load Test Report module.')
-        setTestReportGeneratePayload({
-          ...emptyFactoryTestReportPayload(),
-          reports: [applySampleToFactoryTestReport(emptyFactoryTestReportEntry(), row)],
-        })
-      } finally {
-        setTestReportGenerateLoading(false)
-      }
-    })()
-  }
-
-  const saveGenerateTestReport = async () => {
-    const pid = (projectId ?? '').trim()
-    if (!pid) throw new Error('Save the BIS project first, then save the Test Report.')
-    await saveBisModulePayload(
-      pid,
-      'factory-test-report',
-      testReportGeneratePayload as unknown as Record<string, unknown>,
-    )
-  }
-
-  const handleGenerateTestReportSave = () => {
-    setTestReportGenerateBusy(true)
-    void saveGenerateTestReport()
-      .then(() => toast.success('Test Report module saved.'))
-      .catch((err) =>
-        toast.error(err instanceof Error ? err.message : 'Could not save Test Report.'),
-      )
-      .finally(() => setTestReportGenerateBusy(false))
-  }
-
-  const handleGenerateTestReportPrint = () => {
-    const pid = (projectId ?? '').trim()
-    if (!pid) {
-      toast.error('Save the BIS project first, then print the Test Report.')
-      return
-    }
-    setTestReportGenerateBusy(true)
-    void (async () => {
-      try {
-        await saveGenerateTestReport()
-        const project = await fetchBisProjectById(pid)
-        if (!project) throw new Error('BIS project not found.')
-        const printData = await loadBisPrintData(project)
-        const data = {
-          ...factoryTestReportDataFromPrintData({
-            ...printData,
-            modulePayload: testReportGeneratePayload as unknown as Record<string, unknown>,
-          }),
-          reports: testReportGeneratePayload.reports,
-          inspectionOfficerName:
-            (project.inspection_officer_name ?? '').trim() ||
-            testReportGeneratePayload.inspectionOfficerName,
-          inspectionOfficerDesignation:
-            (project.inspection_officer_designation ?? '').trim() ||
-            testReportGeneratePayload.inspectionOfficerDesignation,
-          authorisedName: testReportGeneratePayload.authorisedName,
-          authorisedDesignation: testReportGeneratePayload.authorisedDesignation,
-          testedByName: testReportGeneratePayload.testedByName,
-          testedByDesignation: testReportGeneratePayload.testedByDesignation,
-          testedBySignatureImageUrl: testReportQcSignatureUrl,
-        }
-        const html = applyBisDocumentPrintPageSettings(
-          buildFactoryTestReportHtml(data),
-          await loadBisProjectPrintPageSettings(pid),
-        )
-        const pending = openPendingPrintWindow('Preparing Test Report…')
-        const err = openPrintHtml(html, { target: pending })
-        if (err) toast.error(err)
-        else toast.success('Test Report ready to print.')
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Could not print Test Report.')
-      } finally {
-        setTestReportGenerateBusy(false)
-      }
-    })()
-  }
-
-  const handleGenerateTestReportDownload = () => {
-    const pid = (projectId ?? '').trim()
-    if (!pid) {
-      toast.error('Save the BIS project first, then download the Test Report.')
-      return
-    }
-    setTestReportGenerateBusy(true)
-    void (async () => {
-      try {
-        await saveGenerateTestReport()
-        const project = await fetchBisProjectById(pid)
-        if (!project) throw new Error('BIS project not found.')
-        const printData = await loadBisPrintData(project)
-        const data = {
-          ...factoryTestReportDataFromPrintData({
-            ...printData,
-            modulePayload: testReportGeneratePayload as unknown as Record<string, unknown>,
-          }),
-          reports: testReportGeneratePayload.reports,
-          inspectionOfficerName:
-            (project.inspection_officer_name ?? '').trim() ||
-            testReportGeneratePayload.inspectionOfficerName,
-          inspectionOfficerDesignation:
-            (project.inspection_officer_designation ?? '').trim() ||
-            testReportGeneratePayload.inspectionOfficerDesignation,
-          authorisedName: testReportGeneratePayload.authorisedName,
-          authorisedDesignation: testReportGeneratePayload.authorisedDesignation,
-          testedByName: testReportGeneratePayload.testedByName,
-          testedByDesignation: testReportGeneratePayload.testedByDesignation,
-          testedBySignatureImageUrl: testReportQcSignatureUrl,
-        }
-        const isLabel =
-          (isCodeSearch ?? '').trim() ||
-          isCodeLabel.trim() ||
-          (printData.isNumber ?? '').trim() ||
-          ''
-        const isDigits =
-          isLabel.replace(/^is\s*/i, '').match(/\d{3,7}/)?.[0] ||
-          isLabel.replace(/[^\d]/g, '') ||
-          ''
-        const focusId = (testReportGenerateSampleId ?? '').trim()
-        const activeReport =
-          (focusId
-            ? testReportGeneratePayload.reports.find((r) => r.sampleRowId === focusId)
-            : null) ??
-          testReportGeneratePayload.reports[0] ??
-          null
-        const batchRaw = (activeReport?.batchNumber ?? '').trim()
-        const batchSafe = batchRaw.replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim()
-        const filename = isDigits
-          ? batchSafe
-            ? `IS ${isDigits} Test Report - ${batchSafe}.pdf`
-            : `IS ${isDigits} Test Report.pdf`
-          : batchSafe
-            ? `Test Report - ${batchSafe}.pdf`
-            : 'Test Report.pdf'
-        await downloadPdfViaPlaywright({
-          html: applyBisDocumentPrintPageSettings(
-            buildFactoryTestReportHtml(data),
-            await loadBisProjectPrintPageSettings(pid),
-          ),
-          filename,
-        })
-        toast.success('Test Report PDF downloaded.')
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Could not download Test Report.')
-      } finally {
-        setTestReportGenerateBusy(false)
-      }
-    })()
-  }
 
   const openCourierSlipForm = (row: OslSampleRequirementRow) => {
     setCourierDraft({ ...row })
@@ -1601,31 +1277,6 @@ export function OslSampleRequirementsModuleFields({
       })
   }
 
-  const downloadTestReport = (row: OslSampleRequirementRow) => {
-    if (!row.testReportStoragePath.trim()) {
-      toast.error('No Test Report PDF attached yet.')
-      return
-    }
-    const filename = row.testReportFileName.trim() || 'Test_Report.pdf'
-    void createBisProjectFileUrls(row.testReportStoragePath, filename)
-      .then(({ downloadUrl, viewUrl }) => {
-        const href = downloadUrl || viewUrl
-        if (!href) {
-          toast.error('Could not download Test Report PDF.')
-          return
-        }
-        const a = document.createElement('a')
-        a.href = href
-        a.download = filename
-        a.rel = 'noopener'
-        document.body.appendChild(a)
-        a.click()
-        a.remove()
-      })
-      .catch((err) => {
-        toast.error(err instanceof Error ? err.message : 'Could not download Test Report PDF.')
-      })
-  }
 
   const deleteTestReport = (row: OslSampleRequirementRow) => {
     if (!row.testReportStoragePath.trim() && !row.testReportFileId.trim()) {
@@ -1769,24 +1420,6 @@ export function OslSampleRequirementsModuleFields({
       .catch((err) => toast.error(err instanceof Error ? err.message : 'Could not open the PDF.'))
   }
 
-  const downloadDeclaredValueFile = (row: OslSampleRequirementRow) => {
-    if (!row.declaredValueStoragePath) return
-    const filename = row.declaredValueFileName || 'Declared_Value.pdf'
-    void createBisProjectFileUrls(row.declaredValueStoragePath, filename)
-      .then(({ downloadUrl, viewUrl }) => {
-        const url = downloadUrl || viewUrl
-        if (!url) return toast.error('Could not download the attached PDF.')
-        const anchor = document.createElement('a')
-        anchor.href = url
-        anchor.download = filename
-        anchor.rel = 'noopener'
-        document.body.appendChild(anchor)
-        anchor.click()
-        anchor.remove()
-      })
-      .catch((err) => toast.error(err instanceof Error ? err.message : 'Could not download the PDF.'))
-  }
-
   const deleteDeclaredValueFile = (row: OslSampleRequirementRow) => {
     if (!row.declaredValueFileId) return
     void deleteBisProjectFile({
@@ -1859,137 +1492,80 @@ export function OslSampleRequirementsModuleFields({
     </div>
   )
 
-  const renderFileActionMenu = ({
-    title,
+
+  // One button per file: red uploads from the computer; once attached it turns green — click to view (new tab),
+  // double-click to delete (after confirmation).
+  const fileClickTimers = useRef<Record<string, number>>({})
+  const renderFileToggle = ({
+    key,
+    label,
     hasFile,
-    triggerTitle,
-    triggerAriaLabel,
-    triggerIcon,
-    onGenerate,
-    onView,
     onUpload,
-    onDownload,
+    onView,
     onDelete,
   }: {
-    title: string
+    key: string
+    label: string
     hasFile: boolean
-    triggerTitle: string
-    triggerAriaLabel: string
-    triggerIcon: ReactNode
-    onGenerate?: () => void
-    onView: () => void
     onUpload: () => void
-    onDownload: () => void
+    onView: () => void
     onDelete: () => void
-  }) => (
-    <DropdownMenu modal={false}>
-      <DropdownMenuTrigger asChild>
-        <Button
+  }) => {
+    const btn = 'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-none border p-0 text-white shadow-sm transition-colors disabled:opacity-60'
+    if (!hasFile) {
+      return (
+        <button
           type="button"
-          size="sm"
-          variant="outline"
-          className={cn(
-            limsOutlineBtnClass,
-            actionBtnClass,
-            hasFile ? 'border-amber-600 bg-amber-50 text-amber-950' : null,
-          )}
+          className={cn(btn, 'border-red-700 bg-red-600 hover:bg-red-700')}
+          title={`Upload ${label} (PDF)`}
+          aria-label={`Upload ${label}`}
           disabled={disabled}
-          title={triggerTitle}
-          aria-label={triggerAriaLabel}
+          onClick={onUpload}
         >
-          {triggerIcon}
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" sideOffset={6} className={fileMenuContentClass}>
-        <DropdownMenuLabel className={fileMenuLabelClass}>{title}</DropdownMenuLabel>
-        <DropdownMenuSeparator className="mx-1 bg-stone-300" />
-        {onGenerate ? (
-          <DropdownMenuItem
-            disabled={disabled}
-            className={fileMenuItemClass}
-            onSelect={onGenerate}
-          >
-            <span className={cn(fileMenuIconWrapClass, 'border-violet-500 bg-violet-50 text-violet-800')}>
-              <Sparkles className="h-3.5 w-3.5" aria-hidden />
-            </span>
-            Generate
-          </DropdownMenuItem>
-        ) : null}
-        <DropdownMenuItem
-          disabled={disabled || !hasFile}
-          className={fileMenuItemClass}
-          onSelect={onView}
-        >
-          <span className={cn(fileMenuIconWrapClass, 'border-sky-400 bg-sky-50 text-sky-800')}>
-            <Eye className="h-3.5 w-3.5" aria-hidden />
-          </span>
-          View
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          disabled={disabled}
-          className={fileMenuItemClass}
-          onSelect={onUpload}
-        >
-          <span className={cn(fileMenuIconWrapClass, 'border-amber-500 bg-amber-50 text-amber-900')}>
-            <Upload className="h-3.5 w-3.5" aria-hidden />
-          </span>
-          Upload
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          disabled={disabled || !hasFile}
-          className={fileMenuItemClass}
-          onSelect={onDownload}
-        >
-          <span className={cn(fileMenuIconWrapClass, 'border-emerald-500 bg-emerald-50 text-emerald-800')}>
-            <Download className="h-3.5 w-3.5" aria-hidden />
-          </span>
-          Download
-        </DropdownMenuItem>
-        <DropdownMenuSeparator className="mx-1 bg-stone-300" />
-        <DropdownMenuItem
-          disabled={disabled || !hasFile}
-          className={cn(fileMenuItemClass, 'text-red-700 focus:bg-red-50 focus:text-red-800')}
-          onSelect={onDelete}
-        >
-          <span className={cn(fileMenuIconWrapClass, 'border-red-400 bg-red-50 text-red-700')}>
-            <Trash2 className="h-3.5 w-3.5" aria-hidden />
-          </span>
-          Delete
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
+          <Upload size={14} aria-hidden />
+        </button>
+      )
+    }
+    return (
+      <button
+        type="button"
+        className={cn(btn, 'border-green-800 bg-green-600 hover:bg-green-700')}
+        title={`${label} — click to view, double-click to delete`}
+        aria-label={`View ${label} (double-click to delete)`}
+        disabled={disabled}
+        onClick={() => {
+          window.clearTimeout(fileClickTimers.current[key])
+          fileClickTimers.current[key] = window.setTimeout(onView, 250)
+        }}
+        onDoubleClick={() => {
+          window.clearTimeout(fileClickTimers.current[key])
+          if (window.confirm(`Delete the ${label}?`)) onDelete()
+        }}
+      >
+        <FileCheck2 size={14} aria-hidden />
+      </button>
+    )
+  }
 
-  const renderTestRequestMenu = (row: OslSampleRequirementRow) => {
-    const hasFile = Boolean(row.testRequestStoragePath.trim() || row.testRequestFileId.trim())
-    return renderFileActionMenu({
-      title: 'Test Request',
-      hasFile,
-      triggerTitle: 'Test Request',
-      triggerAriaLabel: 'Test request',
-      triggerIcon: <FileText size={14} aria-hidden />,
-      onView: () => viewTestRequest(row),
+  const renderTestRequestMenu = (row: OslSampleRequirementRow) =>
+    renderFileToggle({
+      key: `${row.id}:request`,
+      label: 'Test Request',
+      hasFile: Boolean(row.testRequestStoragePath.trim() || row.testRequestFileId.trim()),
       onUpload: () => openTestRequestUpload(row),
-      onDownload: () => downloadTestRequest(row),
+      onView: () => viewTestRequest(row),
       onDelete: () => deleteTestRequest(row),
     })
-  }
 
-  const renderTestReportMenu = (row: OslSampleRequirementRow) => {
-    const hasFile = Boolean(row.testReportStoragePath.trim() || row.testReportFileId.trim())
-    return renderFileActionMenu({
-      title: 'Test Report',
-      hasFile,
-      triggerTitle: 'Test Report',
-      triggerAriaLabel: 'Test report',
-      triggerIcon: <ScrollText size={14} aria-hidden />,
-      onGenerate: () => openGenerateTestReport(row),
-      onView: () => viewTestReport(row),
+  const renderTestReportMenu = (row: OslSampleRequirementRow) =>
+    renderFileToggle({
+      key: `${row.id}:report`,
+      label: 'Test Report',
+      hasFile: Boolean(row.testReportStoragePath.trim() || row.testReportFileId.trim()),
       onUpload: () => openTestReportUpload(row),
-      onDownload: () => downloadTestReport(row),
+      onView: () => viewTestReport(row),
       onDelete: () => deleteTestReport(row),
     })
-  }
 
   const renderDocButtons = (row: OslSampleRequirementRow) => (
     <div className="inline-flex flex-wrap items-center gap-0.5">
@@ -2834,114 +2410,6 @@ export function OslSampleRequirementsModuleFields({
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={testReportGenerateOpen}
-        onOpenChange={(open) => {
-          if (!open) {
-            setTestReportGenerateOpen(false)
-            setTestReportGenerateBusy(false)
-            setTestReportGenerateLoading(false)
-            setTestReportGenerateSampleId(null)
-            setTestReportPreviewContext(null)
-            setTestReportQcSignatureUrl('')
-          }
-        }}
-      >
-        <DialogContent
-          persistOnFocusLoss
-          layer="top"
-          aria-describedby={undefined}
-          className={cn(
-            'flex !flex-col gap-0 overflow-hidden p-0',
-            '!flex h-[100dvh] max-h-[100dvh] translate-x-0 translate-y-0 rounded-none border-0 bg-stone-100 shadow-none sm:rounded-none',
-            'left-[var(--app-dialog-overlay-left,0px)] top-0 right-0',
-            'w-[calc(100vw-var(--app-dialog-overlay-left,0px))] max-w-none',
-            'border-stone-600 ring-1 ring-amber-700/20',
-          )}
-        >
-          <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white">
-            <div
-              className="pointer-events-none absolute inset-0 opacity-[0.18]"
-              style={limsDarkBarGlowStyle}
-            />
-            <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
-            <DialogHeader className="relative pr-10 text-left">
-              <DialogTitle className="text-base font-semibold tracking-tight text-white">
-                Generate Test Report
-              </DialogTitle>
-            </DialogHeader>
-          </div>
-
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            {testReportGenerateLoading ? (
-              <p className="py-8 text-center text-sm text-stone-500">Loading Test Report module…</p>
-            ) : (
-              <FactoryTestReportModuleFields
-                value={testReportGeneratePayload}
-                onChange={setTestReportGeneratePayload}
-                disabled={disabled || testReportGenerateBusy}
-                sampleOptions={rows}
-                isCodeId={isCodeId}
-                isCodeLabel={
-                  isCodeLabel.trim() ||
-                  [isCodeSearch, isCodeRevisionYear].filter(Boolean).join(': ') ||
-                  ''
-                }
-                focusSampleRowId={testReportGenerateSampleId}
-                previewContext={testReportPreviewContext}
-                testedBySignatureImageUrl={testReportQcSignatureUrl}
-                projectId={projectId}
-              />
-            )}
-          </div>
-
-          <DialogFooter className="shrink-0 gap-2 border-t border-stone-300 bg-stone-50 px-4 py-3 sm:justify-between">
-            <Button
-              type="button"
-              variant="outline"
-              className={cn(limsOutlineBtnClass, 'h-9')}
-              disabled={testReportGenerateBusy}
-              onClick={() => {
-                setTestReportGenerateOpen(false)
-                setTestReportGenerateSampleId(null)
-                setTestReportPreviewContext(null)
-                setTestReportQcSignatureUrl('')
-              }}
-            >
-              Close
-            </Button>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                className={cn(limsOutlineBtnClass, 'h-9')}
-                disabled={disabled || testReportGenerateBusy || testReportGenerateLoading}
-                onClick={handleGenerateTestReportSave}
-              >
-                Save
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className={cn(limsOutlineBtnClass, 'h-9 gap-1.5')}
-                disabled={disabled || testReportGenerateBusy || testReportGenerateLoading}
-                onClick={handleGenerateTestReportPrint}
-              >
-                Print
-              </Button>
-              <Button
-                type="button"
-                className={cn(limsPrimaryBtnClass, 'h-9 gap-1.5')}
-                disabled={disabled || testReportGenerateBusy || testReportGenerateLoading}
-                onClick={handleGenerateTestReportDownload}
-              >
-                <FileDown className="h-4 w-4" aria-hidden />
-                {testReportGenerateBusy ? 'Preparing…' : 'Download PDF'}
-              </Button>
-            </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <Dialog
         open={importDialogOpen}
@@ -3232,6 +2700,14 @@ export function OslSampleRequirementsModuleFields({
           persistOnFocusLoss
           layer="stacked"
           aria-describedby={undefined}
+          // Start typing in Grade / Type / Variety / Size / Class / Rating, not in "Sample For".
+          onOpenAutoFocus={(event) => {
+            const grade = document.getElementById('osl-grade') as HTMLTextAreaElement | null
+            if (!grade) return
+            event.preventDefault()
+            grade.focus()
+            grade.setSelectionRange(grade.value.length, grade.value.length)
+          }}
           className={cn(
             limsDialogClass,
             'flex !flex-col gap-0 overflow-hidden bg-white p-0',
@@ -3391,43 +2867,43 @@ export function OslSampleRequirementsModuleFields({
                       />
                       {draft.declaredValueFileName ? (
                         <span
-                          className="pointer-events-none absolute bottom-1.5 left-2 max-w-[calc(100%-9rem)] truncate bg-white/90 pr-1 text-[10px] text-stone-600"
+                          className="pointer-events-none absolute bottom-1.5 left-2 max-w-[calc(100%-3rem)] truncate bg-white/90 pr-1 text-[10px] text-stone-600"
                           title={draft.declaredValueFileName}
                         >
                           {draft.declaredValueFileName}
                         </span>
                       ) : null}
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="absolute bottom-1 right-1 h-6 gap-1 rounded-none border-stone-400 bg-white px-1.5 text-[10px] text-stone-700 hover:bg-amber-50"
-                            aria-label="Declared value PDF actions"
-                            disabled={declaredValueUploadBusy}
-                          >
-                            <FileText size={12} aria-hidden />
-                            {declaredValueUploadBusy ? 'Uploading…' : draft.declaredValueFileName ? 'PDF attached' : 'PDF options'}
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className={fileMenuContentClass}>
-                          <DropdownMenuLabel className={fileMenuLabelClass}>Declared Value PDF</DropdownMenuLabel>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            className={fileMenuItemClass}
-                            onSelect={() => declaredValueFileInputRef.current?.click()}
-                          ><Upload size={15} aria-hidden />Upload / Replace</DropdownMenuItem>
-                          <DropdownMenuItem className={fileMenuItemClass} disabled={!draft.declaredValueStoragePath} onSelect={() => viewDeclaredValueFile(draft)}>
-                            <Eye size={15} aria-hidden />View
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className={fileMenuItemClass} disabled={!draft.declaredValueStoragePath} onSelect={() => downloadDeclaredValueFile(draft)}>
-                            <Download size={15} aria-hidden />Download
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className={cn(fileMenuItemClass, 'text-red-700 focus:text-red-800')} disabled={!draft.declaredValueFileId} onSelect={() => deleteDeclaredValueFile(draft)}>
-                            <Trash2 size={15} aria-hidden />Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      {/* One button: red uploads a PDF; once attached it turns green — click to view, double-click to delete. */}
+                      {draft.declaredValueStoragePath ? (
+                        <button
+                          type="button"
+                          className="absolute bottom-1 right-1 inline-flex h-7 w-7 items-center justify-center rounded-none border border-green-800 bg-green-600 p-0 text-white shadow-sm transition-colors hover:bg-green-700 disabled:opacity-60"
+                          title={`${draft.declaredValueFileName || 'Declared Value PDF'} — click to view, double-click to delete`}
+                          aria-label="View Declared Value PDF (double-click to delete)"
+                          disabled={declaredValueUploadBusy}
+                          onClick={() => {
+                            if (declaredValueClickTimer.current) window.clearTimeout(declaredValueClickTimer.current)
+                            declaredValueClickTimer.current = window.setTimeout(() => viewDeclaredValueFile(draft), 250)
+                          }}
+                          onDoubleClick={() => {
+                            if (declaredValueClickTimer.current) window.clearTimeout(declaredValueClickTimer.current)
+                            if (window.confirm('Delete the Declared Value PDF?')) deleteDeclaredValueFile(draft)
+                          }}
+                        >
+                          <FileCheck2 size={14} aria-hidden />
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="absolute bottom-1 right-1 inline-flex h-7 w-7 items-center justify-center rounded-none border border-red-700 bg-red-600 p-0 text-white shadow-sm transition-colors hover:bg-red-700 disabled:opacity-60"
+                          title={declaredValueUploadBusy ? 'Uploading PDF…' : 'Upload Declared Value PDF'}
+                          aria-label="Upload Declared Value PDF"
+                          disabled={declaredValueUploadBusy}
+                          onClick={() => declaredValueFileInputRef.current?.click()}
+                        >
+                          {declaredValueUploadBusy ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Upload size={14} aria-hidden />}
+                        </button>
+                      )}
                     </div>
                   </Field>
                 </div>

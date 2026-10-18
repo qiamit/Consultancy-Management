@@ -1,5 +1,6 @@
 import { sendQiAssistantMessage } from '@/components/qi-assistant/qiAssistantApi'
 import { processFlowOutlineText, type ProcessFlowNode } from './processFlowModel'
+import { AI_WRITING_RULES, formatAiSentence } from './aiTextFormat'
 
 export type ProcessDescriptionTone =
   | 'technical'
@@ -26,6 +27,8 @@ export type ProcessDescriptionGenerateContext = {
   nodes: ProcessFlowNode[]
   isCodeId?: string | null
   options?: ProcessDescriptionGenerateOptions
+  /** Extra instructions typed by the user; they take priority over the defaults below. */
+  instructions?: string
 }
 
 export const DEFAULT_PROCESS_DESCRIPTION_OPTIONS: ProcessDescriptionGenerateOptions =
@@ -52,6 +55,7 @@ const TONE_GUIDE: Record<ProcessDescriptionTone, string> = {
 
 function buildGenerateMessage(
   options: ProcessDescriptionGenerateOptions,
+  instructions = '',
 ): string {
   const count = Math.min(30, Math.max(3, Math.round(options.pointCount)))
   const minAccept = Math.max(3, Math.min(count - 1, Math.floor(count * 0.75)))
@@ -64,7 +68,7 @@ ${TONE_GUIDE[options.tone]}
 Length: ${LENGTH_GUIDE[options.length]}.
 Produce exactly ${count} points (paragraphs) — not fewer than ${minAccept}.
 
-Cover the manufacturing sequence from raw material receipt through processing, in-process controls, finished goods inspection, packing and dispatch, and control of non-conforming product / records — aligned to the flow chart steps.
+${instructions.trim() ? `Special instructions from the user (follow these):\n${instructions.trim()}\n\n` : ''}Cover the manufacturing sequence from raw material receipt through processing, in-process controls, finished goods inspection, packing and dispatch, and control of non-conforming product / records — aligned to the flow chart steps.
 
 Return ONLY a JSON block (optionally inside \`\`\`json fences) with this shape:
 { "descriptionPoints": ["paragraph 1", "paragraph 2", ...] }
@@ -73,7 +77,9 @@ Rules:
 - Exactly ${count} strings in descriptionPoints (or as close as possible, at least ${minAccept}).
 - No numbering inside the strings (the form will number them).
 - Do not invent unrelated products; stay consistent with the IS and scope.
-- Do not include letterhead, salutation, or signature blocks.`
+- Do not include letterhead, salutation, or signature blocks.
+
+${AI_WRITING_RULES}`
 }
 
 function extractJsonPayload(reply: string): unknown | null {
@@ -156,7 +162,7 @@ export async function generateProcessDescription(
 
   const { reply } = await sendQiAssistantMessage({
     page: 'bis/process-flow',
-    message: buildGenerateMessage(options),
+    message: buildGenerateMessage(options, input.instructions),
     context: buildContext(input),
     isCodeId: input.isCodeId?.trim() || undefined,
     history: [],
@@ -173,5 +179,5 @@ export async function generateProcessDescription(
           : 'Could not read process description from AI response. Please try again.',
     )
   }
-  return points.slice(0, Math.max(target, points.length))
+  return points.map(formatAiSentence).filter(Boolean).slice(0, Math.max(target, points.length))
 }

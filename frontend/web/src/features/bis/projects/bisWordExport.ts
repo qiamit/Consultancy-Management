@@ -123,18 +123,129 @@ const WORD_BLOCK_TAGS = new Set(['DIV', 'P', 'TABLE', 'H1', 'H2', 'H3', 'H4', 'H
  * html-to-docx only understands the `border` shorthand (it ignores the border-color / -style / -width longhands and then
  * writes "none" for the top and left edges of every table cell), so equal borders are written as one shorthand.
  */
+const BORDER_SIDES = ['top', 'right', 'bottom', 'left'] as const
+
+function borderSides(computed: CSSStyleDeclaration) {
+  return BORDER_SIDES.map((side) => {
+    const width = parseFloat(computed.getPropertyValue(`border-${side}-width`)) || 0
+    const style = computed.getPropertyValue(`border-${side}-style`)
+    return { side, width, style, color: computed.getPropertyValue(`border-${side}-color`), visible: width > 0 && style !== 'none' && style !== 'hidden' }
+  })
+}
+
 function applyWordBorder(element: HTMLElement, computed: CSSStyleDeclaration) {
-  const sides = ['top', 'right', 'bottom', 'left'].map((side) => ({
-    width: parseFloat(computed.getPropertyValue(`border-${side}-width`)) || 0,
-    style: computed.getPropertyValue(`border-${side}-style`),
-    color: computed.getPropertyValue(`border-${side}-color`),
-  }))
-  const visible = (side: (typeof sides)[number]) => side.width > 0 && side.style !== 'none' && side.style !== 'hidden'
+  const sides = borderSides(computed)
   const first = sides[0]!
-  if (visible(first) && sides.every((side) => side.width === first.width && side.style === first.style && side.color === first.color)) {
+  if (first.visible && sides.every((side) => side.width === first.width && side.style === first.style && side.color === first.color)) {
     element.style.setProperty('border', `${first.width}px ${first.style} ${first.color}`)
-  } else if (!sides.some(visible)) {
+  } else if (!sides.some((side) => side.visible)) {
     element.style.setProperty('border', '0 none')
+  } else if (element.tagName === 'TD' || element.tagName === 'TH') {
+    // Unequal cell borders: one shorthand per side (html-to-docx reads `border-bottom: …`, not the longhands).
+    element.style.setProperty('border', '0 none')
+    element.dataset.wordBorder = sides.map((side) => `border-${side.side}: ${side.visible ? `${side.width}px ${side.style} ${side.color}` : '0 none'}`).join('; ')
+  }
+}
+
+/** First font of a CSS font-family list, without quotes (html-to-docx writes the raw value as the font name). */
+function wordFontFamily(value: string): string {
+  return (value.split(',')[0] ?? '').trim().replace(/^["']|["']$/g, '') || 'Arial'
+}
+
+function transformText(root: HTMLElement, transform: string) {
+  const walker = root.ownerDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const text = node.nodeValue ?? ''
+    node.nodeValue = transform === 'uppercase'
+      ? text.toUpperCase()
+      : transform === 'lowercase'
+        ? text.toLowerCase()
+        : text.replace(/(^|\s)(\p{Ll})/gu, (_, lead: string, ch: string) => lead + ch.toUpperCase())
+  }
+}
+
+async function imageAsDataUrl(image: HTMLImageElement): Promise<string | null> {
+  const src = image.currentSrc || image.src
+  if (!src) return null
+  if (src.startsWith('data:')) return src
+  try {
+    const response = await fetch(src, { mode: 'cors' })
+    if (!response.ok) throw new Error(String(response.status))
+    const blob = await response.blob()
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(String(reader.result))
+      reader.onerror = () => reject(reader.error)
+      reader.readAsDataURL(blob)
+    })
+  } catch {
+    try {
+      const canvas = image.ownerDocument.createElement('canvas')
+      canvas.width = image.naturalWidth
+      canvas.height = image.naturalHeight
+      canvas.getContext('2d')?.drawImage(image, 0, 0)
+      return canvas.toDataURL('image/png')
+    } catch {
+      return null
+    }
+  }
+}
+
+/**
+ * Word drops paragraph borders (the letterhead rule, the signature line), so a block with a top / bottom rule becomes a
+ * one-cell table whose cell carries the rule.
+ */
+function wrapRuledBlocks(doc: Document, win: Window) {
+  for (const block of Array.from(doc.body.querySelectorAll<HTMLElement>('div, p, h1, h2, h3, h4, h5, h6'))) {
+    const computed = win.getComputedStyle(block)
+    const sides = borderSides(computed)
+    const top = sides[0]!
+    const bottom = sides[2]!
+    if (!top.visible && !bottom.visible) continue
+    const width = block.getBoundingClientRect().width
+    const parentWidth = block.parentElement?.getBoundingClientRect().width ?? width
+    const table = doc.createElement('table')
+    table.style.borderCollapse = 'collapse'
+    table.style.width = `${Math.round(width)}px`
+    if (width < parentWidth - 2 && block.parentElement) {
+      const offset = block.getBoundingClientRect().left - block.parentElement.getBoundingClientRect().left
+      if (offset > (parentWidth - width) / 2) table.setAttribute('align', 'right')
+    }
+    table.style.marginTop = computed.marginTop
+    table.style.marginBottom = computed.marginBottom
+    const row = doc.createElement('tr')
+    const cell = doc.createElement('td')
+    cell.style.border = '0 none'
+    cell.dataset.wordBorder = `border-top: ${top.visible ? `${top.width}px ${top.style} ${top.color}` : '0 none'}; border-bottom: ${bottom.visible ? `${bottom.width}px ${bottom.style} ${bottom.color}` : '0 none'}; border-left: 0 none; border-right: 0 none`
+    cell.style.padding = `${computed.paddingTop} 0 ${computed.paddingBottom} 0`
+    cell.style.verticalAlign = 'top'
+    cell.style.textAlign = computed.textAlign
+    block.style.removeProperty('border')
+    block.style.setProperty('border', '0 none')
+    block.style.setProperty('margin-top', '0')
+    block.style.setProperty('margin-bottom', '0')
+    block.style.setProperty('padding-top', '0')
+    block.style.setProperty('padding-bottom', '0')
+    block.replaceWith(table)
+    cell.appendChild(block)
+    row.appendChild(cell)
+    const body = doc.createElement('tbody')
+    body.appendChild(row)
+    table.appendChild(body)
+  }
+}
+
+/** Inline items set apart on the page (letterhead "Tel   Email   GSTIN") keep a visible gap in Word. */
+function keepInlineGaps(doc: Document) {
+  for (const element of Array.from(doc.body.querySelectorAll<HTMLElement>('span, strong, b, em, i, a'))) {
+    const next = element.nextSibling as HTMLElement | null
+    // nodeType, not instanceof: these nodes belong to the layout frame's window.
+    if (!next || next.nodeType !== Node.ELEMENT_NODE) continue
+    const a = element.getBoundingClientRect()
+    const b = next.getBoundingClientRect()
+    const gap = b.left - a.right
+    if (Math.abs(a.top - b.top) > 2 || gap < 3) continue
+    element.after(doc.createTextNode('\u00a0'.repeat(Math.max(1, Math.min(6, Math.round(gap / 3))))))
   }
 }
 
@@ -142,7 +253,8 @@ function applyWordBorder(element: HTMLElement, computed: CSSStyleDeclaration) {
 function convertToRowsToTables(doc: Document) {
   for (const row of Array.from(doc.querySelectorAll<HTMLElement>('.pd-to-row'))) {
     const table = doc.createElement('table')
-    table.style.width = '100%'
+    // Measured width: html-to-docx reads 100% as the full page text width, wider than the page frame it sits in.
+    table.style.width = `${Math.round(row.getBoundingClientRect().width)}px`
     table.style.borderCollapse = 'collapse'
     const tr = doc.createElement('tr')
     Array.from(row.children).forEach((child, index) => {
@@ -151,7 +263,11 @@ function convertToRowsToTables(doc: Document) {
       cell.style.width = index === 0 ? '60%' : '40%'
       cell.style.textAlign = index === 0 ? 'left' : 'right'
       cell.style.border = '0 none'
-      while (child.firstChild) cell.appendChild(child.firstChild)
+      // The block itself goes in (not its loose text / <br> nodes), so its lines stay one paragraph.
+      const block = child as HTMLElement
+      block.style.setProperty('margin', '0')
+      block.style.setProperty('width', 'auto')
+      cell.appendChild(block)
       tr.appendChild(cell)
     })
     const body = doc.createElement('tbody')
@@ -210,6 +326,17 @@ async function inlineWordCompatibleStyles(
       'margin-right', 'margin-top', 'padding-bottom', 'padding-left', 'padding-right',
       'padding-top', 'text-align', 'text-decoration', 'vertical-align', 'white-space',
     ]
+    await Promise.all(
+      Array.from(frameDocument.images).map((img) =>
+        img.complete ? Promise.resolve() : new Promise<void>((resolve) => {
+          img.onload = () => resolve()
+          img.onerror = () => resolve()
+        }),
+      ),
+    )
+    keepInlineGaps(frameDocument)
+    const images: { element: HTMLImageElement; width: number; height: number }[] = []
+    const transforms: { element: HTMLElement; transform: string }[] = []
     for (const element of Array.from(frameDocument.body.querySelectorAll<HTMLElement>('*'))) {
       const computed = frameWindow.getComputedStyle(element)
       applyWordBorder(element, computed)
@@ -219,17 +346,43 @@ async function inlineWordCompatibleStyles(
           element.style.setProperty(property, value)
         }
       }
-      if (element.tagName === 'TABLE' || element.tagName === 'TD' || element.tagName === 'TH') {
+      element.style.setProperty('font-family', wordFontFamily(computed.getPropertyValue('font-family')))
+      // html-to-docx only knows the keyword "bold", not numeric weights.
+      element.style.setProperty('font-weight', (parseInt(computed.getPropertyValue('font-weight'), 10) || 400) >= 600 ? 'bold' : 'normal')
+      const transform = computed.getPropertyValue('text-transform')
+      if (transform && transform !== 'none' && (!element.parentElement || frameWindow.getComputedStyle(element.parentElement).getPropertyValue('text-transform') !== transform)) {
+        transforms.push({ element, transform })
+      }
+      if ((element.tagName === 'TABLE' || element.tagName === 'TD' || element.tagName === 'TH') && !element.matches('.word-page-shell > tbody > tr > td')) {
         const width = computed.getPropertyValue('width')
         if (width && width !== 'auto') element.style.width = width
       }
       if (element.tagName === 'IMG') {
-        const width = computed.getPropertyValue('width')
-        if (width && width !== 'auto') element.style.width = width
-        element.style.maxWidth = '100%'
-        element.style.height = 'auto'
+        const box = element.getBoundingClientRect()
+        if (computed.display === 'none' || computed.visibility === 'hidden' || box.width < 1 || box.height < 1) {
+          element.remove()
+          continue
+        }
+        images.push({ element: element as HTMLImageElement, width: Math.round(box.width), height: Math.round(box.height) })
       }
     }
+    // Images are embedded (signatures and seals on remote storage would otherwise be dropped) at their on-page size.
+    for (const { element, width, height } of images) {
+      const data = await imageAsDataUrl(element)
+      if (!data) {
+        element.remove()
+        continue
+      }
+      element.src = data
+      element.removeAttribute('srcset')
+      element.setAttribute('width', String(width))
+      element.setAttribute('height', String(height))
+      element.style.width = `${width}px`
+      element.style.height = `${height}px`
+      element.style.maxWidth = '100%'
+    }
+    for (const { element, transform } of transforms) transformText(element, transform)
+    wrapRuledBlocks(frameDocument, frameWindow)
     convertToRowsToTables(frameDocument)
     flattenNestedDivs(frameDocument.body, frameWindow)
     for (const pageNumber of Array.from(frameDocument.querySelectorAll<HTMLElement>('.pd-page-num'))) {
@@ -237,7 +390,14 @@ async function inlineWordCompatibleStyles(
       pageNumber.style.textAlign = 'right'
       pageNumber.style.marginTop = '8pt'
     }
-    return frameDocument.documentElement.outerHTML
+    // Side borders go in last as plain text: setting them through element.style lets the browser fold them into
+    // border-width / border-style longhands, which html-to-docx ignores.
+    for (const element of Array.from(frameDocument.querySelectorAll<HTMLElement>('[data-word-border]'))) {
+      element.setAttribute('style', `${element.getAttribute('style') ?? ''}; ${element.dataset.wordBorder}`)
+      element.removeAttribute('data-word-border')
+    }
+    // The browser re-quotes multi-word font names ("Times New Roman"); html-to-docx would keep the quotes in the font name.
+    return frameDocument.documentElement.outerHTML.replace(/font-family:\s*&quot;([^&;]+)&quot;/g, 'font-family: $1')
   } finally {
     frame.remove()
   }
@@ -248,9 +408,17 @@ export async function buildWordDocx(html: string, title: string, settings: typeo
   // Define that alias before loading its lazy chunk so the ESM bundle can run in browsers.
   const browserGlobal = globalThis as typeof globalThis & { global?: typeof globalThis }
   browserGlobal.global ??= globalThis
+  // It also needs Node's Buffer to embed images.
+  const browserBuffer = globalThis as typeof globalThis & { Buffer?: unknown }
+  if (!browserBuffer.Buffer) browserBuffer.Buffer = (await import('buffer')).Buffer
   const { default: HTMLtoDOCX } = await import('@turbodocx/html-to-docx')
   const size = bisPrintPageSizeMm(settings)
-  const wordReadyHtml = await inlineWordCompatibleStyles(html, size.widthMm, size.heightMm)
+  // Lay out at Word's text width (page minus side margins) so measured widths carry over without clipping.
+  const wordReadyHtml = await inlineWordCompatibleStyles(
+    html,
+    Math.max(50, size.widthMm - settings.marginLeftMm - settings.marginRightMm),
+    size.heightMm,
+  )
   const wordDocument = await HTMLtoDOCX(wordReadyHtml, null, {
     orientation: settings.orientation,
     pageSize: {
@@ -268,7 +436,6 @@ export async function buildWordDocx(html: string, title: string, settings: typeo
     font: 'Arial',
     table: {
       row: { cantSplit: true },
-      borderOptions: { size: 1, color: '000000' },
     },
     imageProcessing: { svgHandling: 'native', suppressSharpWarning: true },
   })

@@ -1,21 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { ClipboardList, Eye, Paperclip } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { ClipboardList } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
-import { usePdfViewer } from '@/components/ui/usePdfViewer'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { saveBisModulePayload } from './bisModuleDataApi'
-import {
-  deleteBisProjectFile,
-  formatBisProjectFilesError,
-  listBisProjectFiles,
-  uploadBisProjectFile,
-  type BisProjectViewFile,
-} from './bisProjectFilesApi'
 import { parseCmpf311Payload } from './cmpf311Model'
 import { ProductManualValue } from './ManakVarietiesTable'
+import { SharedProjectFileButton } from './RowFileAttachment'
 
 const labelCls =
   'whitespace-nowrap border border-[#e7e0d4] bg-[#f7f3eb] px-3 py-1.5 text-left align-middle text-sm font-bold text-stone-800'
@@ -143,133 +135,11 @@ export function ManakSitRow({
             Consent Letter:
           </th>
           <td className={valueCls}>
-            <ConsentLetterControl projectId={projectId} />
+            {projectId ? <SharedProjectFileButton projectId={projectId} docKind="consent-letter" label="Consent Letter" /> : null}
           </td>
         </tr>
       </tbody>
     </table>
     </>
-  )
-}
-
-/**
- * Consent letter control (applies to BIS SIT and Own SIT alike): a clip button uploads; once a letter exists its eye button
- * replaces it. Single click views the letter, double click deletes it.
- */
-function ConsentLetterControl({ projectId }: { projectId: string | null }) {
-  const [confirmAction, confirmDialog] = useConfirmDialog()
-  const [viewFile, viewer] = usePdfViewer()
-  const inputRef = useRef<HTMLInputElement | null>(null)
-  const clickTimer = useRef<number | null>(null)
-  const [files, setFiles] = useState<BisProjectViewFile[]>([])
-  const [busy, setBusy] = useState(false)
-
-  const reload = useCallback(async (id: string) => {
-    setFiles(await listBisProjectFiles(id, 'consent-letter'))
-  }, [])
-
-  useEffect(() => {
-    if (!projectId) {
-      setFiles([])
-      return
-    }
-    let active = true
-    void listBisProjectFiles(projectId, 'consent-letter')
-      .then((list) => {
-        if (active) setFiles(list)
-      })
-      .catch((error: unknown) => {
-        if (active) toast.error(formatBisProjectFilesError(error))
-      })
-    return () => {
-      active = false
-    }
-  }, [projectId])
-
-  const upload = async (file?: File) => {
-    if (!projectId || !file) return
-    setBusy(true)
-    try {
-      await uploadBisProjectFile(projectId, file, 'consent-letter')
-      // One consent letter is enough: a new upload replaces the earlier ones.
-      const latest = await listBisProjectFiles(projectId, 'consent-letter')
-      await Promise.allSettled(latest.slice(1).map(deleteBisProjectFile))
-      await reload(projectId)
-      toast.success('Consent letter uploaded.')
-    } catch (error) {
-      toast.error(formatBisProjectFilesError(error))
-    } finally {
-      setBusy(false)
-      if (inputRef.current) inputRef.current.value = ''
-    }
-  }
-
-  const view = (file: BisProjectViewFile) => viewFile(file.viewUrl, file.file_name, 'Consent letter file is unavailable.')
-
-  const remove = async (file: BisProjectViewFile) => {
-    if (!projectId) return
-    if (!(await confirmAction(`Delete ${file.file_name}?`, { title: 'Delete consent letter' }))) return
-    setBusy(true)
-    try {
-      await deleteBisProjectFile(file)
-      await reload(projectId)
-      toast.success('Consent letter deleted.')
-    } catch (error) {
-      toast.error(formatBisProjectFilesError(error))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const btn = 'h-8 w-8 shrink-0 rounded-none border-stone-400 bg-white p-0 text-amber-800 shadow-none hover:bg-amber-50'
-
-  return (
-    <div className="flex items-center gap-1">
-      {confirmDialog}
-      {viewer}
-      <input
-        ref={inputRef}
-        type="file"
-        accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
-        className="hidden"
-        disabled={!projectId || busy}
-        onChange={(event) => void upload(event.target.files?.[0])}
-      />
-      {files.length === 0 ? (
-        <Button
-          type="button"
-          variant="outline"
-          className={btn}
-          disabled={!projectId || busy}
-          title="Upload consent letter"
-          aria-label="Upload consent letter"
-          onClick={() => inputRef.current?.click()}
-        >
-          <Paperclip className="h-[15px] w-[15px]" aria-hidden />
-        </Button>
-      ) : (
-        [files[0]!].map((file) => (
-          <Button
-            key={file.id}
-            type="button"
-            variant="outline"
-            className={btn}
-            disabled={busy}
-            title={`${file.file_name} — click to view, double-click to delete`}
-            aria-label={`View consent letter ${file.file_name}`}
-            onClick={() => {
-              if (clickTimer.current) window.clearTimeout(clickTimer.current)
-              clickTimer.current = window.setTimeout(() => view(file), 250)
-            }}
-            onDoubleClick={() => {
-              if (clickTimer.current) window.clearTimeout(clickTimer.current)
-              void remove(file)
-            }}
-          >
-            <Eye className="h-[15px] w-[15px]" aria-hidden />
-          </Button>
-        ))
-      )}
-    </div>
   )
 }

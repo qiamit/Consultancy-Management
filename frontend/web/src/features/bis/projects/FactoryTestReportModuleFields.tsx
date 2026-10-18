@@ -211,6 +211,17 @@ export function FactoryTestReportModuleFields({
     })
   }
 
+  /** Select All / clear for many parameters at once (one update, so none is lost). */
+  const toggleParams = (params: MasterParam[], checked: boolean) => {
+    if (checked) {
+      const added = params.filter((param) => !selectedParamIds.has(param.id)).map((param) => paramFromMaster(param, isCodeLabel))
+      if (added.length) patchActiveReport({ parameters: [...activeReport.parameters, ...added] })
+      return
+    }
+    const removing = new Set(params.map((param) => param.id))
+    patchActiveReport({ parameters: activeReport.parameters.filter((p) => !removing.has(p.testParameterId)) })
+  }
+
   const patchParam = (
     paramId: string,
     key: 'observedValue' | 'remark' | 'specifiedRequirement' | 'unit',
@@ -412,19 +423,19 @@ export function FactoryTestReportModuleFields({
 
             <div className="min-w-0 space-y-1.5">
               <div className="overflow-hidden rounded-sm border border-stone-800">
-                <table className="w-full table-fixed border-collapse text-left text-[11px]">
+                <table className="w-full table-fixed border-collapse text-left text-[13px] leading-snug text-black">
                   <thead>
                     <tr className="bg-stone-100">
-                      <th className="w-[25%] border border-stone-800 px-2 py-1.5 text-center font-extrabold">
+                      <th className="w-[36%] border border-stone-800 px-2 py-1.5 text-center font-extrabold">
                         Test Name
                       </th>
-                      <th className="w-[10%] border border-stone-800 px-2 py-1.5 text-center font-extrabold">
+                      <th className="w-[8%] border border-stone-800 px-2 py-1.5 text-center font-extrabold">
                         Unit
                       </th>
-                      <th className="w-[35%] border border-stone-800 px-2 py-1.5 text-center font-extrabold">
+                      <th className="w-[30%] border border-stone-800 px-2 py-1.5 text-center font-extrabold">
                         Specified Requirements
                       </th>
-                      <th className="w-[20%] border border-stone-800 px-2 py-1.5 text-center font-extrabold">
+                      <th className="w-[16%] border border-stone-800 px-2 py-1.5 text-center font-extrabold">
                         Observed Value
                       </th>
                       <th className="w-[10%] border border-stone-800 px-2 py-1.5 text-center font-extrabold">
@@ -447,13 +458,15 @@ export function FactoryTestReportModuleFields({
                       activeReport.parameters.map((p) => (
                         <tr key={p.testParameterId || p.testName}>
                           <td className="border border-stone-800 px-2 py-1.5 align-top">
-                            <div className="font-bold">{p.testName || '—'}</div>
+                            {/* Clause follows the test name on the same line. */}
+                            <span className="font-bold">{p.testName || '—'}</span>
                             {p.clauseNo || p.isReference ? (
-                              <div className="text-[9px] text-stone-600">
+                              <span className="whitespace-nowrap text-[11px] font-medium text-stone-800">
+                                {' · '}
                                 {[p.clauseNo ? `Cl. ${p.clauseNo}` : '', p.isReference]
                                   .filter(Boolean)
                                   .join(' · ')}
-                              </div>
+                              </span>
                             ) : null}
                           </td>
                           <td className="border border-stone-800 px-2 py-1.5 text-center align-middle">
@@ -484,7 +497,7 @@ export function FactoryTestReportModuleFields({
                                 autoFocus
                                 className={cn(
                                   limsFieldClass,
-                                  'h-7 border-0 bg-transparent text-center text-[11px] shadow-none focus-visible:ring-1',
+                                  'h-8 border-0 bg-transparent text-center text-[13px] font-medium text-black shadow-none focus-visible:ring-1',
                                 )}
                                 value={p.specifiedRequirement}
                                 disabled={disabled}
@@ -512,7 +525,7 @@ export function FactoryTestReportModuleFields({
                             <Input
                               className={cn(
                                 limsFieldClass,
-                                'h-7 border-0 bg-transparent text-center text-[11px] shadow-none focus-visible:ring-1',
+                                'h-8 border-0 bg-transparent text-center text-[13px] font-medium text-black shadow-none focus-visible:ring-1',
                               )}
                               value={p.observedValue}
                               disabled={disabled}
@@ -526,7 +539,7 @@ export function FactoryTestReportModuleFields({
                             <Input
                               className={cn(
                                 limsFieldClass,
-                                'h-7 border-0 bg-transparent text-center text-[11px] shadow-none focus-visible:ring-1',
+                                'h-8 border-0 bg-transparent text-center text-[13px] font-medium text-black shadow-none focus-visible:ring-1',
                               )}
                               value={p.remark || 'Pass'}
                               disabled={disabled}
@@ -790,6 +803,7 @@ export function FactoryTestReportModuleFields({
         isCodeLabel={isCodeLabel.trim() || (isNumber !== '—' ? isNumber : '')}
         selectedParamIds={selectedParamIds}
         onToggleParam={toggleParam}
+        onToggleParams={toggleParams}
         onParamCreated={() => {
           /* list refresh handled inside dialog; selection via onToggleParam */
         }}
