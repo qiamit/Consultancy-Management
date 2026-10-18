@@ -83,7 +83,7 @@ export function ManakSubPanel({
 }) {
   return (
     <div className="border border-stone-300 bg-white">
-      <div className="flex items-center justify-between bg-stone-800 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-amber-200">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 bg-stone-800 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-amber-200">
         <span>{title}</span>
         {headerExtra}
         {onEdit ? (

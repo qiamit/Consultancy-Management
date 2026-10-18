@@ -172,6 +172,16 @@ body.new-app-wait .tile-new-app .tile-hint {
   color: #b45309;
 }
 
+/* Inclusion shares the New Application tile look but has its own ON / OFF colour. */
+body.new-app-off .tile-inclusion .tile-hint,
+body.new-app-wait .tile-inclusion .tile-hint {
+  color: #0f766e;
+}
+
+body.inclusion-off .tile-inclusion .tile-hint {
+  color: #b91c1c;
+}
+
 .import-qr-status {
   margin: 8px 0 0;
   padding: 8px 10px;

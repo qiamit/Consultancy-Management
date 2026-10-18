@@ -183,8 +183,8 @@ export function BisDocumentPrintSettingsDialog({
         className={cn(
           limsDialogClass,
           wide
-            ? 'w-[min(42rem,calc(100vw-1.5rem))] max-w-[42rem]'
-            : 'w-[min(24rem,calc(100vw-1.5rem))] max-w-sm',
+            ? 'w-[min(42rem,calc(100vw_-_var(--app-dialog-overlay-left,0px)_-_1.5rem))] max-w-[42rem]'
+            : 'w-[min(24rem,calc(100vw_-_var(--app-dialog-overlay-left,0px)_-_1.5rem))] max-w-sm',
         )}
       >
         <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white">

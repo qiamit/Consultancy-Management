@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Eye, FileDown, FileSpreadsheet, FileType, Paperclip, Printer, ScrollText } from 'lucide-react'
+import { Eye, FileDown, FileSpreadsheet, FileType, Paperclip, Pencil, Printer, ScrollText } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -38,7 +38,7 @@ const iconBtn = 'h-8 w-8 rounded-none border border-stone-400 bg-white/70 p-0 te
 
 type Col = 'preview' | 'print' | 'pdf' | 'edit'
 const COLS: Col[] = ['preview', 'print', 'pdf', 'edit']
-const COL_TITLE: Record<Col, string> = { preview: 'Preview', print: 'Print', pdf: 'PDF', edit: 'Editable File' }
+const COL_TITLE: Record<Col, string> = { preview: 'Preview', print: 'Print', pdf: 'PDF', edit: 'Editable' }
 const EMPTY: PreviewSelection = { previewKinds: [], previewFiles: [], printKinds: [], printFiles: [], pdfKinds: [], pdfFiles: [], wordKinds: [], excelKinds: [] }
 
 const toolbarBtn =
@@ -58,6 +58,7 @@ export function ManakPreviewStep({
   onPrintSelected,
   onDownloadSelected,
   onEditableSelected,
+  source,
 }: {
   row: BisProjectRow
   refreshKey: number
@@ -75,6 +76,14 @@ export function ManakPreviewStep({
   onDownloadSelected: (selection: PreviewSelection) => void
   /** Editable column: Word / Excel files. */
   onEditableSelected: (selection: PreviewSelection) => void
+  /** Another document list (Inclusion); default = the New Application's Steps 1–7. */
+  source?: {
+    kinds: BisPrintDocumentKind[]
+    buildRows: (row: BisProjectRow, payloads: Partial<Record<string, Rec | null>>, files: PreviewFile[]) => Row[]
+    stepTitle: (step: number) => string
+    /** Heading above the table (default "Application Submission — Preview"). */
+    heading?: string
+  }
 }) {
   const [payloads, setPayloads] = useState<Partial<Record<string, Rec | null>>>({})
   const [files, setFiles] = useState<PreviewFile[]>([])
@@ -83,7 +92,7 @@ export function ManakPreviewStep({
 
   useEffect(() => {
     let active = true
-    const kinds = APPLICATION_DOCUMENT_COMPONENT_KINDS
+    const kinds = source?.kinds ?? APPLICATION_DOCUMENT_COMPONENT_KINDS
     void Promise.all([
       Promise.all(kinds.map((k) => fetchBisModulePayload(row.id, k).catch(() => null))),
       supabase.from('bis_project_files').select('id, file_name, storage_path, doc_kind').eq('bis_project_id', row.id).order('created_at', { ascending: true }),
@@ -101,9 +110,11 @@ export function ManakPreviewStep({
     return () => {
       active = false
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the source is fixed for the dialog's mode
   }, [row.id, refreshKey])
 
-  const rows = useMemo<Row[]>(() => buildApplicationDocumentRows(row, payloads, files), [payloads, files, row])
+  const buildRows = source?.buildRows ?? buildApplicationDocumentRows
+  const rows = useMemo<Row[]>(() => buildRows(row, payloads, files), [buildRows, payloads, files, row])
 
   // Uploaded files have no generated preview or editable copy: View opens them, PDF and Print still work.
   const canTick = (r: Row, col: Col) => (col !== 'edit' && col !== 'preview') || r.type === 'doc'
@@ -115,6 +126,27 @@ export function ManakPreviewStep({
       return { ...prev, [col]: next }
     })
   const rowTicked = (r: Row) => COLS.filter((c) => canTick(r, c)).every((c) => ticked[c].has(r.id))
+  /** Header boxes: every row of one column, or (col = null) every column of every row. */
+  const colRows = (col: Col) => rows.filter((r) => canTick(r, col))
+  const allTicked = (col: Col | null) =>
+    rows.length > 0 && (col ? colRows(col).every((r) => ticked[col].has(r.id)) : rows.every(rowTicked))
+  const tickAll = (col: Col | null, on: boolean) =>
+    setTicked((prev) => {
+      const next = { ...prev }
+      for (const c of col ? [col] : COLS) next[c] = on ? new Set(colRows(c).map((r) => r.id)) : new Set()
+      return next
+    })
+  const headBox = (col: Col | null, label: string) => (
+    <input
+      type="checkbox"
+      className={cn(checkCls, 'align-middle')}
+      aria-label={label}
+      title={label}
+      disabled={!rows.length}
+      checked={allTicked(col)}
+      onChange={(e) => tickAll(col, e.target.checked)}
+    />
+  )
   const toggleRow = (r: Row, on: boolean) =>
     setTicked((prev) => {
       const next = { ...prev }
@@ -198,7 +230,7 @@ export function ManakPreviewStep({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-base font-bold text-stone-900">Application Submission — Preview</h3>
+        <h3 className="text-base font-bold text-stone-900">{source?.heading ?? 'Application Submission — Preview'}</h3>
         <div className="flex items-center gap-1.5">
           {toolbar.map(({ col, title, icon, run }) => (
             <Button
@@ -226,15 +258,19 @@ export function ManakPreviewStep({
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr>
-              <th className={cn(thCls, 'w-8 px-1')} aria-label="Select row" />
+              <th className={cn(thCls, 'w-8 px-1 text-center')}>{headBox(null, 'Select all documents')}</th>
               <th className={cn(thCls, 'text-left')}>Document &amp; Information Detail</th>
-              <th className={cn(thCls, 'w-[1%] whitespace-nowrap text-center')}>Preview</th>
-              <th className={cn(thCls, 'w-[1%] whitespace-nowrap text-center')}>Print</th>
-              <th className={cn(thCls, 'w-[1%] whitespace-nowrap text-center')}>PDF</th>
+              <th className={cn(thCls, 'w-[1%] whitespace-nowrap text-center')}>
+                <span className="flex flex-col items-center gap-1">Preview {headBox('preview', 'Select all for Preview')}</span>
+              </th>
+              <th className={cn(thCls, 'w-[1%] whitespace-nowrap text-center')}>
+                <span className="flex flex-col items-center gap-1">Print {headBox('print', 'Select all for Print')}</span>
+              </th>
+              <th className={cn(thCls, 'w-[1%] whitespace-nowrap text-center')}>
+                <span className="flex flex-col items-center gap-1">PDF {headBox('pdf', 'Select all for PDF')}</span>
+              </th>
               <th className={cn(thCls, 'w-[1%] text-center leading-tight')}>
-                Editable
-                <br />
-                File
+                <span className="flex flex-col items-center gap-1">Editable {headBox('edit', 'Select all Editable')}</span>
               </th>
             </tr>
           </thead>
@@ -246,10 +282,15 @@ export function ManakPreviewStep({
                     <td colSpan={6} className="border border-[#e7e0d4] px-2 py-1">
                       <span className="flex items-center justify-between gap-2">
                         <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-stone-700">
-                          {r.step + 1}. {BIS_APPLICATION_STEPS[r.step]?.title ?? 'Other'}
+                          {r.step + 1}. {source ? source.stepTitle(r.step) : (BIS_APPLICATION_STEPS[r.step]?.title ?? 'Other')}
                         </span>
-                        <button type="button" className="text-[11px] font-semibold text-amber-800 underline-offset-2 hover:underline" onClick={() => onEditStep(r.step)}>
-                          Edit step
+                        <button
+                          type="button"
+                          className="inline-flex h-6 items-center gap-1 rounded-none border border-amber-700 bg-amber-700 px-2 text-[11px] font-semibold text-white shadow-sm transition-colors hover:bg-amber-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40"
+                          onClick={() => onEditStep(r.step)}
+                        >
+                          <Pencil size={12} aria-hidden />
+                          Edit Step
                         </button>
                       </span>
                     </td>

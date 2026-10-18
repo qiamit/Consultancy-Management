@@ -42,8 +42,33 @@ function str(raw: unknown): string {
   return String(raw ?? '').trim()
 }
 
+/**
+ * Calibration Status is Yes / No: anything else saved earlier (e.g. "To be verified") becomes Yes when the
+ * instrument has a least count and a range, otherwise No.
+ */
+export function cmpf306CalibrationStatus(row: { calibrationStatus?: unknown; leastCount?: unknown; range?: unknown }): 'Yes' | 'No' {
+  const v = str(row.calibrationStatus).toLowerCase()
+  if (v === 'yes' || v === 'no') return v === 'yes' ? 'Yes' : 'No'
+  // "-", "—", "NA" in a cell mean nothing was given.
+  const given = (x: unknown) => !/^(?:[-–—]*|n\/?a)$/i.test(str(x))
+  return given(row.leastCount) && given(row.range) ? 'Yes' : 'No'
+}
+
+/** Quantity as "1 Nos", "2 Nos" …: a bare number gets " Nos"; other text (e.g. "1 Set") stays as typed. */
+export function cmpf306QuantityNos(value: unknown): string {
+  const v = str(value)
+  const n = /^(\d+(?:\.\d+)?)\s*(?:nos?\.?)?$/i.exec(v)
+  return n ? `${n[1]} Nos` : v
+}
+
+/** Saved row with the Calibration Status / Quantity rules applied (for the step table, documents and Excel). */
+export function normalizeCmpf306Row<T extends Record<string, unknown>>(row: T): T {
+  if (!cmpf306RowHasContent(row as unknown as Cmpf306EquipmentRow)) return row
+  return { ...row, calibrationStatus: cmpf306CalibrationStatus(row), quantity: cmpf306QuantityNos(row.quantity) }
+}
+
 function parseRow(raw: Record<string, unknown>): Cmpf306EquipmentRow {
-  return {
+  return normalizeCmpf306Row({
     equipmentName: str(
       raw.equipmentName ?? raw.equipment_name ?? raw.name ?? raw.testEquipment,
     ),
@@ -55,7 +80,7 @@ function parseRow(raw: Record<string, unknown>): Cmpf306EquipmentRow {
     ),
     clauseNo: str(raw.clauseNo ?? raw.clause_no ?? raw.clause),
     quantity: str(raw.quantity ?? raw.qty ?? raw.number),
-  }
+  })
 }
 
 export function parseCmpf306Payload(

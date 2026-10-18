@@ -1378,7 +1378,18 @@
           return;
         }
         // Belt-and-suspenders: if Import QR armed mid-flight, never open Test Request.
-        chrome.storage.local.get(["qeManakImportQr", "qeManakNewApp"], (store) => {
+        chrome.storage.local.get(["qeManakImportQr", "qeManakNewApp", "qeManakInclusion"], (store) => {
+          // Manak Assist (Inclusion): inclusion-fill.js opens the licence's Change in Scope (Inclusion).
+          if (store && store.qeManakInclusion === true) {
+            chrome.storage.local.set({
+              qeManakInclusionEnabled: true,
+              pendingFill: null,
+              qeManakEnabled: false,
+              qeManakImportQr: false,
+            });
+            showBanner("Signed in. Inclusion ON — opening the licence's Change in Scope (Inclusion).", true);
+            return;
+          }
           // Manak Assist (New Application): stay on the dashboard; newapp-fill.js takes over.
           if (store && store.qeManakNewApp === true) {
             chrome.storage.local.set({
@@ -2052,12 +2063,18 @@
     if (!payload) return { ok: false, message: "No QE_MANAK_TR_V1 payload." };
     // New Application (Manak Assist) owns this session — never open or fill Test Request.
     if (payload.kind === "QE_MANAK_NEWAPP_V1") return { ok: false, message: "New Application payload." };
+    if (payload.kind === "QE_MANAK_INCLUSION_V1") return { ok: false, message: "Inclusion payload." };
     const newApp = await new Promise((resolve) =>
-      chrome.storage.local.get(["qeManakNewApp", "qeManakNewAppEnabled"], (d) =>
-        resolve(Boolean(d && (d.qeManakNewApp === true || d.qeManakNewAppEnabled === true))),
+      chrome.storage.local.get(["qeManakNewApp", "qeManakNewAppEnabled", "qeManakInclusion", "qeManakInclusionEnabled"], (d) =>
+        resolve(
+          Boolean(
+            d &&
+              (d.qeManakNewApp === true || d.qeManakNewAppEnabled === true || d.qeManakInclusion === true || d.qeManakInclusionEnabled === true),
+          ),
+        ),
       ),
     );
-    if (newApp && !force) return { ok: false, message: "New Application is ON." };
+    if (newApp && !force) return { ok: false, message: "New Application / Inclusion is ON." };
 
     const state = await readArmedState();
     if (!force && state.qeManakArmed !== true) {

@@ -20,6 +20,7 @@ import { buildMergedBisProjectFilesPdf } from './mergeBisProjectFilesPdf'
 import { FileAttachButton } from './RowFileAttachment'
 import { AiFilePickerDialog, type PickedFile } from './AiFilePickerDialog'
 import { ApplicationDocumentsAutoTable } from './ApplicationDocumentsAutoTable'
+import { otherInformationUploadChoice } from './applicationDocuments'
 import { EditableRows } from './ManakManagementStep'
 import { fileColumn } from './rowFileColumn'
 import { useShowAiButtons } from '@/hooks/useShowAiAssistant'
@@ -200,7 +201,6 @@ export function ManakDeclarationStep({
         : undefined,
       popup: () => (
         <>
-        {key === 'otherInformation' ? <ApplicationDocumentsAutoTable projectRow={projectRow} /> : null}
         <EditableRows
           projectId={projectId}
           kind={APPLICATION_DECLARATION_KIND}
@@ -212,6 +212,16 @@ export function ManakDeclarationStep({
           onChanged={onChanged}
           addLabel={`Add ${label} file`}
         />
+        {key === 'otherInformation' ? (
+          <ApplicationDocumentsAutoTable
+            projectRow={projectRow}
+            choice={otherInformationUploadChoice(payload)}
+            onChoiceChange={async (next) => {
+              await patchDeclaration(projectId, { otherInformationExcluded: next.excluded, otherInformationIncluded: next.included })
+              onChanged()
+            }}
+          />
+        ) : null}
         </>
       ),
       actions: (edit) => (

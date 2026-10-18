@@ -1792,12 +1792,12 @@ export function LegalDocumentsModuleDialog({
                 limsDialogClass,
                 'bg-white',
                 compactFormModule
-                  ? 'h-auto max-h-[min(92vh,860px)] w-[min(68rem,calc(100vw-1.5rem))] max-w-[68rem]'
+                  ? 'h-auto max-h-[min(92vh,860px)] w-[min(68rem,calc(100vw_-_var(--app-dialog-overlay-left,0px)_-_1.5rem))] max-w-[68rem]'
                   : 'max-h-[min(92vh,860px)]',
                 !compactFormModule &&
                   (showApplicationFields
-                    ? 'w-[min(56rem,calc(100vw-1.5rem))] max-w-[56rem]'
-                    : 'w-[min(42rem,calc(100vw-1.5rem))] max-w-[42rem]'),
+                    ? 'w-[min(56rem,calc(100vw_-_var(--app-dialog-overlay-left,0px)_-_1.5rem))] max-w-[56rem]'
+                    : 'w-[min(42rem,calc(100vw_-_var(--app-dialog-overlay-left,0px)_-_1.5rem))] max-w-[42rem]'),
               ),
         )}
       >

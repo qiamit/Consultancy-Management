@@ -138,6 +138,8 @@ chrome.runtime.onInstalled.addListener(async () => {
       qeManakImportQrEnabled: false,
       qeManakNewApp: false,
       qeManakNewAppEnabled: false,
+      qeManakInclusion: false,
+      qeManakInclusionEnabled: false,
     });
   }
 });
@@ -164,10 +166,12 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
       "qeManakImportQrLanded",
       "qeManakPortal",
       "qeManakNewApp",
+      "qeManakInclusion",
     ],
     (data) => {
       const importArmed = data && data.qeManakImportQr === true;
-      const newAppArmed = data && data.qeManakNewApp === true;
+      // Inclusion stays armed across its pages like New Application.
+      const newAppArmed = data && (data.qeManakNewApp === true || data.qeManakInclusion === true);
       const trArmed =
         data &&
         data.qeManakEnabled === true &&
@@ -1003,8 +1007,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const importProjectId = String(message.projectId || "").trim();
     const qrCount = Math.max(1, Math.min(5, Number(message.qrCount) || 1));
     const openKey = [
-      message.newApp ? "new-app" : message.loginOnly ? "login" : importQr ? "import-qr" : "tr",
-      message.newApp ? String(message.projectId || "") : "",
+      message.newApp ? "new-app" : message.inclusion ? "inclusion" : message.loginOnly ? "login" : importQr ? "import-qr" : "tr",
+      message.newApp || message.inclusion ? String(message.projectId || "") : "",
       portalUserId,
       (payload && payload.sampleId) || "",
       importQr ? String(qrCount) : "",
@@ -1106,6 +1110,47 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           return;
         }
       }
+      if (message.inclusion) {
+        // Manak Assist on BIS New Inclusion: login, then the Inclusion section opens this licence's
+        // Change in Scope (Inclusion) form and fills it. Test Request / Import QR / New Application stay OFF.
+        await chrome.storage.local.set({
+          pendingFill: null,
+          manakResult: null,
+          qeManakImportQr: false,
+          qeManakImportQrEnabled: false,
+          qeManakEnabled: false,
+          qeManakArmed: true,
+          qeManakHomeReady: false,
+          qeManakNewApp: false,
+          qeManakNewAppEnabled: false,
+          newAppFill: null,
+          qeManakInclusion: true,
+          // Section switches ON once a signed-in Manak page is seen (inclusion-fill.js).
+          qeManakInclusionEnabled: false,
+          inclusionFill: payloadWithoutPassword(payload),
+          inclusionLog: null,
+          qeManakPortal: {
+            userId: portalUserId,
+          },
+        });
+        const reused = await findConfirmedLoggedInManakTab();
+        if (reused && reused.tab.id) {
+          clearRememberedPortal();
+          await chrome.storage.local.set({ qeManakInclusionEnabled: true });
+          await safeTabUpdate(reused.tab.id, { active: true });
+          void settle(chrome.windows.update(reused.tab.windowId, { focused: true }));
+          void safeSendTab(reused.tab.id, { type: "QE_INCLUSION_REFRESH" });
+          sendResponse({ ok: true, message: "Already logged in. Inclusion ON — opening the licence's Change in Scope (Inclusion)." });
+          return;
+        }
+        const created = await safeTabCreate({ url: ebisLoginUrl, active: true });
+        if (created && created.id) scheduleLoginFill(created.id, portalUserId, portalPassword);
+        sendResponse({
+          ok: true,
+          message: "Opening Manak in a new tab. User ID / Password are filled — type the captcha.",
+        });
+        return;
+      }
       if (message.newApp) {
         // Manak Assist: login in a new tab, then the New Application section fills the
         // licence application for this project. Test Request / Import QR stay OFF.
@@ -1120,6 +1165,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           qeManakNewApp: true,
           // Section switches ON after captcha sign-in (content.js).
           qeManakNewAppEnabled: false,
+          qeManakInclusion: false,
+          qeManakInclusionEnabled: false,
+          inclusionFill: null,
           newAppFill: payloadWithoutPassword(payload),
           newAppLog: null,
           qeManakPortal: {
@@ -1292,8 +1340,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     void (async () => {
       try {
         const url = String(message.url || "");
-        const store = await chrome.storage.local.get(["newAppFill"]);
-        const files = (store.newAppFill && store.newAppFill.files) || [];
+        const store = await chrome.storage.local.get(["newAppFill", "inclusionFill"]);
+        const files = [
+          ...((store.newAppFill && store.newAppFill.files) || []),
+          ...((store.inclusionFill && store.inclusionFill.files) || []),
+        ];
         if (!url || !files.some((f) => f && f.url === url)) {
           sendResponse({ ok: false, error: "File is not part of this application." });
           return;

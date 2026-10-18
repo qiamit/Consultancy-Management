@@ -1,6 +1,7 @@
 /** window.postMessage bridge for QE Consultancy browser extension (see frontend/extensions/qe-consultancy-chrome/bridge.js). */
 
 import { getPortalPasswordForExtension } from './bisPortalSecretApi'
+import type { ManakInclusionPayload } from './inclusionPayload'
 import type { ManakNewAppPayload } from './manakNewAppPayload'
 
 export const MANAK_EBIS_LOGIN_URL = 'https://www.manakonline.in/MANAK/eBISLogin'
@@ -144,6 +145,8 @@ export async function openManakEbisAssist(options: {
   projectId?: string | null
   /** New Application data: the extension opens a new window and fills the licence steps after login. */
   newApp?: ManakNewAppPayload | null
+  /** Change in Scope (Inclusion) data: the extension opens the licence's inclusion form and fills it after login. */
+  inclusion?: ManakInclusionPayload | null
 }): Promise<OpenManakEbisResult> {
   const portalUserId = String(options.portalUserId ?? '').trim()
   const loginUrl = manakEbisLoginHref(portalUserId)
@@ -178,9 +181,10 @@ export async function openManakEbisAssist(options: {
     window.postMessage(
       {
         type: 'QE_MANAK_OPEN',
-        payload: options.newApp ?? null,
-        loginOnly: !options.newApp,
+        payload: options.newApp ?? options.inclusion ?? null,
+        loginOnly: !options.newApp && !options.inclusion,
         newApp: Boolean(options.newApp),
+        inclusion: Boolean(options.inclusion) && !options.newApp,
         projectId: options.projectId ?? '',
         loginUrl,
         portalUserId,

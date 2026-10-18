@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { buildManakNewAppPayload } from './manakNewAppPayload'
+import { buildManakInclusionPayload } from './inclusionPayload'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -88,7 +89,7 @@ function SortableHeader({
 }
 
 const EXTENSION_MISSING_MSG =
-  'QE Consultancy extension is not loaded. Open this app in Chrome or Edge, then reload the extension from chrome://extensions.'
+  'QE Consultancy extension is not connected to this tab. If you just reloaded the extension, refresh this page (Cmd/Ctrl + R) and try again; otherwise reload the extension from chrome://extensions.'
 
 const GRID_TABLE =
   'w-full min-w-0 table-fixed border-collapse font-jakarta [&_th]:border [&_td]:border [&_th]:border-stone-700 [&_td]:border-[#e7e0d4] [&_th]:p-[1mm] [&_td]:!p-[1mm] [&_th]:sticky [&_th]:top-0 [&_th]:z-[1] [&_td]:break-words'
@@ -123,6 +124,7 @@ function RowActions({
   renewalMode = false,
   onStartRenewal,
   onRenewalReminder,
+  inclusionMode = false,
 }: {
   row: BisProjectRow
   client: string
@@ -133,6 +135,8 @@ function RowActions({
   renewalMode?: boolean
   onStartRenewal?: (row: BisProjectRow) => void
   onRenewalReminder?: (row: BisProjectRow) => void
+  /** BIS New Inclusion list: Manak Assist runs the inclusion flow, never the New Application fill. */
+  inclusionMode?: boolean
 }) {
   return (
     <div className="bis-project-row-actions inline-flex shrink-0 items-center gap-0.5">
@@ -217,6 +221,19 @@ function RowActions({
         aria-label={`Manak Assist for ${client}`}
         title="Manak Assist — login and fill the New Application on Manak"
         onClick={() => {
+          if (inclusionMode || (row.project_kind ?? '').trim().toLowerCase() === 'inclusion') {
+            // Inclusion has its own Manak flow (Change in Scope); never the New Application fill.
+            const preparing = toast.loading('Preparing inclusion data, lists and the merged document for Manak…')
+            void buildManakInclusionPayload(row)
+              .finally(() => toast.dismiss(preparing))
+              .then((inclusion) => openManakEbisAssist({ portalUserId: manakLoginFromProject(row).userId, projectId: row.id, inclusion }))
+              .then(({ extensionUsed }) => {
+                if (extensionUsed) toast.success('Opening Manak in a new tab — type the captcha; the inclusion form fills after login')
+                else toast.warning('Extension not detected — opened Manak eBIS in a new tab', { description: EXTENSION_MISSING_MSG })
+              })
+              .catch((err: unknown) => toast.error(err instanceof Error ? err.message : 'Could not prepare the inclusion for Manak'))
+            return
+          }
           const preparing = toast.loading('Preparing application data and all documents for Manak — this can take a minute or two…')
           void buildManakNewAppPayload(row)
             .finally(() => toast.dismiss(preparing))
@@ -543,6 +560,7 @@ export function BisProjectsTable({
                             renewalMode={renewalMode}
                             onStartRenewal={onStartRenewal}
                             onRenewalReminder={onRenewalReminder}
+                            inclusionMode={inclusionMode}
                           />
                         </div>
 
@@ -752,6 +770,7 @@ export function BisProjectsTable({
                           renewalMode={renewalMode}
                           onStartRenewal={onStartRenewal}
                           onRenewalReminder={onRenewalReminder}
+                            inclusionMode={inclusionMode}
                         />
                       </TableCell>
                     </TableRow>

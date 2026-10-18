@@ -650,6 +650,7 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
         })()}
         onModuleKindChange={(kind) => setModule(kind)}
         onProjectSaved={() => void refreshDocumentsRow()}
+        inclusionMode={listMode === 'inclusion'}
       />
 
       <IsCodeDetailsDialog

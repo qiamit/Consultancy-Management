@@ -59,7 +59,7 @@ const ENTRIES: Entry[] = [
   { step: 3, kind: 'cmpf-307', when: (c) => c.applicable(PACKAGING_COMPONENTS_KIND, 'brand', 'Yes') },
   { step: 4, kind: 'cmpf-306', when: (c) => c.applicable(TESTING_COMPONENTS_KIND, 'equipment', 'Yes') },
   { step: 4, kind: 'subcontracted-tests', label: 'Tests Intended to be Sub-Contracted', when: (c) => c.payloads[TESTING_COMPONENTS_KIND]?.inHouseTesting === 'No' },
-  { step: 5, kind: 'osl-offer-and-test-request', when: (c) => c.applicable(TEST_REPORT_COMPONENTS_KIND, 'sample-offer', 'Yes') },
+  { step: 5, kind: 'osl-offer-and-test-request', label: 'Sample Offer Letter', when: (c) => c.applicable(TEST_REPORT_COMPONENTS_KIND, 'sample-offer', 'Yes') },
   { step: 5, kind: 'factory-test-report', when: (c) => c.applicable(TEST_REPORT_COMPONENTS_KIND, 'factory-test-report', 'Yes') },
   { step: 5, kind: 'undertaking-long-duration', when: (c) => c.applicable(TEST_REPORT_COMPONENTS_KIND, 'long-duration', 'No') },
   { step: 5, kind: 'raw-material-test-reports', when: (c) => c.applicable(TEST_REPORT_COMPONENTS_KIND, 'raw-material-test-reports', 'No') },
@@ -83,9 +83,9 @@ export const FILE_KINDS: Record<string, { step: number; label: string; fixed?: b
   'technical-staff-photo': { step: 1, label: 'Passport Size Photo of QCI', fixed: true },
   'packaging-label': { step: 3, label: 'Form of Label' },
   'cmpf-307-agreement': { step: 3, label: 'Brand Agreement' },
-  'cmpf-307-trademark-certificate': { step: 3, label: 'Trademark Certificate' },
+  'cmpf-307-trademark-certificate': { step: 3, label: 'Trademark Certificate', fixed: true },
   'calibration-certificates': { step: 4, label: 'Calibration Certificate' },
-  'consent-letter': { step: 4, label: 'Consent Letter' },
+  'consent-letter': { step: 4, label: 'Consent Letter', fixed: true },
   'osl-sample-test-request': { step: 5, label: 'Test Request' },
   'osl-sample-test-report': { step: 5, label: 'Test Report' },
   'osl-courier-slip': { step: 5, label: 'Courier Slip' },
@@ -105,6 +105,8 @@ export const APPLICATION_DOCUMENT_COMPONENT_KINDS = [
   TESTING_COMPONENTS_KIND,
   TEST_REPORT_COMPONENTS_KIND,
   APPLICATION_DECLARATION_KIND,
+  // Sample rows: batch number for the Test Request / Test Report file names.
+  'osl-sample-requirements' as BisPrintDocumentKind,
 ]
 
 export function buildApplicationDocumentRows(
@@ -132,9 +134,28 @@ export function buildApplicationDocumentRows(
     }))
     const placed = new Map<string, Row[]>()
     const loose: Row[] = []
+    // Test Request / Test Report: "<label> - <batch number>" of the sample row the file is attached to.
+    const samples = Array.isArray(payloads['osl-sample-requirements']?.rows) ? (payloads['osl-sample-requirements']!.rows as Rec[]) : []
+    const SAMPLE_FILE_KEYS: Record<string, string> = { 'osl-sample-test-request': 'testRequestStoragePath', 'osl-sample-test-report': 'testReportStoragePath' }
+    const fileLabel = (file: PreviewFile, meta: { label: string; fixed?: boolean }) => {
+      const key = SAMPLE_FILE_KEYS[file.doc_kind]
+      if (key) {
+        const batch = String(samples.find((sr) => String(sr[key] ?? '') === file.storage_path)?.batchNumber ?? '').trim()
+        return batch ? `${meta.label} - ${batch}` : meta.label
+      }
+      return meta.fixed ? meta.label : `${meta.label} — ${file.file_name}`
+    }
+    // The same file uploaded twice for the same document (e.g. the consent letter on Step 1 and Step 5) shows once.
+    const seenFiles = new Set<string>()
     files.forEach((file) => {
+      // Test Request / Test Report uploads count only while a current sample row points at them (old uploads stay hidden).
+      const sampleKey = SAMPLE_FILE_KEYS[file.doc_kind]
+      if (sampleKey && !samples.some((sr) => String(sr[sampleKey] ?? '').trim() === file.storage_path)) return
+      const dupKey = `${file.doc_kind}|${file.file_name.trim().toLowerCase()}`
+      if (seenFiles.has(dupKey)) return
+      seenFiles.add(dupKey)
       const meta = FILE_KINDS[file.doc_kind] ?? { step: 6, label: 'Uploaded File' }
-      const r: Row = { id: `file:${file.id}`, step: meta.step, type: 'file', file, label: meta.fixed ? meta.label : `${meta.label} — ${file.file_name}` }
+      const r: Row = { id: `file:${file.id}`, step: meta.step, type: 'file', file, label: fileLabel(file, meta) }
       if (meta.after && docs.some((d) => d.type === 'doc' && d.kind === meta.after)) placed.set(meta.after, [...(placed.get(meta.after) ?? []), r])
       else loose.push(r)
     })
@@ -170,9 +191,37 @@ export function otherInformationDocumentRows(rows: Row[]): Row[] {
   return rows.filter((r) => {
     if (r.type === 'file' && (!/\.pdf$/i.test(r.file.storage_path) || r.file.doc_kind === 'application-declaration')) return false
     // The same file uploaded twice (same name) goes once.
-    const key = r.label.trim().toLowerCase()
+    const key = `${r.label}|${r.type === 'file' ? r.file.file_name : ''}`.trim().toLowerCase()
     if (seen.has(key)) return false
     seen.add(key)
     return true
   })
+}
+
+/** Other Information upload switches that start OFF: these documents (and uploaded files of these kinds). */
+const OTHER_INFORMATION_DEFAULT_OFF = new Set(['doc:osl-offer-and-test-request', 'doc:factory-test-report'])
+const OTHER_INFORMATION_DEFAULT_OFF_FILE_KINDS = new Set(['osl-sample-test-request', 'osl-sample-test-report'])
+const defaultOff = (row: Row) => OTHER_INFORMATION_DEFAULT_OFF.has(row.id) || (row.type === 'file' && OTHER_INFORMATION_DEFAULT_OFF_FILE_KINDS.has(row.file.doc_kind))
+
+/** Saved in application-declaration: ids switched off (otherInformationExcluded) / default-off ids switched on (otherInformationIncluded). */
+export type OtherInformationUploadChoice = { excluded: string[]; included: string[] }
+
+export function otherInformationUploadChoice(declaration: Record<string, unknown> | null | undefined): OtherInformationUploadChoice {
+  const ids = (v: unknown) => (Array.isArray(v) ? v.map(String) : [])
+  return { excluded: ids(declaration?.otherInformationExcluded), included: ids(declaration?.otherInformationIncluded) }
+}
+
+export const otherInformationUploadOn = (row: Row, choice: OtherInformationUploadChoice): boolean =>
+  choice.included.includes(row.id) || (!choice.excluded.includes(row.id) && !defaultOff(row))
+
+export function setOtherInformationUpload(choice: OtherInformationUploadChoice, rows: Row[], on: boolean): OtherInformationUploadChoice {
+  const excluded = new Set(choice.excluded)
+  const included = new Set(choice.included)
+  for (const row of rows) {
+    excluded.delete(row.id)
+    included.delete(row.id)
+    if (on && defaultOff(row)) included.add(row.id)
+    if (!on && !defaultOff(row)) excluded.add(row.id)
+  }
+  return { excluded: [...excluded], included: [...included] }
 }

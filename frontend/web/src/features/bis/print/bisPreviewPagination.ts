@@ -144,17 +144,22 @@ export function paginateSheetsIn(doc: Document): void {
       }
     }
     // Headings / captions right above the first moved block go with it (a table that moves whole takes its title).
+    let captionsMoved = false
     if (moveFrom === idx) {
       let m = moveFrom
       while (idx - m < 3 && m - 1 >= start && isLeadIn(kids[m - 1])) m -= 1
       // Only when something stays on this page; otherwise the sheet would be left empty.
-      if (m > start) moveFrom = m
+      if (m > start) {
+        captionsMoved = m < moveFrom
+        moveFrom = m
+      }
     }
     sheet.parentNode!.insertBefore(next, sheet.nextSibling)
     const leadIns = next.children.length
     kids.slice(moveFrom).forEach(function (k) { next.appendChild(k) })
-    // A carried caption goes above the carried table rows, in document order.
-    if (moveFrom < idx && leadIns > (letterhead ? 1 : 0)) {
+    // A carried caption goes above the carried table rows, in document order. Not for a closing block's
+    // paragraph: that already follows the carried rows (e.g. a declaration below a table, then the signature).
+    if (captionsMoved && moveFrom < idx && leadIns > (letterhead ? 1 : 0)) {
       const anchor = next.children[letterhead ? 1 : 0]
       for (let i = moveFrom; i < idx; i++) next.insertBefore(kids[i], anchor)
     }
@@ -200,7 +205,18 @@ const PAGINATE_SCRIPT = `<script id="bis-preview-pagination">
   var done = false;
   function run() { if (done) return; done = true; try { paginateSheetsIn(document); } catch (e) { /* leave the preview as rendered */ } }
   window.__bisPaginateNow = run; // printing calls this right before window.print()
-  function whenReady() { (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(run); }
+  // Fit to width: a page wider than the preview area is zoomed down (no sideways scroll); printing uses the real size.
+  function fit() {
+    var root = document.documentElement;
+    root.style.zoom = '';
+    var need = Math.max(root.scrollWidth, document.body ? document.body.scrollWidth : 0);
+    var have = root.clientWidth;
+    if (need > have + 1) root.style.zoom = String(Math.max(0.35, (have - 2) / need));
+  }
+  window.addEventListener('resize', fit);
+  window.addEventListener('beforeprint', function () { document.documentElement.style.zoom = ''; });
+  window.addEventListener('afterprint', fit);
+  function whenReady() { (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(run).then(fit); }
   if (document.readyState === 'complete') whenReady(); else window.addEventListener('load', whenReady);
 })();
 </script>`

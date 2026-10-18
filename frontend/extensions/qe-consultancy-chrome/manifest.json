@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "QE Consultancy",
-  "version": "2.5.1",
-  "description": "Manak Test Request, Import QR, New Application fill, IS Code portal fetch and search, copy/paste bypass, and bulk field fill for Chrome, Edge, and other Chromium browsers.",
+  "version": "2.6.5",
+  "description": "Manak Test Request, Import QR, New Application and Inclusion fill, IS Code portal fetch and search, copy/paste bypass, and bulk field fill for Chrome, Edge, and other Chromium browsers.",
   "action": {
     "default_title": "QE Consultancy",
     "default_popup": "popup.html"
@@ -41,7 +41,8 @@
         "field-map.js",
         "captcha-assist.js",
         "content.js",
-        "newapp-fill.js"
+        "newapp-fill.js",
+        "inclusion-fill.js"
       ],
       "run_at": "document_idle"
     },

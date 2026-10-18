@@ -209,6 +209,7 @@
         loginOnly: Boolean(data.loginOnly),
         importQr: Boolean(data.importQr),
         newApp: Boolean(data.newApp),
+        inclusion: Boolean(data.inclusion),
         qrCount: Number(data.qrCount) || 1,
         projectId: data.projectId || "",
         loginUrl: data.loginUrl || "",
