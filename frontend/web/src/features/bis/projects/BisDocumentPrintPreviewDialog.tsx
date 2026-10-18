@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import { Download, Eye, Loader2, Printer, X } from 'lucide-react'
+import { Eye, FileDown, FileSpreadsheet, FileType, Loader2, Printer, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -12,7 +12,6 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import {
-  limsDarkBarBtnClass,
   limsDarkBarGlowStyle,
   limsFieldClass,
   limsOutlineBtnClass,
@@ -60,7 +59,7 @@ type PreviewSource = 'attachments' | 'generated' | 'application-pack'
  * Structured form modules always use generated HTML from saved fields.
  */
 function canTryAttachedFiles(kind: BisPrintDocumentKind): boolean {
-  if (kind === 'technical-staff' || kind === 'osl-sample-requirements') return false
+  if (kind === 'technical-staff' || kind === 'osl-sample-requirements' || kind === 'manufacturing-scope') return false
   return (ALL_BIS_PRINT_KINDS as readonly string[]).includes(kind) || kind === 'form1'
 }
 
@@ -110,6 +109,9 @@ function SettingToggle({
   )
 }
 
+const footerIconBtn =
+  'h-8 w-8 rounded-none border border-amber-500/60 bg-stone-800 p-0 text-amber-200 shadow-sm transition-colors hover:border-amber-400 hover:bg-amber-600 hover:text-white disabled:opacity-40'
+
 export function BisDocumentPrintPreviewDialog({
   open,
   onOpenChange,
@@ -117,12 +119,15 @@ export function BisDocumentPrintPreviewDialog({
   kind,
   /** When set, skip uploads/default builder and show this generated HTML. */
   generatedHtml = null,
+  editable,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   row: BisProjectRow | null
   kind: BisPrintDocumentKind | null
   generatedHtml?: string | null
+  /** Word / Excel download, shown like the document's own row buttons. */
+  editable?: { format: 'word' | 'excel'; onDownload: () => void } | null
 }) {
   const [settings, setSettings] = useState<BisDocumentPrintPageSettings>(
     DEFAULT_BIS_DOCUMENT_PRINT_PAGE_SETTINGS,
@@ -1372,7 +1377,7 @@ export function BisDocumentPrintPreviewDialog({
                             }))
                           }
                         />
-                        <SettingToggle
+                        {kind === 'authorization-letter' ? <p className="border border-stone-300 bg-stone-50 p-2 text-xs text-stone-700">Use Include Signature for each person in the Authorization Letter editor to control signature images.</p> : <SettingToggle
                           id="bis-sig-img"
                           label="Show signature image"
                           checked={settings.showSignatureImage}
@@ -1383,7 +1388,7 @@ export function BisDocumentPrintPreviewDialog({
                               showSignatureImage: checked,
                             }))
                           }
-                        />
+                        />}
                         <div className="space-y-1">
                           <Label htmlFor="bis-sig-space" className="text-xs text-stone-700">
                             Signature space (mm)
@@ -1610,32 +1615,44 @@ export function BisDocumentPrintPreviewDialog({
           <div className="absolute top-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
           <div className="relative flex flex-wrap items-center justify-end gap-2">
             {error ? <p className="mr-auto text-xs text-red-300">{error}</p> : null}
-            <Button
-              type="button"
-              variant="outline"
-              className={limsDarkBarBtnClass}
-              onClick={() => onOpenChange(false)}
-            >
-              Close
-            </Button>
-            <Button
-              type="button"
-              className={cn(limsPrimaryBtnClass, 'min-w-[7.5rem]')}
-              disabled={!hasPreview || loading || downloadingPdf}
-              onClick={() => void handleDownloadPdf()}
-            >
-              <Download className="mr-1.5 h-3.5 w-3.5" aria-hidden />
-              {downloadingPdf ? 'Preparing…' : 'PDF'}
-            </Button>
-            <Button
-              type="button"
-              className={cn(limsPrimaryBtnClass, 'min-w-[7.5rem]')}
-              disabled={!hasPreview || loading || printing}
-              onClick={handlePrint}
-            >
-              <Printer className="mr-1.5 h-3.5 w-3.5" aria-hidden />
-              {printing ? 'Printing…' : 'Print'}
-            </Button>
+            {/* Same icons as the document's row buttons: PDF, Word / Excel, Print. */}
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="ghost"
+                className={footerIconBtn}
+                disabled={!hasPreview || loading || downloadingPdf}
+                title="Download PDF"
+                aria-label="Download PDF"
+                onClick={() => void handleDownloadPdf()}
+              >
+                {downloadingPdf ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <FileDown size={15} aria-hidden />}
+              </Button>
+              {editable ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className={footerIconBtn}
+                  disabled={!hasPreview || loading}
+                  title={editable.format === 'excel' ? 'Download Excel' : 'Download Word'}
+                  aria-label={editable.format === 'excel' ? 'Download Excel' : 'Download Word'}
+                  onClick={editable.onDownload}
+                >
+                  {editable.format === 'excel' ? <FileSpreadsheet size={15} aria-hidden /> : <FileType size={15} aria-hidden />}
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                variant="ghost"
+                className={footerIconBtn}
+                disabled={!hasPreview || loading || printing}
+                title="Print"
+                aria-label="Print"
+                onClick={handlePrint}
+              >
+                {printing ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Printer size={15} aria-hidden />}
+              </Button>
+            </div>
           </div>
         </div>
       </DialogContent>

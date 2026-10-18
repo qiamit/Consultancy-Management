@@ -6,6 +6,7 @@ import {
   buildAppointmentLetterHtml,
 } from './appointmentLetterHtml'
 import { authorizationLetterDataFromPrintData, buildAuthorizationLetterHtml } from './authorizationLetterHtml'
+import { authorizationLetterSelectionError, authorizationLetterSettings, authorizationLetterSources } from '../projects/authorizationLetterModel'
 import { bisForm1DataFromPrintData, buildBisForm1Html } from './bisForm1Html'
 import { buildCmpf305Html, cmpf305DataFromPrintData } from './cmpf305Html'
 import { buildCmpf306Html, cmpf306DataFromPrintData } from './cmpf306Html'
@@ -96,7 +97,7 @@ import {
   topManagementDataFromPrintData,
 } from './topManagementHtml'
 import { appendPrintHtmlDocument, injectBisDocumentPageFooters } from './printDocumentShared'
-import { buildUndertakingGeneralHtml, undertakingGeneralDataFromPrintData } from './undertakingGeneralHtml'
+import { buildUndertakingOtherHtml, buildUndertakingIndianStandardsHtml, buildUndertakingGeneralHtml, undertakingGeneralDataFromPrintData } from './undertakingGeneralHtml'
 import {
   buildUndertakingLongDurationHtml,
   undertakingLongDurationDataFromPrintData,
@@ -137,6 +138,8 @@ export type BisPrintDocumentKind =
   | 'factory-test-report'
   | 'osl-sample-requirements'
   | 'undertaking-general'
+  | 'undertaking-indian-standards'
+  | 'undertaking-other'
   | 'undertaking-option-2'
   | 'undertaking-long-duration'
   | 'undertaking-mmf'
@@ -161,6 +164,7 @@ export type BisPrintDocumentKind =
   | 'packaging-marking'
   | 'raw-material-test-reports'
   | 'osl-offer-and-test-request'
+  | 'application-copy'
 
 export const BIS_PRINT_DOCUMENT_LABEL: Record<BisPrintDocumentKind, string> = {
   'legal-documents': 'Legal Documents',
@@ -180,7 +184,9 @@ export const BIS_PRINT_DOCUMENT_LABEL: Record<BisPrintDocumentKind, string> = {
   'updated-sit': 'Updated Scheme of Inspection',
   'factory-test-report': 'Factory Test Report',
   'osl-sample-requirements': 'Sample Requirements, Test Request, & Test Reports',
-  'undertaking-general': 'Undertaking (General & ISS)',
+  'undertaking-general': 'Undertaking for General',
+  'undertaking-indian-standards': 'Undertaking as per Indian Standards',
+  'undertaking-other': 'Undertaking Other if Required',
   'undertaking-option-2': 'Undertaking for Option 2',
   'undertaking-long-duration': 'Undertaking (Long Duration Test)',
   'undertaking-mmf': 'Undertaking for Minimum Marking Fee',
@@ -205,6 +211,7 @@ export const BIS_PRINT_DOCUMENT_LABEL: Record<BisPrintDocumentKind, string> = {
   'packaging-marking': 'Packaging and Marking',
   'raw-material-test-reports': 'Raw Material Test Reports',
   'osl-offer-and-test-request': 'Sample Offer Letter & Test Request',
+  'application-copy': 'Application Copy',
 }
 
 /** Documents offered in the "More prints" menu (Form-I and Authorization Letter have their own buttons). */
@@ -291,7 +298,8 @@ export const BIS_MERGE_PDF_MODULE_KINDS: BisPrintDocumentKind[] = [
 
 /** Kinds that try merged attachments first, then generated HTML. */
 export const BIS_HYBRID_FILE_VIEW_KINDS: BisPrintDocumentKind[] = ALL_BIS_PRINT_KINDS.filter(
-  (k) => k !== 'application-details',
+  // The scope undertaking is always generated; its uploaded drawings are a separate document.
+  (k) => k !== 'application-details' && k !== 'manufacturing-scope',
 )
 
 /** Old module URL slugs redirect into Application Details. */
@@ -304,7 +312,7 @@ export const LEGACY_FILE_MODULE_ALIASES: Record<string, BisPrintDocumentKind> = 
 export const MORE_PRINTS_TOOLTIP =
   'Full BIS application print pack (CMPF, undertakings, staff, SEF, OSL, plant layout, location map)'
 
-function combinePrintHtmlDocuments(title: string, documents: string[]): string {
+export function combinePrintHtmlDocuments(title: string, documents: string[]): string {
   const pageBodies = documents.map((html) => {
     const body = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i)?.[1] ?? html
     const style = html.match(/<style[^>]*>([\s\S]*?)<\/style>/i)?.[1] ?? ''
@@ -325,6 +333,8 @@ function allRequiredUndertakingsHtml(data: BisPrintData): string {
   const defaults: Record<string, boolean> = {
     'self-evaluation-form': true,
     'undertaking-general': true,
+    'undertaking-indian-standards': true,
+    'undertaking-other': true,
     'undertaking-option-2': true,
     'undertaking-long-duration': false,
     'undertaking-mmf': false,
@@ -343,6 +353,8 @@ function allRequiredUndertakingsHtml(data: BisPrintData): string {
   const documents: string[] = []
   if (show('self-evaluation-form')) documents.push(buildSelfEvaluationFormHtml(selfEvaluationFormDataFromPrintData(data)))
   if (show('undertaking-general')) documents.push(buildUndertakingGeneralHtml(undertakingGeneralDataFromPrintData(withPayload(sources.general))))
+  if (show('undertaking-indian-standards') && sources.indian && typeof sources.indian === 'object' && Array.isArray((sources.indian as Record<string, unknown>).lines) && ((sources.indian as Record<string, unknown>).lines as unknown[]).length) documents.push(buildUndertakingIndianStandardsHtml(withPayload(sources.indian)))
+  if (show('undertaking-other') && sources.other && typeof sources.other === 'object' && Array.isArray((sources.other as Record<string, unknown>).lines) && ((sources.other as Record<string, unknown>).lines as unknown[]).length) documents.push(buildUndertakingOtherHtml(withPayload(sources.other)))
   if (show('undertaking-option-2')) documents.push(buildUndertakingOption2Html(undertakingOption2DataFromPrintData(data)))
   if (show('undertaking-long-duration')) documents.push(buildUndertakingLongDurationHtml(undertakingLongDurationDataFromPrintData(withPayload(sources.longDuration))))
   if (show('undertaking-mmf')) documents.push(buildUndertakingMinimumMarkingFeeHtml(undertakingMinimumMarkingFeeDataFromPrintData(withPayload(sources.minimumFee))))
@@ -390,6 +402,8 @@ function markingFeeAcceptanceHtmlFromData(d: BisPrintData, unit: string): string
 const HTML_BUILDERS: Record<BisPrintDocumentKind, (data: BisPrintData) => string> = {
   'legal-documents': (d) => buildLegalDocumentsHtml(legalDocumentsDataFromPrintData(d)),
   'application-details': (d) => buildBisForm1Html(bisForm1DataFromPrintData(d)),
+  // Step 8: the application form alone (Location Map is its own document there).
+  'application-copy': (d) => buildBisForm1Html(bisForm1DataFromPrintData(d)),
   // Kept for typed builders / legacy callers; UI list uses Application Details only.
   'license-details': (d) => buildApplicationDetailsHtml(legalDocumentsDataFromPrintData(d)),
   'branch-details': (d) => buildApplicationDetailsHtml(legalDocumentsDataFromPrintData(d)),
@@ -407,6 +421,8 @@ const HTML_BUILDERS: Record<BisPrintDocumentKind, (data: BisPrintData) => string
   'factory-test-report': (d) => buildFactoryTestReportHtml(factoryTestReportDataFromPrintData(d)),
   'osl-sample-requirements': (d) => buildOslSampleRequirementsHtml(oslSampleRequirementsDataFromPrintData(d)),
   'undertaking-general': (d) => buildUndertakingGeneralHtml(undertakingGeneralDataFromPrintData(d)),
+  'undertaking-indian-standards': (d) => buildUndertakingIndianStandardsHtml(d),
+  'undertaking-other': (d) => buildUndertakingOtherHtml(d),
   'undertaking-option-2': (d) => buildUndertakingOption2Html(undertakingOption2DataFromPrintData(d)),
   'undertaking-long-duration': (d) =>
     buildUndertakingLongDurationHtml(undertakingLongDurationDataFromPrintData(d)),
@@ -445,6 +461,7 @@ const HTML_BUILDERS: Record<BisPrintDocumentKind, (data: BisPrintData) => string
 export async function buildBisDocumentHtml(
   row: BisProjectRow,
   kind: BisPrintDocumentKind,
+  overrides?: { modulePayload?: Record<string, unknown>; topManagement?: Record<string, unknown> },
 ): Promise<string> {
   const { fetchBisModulePayload } = await import('../projects/bisModuleDataApi')
   const { createBisProjectFileUrls } = await import('../projects/bisProjectFilesApi')
@@ -458,7 +475,9 @@ export async function buildBisDocumentHtml(
           ? 'cmpf-311'
           : kind === 'raw-material-details' || kind === 'certified-reference-materials'
             ? 'raw-material-reference'
-            : kind
+            : kind === 'application-copy'
+              ? 'application-details'
+              : kind
   const [
     printData,
     modulePayload,
@@ -469,11 +488,11 @@ export async function buildBisDocumentHtml(
     markingFeePayload,
   ] = await Promise.all([
     loadBisPrintData(row),
-    fetchBisModulePayload(row.id, modulePayloadKind).catch(() => null),
+    overrides?.modulePayload ? Promise.resolve(overrides.modulePayload) : fetchBisModulePayload(row.id, modulePayloadKind).catch(() => null),
     kind === 'top-management'
       ? Promise.resolve(null)
-      : fetchBisModulePayload(row.id, 'top-management').catch(() => null),
-    kind === 'application-details'
+      : overrides?.topManagement ? Promise.resolve(overrides.topManagement) : fetchBisModulePayload(row.id, 'top-management').catch(() => null),
+    kind === 'application-details' || kind === 'application-copy'
       ? fetchBisModulePayload(row.id, 'technical-staff').catch(() => null)
       : Promise.resolve(null),
     kind === 'osl-sample-requirements'
@@ -500,7 +519,7 @@ export async function buildBisDocumentHtml(
   }
 
   if (kind === 'self-evaluation-form' || kind === 'all-required-undertakings') {
-    const [rawMaterials, technicalStaff, brandData, selfEvaluation, generalUndertaking, longDurationUndertaking, minimumFeeUndertaking, packagingMarking] = await Promise.all([
+    const [rawMaterials, technicalStaff, brandData, selfEvaluation, generalUndertaking, longDurationUndertaking, minimumFeeUndertaking, packagingMarking, indianUndertaking, otherUndertaking] = await Promise.all([
       fetchBisModulePayload(row.id, 'raw-material-reference').catch(() => null),
       fetchBisModulePayload(row.id, 'technical-staff').catch(() => null),
       fetchBisModulePayload(row.id, 'cmpf-307').catch(() => null),
@@ -518,6 +537,8 @@ export async function buildBisDocumentHtml(
         : Promise.resolve(null),
       // SEF "Packaging & Marking" is linked to Step 4 Packaging and Marking.
       fetchBisModulePayload(row.id, 'packaging-marking').catch(() => null),
+      kind === 'all-required-undertakings' ? fetchBisModulePayload(row.id, 'undertaking-indian-standards').catch(() => null) : Promise.resolve(null),
+      kind === 'all-required-undertakings' ? fetchBisModulePayload(row.id, 'undertaking-other').catch(() => null) : Promise.resolve(null),
     ])
     data = {
       ...data,
@@ -533,6 +554,8 @@ export async function buildBisDocumentHtml(
         },
         __undertakingSources: {
           general: generalUndertaking,
+          indian: indianUndertaking,
+          other: otherUndertaking,
           longDuration:
             kind === 'all-required-undertakings'
               ? {
@@ -642,6 +665,11 @@ export async function buildBisDocumentHtml(
         },
       }
     }
+  }
+
+  if (kind === 'authorization-letter') {
+    const validation = authorizationLetterSelectionError(authorizationLetterSettings(modulePayload, tm), tm)
+    if (validation) throw new Error(validation)
   }
 
   let html =
@@ -767,10 +795,13 @@ export async function buildBisDocumentHtml(
 
   // Authorization Letter: two signatures — Authorized Person + Authorized By.
   if (tm && (kind === 'top-management' || kind === 'authorization-letter')) {
-    const personPath = String(tm.authorizedSignatureStoragePath ?? '').trim()
+    // Top Management keeps its own embedded letter defaults. The standalone letter has its own selections.
+    const sources = authorizationLetterSources(kind === 'authorization-letter' ? data.modulePayload : null, tm)
+    const standalone = kind === 'authorization-letter'
+    const personPath = sources.person?.signature?.storagePath || (standalone ? '' : String(tm.authorizedSignatureStoragePath ?? '').trim())
     const personFile =
-      String(tm.authorizedSignatureFileName ?? '').trim() || 'authorized-signature'
-    const personUrl = await resolveSignatureUrl(personPath, personFile)
+      sources.person?.signature?.fileName || String(tm.authorizedSignatureFileName ?? '').trim() || 'authorized-signature'
+    const personUrl = !standalone || sources.settings.includePersonSignature ? await resolveSignatureUrl(personPath, personFile) : undefined
 
     const authorizedByName = String(tm.authorizedBy ?? '').trim()
     const byRow = Array.isArray(tm.rows)
@@ -782,24 +813,34 @@ export async function buildBisDocumentHtml(
               authorizedByName,
         ) as Record<string, unknown> | undefined)
       : undefined
-    const byPath = String(byRow?.signatureStoragePath ?? '').trim()
-    const byFile = String(byRow?.signatureFileName ?? '').trim() || 'signature'
-    const byUrl =
+    const byPath = sources.authorizer?.signature?.storagePath || (standalone ? '' : String(byRow?.signatureStoragePath ?? '').trim())
+    const byFile = sources.authorizer?.signature?.fileName || String(byRow?.signatureFileName ?? '').trim() || 'signature'
+    const byUrl = !standalone || sources.settings.includeBySignature ?
       (await resolveSignatureUrl(byPath, byFile)) ||
       // Fallback: if Authorized By is the same person currently applied to documents.
-      (data.documentSignatory?.name.trim() === authorizedByName
+      (!standalone && data.documentSignatory?.name.trim() === authorizedByName
         ? data.documentSignatory.signatureImageUrl
-        : undefined)
+        : undefined) : undefined
+
+    if (standalone && ((personPath && sources.settings.includePersonSignature && !personUrl) || (byPath && sources.settings.includeBySignature && !byUrl))) {
+      throw new Error('A selected signature could not be loaded. Re-upload it or turn off Include Signature for that person.')
+    }
+    if (standalone && sources.settings.includeFirmSeal && sources.settings.sealFile) {
+      const seal = sources.settings.sealFile
+      const sealUrl = await resolveSignatureUrl(seal.storagePath, seal.fileName)
+      if (!sealUrl) throw new Error('The firm seal could not be loaded. Re-upload it or turn off Include Firm Seal.')
+      html = html.replace('<div class="al-firm-seal"></div>', `<div class="al-firm-seal">${toSafeImg(sealUrl, 'Firm seal').replace('pd-sign-img', 'al-seal-img')}</div>`)
+    }
 
     if (personUrl) {
-      const imgTag = toSafeImg(personUrl, 'Authorized person signature')
+      const imgTag = toSafeImg(personUrl, 'Authorized person signature').replace('class="pd-sign-img"', standalone ? 'class="pd-sign-img al-selected-signature"' : 'class="pd-sign-img"')
       html = html.replace(
         /<div class="al-sign-space al-sign-space-person"><\/div>/g,
         `<div class="al-sign-space al-sign-space-person">${imgTag}</div>`,
       )
     }
     if (byUrl) {
-      const imgTag = toSafeImg(byUrl, 'Authorized by signature')
+      const imgTag = toSafeImg(byUrl, 'Authorized by signature').replace('class="pd-sign-img"', standalone ? 'class="pd-sign-img al-selected-signature"' : 'class="pd-sign-img"')
       html = html.replace(
         /<div class="al-sign-space al-sign-space-by"><\/div>/g,
         `<div class="al-sign-space al-sign-space-by">${imgTag}</div>`,

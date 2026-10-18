@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState, type ReactNode } from 'react'
-import { ClipboardList, Download, Eye, FileType, Pencil, type LucideIcon } from 'lucide-react'
+import { ClipboardList, Download, Eye, FileType, Pencil, Printer, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { loadBisPrintData, type BisPrintData } from '../print/loadBisPrintData'
 import type { BisPrintDocumentKind } from '../print/printBisDocument'
@@ -19,6 +19,7 @@ import { toast } from 'sonner'
 import { ManakManagementStep, type ImportDataBundle } from './ManakManagementStep'
 import { ManakManufacturingStep } from './ManakManufacturingStep'
 import {
+  APPLICATION_DECLARATION_KIND,
   CORRESPONDENCE_KIND,
   LONG_DURATION_TESTS_KIND,
   MANUFACTURING_COMPONENTS_KIND,
@@ -29,6 +30,7 @@ import {
 import { ManakPackagingStep } from './ManakPackagingStep'
 import { ManakTestingStep } from './ManakTestingStep'
 import { ManakTestReportsStep } from './ManakTestReportsStep'
+import { ManakDeclarationStep } from './ManakDeclarationStep'
 import type { BisProjectRow } from './types'
 
 /* ───────── Manak Online look: blue section bars, light-blue sub-panels, label / value grids ───────── */
@@ -258,6 +260,7 @@ const STEP_MODULES: BisPrintDocumentKind[] = [
   LONG_DURATION_TESTS_KIND,
   'raw-material-test-reports',
   'factory-test-report',
+  APPLICATION_DECLARATION_KIND,
 ]
 
 type StepData = {
@@ -339,7 +342,6 @@ export function ManakStepPage({
   row,
   refreshKey,
   onEdit,
-  documents,
   onLocationMapPreview,
   onLocationMapPdf,
   onProjectSaved,
@@ -362,12 +364,12 @@ export function ManakStepPage({
   onLocationMapPdf?: () => void
   onProjectSaved?: () => void
   /** Undertaking for Manufacturing Scope: preview / PDF / Word actions. */
-  onScopeDocument?: { preview: () => void; pdf: () => void; word: () => void }
+  onScopeDocument?: { preview: () => void; pdf: () => void; word: () => void; print?: () => void }
   /** Undertaking for Minimum Marking Fee: edit (opens its form) and preview / PDF / Word. */
-  onMarkingFee?: { edit: () => void; preview: () => void; pdf: () => void; word: () => void }
+  onMarkingFee?: { edit: () => void; preview: () => void; pdf: () => void; word: () => void; print?: () => void }
   /** Top Management Details document: preview / PDF / Word. */
-  onTopManagement?: { preview: () => void; pdf: () => void; word: () => void }
-  onTechnicalStaff?: { preview: () => void; pdf: () => void; word: () => void }
+  onTopManagement?: { preview: () => void; pdf: () => void; word: () => void; print?: () => void }
+  onTechnicalStaff?: { preview: () => void; pdf: () => void; word: () => void; print?: () => void }
   /** Document action buttons (Edit / View / Preview / Print / Word / PDF) for one document kind. */
   renderDocActions?: (kind: BisPrintDocumentKind, onModuleEdit: () => void) => ReactNode
   /** PDF / Word / Excel bundle selection. */
@@ -398,6 +400,7 @@ export function ManakStepPage({
         ['Preview the Acceptance of Marking Fee', 'Preview acceptance of marking fee', onMarkingFee.preview, Eye],
         ['Acceptance of Marking Fee — PDF', 'Acceptance of marking fee PDF', onMarkingFee.pdf, Download],
         ['Acceptance of Marking Fee — Word', 'Acceptance of marking fee Word', onMarkingFee.word, FileType],
+        ...(onMarkingFee.print ? ([['Print the Acceptance of Marking Fee', 'Print acceptance of marking fee', onMarkingFee.print, Printer]] as Array<[string, string, () => void, LucideIcon]>) : []),
       ]
     : []
   const markingFeeRows: Array<Array<[string, ReactNode]>> = [
@@ -595,21 +598,28 @@ export function ManakStepPage({
     ) : null
   } else if (stepId === 'declaration') {
     const tm = payloads['top-management']
-    body = (
-      <ManakPanel title="Declaration and Undertaking" onEdit={edit('all-required-undertakings')}>
-        <ManakSubPanel title="Miscellaneous Declaration">
-          <ManakFields
-            items={[
-              ['Name of Person submitting the application', s(tm?.signatoryName) || c?.contactPerson],
-              ['Designation of Person submitting the application', s(tm?.signatoryDesignation)],
-            ]}
-          />
-        </ManakSubPanel>
-        <p className="text-sm text-stone-700">
-          Undertakings and the Self Evaluation Form are generated from the module — see the document rows below.
-        </p>
-      </ManakPanel>
-    )
+    // Person submitting the application: the signatory, else the Step 1 contact person; designation picked up
+    // from the same person in Top Management (Step 2) or the client's contacts. Both stay editable on Step 7.
+    const declarationName = s(tm?.signatoryName) || c?.contactPerson || ''
+    const sameName = (v: unknown) => s(v).toLowerCase() === declarationName.toLowerCase()
+    const declarationDesignation =
+      s(tm?.signatoryDesignation) ||
+      s(list(tm, 'rows').find((r) => sameName(r.personName))?.designation) ||
+      s(c?.topManagement.find((p) => sameName(p.name))?.designation)
+    body = row?.id ? (
+      <ManakDeclarationStep
+        key={row.id}
+        projectRow={row}
+        payload={payloads[APPLICATION_DECLARATION_KIND]}
+        defaultName={declarationName}
+        defaultDesignation={declarationDesignation}
+        onChanged={() => setReloadTick((tick) => tick + 1)}
+        onManagementChanged={() => setReloadTick((tick) => tick + 1)}
+        onEdit={onEdit}
+        renderDocActions={renderDocActions}
+        selection={docSelection}
+      />
+    ) : null
   }
 
   return (
@@ -617,8 +627,6 @@ export function ManakStepPage({
       {loading ? <p className="mb-2 text-xs text-stone-500">Loading application data…</p> : null}
       {error ? <p className="mb-2 text-xs text-red-700">{error}</p> : null}
       <div className={cn(loading && 'opacity-60')}>{body}</div>
-      {/* Steps 1–6 no longer need the documents list: everything is edited / generated in place above. */}
-      {stepId === 'declaration' ? <ManakPanel title="Documents (create · view · print · download)">{documents}</ManakPanel> : null}
     </div>
   )
 }

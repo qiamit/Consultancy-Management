@@ -340,6 +340,17 @@ const text = (v: unknown) => (typeof v === 'string' ? v.trim() : v == null ? '' 
  * Copies one referenced file into the target project so the imported record owns its own copy
  * (deleting it later must never remove the source application's file).
  */
+/** Copies one project file into another application (new storage object + bis_project_files row). */
+export async function copyProjectFileToProject(
+  sourceProjectId: string,
+  targetProjectId: string,
+  file: { id: string; file_name: string; storage_path: string },
+  fallbackDocKind: string,
+): Promise<{ id: string; file_name: string; storage_path: string } | null> {
+  const copy = await duplicateReferencedFile(sourceProjectId, targetProjectId, { id: file.id, name: file.file_name, path: file.storage_path }, fallbackDocKind)
+  return copy ? { id: copy.id, file_name: file.file_name, storage_path: copy.path } : null
+}
+
 async function duplicateReferencedFile(
   sourceProjectId: string,
   targetProjectId: string,

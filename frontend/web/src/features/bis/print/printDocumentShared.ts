@@ -331,8 +331,8 @@ export const PRINT_SCAN_FRIENDLY_CSS = `
     font-family: Arial, Helvetica, "Liberation Sans", sans-serif !important;
     color: #000 !important;
     background: #fff !important;
-    font-size: 13px !important;
-    line-height: 1.45 !important;
+    font-size: 13.5px !important;
+    line-height: 1.5 !important;
     text-rendering: geometricPrecision;
   }
   .pd-sheet img, .al-sheet img, .f1-sheet img {
@@ -362,14 +362,20 @@ export const PRINT_SCAN_FRIENDLY_CSS = `
     color: #000 !important;
     -webkit-text-fill-color: #000 !important;
   }
-  .proc-points p, .ug-points p, .u2-conditions p {
-    font-size: 12.5px !important;
+  /* Scan-legible body text: large enough and dark enough to read after print → seal / sign → scan. */
+  .pd-body, .al-body, .pd-to-block, .al-to-block, .pd-date-block, .al-date-block {
+    font-size: 13.5px !important;
     font-weight: 500 !important;
     line-height: 1.55 !important;
   }
+  .proc-points p, .ug-points p, .u2-conditions p {
+    font-size: 13.5px !important;
+    font-weight: 500 !important;
+    line-height: 1.6 !important;
+  }
   .pd-meta td, .pd-table th, .pd-table td,
   .al-sheet table th, .al-sheet table td {
-    font-size: 12px !important;
+    font-size: 12.5px !important;
     color: #000 !important;
     border-color: #000 !important;
     border-width: 1.25px !important;
@@ -380,7 +386,7 @@ export const PRINT_SCAN_FRIENDLY_CSS = `
     background: #f0f0f0 !important;
   }
   .pd-note, .pd-seal-note, .al-seal-note, .al-sign-label {
-    font-size: 11px !important;
+    font-size: 11.5px !important;
     color: #222 !important;
   }
   .pd-page-num {

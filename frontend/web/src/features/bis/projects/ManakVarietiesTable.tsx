@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
-import { BookOpen, Check, Columns3, Download, Eye, ExternalLink, FileText, FileType, Globe, LogIn, Paperclip, Pencil, Plus, Trash2, Upload, X } from 'lucide-react'
+import { BookOpen, Check, Columns3, Download, Eye, ExternalLink, FileText, FileType, Globe, LogIn, Paperclip, Pencil, Plus, Trash2, Upload, X, Printer } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -214,7 +214,7 @@ export function ManakVarietiesTable({
   scopeNotes?: string
   onScopeSaved?: () => void
   /** Undertaking for Manufacturing Scope: preview / PDF / Word of the scope declaration, generated from the same scope table. */
-  scopeDocument?: { preview: () => void; pdf: () => void; word: () => void }
+  scopeDocument?: { preview: () => void; pdf: () => void; word: () => void; print?: () => void }
 }) {
   const [viewFile, viewer] = usePdfViewer()
   const [confirmAction, confirmDialog] = useConfirmDialog()
@@ -538,6 +538,11 @@ export function ManakVarietiesTable({
           <button type="button" className={cn(iconBtn, 'border-stone-400 text-amber-800')} title="Undertaking for Manufacturing Scope — Word" aria-label="Undertaking for scope Word" onClick={scopeDocument.word}>
             <FileType size={15} aria-hidden />
           </button>
+          {scopeDocument.print ? (
+            <button type="button" className={cn(iconBtn, 'border-stone-400 text-amber-800')} title="Undertaking for Manufacturing Scope — Print" aria-label="Print undertaking for scope" onClick={scopeDocument.print}>
+              <Printer size={15} aria-hidden />
+            </button>
+          ) : null}
         </>
       ) : null}
     </div>
