@@ -276,6 +276,8 @@
 
   const FILE_SLOTS = {
     "own-sit": { names: [/sitApplicantFileUpload/i], labels: [/own\s*sit|scheme\s*of\s*inspection/i] },
+    statutory: { names: [/^statutoryPermissionsFile$/], labels: [] },
+    "auth-letter": { names: [/^authLetterFlagFile$/], labels: [] },
     "outsource-controls": { names: [/^docId930$/], labels: [/controls\s*being\s*exercised/i] },
     hygiene: { names: [/^docId316$/], labels: [/hygien/i] },
     "process-flow": { names: [/^docId909$/], labels: [/process\s*flow/i] },
@@ -482,6 +484,18 @@
       plan.push(scalar("Weekly off", days.length ? "Yes" : "No", [/^isWeeklyOff$/], []));
       // isWeeklyOff = Yes reveals the weeklyOffDays multi-select (select2).
       if (days.length) plan.push(scalar("Weekly off days", days.join(", "), [/^weeklyOffDays$/], []));
+      // Declaration answers from the app's Step 7; "Yes" reveals each upload field.
+      plan.push(scalar("Statutory permissions", dc.statutoryPermissions || "No", [/^statutoryPermissionsFlag$/], []));
+      files("statutory").forEach((f) => plan.push({ kind: "file", key: "Statutory permissions file", slot: "statutory", file: f }));
+      plan.push(scalar("Other information", dc.otherInformation || "No", [/^otherInformationFlag$/], []));
+      plan.push(scalar("Other request for consideration", dc.otherRequest || "No", [/^otherRequirementFlag$/], []));
+      plan.push(scalar("Authorization letter", dc.authorizationLetter || "No", [/^authLetterFlag$/], []));
+      files("auth-letter").forEach((f) => plan.push({ kind: "file", key: "Authorization letter", slot: "auth-letter", file: f }));
+      [["other-info", "otherInformationFile"], ["other-request", "otherRequirementFile"]].forEach(([slot, prefix]) =>
+        files(slot).forEach((f) =>
+          plan.push({ kind: "indexed", key: `${f.label || slot}`, index: f.row || 0, add: /a^/, cells: [], files: [{ ...f, idPrefix: prefix }] }),
+        ),
+      );
       plan.push(scalar("I agree (undertaking)", "Yes", [/^agree$/], [], { type: "checkbox" }));
     }
     return plan;
@@ -674,7 +688,7 @@
       } else if (item.kind === "indexed") {
         const i = item.index;
         const prefix = `${item.key}: `;
-        if (!document.getElementById(`${item.cells[0].idPrefix}${i}`)) {
+        if (item.cells.length && !document.getElementById(`${item.cells[0].idPrefix}${i}`)) {
           const add = Array.from(document.querySelectorAll("[onclick]")).find((e) => item.add.test(e.getAttribute("onclick") || ""));
           if (add) {
             add.click();

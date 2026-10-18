@@ -15,7 +15,7 @@ import { fetchBisModulePayload } from './bisModuleDataApi'
 import { BIS_PROJECT_FILES_BUCKET } from './bisProjectFilesApi'
 import { loadBisProjectPrintPageSettings } from './bisPrintPageSettingsApi'
 import { parseCmpf311Payload } from './cmpf311Model'
-import { CORRESPONDENCE_KIND, MANUFACTURING_COMPONENTS_KIND, TESTING_COMPONENTS_KIND, TEST_REPORT_COMPONENTS_KIND } from './manakModuleKinds'
+import { APPLICATION_DECLARATION_KIND, CORRESPONDENCE_KIND, MANUFACTURING_COMPONENTS_KIND, TESTING_COMPONENTS_KIND, TEST_REPORT_COMPONENTS_KIND } from './manakModuleKinds'
 import type { BisProjectRow } from './types'
 
 type Rec = Record<string, unknown>
@@ -23,6 +23,10 @@ type YesNo = 'Yes' | 'No'
 
 export type ManakNewAppFileSlot =
   | 'own-sit'
+  | 'statutory'
+  | 'other-info'
+  | 'other-request'
+  | 'auth-letter'
   | 'outsource-controls'
   | 'hygiene'
   | 'variety'
@@ -83,7 +87,16 @@ export type ManakNewAppPayload = {
   /** Step 6 switches: long-duration tests and raw-material test reports (Test Reports step "applicable"). */
   testReportOptions: { longDuration: YesNo; rawMaterialReports: YesNo }
   /** weeklyOffDays: e.g. ["Sunday"]; empty = no weekly off. */
-  declaration: { name: string; designation: string; weeklyOffDays: string[] }
+  /** Step 7 from the Declaration & Undertaking module (application-declaration). */
+  declaration: {
+    name: string
+    designation: string
+    weeklyOffDays: string[]
+    statutoryPermissions: YesNo
+    otherInformation: YesNo
+    otherRequest: YesNo
+    authorizationLetter: YesNo
+  }
   files: ManakNewAppFile[]
   /** Uploads the portal asks for that are generated documents, not stored files — the user uploads these. */
   missingFiles: Array<{ step: string; label: string }>
@@ -112,7 +125,7 @@ function mimeFor(name: string): string {
  * Documents the app generates (not stored uploads) that Manak asks for. Rendered the same way as
  * the Documents dialog PDF download, saved under `<projectId>/manak-assist/` (overwritten each time).
  */
-type GenerateWhen = { sitAccept: YesNo; outsourcing: YesNo; hygiene: YesNo; inHouse: YesNo }
+type GenerateWhen = { sitAccept: YesNo; outsourcing: YesNo; hygiene: YesNo; inHouse: YesNo; authorizationLetter: YesNo }
 const GENERATED_DOCS: Array<{ kind: BisPrintDocumentKind; slot: ManakNewAppFileSlot; label: string; step: string; excel?: boolean; when?: (p: GenerateWhen) => boolean }> = [
   // Manak's machinery / equipment uploads take .xlsx — same workbook as the Documents dialog "Download Excel".
   { kind: 'cmpf-305', slot: 'machinery', label: 'Manufacturing Machinery List', step: 'manufacturing', excel: true },
@@ -121,6 +134,7 @@ const GENERATED_DOCS: Array<{ kind: BisPrintDocumentKind; slot: ManakNewAppFileS
   { kind: 'cmpf-311', slot: 'own-sit', label: 'Own SIT (Acceptance of SIT, CMPF-311)', step: 'general', when: (p) => p.sitAccept === 'No' },
   { kind: 'manufacturing-subcontracting', slot: 'outsource-controls', label: 'Controls on outsourced process', step: 'manufacturing', when: (p) => p.outsourcing === 'Yes' },
   { kind: 'hygiene-conditions', slot: 'hygiene', label: 'Hygiene Conditions', step: 'manufacturing', when: (p) => p.hygiene === 'Yes' },
+  { kind: 'authorization-letter', slot: 'auth-letter', label: 'Authorization Letter', step: 'declaration', when: (p) => p.authorizationLetter === 'Yes' },
   { kind: 'process-flow-chart', slot: 'process-flow', label: 'Process Flow Chart', step: 'manufacturing' },
   { kind: 'plant-layout', slot: 'plant-layout', label: 'Plant Layout', step: 'manufacturing' },
 ]
@@ -175,6 +189,7 @@ export async function buildManakNewAppPayload(row: BisProjectRow): Promise<Manak
     TESTING_COMPONENTS_KIND,
     TEST_REPORT_COMPONENTS_KIND,
     'undertaking-general',
+    APPLICATION_DECLARATION_KIND,
   ]
   const [print, projectRes, scopeFiles, consentFiles, ...loaded] = await Promise.all([
     loadBisPrintData(row),
@@ -291,9 +306,76 @@ export async function buildManakNewAppPayload(row: BisProjectRow): Promise<Manak
   if (outsourcing === 'Yes') {
     missingFiles.push({ step: 'manufacturing', label: 'Agreement with manufacturing unit for outsourcing (signed PDF — not stored in Consultancy Pro)' })
   }
+  /* Step 7 — Declaration & Undertaking (same defaults the app's Step 7 shows). */
+  const decl = p[APPLICATION_DECLARATION_KIND] ?? {}
+  const declApplicable = (decl.applicable && typeof decl.applicable === 'object' ? decl.applicable : {}) as Partial<Record<string, YesNo>>
+  const yn = (key: string, fallback: YesNo): YesNo => {
+    const v = declApplicable[key] ?? decl[key]
+    return v === 'Yes' || v === 'No' ? v : fallback
+  }
+  const tmPayload = p['top-management']
+  const defaultName = str(tmPayload?.signatoryName) || c.contactPerson
+  const sameName = (v: unknown) => str(v).toLowerCase() === defaultName.toLowerCase()
+  const submitterName = str(decl.submitterName) || defaultName
+  // Manak rejects a blank designation: fall back to Top Management / correspondence when Step 7 has none.
+  const submitterDesignation =
+    str(decl.submitterDesignation) ||
+    str(tmPayload?.signatoryDesignation) ||
+    str(rowsOf(tmPayload).find((r) => sameName(r.personName))?.designation) ||
+    str(c.topManagement.find((t) => sameName(t.name))?.designation) ||
+    str(corr.designation) ||
+    firstTm?.designation ||
+    ''
+  const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+  const savedDays = Array.isArray(decl.offDays) ? DAYS.filter((d) => (decl.offDays as unknown[]).includes(d)) : []
+  const weeklyOffDays =
+    decl.weeklyOffs === 'Yes'
+      ? savedDays.length ? savedDays : ['Sunday']
+      : decl.weeklyOffs === 'No'
+        ? []
+        : str(p['undertaking-general']?.weeklyOff)
+            .split(/\s*(?:,|&|\band\b)\s*/i)
+            .map((d) => d.trim())
+            .filter((d) => /^(sun|mon|tues|wednes|thurs|fri|satur)day$/i.test(d))
+  const declaration = {
+    name: submitterName,
+    designation: submitterDesignation,
+    weeklyOffDays,
+    statutoryPermissions: yn('statutoryPermissions', 'No'),
+    otherInformation: yn('otherInformation', 'No'),
+    otherRequest: yn('otherRequest', 'No'),
+    authorizationLetter: yn('authorizationLetter', 'Yes'),
+  }
+  const declFile = (v: unknown): { storagePath: string; fileName: string } | null => {
+    if (!v || typeof v !== 'object') return null
+    const f = v as Rec
+    const path = str(f.storagePath ?? f.storage_path)
+    return path ? { storagePath: path, fileName: str(f.fileName ?? f.file_name) } : null
+  }
+  if (declaration.statutoryPermissions === 'Yes') {
+    const f = declFile(decl.statutoryPermissionFile)
+    if (f) await addFile('statutory', 'Statutory permissions', f.storagePath, f.fileName)
+    else missingFiles.push({ step: 'declaration', label: 'Statutory permissions file (not attached in Step 7)' })
+  }
+  for (const [key, slot, label] of [
+    ['otherInformation', 'other-info', 'Other information'],
+    ['otherRequest', 'other-request', 'Other request'],
+  ] as const) {
+    if (declaration[key] !== 'Yes') continue
+    const rows = Array.isArray(decl[`${key}Rows`]) ? (decl[`${key}Rows`] as Rec[]) : []
+    let i = 0
+    for (const r of rows) {
+      const f = declFile(r.file) ?? declFile(r.upload)
+      if (!f) continue
+      await addFile(slot, str(r.fileName) || label, f.storagePath, f.fileName || str(r.fileName), i)
+      i += 1
+    }
+    if (!i) missingFiles.push({ step: 'declaration', label: `${label} files (none attached in Step 7)` })
+  }
+
   // Generated one after another: the PDF service renders with a single browser.
   for (const doc of GENERATED_DOCS) {
-    if (doc.when && !doc.when({ sitAccept, outsourcing, hygiene, inHouse })) continue
+    if (doc.when && !doc.when({ sitAccept, outsourcing, hygiene, inHouse, authorizationLetter: declaration.authorizationLetter })) continue
     try {
       const path = doc.excel ? await generateDocExcel(row, doc.kind) : await generateDocPdf(row, doc.kind)
       await addFile(doc.slot, doc.label, path, `${doc.label}.${doc.excel ? 'xlsx' : 'pdf'}`)
@@ -361,14 +443,7 @@ export async function buildManakNewAppPayload(row: BisProjectRow): Promise<Manak
       longDuration: trApplicable['long-duration'] === 'Yes' ? 'Yes' : 'No',
       rawMaterialReports: trApplicable['raw-material-test-reports'] === 'Yes' ? 'Yes' : 'No',
     },
-    declaration: {
-      weeklyOffDays: str(p['undertaking-general']?.weeklyOff)
-        .split(/\s*(?:,|&|\band\b)\s*/i)
-        .map((d) => d.trim())
-        .filter((d) => /^(sun|mon|tues|wednes|thurs|fri|satur)day$/i.test(d)),
-      name: str(p['top-management']?.signatoryName) || str(corr.name) || firstTm?.name || c.contactPerson,
-      designation: str(p['top-management']?.signatoryDesignation) || str(corr.designation) || firstTm?.designation || '',
-    },
+    declaration,
     files,
     missingFiles,
     copiedAt: new Date().toISOString(),
