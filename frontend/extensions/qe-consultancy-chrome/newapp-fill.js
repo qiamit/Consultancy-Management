@@ -550,11 +550,75 @@
     }
   }
 
+  const selectByHandler = (re) =>
+    Array.from(document.querySelectorAll("select")).find((el) => re.test(el.getAttribute("onchange") || ""));
+
+  /**
+   * New application (GeneralInfoForm without a draft): Do you know IS = Yes, type the IS digits,
+   * Search (searchStandardNumber()), pick the IS (selectStandardNumberChange) and the procedure
+   * option (standardOptionValueChange). A draft opened for edit already has these, so this is a no-op.
+   */
+  async function selectStandardAndOption(g, report) {
+    const temp = document.getElementById("standardNumberTemp");
+    if (!temp) return;
+    const know = document.getElementById("knowStandardNumber");
+    if (know) setValue(know, "Yes");
+    let isSel = selectByHandler(/selectStandardNumberChange/);
+    const chosen = (el) => el && el.selectedIndex > 0 && el.value && el.value !== "0";
+    if (!chosen(isSel)) {
+      if (!g.isDigits) {
+        report.missing.push("Indian Standard (no IS number in Consultancy Pro)");
+        return;
+      }
+      if (norm(temp.value) !== g.isDigits) setText(temp, g.isDigits);
+      const search = Array.from(document.querySelectorAll("button, input[type=button]")).find((b) =>
+        /searchStandardNumber/.test(b.getAttribute("onclick") || ""),
+      );
+      if (!search) {
+        report.missing.push("Indian Standard: Search button");
+        return;
+      }
+      search.click();
+      for (let i = 0; i < 25; i += 1) {
+        await sleep(400);
+        isSel = selectByHandler(/selectStandardNumberChange/);
+        if (isSel && isSel.options.length > 1) break;
+      }
+      if (!isSel || isSel.options.length < 2) {
+        report.missing.push(`Indian Standard: IS ${g.isDigits} not found on Manak`);
+        return;
+      }
+      const want = low(g.isLabel).replace(/\s+/g, "");
+      const options = Array.from(isSel.options).slice(1);
+      const opt = options.find((o) => low(o.text).replace(/\s+/g, "").startsWith(want)) || (options.length === 1 ? options[0] : null);
+      if (!opt) {
+        report.missing.push(`Indian Standard: choose ${g.isLabel} yourself`);
+        return;
+      }
+      isSel.value = opt.value;
+      isSel.dispatchEvent(new Event("change", { bubbles: true }));
+      nudgePage(isSel);
+      report.filled.push(`Indian Standard (${norm(opt.text).slice(0, 40)})`);
+      await sleep(1500);
+    }
+    let optSel = selectByHandler(/standardOptionValueChange/);
+    for (let i = 0; i < 10 && !(optSel && optSel.options.length > 1); i += 1) {
+      await sleep(400);
+      optSel = selectByHandler(/standardOptionValueChange/);
+    }
+    if (optSel && !chosen(optSel)) {
+      if (setValue(optSel, g.procedureOption || "Option 2") === "no-option") report.missing.push(`Select Option: ${g.procedureOption}`);
+      else report.filled.push(`Select Option (${g.procedureOption})`);
+      await sleep(1500);
+    }
+  }
+
   async function runStepInner(step, data) {
     document.querySelectorAll("input, select, textarea").forEach((el) => {
       el.__qeUsed = false;
     });
     const report = { filled: [], missing: [], empty: [], skipped: [] };
+    if (step.id === "general") await selectStandardAndOption(data.general || {}, report);
     const plan = planFor(step.id, data);
     for (const item of plan) {
       if (item.kind === "field") {
@@ -714,9 +778,9 @@
     const list = (items, cls) => (items.length ? `<ul class="${cls}">${items.map((i) => `<li>${esc(i)}</li>`).join("")}</ul>` : "");
     let html = `<div class="mut">${esc(data.isNumber || "")}${data.applicationNumber ? ` · App ${esc(data.applicationNumber)}` : ""}</div>`;
     if (!step) {
-      html += `<p>Open <b>Product Certification → Apply for new licence</b> (or <b>Draft Applications → edit</b> for an existing draft). Each step fills automatically.</p>`;
+      html += `<p>${report && report.note ? esc(report.note) : "Opening Draft Applications / Apply for new licence for this IS…"}</p>`;
     } else if (step.id === "preview") {
-      html += `<p><b>Preview.</b> Check every row and file on this page. The extension stops here — it never clicks <b>Proceed to Payment</b>.</p>`;
+      html += `<p><b>Preview reached — New Application is now OFF.</b> Check every row and file on this page, then click <b>Proceed to Payment</b> yourself. The extension never pays or submits.</p>`;
     } else if (busy) {
       html += `<p><b>${esc(step.title)}</b> — filling…</p>`;
     } else if (report) {
@@ -730,7 +794,9 @@
         const miss = (data.missingFiles || []).filter((f) => f.step === step.id);
         if (miss.length) html += `<div class="miss">Upload yourself (not stored as a file):</div>${list(miss.map((f) => f.label), "miss")}`;
       }
-      html += `<p class="mut">Review, then click <b>Next</b> on the portal.</p>`;
+      html += report.advancing
+        ? `<p class="ok"><b>Step complete — clicking Next…</b></p>`
+        : `<p class="miss"><b>Stopped on this step.</b> Fix the items above, then click <b>Next</b> on the portal — the next step fills automatically.</p>`;
     }
     html += `<div class="row">${step && step.id !== "preview" ? '<button class="pri" id="again">Fill this step again</button>' : ""}<button id="copy" title="Copies this page's field names and labels (no values) to paste to Claude">Copy fields for Claude</button><button id="off">Turn OFF</button></div><div class="mut" id="copied"></div>`;
     root.getElementById("b").innerHTML = html;
@@ -792,16 +858,123 @@
   }
 
   function signedIn() {
-    if (/ebislogin|\/login$/i.test(location.pathname)) return false;
-    return Boolean(document.querySelector("a[href*='logout' i]"));
+    if (/ebislogin/i.test(location.pathname)) return false;
+    // After sign-in Manak's home is /MANAK/login too — a Logout link and no password box means signed in.
+    const pass = document.querySelector("input[type='password']");
+    const passVisible = pass && pass.getBoundingClientRect().width > 0;
+    return Boolean(document.querySelector("a[href*='logout' i]")) && !passVisible;
   }
 
   /* ───────── main ───────── */
 
   let running = false;
+  let finished = false;
+
+  const NAV_KEY = "qeNewAppNavCount";
+
+  function navBudget() {
+    const n = Number(sessionStorage.getItem(NAV_KEY) || "0");
+    if (n >= 6) return false;
+    sessionStorage.setItem(NAV_KEY, String(n + 1));
+    return true;
+  }
+
+  /** Edit (pencil) control in a draft row — never the delete (bin) icon. null when unsure. */
+  function draftEditControl(row) {
+    const blob = (el) =>
+      [el.getAttribute("onclick"), el.getAttribute("href"), String(el.className || ""), el.title, el.getAttribute("alt"), el.getAttribute("src"), el.id]
+        .filter(Boolean)
+        .join(" ");
+    const hits = Array.from(row.querySelectorAll("a, button, i, span, img")).filter((el) => {
+      const b = blob(el);
+      return /edit|pencil|update|modify/i.test(b) && !/delet|remov|trash|bin\b|cancel/i.test(b);
+    });
+    // Prefer the clickable wrapper (a / button) over an inner icon.
+    const clickable = hits.find((el) => el.tagName === "A" || el.tagName === "BUTTON") || hits[0];
+    return clickable || null;
+  }
+
+  /**
+   * Signed in but not on a licence step: Draft list → open this IS's draft (edit), else
+   * Product Certification → Apply for new licence. Returns a panel message.
+   */
+  function autoNavigate(data) {
+    const path = location.pathname;
+    const isKey = low((data.general && data.general.isLabel) || data.isNumber || "").replace(/\s+/g, "");
+    if (/ApplicantPCSaveAsDraft/i.test(path)) {
+      const rows = Array.from(document.querySelectorAll("table tbody tr")).filter((tr) =>
+        low(tr.innerText).replace(/\s+/g, "").includes(isKey),
+      );
+      if (rows.length > 1) return "More than one draft for this IS — open the right one (edit) yourself.";
+      if (rows.length === 1) {
+        const edit = draftEditControl(rows[0]);
+        if (!edit) return "Found the draft for this IS — click its edit (pencil) icon.";
+        if (!navBudget()) return "Stopped automatic navigation — open the draft yourself.";
+        edit.click();
+        return "Opening the existing draft…";
+      }
+      sessionStorage.setItem("qeNewAppWantNew", "1");
+      if (!navBudget()) return "Stopped automatic navigation — open Apply for new licence yourself.";
+      location.href = "/MANAK/ApplicantPC";
+      return "No draft for this IS — opening Apply for new licence…";
+    }
+    if (/ApplicantPC$/i.test(path) || /\/ApplicantPC\b/i.test(path)) {
+      if (sessionStorage.getItem("qeNewAppWantNew") === "1") {
+        const apply = Array.from(document.querySelectorAll("a")).find((a) => /apply\s*for\s*new\s*licen/i.test(a.innerText || ""));
+        if (!apply) return "Click Apply for new licence.";
+        if (!navBudget()) return "Stopped automatic navigation — click Apply for new licence yourself.";
+        sessionStorage.removeItem("qeNewAppWantNew");
+        apply.click();
+        return "Opening Apply for new licence…";
+      }
+      if (!navBudget()) return "Stopped automatic navigation — open Draft Applications yourself.";
+      location.href = "/MANAK/ApplicantPCSaveAsDraft";
+      return "Checking Draft Applications for this IS…";
+    }
+    if (/\/login$|\/home|dashboard/i.test(path)) {
+      if (!navBudget()) return "Stopped automatic navigation — open Product Certification yourself.";
+      location.href = "/MANAK/ApplicantPC";
+      return "Opening Product Certification…";
+    }
+    return "";
+  }
+
+  /** Click the step's Next and watch for a Manak validation message (page stays) or a new page. */
+  function autoNext(data, step, report) {
+    const next = document.getElementById("next") || document.getElementById("save");
+    if (!next || !/nextfunction|submit/i.test(next.getAttribute("onclick") || "")) {
+      report.missing.push("Next button");
+      renderPanel(data, step, report, false);
+      return;
+    }
+    alertCapture(true);
+    renderPanel(data, step, { ...report, advancing: true }, false);
+    next.click();
+    // A successful Next navigates (this script is gone); still here = Manak refused.
+    setTimeout(() => {
+      const log = document.documentElement.getAttribute("data-qe-newapp-alert-log") || "";
+      alertCapture(false);
+      report.portal = log ? log.split("\n").filter(Boolean) : ["Manak did not move to the next step."];
+      report.stopped = true;
+      renderPanel(data, step, report, false);
+    }, 15000);
+  }
+
+  async function finishAtPreview(data) {
+    finished = true;
+    renderPanel(data, { id: "preview", title: "Preview" }, null, false);
+    // Done: switch New Application OFF and leave the application for review.
+    await chrome.storage.local.set({
+      qeManakNewApp: false,
+      qeManakNewAppEnabled: false,
+      newAppFill: null,
+      newAppLog: { step: "preview", message: "Reached Preview — New Application turned OFF for review", at: Date.now() },
+    });
+    chrome.runtime.sendMessage({ type: "QE_MANAK_IDLE" }, () => void chrome.runtime.lastError);
+  }
 
   async function run(force) {
-    if (running) return;
+    if (running || finished) return;
     if (/ebislogin/i.test(location.pathname)) return;
     // Test Request / QR / Test Sample pages belong to the other sections — never fill them here.
     if (/testRequest|QrCode|TestSample|knowfees/i.test(location.pathname)) {
@@ -821,11 +994,17 @@
     }
     const data = store.newAppFill;
     const step = detectStep();
-    const key = `qeNewAppDone|${location.pathname}|${step ? step.id : ""}`;
-    if (!step || step.id === "preview") {
-      renderPanel(data, step, null, false);
+    if (step && step.id === "preview") {
+      await finishAtPreview(data);
       return;
     }
+    if (!step) {
+      const note = signedIn() ? autoNavigate(data) : "";
+      renderPanel(data, null, note ? { note } : null, false);
+      return;
+    }
+    sessionStorage.removeItem(NAV_KEY);
+    const key = `qeNewAppDone|${location.pathname}|${step.id}`;
     if (!force && sessionStorage.getItem(key) === "1") {
       renderPanel(data, step, window.__qeNewAppLastReport || null, false);
       return;
@@ -836,7 +1015,6 @@
       const report = await runStep(step, data);
       window.__qeNewAppLastReport = report;
       sessionStorage.setItem(key, "1");
-      renderPanel(data, step, report, false);
       chrome.storage.local.set({
         newAppLog: {
           step: step.id,
@@ -845,6 +1023,13 @@
           at: Date.now(),
         },
       });
+      // Clean step → Next automatically. Anything missing or a Manak message → stop for the user.
+      if (!force && report.missing.length === 0 && !(report.portal && report.portal.length)) {
+        autoNext(data, step, report);
+      } else {
+        report.stopped = true;
+        renderPanel(data, step, report, false);
+      }
     } finally {
       running = false;
     }

@@ -175,7 +175,8 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
         Boolean(data.pendingFill);
       if (!importArmed && !trArmed && !newAppArmed) return;
 
-      if (/ebislogin/i.test(url) || changeInfo.status === "complete") {
+      // New Application stays armed through all 8 steps; re-fill login only on the eBIS login page.
+      if (/ebislogin/i.test(url) || (changeInfo.status === "complete" && !(newAppArmed && !importArmed && !trArmed))) {
         const portal = (data && data.qeManakPortal) || {};
         const userId = lastPortal.userId || portal.userId || "";
         const password = lastPortal.password || "";

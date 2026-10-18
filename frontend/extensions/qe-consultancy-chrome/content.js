@@ -957,6 +957,8 @@
   }
 
   function fillLoginFields(userId, password) {
+    // Signed-in pages have no login form — never show "No portal password" there.
+    if (!isLoginPage()) return;
     const fromUrl = loginCredentialsFromUrl();
     const id = text(userId) || fromUrl.userId;
     const pwd = text(password) || fromUrl.password;
@@ -2799,6 +2801,10 @@
     if (msg.type === "QE_MANAK_FILL_LOGIN") {
       if (/employeeQrCodeGeneration|generateqr|qrcodegeneration/i.test(location.pathname || "")) {
         sendResponse({ ok: false, message: "Already on the QR codes page; skipping login field fill." });
+        return true;
+      }
+      if (!isLoginPage()) {
+        sendResponse({ ok: false, message: "Not a login page; skipping login field fill." });
         return true;
       }
       fillLoginFields(msg.userId, msg.password);

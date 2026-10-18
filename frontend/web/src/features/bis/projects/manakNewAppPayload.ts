@@ -53,7 +53,8 @@ export type ManakNewAppPayload = {
   isNumber: string
   isTitle: string
   applicationNumber: string
-  general: { sitAccept: YesNo; varieties: Array<{ name: string }> }
+  /** isDigits / isLabel drive the step 1 IS search; procedureOption = Manak "Select Option". */
+  general: { isDigits: string; isLabel: string; procedureOption: 'Option 1' | 'Option 2'; sitAccept: YesNo; varieties: Array<{ name: string }> }
   management: {
     topManagement: Array<{ name: string; designation: string; mobile: string; email: string; din: string }>
     correspondence: { addressType: string; name: string; designation: string; email: string; mobile: string }
@@ -309,7 +310,13 @@ export async function buildManakNewAppPayload(row: BisProjectRow): Promise<Manak
     isNumber: print.isCode.label || print.isCode.isNumber,
     isTitle: print.isCode.title,
     applicationNumber: str(project.application_number ?? row.application_number).replace(/\D/g, ''),
-    general: { sitAccept, varieties: varietyNames.map((name) => ({ name })) },
+    general: {
+      isDigits: str(print.isCode.isNumber || print.isCode.label).replace(/^IS\s*/i, '').split(/[:\s(]/)[0].replace(/\D/g, ''),
+      isLabel: print.isCode.label || print.isCode.isNumber,
+      // Consultancy Pro "simplified" = Manak Option 2 (OSL test report); "normal" = Option 1.
+      procedureOption: str(project.application_process ?? row.application_process).toLowerCase() === 'normal' ? 'Option 1' : 'Option 2',
+      sitAccept,
+      varieties: varietyNames.map((name) => ({ name })) },
     management: {
       topManagement,
       correspondence: {
