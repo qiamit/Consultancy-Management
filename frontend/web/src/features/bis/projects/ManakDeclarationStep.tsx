@@ -19,6 +19,7 @@ import { ManakDocumentActions } from './ManakDocumentActions'
 import { buildMergedBisProjectFilesPdf } from './mergeBisProjectFilesPdf'
 import { FileAttachButton } from './RowFileAttachment'
 import { AiFilePickerDialog, type PickedFile } from './AiFilePickerDialog'
+import { ApplicationDocumentsAutoTable } from './ApplicationDocumentsAutoTable'
 import { EditableRows } from './ManakManagementStep'
 import { fileColumn } from './rowFileColumn'
 import { useShowAiButtons } from '@/hooks/useShowAiAssistant'
@@ -179,7 +180,8 @@ export function ManakDeclarationStep({
       label,
       printKind: UPLOAD_ROW_KIND,
       selectable: false,
-      defaultApplicable: 'No',
+      // Other Information carries every application document by default.
+      defaultApplicable: key === 'otherInformation' ? 'Yes' : 'No',
       importTable: { kind: APPLICATION_DECLARATION_KIND, rowsKey, idKeys: ['fileName'] },
       popupHeaderExtra: showAiButtons
         ? () => (
@@ -197,6 +199,8 @@ export function ManakDeclarationStep({
           )
         : undefined,
       popup: () => (
+        <>
+        {key === 'otherInformation' ? <ApplicationDocumentsAutoTable projectRow={projectRow} /> : null}
         <EditableRows
           projectId={projectId}
           kind={APPLICATION_DECLARATION_KIND}
@@ -208,6 +212,7 @@ export function ManakDeclarationStep({
           onChanged={onChanged}
           addLabel={`Add ${label} file`}
         />
+        </>
       ),
       actions: (edit) => (
         <ManakDocumentActions

@@ -28,6 +28,49 @@
   }
 
   document.addEventListener("qe-silence-alert", applyAlertSilence, true);
+
+  /**
+   * While newapp-fill.js runs a step it sets data-qe-newapp-alerts="1": portal alerts (e.g. a file
+   * type check) are recorded in data-qe-newapp-alert-log instead of blocking the page; the panel
+   * shows them. Back to the native alert as soon as the attribute is removed.
+   */
+  function newAppAlertCapture() {
+    const on = document.documentElement.getAttribute("data-qe-newapp-alerts") === "1";
+    if (on && !window.__qeNewAppAlertOn) {
+      window.__qeNewAppAlertOn = true;
+      window.__qeNewAppNativeAlert = window.alert;
+      window.alert = function (msg) {
+        const root = document.documentElement;
+        const prev = root.getAttribute("data-qe-newapp-alert-log") || "";
+        root.setAttribute("data-qe-newapp-alert-log", `${prev}${prev ? "\n" : ""}${String(msg).slice(0, 300)}`);
+      };
+    } else if (!on && window.__qeNewAppAlertOn) {
+      window.__qeNewAppAlertOn = false;
+      if (window.__qeNewAppNativeAlert) window.alert = window.__qeNewAppNativeAlert;
+    }
+  }
+  document.addEventListener("qe-newapp-alerts", newAppAlertCapture, true);
+
+  /**
+   * New Application fill (newapp-fill.js, isolated world) marks a field it changed and asks
+   * the page's own jQuery to fire "change", so Manak's onchange handlers / select2 update.
+   */
+  document.addEventListener(
+    "qe-newapp-jq-change",
+    () => {
+      const $ = window.jQuery || window.$;
+      const els = document.querySelectorAll("[data-qe-newapp-changed='1']");
+      els.forEach((el) => {
+        el.removeAttribute("data-qe-newapp-changed");
+        try {
+          if ($) $(el).trigger("change");
+        } catch {
+          /* ignore */
+        }
+      });
+    },
+    true,
+  );
   try {
     new MutationObserver(applyAlertSilence).observe(document.documentElement, {
       attributes: true,

@@ -136,6 +136,8 @@ chrome.runtime.onInstalled.addListener(async () => {
       qeManakArmed: false,
       qeManakImportQr: false,
       qeManakImportQrEnabled: false,
+      qeManakNewApp: false,
+      qeManakNewAppEnabled: false,
     });
   }
 });
@@ -161,17 +163,20 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
       "qeManakImportQrEnabled",
       "qeManakImportQrLanded",
       "qeManakPortal",
+      "qeManakNewApp",
     ],
     (data) => {
       const importArmed = data && data.qeManakImportQr === true;
+      const newAppArmed = data && data.qeManakNewApp === true;
       const trArmed =
         data &&
         data.qeManakEnabled === true &&
         data.qeManakArmed === true &&
         Boolean(data.pendingFill);
-      if (!importArmed && !trArmed) return;
+      if (!importArmed && !trArmed && !newAppArmed) return;
 
-      if (/ebislogin/i.test(url) || changeInfo.status === "complete") {
+      // New Application stays armed through all 8 steps; re-fill login only on the eBIS login page.
+      if (/ebislogin/i.test(url) || (changeInfo.status === "complete" && !(newAppArmed && !importArmed && !trArmed))) {
         const portal = (data && data.qeManakPortal) || {};
         const userId = lastPortal.userId || portal.userId || "";
         const password = lastPortal.password || "";
@@ -998,7 +1003,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const importProjectId = String(message.projectId || "").trim();
     const qrCount = Math.max(1, Math.min(5, Number(message.qrCount) || 1));
     const openKey = [
-      message.loginOnly ? "login" : importQr ? "import-qr" : "tr",
+      message.newApp ? "new-app" : message.loginOnly ? "login" : importQr ? "import-qr" : "tr",
+      message.newApp ? String(message.projectId || "") : "",
       portalUserId,
       (payload && payload.sampleId) || "",
       importQr ? String(qrCount) : "",
@@ -1099,6 +1105,47 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           });
           return;
         }
+      }
+      if (message.newApp) {
+        // Manak Assist: login in a new tab, then the New Application section fills the
+        // licence application for this project. Test Request / Import QR stay OFF.
+        await chrome.storage.local.set({
+          pendingFill: null,
+          manakResult: null,
+          qeManakImportQr: false,
+          qeManakImportQrEnabled: false,
+          qeManakEnabled: false,
+          qeManakArmed: true,
+          qeManakHomeReady: false,
+          qeManakNewApp: true,
+          // Section switches ON after captcha sign-in (content.js).
+          qeManakNewAppEnabled: false,
+          newAppFill: payloadWithoutPassword(payload),
+          newAppLog: null,
+          qeManakPortal: {
+            userId: portalUserId,
+          },
+        });
+        const reused = await findConfirmedLoggedInManakTab();
+        if (reused && reused.tab.id) {
+          clearRememberedPortal();
+          await chrome.storage.local.set({ qeManakNewAppEnabled: true });
+          await safeTabUpdate(reused.tab.id, { active: true });
+          void settle(chrome.windows.update(reused.tab.windowId, { focused: true }));
+          void safeSendTab(reused.tab.id, { type: "QE_NEWAPP_REFRESH" });
+          sendResponse({
+            ok: true,
+            message: "Already logged in. New Application ON — open Apply for new licence or the draft.",
+          });
+          return;
+        }
+        const created = await safeTabCreate({ url: ebisLoginUrl, active: true });
+        if (created && created.id) scheduleLoginFill(created.id, portalUserId, portalPassword);
+        sendResponse({
+          ok: true,
+          message: "Opening Manak in a new tab. User ID / Password are filled — type the captcha.",
+        });
+        return;
       }
       if (message.loginOnly) {
         // App-started login always turns Manak Test Request Auto flow ON.
@@ -1236,6 +1283,33 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         });
       },
     );
+    return true;
+  }
+
+  if (message.type === "QE_NEWAPP_FETCH_FILE") {
+    // Content scripts on Manak cannot read our storage (CORS); fetch here.
+    // Only URLs listed in the armed New Application payload are allowed.
+    void (async () => {
+      try {
+        const url = String(message.url || "");
+        const store = await chrome.storage.local.get(["newAppFill"]);
+        const files = (store.newAppFill && store.newAppFill.files) || [];
+        if (!url || !files.some((f) => f && f.url === url)) {
+          sendResponse({ ok: false, error: "File is not part of this application." });
+          return;
+        }
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`Download failed (${res.status}). Re-open Manak Assist to refresh links.`);
+        const buf = new Uint8Array(await res.arrayBuffer());
+        let bin = "";
+        for (let i = 0; i < buf.length; i += 0x8000) {
+          bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+        }
+        sendResponse({ ok: true, base64: btoa(bin), mime: res.headers.get("content-type") || "" });
+      } catch (error) {
+        sendResponse({ ok: false, error: error instanceof Error ? error.message : "Download failed." });
+      }
+    })();
     return true;
   }
 

@@ -164,7 +164,13 @@
     }
     if (data.type === "QE_IS_CODE_PING") {
       markPresent();
-      window.postMessage({ type: "QE_IS_CODE_PONG" }, window.location.origin);
+      let version = "";
+      try {
+        version = chrome.runtime.getManifest().version;
+      } catch {
+        /* orphaned after reload */
+      }
+      window.postMessage({ type: "QE_IS_CODE_PONG", version }, window.location.origin);
       sendRuntime({ type: "QE_IS_CODE_PING" });
       return;
     }
@@ -202,6 +208,7 @@
         payload: data.payload,
         loginOnly: Boolean(data.loginOnly),
         importQr: Boolean(data.importQr),
+        newApp: Boolean(data.newApp),
         qrCount: Number(data.qrCount) || 1,
         projectId: data.projectId || "",
         loginUrl: data.loginUrl || "",

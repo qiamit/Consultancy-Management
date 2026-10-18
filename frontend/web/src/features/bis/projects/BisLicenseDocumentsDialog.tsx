@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { PDFDocument } from 'pdf-lib'
-import * as XLSX from 'xlsx'
 import {
   Check,
   ChevronLeft,
@@ -38,8 +37,6 @@ import { cn } from '@/lib/utils'
 import {
   ALL_BIS_PRINT_KINDS,
   BIS_FILE_MODULE_KINDS,
-  BIS_HYBRID_FILE_VIEW_KINDS,
-  BIS_MERGE_PDF_MODULE_KINDS,
   BIS_PRINT_DOCUMENT_LABEL,
   buildBisDocumentHtml,
   printKindToStorageDocKind,
@@ -56,11 +53,12 @@ import {
   unassignedKinds,
 } from './bisApplicationSteps'
 import { BisDocumentPrintPreviewDialog } from './BisDocumentPrintPreviewDialog'
-import { buildApplicationDetailsPackPdf } from './buildApplicationDetailsPackPdf'
+import { buildBisDocumentPdfBlob, isHybridFileViewKind, isMergePdfModuleKind, pdfBlob, safeFileBase } from './bisDocumentPdf'
 import { loadBisProjectPrintPageSettings } from './bisPrintPageSettingsApi'
 import { buildWordDocx, combineWordHtml } from './bisWordExport'
 import { BisModuleImportDialog } from './BisModuleImportDialog'
 import { paginateHtmlForDownload } from '../print/bisPreviewPagination'
+import { buildExcelWorkbook } from './bisExcelWorkbook'
 import { isImportableBisModuleKind } from './bisModuleImportApi'
 import { LegalDocumentsModuleDialog } from './LegalDocumentsModuleDialog'
 import {
@@ -74,13 +72,6 @@ function isFileModuleKind(kind: BisPrintDocumentKind): boolean {
   return (BIS_FILE_MODULE_KINDS as readonly string[]).includes(kind)
 }
 
-function isMergePdfModuleKind(kind: BisPrintDocumentKind): boolean {
-  return (BIS_MERGE_PDF_MODULE_KINDS as readonly string[]).includes(kind)
-}
-
-function isHybridFileViewKind(kind: BisPrintDocumentKind): boolean {
-  return (BIS_HYBRID_FILE_VIEW_KINDS as readonly string[]).includes(kind)
-}
 import { clientDisplayName, formatCmL, isCodeDisplayLabel, type BisProjectRow } from './types'
 
 const checkboxClass =
@@ -90,19 +81,6 @@ const rowSelectedClass = 'bg-[#fde68a]/80 hover:bg-[#fde68a]/80'
 
 const actionBtnClass =
   'h-8 w-8 rounded-none border border-stone-400 bg-white/70 p-0 text-amber-800 shadow-sm hover:border-amber-600 hover:bg-amber-50 hover:text-amber-950 focus-visible:ring-2 focus-visible:ring-amber-500/40'
-
-function safeFileBase(label: string, cmL: string): string {
-  const raw = [label, cmL]
-    .map((part) => part.trim())
-    .filter((part) => part && !/^[-\u2012-\u2015]+$/.test(part))
-    .join('-')
-  return raw
-    .replace(/[\\/:*?"<>|]+/g, '_')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 80) || 'document'
-}
 
 function triggerBlobDownload(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
@@ -116,12 +94,6 @@ function triggerBlobDownload(blob: Blob, filename: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 2_000)
 }
 
-function pdfBlob(bytes: Uint8Array): Blob {
-  const copy = new Uint8Array(bytes.byteLength)
-  copy.set(bytes)
-  return new Blob([copy.buffer], { type: 'application/pdf' })
-}
-
 async function mergePdfBlobs(blobs: Blob[]): Promise<Blob> {
   const merged = await PDFDocument.create()
   for (const blob of blobs) {
@@ -133,64 +105,6 @@ async function mergePdfBlobs(blobs: Blob[]): Promise<Blob> {
   }
   const bytes = await merged.save()
   return pdfBlob(bytes)
-}
-
-function buildExcelWorkbook(
-  documents: Array<{ title: string; html: string }>,
-): Blob {
-  const workbook = XLSX.utils.book_new()
-  const usedNames = new Set<string>()
-  const addSheet = (sheet: XLSX.WorkSheet, rawName: string) => {
-    const base = rawName.replace(/[\\/?*:[\]]/g, ' ').trim().slice(0, 25) || 'Document'
-    let name = base
-    let suffix = 2
-    while (usedNames.has(name.toLowerCase())) {
-      name = `${base.slice(0, 25 - String(suffix).length)} ${suffix}`
-      suffix += 1
-    }
-    usedNames.add(name.toLowerCase())
-    XLSX.utils.book_append_sheet(workbook, sheet, name)
-  }
-
-  for (const document of documents) {
-    const parsed = new DOMParser().parseFromString(document.html, 'text/html')
-    // A table continued on later pages (same class, e.g. CMPF-305 machinery) becomes one sheet with one header row.
-    const firstByClass = new Map<string, HTMLTableElement>()
-    for (const table of Array.from(parsed.querySelectorAll('table'))) {
-      const key = table.className.trim()
-      const first = key ? firstByClass.get(key) : undefined
-      if (!key) continue
-      if (!first) {
-        firstByClass.set(key, table)
-        continue
-      }
-      const target = first.tBodies[0] ?? first.appendChild(parsed.createElement('tbody'))
-      // The first page's single-cell placeholder (e.g. "Separate Sheet Attached") is not a data row.
-      for (const tr of Array.from(target.rows)) if (tr.cells.length === 1 && tr.cells[0]!.colSpan > 1) tr.remove()
-      for (const body of Array.from(table.tBodies)) for (const tr of Array.from(body.rows)) target.appendChild(tr)
-      table.remove()
-    }
-    const tables = Array.from(parsed.querySelectorAll('table'))
-    if (tables.length > 0) {
-      tables.forEach((table, index) => {
-        addSheet(
-          XLSX.utils.table_to_sheet(table, { raw: true }),
-          tables.length === 1 ? document.title : `${document.title} ${index + 1}`,
-        )
-      })
-      continue
-    }
-    const lines = (parsed.body.innerText || parsed.body.textContent || '')
-      .split(/\n+/)
-      .map((line) => line.trim())
-      .filter(Boolean)
-    addSheet(XLSX.utils.aoa_to_sheet(lines.map((line) => [line])), document.title)
-  }
-
-  const bytes = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
-  return new Blob([bytes], {
-    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  })
 }
 
 /** Documents downloaded as Excel instead of Word (tabular lists). */
@@ -645,41 +559,7 @@ export function BisLicenseDocumentsDialog({
     settings: typeof DEFAULT_BIS_DOCUMENT_PRINT_PAGE_SETTINGS,
   ): Promise<Blob> => {
     if (!row) throw new Error('Select a license first.')
-
-    if (kind === 'application-details') {
-      const html = await buildBisDocumentHtml(row, kind)
-      return buildApplicationDetailsPackPdf(
-        html,
-        row.id,
-        row.client_id,
-        settings,
-        `${safeFileBase(BIS_PRINT_DOCUMENT_LABEL[kind], cmL)}.pdf`,
-      )
-    }
-
-    if (isMergePdfModuleKind(kind) || isHybridFileViewKind(kind)) {
-      const attached = await buildMergedBisProjectFilesPdf(
-        row.id,
-        [printKindToStorageDocKind(kind)],
-        { strict: true },
-      )
-      if (attached) return pdfBlob(attached)
-      if (isMergePdfModuleKind(kind)) {
-        throw new Error(`No attached files found for ${BIS_PRINT_DOCUMENT_LABEL[kind]}.`)
-      }
-    }
-
-    // Same page breaks as the preview.
-    const html = await paginateHtmlForDownload(
-      applyBisDocumentPrintPageSettings(await buildBisDocumentHtml(row, kind), settings),
-    )
-    return renderPdfViaPlaywright({
-      html,
-      filename: `${safeFileBase(BIS_PRINT_DOCUMENT_LABEL[kind], cmL)}.pdf`,
-      format: mapPageSizeToPlaywrightFormat(settings.pageSize),
-      landscape: settings.orientation === 'landscape',
-      margin: { top: '0mm', right: '0mm', bottom: '0mm', left: '0mm' },
-    })
+    return buildBisDocumentPdfBlob(row, kind, settings)
   }
 
   const downloadPdfDocuments = async (

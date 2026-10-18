@@ -957,6 +957,8 @@
   }
 
   function fillLoginFields(userId, password) {
+    // Signed-in pages have no login form — never show "No portal password" there.
+    if (!isLoginPage()) return;
     const fromUrl = loginCredentialsFromUrl();
     const id = text(userId) || fromUrl.userId;
     const pwd = text(password) || fromUrl.password;
@@ -1376,7 +1378,18 @@
           return;
         }
         // Belt-and-suspenders: if Import QR armed mid-flight, never open Test Request.
-        chrome.storage.local.get(["qeManakImportQr"], (store) => {
+        chrome.storage.local.get(["qeManakImportQr", "qeManakNewApp"], (store) => {
+          // Manak Assist (New Application): stay on the dashboard; newapp-fill.js takes over.
+          if (store && store.qeManakNewApp === true) {
+            chrome.storage.local.set({
+              qeManakNewAppEnabled: true,
+              pendingFill: null,
+              qeManakEnabled: false,
+              qeManakImportQr: false,
+            });
+            showBanner("Signed in. New Application ON — open Apply for new licence or your draft.", true);
+            return;
+          }
           if (store && store.qeManakImportQr === true) {
             chrome.storage.local.set({
               qeManakImportQrEnabled: true,
@@ -2037,6 +2050,14 @@
       return { ok: false, message: "Extension is OFF." };
     }
     if (!payload) return { ok: false, message: "No QE_MANAK_TR_V1 payload." };
+    // New Application (Manak Assist) owns this session — never open or fill Test Request.
+    if (payload.kind === "QE_MANAK_NEWAPP_V1") return { ok: false, message: "New Application payload." };
+    const newApp = await new Promise((resolve) =>
+      chrome.storage.local.get(["qeManakNewApp", "qeManakNewAppEnabled"], (d) =>
+        resolve(Boolean(d && (d.qeManakNewApp === true || d.qeManakNewAppEnabled === true))),
+      ),
+    );
+    if (newApp && !force) return { ok: false, message: "New Application is ON." };
 
     const state = await readArmedState();
     if (!force && state.qeManakArmed !== true) {
@@ -2780,6 +2801,10 @@
     if (msg.type === "QE_MANAK_FILL_LOGIN") {
       if (/employeeQrCodeGeneration|generateqr|qrcodegeneration/i.test(location.pathname || "")) {
         sendResponse({ ok: false, message: "Already on the QR codes page; skipping login field fill." });
+        return true;
+      }
+      if (!isLoginPage()) {
+        sendResponse({ ok: false, message: "Not a login page; skipping login field fill." });
         return true;
       }
       fillLoginFields(msg.userId, msg.password);
