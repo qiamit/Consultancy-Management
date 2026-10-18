@@ -281,7 +281,7 @@ function buildFormBody(data: BisForm1Data): string {
               </td>
               <td class="f1-grades">
                 <div class="f1-grades-head">License Scope</div>
-                <div class="f1-grades-body">${scopeMarkup(data.gradesText)}</div>
+                <div class="f1-grades-body${parseBisNotesScope(data.gradesText).mode === 'plain' ? '' : ' f1-grades-body--table'}">${scopeMarkup(data.gradesText)}</div>
               </td>
             </tr>
           </table>
@@ -398,9 +398,16 @@ const FORM1_STYLES = `
   .f1-grades { width: 75%; padding: 0 !important; }
   .f1-grades-head { text-align: center; font-weight: 700; font-size: 12px; border-bottom: 1px solid #111; padding: 4px; background: #f5f5f4; }
   .f1-grades-body { padding: 4px 5px; font-size: 12px; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
-  .f1-scope-table { width: 100%; border-collapse: collapse; table-layout: auto; }
-  .f1-scope-table th, .f1-scope-table td { border: 1px solid #333; padding: 3px 5px; text-align: left; font-size: 12px; line-height: 1.35; overflow-wrap: anywhere; }
+  /* Scope table sits flush inside the License Scope cell: Component column wide enough for its words, values centred. */
+  .f1-grades-body--table { padding: 0; white-space: normal; }
+  .f1-scope-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  .f1-scope-table th, .f1-scope-table td { border: 1px solid #333; padding: 4px 6px; text-align: center; vertical-align: middle; font-size: 12px; line-height: 1.4; overflow-wrap: break-word; word-break: normal; hyphens: none; }
   .f1-scope-table th { font-weight: 700; background: #f5f5f4; }
+  .f1-scope-table th:first-child, .f1-scope-table td:first-child { width: 26%; font-weight: 600; }
+  .f1-scope-table thead th { border-top: 0; }
+  .f1-scope-table tr > :first-child { border-left: 0; }
+  .f1-scope-table tr > :last-child { border-right: 0; }
+  .f1-scope-table tbody tr:last-child td { border-bottom: 0; }
   .f1-cap-cell { width: 20%; text-align: center; padding: 3px 4px !important; }
   .f1-cap-cell .f1-mini, .f1-cap-cell .f1-val { text-align: center; }
   .f1-licenses-body { margin-top: 3px; font-size: 12px; min-height: 16px; line-height: 1.35; }

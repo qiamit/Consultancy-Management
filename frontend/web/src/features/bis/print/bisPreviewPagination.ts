@@ -42,12 +42,43 @@ export function paginateSheetsIn(doc: Document): void {
     if (table.tFoot) shell.appendChild(table.tFoot.cloneNode(true))
     return { table: shell, body: body }
   }
+  /** Where a block really ends: a table ends with its last row (and footer), not its outer border. */
+  function contentBottom(el: HTMLElement, sheet: HTMLElement): number {
+    if (el.tagName === 'TABLE') {
+      const t = el as HTMLTableElement
+      const body = t.tBodies.length ? t.tBodies[t.tBodies.length - 1] : null
+      const last = body && body.rows.length ? body.rows[body.rows.length - 1] : null
+      if (last) return bottomOf(last, sheet) + (t.tFoot ? t.tFoot.offsetHeight : 0)
+    }
+    return bottomOf(el, sheet)
+  }
+  /** A heading / caption that belongs with the block after it (never left alone at the foot of a page). */
+  function isLeadIn(el: HTMLElement): boolean {
+    if (/^H[1-6]$/.test(el.tagName)) return true
+    if (/title|heading|caption|-ref\b|manual-ref|section-head/i.test(el.className || '')) return el.offsetHeight < 80
+    return el.tagName === 'P' && el.offsetHeight < 32
+  }
+  /** A list-like block (numbered points, list items) that can be split between pages item by item. */
+  function splittableItems(el: HTMLElement): HTMLElement[] | null {
+    if (!/^(DIV|OL|UL|SECTION)$/.test(el.tagName) || /sign|letterhead|seal/i.test(el.className || '')) return null
+    const items = Array.prototype.slice.call(el.children) as HTMLElement[]
+    if (items.length < 2 || !items.every(function (c) { return /^(P|LI|DIV)$/.test(c.tagName) })) return null
+    return items
+  }
+  /** Empty copy of a list block for the next page (an <ol> continues its numbering). */
+  function cloneListShell(el: HTMLElement, movedFrom: number): HTMLElement {
+    const shell = el.cloneNode(false) as HTMLElement
+    shell.removeAttribute('id')
+    if (el.tagName === 'OL') shell.setAttribute('start', String((parseInt(el.getAttribute('start') || '1', 10) || 1) + movedFrom))
+    return shell
+  }
   /** Moves what does not fit into a new sheet right after this one; returns it (or null when nothing moved). */
   function split(sheet: HTMLElement): HTMLElement | null {
-    const max = limitOf(sheet) + 1
+    // A couple of pixels of tolerance: borders and rounding must not push a whole block to the next page.
+    const max = limitOf(sheet) + 2
     const kids = flowChildren(sheet)
     let idx = -1
-    for (let i = 0; i < kids.length; i++) { if (bottomOf(kids[i], sheet) > max) { idx = i; break } }
+    for (let i = 0; i < kids.length; i++) { if (contentBottom(kids[i], sheet) > max) { idx = i; break } }
     if (idx < 0) return null
     // A letterhead at the top of the sheet is repeated on each continuation page; content starts below it.
     const letterhead = kids[0] && kids[0].classList.contains('pd-letterhead') ? kids[0] : null
@@ -65,7 +96,11 @@ export function paginateSheetsIn(doc: Document): void {
       const rowMax = max - (foot ? foot.offsetHeight : 0)
       let r = -1
       for (let j = 0; j < rows.length; j++) { if (bottomOf(rows[j], sheet) > rowMax) { r = j; break } }
+      // Every row fits and only the footer spills over: move just the last row, never the whole table.
+      if (r < 0 && rows.length > 1) r = rows.length - 1
       if (r > 0) {
+        // Headings marked to repeat (e.g. "Scheme of Inspection & Testing") open each continuation page.
+        kids.slice(start, idx).forEach(function (k) { if (k.classList.contains('pd-repeat-head')) next.appendChild(k.cloneNode(true)) })
         const rest = cloneTableShell(first as HTMLTableElement)
         rows.slice(r).forEach(function (row) { rest.body.appendChild(row) })
         next.appendChild(rest.table)
@@ -73,6 +108,18 @@ export function paginateSheetsIn(doc: Document): void {
       } else if (idx === start) {
         return null
       }
+    } else if (splittableItems(first) && (function () {
+      const items = splittableItems(first)!
+      let c = -1
+      for (let j = 0; j < items.length; j++) { if (bottomOf(items[j], sheet) > max) { c = j; break } }
+      if (c <= 0) return false
+      const rest = cloneListShell(first, c)
+      items.slice(c).forEach(function (it) { rest.appendChild(it) })
+      next.appendChild(rest)
+      moveFrom = idx + 1
+      return true
+    })()) {
+      // Split point by point, like table rows.
     } else if (idx === start) {
       return null // a single block taller than a page cannot be split here
     } else {
@@ -88,10 +135,29 @@ export function paginateSheetsIn(doc: Document): void {
         const carried = cloneTableShell(before as HTMLTableElement)
         carried.body.appendChild(body0.rows[body0.rows.length - 1])
         next.appendChild(carried.table)
+      }      else if (before && first === kids[kids.length - 1] && splittableItems(before)) {
+        // A list of points precedes the closing block: its last point comes along.
+        const items = splittableItems(before)!
+        const carried = cloneListShell(before, items.length - 1)
+        carried.appendChild(items[items.length - 1])
+        next.appendChild(carried)
       }
     }
+    // Headings / captions right above the first moved block go with it (a table that moves whole takes its title).
+    if (moveFrom === idx) {
+      let m = moveFrom
+      while (idx - m < 3 && m - 1 >= start && isLeadIn(kids[m - 1])) m -= 1
+      // Only when something stays on this page; otherwise the sheet would be left empty.
+      if (m > start) moveFrom = m
+    }
     sheet.parentNode!.insertBefore(next, sheet.nextSibling)
+    const leadIns = next.children.length
     kids.slice(moveFrom).forEach(function (k) { next.appendChild(k) })
+    // A carried caption goes above the carried table rows, in document order.
+    if (moveFrom < idx && leadIns > (letterhead ? 1 : 0)) {
+      const anchor = next.children[letterhead ? 1 : 0]
+      for (let i = moveFrom; i < idx; i++) next.insertBefore(kids[i], anchor)
+    }
     return next
   }
   const originals = Array.prototype.slice.call(doc.querySelectorAll(SHEETS)) as HTMLElement[]
@@ -105,6 +171,17 @@ export function paginateSheetsIn(doc: Document): void {
     }
     // Every page of a split sheet gets its own page number.
     if (pageNum) created.forEach(function (s) { s.appendChild(pageNum!.cloneNode(true)) })
+  })
+  // A full page must not scroll: when only the last block's bottom margin (blank space) spills past the sheet,
+  // drop that margin.
+  ;(Array.prototype.slice.call(doc.querySelectorAll(SHEETS)) as HTMLElement[]).forEach(function (sheet) {
+    if (sheet.scrollHeight <= sheet.clientHeight) return
+    const kids = flowChildren(sheet)
+    const last = kids[kids.length - 1]
+    if (!last) return
+    const view = doc.defaultView
+    const mb = view ? parseFloat(view.getComputedStyle(last).marginBottom || '0') : 0
+    if (mb > 0 && sheet.scrollHeight - sheet.clientHeight <= mb + 1) last.style.marginBottom = '0px'
   })
   // Renumber "Page X of Y" by position among all sheets (a cover page without a number still counts).
   const allSheets = Array.prototype.slice.call(doc.querySelectorAll(SHEETS)) as HTMLElement[]

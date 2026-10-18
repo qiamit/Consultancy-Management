@@ -182,7 +182,7 @@ function blobFromPdfBytes(bytes: Uint8Array): Blob {
   return new Blob([ownedBytes.buffer], { type: 'application/pdf' })
 }
 
-function writePdfViewerHtml(
+export function writePdfViewerHtml(
   win: Window,
   title: string,
   blobUrl: string,

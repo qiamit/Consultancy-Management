@@ -7,8 +7,6 @@ import { LimsFieldWithAdd } from '@/components/lims/LimsFieldWithAdd'
 import { usePdfViewer } from '@/components/ui/usePdfViewer'
 import { cn } from '@/lib/utils'
 import { limsDialogClass, limsFieldAddBtnClass, limsFieldClass, limsPrimaryBtnClass } from '@/lib/limsThemeUi'
-import { buildBisDocumentHtml } from '../print/printBisDocument'
-import { BisDocumentPrintPreviewDialog } from './BisDocumentPrintPreviewDialog'
 import { fetchBisModulePayload, saveBisModulePayload } from './bisModuleDataApi'
 import { createBisProjectFileUrls, deleteBisProjectFile, uploadBisProjectFile } from './bisProjectFilesApi'
 import { authorizationLetterSelectionError, authorizationLetterSettings, authorizationPeople, authorizationPersonKey, type AuthorizationPerson } from './authorizationLetterModel'
@@ -18,8 +16,8 @@ import type { DeclarationFile } from './manakDeclarationFiles'
 import type { BisProjectRow } from './types'
 import { APPLICATION_DECLARATION_KIND } from './manakModuleKinds'
 
-const th = 'border border-stone-700 bg-stone-800 px-3 py-2 text-left text-[11px] font-bold uppercase tracking-wider text-amber-200'
-const td = 'border border-stone-300 px-3 py-2 align-middle'
+const th = 'border border-stone-700 bg-stone-800 px-3 py-2 text-center text-[11px] font-bold uppercase tracking-wider text-amber-200'
+const td = 'border border-stone-300 px-3 py-2 text-center align-middle'
 const imageAccept = '.png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp'
 
 export function AuthorizationLetterDialog({ open, onOpenChange, projectRow, legacyFile, onManagementChanged, onSaved }: {
@@ -36,7 +34,6 @@ export function AuthorizationLetterDialog({ open, onOpenChange, projectRow, lega
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
-  const [previewHtml, setPreviewHtml] = useState<string | null>(null)
   const [viewFile, viewer] = usePdfViewer()
   const dateInput = useRef<HTMLInputElement>(null)
   const people = authorizationPeople(tm)
@@ -59,7 +56,7 @@ export function AuthorizationLetterDialog({ open, onOpenChange, projectRow, lega
 
   const close = (next: boolean) => {
     if (busy) return
-    if (!next) { setPreviewHtml(null); setLoading(true) }
+    if (!next) { setLoading(true) }
     onOpenChange(next)
   }
   const view = async (file: DeclarationFile, title: string) => {
@@ -96,7 +93,8 @@ export function AuthorizationLetterDialog({ open, onOpenChange, projectRow, lega
     } catch (err) { toast.error(err instanceof Error ? err.message : 'Could not upload the image.') }
     finally { setBusy(false) }
   }
-  const prepare = async (save: boolean) => {
+  /** Saves the letter choices; the letter is previewed / downloaded from its row on Step 7. */
+  const save = async () => {
     setBusy(true)
     try {
       const current = await fetchBisModulePayload(projectRow.id, 'top-management')
@@ -104,18 +102,15 @@ export function AuthorizationLetterDialog({ open, onOpenChange, projectRow, lega
       const validation = authorizationLetterSelectionError(form, current)
       if (validation) throw new Error(validation)
       const payload = { ...raw, ...form }
-      if (save) {
-        await saveBisModulePayload(projectRow.id, 'authorization-letter', payload)
-        setRaw(payload)
-        const person = authorizationPeople(current).find((item) => item.key === form.authorizedPersonKey)!
-        const declaration = await fetchBisModulePayload(projectRow.id, APPLICATION_DECLARATION_KIND)
-        await saveBisModulePayload(projectRow.id, APPLICATION_DECLARATION_KIND, { ...declaration, authorizationLetter: 'Yes', submitterName: person.name, submitterDesignation: person.designation })
-        onSaved(person)
-        toast.success('Authorization Letter details saved.')
-      }
-      const html = await buildBisDocumentHtml(projectRow, 'authorization-letter', { modulePayload: payload, topManagement: current ?? {} })
-      setPreviewHtml(html)
-    } catch (err) { toast.error(err instanceof Error ? err.message : 'Could not prepare the Authorization Letter.') }
+      await saveBisModulePayload(projectRow.id, 'authorization-letter', payload)
+      setRaw(payload)
+      const person = authorizationPeople(current).find((item) => item.key === form.authorizedPersonKey)!
+      const declaration = await fetchBisModulePayload(projectRow.id, APPLICATION_DECLARATION_KIND)
+      await saveBisModulePayload(projectRow.id, APPLICATION_DECLARATION_KIND, { ...declaration, authorizationLetter: 'Yes', submitterName: person.name, submitterDesignation: person.designation })
+      onSaved(person)
+      toast.success('Authorization Letter saved.')
+      onOpenChange(false)
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Could not save the Authorization Letter.') }
     finally { setBusy(false) }
   }
   const selectPerson = (role: 'person' | 'by') => {
@@ -124,11 +119,11 @@ export function AuthorizationLetterDialog({ open, onOpenChange, projectRow, lega
     const signatureFlag = role === 'person' ? 'includePersonSignature' : 'includeBySignature'
     const roleLabel = role === 'person' ? 'Authorized Person' : 'Authorized By'
     return <tr className={role === 'person' ? 'bg-[#fffcf7]' : 'bg-[#f7f3eb]'}>
-      <th className={cn(td, 'text-left font-semibold')}>{roleLabel} <span className="text-red-600">*</span></th>
-      <td className={td}><select aria-label={roleLabel} className={cn(limsFieldClass, 'w-full min-w-48')} disabled={loading || busy || !!error} value={form[key]} onChange={(event) => setForm((previous) => ({ ...previous, [key]: event.target.value }))}>
+      <th className={cn(td, 'font-semibold')}>{roleLabel} <span className="text-red-600">*</span></th>
+      <td className={td}><select aria-label={roleLabel} className={cn(limsFieldClass, 'w-full min-w-48 text-center [text-align-last:center]')} disabled={loading || busy || !!error} value={form[key]} onChange={(event) => setForm((previous) => ({ ...previous, [key]: event.target.value }))}>
         <option value="">Select from Top Management</option>
         {form[key] && !selected ? <option value={form[key]}>Previously Selected Person — No Longer Available</option> : null}
-        {people.map((person) => <option key={person.key} value={person.key}>{person.name}{person.designation ? ` — ${person.designation}` : ''}</option>)}
+        {people.map((person) => <option key={person.key} value={person.key}>{person.name}</option>)}
       </select></td>
       <td className={cn(td, 'text-center')}>{selected?.designation || '—'}</td>
       <td className={td}><div className="flex flex-wrap items-center justify-center gap-2">
@@ -155,12 +150,10 @@ export function AuthorizationLetterDialog({ open, onOpenChange, projectRow, lega
         </div>
         <DialogFooter className="flex-wrap gap-2 border-t border-stone-200 bg-stone-50 px-4 py-3">
           <Button type="button" variant="outline" className="rounded-none" disabled={busy} onClick={() => close(false)}>Close</Button>
-          <Button type="button" variant="outline" className="rounded-none" disabled={busy || loading || !!error || !people.length} onClick={() => void prepare(false)}><Eye className="mr-2 h-4 w-4" />Preview</Button>
-          <Button type="button" className={cn(limsPrimaryBtnClass, 'min-w-[10rem]')} disabled={busy || loading || !!error || !people.length} onClick={() => void prepare(true)}>{busy ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}Save &amp; Preview</Button>
+          <Button type="button" className={cn(limsPrimaryBtnClass, 'min-w-[7rem]')} disabled={busy || loading || !!error || !people.length} onClick={() => void save()}>{busy ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}Save</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
     {viewer}
-    <BisDocumentPrintPreviewDialog open={previewHtml !== null && open} onOpenChange={(next) => { if (!next) setPreviewHtml(null) }} row={projectRow} kind="authorization-letter" generatedHtml={previewHtml} />
   </>
 }

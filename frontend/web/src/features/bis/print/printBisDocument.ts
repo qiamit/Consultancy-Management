@@ -164,6 +164,7 @@ export type BisPrintDocumentKind =
   | 'packaging-marking'
   | 'raw-material-test-reports'
   | 'osl-offer-and-test-request'
+  | 'application-copy'
 
 export const BIS_PRINT_DOCUMENT_LABEL: Record<BisPrintDocumentKind, string> = {
   'legal-documents': 'Legal Documents',
@@ -210,6 +211,7 @@ export const BIS_PRINT_DOCUMENT_LABEL: Record<BisPrintDocumentKind, string> = {
   'packaging-marking': 'Packaging and Marking',
   'raw-material-test-reports': 'Raw Material Test Reports',
   'osl-offer-and-test-request': 'Sample Offer Letter & Test Request',
+  'application-copy': 'Application Copy',
 }
 
 /** Documents offered in the "More prints" menu (Form-I and Authorization Letter have their own buttons). */
@@ -296,7 +298,8 @@ export const BIS_MERGE_PDF_MODULE_KINDS: BisPrintDocumentKind[] = [
 
 /** Kinds that try merged attachments first, then generated HTML. */
 export const BIS_HYBRID_FILE_VIEW_KINDS: BisPrintDocumentKind[] = ALL_BIS_PRINT_KINDS.filter(
-  (k) => k !== 'application-details',
+  // The scope undertaking is always generated; its uploaded drawings are a separate document.
+  (k) => k !== 'application-details' && k !== 'manufacturing-scope',
 )
 
 /** Old module URL slugs redirect into Application Details. */
@@ -309,7 +312,7 @@ export const LEGACY_FILE_MODULE_ALIASES: Record<string, BisPrintDocumentKind> = 
 export const MORE_PRINTS_TOOLTIP =
   'Full BIS application print pack (CMPF, undertakings, staff, SEF, OSL, plant layout, location map)'
 
-function combinePrintHtmlDocuments(title: string, documents: string[]): string {
+export function combinePrintHtmlDocuments(title: string, documents: string[]): string {
   const pageBodies = documents.map((html) => {
     const body = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i)?.[1] ?? html
     const style = html.match(/<style[^>]*>([\s\S]*?)<\/style>/i)?.[1] ?? ''
@@ -399,6 +402,8 @@ function markingFeeAcceptanceHtmlFromData(d: BisPrintData, unit: string): string
 const HTML_BUILDERS: Record<BisPrintDocumentKind, (data: BisPrintData) => string> = {
   'legal-documents': (d) => buildLegalDocumentsHtml(legalDocumentsDataFromPrintData(d)),
   'application-details': (d) => buildBisForm1Html(bisForm1DataFromPrintData(d)),
+  // Step 8: the application form alone (Location Map is its own document there).
+  'application-copy': (d) => buildBisForm1Html(bisForm1DataFromPrintData(d)),
   // Kept for typed builders / legacy callers; UI list uses Application Details only.
   'license-details': (d) => buildApplicationDetailsHtml(legalDocumentsDataFromPrintData(d)),
   'branch-details': (d) => buildApplicationDetailsHtml(legalDocumentsDataFromPrintData(d)),
@@ -470,7 +475,9 @@ export async function buildBisDocumentHtml(
           ? 'cmpf-311'
           : kind === 'raw-material-details' || kind === 'certified-reference-materials'
             ? 'raw-material-reference'
-            : kind
+            : kind === 'application-copy'
+              ? 'application-details'
+              : kind
   const [
     printData,
     modulePayload,
@@ -485,7 +492,7 @@ export async function buildBisDocumentHtml(
     kind === 'top-management'
       ? Promise.resolve(null)
       : overrides?.topManagement ? Promise.resolve(overrides.topManagement) : fetchBisModulePayload(row.id, 'top-management').catch(() => null),
-    kind === 'application-details'
+    kind === 'application-details' || kind === 'application-copy'
       ? fetchBisModulePayload(row.id, 'technical-staff').catch(() => null)
       : Promise.resolve(null),
     kind === 'osl-sample-requirements'
