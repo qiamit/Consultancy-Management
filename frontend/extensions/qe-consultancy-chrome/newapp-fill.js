@@ -722,8 +722,11 @@
             report.missing.push(`${name} — no row for it (add it yourself)`);
             break;
           }
+          // Manak: otherInformationFileName# (same row as otherInformationFile#); "+" = addOtherInformation().
           const tr = input.closest("tr");
-          const nameBox = tr && Array.from(tr.querySelectorAll("input[type='text'], textarea")).find(isVisible);
+          const nameBox =
+            document.getElementById(`${item.prefix}Name${i}`) ||
+            (tr && Array.from(tr.querySelectorAll("input[type='text'], textarea")).find(isVisible));
           if (nameBox) {
             const res = setValue(nameBox, f.label || f.fileName);
             if (String(res).startsWith("too-long")) setValue(nameBox, (f.label || f.fileName).slice(0, Number(String(res).split(":")[1]) || 50));
