@@ -1,4 +1,5 @@
 import { formatIsCodeLabel } from '@/features/masters/is-codes/formatIsCodeLabel'
+import { formatDisplayDate } from '../projects/types'
 
 export {
   formatCmL,
@@ -265,6 +266,41 @@ export function splitProductionRowForStockMarking(
     }
   }
   return [...rows.slice(0, index), ...segments, ...rows.slice(index + 1)]
+}
+
+/**
+ * Several stock-marking breaks inside one monthly period (e.g. operative 1–10, no production 11–19,
+ * operative 20–31). Breaks must not overlap; each one splits the segment of the month that holds it.
+ */
+export function splitProductionRowForStockMarkingBreaks(
+  rows: RenewalProductionRow[],
+  rowId: string,
+  breaks: Array<{ from: string; to: string }>,
+): RenewalProductionRow[] {
+  const original = rows.find((row) => row.id === rowId)
+  if (!original) throw new Error('Production period could not be found.')
+  if (!breaks.length) throw new Error('Add at least one break.')
+  const sorted = [...breaks].sort((a, b) => a.from.localeCompare(b.from))
+  for (const [index, item] of sorted.entries()) {
+    if (!parseIsoUtcDate(item.from) || !parseIsoUtcDate(item.to) || item.from > item.to) {
+      throw new Error(`Break ${index + 1}: enter a valid start and end date.`)
+    }
+    if (index > 0 && item.from <= sorted[index - 1].to) {
+      throw new Error(`Breaks ${formatDisplayDate(sorted[index - 1].from)} – ${formatDisplayDate(sorted[index - 1].to)} and ${formatDisplayDate(item.from)} – ${formatDisplayDate(item.to)} overlap.`)
+    }
+  }
+  let next = rows
+  for (const item of sorted) {
+    // The segment (of the original month) that now holds this break.
+    const target = next.find((row) => !row.stockMarkingBreak
+      && row.periodFrom >= original.periodFrom && row.periodTo <= original.periodTo
+      && row.periodFrom <= item.from && row.periodTo >= item.to)
+    if (!target) {
+      throw new Error(`Break ${formatDisplayDate(item.from)} – ${formatDisplayDate(item.to)} must stay inside ${formatDisplayDate(original.periodFrom)} – ${formatDisplayDate(original.periodTo)}.`)
+    }
+    next = splitProductionRowForStockMarking(next, target.id, item.from, item.to)
+  }
+  return next
 }
 
 function finiteNumber(value: string): number | null {

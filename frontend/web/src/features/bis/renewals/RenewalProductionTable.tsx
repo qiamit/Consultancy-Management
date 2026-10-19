@@ -15,7 +15,7 @@ import {
   formatDisplayDate,
   renewalMarkingFeeSummary,
   renewalSlabForQuantity,
-  splitProductionRowForStockMarking,
+  splitProductionRowForStockMarkingBreaks,
   type BisRenewalForm,
   type RenewalMarkingFeeSummary,
   type RenewalProductionRow,
@@ -215,7 +215,7 @@ export function RenewalProductionTable({
     rows: RenewalProductionRow[]
     total: boolean
   } | null>(null)
-  const [breakSelection, setBreakSelection] = useState<{ row: RenewalProductionRow; from: string; to: string; error: string } | null>(null)
+  const [breakSelection, setBreakSelection] = useState<{ row: RenewalProductionRow; breaks: Array<{ from: string; to: string }>; error: string } | null>(null)
   const calculatedRows = rows.map((row) => calculateRenewalProductionRow(row, basicUnitRate, slabRates))
   const totalProduction = sumField(calculatedRows, 'productionUnit')
   const totalProductionValue = sumField(calculatedRows, 'productionValue')
@@ -260,7 +260,7 @@ export function RenewalProductionTable({
         title="Insert stock-marking break within this period"
         className="size-7 shrink-0 rounded-none text-stone-700 hover:bg-stone-100"
         disabled={!row.periodFrom || !row.periodTo}
-        onClick={() => setBreakSelection({ row, from: row.periodFrom, to: row.periodTo, error: '' })}
+        onClick={() => setBreakSelection({ row, breaks: [{ from: row.periodFrom, to: row.periodTo }], error: '' })}
       >
         <Scissors className="size-4" />
       </Button> : null}
@@ -441,34 +441,75 @@ export function RenewalProductionTable({
             <>
               <div className="space-y-3 bg-[#fffcf7] p-4 text-sm">
                 <p className="text-stone-600">
-                  Choose the dates with no production. A zero-production row will be inserted inside{' '}
+                  Choose the dates with no production. Each break becomes a zero-production row inside{' '}
                   <span className="font-semibold text-stone-800">
                     {formatDisplayDate(breakSelection.row.periodFrom)} – {formatDisplayDate(breakSelection.row.periodTo)}
-                  </span>.
+                  </span>; the days around it stay as production rows. Add more breaks if production stopped more than once in this period.
                 </p>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <div className="min-w-0 space-y-1">
-                    <label htmlFor="stock-break-from" className="text-xs font-semibold">Break From</label>
-                    <PeriodDateInput
-                      id="stock-break-from"
-                      label="Break from"
-                      min={breakSelection.row.periodFrom}
-                      max={breakSelection.row.periodTo}
-                      value={breakSelection.from}
-                      onChange={(from) => setBreakSelection({ ...breakSelection, from, error: '' })}
-                    />
-                  </div>
-                  <div className="min-w-0 space-y-1">
-                    <label htmlFor="stock-break-to" className="text-xs font-semibold">Break To</label>
-                    <PeriodDateInput
-                      id="stock-break-to"
-                      label="Break to"
-                      min={breakSelection.row.periodFrom}
-                      max={breakSelection.row.periodTo}
-                      value={breakSelection.to}
-                      onChange={(to) => setBreakSelection({ ...breakSelection, to, error: '' })}
-                    />
-                  </div>
+                <div className="space-y-2">
+                  {breakSelection.breaks.map((item, index) => {
+                    const setBreak = (patch: Partial<{ from: string; to: string }>) => setBreakSelection({
+                      ...breakSelection,
+                      breaks: breakSelection.breaks.map((b, i) => (i === index ? { ...b, ...patch } : b)),
+                      error: '',
+                    })
+                    return (
+                      <div key={index} className="grid grid-cols-[1fr_1fr_auto] items-end gap-2 border border-stone-300 bg-white p-2">
+                        <div className="min-w-0 space-y-1">
+                          <label htmlFor={`stock-break-from-${index}`} className="text-xs font-semibold">
+                            {breakSelection.breaks.length > 1 ? `Break ${index + 1} From` : 'Break From'}
+                          </label>
+                          <PeriodDateInput
+                            id={`stock-break-from-${index}`}
+                            label={`Break ${index + 1} from`}
+                            min={breakSelection.row.periodFrom}
+                            max={breakSelection.row.periodTo}
+                            value={item.from}
+                            onChange={(from) => setBreak({ from })}
+                          />
+                        </div>
+                        <div className="min-w-0 space-y-1">
+                          <label htmlFor={`stock-break-to-${index}`} className="text-xs font-semibold">
+                            {breakSelection.breaks.length > 1 ? `Break ${index + 1} To` : 'Break To'}
+                          </label>
+                          <PeriodDateInput
+                            id={`stock-break-to-${index}`}
+                            label={`Break ${index + 1} to`}
+                            min={breakSelection.row.periodFrom}
+                            max={breakSelection.row.periodTo}
+                            value={item.to}
+                            onChange={(to) => setBreak({ to })}
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 rounded-none border border-stone-400 text-red-700 hover:bg-red-50 disabled:opacity-30"
+                          aria-label={`Remove break ${index + 1}`}
+                          title="Remove this break"
+                          disabled={breakSelection.breaks.length === 1}
+                          onClick={() => setBreakSelection({ ...breakSelection, breaks: breakSelection.breaks.filter((_, i) => i !== index), error: '' })}
+                        >
+                          <Trash2 className="size-4" aria-hidden />
+                        </Button>
+                      </div>
+                    )
+                  })}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-8 w-full rounded-none border-dashed border-amber-600 text-amber-800 hover:bg-amber-50"
+                    onClick={() => {
+                      const last = breakSelection.breaks[breakSelection.breaks.length - 1]
+                      // Next break starts two days after the last one (a production day in between).
+                      const start = last?.to ? new Date(Date.parse(`${last.to}T00:00:00Z`) + 2 * 86_400_000).toISOString().slice(0, 10) : breakSelection.row.periodFrom
+                      const from = start > breakSelection.row.periodTo ? breakSelection.row.periodTo : start
+                      setBreakSelection({ ...breakSelection, breaks: [...breakSelection.breaks, { from, to: breakSelection.row.periodTo }], error: '' })
+                    }}
+                  >
+                    <Plus className="mr-1 size-4" aria-hidden /> Add Another Break
+                  </Button>
                 </div>
                 {breakSelection.error ? <p className="border-l-2 border-destructive bg-destructive/5 px-3 py-2 text-destructive" role="alert">{breakSelection.error}</p> : null}
               </div>
@@ -479,7 +520,7 @@ export function RenewalProductionTable({
                   className={cn(limsPrimaryBtnClass, 'min-w-[8rem]')}
                   onClick={() => {
                     try {
-                      onRowsChange(splitProductionRowForStockMarking(rows, breakSelection.row.id, breakSelection.from, breakSelection.to))
+                      onRowsChange(splitProductionRowForStockMarkingBreaks(rows, breakSelection.row.id, breakSelection.breaks))
                       setBreakSelection(null)
                     } catch (error) {
                       setBreakSelection({ ...breakSelection, error: error instanceof Error ? error.message : 'Could not insert this break.' })
