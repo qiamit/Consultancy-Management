@@ -2234,15 +2234,34 @@
       const t = text(raw || "").replace(/\s+/g, " ");
       (t.match(/\b\d{12}\b/g) || []).forEach(add);
     };
+    // Manak's Not Used rows read "Not Scanned"; strip the negated status first
+    // so the word "Scanned" inside it does not mark a pending code as used.
     const isUnavailableRow = (raw) => {
-      const rowText = text(raw || "").replace(/\s+/g, " ");
+      const rowText = text(raw || "")
+        .replace(/\s+/g, " ")
+        .replace(/\bnot\s+(?:yet\s+)?(?:scanned|used|assigned|consumed|submitted)\b/gi, " ");
       if (/\b(?:scanned|assigned|consumed|submitted)\b|\balready\s+(?:used|scanned)\b|\btest\s*request\b/i.test(rowText)) {
         return true;
       }
-      return /\bused\b/i.test(rowText) && !/\bnot\s+used\b/i.test(rowText);
+      return /\bused\b/i.test(rowText);
+    };
+    // Prefer the table's "Used Status" column when Manak renders one.
+    const usedStatusOf = (row) => {
+      const table = row && row.closest ? row.closest("table") : null;
+      if (!table || row.tagName !== "TR") return null;
+      const idx = headerIndex(table, /used\s*status|^status$/);
+      if (idx < 0) return null;
+      const cell = row.cells && row.cells[idx];
+      return cell ? normalize(cell.textContent || "") : null;
     };
     const addRow = (row, input) => {
-      if (!row || isUnavailableRow(row.innerText || row.textContent || "")) return;
+      if (!row) return;
+      const status = usedStatusOf(row);
+      if (status !== null) {
+        if (!/^(?:not\s*(?:yet\s*)?(?:scanned|used)|unused|available|n\/?a|-)?$/.test(status)) return;
+      } else if (isUnavailableRow(row.innerText || row.textContent || "")) {
+        return;
+      }
       if (input) add(input.value);
       addFromText(row.innerText || row.textContent || "");
     };
@@ -2479,6 +2498,13 @@
     );
   }
 
+  /** Manak's "N new Codes available for generation." line; null when not shown. */
+  function qrCodesLeftToGenerate() {
+    const blob = document.body ? document.body.innerText || "" : "";
+    const hit = blob.match(/(\d+)\s+new\s+codes?\s+(?:are\s+)?available\s+for\s+generation/i);
+    return hit ? Number(hit[1]) : null;
+  }
+
   /**
    * On Generate New Code page (?flag=1): set Number of Copies and click Generate.
    * Manak allows max 5 copies per click.
@@ -2487,7 +2513,16 @@
     if (sessionStorage.getItem("qeManakImportGenerateClicked") === "1") {
       return false;
     }
-    const copies = Math.max(1, Math.min(5, Number(wantedCount) || 1));
+    const left = qrCodesLeftToGenerate();
+    if (left === 0) {
+      showBanner(
+        "Manak allows 0 new QR codes right now (its limit of unscanned codes is reached). Use or scan the Not Used codes first, then retry Import.",
+        false,
+        true,
+      );
+      return "limit";
+    }
+    const copies = Math.max(1, Math.min(5, left || 5, Number(wantedCount) || 1));
     sessionStorage.setItem("qeManakImportGenerateClicked", "1");
     showBanner(`Generating ${copies} new QR code(s)…`, true);
     setQrCodeCount(copies);
@@ -2501,7 +2536,7 @@
       );
       return false;
     }
-    startImportQrCodeWatch(copies);
+    startImportQrCodeWatch(50);
     // After generate, Manak often lands codes under Not Used — follow up once.
     window.setTimeout(() => {
       if (window.__qeManakImportPublished) return;
@@ -2698,6 +2733,9 @@
         sessionStorage.removeItem("qeManakImportNeedGenerate");
         showBanner("Generate New Code — setting count and clicking Generate…", true);
         const started = await submitGenerateNewQrCodes(copies);
+        if (started === "limit") {
+          return { ok: false, message: "Manak QR generation limit reached." };
+        }
         if (started) {
           return { ok: true, message: "Generating new QR codes…" };
         }
@@ -2714,10 +2752,10 @@
         const genCodes = scrapeQrCodesFromPage();
         if (genCodes.length > 0) {
           window.__qeManakImportPublished = true;
-          await publishImportedQrCodes(genCodes.slice(0, copies));
+          await publishImportedQrCodes(genCodes.slice(0, 50));
           return { ok: true, message: "QR codes imported after generate." };
         }
-        startImportQrCodeWatch(copies);
+        startImportQrCodeWatch(50);
         return { ok: true, message: "Waiting for generated QR codes…" };
       }
 
@@ -2733,11 +2771,11 @@
         const afterCodes = scrapeQrCodesFromPage();
         if (afterCodes.length > 0) {
           window.__qeManakImportPublished = true;
-          await publishImportedQrCodes(afterCodes.slice(0, copies));
+          await publishImportedQrCodes(afterCodes.slice(0, 50));
           return { ok: true, message: "QR codes imported after generate." };
         }
         showBanner("Waiting for newly generated codes on Not Used list…", true);
-        startImportQrCodeWatch(copies);
+        startImportQrCodeWatch(50);
         return { ok: true, message: "Watching Not Used list after generate." };
       }
 
@@ -2755,9 +2793,7 @@
       const codes = scrapeQrCodesFromPage();
       if (codes.length > 0) {
         window.__qeManakImportPublished = true;
-        await publishImportedQrCodes(
-          codes.slice(0, Math.max(copies, Math.min(50, codes.length))),
-        );
+        await publishImportedQrCodes(codes.slice(0, 50));
         return { ok: true, message: "QR codes imported." };
       }
 
