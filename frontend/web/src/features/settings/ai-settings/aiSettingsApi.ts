@@ -43,6 +43,13 @@ export async function upsertAiModel(
   if (error) throw error
 }
 
+/** Admin only, logged: the saved key for one model (encrypted at rest). */
+export async function revealAiModelKey(id: string): Promise<string> {
+  const { data, error } = await supabase.rpc('ai_model_key_reveal', { p_model_id: id })
+  if (error) throw error
+  return typeof data === 'string' ? data : ''
+}
+
 export async function deleteAiModel(id: string): Promise<void> {
   const { error } = await supabase.from('ai_models').delete().eq('id', id)
   if (error) throw error

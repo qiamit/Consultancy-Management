@@ -33,7 +33,9 @@ export type AiModelRow = {
   provider: string
   model_id: string
   display_name: string
+  /** Always null since Batch D: keys are encrypted (see api_key_set). Write-only. */
   api_key: string | null
+  api_key_set?: boolean
   api_base_url: string | null
   is_default: boolean
   is_active: boolean
