@@ -2,9 +2,9 @@ import { useState, type KeyboardEvent } from 'react'
 import { Calculator, Calendar, Plus, Scissors, Trash2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { LimsFieldWithAdd } from '@/components/lims/LimsFieldWithAdd'
-import { limsFieldAddBtnClass } from '@/lib/limsThemeUi'
+import { limsFieldAddBtnClass, limsManageDialogClass, limsPrimaryBtnClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { formatMoneyInput } from '@/features/masters/products-services/types'
 import { getCurrencySymbol } from '@/lib/appCurrency'
@@ -15,7 +15,7 @@ import {
   formatDisplayDate,
   renewalMarkingFeeSummary,
   renewalSlabForQuantity,
-  splitProductionRowForStockMarking,
+  splitProductionRowForStockMarkingBreaks,
   type BisRenewalForm,
   type RenewalMarkingFeeSummary,
   type RenewalProductionRow,
@@ -107,12 +107,16 @@ export function PeriodDateInput({
   value,
   onChange,
   disabled = false,
+  min,
+  max,
 }: {
   id: string
   label: string
   value: string
   onChange: (value: string) => void
   disabled?: boolean
+  min?: string
+  max?: string
 }) {
   return (
     <LimsFieldWithAdd
@@ -135,6 +139,8 @@ export function PeriodDateInput({
         aria-label={label}
         disabled={disabled}
         className={periodDateInputClass}
+        min={min}
+        max={max}
         value={value}
         onChange={(event) => onChange(event.target.value)}
       />
@@ -209,7 +215,7 @@ export function RenewalProductionTable({
     rows: RenewalProductionRow[]
     total: boolean
   } | null>(null)
-  const [breakSelection, setBreakSelection] = useState<{ row: RenewalProductionRow; from: string; to: string; error: string } | null>(null)
+  const [breakSelection, setBreakSelection] = useState<{ row: RenewalProductionRow; breaks: Array<{ from: string; to: string }>; error: string } | null>(null)
   const calculatedRows = rows.map((row) => calculateRenewalProductionRow(row, basicUnitRate, slabRates))
   const totalProduction = sumField(calculatedRows, 'productionUnit')
   const totalProductionValue = sumField(calculatedRows, 'productionValue')
@@ -254,7 +260,7 @@ export function RenewalProductionTable({
         title="Insert stock-marking break within this period"
         className="size-7 shrink-0 rounded-none text-stone-700 hover:bg-stone-100"
         disabled={!row.periodFrom || !row.periodTo}
-        onClick={() => setBreakSelection({ row, from: row.periodFrom, to: row.periodTo, error: '' })}
+        onClick={() => setBreakSelection({ row, breaks: [{ from: row.periodFrom, to: row.periodTo }], error: '' })}
       >
         <Scissors className="size-4" />
       </Button> : null}
@@ -311,7 +317,7 @@ export function RenewalProductionTable({
                 title={`Calculated ${getCurrencySymbol()} ${formatAmountTotal(feeSummary.calculated)} · Minimum ${minimumFeeText(feeSummary)}`}
               >
                 {formatAmountTotal(totalMarkingFee)}
-                {feeSummary.basis === 'minimum' ? <span className="block text-[10px] font-semibold text-amber-800">Minimum fee</span> : null}
+                {feeSummary.basis === 'minimum' ? <span className="block text-[10px] font-semibold text-amber-800">Minimum Fee</span> : null}
               </th>
               <th className="border border-stone-300 px-1 py-1 text-center">
                 <Button
@@ -421,24 +427,112 @@ export function RenewalProductionTable({
         onOpenChange={(open) => { if (!open) setCalculationSelection(null) }}
       />
       <Dialog open={breakSelection !== null} onOpenChange={(open) => { if (!open) setBreakSelection(null) }}>
-        <DialogContent className="max-w-md rounded-none border-stone-500">
-          <DialogHeader><DialogTitle>Add Stock-Marking Break</DialogTitle></DialogHeader>
-          {breakSelection ? <div className="space-y-4">
-            <p className="text-sm text-stone-600">Choose the dates with no production. A zero-production row will be inserted inside this monthly period.</p>
-            <div className="grid grid-cols-2 gap-3">
-              <label className="space-y-1 text-xs font-medium">Break from<Input type="date" min={breakSelection.row.periodFrom} max={breakSelection.row.periodTo} value={breakSelection.from} onChange={(event) => setBreakSelection({ ...breakSelection, from: event.target.value, error: '' })} /></label>
-              <label className="space-y-1 text-xs font-medium">Break to<Input type="date" min={breakSelection.row.periodFrom} max={breakSelection.row.periodTo} value={breakSelection.to} onChange={(event) => setBreakSelection({ ...breakSelection, to: event.target.value, error: '' })} /></label>
-            </div>
-            {breakSelection.error ? <p className="text-sm text-destructive" role="alert">{breakSelection.error}</p> : null}
-            <div className="flex justify-end gap-2"><Button type="button" variant="outline" className="rounded-none" onClick={() => setBreakSelection(null)}>Cancel</Button><Button type="button" className="rounded-none" onClick={() => {
-              try {
-                onRowsChange(splitProductionRowForStockMarking(rows, breakSelection.row.id, breakSelection.from, breakSelection.to))
-                setBreakSelection(null)
-              } catch (error) {
-                setBreakSelection({ ...breakSelection, error: error instanceof Error ? error.message : 'Could not insert this break.' })
-              }
-            }}>Insert Break</Button></div>
-          </div> : null}
+        <DialogContent
+          aria-describedby={undefined}
+          className={cn(limsManageDialogClass, 'w-[min(32rem,calc(100vw_-_var(--app-dialog-overlay-left,0px)_-_1.5rem))]')}
+        >
+          <DialogHeader className="bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 py-2.5 pl-4 pr-12 text-left">
+            <DialogTitle className="flex items-center gap-2 text-base font-semibold text-white">
+              <Scissors className="size-4 text-amber-300" aria-hidden />
+              Add Stock-Marking Break
+            </DialogTitle>
+          </DialogHeader>
+          {breakSelection ? (
+            <>
+              <div className="space-y-3 bg-[#fffcf7] p-4 text-sm">
+                <p className="text-stone-600">
+                  Choose the dates with no production. Each break becomes a zero-production row inside{' '}
+                  <span className="font-semibold text-stone-800">
+                    {formatDisplayDate(breakSelection.row.periodFrom)} – {formatDisplayDate(breakSelection.row.periodTo)}
+                  </span>; the days around it stay as production rows. Add more breaks if production stopped more than once in this period.
+                </p>
+                <div className="space-y-2">
+                  {breakSelection.breaks.map((item, index) => {
+                    const setBreak = (patch: Partial<{ from: string; to: string }>) => setBreakSelection({
+                      ...breakSelection,
+                      breaks: breakSelection.breaks.map((b, i) => (i === index ? { ...b, ...patch } : b)),
+                      error: '',
+                    })
+                    return (
+                      <div key={index} className="grid grid-cols-[1fr_1fr_auto] items-end gap-2 border border-stone-300 bg-white p-2">
+                        <div className="min-w-0 space-y-1">
+                          <label htmlFor={`stock-break-from-${index}`} className="text-xs font-semibold">
+                            {breakSelection.breaks.length > 1 ? `Break ${index + 1} From` : 'Break From'}
+                          </label>
+                          <PeriodDateInput
+                            id={`stock-break-from-${index}`}
+                            label={`Break ${index + 1} from`}
+                            min={breakSelection.row.periodFrom}
+                            max={breakSelection.row.periodTo}
+                            value={item.from}
+                            onChange={(from) => setBreak({ from })}
+                          />
+                        </div>
+                        <div className="min-w-0 space-y-1">
+                          <label htmlFor={`stock-break-to-${index}`} className="text-xs font-semibold">
+                            {breakSelection.breaks.length > 1 ? `Break ${index + 1} To` : 'Break To'}
+                          </label>
+                          <PeriodDateInput
+                            id={`stock-break-to-${index}`}
+                            label={`Break ${index + 1} to`}
+                            min={breakSelection.row.periodFrom}
+                            max={breakSelection.row.periodTo}
+                            value={item.to}
+                            onChange={(to) => setBreak({ to })}
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 rounded-none border border-stone-400 text-red-700 hover:bg-red-50 disabled:opacity-30"
+                          aria-label={`Remove break ${index + 1}`}
+                          title="Remove this break"
+                          disabled={breakSelection.breaks.length === 1}
+                          onClick={() => setBreakSelection({ ...breakSelection, breaks: breakSelection.breaks.filter((_, i) => i !== index), error: '' })}
+                        >
+                          <Trash2 className="size-4" aria-hidden />
+                        </Button>
+                      </div>
+                    )
+                  })}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-8 w-full rounded-none border-dashed border-amber-600 text-amber-800 hover:bg-amber-50"
+                    onClick={() => {
+                      const last = breakSelection.breaks[breakSelection.breaks.length - 1]
+                      // Next break starts two days after the last one (a production day in between).
+                      const start = last?.to ? new Date(Date.parse(`${last.to}T00:00:00Z`) + 2 * 86_400_000).toISOString().slice(0, 10) : breakSelection.row.periodFrom
+                      const from = start > breakSelection.row.periodTo ? breakSelection.row.periodTo : start
+                      setBreakSelection({ ...breakSelection, breaks: [...breakSelection.breaks, { from, to: breakSelection.row.periodTo }], error: '' })
+                    }}
+                  >
+                    <Plus className="mr-1 size-4" aria-hidden /> Add Another Break
+                  </Button>
+                </div>
+                {breakSelection.error ? <p className="border-l-2 border-destructive bg-destructive/5 px-3 py-2 text-destructive" role="alert">{breakSelection.error}</p> : null}
+              </div>
+              <DialogFooter className="gap-2 border-t border-stone-200 bg-stone-50 px-4 py-3">
+                <Button type="button" variant="outline" className="rounded-none" onClick={() => setBreakSelection(null)}>Cancel</Button>
+                <Button
+                  type="button"
+                  className={cn(limsPrimaryBtnClass, 'min-w-[8rem]')}
+                  onClick={() => {
+                    try {
+                      onRowsChange(splitProductionRowForStockMarkingBreaks(rows, breakSelection.row.id, breakSelection.breaks))
+                      setBreakSelection(null)
+                    } catch (error) {
+                      setBreakSelection({ ...breakSelection, error: error instanceof Error ? error.message : 'Could not insert this break.' })
+                    }
+                  }}
+                >
+                  <Scissors className="mr-2 size-4" aria-hidden />
+                  Insert Break
+                </Button>
+              </DialogFooter>
+            </>
+          ) : null}
         </DialogContent>
       </Dialog>
     </section>
