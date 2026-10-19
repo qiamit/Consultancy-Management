@@ -31,6 +31,13 @@ function dateToIso(value: unknown): string {
   return ''
 }
 
+/** A number entered in the Renewal Sheet, or null when the field is blank. */
+function entered(value: string): number | null {
+  if (!String(value ?? '').trim()) return null
+  const n = Number.parseFloat(String(value).replace(/[₹,\s]/g, ''))
+  return Number.isFinite(n) ? n : null
+}
+
 function renewalWorkbookFilename(form: BisRenewalForm): string {
   return `${safeBaseName(form.clientLabel || form.projectLabel)}_Renewal_Production.xlsx`
 }
@@ -109,7 +116,7 @@ export async function createRenewalClientWorkbook(form: BisRenewalForm): Promise
   sheet.mergeCells('A10:B10')
   sheet.mergeCells('C10:E10')
   sheet.getCell('A10').value = 'Basic Unit Rate Approx (₹ per unit)'
-  sheet.getCell('C10').value = ''
+  sheet.getCell('C10').value = entered(form.basicUnitRate) ?? ''
   for (let row = 4; row <= 10; row += 1) {
     const label = sheet.getCell(`A${row}`)
     const value = sheet.getCell(`C${row}`)
@@ -153,13 +160,16 @@ export async function createRenewalClientWorkbook(form: BisRenewalForm): Promise
     cell.border = { top: { style: 'medium', color: { argb: `FF${amber}` } }, left: border, bottom: border, right: border }
   })
 
+  // Values already entered in the Renewal Sheet go into the workbook (rejection = total − covered).
   form.productionRows.forEach((row, index) => {
+    const total = entered(row.productionUnit)
+    const covered = entered(row.coveredUnit)
     const excelRow = sheet.addRow([
       // UTC midnight: Excel stores dates without a time zone, so a local (IST) midnight would show the day before.
       row.periodFrom ? new Date(`${row.periodFrom}T00:00:00Z`) : '',
       row.periodTo ? new Date(`${row.periodTo}T00:00:00Z`) : '',
-      row.stockMarkingBreak ? 0 : '',
-      row.stockMarkingBreak ? 0 : '',
+      row.stockMarkingBreak ? 0 : total ?? '',
+      row.stockMarkingBreak ? 0 : total !== null && covered !== null ? Math.max(0, total - covered) : '',
       row.stockMarkingBreak ? 0 : { formula: `IF(C${headerRow + index + 1}="","",MAX(0,C${headerRow + index + 1}-IF(D${headerRow + index + 1}="",0,D${headerRow + index + 1})))`, result: '' },
     ])
     excelRow.height = 25
