@@ -70,6 +70,9 @@ export async function sendRenewalReminderNow(projectId: string, to?: string): Pr
   return callFunctions('/renewal-reminders/send', { method: 'POST', body: JSON.stringify({ projectId, ...(to ? { to } : {}) }) })
 }
 
+/** Admin: turn automatic reminders on; reminders already due today are marked skipped (no backlog mail). */
+export const enableRenewalReminders = () => callFunctions<{ skipped: number }>('/renewal-reminders/enable', { method: 'POST', body: '{}' })
+
 export async function setRenewalRemindersEnabled(enabled: boolean): Promise<void> {
   const { data: user } = await supabase.auth.getUser()
   const { data, error } = await supabase

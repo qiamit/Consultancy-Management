@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import { limsDialogClass } from '@/lib/limsThemeUi'
 import { formatDisplayDate } from '../projects/types'
 import {
+  enableRenewalReminders,
   fetchRenewalReminderPlan,
   setRenewalRemindersEnabled,
   setRenewalRemindersPaused,
@@ -26,7 +27,7 @@ const ACTION_STYLE: Record<RenewalReminderPlanItem['action'], string> = {
 }
 
 function actionText(item: RenewalReminderPlanItem, enabled: boolean): string {
-  if (item.action === 'send') return enabled ? `${item.stage}-day reminder goes today` : `${item.stage}-day reminder due (reminders off)`
+  if (item.action === 'send') return enabled ? `${item.stage}-day reminder goes today` : `${item.stage}-day due — skipped when turned on`
   return item.reason
 }
 
@@ -66,11 +67,16 @@ export function RenewalRemindersDialog({ open, onOpenChange }: { open: boolean; 
   const toggleEnabled = async () => {
     if (!settings) return
     const next = !settings.enabled
-    if (next && sendCount > 0 && !window.confirm(`Turn on automatic reminders? ${sendCount} reminder email(s) will go out in today's run (after ${settings.sendHourIst}:00 IST).`)) return
+    if (next && !window.confirm(`Turn on automatic reminders?${sendCount ? ` The ${sendCount} reminder(s) already due today will be marked skipped (no email).` : ''} Emails go out as licences reach the next stage.`)) return
     setBusy(true)
     try {
-      await setRenewalRemindersEnabled(next)
-      toast.success(next ? 'Automatic renewal reminders are on.' : 'Automatic renewal reminders are off.')
+      if (next) {
+        const { skipped } = await enableRenewalReminders()
+        toast.success(`Automatic renewal reminders are on.${skipped ? ` ${skipped} already-due reminder(s) skipped.` : ''}`)
+      } else {
+        await setRenewalRemindersEnabled(false)
+        toast.success('Automatic renewal reminders are off.')
+      }
       await load()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not change the setting.')
