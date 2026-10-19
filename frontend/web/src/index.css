@@ -329,6 +329,17 @@ th * {
   }
 }
 
+/* Phones: a master page's title gets its own line (never cut); search, rows and add go on the next line. */
+@media (max-width: 639px) {
+  .lims-title-row { flex-wrap: wrap !important; }
+  .lims-title-row > .lims-page-title {
+    flex-basis: 100%;
+    max-width: none !important;
+    white-space: normal;
+    overflow: visible;
+  }
+}
+
 @container bis-projects (max-width: 949px) {
   .bis-projects-toolbar-main { flex-wrap: wrap; }
   .bis-projects-search { flex-basis: calc(100% - 6rem); }
@@ -491,4 +502,78 @@ th * {
   .laboratories-responsive-footer button[class~='w-10'] {
     width: 2rem !important;
   }
+}
+
+/* Application step 1 (General): the label | value | label | value tables reflow on smaller screens.
+   Tablets: two label/value pairs per row. Phones: one field per row, label above the value. */
+@media (max-width: 1023px) {
+  .manak-kv table,
+  .manak-kv tbody { display: block; width: 100%; }
+  .manak-kv colgroup { display: none; }
+  .manak-kv table + table { margin-top: 0; }
+  .manak-kv tr { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) minmax(0, 2fr) minmax(0, 3fr); }
+  .manak-kv th,
+  .manak-kv td { display: block; width: auto !important; min-width: 0; }
+  .manak-kv th { white-space: normal !important; font-size: 0.75rem !important; padding: 0.375rem 0.5rem !important; }
+  .manak-kv th:empty,
+  .manak-kv td:empty { display: none; }
+}
+@media (max-width: 639px) {
+  .manak-kv tr { grid-template-columns: minmax(0, 1fr); }
+  .manak-kv th { border-bottom-width: 0 !important; padding-bottom: 0.125rem !important; }
+  .manak-kv td { padding-top: 0.25rem; }
+}
+
+/* Editable row tables (Management, Technical staff, Manufacturing lists, Inclusion …): below 1024 px each row
+   becomes a card with the column name above every value — two columns on tablets, one on phones. */
+@media (max-width: 1023px) {
+  .er-table thead { display: none; }
+  .er-table,
+  .er-table tbody { display: block; width: 100%; }
+  .er-table tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem 0.75rem;
+    margin-bottom: 0.5rem;
+    padding: 0.625rem 0.75rem;
+    border: 1px solid #d6d3d1;
+  }
+  .er-table td {
+    display: block;
+    width: auto !important;
+    min-width: 0;
+    padding: 0 !important;
+    border: 0 !important;
+    text-align: left !important;
+  }
+  .er-table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 0.2rem;
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #78716c;
+  }
+  .er-table td .mx-auto { margin-left: 0; margin-right: 0; }
+  .er-table tr.er-draft { border-color: #d97706; background: #fffbeb; }
+  .er-table tr.er-draft::before {
+    content: 'Add New';
+    grid-column: 1 / -1;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #92400e;
+  }
+  .er-table tr.er-draft td.er-select,
+  .er-table td.er-hint { display: none; }
+  .er-table td.er-select { grid-column: 1 / -1; order: -1; }
+  .er-table td.er-actions,
+  .er-table td.er-empty { grid-column: 1 / -1; text-align: right !important; }
+  .er-table td.er-empty { text-align: center !important; }
+}
+@media (max-width: 639px) {
+  .er-table tr { grid-template-columns: minmax(0, 1fr); }
 }

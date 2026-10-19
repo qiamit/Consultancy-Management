@@ -414,6 +414,10 @@ function NavItemLink({
   return link
 }
 
+/** The sidebar docks beside the page from 1280 px (xl); narrower screens open it as a drawer, so tablets and
+ * small laptops keep the full width for tables. Keep in step with the xl: classes below. */
+const SIDEBAR_DOCK_QUERY = '(min-width: 1280px)'
+
 export default function GlobalLayout() {
   // Re-render entire shell when Lab Settings date/time/currency preferences change
   useAppDateFormat()
@@ -456,7 +460,7 @@ export default function GlobalLayout() {
   useEffect(() => {
     const root = document.documentElement
     const syncDialogLayout = () => {
-      const desktop = window.matchMedia('(min-width: 1024px)').matches
+      const desktop = window.matchMedia(SIDEBAR_DOCK_QUERY).matches
       if (desktop && !sidebarCollapsed) {
         root.style.setProperty('--app-dialog-center-x', 'calc(268px + (100vw - 268px) / 2)')
         root.style.setProperty('--app-dialog-overlay-left', '268px')
@@ -624,7 +628,7 @@ export default function GlobalLayout() {
         ) : (
           <button
             type="button"
-            className="relative z-10 shrink-0 rounded-none p-1.5 text-stone-200 hover:bg-white/10 hover:text-white lg:hidden"
+            className="relative z-10 shrink-0 rounded-none p-1.5 text-stone-200 hover:bg-white/10 hover:text-white xl:hidden"
             onClick={() => setMobileNavOpen(false)}
             aria-label="Close navigation menu"
           >
@@ -645,7 +649,7 @@ export default function GlobalLayout() {
       {mobileNavOpen && (
         <button
           type="button"
-          className="fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-[2px] lg:hidden"
+          className="fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-[2px] xl:hidden"
           aria-label="Close navigation menu"
           onClick={() => setMobileNavOpen(false)}
         />
@@ -655,7 +659,7 @@ export default function GlobalLayout() {
         className={cn(
           'fixed inset-y-0 left-0 z-50 flex w-[min(88vw,280px)] max-w-[280px] flex-col overflow-hidden border-r border-stone-700',
           'bg-gradient-to-b from-stone-800 via-stone-900 to-stone-950 shadow-2xl shadow-stone-950/40',
-          'transition-transform duration-300 ease-in-out lg:hidden',
+          'transition-transform duration-300 ease-in-out xl:hidden',
           mobileNavOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >
@@ -666,7 +670,7 @@ export default function GlobalLayout() {
         <aside
           className={cn(
             'hidden w-[268px] min-w-0 max-w-[268px] flex-col overflow-hidden border-r border-stone-700 bg-gradient-to-b from-stone-800 via-stone-900 to-stone-950',
-            'relative z-[55] shadow-lg shadow-stone-950/30 transition-[width] duration-300 ease-in-out lg:flex',
+            'relative z-[55] shadow-lg shadow-stone-950/30 transition-[width] duration-300 ease-in-out xl:flex',
           )}
         >
           {renderSidebar(false, { showCollapseToggle: true })}
@@ -689,10 +693,10 @@ export default function GlobalLayout() {
               type="button"
               className={cn(
                 'inline-flex h-9 w-9 items-center justify-center rounded-none border border-stone-500 bg-stone-800/80 text-white shadow-sm transition-colors hover:border-amber-500/50 hover:bg-stone-700',
-                !sidebarCollapsed && 'lg:hidden',
+                !sidebarCollapsed && 'xl:hidden',
               )}
               onClick={() => {
-                if (typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches) {
+                if (typeof window !== 'undefined' && window.matchMedia(SIDEBAR_DOCK_QUERY).matches) {
                   if (sidebarCollapsed) toggleSidebarCollapsed()
                   return
                 }

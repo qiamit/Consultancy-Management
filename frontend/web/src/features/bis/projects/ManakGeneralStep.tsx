@@ -537,7 +537,7 @@ function FieldGrid({
       </table>
     ))
   return (
-    <div className="overflow-x-auto">
+    <div className="manak-kv overflow-x-auto">
       {renderGroups(leadGroups, false)}
       {fullRows.length > 0 ? (
         <table
