@@ -13,18 +13,9 @@ const RESEND_API_KEY = process.env.RESEND_API_KEY || ''
 const EMAIL_FROM =
   process.env.RESEND_FROM_EMAIL || process.env.MRM_EMAIL_FROM || 'Q Engineering <info@qengineering.in>'
 
-/** Full-access roles (matches frontend isLaboratoryDirector + list_team_users RPC). */
-const FULL_ACCESS_DESIGNATIONS = new Set([
-  'laboratory director',
-  'admin',
-  'administrator',
-  'director',
-  'super admin',
-  'managing director',
-])
-
-function hasFullAccessDesignation(designation) {
-  return FULL_ACCESS_DESIGNATIONS.has(String(designation ?? '').trim().toLowerCase())
+/** Admin = Access role 'admin' only (decision #45; matches public.app_is_admin()). */
+function isAdminRole(role) {
+  return String(role ?? '').trim().toLowerCase() === 'admin'
 }
 
 function corsJson(res, status, body) {
@@ -283,17 +274,17 @@ async function requireUser(req) {
 async function requireFullAccess(req) {
   const caller = await requireUser(req)
   const callerId = String(caller?.id ?? '')
-  let designation = ''
+  let role = ''
   let status = ''
   let found = false
   try {
     const profiles = await rest(
-      `/user_profiles?id=eq.${encodeURIComponent(callerId)}&select=designation,status`,
+      `/user_profiles?id=eq.${encodeURIComponent(callerId)}&select=role,status`,
     )
     const row = Array.isArray(profiles) ? profiles[0] : null
     if (row) {
       found = true
-      designation = String(row.designation ?? '')
+      role = String(row.role ?? '')
       status = row.status == null ? '' : String(row.status)
     }
   } catch {
@@ -303,7 +294,7 @@ async function requireFullAccess(req) {
   }
   const statusNorm = status.trim().toLowerCase()
   const active = found && (statusNorm === '' || statusNorm === 'active')
-  if (!active || !hasFullAccessDesignation(designation)) {
+  if (!active || !isAdminRole(role)) {
     const err = new Error('Forbidden')
     err.statusCode = 403
     throw err

@@ -7,7 +7,7 @@ import { useModuleAccessOptional } from '@/features/settings/module-access/Modul
 import { cn } from '@/lib/utils'
 
 export function RequireModuleAccess({ children }: { children: React.ReactNode }) {
-  const { user, loading, designation, departmentName, profileReady } = useAuth()
+  const { user, loading, designation, departmentName, profileReady, role } = useAuth()
   const moduleAccess = useModuleAccessOptional()
   const location = useLocation()
   const profileLoadedRef = useRef(false)
@@ -31,7 +31,7 @@ export function RequireModuleAccess({ children }: { children: React.ReactNode })
     return null
   }
 
-  const ctx = { designation, departmentName }
+  const ctx = { designation, departmentName, role }
   // While module-access matrix is loading, fall back to static path rules — never skip the check.
   const allowed =
     moduleAccess && !moduleAccess.loading
@@ -41,7 +41,11 @@ export function RequireModuleAccess({ children }: { children: React.ReactNode })
   if (!allowed) {
     return (
       <AccessDeniedPage
-        message="You do not have permission to access this module. Contact your Laboratory Director if you need additional access."
+        message={
+          moduleAccess?.error
+            ? `Module access could not be loaded (${moduleAccess.error}). Refresh the page to try again.`
+            : 'You do not have permission to access this module. Ask an admin to grant access in Settings → Module Access.'
+        }
         designation={designation}
         departmentName={departmentName}
       />

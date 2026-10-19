@@ -95,8 +95,8 @@ export function QuotationTemplatesDialog({
   onOpenChange,
   documentKind = 'quotation',
 }: QuotationTemplatesDialogProps) {
-  const { designation } = useAuth()
-  const canEditTemplates = isLaboratoryDirector(designation)
+  const { role } = useAuth()
+  const canEditTemplates = isLaboratoryDirector(role)
   const [templates, setTemplates] = useState<LabDocumentTemplates>(DEFAULT_LAB_DOCUMENT_TEMPLATES)
   const [headerTemplates, setHeaderTemplates] = useState<NamedTemplate[]>([])
   const [footerTemplates, setFooterTemplates] = useState<NamedTemplate[]>([])

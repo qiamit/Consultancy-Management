@@ -61,7 +61,8 @@ export async function fetchModuleAccessRulesForSubject(
 
 /**
  * Upsert access for one subject.
- * Only view/edit rows are stored; none is represented by deleting the row (keeps table small).
+ * Every module gets a row, including 'none'. Deleting rows would leave the subject
+ * with no matrix, and no matrix falls back to the default (decision #44).
  */
 export async function saveModuleAccessMatrix(params: {
   subjectType: ModuleAccessSubjectType
@@ -70,49 +71,20 @@ export async function saveModuleAccessMatrix(params: {
   levelsByModule: Record<string, ModuleAccessLevel>
   updatedBy: string | null
 }): Promise<void> {
-  const entries = Object.entries(params.levelsByModule)
-  const granted = entries.filter(([, level]) => level !== 'none')
-  const clearedKeys = entries.filter(([, level]) => level === 'none').map(([key]) => key)
   const now = new Date().toISOString()
+  const payload = Object.entries(params.levelsByModule).map(([moduleKey, accessLevel]) => ({
+    subject_type: params.subjectType,
+    subject_key: params.subjectKey,
+    subject_label: params.subjectLabel,
+    module_key: moduleKey,
+    access_level: accessLevel,
+    updated_by: params.updatedBy,
+    updated_at: now,
+  }))
+  if (payload.length === 0) return
 
-  if (clearedKeys.length > 0) {
-    const { error: deleteError } = await supabase
-      .from('module_access_rules')
-      .delete()
-      .eq('subject_type', params.subjectType)
-      .eq('subject_key', params.subjectKey)
-      .in('module_key', clearedKeys)
-
-    if (deleteError) throw new Error(deleteError.message)
-  }
-
-  if (granted.length === 0) return
-
-  const existing = await fetchModuleAccessRulesForSubject(params.subjectType, params.subjectKey)
-  const existingIdByModule = new Map(existing.map((row) => [row.module_key, row.id]))
-
-  for (const [moduleKey, accessLevel] of granted) {
-    const payload = {
-      subject_type: params.subjectType,
-      subject_key: params.subjectKey,
-      subject_label: params.subjectLabel,
-      module_key: moduleKey,
-      access_level: accessLevel,
-      updated_by: params.updatedBy,
-      updated_at: now,
-    }
-
-    const existingId = existingIdByModule.get(moduleKey)
-    if (existingId) {
-      const { error: updateError } = await supabase
-        .from('module_access_rules')
-        .update(payload)
-        .eq('id', existingId)
-      if (updateError) throw new Error(updateError.message)
-      continue
-    }
-
-    const { error: insertError } = await supabase.from('module_access_rules').insert(payload)
-    if (insertError) throw new Error(insertError.message)
-  }
+  const { error } = await supabase
+    .from('module_access_rules')
+    .upsert(payload, { onConflict: 'subject_type,subject_key,module_key' })
+  if (error) throw new Error(error.message)
 }

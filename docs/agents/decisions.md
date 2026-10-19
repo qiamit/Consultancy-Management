@@ -28,6 +28,10 @@ Format: `#n | date | decision | source`
 - #11 | 2026-10-08 | MST-07 (Manak portal passwords) was excluded earlier; **encrypting client Manak passwords is now approved for S6** (supersedes the MST-07 exclusion for encryption). | Amit, chat (t43 answer)
 - #12 | 2026-10-08 | The in-app AI assistant is named **"QE Assistant"** (renamed from QI Assistant in S5). Its data-editing ability comes later (the toggle is disabled for now). | Amit, chat
 - #13 | 2026-10-08 | Archived masters stay visible in pickers until S6. S6 hides them from pickers. | S5 plan
+- #44 | 2026-10-19 | Module Access default is None. A user with no matching matrix row gets None everywhere except a Dashboard view. Saving "None" stores a `none` row and never deletes it. Existing users are seeded before the default changes, so nobody is locked out by surprise. | Amit, chat (settings review)
+- #45 | 2026-10-19 | Admin comes only from the Access role (`user_profiles.role = 'admin'`). Designation is a job title only and no longer grants admin anywhere (DB, functions, UI). At least one active admin must always remain. | Amit, chat (settings review)
+- #46 | 2026-10-19 | Passwords: an admin can set or reset a user's password, every user can change their own, and "Forgot password" sends a reset link by email. The email needs SMTP on the Railway auth service. | Amit, chat (settings review)
+- #47 | 2026-10-19 | App MCP server at `mcp.qengineering.in`. v1 has read and edit tools, both under the user's own login and Module Access. Every edit is preview first, then applied only after confirmation. No delete, password, portal-secret, user-management or email tools. It is built after the Module Access and admin fixes (#44, #45). | Amit, chat (settings review)
 
 ## Finance (F1+)
 - #20 | 2026-10-08 | Keep GimBooks for now. Build a direct GimBooks import (parties, opening balances, invoices) for when we switch. | Amit, chat (t37u)

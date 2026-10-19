@@ -4,12 +4,12 @@ import { isLaboratoryDirector } from '@/lib/isLaboratoryDirector'
 
 /** Renders children only for Laboratory Director (footer Import/Export/Print/Delete, etc.). */
 export function LaboratoryDirectorOnly({ children }: { children: ReactNode }) {
-  const { designation, role } = useAuth()
-  if (!isLaboratoryDirector(designation, role)) return null
+  const { role } = useAuth()
+  if (!isLaboratoryDirector(role)) return null
   return <>{children}</>
 }
 
 export function useIsLaboratoryDirector(): boolean {
-  const { designation, role } = useAuth()
-  return isLaboratoryDirector(designation, role)
+  const { role } = useAuth()
+  return isLaboratoryDirector(role)
 }

@@ -98,8 +98,8 @@ export function MaintenanceHistoryDialog({
   onDirectorChange?: (next: MaintenanceHistoryDirectorChange) => void
   layer?: 'default' | 'nested' | 'stacked'
 }) {
-  const { designation } = useAuth()
-  const canManageActions = isLaboratoryDirector(designation)
+  const { role } = useAuth()
+  const canManageActions = isLaboratoryDirector(role)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [viewing, setViewing] = useState<HistoryListRow | null>(null)
   const [isEditing, setIsEditing] = useState(false)

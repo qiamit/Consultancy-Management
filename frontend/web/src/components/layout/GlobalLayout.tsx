@@ -52,10 +52,10 @@ function navItemAccessible(
 
 function useNavCanAccess() {
   const moduleAccess = useModuleAccessOptional()
-  const { designation, departmentName } = useAuth()
+  const { designation, departmentName, role } = useAuth()
   const legacyCtx = useMemo(
-    () => ({ designation: designation ?? '', departmentName: departmentName ?? '' }),
-    [designation, departmentName],
+    () => ({ designation: designation ?? '', departmentName: departmentName ?? '', role }),
+    [designation, departmentName, role],
   )
 
   return useCallback(
@@ -99,8 +99,8 @@ function profileMenuIcon(item: NavItem): ElementType {
 
 function ProfileMenuSections() {
   const canAccess = useNavCanAccess()
-  const { designation } = useAuth()
-  const isDirector = isLaboratoryDirector(designation)
+  const { role } = useAuth()
+  const isDirector = isLaboratoryDirector(role)
 
   return (
     <>

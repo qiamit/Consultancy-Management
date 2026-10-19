@@ -335,6 +335,7 @@ export default function ModuleAccessMasterPage() {
   const [levels, setLevels] = useState<Record<string, ModuleAccessLevel>>(defaultLevels)
   const [selectedModuleKeys, setSelectedModuleKeys] = useState<Set<string>>(() => new Set())
   const [matrixLoading, setMatrixLoading] = useState(false)
+  const [matrixLoadFailed, setMatrixLoadFailed] = useState(false)
   const [saving, setSaving] = useState(false)
 
   const sections = useMemo(() => moduleSections(), [])
@@ -504,6 +505,7 @@ export default function ModuleAccessMasterPage() {
     if (!accessOpen || !accessSubject) return
     let canceled = false
     setMatrixLoading(true)
+    setMatrixLoadFailed(false)
     setLevels(defaultLevels())
     void (async () => {
       try {
@@ -520,7 +522,10 @@ export default function ModuleAccessMasterPage() {
         setLevels(next)
       } catch (err) {
         if (!canceled) {
-          setError(err instanceof Error ? err.message : 'Unable to load module access')
+          setError(
+            `${err instanceof Error ? err.message : 'Unable to load module access'}. Saving is blocked until it loads.`,
+          )
+          setMatrixLoadFailed(true)
           setLevels(defaultLevels())
         }
       } finally {
@@ -533,7 +538,7 @@ export default function ModuleAccessMasterPage() {
   }, [accessOpen, accessSubject])
 
   const handleSaveAccess = async () => {
-    if (!accessSubject) return
+    if (!accessSubject || matrixLoadFailed) return
     setSaving(true)
     setError(null)
     try {
@@ -949,7 +954,7 @@ export default function ModuleAccessMasterPage() {
             <Button
               type="button"
               className={cn('gap-2', limsPrimaryBtnClass)}
-              disabled={saving || matrixLoading || !accessSubject}
+              disabled={saving || matrixLoading || matrixLoadFailed || !accessSubject}
               onClick={() => void handleSaveAccess()}
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save size={14} />}

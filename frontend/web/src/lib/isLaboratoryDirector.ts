@@ -1,26 +1,13 @@
 /**
- * Full-access roles for Consultancy Pro (settings, user management, module access).
- * Matches designations stored in user_profiles.
+ * Full-access (admin) check for Consultancy Pro: settings, user management, module access.
+ * Only the Access role grants admin (decision #45). Designation is a job title only.
+ * Matches public.app_is_admin() in the database.
  */
-export function isLaboratoryDirector(
-  designation: string | null | undefined,
-  role?: string | null,
-): boolean {
-  if (String(role ?? '').trim().toLowerCase() === 'admin') return true
-  const d = String(designation ?? '')
-    .trim()
-    .toLowerCase()
-  return (
-    d === 'laboratory director' ||
-    d === 'admin' ||
-    d === 'administrator' ||
-    d === 'director' ||
-    d === 'super admin' ||
-    d === 'managing director'
-  )
+export function isLaboratoryDirector(role: string | null | undefined): boolean {
+  return String(role ?? '').trim().toLowerCase() === 'admin'
 }
 
 /** Alias kept for shared footer/delete helpers copied from LIMS. */
-export function canDeleteSampleHandlingRecords(designation: string | null | undefined): boolean {
-  return isLaboratoryDirector(designation)
+export function canDeleteSampleHandlingRecords(role: string | null | undefined): boolean {
+  return isLaboratoryDirector(role)
 }

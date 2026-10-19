@@ -213,8 +213,8 @@ export function UncertaintyHistoryDialog({
   onHistoryChange: (next: UncertaintyHistoryRecord[]) => Promise<void> | void
   layer?: 'default' | 'nested' | 'stacked' | 'top'
 }) {
-  const { designation } = useAuth()
-  const canDelete = isLaboratoryDirector(designation)
+  const { role } = useAuth()
+  const canDelete = isLaboratoryDirector(role)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [viewing, setViewing] = useState<UncertaintyHistoryRecord | null>(null)
   const [busy, setBusy] = useState(false)

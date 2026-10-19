@@ -3,6 +3,7 @@ import { isLaboratoryDirector } from '@/lib/isLaboratoryDirector'
 export interface UserAccessContext {
   designation: string
   departmentName: string
+  role?: string | null
 }
 
 const PUBLIC_SUPPORT_PATHS = ['/help', '/contact'] as const
@@ -15,16 +16,18 @@ export function isPublicSupportPath(pathname: string | undefined): boolean {
   )
 }
 
-/** Admin / director always has full access. Others rely on Module Access matrix. */
+/**
+ * Fallback when no Module Access rows apply (decision #44): admins get everything,
+ * everyone else only the Dashboard and Help / Contact. Matches public.app_module_level().
+ */
 export function canAccessPath(
   path: string,
   ctx: UserAccessContext | null | undefined,
 ): boolean {
   if (!ctx) return false
-  if (isLaboratoryDirector(ctx.designation)) return true
+  if (isLaboratoryDirector(ctx.role)) return true
   if (isPublicSupportPath(path)) return true
-  void path
-  return true
+  return (path.replace(/\/+$/, '') || '/') === '/'
 }
 
 /** Signature matches LIMS GlobalLayout / ModuleAccessProvider. */
@@ -45,7 +48,7 @@ export function canAccessNavItem(
           .trim()
           .toLowerCase() === d,
     )
-    if (!allowed && !isLaboratoryDirector(ctx.designation)) return false
+    if (!allowed && !isLaboratoryDirector(ctx.role)) return false
   }
   return canAccessPath(to, ctx)
 }
