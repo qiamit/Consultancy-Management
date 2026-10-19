@@ -1,4 +1,4 @@
-import { createContext, createElement, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabaseClient'
 
@@ -14,6 +14,9 @@ interface AuthState {
   profileName: string
   profileReady: boolean
   role: AuthRole
+  /** user_profiles.must_change_password: an admin set this user's password. */
+  mustChangePassword: boolean
+  clearMustChangePassword: () => void
 }
 
 function normalizeAuthRole(value: unknown): AuthRole {
@@ -64,6 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [division, setDivision] = useState('')
   const [profileName, setProfileName] = useState('')
   const [role, setRole] = useState<AuthRole>('')
+  const [mustChangePassword, setMustChangePassword] = useState(false)
   const [profileReady, setProfileReady] = useState(false)
   const profileUserIdRef = useRef<string | null>(null)
 
@@ -143,6 +147,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setDivision('')
       setProfileName('')
       setRole('')
+      setMustChangePassword(false)
       setProfileReady(true)
       try {
         localStorage.removeItem('userDesignation')
@@ -224,7 +229,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const fetchProfile = async () => {
       const { data, error } = await supabase
         .from('user_profiles')
-        .select('designation, department_name, division, full_name, status, role')
+        .select('designation, department_name, division, full_name, status, role, must_change_password')
         .eq('id', userId)
         .maybeSingle()
 
@@ -247,6 +252,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         full_name?: unknown
         status?: unknown
         role?: unknown
+        must_change_password?: unknown
       } | null
       if (row && String(row.status ?? 'Active').trim().toLowerCase() !== 'active') {
         try {
@@ -269,6 +275,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const finalDept = profileDept || metaDept || String(cachedDepartment ?? '')
       const finalDivision = profileDivision || metaDivision || String(cachedDivision ?? '')
       setRole(normalizeAuthRole(row?.role))
+      setMustChangePassword(row?.must_change_password === true)
       applyFromProfile(
         finalDes,
         finalDept,
@@ -284,6 +291,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [user?.id])
 
+  const clearMustChangePassword = useCallback(() => setMustChangePassword(false), [])
+
   const value: AuthState = useMemo(
     () => ({
       user,
@@ -295,8 +304,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profileName,
       profileReady,
       role,
+      mustChangePassword,
+      clearMustChangePassword,
     }),
-    [user, session, loading, designation, departmentName, division, profileName, profileReady, role],
+    [
+      user,
+      session,
+      loading,
+      designation,
+      departmentName,
+      division,
+      profileName,
+      profileReady,
+      role,
+      mustChangePassword,
+      clearMustChangePassword,
+    ],
   )
 
   return createElement(AuthContext.Provider, { value }, children)

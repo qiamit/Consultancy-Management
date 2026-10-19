@@ -69,5 +69,5 @@ Masters: `clients`, `is_codes`, `is_code_files`, `test_parameters`, `products_se
 | `POST /qi-assistant` | QE Assistant chat (text reply only) |
 | `POST /send-email` | Send email via Resend (never in tests). F7 payment reminders use this only after the user confirms, and only for invoices `invoice_needs_reminder` allows. |
 | `POST /send-mrm-agenda` | MRM agenda email |
-| `POST /create-user`, `POST /delete-user` | Admin user management |
+| `POST /create-user`, `POST /delete-user`, `POST /set-user-password` | Admin user management (admin role only). Create sets the access role and `must_change_password`. Delete needs an Inactive user and removes the GoTrue user first; the profile goes through the FK cascade. Set-password logs the user out everywhere. All three write `audit_log` rows (`table_name = 'auth.users'`) with the calling admin's id. |
 | `GET/POST /osl/manak-pdf` | Manak PDF upload/fetch used by the extension |

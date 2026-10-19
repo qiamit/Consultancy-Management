@@ -3,6 +3,7 @@ import { useEnterTogglesCheckbox } from '@/hooks/useEnterTogglesCheckbox'
 import { useProperLabelText } from '@/hooks/useProperLabelText'
 import { RoutePersistence } from '@/components/routing/RoutePersistence'
 import AuthPage from '@/features/auth/AuthPage'
+import ResetPasswordPage from '@/features/auth/ResetPasswordPage'
 import PublicSiteLayout from '@/features/public-site/PublicSiteLayout'
 import PublicHomePage from '@/features/public-site/PublicHomePage'
 import {
@@ -65,6 +66,7 @@ export default function App() {
         </Route>
 
         <Route path="/auth" element={<AuthPage />} />
+        <Route path="/auth/reset" element={<ResetPasswordPage />} />
 
         <Route element={<AuthenticatedShell />}>
           <Route index element={<DashboardPage />} />

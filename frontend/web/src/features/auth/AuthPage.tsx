@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { signIn, useAuth } from '@/hooks/useAuth'
+import { requestPasswordReset } from '@/features/auth/passwordApi'
 import {
   limsDarkBarAccentClass,
   limsDarkBarClass,
@@ -38,6 +39,10 @@ export default function AuthPage() {
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [forgotMode, setForgotMode] = useState(false)
+  const [resetSending, setResetSending] = useState(false)
+  const [resetSent, setResetSent] = useState(false)
+  const [resetError, setResetError] = useState<string | null>(null)
   const [authNotice] = useState<string | null>(() => {
     try {
       const message = sessionStorage.getItem('authNotice')
@@ -106,6 +111,31 @@ export default function AuthPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleSendReset = async () => {
+    const target = email.trim()
+    if (!target) {
+      setResetError('Enter your email address.')
+      return
+    }
+    setResetSending(true)
+    setResetError(null)
+    try {
+      await requestPasswordReset(target)
+      setResetSent(true)
+    } catch {
+      setResetError('Could not send the reset email right now. Try again later or contact your admin.')
+    } finally {
+      setResetSending(false)
+    }
+  }
+
+  const openForgot = () => {
+    setForgotMode(true)
+    setResetSent(false)
+    setResetError(null)
+    setError(null)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -177,7 +207,9 @@ export default function AuthPage() {
               <div className={limsDarkBarAccentClass} />
               <div className="relative flex items-center justify-center gap-2">
                 <ShieldCheck size={18} className="text-amber-300" />
-                <h2 className="text-lg font-semibold tracking-tight text-white">Sign In</h2>
+                <h2 className="text-lg font-semibold tracking-tight text-white">
+                  {forgotMode ? 'Reset Password' : 'Sign In'}
+                </h2>
               </div>
             </div>
 
@@ -187,62 +219,130 @@ export default function AuthPage() {
                   <p className="text-sm text-amber-900">{authNotice}</p>
                 </div>
               ) : null}
-              <div className="space-y-4" onKeyDown={handleKeyDown}>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email Address</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder={PUBLIC_EMAIL}
-                    autoComplete="email"
-                    autoFocus
-                    className={limsFieldClass}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
-                  <div className="relative">
-                    <Input
-                      id="password"
-                      type={showPassword ? 'text' : 'password'}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Enter Your Password"
-                      autoComplete="current-password"
-                      className={cn(limsFieldClass, 'pr-10')}
-                    />
+              {forgotMode ? (
+                <div className="space-y-4">
+                  {resetSent ? (
+                    <div className="rounded-none border border-emerald-600/40 bg-emerald-50 px-3 py-2.5">
+                      <p className="text-sm text-emerald-800">
+                        If an account exists for {email.trim()}, a password reset link has been sent. Check your
+                        inbox (and spam folder). The link works once and expires in about an hour.
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-sm text-stone-600">
+                        Enter your account email. We will send you a link to set a new password.
+                      </p>
+                      <div className="space-y-2">
+                        <Label htmlFor="reset-email">Email Address</Label>
+                        <Input
+                          id="reset-email"
+                          type="email"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !resetSending) void handleSendReset()
+                          }}
+                          placeholder={PUBLIC_EMAIL}
+                          autoComplete="email"
+                          autoFocus
+                          className={limsFieldClass}
+                        />
+                      </div>
+                      {resetError && (
+                        <div className="rounded-none border border-red-500/40 bg-red-50 px-3 py-2.5">
+                          <p className="text-sm text-red-700">{resetError}</p>
+                        </div>
+                      )}
+                    </>
+                  )}
+                  <div className="flex items-center justify-between gap-3">
                     <button
                       type="button"
-                      onClick={() => setShowPassword((v) => !v)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-500 transition-colors hover:text-stone-800"
-                      aria-label={showPassword ? 'Hide password' : 'Show password'}
-                      tabIndex={-1}
+                      className="text-xs font-medium text-amber-800 hover:underline"
+                      onClick={() => setForgotMode(false)}
                     >
-                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      Back to sign in
                     </button>
+                    {!resetSent && (
+                      <Button
+                        type="button"
+                        className={cn(limsPrimaryBtnClass, 'h-8 w-auto min-w-[7.5rem] px-5')}
+                        onClick={handleSendReset}
+                        disabled={!email.trim() || resetSending}
+                      >
+                        {resetSending ? 'Sending...' : 'Send reset link'}
+                      </Button>
+                    )}
                   </div>
                 </div>
-              </div>
+              ) : (
+                <>
+                <div className="space-y-4" onKeyDown={handleKeyDown}>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email Address</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder={PUBLIC_EMAIL}
+                      autoComplete="email"
+                      autoFocus
+                      className={limsFieldClass}
+                    />
+                  </div>
 
-              {error && (
-                <div className="rounded-none border border-red-500/40 bg-red-50 px-3 py-2.5">
-                  <p className="whitespace-pre-line text-sm text-red-700">{error}</p>
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Password</Label>
+                    <div className="relative">
+                      <Input
+                        id="password"
+                        type={showPassword ? 'text' : 'password'}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="Enter Your Password"
+                        autoComplete="current-password"
+                        className={cn(limsFieldClass, 'pr-10')}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((v) => !v)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-500 transition-colors hover:text-stone-800"
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        tabIndex={-1}
+                      >
+                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              )}
 
-              <div className="flex justify-end">
-                <Button
-                  type="button"
-                  className={cn(limsPrimaryBtnClass, 'h-8 w-auto min-w-[7.5rem] px-5')}
-                  onClick={handleSubmit}
-                  disabled={!canSubmit || loading}
-                >
-                  {loading ? 'Signing in...' : 'Sign In'}
-                </Button>
-              </div>
+                {error && (
+                  <div className="rounded-none border border-red-500/40 bg-red-50 px-3 py-2.5">
+                    <p className="whitespace-pre-line text-sm text-red-700">{error}</p>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    className="text-xs font-medium text-amber-800 hover:underline"
+                    onClick={openForgot}
+                  >
+                    Forgot password?
+                  </button>
+                  <Button
+                    type="button"
+                    className={cn(limsPrimaryBtnClass, 'h-8 w-auto min-w-[7.5rem] px-5')}
+                    onClick={handleSubmit}
+                    disabled={!canSubmit || loading}
+                  >
+                    {loading ? 'Signing in...' : 'Sign In'}
+                  </Button>
+                </div>
+                </>
+              )}
 
               <p className="text-center text-xs text-stone-500">
                 For Login Access Issues, Contact your Laboratory Director

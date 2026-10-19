@@ -14,7 +14,9 @@ import { UserManagementTable } from './UserManagementTable'
 import { UserManagementFooterBar } from './UserManagementFooterBar'
 import { UserManagementForm } from './UserManagementForm'
 import { buildUsersPrintHtml, printUsersViaIframe } from './printSelectedUsers'
-import type { UserAccount, UserForm } from './types'
+import { SetPasswordDialog } from './SetPasswordDialog'
+import { createTeamUser, deleteTeamUser } from './userFunctionsApi'
+import type { AccessRole, UserAccount, UserForm } from './types'
 
 async function syncUserOptionsToLabMaster(users: UserAccount[]) {
   for (const u of users) {
@@ -71,6 +73,8 @@ export default function UserManagementMasterPage() {
   const [pageSize, setPageSize] = useState(10)
   const [jumpTo, setJumpTo] = useState('')
   const [userDeleteTarget, setUserDeleteTarget] = useState<UserAccount | null>(null)
+  const [passwordTarget, setPasswordTarget] = useState<UserAccount | null>(null)
+  const currentUserId = session?.user?.id ?? null
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [printMessage, setPrintMessage] = useState<string | null>(null)
 
@@ -355,11 +359,12 @@ export default function UserManagementMasterPage() {
         onToggle={toggleRow}
         onToggleAll={toggleAllOnPage}
         userUpdateLoadingId={userUpdateLoadingId}
+        currentUserId={currentUserId}
         onEdit={(user: UserAccount) => {
           hydratedEditRef.current = user.id
           setEdit(user.id)
         }}
-        onDelete={(user: UserAccount) => setUserDeleteTarget(user)}
+        onSetPassword={(user: UserAccount) => setPasswordTarget(user)}
         onStatusChange={async (user, status) => {
           if (user.status === status) return
 
@@ -424,54 +429,19 @@ export default function UserManagementMasterPage() {
         setDepartments={setDepartments}
         divisions={divisions}
         setDivisions={setDivisions}
-        onSave={async (formData: UserForm, countryCode?: string) => {
+        onSave={async (formData: UserForm, countryCode: string, accessRole: AccessRole) => {
           await persistUserLabOptions(formData)
-
-          const {
-            data: { session: latestSession },
-          } = await supabase.auth.getSession()
-
-          const accessToken = latestSession?.access_token ?? session?.access_token
-          if (!accessToken) {
-            throw new Error('Session expired. Please log in again.')
-          }
-
-          const mobileFormatted = formatMobileForSave(formData.mobile, countryCode ?? '+91')
-
-          const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`
-          const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
-
-          const response = await fetch(functionUrl, {
-            method: 'POST',
-            headers: {
-              apikey: anonKey,
-              Authorization: `Bearer ${anonKey}`,
-              'x-user-jwt': accessToken,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              email: formData.email.trim(),
-              password: formData.password.trim(),
-              full_name: formData.name.trim(),
-              mobile: mobileFormatted,
-              designation: formData.designation,
-              department_name: formData.department,
-              division: formData.division,
-              status: 'Active',
-            }),
+          // Role is set server-side with the profile, so a role error can no longer hide behind a closed dialog.
+          await createTeamUser({
+            email: formData.email.trim(),
+            password: formData.password,
+            full_name: formData.name.trim(),
+            mobile: formatMobileForSave(formData.mobile, countryCode || '+91'),
+            designation: formData.designation,
+            department_name: formData.department,
+            division: formData.division,
+            role: accessRole,
           })
-
-          const payload = (await response.json().catch(() => null)) as unknown
-          if (!response.ok) {
-            const message =
-              typeof payload === 'object' && payload && 'error' in payload
-                ? String((payload as { error?: unknown }).error)
-                : `Edge Function returned ${response.status}`
-            throw new Error(message)
-          }
-
-          hydratedEditRef.current = null
-          setEdit(null)
           await reloadUsers()
         }}
         onOptionsChanged={refreshLabOptions}
@@ -494,61 +464,52 @@ export default function UserManagementMasterPage() {
         setDepartments={setDepartments}
         divisions={divisions}
         setDivisions={setDivisions}
-        onSave={async (formData: UserForm, countryCode?: string) => {
+        onSave={async (formData: UserForm, countryCode: string, accessRole: AccessRole) => {
           if (!editTarget) return
 
           setUserUpdateError(null)
           setUserUpdateLoadingId(editTarget.id)
-
-          await persistUserLabOptions(formData)
-
-          const mobileFormatted = formatMobileForSave(formData.mobile, countryCode)
-
           try {
-            const {
-              data: { session: latestSession },
-            } = await supabase.auth.getSession()
+            await persistUserLabOptions(formData)
 
-            const accessToken = latestSession?.access_token ?? session?.access_token
-            if (!accessToken) {
-              throw new Error('Session expired. Please log in again.')
-            }
-
+            // update_team_user also syncs the GoTrue email; there is no direct-table fallback
+            // because that changed user_profiles.email without the login email.
             const { error: updateError } = await supabase.rpc('update_team_user', {
               p_user_id: editTarget.id,
               p_full_name: formData.name.trim(),
-              p_mobile: mobileFormatted,
+              p_mobile: formatMobileForSave(formData.mobile, countryCode),
               p_designation: formData.designation,
               p_department_name: formData.department,
               p_division: formData.division,
               p_email: formData.email.trim(),
             })
-            if (updateError) {
-              const { error: profileError } = await supabase
-                .from('user_profiles')
-                .update({
-                  full_name: formData.name.trim(),
-                  mobile: mobileFormatted,
-                  designation: formData.designation,
-                  department_name: formData.department,
-                  division: formData.division,
-                  email: formData.email.trim(),
-                })
-                .eq('id', editTarget.id)
-              if (profileError) throw profileError
+            if (updateError) throw new Error(updateError.message)
+
+            if (accessRole !== editTarget.accessRole) {
+              const { error: roleError } = await supabase.rpc('set_user_role', {
+                p_user_id: editTarget.id,
+                p_role: accessRole,
+              })
+              if (roleError) throw new Error(`Details saved, but the access role was not changed: ${roleError.message}`)
             }
 
-            hydratedEditRef.current = null
-            setEdit(null)
             await reloadUsers()
-          } catch (err) {
-            setUserUpdateError(err instanceof Error ? err.message : 'Unable to update user')
           } finally {
             setUserUpdateLoadingId(null)
           }
         }}
         onOptionsChanged={refreshLabOptions}
         loading={userUpdateLoadingId === editTarget?.id}
+        onRequestDelete={
+          editTarget && editTarget.status === 'Inactive' && editTarget.id !== currentUserId
+            ? () => {
+                const target = editTarget
+                hydratedEditRef.current = null
+                setEdit(null)
+                setUserDeleteTarget(target)
+              }
+            : undefined
+        }
       />
 
       {userDeleteTarget && (
@@ -568,50 +529,24 @@ export default function UserManagementMasterPage() {
 
             setUserUpdateError(null)
             setUserUpdateLoadingId(userDeleteTarget.id)
-
             try {
-              const {
-                data: { session: latestSession },
-              } = await supabase.auth.getSession()
-
-              const accessToken = latestSession?.access_token ?? session?.access_token
-              if (!accessToken) {
-                throw new Error('Session expired. Please log in again.')
-              }
-
-              const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`
-              const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
-
-              const response = await fetch(functionUrl, {
-                method: 'POST',
-                headers: {
-                  apikey: anonKey,
-                  Authorization: `Bearer ${anonKey}`,
-                  'x-user-jwt': accessToken,
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ user_id: userDeleteTarget.id }),
-              })
-
-              const payload = (await response.json().catch(() => null)) as unknown
-              if (!response.ok) {
-                const message =
-                  typeof payload === 'object' && payload && 'error' in payload
-                    ? String((payload as { error?: unknown }).error)
-                    : `Delete failed (${response.status})`
-                throw new Error(message)
-              }
-
+              await deleteTeamUser(userDeleteTarget.id)
               setUserDeleteTarget(null)
               await reloadUsers()
-            } catch (err) {
-              setUserUpdateError(err instanceof Error ? err.message : 'Unable to delete user')
             } finally {
               setUserUpdateLoadingId(null)
             }
           }}
         />
       )}
+
+      <SetPasswordDialog
+        user={passwordTarget}
+        isSelf={passwordTarget != null && passwordTarget.id === currentUserId}
+        onOpenChange={(open) => {
+          if (!open) setPasswordTarget(null)
+        }}
+      />
     </div>
   )
 }
