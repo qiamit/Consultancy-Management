@@ -98,7 +98,6 @@ h1 {
 
 .panel-copy { border-left-color: #64748b; }
 .panel-manak { border-left-color: #059669; }
-.panel-bulk { border-left-color: #0f766e; }
 
 .panel-head {
   display: flex;
@@ -122,7 +121,6 @@ h1 {
 
 .panel-copy .step { background: #64748b; }
 .panel-manak .step { background: #059669; }
-.panel-bulk .step { background: #0f766e; }
 
 .manak-toggles {
   align-items: stretch;
@@ -154,10 +152,6 @@ body.off .manak-toggles .tile-import-qr .tile-hint {
 
 body.off.import-qr-off .tile-import-qr .tile-hint {
   color: #b91c1c;
-}
-
-.tile-new-app {
-  grid-column: 1 / -1;
 }
 
 .tile-new-app .tile-hint {
@@ -192,6 +186,10 @@ body.inclusion-off .tile-inclusion .tile-hint {
   line-height: 1.4;
   color: #4c1d95;
   font-weight: 600;
+}
+
+.import-qr-status:empty {
+  display: none;
 }
 
 h2 {
@@ -244,13 +242,6 @@ h2 {
   font-weight: 600;
   color: #0f766e;
   line-height: 1.35;
-}
-
-.flow-note {
-  margin: 8px 0 0;
-  font-size: 11px;
-  line-height: 1.45;
-  color: #64748b;
 }
 
 .tile-power {
@@ -353,6 +344,13 @@ h2 {
   margin-bottom: 0;
 }
 
+.field-row .action-btn-inline {
+  flex: 0 0 auto;
+  width: auto;
+  align-self: flex-end;
+  padding: 9px 16px;
+}
+
 .field label {
   font-size: 11px;
   font-weight: 700;
@@ -445,4 +443,14 @@ input:focus {
 
 .status.error:not(:empty) {
   background: var(--error-bg);
+}
+
+/* Renewal / Organisation Profile: buttons only until their automation exists. */
+.tile-soon {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.tile-soon .switch {
+  pointer-events: none;
 }

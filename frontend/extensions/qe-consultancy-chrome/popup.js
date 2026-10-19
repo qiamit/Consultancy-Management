@@ -12,9 +12,6 @@ const inclusionLabel = document.getElementById("inclusionLabel");
 const inclusionStatus = document.getElementById("inclusionStatus");
 const enableBypass = document.getElementById("enableBypass");
 const enableCtrlBypass = document.getElementById("enableCtrlBypass");
-const fieldNameInput = document.getElementById("fieldName");
-const fieldValueInput = document.getElementById("fieldValue");
-const fillButton = document.getElementById("fillButton");
 
 init();
 
@@ -295,26 +292,6 @@ function init() {
         return;
       }
       setStatus(enabled ? "Shortcut bypass enabled." : "Shortcut bypass disabled.", false);
-    });
-  });
-
-  fillButton.addEventListener("click", () => {
-    const fieldName = fieldNameInput.value.trim();
-    const value = fieldValueInput.value;
-    if (!fieldName) {
-      setStatus("Enter a field name.", true);
-      return;
-    }
-    chrome.runtime.sendMessage({ type: "RUN_BULK_FILL", fieldName, value }, (response) => {
-      if (chrome.runtime.lastError) {
-        setStatus(chrome.runtime.lastError.message, true);
-        return;
-      }
-      if (!response || response.ok === false) {
-        setStatus(response?.error || "Failed to fill fields.", true);
-        return;
-      }
-      setStatus(`Updated ${response.updatedCount} field(s).`, false);
     });
   });
 }
