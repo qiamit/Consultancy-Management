@@ -160,6 +160,8 @@ export default function BisRenewalsMasterPage({ dialogOnly = false }: { dialogOn
           isCodeLabel: summary.isCodeLabel,
           unitOfIs: summary.unitOfIs,
           slabRates: summary.slabRates,
+          firmScale: summary.firmScale,
+          minimumFees: summary.minimumFees,
         }
         const savedDraft = readRenewalDraft('new')
         // A new renewal starts on Manak's production period, with its monthly rows.

@@ -6,6 +6,9 @@ import {
   renewalClientName,
   coveredProductionExceedsTotal,
   calculateRenewalProductionRow,
+  minimumFeesFromIsCode,
+  renewalMarkingFeeSummary,
+  type RenewalMinimumFees,
   type RenewalSlabRate,
   type BisRenewalForm,
   type BisRenewalRow,
@@ -14,8 +17,8 @@ import {
 export { formatBisApiError }
 
 const PROJECT_JOIN =
-  'project:bis_projects(id, title, cm_l_digits, license_validity_date, status, client_id, is_code:is_codes(is_number, title, revision_year, part_no, section_no, standard_prefix, unit_of_is, slab_1_quantity, slab_1_rate, slab_2_quantity, slab_2_rate, slab_3_quantity, slab_3_rate))'
-const SELECT_WITH_JOINS = `*, client:clients(company_name, address, email), ${PROJECT_JOIN}`
+  'project:bis_projects(id, title, cm_l_digits, license_validity_date, status, client_id, is_code:is_codes(is_number, title, revision_year, part_no, section_no, standard_prefix, unit_of_is, slab_1_quantity, slab_1_rate, slab_2_quantity, slab_2_rate, slab_3_quantity, slab_3_rate, mmf_large_scale, mmf_medium_scale, mmf_small_scale, mmf_micro_scale))'
+const SELECT_WITH_JOINS = `*, client:clients(company_name, address, email, company_scale), ${PROJECT_JOIN}`
 
 const LOOKUP_ID_LIMIT = 100
 const LOOKUP_OPTION_LIMIT = 30
@@ -137,6 +140,8 @@ export type RenewalProjectSummary = {
   isCodeLabel: string
   unitOfIs: string
   slabRates: RenewalSlabRate[]
+  firmScale: string
+  minimumFees: RenewalMinimumFees
 }
 
 export async function fetchRenewalSlabRates(projectId: string): Promise<RenewalSlabRate[]> {
@@ -177,7 +182,7 @@ export async function fetchRenewalProjectSummary(
   const { data, error } = await supabase
     .from('bis_projects')
     .select(
-      'id, title, client_id, is_code_id, cm_l_digits, license_validity_date, client:clients(company_name, address, email), is_code:is_codes(id, is_number, revision_year, part_no, section_no, standard_prefix, unit_of_is, slab_1_quantity, slab_1_rate, slab_2_quantity, slab_2_rate, slab_3_quantity, slab_3_rate)',
+      'id, title, client_id, is_code_id, cm_l_digits, license_validity_date, client:clients(company_name, address, email, company_scale), is_code:is_codes(id, is_number, revision_year, part_no, section_no, standard_prefix, unit_of_is, slab_1_quantity, slab_1_rate, slab_2_quantity, slab_2_rate, slab_3_quantity, slab_3_rate, mmf_large_scale, mmf_medium_scale, mmf_small_scale, mmf_micro_scale)',
     )
     .eq('id', projectId)
     .maybeSingle()
@@ -189,7 +194,7 @@ export async function fetchRenewalProjectSummary(
     is_code_id: string | null
     cm_l_digits: string | null
     license_validity_date: string | null
-    client: { company_name: string | null; address: string | null; email: string | null } | null
+    client: { company_name: string | null; address: string | null; email: string | null; company_scale?: string | null } | null
     is_code: {
       is_number: string | null
       revision_year: string | null
@@ -203,13 +208,17 @@ export async function fetchRenewalProjectSummary(
       slab_2_rate?: number | string | null
       slab_3_quantity?: string | null
       slab_3_rate?: number | string | null
+      mmf_large_scale?: number | string | null
+      mmf_medium_scale?: number | string | null
+      mmf_small_scale?: number | string | null
+      mmf_micro_scale?: number | string | null
     } | null
   }
   let isCode = row.is_code
   if (!isCode?.unit_of_is && row.is_code_id) {
     const { data: fetchedIsCode, error: isCodeError } = await supabase
       .from('is_codes')
-      .select('unit_of_is, slab_1_quantity, slab_1_rate, slab_2_quantity, slab_2_rate, slab_3_quantity, slab_3_rate')
+      .select('unit_of_is, slab_1_quantity, slab_1_rate, slab_2_quantity, slab_2_rate, slab_3_quantity, slab_3_rate, mmf_large_scale, mmf_medium_scale, mmf_small_scale, mmf_micro_scale')
       .eq('id', row.is_code_id)
       .maybeSingle()
     if (isCodeError) throw isCodeError
@@ -235,6 +244,8 @@ export async function fetchRenewalProjectSummary(
       : '',
     unitOfIs,
     slabRates,
+    firmScale: row.client?.company_scale?.trim() ?? '',
+    minimumFees: minimumFeesFromIsCode(isCode),
   }
 }
 
@@ -276,7 +287,13 @@ export async function saveRenewal(
     renewal_term_years: Number.parseInt(form.renewalTermYears, 10) || 5,
     basic_unit_rate: numberOrNull(form.basicUnitRate),
     marking_fee_quantity: numberOrNull(form.markingFeeQuantity),
-    marking_fee_total: numberOrNull(form.markingFeeTotal),
+    // Payable marking fee for the statement (minimum by firm scale when production gives less).
+    marking_fee_total: form.productionRows.length
+      ? renewalMarkingFeeSummary(
+          form.productionRows.map((row) => calculateRenewalProductionRow(row, form.basicUnitRate, form.slabRates)),
+          form,
+        ).payable
+      : numberOrNull(form.markingFeeTotal),
     fee_challan_number: textOrNull(form.feeChallanNumber),
     fee_payment_date: dateOrNull(form.feePaymentDate),
     fee_payment_mode: textOrNull(form.feePaymentMode),
