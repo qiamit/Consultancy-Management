@@ -9,6 +9,7 @@ import {
   Menu,
   X,
   LogOut,
+  KeyRound,
   Bot,
   Shield,
   Globe,
@@ -39,6 +40,7 @@ import {
   type NavSection,
 } from '@/lib/appNav'
 import { QiAssistant } from '@/components/qi-assistant/QiAssistant'
+import { ChangePasswordDialog } from '@/components/auth/ChangePasswordDialog'
 import { toProperLabelText } from '@/lib/properLabelText'
 
 const formatNavLabel = (value: string) => toProperLabelText(value)
@@ -435,7 +437,8 @@ export default function GlobalLayout() {
     location.pathname.startsWith('/masters/is-codes/') ||
     location.pathname === '/masters/test-parameter' ||
     location.pathname.startsWith('/masters/test-parameter/')
-  const { profileName, designation, profileReady } = useAuth()
+  const { profileName, designation, profileReady, user, mustChangePassword, clearMustChangePassword } = useAuth()
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false
     return window.localStorage.getItem('app.sidebarCollapsed') === '1'
@@ -758,6 +761,11 @@ export default function GlobalLayout() {
 
                 <DropdownMenuSeparator />
 
+                <DropdownMenuItem onSelect={() => setChangePasswordOpen(true)}>
+                  <KeyRound size={14} />
+                  Change Password
+                </DropdownMenuItem>
+
                 <DropdownMenuItem
                   className="text-destructive focus:text-destructive"
                   onSelect={async (event) => {
@@ -779,6 +787,25 @@ export default function GlobalLayout() {
             <Outlet />
           </RequireModuleAccess>
         </main>
+
+        <ChangePasswordDialog
+          mode="self"
+          open={changePasswordOpen && !mustChangePassword}
+          email={user?.email ?? ''}
+          onOpenChange={setChangePasswordOpen}
+          onChanged={clearMustChangePassword}
+        />
+        <ChangePasswordDialog
+          mode="forced"
+          open={profileReady && mustChangePassword}
+          email={user?.email ?? ''}
+          onOpenChange={() => {}}
+          onChanged={clearMustChangePassword}
+          onLogOut={async () => {
+            await signOut()
+            navigate('/auth', { replace: true })
+          }}
+        />
       </div>
     </div>
   )

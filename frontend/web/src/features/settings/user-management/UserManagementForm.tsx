@@ -35,7 +35,7 @@ import {
   limsPrimaryBtnClass,
   limsRegistryFormClass,
 } from '@/lib/limsThemeUi'
-import { supabase } from '@/lib/supabaseClient'
+import { PASSWORD_MIN_LENGTH } from '@/features/auth/passwordApi'
 import { cn } from '@/lib/utils'
 import type { AccessRole, UserAccount, UserForm } from './types'
 import { emptyUserForm } from './types'
@@ -55,9 +55,15 @@ type UserManagementFormProps = {
   setDepartments: React.Dispatch<React.SetStateAction<OptionItem[]>>
   divisions: OptionItem[]
   setDivisions: React.Dispatch<React.SetStateAction<OptionItem[]>>
-  onSave: (formData: UserForm, countryCode?: string) => Promise<void>
+  /**
+   * Does the whole save (create / update, then the access role) and throws on any error.
+   * The dialog stays open and shows the error; it closes itself only after onSave resolves.
+   */
+  onSave: (formData: UserForm, countryCode: string, accessRole: AccessRole) => Promise<void>
   onOptionsChanged?: () => Promise<void>
   loading?: boolean
+  /** Edit mode, Inactive user that is not the signed-in admin: shows "Delete permanently". */
+  onRequestDelete?: () => void
 }
 
 function FormSection({
@@ -133,7 +139,6 @@ export function UserManagementForm(props: UserManagementFormProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [accessRole, setAccessRole] = useState<AccessRole>('staff')
-  const [savedAccessRole, setSavedAccessRole] = useState<AccessRole>('staff')
 
   const designationOptions =
     props.designations.length > 0 ? props.designations : LAB_MASTER_OPTION_DEFAULTS.designation
@@ -393,7 +398,6 @@ export function UserManagementForm(props: UserManagementFormProps) {
     if (props.mode === 'edit' && props.initialData) {
       const nextRole = props.initialData.accessRole || 'staff'
       setAccessRole(nextRole)
-      setSavedAccessRole(nextRole)
       const rawMobile = props.initialData.mobile ?? ''
       const codeMatch = rawMobile.match(/^(\+\d{1,4})\s*(.*)$/)
       const base = {
@@ -421,7 +425,6 @@ export function UserManagementForm(props: UserManagementFormProps) {
       setFormData(emptyUserForm)
       setSelectedCountryCode('+91')
       setAccessRole('staff')
-      setSavedAccessRole('staff')
     }
   }, [props.initialData, props.mode])
 
@@ -440,29 +443,15 @@ export function UserManagementForm(props: UserManagementFormProps) {
         setError('All fields are required')
         return
       }
+      if (formData.password.length < PASSWORD_MIN_LENGTH) {
+        setError(`Password must be at least ${PASSWORD_MIN_LENGTH} characters`)
+        return
+      }
     }
 
     setLoading(true)
     try {
-      await props.onSave(formData, selectedCountryCode)
-      if (accessRole !== savedAccessRole) {
-        let userId = props.mode === 'edit' ? props.initialData?.id ?? '' : ''
-        if (!userId && props.mode === 'create') {
-          const lookup = await supabase
-            .from('user_profiles')
-            .select('id')
-            .ilike('email', formData.email.trim())
-            .maybeSingle()
-          if (lookup.error) throw new Error(lookup.error.message)
-          userId = String((lookup.data as { id?: string } | null)?.id ?? '')
-        }
-        if (!userId) throw new Error('User was saved, but the access role could not be set.')
-        const { error: roleError } = await supabase.rpc('set_user_role', {
-          p_user_id: userId,
-          p_role: accessRole,
-        })
-        if (roleError) throw new Error(roleError.message)
-      }
+      await props.onSave(formData, selectedCountryCode, accessRole)
       props.onOpenChange(false)
       setFormData(emptyUserForm)
     } catch (err) {
@@ -552,14 +541,21 @@ export function UserManagementForm(props: UserManagementFormProps) {
             <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
             <DialogHeader className="relative pr-10 text-left">
               <DialogTitle className="text-base font-semibold tracking-tight text-white">
-                Remove Team Member
+                Delete Team Member
               </DialogTitle>
             </DialogHeader>
           </div>
           <div className="bg-gradient-to-b from-stone-100/80 to-white px-4 py-4">
             <DialogDescription className="text-sm text-stone-700">
-              This action cannot be undone. This will permanently remove the user entry from the list.
+              Permanently delete {props.initialData?.name || 'this user'} and their login? This cannot be undone.
+              A user who is linked to records (equipment, projects and so on) cannot be deleted; keep them
+              Inactive instead.
             </DialogDescription>
+            {error && (
+              <p className="mt-3 border-l-2 border-destructive bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                {error}
+              </p>
+            )}
           </div>
           <DialogFooter className="gap-2 border-t border-stone-200 bg-stone-50 px-4 py-3 sm:justify-end">
             <Button
@@ -577,7 +573,7 @@ export function UserManagementForm(props: UserManagementFormProps) {
               onClick={handleSave}
               disabled={loading}
             >
-              {loading ? 'Removing…' : 'Remove User'}
+              {loading ? 'Deleting…' : 'Delete permanently'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -685,10 +681,12 @@ export function UserManagementForm(props: UserManagementFormProps) {
                     id="user-password"
                     type="password"
                     className={limsFieldClass}
-                    placeholder="Enter Password"
+                    placeholder={`At least ${PASSWORD_MIN_LENGTH} characters`}
+                    autoComplete="new-password"
                     value={formData.password}
                     onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
                   />
+                  <p className="text-xs text-stone-600">The user must choose their own password at first login.</p>
                 </Field>
               ) : null}
             </div>
@@ -853,6 +851,17 @@ export function UserManagementForm(props: UserManagementFormProps) {
         </div>
 
         <DialogFooter className="gap-2 border-t border-stone-200 bg-stone-50 px-4 py-3 sm:justify-end sm:px-6">
+          {props.mode === 'edit' && props.onRequestDelete ? (
+            <Button
+              type="button"
+              variant="ghost"
+              className="mr-auto rounded-none text-destructive hover:bg-destructive/10 hover:text-destructive"
+              onClick={props.onRequestDelete}
+              disabled={loading || props.loading}
+            >
+              Delete permanently
+            </Button>
+          ) : null}
           <Button
             type="button"
             className={cn('min-w-[140px]', limsPrimaryBtnClass)}

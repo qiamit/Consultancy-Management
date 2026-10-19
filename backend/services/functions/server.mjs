@@ -598,14 +598,72 @@ async function handleSendMrmAgenda(req, res) {
   json(res, 200, { sent, failed, recipients: results })
 }
 
+const ACCESS_ROLES = new Set(['admin', 'staff', 'viewer'])
+const PASSWORD_MIN = 8
+const PASSWORD_MAX = 72 // bcrypt ignores anything longer
+
+/** Returns an error message, or '' when the password is acceptable. Passwords are never trimmed. */
+function passwordProblem(password) {
+  if (typeof password !== 'string' || !password) return 'Password is required'
+  if (password.length < PASSWORD_MIN) return `Password must be at least ${PASSWORD_MIN} characters`
+  if (password.length > PASSWORD_MAX) return `Password must be at most ${PASSWORD_MAX} characters`
+  if (password.trim() !== password) return 'Password cannot start or end with a space'
+  return ''
+}
+
+/** Service-role REST call that records the calling admin as audit_log.changed_by. */
+function restAs(actorId, path, init = {}) {
+  return rest(path, { ...init, headers: { 'X-Actor-Id': actorId, ...(init.headers || {}) } })
+}
+
+/** audit_log row for a GoTrue-side event. Best effort: a failed audit write never undoes the action. */
+async function auditUserEvent(actorId, userId, action, event, data = {}) {
+  try {
+    await rest('/rpc/app_audit_user_event', {
+      method: 'POST',
+      body: JSON.stringify({
+        p_actor: actorId,
+        p_user_id: userId,
+        p_action: action,
+        p_event: event,
+        p_data: data,
+      }),
+    })
+  } catch (err) {
+    console.error('[audit] app_audit_user_event failed', event, userId, err)
+  }
+}
+
+async function fetchProfile(userId) {
+  const rows = await rest(
+    `/user_profiles?id=eq.${encodeURIComponent(userId)}&select=id,email,full_name,designation,role,status`,
+  )
+  return Array.isArray(rows) ? rows[0] ?? null : null
+}
+
+function isActiveStatus(status) {
+  const s = String(status ?? '').trim().toLowerCase()
+  return s === '' || s === 'active'
+}
+
 async function handleCreateUser(req, res) {
   const caller = await requireFullAccess(req)
   const body = await readBody(req)
 
   const email = String(body.email ?? '').trim()
-  const password = String(body.password ?? '').trim()
+  const password = typeof body.password === 'string' ? body.password : ''
   if (!email || !password) {
     json(res, 400, { error: 'email and password are required' })
+    return
+  }
+  const problem = passwordProblem(password)
+  if (problem) {
+    json(res, 400, { error: problem })
+    return
+  }
+  const role = String(body.role ?? 'staff').trim().toLowerCase()
+  if (!ACCESS_ROLES.has(role)) {
+    json(res, 400, { error: 'role must be admin, staff or viewer' })
     return
   }
 
@@ -646,7 +704,7 @@ async function handleCreateUser(req, res) {
   const userId = String(createdUser?.id ?? '')
   if (userId) {
     try {
-      await rest('/user_profiles?on_conflict=id', {
+      await restAs(callerId, '/user_profiles?on_conflict=id', {
         method: 'POST',
         headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
         body: JSON.stringify({
@@ -658,15 +716,93 @@ async function handleCreateUser(req, res) {
           department_name: departmentName,
           division,
           status,
+          role,
+          must_change_password: true,
         }),
       })
     } catch (err) {
+      // No login without a profile: undo the GoTrue user.
+      await authAdmin(`/admin/users/${encodeURIComponent(userId)}`, { method: 'DELETE' })
       json(res, 400, { error: err instanceof Error ? err.message : 'Profile upsert failed' })
       return
     }
+    await auditUserEvent(callerId, userId, 'I', 'user_created', { email, role })
   }
 
   json(res, 200, { user: createdUser })
+}
+
+async function handleSetUserPassword(req, res) {
+  const caller = await requireFullAccess(req)
+  const body = await readBody(req)
+  const userId = String(body.user_id ?? '').trim()
+  const password = typeof body.password === 'string' ? body.password : ''
+  const callerId = String(caller?.id ?? '')
+
+  if (!userId) {
+    json(res, 400, { error: 'user_id is required' })
+    return
+  }
+  const problem = passwordProblem(password)
+  if (problem) {
+    json(res, 400, { error: problem })
+    return
+  }
+  const isSelf = userId === callerId
+  const mustChange = isSelf ? false : body.must_change !== false
+
+  const profile = await fetchProfile(userId)
+  if (!profile) {
+    json(res, 404, { error: 'User not found' })
+    return
+  }
+
+  const updateResult = await authAdmin(`/admin/users/${encodeURIComponent(userId)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ password }),
+  })
+  if (!updateResult.ok) {
+    json(res, 400, {
+      error: authErrorMessage(updateResult.data, `Auth ${updateResult.status}`),
+    })
+    return
+  }
+
+  try {
+    await restAs(callerId, `/user_profiles?id=eq.${encodeURIComponent(userId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ must_change_password: mustChange }),
+    })
+  } catch (err) {
+    console.error('[set-user-password] must_change_password update failed', userId, err)
+  }
+
+  let sessionsRevoked = 0
+  if (!isSelf) {
+    try {
+      const revoked = await rest('/rpc/app_revoke_user_sessions', {
+        method: 'POST',
+        body: JSON.stringify({ p_user_id: userId }),
+      })
+      sessionsRevoked = Number(revoked) || 0
+    } catch (err) {
+      console.error('[set-user-password] session revoke failed', userId, err)
+    }
+  }
+
+  await auditUserEvent(callerId, userId, 'U', 'password_set_by_admin', {
+    email: profile.email ?? '',
+    must_change_password: mustChange,
+    sessions_revoked: sessionsRevoked,
+  })
+
+  json(res, 200, { ok: true, must_change_password: mustChange })
+}
+
+/** Postgres FK violation text GoTrue passes through when the profile is still referenced. */
+function looksLikeReferenceError(message) {
+  const m = String(message || '').toLowerCase()
+  return m.includes('foreign key') || m.includes('violates') || m.includes('database error deleting user')
 }
 
 async function handleDeleteUser(req, res) {
@@ -685,22 +821,48 @@ async function handleDeleteUser(req, res) {
     return
   }
 
-  try {
-    await rest(`/user_profiles?id=eq.${encodeURIComponent(userId)}`, { method: 'DELETE' })
-  } catch (err) {
-    json(res, 400, { error: err instanceof Error ? err.message : 'Profile delete failed' })
+  const profile = await fetchProfile(userId)
+  if (profile && isActiveStatus(profile.status)) {
+    json(res, 400, { error: 'Deactivate the user before deleting them permanently.' })
     return
   }
 
+  // GoTrue first: auth.users -> user_profiles is ON DELETE CASCADE, so the profile goes in the
+  // same transaction. If anything still references the profile (or it is the last admin), the
+  // whole delete fails and the login and profile both stay as they were.
   const deleteResult = await authAdmin(`/admin/users/${encodeURIComponent(userId)}`, {
     method: 'DELETE',
   })
-  if (!deleteResult.ok) {
+  if (!deleteResult.ok && deleteResult.status !== 404) {
+    const message = authErrorMessage(deleteResult.data, `Auth ${deleteResult.status}`)
     json(res, 400, {
-      error: authErrorMessage(deleteResult.data, `Auth ${deleteResult.status}`),
+      error: looksLikeReferenceError(message)
+        ? 'This user is linked to existing records (for example equipment or projects), so they cannot be deleted. Keep them Inactive instead.'
+        : message,
     })
     return
   }
+  if (!profile && deleteResult.status === 404) {
+    json(res, 404, { error: 'User not found' })
+    return
+  }
+
+  if (profile && deleteResult.status === 404) {
+    // 404 = no GoTrue user (an old orphan profile); the cascade did not run, so remove it here.
+    try {
+      await restAs(callerId, `/user_profiles?id=eq.${encodeURIComponent(userId)}`, { method: 'DELETE' })
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : 'Profile delete failed' })
+      return
+    }
+  }
+
+  await auditUserEvent(callerId, userId, 'D', 'user_deleted', {
+    email: profile?.email ?? '',
+    full_name: profile?.full_name ?? '',
+    designation: profile?.designation ?? '',
+    role: profile?.role ?? '',
+  })
 
   json(res, 200, { ok: true })
 }
@@ -714,6 +876,7 @@ const routes = {
   'POST /send-email': handleSendEmail,
   'POST /create-user': handleCreateUser,
   'POST /delete-user': handleDeleteUser,
+  'POST /set-user-password': handleSetUserPassword,
   'POST /qi-assistant': handleQiAssistant,
   'OPTIONS /qi-assistant': handleQiAssistant,
   'GET /osl/manak-pdf': handleManakPdf,

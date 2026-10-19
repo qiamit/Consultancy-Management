@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Pencil, Trash2 } from 'lucide-react'
+import { KeyRound, Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
@@ -20,8 +20,10 @@ type UserManagementTableProps = {
   onToggle: (id: string) => void
   onToggleAll: (checked: boolean) => void
   userUpdateLoadingId: string | null
+  /** The signed-in admin: their own status cannot be changed (last-admin / self lock-out guard). */
+  currentUserId: string | null
   onEdit: (user: UserAccount) => void
-  onDelete: (user: UserAccount) => void
+  onSetPassword: (user: UserAccount) => void
   onStatusChange: (user: UserAccount, status: 'Active' | 'Inactive') => void
 }
 
@@ -61,6 +63,7 @@ export function UserManagementTable(props: UserManagementTableProps) {
           <TableBody>
             {props.users.map((user) => {
               const busy = props.userUpdateLoadingId === user.id
+              const isSelf = props.currentUserId === user.id
 
               return (
                 <TableRow key={user.id} data-state={props.selectedIds.has(user.id) ? 'selected' : undefined}>
@@ -100,13 +103,14 @@ export function UserManagementTable(props: UserManagementTableProps) {
                   <TableCell className="text-center align-middle">
                     <Select
                       value={user.status}
-                      disabled={busy}
+                      disabled={busy || isSelf}
                       onValueChange={(value) =>
                         props.onStatusChange(user, value as 'Active' | 'Inactive')
                       }
                     >
                       <SelectTrigger
                         aria-label={`Status for ${user.name}`}
+                        title={isSelf ? 'You cannot deactivate your own account' : undefined}
                         className={cn(
                           'mx-auto h-8 w-[110px] text-xs font-medium',
                           user.status === 'Active'
@@ -139,11 +143,12 @@ export function UserManagementTable(props: UserManagementTableProps) {
                       type="button"
                       variant="ghost"
                       size="sm"
-                      onClick={() => props.onDelete(user)}
+                      onClick={() => props.onSetPassword(user)}
                       disabled={busy}
-                      aria-label={`Delete ${user.name}`}
+                      aria-label={`Set password for ${user.name}`}
+                      title="Set password"
                     >
-                      <Trash2 size={16} className="text-destructive" />
+                      <KeyRound size={16} />
                     </Button>
                   </TableCell>
                 </TableRow>
