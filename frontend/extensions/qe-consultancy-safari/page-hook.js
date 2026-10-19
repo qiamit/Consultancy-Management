@@ -538,7 +538,7 @@
   }
 
   function labTokens(value) {
-    return softLabKey(value).split(" ").filter((t) => t.length >= 4);
+    return softLabKey(value).split(" ").filter((t) => t.length >= 3);
   }
 
   function labMatchScore(blob, wanted) {
@@ -587,9 +587,19 @@
   function pickLabFromTable() {
     const root = document.documentElement;
     const wanted = String(root.getAttribute("data-qe-lab-name") || "");
-    const query = String(root.getAttribute("data-qe-lab-filter") || "") || labTokens(wanted).slice(0, 2).join(" ");
+    const oslCode = String(root.getAttribute("data-qe-lab-osl") || "").replace(/\D/g, "");
+    const query =
+      oslCode || String(root.getAttribute("data-qe-lab-filter") || "") || labTokens(wanted).slice(0, 2).join(" ");
     if (query) filterLabTable(query);
     const radios = Array.from(document.querySelectorAll("input[name='clickonlab']"));
+    if (oslCode) {
+      // Radio values look like "8127706@@#@@OSL".
+      const byCode = radios.find(
+        (el) => String(el.value || "").split("@@")[0].replace(/\D/g, "") === oslCode,
+      );
+      if (!byCode) return false;
+      return confirmLabRadio(byCode);
+    }
     let best = null;
     let bestScore = 0;
     radios.forEach((el) => {
@@ -604,11 +614,15 @@
       }
     });
     const match = wanted
-      ? bestScore >= 40
+      ? bestScore >= 70
         ? best
         : null
       : radios.find((el) => /osl/i.test(String(el.value || ""))) || radios[0];
     if (!match) return false;
+    return confirmLabRadio(match);
+  }
+
+  function confirmLabRadio(match) {
     match.checked = true;
     match.click();
     if (typeof window.selectFinalLab === "function") {
