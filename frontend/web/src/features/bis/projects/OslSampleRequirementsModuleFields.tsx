@@ -78,7 +78,12 @@ import {
   subscribeManakTestRequestResult,
   type ManakTrResult,
 } from './manakExtensionBridge'
-import { createBisProjectFileUrls, deleteBisProjectFile, uploadBisProjectFile } from './bisProjectFilesApi'
+import {
+  createBisProjectFileUrls,
+  deleteBisProjectFile,
+  listBisProjectFiles,
+  uploadBisProjectFile,
+} from './bisProjectFilesApi'
 import { downloadMergedOslTestRequestPdfs } from './mergeOslTestRequestPdfs'
 import {
   assertManakAccountBelongsToOnlyFirm,
@@ -181,6 +186,35 @@ function Field({
   )
 }
 
+/** One Extension run for a sample row; `done` once its PDF is taken (or being taken). */
+type ManakTrRun = { token: string; startedAt: number; done: boolean }
+
+const MANAK_TR_RUN_MAX_AGE_MS = 24 * 60 * 60 * 1000
+
+// Kept in sessionStorage so a reload of this tab mid-run still accepts the PDF.
+function manakTrRunsKey(projectId: string): string {
+  return `qe-manak-tr-runs:${projectId}`
+}
+
+function loadManakTrRuns(projectId: string): Map<string, ManakTrRun> {
+  try {
+    const raw = window.sessionStorage.getItem(manakTrRunsKey(projectId))
+    const parsed = raw ? (JSON.parse(raw) as Record<string, ManakTrRun>) : {}
+    const cutoff = Date.now() - MANAK_TR_RUN_MAX_AGE_MS
+    return new Map(Object.entries(parsed).filter(([, run]) => run && run.startedAt >= cutoff))
+  } catch {
+    return new Map()
+  }
+}
+
+function saveManakTrRuns(projectId: string, runs: Map<string, ManakTrRun>): void {
+  try {
+    window.sessionStorage.setItem(manakTrRunsKey(projectId), JSON.stringify(Object.fromEntries(runs)))
+  } catch {
+    /* storage blocked: runs still work for this page */
+  }
+}
+
 export function OslSampleRequirementsModuleFields({
   value,
   onChange,
@@ -254,10 +288,8 @@ export function OslSampleRequirementsModuleFields({
   }>({ name: '', address: '', isNumber: '', applicationNo: '' })
   const [extensionBusyId, setExtensionBusyId] = useState<string | null>(null)
   const [mergeBusy, setMergeBusy] = useState(false)
-  // Live Extension run per sample row: its return token and when it started.
-  const pendingManakTokensRef = useRef<Map<string, { token: string; startedAt: number }>>(new Map())
-  // Deliveries already taken (by return token, or by row + file for replays).
-  const claimedManakResultsRef = useRef<Set<string>>(new Set())
+  // Extension runs started from this tab, per sample row (see loadManakTrRuns).
+  const manakTrRunsRef = useRef<{ projectId: string; runs: Map<string, ManakTrRun> } | null>(null)
   const courierSlipInputRef = useRef<HTMLInputElement | null>(null)
   const courierSlipRowIdRef = useRef<string | null>(null)
   const testRequestInputRef = useRef<HTMLInputElement | null>(null)
@@ -293,11 +325,18 @@ export function OslSampleRequirementsModuleFields({
     return () => { cancelled = true }
   }, [draftChargesValue, draftIdForCharges, isCodeId])
 
+  const manakTrRuns = (pid: string) => {
+    if (manakTrRunsRef.current?.projectId !== pid) {
+      manakTrRunsRef.current = { projectId: pid, runs: loadManakTrRuns(pid) }
+    }
+    return manakTrRunsRef.current.runs
+  }
+
   /**
    * The extension hands one Manak PDF over several times: direct inject, bridge
-   * chunks, stored-result replays (page load, focus, timers) and the inbox poll.
-   * Attach once per sample + return token; a delivery outside a live run only
-   * fills a row that has no Test Request yet.
+   * chunks, stored-result replays (page load, focus, timers, every app tab) and
+   * the inbox poll. Attach only for a run started from this tab, once per run;
+   * replays after that run (or after a Delete) are ignored.
    */
   const attachManakPdfToSample = async (result: ManakTrResult, returnToken?: string) => {
     const pid = (projectId ?? '').trim()
@@ -323,16 +362,17 @@ export function OslSampleRequirementsModuleFields({
     const pdfName =
       result.pdfName.replace(/[^\w.\-]+/g, '_') ||
       `Test_Request_${result.sample_code || row.id}.pdf`
-    const pending = pendingManakTokensRef.current.get(row.id)
-    // Poll results name their token; page messages count for the live run unless
-    // the PDF was captured before it started (a replay of an older run).
-    const isLiveRun = Boolean(pending) && (returnToken
-      ? returnToken === pending!.token
-      : !result.filledAt || result.filledAt >= pending!.startedAt)
-    const claimKey = isLiveRun ? `token:${pending!.token}` : `file:${row.id}|${pdfName}`
-    if (claimedManakResultsRef.current.has(claimKey)) return
-    if (!isLiveRun && (row.testRequestFileId || row.testRequestFileName.trim())) return
-    claimedManakResultsRef.current.add(claimKey)
+    const runs = manakTrRuns(pid)
+    const run = runs.get(row.id)
+    // Poll results name their token; page messages count for the run unless the
+    // PDF was captured before it started (a replay of an older run).
+    const isThisRun = Boolean(run) && (returnToken
+      ? returnToken === run!.token
+      : !result.filledAt || result.filledAt >= run!.startedAt)
+    if (!run || !isThisRun || run.done) return
+    // Claim before the upload, so a delivery arriving mid-upload is ignored too.
+    run.done = true
+    saveManakTrRuns(pid, runs)
     let uploaded: Awaited<ReturnType<typeof uploadBisProjectFile>>
     try {
       const binary = Uint8Array.from(atob(result.pdfBase64), (c) => c.charCodeAt(0))
@@ -342,7 +382,8 @@ export function OslSampleRequirementsModuleFields({
       })
     } catch (err) {
       // Let a later delivery of the same PDF try again.
-      claimedManakResultsRef.current.delete(claimKey)
+      run.done = false
+      saveManakTrRuns(pid, runs)
       throw err
     }
     // A row deleted while the upload ran: nothing to attach to.
@@ -749,9 +790,12 @@ export function OslSampleRequirementsModuleFields({
       },
     })
     setExtensionBusyId(row.id)
+    const pid = (projectId ?? '').trim()
     void (async () => {
       // Set before the first await, so no delivery can arrive ahead of it.
-      pendingManakTokensRef.current.set(row.id, { token: returnToken, startedAt: Date.now() })
+      const runs = manakTrRuns(pid)
+      runs.set(row.id, { token: returnToken, startedAt: Date.now(), done: false })
+      saveManakTrRuns(pid, runs)
       try {
         const labName = row.laboratoryName.trim() || row.destinationLab.trim()
         const laboratoryOslCode = await findLaboratoryOslCodeByName(labName).catch(() => '')
@@ -779,9 +823,10 @@ export function OslSampleRequirementsModuleFields({
         // Backup poll if postMessage PDF never arrives.
         // Stops once this run's PDF is attached or a newer run replaces it.
         void pollManakPdfInbox(returnToken, {
-          stopWhen: () =>
-            claimedManakResultsRef.current.has(`token:${returnToken}`) ||
-            pendingManakTokensRef.current.get(row.id)?.token !== returnToken,
+          stopWhen: () => {
+            const run = manakTrRuns(pid).get(row.id)
+            return !run || run.token !== returnToken || run.done
+          },
         })
           .then((polled) => {
             if (!polled) return
@@ -792,8 +837,10 @@ export function OslSampleRequirementsModuleFields({
           })
       } catch (err) {
         setExtensionBusyId(null)
-        if (pendingManakTokensRef.current.get(row.id)?.token === returnToken) {
-          pendingManakTokensRef.current.delete(row.id)
+        const runs = manakTrRuns(pid)
+        if (runs.get(row.id)?.token === returnToken) {
+          runs.delete(row.id)
+          saveManakTrRuns(pid, runs)
         }
         toast.error(err instanceof Error ? err.message : 'Failed to start Manak Extension.')
       }
@@ -864,6 +911,8 @@ export function OslSampleRequirementsModuleFields({
     }
     const fileId = row.testRequestFileId.trim()
     const storagePath = row.testRequestStoragePath.trim()
+    const fileName = row.testRequestFileName.trim()
+    const pid = (projectId ?? '').trim()
     void (async () => {
       try {
         if (fileId) {
@@ -873,8 +922,27 @@ export function OslSampleRequirementsModuleFields({
             storage_path: storagePath,
           })
         }
+        // Earlier Extension runs could attach the same PDF several times; only one
+        // copy was linked to the row. Remove the unlinked copies with this name too.
+        let extraRemoved = 0
+        if (pid && fileName) {
+          const linkedIds = new Set(
+            valueRef.current.rows.map((r) => r.testRequestFileId.trim()).filter(Boolean),
+          )
+          const copies = (await listBisProjectFiles(pid, 'osl-sample-test-request')).filter(
+            (f) => f.id !== fileId && f.file_name === fileName && !linkedIds.has(f.id),
+          )
+          for (const copy of copies) {
+            await deleteBisProjectFile(copy)
+            extraRemoved += 1
+          }
+        }
         clearTestRequestOnRow(row.id)
-        toast.success('Test Request PDF removed.')
+        toast.success(
+          extraRemoved
+            ? `Test Request PDF removed (${extraRemoved} duplicate cop${extraRemoved === 1 ? 'y' : 'ies'} too).`
+            : 'Test Request PDF removed.',
+        )
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Could not delete Test Request PDF.')
       }
