@@ -311,7 +311,7 @@ export function RenewalProductionTable({
                 title={`Calculated ${getCurrencySymbol()} ${formatAmountTotal(feeSummary.calculated)} · Minimum ${minimumFeeText(feeSummary)}`}
               >
                 {formatAmountTotal(totalMarkingFee)}
-                {feeSummary.basis === 'minimum' ? <span className="block text-[10px] font-semibold text-amber-800">Minimum fee</span> : null}
+                {feeSummary.basis === 'minimum' ? <span className="block text-[10px] font-semibold text-amber-800">Minimum Fee</span> : null}
               </th>
               <th className="border border-stone-300 px-1 py-1 text-center">
                 <Button
