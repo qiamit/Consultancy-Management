@@ -313,11 +313,20 @@ export async function importRenewalClientWorkbook(
   if (importedRate === null) throw new Error('Enter the Basic Unit Rate in the client workbook before importing it.')
 
   const existingByDates = new Map(form.productionRows.map((row) => [`${row.periodFrom}|${row.periodTo}`, row]))
+  const dataRows = matrix.slice(headerIndex + 1)
+    .map((source) => ({ source, periodFrom: dateToIso(source[indexes.start]), periodTo: dateToIso(source[indexes.end]) }))
+    .filter((row) => row.periodFrom || row.periodTo)
+  // Sheets downloaded before the UTC date fix show every date one day early (21/07 as 20/07). When every
+  // row matches this renewal only after moving it one day on, read them that way.
+  const nextDay = (iso: string) => (iso ? new Date(Date.parse(`${iso}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10) : '')
+  const shifted = dataRows.length > 0
+    && dataRows.some((row) => !existingByDates.has(`${row.periodFrom}|${row.periodTo}`))
+    && dataRows.every((row) => existingByDates.has(`${nextDay(row.periodFrom)}|${nextDay(row.periodTo)}`))
   const updated = new Map<string, RenewalProductionRow>()
-  for (const source of matrix.slice(headerIndex + 1)) {
-    const periodFrom = dateToIso(source[indexes.start])
-    const periodTo = dateToIso(source[indexes.end])
-    if (!periodFrom && !periodTo) continue
+  for (const row of dataRows) {
+    const source = row.source
+    const periodFrom = shifted ? nextDay(row.periodFrom) : row.periodFrom
+    const periodTo = shifted ? nextDay(row.periodTo) : row.periodTo
     const key = `${periodFrom}|${periodTo}`
     const original = existingByDates.get(key)
     if (!original) {
