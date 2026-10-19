@@ -27,7 +27,25 @@
 ## Tools (v1, read-only)
 `whoami`, `search_clients`, `get_client`, `search_projects`, `get_project`, `get_project_module`, `get_file_link`, `search_is_codes`, `get_is_code`, `search_laboratories`, `licences_due`.
 
-Secret-looking keys (`password`, `secret`, `api_key`, `token`, …) are stripped from every result. Edit tools (preview → confirm → apply) come next, behind `MCP_WRITE_ENABLED`.
+Secret-looking keys (`password`, `secret`, `api_key`, `token`, …) are stripped from every result.
+
+## Edit tools (when `MCP_WRITE_ENABLED=true`)
+- Tools: `preview_update_project`, `preview_add_project_note`, `preview_update_client`, `apply_change`.
+- **A preview saves nothing.**
+  - It returns a before → after list and a single-use `confirm_token`, valid 5 minutes and bound to this user and this Claude connection.
+  - The token is stored hashed in `mcp_pending_changes` (migration `20261019200000`).
+- **`apply_change` writes only after the user confirms.** It checks three things first:
+  - the token is unused and not expired
+  - the user still has **edit** on that module
+  - none of the previewed values changed since the preview
+- The write itself runs with the user's JWT, so RLS applies.
+- **Whitelisted fields only.**
+  - Project: stage, numbers, dates, branch and officer details, status.
+  - Client: contact details.
+  - Not editable: firm name, client or IS code links, portal or Manak credentials, finance fields.
+- Notes are appended (existing notes are kept). No delete tools.
+- A user sees the edit tools only for modules where they have **edit**.
+- `apply_change` is limited to 10 per minute per user.
 
 ## Railway service `mcp`
 - Source: this repo, branch `main`, root directory `backend/services/mcp` (Dockerfile build, `/health` healthcheck).
