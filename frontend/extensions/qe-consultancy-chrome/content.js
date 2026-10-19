@@ -1433,7 +1433,7 @@
               qeManakEnabled: false,
               qeManakImportQr: false,
             });
-            showBanner("Signed in. Renewal ON — open Licenses View → Apply for Renewal.", true);
+            showBanner("Signed in. Renewal ON — opening this licence's Apply for Renewal.", true);
             return;
           }
           // Manak Assist (Inclusion): inclusion-fill.js opens the licence's Change in Scope (Inclusion).

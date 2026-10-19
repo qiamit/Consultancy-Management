@@ -342,3 +342,16 @@ export async function deleteRenewals(ids: string[]): Promise<void> {
   const { error } = await supabase.from('bis_renewal_applications').delete().in('id', ids)
   if (error) throw error
 }
+
+/** The licence's latest saved renewal (Renewal Sheet), or null. */
+export async function fetchLatestRenewalForProject(projectId: string): Promise<BisRenewalRow | null> {
+  const { data, error } = await supabase
+    .from('bis_renewal_applications')
+    .select(SELECT_WITH_JOINS)
+    .eq('project_id', projectId)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) throw error
+  return data as unknown as BisRenewalRow | null
+}

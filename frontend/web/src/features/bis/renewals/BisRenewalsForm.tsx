@@ -309,6 +309,7 @@ export function BisRenewalsForm({
                     renewalPeriodFrom,
                     previous.renewalPeriodTo,
                     previous.productionRows,
+                    previous.currentValidity,
                   ),
                 }))}
               />
@@ -326,6 +327,7 @@ export function BisRenewalsForm({
                     previous.renewalPeriodFrom,
                     renewalPeriodTo,
                     previous.productionRows,
+                    previous.currentValidity,
                   ),
                 }))}
               />

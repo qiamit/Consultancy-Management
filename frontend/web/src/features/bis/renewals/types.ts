@@ -96,14 +96,37 @@ function isoUtcDate(date: Date): string {
   return date.toISOString().slice(0, 10)
 }
 
+/**
+ * Production period BIS asks for at renewal (Manak Production Return): the last 3 months of the previous
+ * operative year plus the first 9 months of the current one — the 12 months ending 3 months before validity.
+ */
+export function defaultRenewalProductionPeriod(validity: string): { from: string; to: string } | null {
+  const date = parseIsoUtcDate(validity.slice(0, 10))
+  if (!date) return null
+  const shift = (months: number) => {
+    const out = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + months, 1))
+    out.setUTCDate(Math.min(date.getUTCDate(), new Date(Date.UTC(out.getUTCFullYear(), out.getUTCMonth() + 1, 0)).getUTCDate()))
+    return out
+  }
+  const from = shift(-15)
+  from.setUTCDate(from.getUTCDate() + 1)
+  return { from: isoUtcDate(from), to: isoUtcDate(shift(-3)) }
+}
+
+/**
+ * Monthly rows for the period. With the licence validity date, the month holding the licence anniversary
+ * is split there (e.g. 01–20 Oct / 21–31 Oct), as Manak's Production Return lists it.
+ */
 export function generateMonthlyRenewalRows(
   periodStart: string,
   periodEnd: string,
   currentRows: RenewalProductionRow[],
+  validity = '',
 ): RenewalProductionRow[] {
   const start = parseIsoUtcDate(periodStart)
   const end = parseIsoUtcDate(periodEnd)
   if (!start || !end || start > end) return currentRows
+  const anniversary = parseIsoUtcDate(validity.slice(0, 10))
 
   const existingByStart = new Map(currentRows.map((row) => [row.periodFrom, row]))
   const generated: RenewalProductionRow[] = []
@@ -111,7 +134,12 @@ export function generateMonthlyRenewalRows(
   while (cursor <= end && generated.length < 1200) {
     const periodFrom = isoUtcDate(cursor)
     const monthEnd = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, 0))
-    const periodTo = isoUtcDate(monthEnd < end ? monthEnd : end)
+    let rowEnd = monthEnd < end ? monthEnd : end
+    if (anniversary && cursor.getUTCMonth() === anniversary.getUTCMonth()) {
+      const split = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth(), anniversary.getUTCDate()))
+      if (split >= cursor && split < rowEnd) rowEnd = split
+    }
+    const periodTo = isoUtcDate(rowEnd)
     const existingSegments = currentRows
       .filter((row) => row.periodFrom >= periodFrom && row.periodFrom <= periodTo && row.periodTo <= periodTo)
       .sort((a, b) => a.periodFrom.localeCompare(b.periodFrom))
