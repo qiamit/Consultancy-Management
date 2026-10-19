@@ -552,7 +552,10 @@
     const missing = [];
     for (const field of map.fields || []) {
       if (allow && !allow.has(field.key)) continue;
-      const value = lookup(payload, field.key);
+      const value =
+        field.key === "sample.laboratory_name"
+          ? labOslCode(payload) || lookup(payload, field.key)
+          : lookup(payload, field.key);
       if (!value) continue;
       const el = findBySelectors(field.selectors) || findByLabels(field.labels);
       if (!el || used.has(el)) {
@@ -588,8 +591,23 @@
       .trim();
   }
 
+  // Three letters keep short brand names such as "URS"; dropping them let
+  // "products noida" match Bureau Veritas Consumer Products, Noida.
   function labTokens(value) {
-    return softLabKey(value).split(" ").filter((t) => t.length >= 4);
+    return softLabKey(value).split(" ").filter((t) => t.length >= 3);
+  }
+
+  /** OSL code of the wanted lab: from Laboratory Master, else "(1234567)" in its name. */
+  function labOslCode(payload) {
+    const fromMaster = lookup(payload, "sample.laboratory_osl_code").replace(/\D/g, "");
+    if (fromMaster) return fromMaster;
+    const name = lookup(payload, "sample.laboratory_name") || lookup(payload, "sample.destination_lab");
+    const hit = name.match(/\((\d{6,8})\)/);
+    return hit ? hit[1] : "";
+  }
+
+  function radioOslCode(el) {
+    return text(el && el.value).split("@@")[0].replace(/\D/g, "");
   }
 
   function labMatchScore(blob, wanted) {
@@ -608,9 +626,10 @@
     return labTokens(labName).slice(0, 2).join(" ");
   }
 
-  function findMatchingLabRadio(labName) {
+  function findMatchingLabRadio(labName, oslCode) {
     const wanted = text(labName);
     const radios = Array.from(document.querySelectorAll("input[name='clickonlab']"));
+    if (oslCode) return radios.find((el) => radioOslCode(el) === oslCode) || null;
     let best = null;
     let bestScore = 0;
     radios.forEach((el) => {
@@ -625,22 +644,27 @@
         best = el;
       }
     });
-    if (wanted) return bestScore >= 40 ? best : null;
+    if (wanted) return bestScore >= 70 ? best : null;
     return radios.find((el) => /osl/i.test(String(el.value || ""))) || radios[0] || null;
   }
 
-  function applyLabFilter(labName) {
-    const query = labFilterQuery(labName) || normalize(labName).slice(0, 12);
+  function applyLabFilter(labName, oslCode) {
+    const query = oslCode || labFilterQuery(labName) || normalize(labName).slice(0, 12);
     document.documentElement.setAttribute("data-qe-lab-name", text(labName));
+    document.documentElement.setAttribute("data-qe-lab-osl", text(oslCode));
     document.documentElement.setAttribute("data-qe-lab-filter", query);
     document.dispatchEvent(new Event("qe-manak-filter-lab", { bubbles: true }));
     return query;
   }
 
-  function requestLabPick(labName) {
+  function requestLabPick(labName, oslCode) {
     const token = `${text(labName)}:${Date.now()}`;
     document.documentElement.setAttribute("data-qe-lab-name", text(labName));
-    document.documentElement.setAttribute("data-qe-lab-filter", labFilterQuery(labName) || normalize(labName).slice(0, 12));
+    document.documentElement.setAttribute("data-qe-lab-osl", text(oslCode));
+    document.documentElement.setAttribute(
+      "data-qe-lab-filter",
+      oslCode || labFilterQuery(labName) || normalize(labName).slice(0, 12),
+    );
     document.documentElement.setAttribute("data-qe-lab-pick", token);
     document.dispatchEvent(new Event("qe-manak-pick-lab", { bubbles: true }));
     const confirm = document.getElementById("selectFinalLab");
@@ -649,28 +673,43 @@
     }
   }
 
-  function clickSuggestedLab(labName) {
-    applyLabFilter(labName);
-    const match = findMatchingLabRadio(labName);
+  function clickSuggestedLab(labName, oslCode) {
+    applyLabFilter(labName, oslCode);
+    const match = findMatchingLabRadio(labName, oslCode);
     if (!match) return false;
-    requestLabPick(labName);
+    requestLabPick(labName, oslCode);
     return true;
   }
 
-  function labIsSelected(labName) {
+  function labIsSelected(labName, oslCode) {
     const el = document.getElementById("lab_name");
     if (!el || el.tagName !== "SELECT") return false;
     const opted = el.options[el.selectedIndex];
     const label = (opted && opted.textContent) || "";
     const val = text(el.value);
     if (!val || val === "0" || /select lab name|no lab selected/.test(normalize(label))) return false;
+    // Manak's Lab Name option values are OSL codes.
+    if (oslCode) return val.replace(/\D/g, "") === oslCode;
     if (!text(labName)) return true;
-    return labMatchScore(label + " " + val, labName) >= 40;
+    return labMatchScore(label + " " + val, labName) >= 70;
+  }
+
+  /** Last resort when the lab table does not list the code: pick the select option directly. */
+  function selectLabOptionByCode(oslCode) {
+    const el = document.getElementById("lab_name");
+    if (!oslCode || !el || el.tagName !== "SELECT") return false;
+    const hit = Array.from(el.options || []).find((opt) => text(opt.value).replace(/\D/g, "") === oslCode);
+    if (!hit) return false;
+    el.value = hit.value;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+    el.dispatchEvent(new CustomEvent("qe-manak-set-select", { bubbles: true, detail: { value: hit.value } }));
+    return true;
   }
 
   async function pickLaboratory(payload) {
     const labName = lookup(payload, "sample.laboratory_name") || lookup(payload, "sample.destination_lab");
-    if (labIsSelected(labName)) return true;
+    const oslCode = labOslCode(payload);
+    if (labIsSelected(labName, oslCode)) return true;
 
     const sug = findBySelectors((map.navigation && map.navigation.suggestedLab && map.navigation.suggestedLab.selectors) || []);
     if (sug) sug.click();
@@ -683,17 +722,17 @@
     if (check && !isNeverClick(check)) check.click();
 
     let picked = false;
-    for (let i = 0; i < 24 && !labIsSelected(labName); i += 1) {
+    for (let i = 0; i < 24 && !labIsSelected(labName, oslCode); i += 1) {
       await sleep(700);
       const tableReady = Boolean(
         document.getElementById("filter") && document.querySelector("input[name='clickonlab']"),
       );
       if (tableReady) {
-        applyLabFilter(labName);
+        applyLabFilter(labName, oslCode);
         await sleep(450);
-        picked = clickSuggestedLab(labName) || picked;
+        picked = clickSuggestedLab(labName, oslCode) || picked;
         if (picked) {
-          for (let w = 0; w < 12 && !labIsSelected(labName); w += 1) await sleep(400);
+          for (let w = 0; w < 12 && !labIsSelected(labName, oslCode); w += 1) await sleep(400);
           break;
         }
       } else if (i === 3 || i === 8) {
@@ -701,10 +740,17 @@
         if (again) again.click();
       }
     }
-    if (!labIsSelected(labName) && labName) {
-      showBanner(`Could not match laboratory “${labName}” in Check Lab Availability.`, false, true);
+    if (!labIsSelected(labName, oslCode)) selectLabOptionByCode(oslCode);
+    if (!labIsSelected(labName, oslCode) && (labName || oslCode)) {
+      showBanner(
+        oslCode
+          ? `Could not find OSL code ${oslCode} (“${labName}”) in Check Lab Availability. Pick the lab on Manak.`
+          : `Could not match laboratory “${labName}” in Check Lab Availability. Add its OSL code in Laboratory Master, or pick the lab on Manak.`,
+        false,
+        true,
+      );
     }
-    return labIsSelected(labName);
+    return labIsSelected(labName, oslCode);
   }
 
   function isVisibleEl(el) {
@@ -2196,15 +2242,34 @@
       const t = text(raw || "").replace(/\s+/g, " ");
       (t.match(/\b\d{12}\b/g) || []).forEach(add);
     };
+    // Manak's Not Used rows read "Not Scanned"; strip the negated status first
+    // so the word "Scanned" inside it does not mark a pending code as used.
     const isUnavailableRow = (raw) => {
-      const rowText = text(raw || "").replace(/\s+/g, " ");
+      const rowText = text(raw || "")
+        .replace(/\s+/g, " ")
+        .replace(/\bnot\s+(?:yet\s+)?(?:scanned|used|assigned|consumed|submitted)\b/gi, " ");
       if (/\b(?:scanned|assigned|consumed|submitted)\b|\balready\s+(?:used|scanned)\b|\btest\s*request\b/i.test(rowText)) {
         return true;
       }
-      return /\bused\b/i.test(rowText) && !/\bnot\s+used\b/i.test(rowText);
+      return /\bused\b/i.test(rowText);
+    };
+    // Prefer the table's "Used Status" column when Manak renders one.
+    const usedStatusOf = (row) => {
+      const table = row && row.closest ? row.closest("table") : null;
+      if (!table || row.tagName !== "TR") return null;
+      const idx = headerIndex(table, /used\s*status|^status$/);
+      if (idx < 0) return null;
+      const cell = row.cells && row.cells[idx];
+      return cell ? normalize(cell.textContent || "") : null;
     };
     const addRow = (row, input) => {
-      if (!row || isUnavailableRow(row.innerText || row.textContent || "")) return;
+      if (!row) return;
+      const status = usedStatusOf(row);
+      if (status !== null) {
+        if (!/^(?:not\s*(?:yet\s*)?(?:scanned|used)|unused|available|n\/?a|-)?$/.test(status)) return;
+      } else if (isUnavailableRow(row.innerText || row.textContent || "")) {
+        return;
+      }
       if (input) add(input.value);
       addFromText(row.innerText || row.textContent || "");
     };
@@ -2441,6 +2506,13 @@
     );
   }
 
+  /** Manak's "N new Codes available for generation." line; null when not shown. */
+  function qrCodesLeftToGenerate() {
+    const blob = document.body ? document.body.innerText || "" : "";
+    const hit = blob.match(/(\d+)\s+new\s+codes?\s+(?:are\s+)?available\s+for\s+generation/i);
+    return hit ? Number(hit[1]) : null;
+  }
+
   /**
    * On Generate New Code page (?flag=1): set Number of Copies and click Generate.
    * Manak allows max 5 copies per click.
@@ -2449,7 +2521,16 @@
     if (sessionStorage.getItem("qeManakImportGenerateClicked") === "1") {
       return false;
     }
-    const copies = Math.max(1, Math.min(5, Number(wantedCount) || 1));
+    const left = qrCodesLeftToGenerate();
+    if (left === 0) {
+      showBanner(
+        "Manak allows 0 new QR codes right now (its limit of unscanned codes is reached). Use or scan the Not Used codes first, then retry Import.",
+        false,
+        true,
+      );
+      return "limit";
+    }
+    const copies = Math.max(1, Math.min(5, left || 5, Number(wantedCount) || 1));
     sessionStorage.setItem("qeManakImportGenerateClicked", "1");
     showBanner(`Generating ${copies} new QR code(s)…`, true);
     setQrCodeCount(copies);
@@ -2463,7 +2544,7 @@
       );
       return false;
     }
-    startImportQrCodeWatch(copies);
+    startImportQrCodeWatch(50);
     // After generate, Manak often lands codes under Not Used — follow up once.
     window.setTimeout(() => {
       if (window.__qeManakImportPublished) return;
@@ -2660,6 +2741,9 @@
         sessionStorage.removeItem("qeManakImportNeedGenerate");
         showBanner("Generate New Code — setting count and clicking Generate…", true);
         const started = await submitGenerateNewQrCodes(copies);
+        if (started === "limit") {
+          return { ok: false, message: "Manak QR generation limit reached." };
+        }
         if (started) {
           return { ok: true, message: "Generating new QR codes…" };
         }
@@ -2676,10 +2760,10 @@
         const genCodes = scrapeQrCodesFromPage();
         if (genCodes.length > 0) {
           window.__qeManakImportPublished = true;
-          await publishImportedQrCodes(genCodes.slice(0, copies));
+          await publishImportedQrCodes(genCodes.slice(0, 50));
           return { ok: true, message: "QR codes imported after generate." };
         }
-        startImportQrCodeWatch(copies);
+        startImportQrCodeWatch(50);
         return { ok: true, message: "Waiting for generated QR codes…" };
       }
 
@@ -2695,11 +2779,11 @@
         const afterCodes = scrapeQrCodesFromPage();
         if (afterCodes.length > 0) {
           window.__qeManakImportPublished = true;
-          await publishImportedQrCodes(afterCodes.slice(0, copies));
+          await publishImportedQrCodes(afterCodes.slice(0, 50));
           return { ok: true, message: "QR codes imported after generate." };
         }
         showBanner("Waiting for newly generated codes on Not Used list…", true);
-        startImportQrCodeWatch(copies);
+        startImportQrCodeWatch(50);
         return { ok: true, message: "Watching Not Used list after generate." };
       }
 
@@ -2717,9 +2801,7 @@
       const codes = scrapeQrCodesFromPage();
       if (codes.length > 0) {
         window.__qeManakImportPublished = true;
-        await publishImportedQrCodes(
-          codes.slice(0, Math.max(copies, Math.min(50, codes.length))),
-        );
+        await publishImportedQrCodes(codes.slice(0, 50));
         return { ok: true, message: "QR codes imported." };
       }
 
