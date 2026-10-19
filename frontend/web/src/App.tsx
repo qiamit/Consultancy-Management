@@ -19,6 +19,7 @@ import {
   BisSurveillanceRoute,
   ClientsPage,
   CmsToolsRoute,
+  ClaudeConnectorRoute,
   ContactUsRoute,
   DashboardPage,
   DueSoonLicensesRoute,
@@ -112,6 +113,7 @@ export default function App() {
 
           <Route path="/tools/email" element={<EmailToolsRoute />} />
           <Route path="/tools/cms" element={<CmsToolsRoute />} />
+          <Route path="/tools/mcp" element={<ClaudeConnectorRoute />} />
 
           <Route path="/settings/lab" element={<LabSettingsRoute />} />
           <Route path="/settings/users" element={<UserManagementRoute />} />

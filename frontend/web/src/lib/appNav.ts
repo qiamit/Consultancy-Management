@@ -21,6 +21,7 @@ import {
   BarChart3,
   Mail,
   Globe,
+  Plug,
   Settings,
   HelpCircle,
 } from 'lucide-react'
@@ -304,6 +305,12 @@ export const PROFILE_MENU_SECTIONS: NavSection[] = [
         to: '/tools/cms',
         icon: Globe,
         clause: 'cms',
+      },
+      {
+        label: 'Claude Connector',
+        to: '/tools/mcp',
+        icon: Plug,
+        clause: 'claude-connector',
       },
     ],
   },
