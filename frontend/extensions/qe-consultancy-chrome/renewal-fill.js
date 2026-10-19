@@ -292,6 +292,8 @@
   /* ───────── Production Return Details ───────── */
 
   const ALREADY_FILED = /not allowed to file return for same month/i;
+  const DIFFICULTIES_NIL =
+    "Nil. No difficulties were experienced in operating the BIS licence during this period. Production, testing and marking were carried out in accordance with the Indian Standard and the Scheme of Inspection and Testing.";
 
   /** Show every row of the returns DataTables ("Show N entries" → All), so filed months past page 1 count too. */
   async function showAllEntries() {
@@ -504,8 +506,12 @@
   /** Report of Performance: Manak fills the quantities; we add difficulties, the CA certificate and I Agree, then Next. */
   async function fillPerformance(data, report) {
     const difficulties = $id("brief_info_diff");
-    if (difficulties && !norm(difficulties.value)) setText(difficulties, data.difficulties || "Nil");
-    report.filled.push(`Difficulties: ${norm(difficulties && difficulties.value) || "—"}`);
+    // Empty, or a bare "Nil" left from an earlier draft, gets the full statement.
+    if (difficulties && (!norm(difficulties.value) || /^nil\.?$/i.test(norm(difficulties.value)))) {
+      const text = norm(data.difficulties);
+      setText(difficulties, !text || /^nil\.?$/i.test(text) ? DIFFICULTIES_NIL : text);
+    }
+    report.filled.push(`Difficulties: ${norm(difficulties && difficulties.value).slice(0, 60) || "—"}…`);
     const reason = $id("reason");
     if (reason && visible(reason) && !norm(reason.value)) {
       setText(reason, "Not applicable");
@@ -513,7 +519,11 @@
     }
     const ca = (Array.isArray(data.files) ? data.files : []).find((f) => f && f.slot === "ca-certificate");
     if (!ca) {
-      report.missing.push("CA certificate: attach it on the Renewal Sheet (Attach CA Certificate), then run Manak Assist again — or upload it here yourself.");
+      report.missing.push(
+        Array.isArray(data.files)
+          ? "CA certificate: attach it on the Renewal Sheet (Attach CA Certificate), then run Manak Assist again — or upload it here yourself."
+          : "CA certificate was not sent: refresh Consultancy Pro (Cmd+Shift+R) and click Manak Assist again — or upload it here yourself.",
+      );
       return "stop";
     }
     const upload = await setFile($id("test_file"), ca);
