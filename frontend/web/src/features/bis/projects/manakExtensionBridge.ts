@@ -85,6 +85,16 @@ export function pingExtension(timeoutMs = 400): Promise<boolean> {
   })
 }
 
+/** Hand-off token for the Manak PDF inbox (the server accepts 32–128 word characters / dashes). */
+export function newManakReturnToken(): string {
+  const c = globalThis.crypto as Crypto | undefined
+  if (c && typeof c.randomUUID === 'function') return c.randomUUID()
+  const bytes = new Uint8Array(16)
+  if (c) c.getRandomValues(bytes)
+  else for (let i = 0; i < bytes.length; i += 1) bytes[i] = Math.floor(Math.random() * 256)
+  return `manak-${Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')}`
+}
+
 export async function registerManakPdfInbox(
   token: string,
   sampleId = '',
@@ -555,11 +565,18 @@ export async function pollManakPdfInbox(
   const timeoutMs = opts?.timeoutMs ?? 12 * 60 * 1000
   const intervalMs = opts?.intervalMs ?? 2500
   const started = Date.now()
+  const { supabase } = await import('@/lib/supabaseClient')
   while (Date.now() - started < timeoutMs) {
     try {
+      // The inbox hands the PDF only to the user who registered the token.
+      const { data } = await supabase.auth.getSession()
+      const jwt = data.session?.access_token ?? ''
       const res = await fetch(
         `${getManakPdfApiUrl()}?token=${encodeURIComponent(token)}`,
-        { credentials: 'include' },
+        {
+          credentials: 'include',
+          headers: jwt ? { Authorization: `Bearer ${jwt}` } : undefined,
+        },
       )
       if (res.ok) {
         const data = (await res.json()) as {

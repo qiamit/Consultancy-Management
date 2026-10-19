@@ -71,6 +71,7 @@ import {
   buildManakTrPayload,
   importManakQrCodes,
   openManakTestRequestFill,
+  newManakReturnToken,
   pollManakPdfInbox,
   registerManakPdfInbox,
   subscribeManakQrImport,
@@ -684,10 +685,7 @@ export function OslSampleRequirementsModuleFields({
       )
       return
     }
-    const returnToken =
-      typeof crypto !== 'undefined' && 'randomUUID' in crypto
-        ? crypto.randomUUID()
-        : `manak-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+    const returnToken = newManakReturnToken()
     pendingManakTokensRef.current.set(row.id, returnToken)
     const payload = buildManakTrPayload({
       sampleId: row.id,

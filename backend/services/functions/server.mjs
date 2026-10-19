@@ -10,6 +10,7 @@ const REST_URL = (process.env.REST_URL || 'http://rest.railway.internal:3000').r
 const AUTH_URL = (process.env.AUTH_URL || 'http://auth.railway.internal:9999').replace(/\/$/, '')
 const SERVICE_ROLE_KEY = process.env.SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 const RESEND_API_KEY = process.env.RESEND_API_KEY || ''
+const RESEND_API_URL = process.env.RESEND_API_URL || 'https://api.resend.com/emails' // override only for local tests
 const EMAIL_FROM =
   process.env.RESEND_FROM_EMAIL || process.env.MRM_EMAIL_FROM || 'Q Engineering <info@qengineering.in>'
 
@@ -37,6 +38,38 @@ function json(res, status, body) {
     'Content-Length': Buffer.byteLength(payload),
   })
   res.end(payload)
+}
+
+const MANAK_BODY_LIMIT = 1024 * 1024
+const MANAK_CHUNK_MAX = 200_000 // the extension sends 160 000 base64 characters per chunk
+const MANAK_CHUNKS_MAX = 300 // about 45 MB of PDF
+const MANAK_TOKEN_RE = /^[\w-]{32,128}$/
+const MANAK_PDF_DIR = path.join('/tmp', 'qe-manak-pdfs')
+
+function manakSafeSampleId(value) {
+  return String(value || 'sample')
+    .replace(/[^\w.\-]+/g, '-')
+    .slice(0, 80)
+}
+
+/** Drops inbox entries and assembled PDFs older than the TTL (they only bridge one Test Request hand-off). */
+function sweepManakInbox() {
+  const cutoff = Date.now() - MANAK_TTL_MS
+  for (const dir of [MANAK_INBOX_DIR, MANAK_PDF_DIR]) {
+    try {
+      if (!fs.existsSync(dir)) continue
+      for (const name of fs.readdirSync(dir)) {
+        const full = path.join(dir, name)
+        try {
+          if (fs.statSync(full).mtimeMs < cutoff) fs.rmSync(full, { recursive: true, force: true })
+        } catch {
+          /* ignore */
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 function manakFile(token) {
@@ -80,16 +113,24 @@ async function handleManakPdf(req, res) {
   if (req.method === 'GET') {
     const token = String(url.searchParams.get('token') || '').trim()
     if (!token) return corsJson(res, 400, { ready: false, error: 'token required' })
+    let caller
+    try {
+      caller = await requireUser(req)
+    } catch (err) {
+      return corsJson(res, Number(err?.statusCode) || 401, { ready: false, error: 'Unauthorized' })
+    }
     const entry = readManakEntry(token)
     if (!entry) return corsJson(res, 200, { ready: false })
+    // Only the user who opened the Test Request may collect the PDF.
+    if (!entry.userId || entry.userId !== String(caller?.id ?? '')) {
+      return corsJson(res, 403, { ready: false, error: 'Forbidden' })
+    }
     if (!entry.ref) return corsJson(res, 200, { ready: false, sampleId: entry.sampleId })
     let pdfBase64 = ''
     try {
-      const sampleId = String(entry.sampleId || 'sample')
-        .replace(/[^\w.\-]+/g, '-')
-        .slice(0, 80)
+      const sampleId = manakSafeSampleId(entry.sampleId)
       const pdfName = String(entry.pdfName || 'Test_Request.pdf').replace(/[^\w.\-]+/g, '_')
-      const pdfPath = path.join('/tmp', 'qe-manak-pdfs', sampleId, pdfName)
+      const pdfPath = path.join(MANAK_PDF_DIR, sampleId, pdfName)
       if (fs.existsSync(pdfPath)) {
         pdfBase64 = fs.readFileSync(pdfPath).toString('base64')
       }
@@ -112,25 +153,30 @@ async function handleManakPdf(req, res) {
 
   let body = {}
   try {
-    body = await readBody(req)
-  } catch {
-    return corsJson(res, 400, { ok: false, error: 'Invalid JSON' })
+    body = await readBody(req, MANAK_BODY_LIMIT)
+  } catch (err) {
+    const status = Number(err?.statusCode) === 413 ? 413 : 400
+    return corsJson(res, status, { ok: false, error: status === 413 ? 'Request too large' : 'Invalid JSON' })
   }
 
   const action = String(body.action || '').trim()
   const token = String(body.token || '').trim()
   if (!token) return corsJson(res, 400, { ok: false, error: 'token required' })
+  if (!MANAK_TOKEN_RE.test(token)) return corsJson(res, 400, { ok: false, error: 'Invalid token' })
 
   if (action === 'register') {
+    let caller
     try {
-      await requireUser(req)
+      caller = await requireUser(req)
     } catch (err) {
       return corsJson(res, Number(err?.statusCode) || 401, { ok: false, error: 'Unauthorized' })
     }
     const sampleId = String(body.sampleId || '').trim()
     if (!sampleId) return corsJson(res, 400, { ok: false, error: 'sampleId required' })
+    sweepManakInbox()
     writeManakEntry({
       token,
+      userId: String(caller?.id ?? ''),
       sampleId,
       createdAt: Date.now(),
       chunks: [],
@@ -147,8 +193,23 @@ async function handleManakPdf(req, res) {
         error: 'Unknown token. Open Test Request from the app again.',
       })
     }
-    entry.chunkTotal = Number(body.total) || 0
-    entry.chunks[Number(body.index) || 0] = String(body.chunk || '')
+    const total = Number(body.total)
+    const index = Number(body.index)
+    const chunk = String(body.chunk || '')
+    if (!Number.isInteger(total) || total < 1 || total > MANAK_CHUNKS_MAX) {
+      return corsJson(res, 400, { ok: false, error: 'Invalid chunk total' })
+    }
+    if (!Number.isInteger(index) || index < 0 || index >= total) {
+      return corsJson(res, 400, { ok: false, error: 'Invalid chunk index' })
+    }
+    if (!chunk || chunk.length > MANAK_CHUNK_MAX || !/^[A-Za-z0-9+/=]+$/.test(chunk)) {
+      return corsJson(res, 400, { ok: false, error: 'Invalid chunk' })
+    }
+    if (entry.chunkTotal && entry.chunkTotal !== total) {
+      return corsJson(res, 400, { ok: false, error: 'Chunk total changed' })
+    }
+    entry.chunkTotal = total
+    entry.chunks[index] = chunk
     entry.createdAt = Date.now()
     writeManakEntry(entry)
     return corsJson(res, 200, { ok: true })
@@ -165,14 +226,13 @@ async function handleManakPdf(req, res) {
       /[^\w.\-]+/g,
       '_',
     )
-    const sampleId = String(body.sampleId || entry.sampleId || 'sample')
-      .replace(/[^\w.\-]+/g, '-')
-      .slice(0, 80)
+    // Always the sample the app registered, never one from the (unauthenticated) request body.
+    const sampleId = manakSafeSampleId(entry.sampleId)
     const ref = `osl-sample-test-requests/${sampleId}/${Date.now()}-${pdfName.slice(0, 120)}`
     // Persist assembled PDF bytes under /tmp until Storage upload is wired for OSL paths.
     try {
       const bin = Buffer.from(entry.chunks.join(''), 'base64')
-      const outDir = path.join('/tmp', 'qe-manak-pdfs', sampleId)
+      const outDir = path.join(MANAK_PDF_DIR, sampleId)
       fs.mkdirSync(outDir, { recursive: true })
       fs.writeFileSync(path.join(outDir, pdfName), bin)
     } catch (err) {
@@ -200,11 +260,29 @@ const handleQiAssistant = createQiAssistantHandler({
   corsJson,
 })
 
-function readBody(req) {
+const BODY_LIMIT_DEFAULT = 25 * 1024 * 1024
+
+/** JSON body, refused with 413 once it passes maxBytes (the request is not buffered further). */
+function readBody(req, maxBytes = BODY_LIMIT_DEFAULT) {
   return new Promise((resolve, reject) => {
     const chunks = []
-    req.on('data', (c) => chunks.push(c))
+    let size = 0
+    let tooLarge = false
+    req.on('data', (c) => {
+      if (tooLarge) return
+      size += c.length
+      if (size > maxBytes) {
+        tooLarge = true
+        chunks.length = 0
+        const err = new Error('Request body is too large')
+        err.statusCode = 413
+        reject(err)
+        return
+      }
+      chunks.push(c)
+    })
     req.on('end', () => {
+      if (tooLarge) return
       const raw = Buffer.concat(chunks).toString('utf8')
       if (!raw) return resolve({})
       try {
@@ -334,41 +412,6 @@ function authErrorMessage(payload, fallback) {
   return fallback
 }
 
-function esc(value) {
-  return String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-}
-
-function buildMrmHtml(opts) {
-  const rows = opts.agenda
-    .map(
-      (a) =>
-        `<tr><td style="padding:6px 8px;border:1px solid #78716c;width:28px;text-align:center;font-weight:600;">${esc(a.letter)})</td><td style="padding:6px 8px;border:1px solid #78716c;">${esc(a.title)}${a.remarks ? `<div style="color:#78716c;font-size:12px;margin-top:4px;">${esc(a.remarks)}</div>` : ''}</td></tr>`,
-    )
-    .join('')
-  return `<!doctype html>
-<html><body style="font-family:Segoe UI,Arial,sans-serif;color:#1c1917;line-height:1.45;">
-  <h2 style="margin:0 0 8px;">Management Review Meeting — Agenda</h2>
-  <p style="margin:0 0 12px;color:#57534e;font-size:13px;">ISO/IEC 17025 Clause 8.9.2 · Plan <strong>${esc(opts.planCode)}</strong></p>
-  <p style="margin:0 0 4px;font-size:13px;"><strong>Dates:</strong> ${esc(opts.plannedFrom)} – ${esc(opts.plannedTo)}</p>
-  <p style="margin:0 0 4px;font-size:13px;"><strong>Venue:</strong> ${esc(opts.venue || '—')}</p>
-  <p style="margin:0 0 16px;font-size:13px;"><strong>Chairperson:</strong> ${esc(opts.chairperson || '—')}</p>
-  <table style="border-collapse:collapse;width:100%;font-size:13px;">
-    <thead>
-      <tr>
-        <th style="background:#292524;color:#fde68a;text-align:left;padding:6px 8px;border:1px solid #78716c;">Ref</th>
-        <th style="background:#292524;color:#fde68a;text-align:left;padding:6px 8px;border:1px solid #78716c;">Agenda point</th>
-      </tr>
-    </thead>
-    <tbody>${rows}</tbody>
-  </table>
-  <p style="margin-top:16px;font-size:12px;color:#78716c;">Please review the agenda before the meeting. Contact laboratory management with any questions.</p>
-</body></html>`
-}
-
 function normalizeEmailList(raw) {
   if (raw == null || raw === '') return []
   const list = Array.isArray(raw)
@@ -404,7 +447,7 @@ async function sendResendEmail({ to, subject, html, text, attachments, cc, bcc }
     ...(bccList.length > 0 ? { bcc: bccList } : {}),
     ...(Array.isArray(attachments) && attachments.length > 0 ? { attachments } : {}),
   }
-  const res = await fetch('https://api.resend.com/emails', {
+  const res = await fetch(RESEND_API_URL, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${RESEND_API_KEY}`,
@@ -454,148 +497,130 @@ function normalizeAttachments(raw) {
   })
 }
 
+const EMAIL_BODY_LIMIT = 55 * 1024 * 1024 // 4 attachments x 12 MB of base64, plus the HTML
+const EMAIL_MAX_RECIPIENTS = 20
+const EMAIL_LIMIT_HOUR = 60
+const EMAIL_LIMIT_DAY = 300
+
+/** Module path the email is sent from, e.g. /finance/sale/invoice. '' when missing or malformed. */
+function normalizeSourcePath(raw) {
+  const value = String(raw ?? '').trim().split(/[?#]/)[0].replace(/\/+$/, '')
+  if (!value.startsWith('/') || value.length > 200 || !/^[\w\-/]+$/.test(value)) return ''
+  return value
+}
+
+/** The caller's own Module Access level for a path (RLS-side app_module_level, run with their JWT). */
+async function callerModuleLevel(req, modulePath) {
+  const res = await fetch(`${REST_URL}/rpc/app_module_level`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${callerJwt(req)}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ p_path: modulePath }),
+  })
+  if (!res.ok) return 'none'
+  const level = await res.json().catch(() => 'none')
+  return typeof level === 'string' ? level : 'none'
+}
+
+/** email_send_log row. Best effort: a failed log write never changes the response. */
+async function logEmail(entry) {
+  try {
+    await rest('/email_send_log', {
+      method: 'POST',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        user_id: entry.userId || null,
+        source_path: entry.sourcePath || null,
+        to_addrs: entry.to ?? [],
+        cc_addrs: entry.cc ?? [],
+        bcc_addrs: entry.bcc ?? [],
+        subject: String(entry.subject ?? '').slice(0, 500),
+        attachment_count: entry.attachmentCount ?? 0,
+        attachment_bytes: entry.attachmentBytes ?? 0,
+        status: entry.status,
+        error: entry.error ? String(entry.error).slice(0, 1000) : null,
+        resend_id: entry.resendId ?? null,
+      }),
+    })
+  } catch (err) {
+    console.error('[email] email_send_log write failed', err)
+  }
+}
+
 async function handleSendEmail(req, res) {
-  await requireUser(req)
-  const body = await readBody(req)
+  const caller = await requireUser(req)
+  const body = await readBody(req, EMAIL_BODY_LIMIT)
+  const userId = String(caller?.id ?? '')
   const to = normalizeEmailList(body.to)
   const cc = normalizeEmailList(body.cc)
   const bcc = normalizeEmailList(body.bcc)
   const subject = String(body.subject ?? '').trim()
   const html = String(body.html ?? body.text ?? '').trim()
+  const sourcePath = normalizeSourcePath(body.source_path)
   if (to.length === 0 || !subject || !html) {
     json(res, 400, { error: 'to, subject, and html are required' })
     return
   }
   const attachments = normalizeAttachments(body.attachments)
-  const sent = await sendResendEmail({
+  const logBase = {
+    userId,
+    sourcePath,
     to,
     cc,
     bcc,
     subject,
-    html,
-    text: body.text,
-    attachments,
-  })
+    attachmentCount: attachments.length,
+    // base64 length -> approximate decoded bytes
+    attachmentBytes: attachments.reduce((sum, a) => sum + Math.floor((a.content.length * 3) / 4), 0),
+  }
+  const block = async (status, error) => {
+    await logEmail({ ...logBase, status: 'blocked', error })
+    json(res, status, { error })
+  }
+
+  if (!sourcePath) {
+    await block(400, 'Email must be sent from an app module. Reload the page and try again.')
+    return
+  }
+  if ((await callerModuleLevel(req, sourcePath)) !== 'edit') {
+    await block(403, 'You need edit access to this module to send email from it.')
+    return
+  }
+  if (to.length + cc.length + bcc.length > EMAIL_MAX_RECIPIENTS) {
+    await block(400, `An email can have at most ${EMAIL_MAX_RECIPIENTS} recipients (to, cc and bcc together).`)
+    return
+  }
+  let quota = { hour: 0, day: 0 }
+  try {
+    quota = (await rest('/rpc/app_email_quota', {
+      method: 'POST',
+      body: JSON.stringify({ p_user_id: userId }),
+    })) ?? quota
+  } catch (err) {
+    console.error('[email] quota check failed', err)
+    json(res, 503, { error: 'Email limit check is unavailable. Try again shortly.' })
+    return
+  }
+  if (Number(quota.hour) >= EMAIL_LIMIT_HOUR) {
+    await block(429, `Email limit reached: ${EMAIL_LIMIT_HOUR} emails per hour. Try again later.`)
+    return
+  }
+  if (Number(quota.day) >= EMAIL_LIMIT_DAY) {
+    await block(429, `Email limit reached: ${EMAIL_LIMIT_DAY} emails per day. Try again tomorrow.`)
+    return
+  }
+
+  let sent
+  try {
+    sent = await sendResendEmail({ to, cc, bcc, subject, html, text: body.text, attachments })
+  } catch (err) {
+    await logEmail({ ...logBase, status: 'failed', error: err instanceof Error ? err.message : 'Send failed' })
+    throw err
+  }
+  await logEmail({ ...logBase, status: 'sent', resendId: sent.id ?? null })
   json(res, 200, { ok: true, id: sent.id ?? null })
-}
-
-async function handleSendMrmAgenda(req, res) {
-  await requireUser(req)
-  const body = await readBody(req)
-  const planId = String(body.planId ?? '').trim()
-  if (!planId) {
-    json(res, 400, { error: 'planId is required' })
-    return
-  }
-
-  const plans = await rest(`/mrm_plans?id=eq.${encodeURIComponent(planId)}&select=*`)
-  const plan = Array.isArray(plans) ? plans[0] : null
-  if (!plan) {
-    json(res, 404, { error: 'Plan not found' })
-    return
-  }
-
-  const [agendaData, recipData] = await Promise.all([
-    rest(
-      `/mrm_agenda_items?plan_id=eq.${encodeURIComponent(planId)}&included=eq.true&select=*&order=sort_order.asc`,
-    ),
-    rest(`/mrm_plan_recipients?plan_id=eq.${encodeURIComponent(planId)}&select=*`),
-  ])
-  const recipients = Array.isArray(recipData) ? recipData : []
-  if (recipients.length === 0) {
-    json(res, 400, { error: 'No recipients on this plan' })
-    return
-  }
-
-  const agenda = (Array.isArray(agendaData) ? agendaData : []).map((row) => ({
-    letter: String(row.clause_letter ?? ''),
-    title: String(row.title ?? ''),
-    remarks: String(row.remarks ?? ''),
-  }))
-  const html = buildMrmHtml({
-    planCode: String(plan.plan_code ?? ''),
-    plannedFrom: String(plan.planned_from ?? ''),
-    plannedTo: String(plan.planned_to ?? ''),
-    venue: String(plan.venue ?? ''),
-    chairperson: String(plan.chairperson ?? ''),
-    agenda,
-  })
-  const subject = `MRM Agenda — ${String(plan.plan_code ?? planId)}`
-
-  let sent = 0
-  let failed = 0
-  const results = []
-
-  for (const r of recipients) {
-    const recipientId = String(r.id ?? '')
-    const userId = String(r.user_id ?? '')
-    let email = String(r.email ?? '').trim()
-    if (!email && userId) {
-      try {
-        const profiles = await rest(
-          `/user_profiles?id=eq.${encodeURIComponent(userId)}&select=email`,
-        )
-        email = String(profiles?.[0]?.email ?? '').trim()
-      } catch {
-        /* ignore */
-      }
-    }
-
-    if (!email) {
-      failed += 1
-      await rest(`/mrm_plan_recipients?id=eq.${encodeURIComponent(recipientId)}`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          email_status: 'skipped',
-          email_error: 'No email address',
-          email_sent_at: null,
-        }),
-      })
-      results.push({ userId, emailStatus: 'skipped', emailError: 'No email address', emailSentAt: null })
-      continue
-    }
-
-    try {
-      await sendResendEmail({ to: email, subject, html })
-      const sentAt = new Date().toISOString()
-      sent += 1
-      await rest(`/mrm_plan_recipients?id=eq.${encodeURIComponent(recipientId)}`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          email,
-          email_status: 'sent',
-          email_error: '',
-          email_sent_at: sentAt,
-        }),
-      })
-      results.push({ userId, emailStatus: 'sent', emailError: '', emailSentAt: sentAt })
-    } catch (err) {
-      const errMsg = err instanceof Error ? err.message : 'Send failed'
-      failed += 1
-      await rest(`/mrm_plan_recipients?id=eq.${encodeURIComponent(recipientId)}`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          email,
-          email_status: 'failed',
-          email_error: errMsg.slice(0, 500),
-          email_sent_at: null,
-        }),
-      })
-      results.push({ userId, emailStatus: 'failed', emailError: errMsg.slice(0, 500), emailSentAt: null })
-    }
-  }
-
-  if (sent > 0) {
-    await rest(`/mrm_plans?id=eq.${encodeURIComponent(planId)}`, {
-      method: 'PATCH',
-      body: JSON.stringify({
-        status: 'communicated',
-        communicated_at: new Date().toISOString(),
-      }),
-    })
-  }
-
-  json(res, 200, { sent, failed, recipients: results })
 }
 
 const ACCESS_ROLES = new Set(['admin', 'staff', 'viewer'])
@@ -872,7 +897,6 @@ const routes = {
     res.writeHead(200, { 'Content-Type': 'text/plain' })
     res.end('ok')
   },
-  'POST /send-mrm-agenda': handleSendMrmAgenda,
   'POST /send-email': handleSendEmail,
   'POST /create-user': handleCreateUser,
   'POST /delete-user': handleDeleteUser,

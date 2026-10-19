@@ -28,6 +28,11 @@ export async function sendAppEmail(payload: {
   html: string
   text?: string
   attachments?: Array<{ filename: string; content: string; contentType?: string }>
+  /**
+   * App module the email belongs to; the server requires edit access on it (Module Access).
+   * Defaults to the page the user is on.
+   */
+  sourcePath?: string
 }): Promise<{ id: string | null }> {
   const { data: sessionData } = await supabase.auth.getSession()
   const accessToken = sessionData.session?.access_token
@@ -58,6 +63,7 @@ export async function sendAppEmail(payload: {
         html: payload.html,
         text: payload.text,
         attachments: payload.attachments,
+        source_path: payload.sourcePath ?? window.location.pathname,
       }),
     })
   } catch (err) {
