@@ -2,6 +2,7 @@ import http from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
 import { createQiAssistantHandler } from './qiAssistant.mjs'
+import { createRenewalReminders } from './renewalReminders.mjs'
 
 const PORT = Number(process.env.PORT || 8080)
 const MANAK_INBOX_DIR = path.join('/tmp', 'qe-manak-pdf-inbox')
@@ -910,12 +911,45 @@ async function handleDeleteUser(req, res) {
   json(res, 200, { ok: true })
 }
 
+const renewalReminders = createRenewalReminders({ rest, sendResendEmail, logEmail })
+const RENEWALS_PATH = '/bis/license-renewals'
+
+/** Today's renewal reminder plan: who gets which reminder, and why others are skipped. */
+async function handleRenewalRemindersPreview(req, res) {
+  await requireUser(req)
+  const level = await callerModuleLevel(req, RENEWALS_PATH)
+  if (level !== 'view' && level !== 'edit') {
+    json(res, 403, { error: 'You need access to BIS License Renewals.' })
+    return
+  }
+  json(res, 200, await renewalReminders.plan(renewalReminders.istNow().date))
+}
+
+/** Send the renewal reminder for one licence now (to the client, or to the given address). */
+async function handleRenewalReminderSend(req, res) {
+  const caller = await requireUser(req)
+  if ((await callerModuleLevel(req, RENEWALS_PATH)) !== 'edit') {
+    json(res, 403, { error: 'You need edit access to BIS License Renewals to send reminders.' })
+    return
+  }
+  const body = await readBody(req, 64 * 1024)
+  const projectId = String(body.projectId ?? '').trim()
+  if (!/^[0-9a-f-]{36}$/i.test(projectId)) {
+    json(res, 400, { error: 'projectId is required' })
+    return
+  }
+  const result = await renewalReminders.sendNow(projectId, { to: body.to, userId: String(caller?.id ?? '') })
+  json(res, 200, { ok: true, ...result })
+}
+
 const routes = {
   'GET /health': async (_req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' })
     res.end('ok')
   },
   'POST /send-email': handleSendEmail,
+  'GET /renewal-reminders/preview': handleRenewalRemindersPreview,
+  'POST /renewal-reminders/send': handleRenewalReminderSend,
   'POST /create-user': handleCreateUser,
   'POST /delete-user': handleDeleteUser,
   'POST /set-user-password': handleSetUserPassword,
@@ -954,4 +988,5 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`functions listening on ${PORT}`)
+  renewalReminders.startScheduler()
 })
