@@ -95,7 +95,7 @@ export default function ExpensePage() {
           <p className="text-sm text-stone-600">No expenses added yet.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-sm">
+            <table className="auto-cards list-cards w-full min-w-[640px] text-sm">
               <thead>
                 <tr className="border-b border-stone-300 text-left">
                   <th className="py-2 pr-3">Number</th>

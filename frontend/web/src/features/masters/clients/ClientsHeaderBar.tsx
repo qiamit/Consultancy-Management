@@ -50,9 +50,9 @@ export function ClientsHeaderBar({
         />
         <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
 
-        <div className={cn('relative', limsToolbarScrollClass, 'md:gap-2.5')}>
+        <div className={cn('lims-title-row relative', limsToolbarScrollClass, 'md:gap-2.5')}>
           <h1
-            className="shrink-0 max-w-[4.5rem] truncate text-sm font-semibold tracking-tight text-white sm:max-w-[9rem] sm:text-base md:max-w-none md:text-lg"
+            className="lims-page-title shrink-0 max-w-[4.5rem] truncate text-sm font-semibold tracking-tight text-white sm:max-w-[9rem] sm:text-base md:max-w-none md:text-lg"
             title="Client Directory"
           >
             <span className="md:hidden">Clients</span>

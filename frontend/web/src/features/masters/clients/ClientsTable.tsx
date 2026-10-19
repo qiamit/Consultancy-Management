@@ -67,7 +67,7 @@ const thBase =
 const cellInnerClass = 'w-full space-y-1 p-[1mm]'
 
 const companyNameClass =
-  'truncate text-[13px] font-bold tracking-[-0.015em] text-[#1c1917]'
+  'break-words text-[13px] font-bold tracking-[-0.015em] text-[#1c1917]'
 
 const metaLineClass =
   'truncate font-mono text-[11px] font-medium tracking-normal text-[#b45309]'

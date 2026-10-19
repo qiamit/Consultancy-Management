@@ -63,8 +63,8 @@ export function TestParameterTableFooterBar({
         <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={limsDarkBarGlowStyle} />
         <div className="absolute top-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
 
-        <div className="relative flex min-w-0 flex-nowrap items-center gap-1 overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch] sm:gap-1.5 md:gap-2.5">
-          <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
+        <div className="relative flex min-w-0 flex-wrap items-center gap-1 gap-y-1.5 overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch] sm:gap-1.5 md:gap-2.5">
+          <div className="flex min-w-0 flex-wrap items-center gap-1 sm:gap-1.5">
             {onToggleShowArchived ? (
               <label className="flex h-8 shrink-0 items-center gap-1 px-1 text-[10px] text-stone-200 sm:text-xs">
                 <input type="checkbox" checked={Boolean(showArchived)} onChange={() => onToggleShowArchived()} />

@@ -314,7 +314,7 @@ export function ManakDeclarationStep({
 
   return (
     <>
-      <div className="mb-3 overflow-x-auto border border-stone-300 bg-white">
+      <div className="manak-kv mb-3 overflow-x-auto border border-stone-300 bg-white">
         <table className="w-full min-w-[760px] border-collapse text-sm">
           <tbody>
             <tr>
@@ -361,7 +361,7 @@ export function ManakDeclarationStep({
         selection={selection}
         after={
           <div className="overflow-x-auto border border-stone-300 bg-white">
-            <table className="w-full border-collapse text-sm">
+            <table className="wo-table w-full border-collapse text-sm">
               <tbody>
                 <tr>
                   <th className={labelCls}>

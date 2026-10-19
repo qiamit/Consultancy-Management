@@ -726,7 +726,7 @@ export function BisProjectsTable({
                           recordId={r.client_id}
                           onOpen={onOpenClient}
                           kind="Client"
-                          className="break-all text-sm font-semibold leading-snug"
+                          className="break-words text-sm font-semibold leading-snug [hyphens:auto]"
                         />
                       </TableCell>
                       <TableCell className="px-2 py-2 text-center align-middle text-sm">

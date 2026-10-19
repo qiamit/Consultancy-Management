@@ -161,7 +161,7 @@ export default function EmailLogPage() {
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
       <div className={cn(limsPanelClass, 'overflow-x-auto')}>
-        <Table className={limsTableClass}>
+        <Table className={cn(limsTableClass, 'list-cards')}>
           <TableHeader>
             <TableRow>
               <TableHead className={limsTableHeadClass}>When</TableHead>
@@ -183,17 +183,17 @@ export default function EmailLogPage() {
             ) : (
               rows.map((row) => (
                 <TableRow key={row.id}>
-                  <TableCell className="whitespace-nowrap text-xs">{formatWhen(row.created_at)}</TableCell>
-                  <TableCell className="text-sm">
+                  <TableCell data-label="When" className="whitespace-nowrap text-xs">{formatWhen(row.created_at)}</TableCell>
+                  <TableCell data-label="User" className="text-sm">
                     {(row.user_id && users.get(row.user_id)) || row.user_id || '—'}
                   </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{row.source_path || '—'}</TableCell>
-                  <TableCell className="max-w-[22rem] break-words text-xs">{recipients(row) || '—'}</TableCell>
-                  <TableCell className="max-w-[18rem] break-words text-sm">{row.subject || '—'}</TableCell>
-                  <TableCell className="whitespace-nowrap text-center text-xs">
+                  <TableCell data-label="Module" className="lc-wide break-all text-xs text-muted-foreground">{row.source_path || '—'}</TableCell>
+                  <TableCell data-label="Recipients" className="lc-wide max-w-[22rem] break-words text-xs">{recipients(row) || '—'}</TableCell>
+                  <TableCell className="lc-title max-w-[18rem] break-words text-sm">{row.subject || '—'}</TableCell>
+                  <TableCell data-label="Attachments" className="whitespace-nowrap text-center text-xs">
                     {row.attachment_count ? `${row.attachment_count} · ${formatBytes(row.attachment_bytes)}` : '—'}
                   </TableCell>
-                  <TableCell className="text-center">
+                  <TableCell data-label="Status" className="text-center">
                     <span
                       className={cn('inline-flex rounded-md px-2 py-0.5 text-xs font-medium capitalize', STATUS_TONE[row.status])}
                       title={row.error || undefined}

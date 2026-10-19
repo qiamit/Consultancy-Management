@@ -486,7 +486,7 @@ export function EditableRows({
         </div>
       ) : null}
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-sm">
+        <table className="er-table w-full border-collapse text-sm">
           <thead>
             <tr>
               <th className={cn(thCls, 'w-8 px-1 text-center')} aria-label="Select" />
@@ -505,10 +505,10 @@ export function EditableRows({
             </tr>
           </thead>
           <tbody>
-            <tr className="bg-[#fffcf7]">
-              <td className={tdCls} />
+            <tr className="er-draft bg-[#fffcf7]">
+              <td className={cn(tdCls, 'er-select')} />
               {fields.map((f) => (
-                <td key={f.key} className={tdCls}>
+                <td key={f.key} className={tdCls} data-label={`${f.label.replace(/\n/g, ' ')}${f.optional ? '' : ' *'}`}>
                   {f.options && f.multiple ? (
                     <MultiOptionSelect field={f} value={str(draft[f.key])} onChange={(v) => setDraft((d) => ({ ...d, [f.key]: v }))} />
                   ) : f.options ? (
@@ -563,11 +563,11 @@ export function EditableRows({
                 </td>
               ))}
               {extraColumns?.map((c) => (
-                <td key={c.label} className={cn(tdCls, c.renderDraft ? 'text-center' : 'text-center text-xs text-stone-400', c.compact && 'w-[1%]')}>
+                <td key={c.label} data-label={c.label} className={cn(tdCls, c.renderDraft ? 'text-center' : 'er-hint text-center text-xs text-stone-400', c.compact && 'w-[1%]')}>
                   {c.renderDraft ? c.renderDraft(draft, (patch) => setDraft((d) => ({ ...d, ...patch }))) : 'Add the row, then attach documents'}
                 </td>
               ))}
-              <td className={cn(tdCls, 'text-center')}>
+              <td className={cn(tdCls, 'er-actions text-center')}>
                 <Button
                   type="button"
                   size="sm"
@@ -583,7 +583,7 @@ export function EditableRows({
             </tr>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={fields.length + (extraColumns?.length ?? 0) + 2} className={cn(tdCls, 'py-3 text-center text-stone-500')}>
+                <td colSpan={fields.length + (extraColumns?.length ?? 0) + 2} className={cn(tdCls, 'er-empty py-3 text-center text-stone-500')}>
                   No records yet.
                 </td>
               </tr>
@@ -592,7 +592,7 @@ export function EditableRows({
                 const editing = editIndex === index
                 return (
                   <tr key={index} className={n % 2 ? 'bg-[#f7f3eb]' : 'bg-[#fffcf7]'}>
-                    <td className={cn(tdCls, 'px-1 text-center')}>
+                    <td className={cn(tdCls, 'er-select px-1 text-center')}>
                       <input
                         type="checkbox"
                         className={checkCls}
@@ -602,7 +602,7 @@ export function EditableRows({
                       />
                     </td>
                     {fields.map((f) => (
-                      <td key={f.key} className={cn(tdCls, f.alignLeft ? 'text-left' : 'text-center')}>
+                      <td key={f.key} data-label={f.label.replace(/\n/g, ' ')} className={cn(tdCls, f.alignLeft ? 'text-left' : 'text-center')}>
                         {editing && f.options && f.multiple ? (
                           <MultiOptionSelect field={f} value={str(editDraft[f.key])} onChange={(v) => setEditDraft((d) => ({ ...d, [f.key]: v }))} />
                         ) : editing && f.options ? (
@@ -659,11 +659,11 @@ export function EditableRows({
                       </td>
                     ))}
                     {extraColumns?.map((c) => (
-                      <td key={c.label} className={cn(tdCls, c.compact && 'w-[1%] text-center')}>
+                      <td key={c.label} data-label={c.label} className={cn(tdCls, c.compact && 'w-[1%] text-center')}>
                         {c.render(r, index)}
                       </td>
                     ))}
-                    <td className={cn(tdCls, 'text-center')}>
+                    <td className={cn(tdCls, 'er-actions text-center')}>
                       <span className="inline-flex gap-1">
                         {editing ? (
                           <>
@@ -847,7 +847,7 @@ export function ManakManagementStep({
             const thC = 'whitespace-nowrap border border-[#e7e0d4] bg-[#f7f3eb] px-3 py-1.5 text-left align-middle font-bold text-stone-800'
             const tdC = 'border border-[#e7e0d4] px-2 py-1 align-middle text-stone-700'
             return (
-              <div className="overflow-x-auto">
+              <div className="manak-kv overflow-x-auto">
                 <table className="w-full table-fixed border-collapse text-sm">
                   <colgroup>
                     <col style={{ width: '20%' }} />

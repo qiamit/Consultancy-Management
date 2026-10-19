@@ -149,7 +149,7 @@ export default function ClaudeConnectorPage() {
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
       <div className={cn(limsPanelClass, 'overflow-x-auto')}>
-        <Table className={limsTableClass}>
+        <Table className={cn(limsTableClass, 'list-cards')}>
           <TableHeader>
             <TableRow>
               {isAdmin ? <TableHead className={limsTableHeadClass}>User</TableHead> : null}
@@ -170,14 +170,14 @@ export default function ClaudeConnectorPage() {
               rows.map((row) => (
                 <TableRow key={row.id}>
                   {isAdmin ? (
-                    <TableCell className="text-sm">
+                    <TableCell data-label="User" className="text-sm">
                       {row.user_id === myId ? 'You' : names.get(row.user_id) || row.user_id}
                     </TableCell>
                   ) : null}
-                  <TableCell className="text-sm">{row.client_name}</TableCell>
-                  <TableCell className="whitespace-nowrap text-xs">{when(row.created_at)}</TableCell>
-                  <TableCell className="whitespace-nowrap text-xs">{when(row.last_used_at)}</TableCell>
-                  <TableCell className="text-center">
+                  <TableCell className="lc-title text-sm">{row.client_name}</TableCell>
+                  <TableCell data-label="Connected" className="whitespace-nowrap text-xs">{when(row.created_at)}</TableCell>
+                  <TableCell data-label="Last used" className="whitespace-nowrap text-xs">{when(row.last_used_at)}</TableCell>
+                  <TableCell className="lc-actions text-center">
                     <Button
                       type="button"
                       variant="outline"

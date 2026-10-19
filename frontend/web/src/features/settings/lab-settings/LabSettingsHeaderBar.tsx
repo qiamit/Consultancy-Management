@@ -68,7 +68,8 @@ export function LabSettingsHeaderBar({
         <div className="relative mt-3 border-t border-stone-700/80 pt-3">
           <TabsList
             className={cn(
-              'flex h-auto w-full flex-nowrap items-center justify-start gap-1 overflow-x-auto',
+              'grid h-auto w-full grid-cols-2 items-stretch justify-start gap-1 sm:flex sm:flex-wrap sm:items-center xl:flex-nowrap xl:overflow-x-auto',
+              '[&>*]:min-w-0 [&>*]:whitespace-normal [&>*]:text-center sm:[&>*]:whitespace-nowrap',
               'rounded-none border border-stone-500 bg-stone-950/40 p-1 text-stone-300',
               '[-webkit-overflow-scrolling:touch]',
             )}

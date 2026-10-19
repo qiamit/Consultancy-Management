@@ -353,7 +353,7 @@ export function ManakPackagingStep({
     <>
       <ManakPanel title="Packaging And Brand Details">
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm">
+          <table className="comp-table w-full border-collapse text-sm">
             <thead>
               <tr>
                 <th className={cn(thCls, 'w-8 px-1 text-center')} aria-label="Select" />

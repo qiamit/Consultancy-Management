@@ -349,7 +349,7 @@ export function ManakApplicationFields({
     </table>
   )
   return (
-    <div className="overflow-x-auto">
+    <div className="manak-kv overflow-x-auto">
       {lineItems.map((list, i) => (
         <Fragment key={i}>{lineTable(list, i === 0)}</Fragment>
       ))}

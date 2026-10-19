@@ -36,9 +36,9 @@ export function ProductServicesHeaderBar({
 }) {
   return (
     <div className="relative overflow-hidden rounded-none border-2 border-stone-500 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-2 py-2 text-white shadow-sm ring-1 ring-amber-700/20 sm:px-4 sm:py-2.5 md:px-5">
-      <div className="relative flex min-w-0 flex-nowrap items-center gap-1 sm:gap-1.5 md:gap-2.5">
+      <div className="lims-title-row relative flex min-w-0 flex-nowrap items-center gap-1 sm:gap-1.5 md:gap-2.5">
         <h1
-          className="shrink-0 max-w-[4.5rem] truncate text-sm font-semibold tracking-tight text-white sm:max-w-[9rem] sm:text-base md:max-w-none md:text-lg"
+          className="lims-page-title shrink-0 max-w-[4.5rem] truncate text-sm font-semibold tracking-tight text-white sm:max-w-[9rem] sm:text-base md:max-w-none md:text-lg"
           title={pageTitle}
         >
           {pageTitle}

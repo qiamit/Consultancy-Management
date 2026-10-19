@@ -372,7 +372,53 @@ export function ManakManufacturingStep({
   return (
     <>
       <ManakPanel title="Manufacturing Process Details">
-        <div className="overflow-x-auto">
+        {/* Phones: one card per component instead of a table that scrolls sideways. */}
+        <div className="space-y-2 md:hidden">
+          {COMPONENTS.map((c) => {
+            const yes = isApplicable(c)
+            return (
+              <article key={c.key} className={cn('border border-stone-300 bg-[#fffcf7] p-2.5', !yes && 'bg-[#f7f3eb]')}>
+                <div className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    className={cn(checkCls, 'mt-0.5 shrink-0')}
+                    aria-label={`Select ${c.label}`}
+                    disabled={!yes || !selection}
+                    checked={yes && Boolean(selection?.has(c.printKind))}
+                    onChange={(e) => selection?.set(c.printKind, e.target.checked)}
+                  />
+                  <div className="min-w-0 flex-1 text-sm font-semibold leading-snug text-stone-800">
+                    {yes ? (
+                      <button type="button" className="text-left font-semibold hover:text-amber-800 hover:underline" onClick={editComponent(c)}>
+                        {c.label}
+                      </button>
+                    ) : (
+                      c.label
+                    )}
+                  </div>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-stone-200 pt-2">
+                  <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-stone-500">
+                    Applicable<span className="text-red-500">*</span>
+                    <Select value={yes ? 'Yes' : 'No'} onValueChange={(v) => void setComponentApplicable(c, v as YesNo)}>
+                      <SelectTrigger className="h-8 w-20 rounded-none border-stone-300 bg-white text-sm normal-case tracking-normal text-stone-900" aria-label={`${c.label} applicable`}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Yes">Yes</SelectItem>
+                        <SelectItem value="No">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex min-w-0 flex-wrap items-center justify-end gap-1">
+                    {yes ? renderDocActions?.(c.printKind, editComponent(c)) ?? muted : <span className="text-xs text-stone-400">Not applicable</span>}
+                  </div>
+                </div>
+              </article>
+            )
+          })}
+        </div>
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr>

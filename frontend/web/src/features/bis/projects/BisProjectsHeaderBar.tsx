@@ -144,9 +144,9 @@ export function BisProjectsHeaderBar({
 
         {/* lg+ (~10″): one row. Below lg: filters wrap to a second line. */}
         <div className="bis-projects-toolbar relative flex min-w-0 flex-col gap-1.5 lg:flex-row lg:items-center lg:gap-2.5">
-          <div className="bis-projects-toolbar-main flex min-w-0 flex-nowrap items-center gap-1 sm:gap-1.5 md:gap-2.5 lg:min-w-0 lg:flex-1">
+          <div className="lims-title-row bis-projects-toolbar-main flex min-w-0 flex-nowrap items-center gap-1 sm:gap-1.5 md:gap-2.5 lg:min-w-0 lg:flex-1">
             <h1
-              className="shrink-0 max-w-[4.5rem] truncate text-sm font-semibold tracking-tight text-white sm:max-w-[9rem] sm:text-base md:max-w-none md:text-lg"
+              className="lims-page-title shrink-0 max-w-[4.5rem] truncate text-sm font-semibold tracking-tight text-white sm:max-w-[9rem] sm:text-base md:max-w-none md:text-lg"
               title={title}
             >
               {title}

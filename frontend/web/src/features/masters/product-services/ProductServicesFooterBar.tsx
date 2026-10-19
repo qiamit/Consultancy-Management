@@ -45,8 +45,8 @@ export function ProductServicesTableFooterBar({
 
   return (
     <div className="relative overflow-hidden rounded-none border-2 border-stone-500 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-3 py-2 text-white shadow-sm ring-1 ring-amber-700/20 sm:px-5">
-      <div className="flex min-w-0 flex-nowrap items-center gap-1 overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch] sm:gap-1.5 md:gap-2.5">
-        <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
+      <div className="flex min-w-0 flex-wrap items-center gap-1 gap-y-1.5 overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch] sm:gap-1.5 md:gap-2.5">
+        <div className="flex min-w-0 flex-wrap items-center gap-1 sm:gap-1.5">
           <LaboratoryDirectorOnly>
             <Button
               type="button"

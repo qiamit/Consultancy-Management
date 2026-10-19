@@ -287,7 +287,7 @@ export const AiModelsPanel = forwardRef<AiModelsPanelHandle, AiModelsPanelProps>
 
           <div className="overflow-hidden overflow-hidden rounded-none border-2 border-stone-500 bg-white shadow-sm ring-1 ring-amber-700/20">
             {pagedRows.length > 0 ? (
-              <Table className={GRID_TABLE}>
+              <Table className={cn(GRID_TABLE, 'list-cards')}>
                 <TableHeader>
                   <TableRow className="bg-stone-800 hover:bg-stone-800">
                     <TableHead className="w-12 text-center text-xs sm:w-14">
@@ -316,7 +316,7 @@ export const AiModelsPanel = forwardRef<AiModelsPanelHandle, AiModelsPanelProps>
                       key={r.id}
                       data-state={selectedIds.has(r.id) ? 'selected' : undefined}
                     >
-                      <TableCell className="text-center align-middle">
+                      <TableCell className="lc-check text-center align-middle">
                         <input
                           type="checkbox"
                           className={checkboxClass}
@@ -325,7 +325,7 @@ export const AiModelsPanel = forwardRef<AiModelsPanelHandle, AiModelsPanelProps>
                           onChange={() => toggleRow(r.id)}
                         />
                       </TableCell>
-                      <TableCell className="align-middle text-left">
+                      <TableCell className="lc-title align-middle text-left">
                         <div className="space-y-0.5">
                           <p className="font-medium text-foreground">{r.display_name}</p>
                           {r.is_default ? (
@@ -336,10 +336,10 @@ export const AiModelsPanel = forwardRef<AiModelsPanelHandle, AiModelsPanelProps>
                           ) : null}
                         </div>
                       </TableCell>
-                      <TableCell className="text-center text-sm capitalize align-middle">{r.provider}</TableCell>
-                      <TableCell className="text-center text-xs text-muted-foreground align-middle">{r.model_id}</TableCell>
-                      <TableCell className="text-center text-xs font-mono align-middle">{r.api_key_set ? 'Key set ✓' : r.api_key ? maskApiKey(r.api_key) : '—'}</TableCell>
-                      <TableCell className="text-center align-middle">
+                      <TableCell data-label="Provider" className="text-center text-sm capitalize align-middle">{r.provider}</TableCell>
+                      <TableCell data-label="Model ID" className="text-center text-xs text-muted-foreground align-middle">{r.model_id}</TableCell>
+                      <TableCell data-label="API Key" className="text-center text-xs font-mono align-middle">{r.api_key_set ? 'Key set ✓' : r.api_key ? maskApiKey(r.api_key) : '—'}</TableCell>
+                      <TableCell data-label="Status" className="text-center align-middle">
                         <span
                           className={cn(
                             'inline-flex rounded-md px-2.5 py-1 text-xs font-medium',
@@ -351,7 +351,7 @@ export const AiModelsPanel = forwardRef<AiModelsPanelHandle, AiModelsPanelProps>
                           {r.is_active ? 'Active' : 'Inactive'}
                         </span>
                       </TableCell>
-                      <TableCell className="text-center align-middle">
+                      <TableCell className="lc-actions text-center align-middle">
                         <div className="inline-flex items-center justify-center gap-0.5">
                           <Button
                             type="button"

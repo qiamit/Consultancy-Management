@@ -54,7 +54,7 @@ const TABLE_MQ_SHOW = 'hidden xl:block'
 const CARDS_MQ_SHOW = 'xl:hidden'
 
 const GRID_TABLE =
-  'min-w-[1100px] w-full border-collapse font-jakarta [&_th]:border [&_td]:border [&_th]:border-stone-700 [&_td]:border-[#e7e0d4] [&_th]:p-[1mm] [&_td]:!p-[1mm] [&_th]:sticky [&_th]:top-0 [&_th]:z-[1] [&_td]:static'
+  'min-w-[960px] w-full border-collapse font-jakarta [&_th]:border [&_td]:border [&_th]:border-stone-700 [&_td]:border-[#e7e0d4] [&_th]:p-[1mm] [&_td]:!p-[1mm] [&_th]:sticky [&_th]:top-0 [&_th]:z-[1] [&_td]:static'
 
 const thBase =
   'bg-stone-800 text-center text-[11px] font-bold uppercase tracking-[0.14em] text-amber-200'
