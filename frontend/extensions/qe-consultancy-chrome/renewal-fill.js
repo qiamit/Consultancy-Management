@@ -255,22 +255,70 @@
 
   /* ───────── Production Return Details ───────── */
 
-  /** Periods already filed: the returns table under "Advance Marking Fee" (From Date / To Date columns). */
+  const ALREADY_FILED = /not allowed to file return for same month/i;
+
+  /** Show every row of the returns DataTables ("Show N entries" → All), so filed months past page 1 count too. */
+  async function showAllEntries() {
+    let changed = false;
+    for (const select of document.querySelectorAll(".dataTables_length select, select[name$='_length']")) {
+      const all = Array.from(select.options).find((o) => o.value === "-1" || /^all$/i.test(norm(o.text)));
+      if (all && select.value !== all.value) {
+        select.value = all.value;
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+        changed = true;
+      }
+    }
+    if (changed) await sleep(600);
+  }
+
+  /**
+   * Periods already filed, from every returns table on the page — the Advance Marking Fee table and
+   * "Previous Years Production Return". DataTables may draw the header in a separate table from the rows
+   * (scrolling layout), so headers are read from the table or its .dataTables_wrapper.
+   */
   function filedPeriods() {
     const out = new Set();
     for (const table of document.querySelectorAll("table")) {
-      const head = Array.from(table.querySelectorAll("thead th, tr:first-child th")).map((th) => low(th.innerText));
-      const fromIdx = head.findIndex((h) => h === "from date");
-      const toIdx = head.findIndex((h) => h === "to date");
-      if (fromIdx < 0 || toIdx < 0) continue;
-      for (const tr of table.querySelectorAll("tbody tr")) {
-        const cells = Array.from(tr.cells).map((c) => c.innerText);
+      const rows = Array.from(table.querySelectorAll("tbody tr")).filter((tr) => tr.cells.length > 2);
+      if (!rows.length) continue;
+      const wrapper = table.closest(".dataTables_wrapper") || table;
+      const head = Array.from(wrapper.querySelectorAll("thead tr:last-child th, thead tr:last-child td"))
+        .slice(0, rows[0].cells.length)
+        .map((th) => low(th.innerText).replace(/[^a-z ]/g, "").trim());
+      let fromIdx = head.findIndex((h) => h === "from date" || h === "from");
+      let toIdx = head.findIndex((h) => h === "to date" || h === "to");
+      for (const tr of rows) {
+        const cells = Array.from(tr.cells).map((c) => norm(c.innerText));
+        if (fromIdx < 0 || toIdx < 0) {
+          // No usable header: take the first two date cells of the row.
+          const dates = cells.map(isoDate).filter(Boolean);
+          if (dates.length >= 2 && dates[0] <= dates[1]) out.add(`${dates[0]}|${dates[1]}`);
+          continue;
+        }
         const from = isoDate(cells[fromIdx]);
         const to = isoDate(cells[toIdx]);
         if (from && to) out.add(`${from}|${to}`);
       }
     }
     return out;
+  }
+
+  /**
+   * Manak's own list of months still to file ("Please fill the production return for the period: 01-Jul-2026
+   * To 20-Jul-2026, …"), when the page carries it. Null when there is no such message.
+   */
+  function pendingFromManak() {
+    const text = norm(document.body.innerText + " " + Array.from(document.querySelectorAll(".sweet-alert p, .swal-text, .swal2-html-container, .lead")).map((e) => e.textContent).join(" "));
+    const at = text.search(/please fill the production return for the period\s*:/i);
+    if (at < 0) return null;
+    const list = text.slice(at).replace(/^[^:]*:/, "").split(/if you have nil production/i)[0];
+    const out = new Set();
+    for (const m of list.matchAll(/(\d{1,2}-[A-Za-z]{3}-\d{4})\s+to\s+(\d{1,2}-[A-Za-z]{3}-\d{4})/gi)) {
+      const from = isoDate(m[1]);
+      const to = isoDate(m[2]);
+      if (from && to) out.add(`${from}|${to}`);
+    }
+    return out.size ? out : null;
   }
 
   /** The #todate option for a period ("21-Jul-2025  To  31-Jul-2025"). */
@@ -330,12 +378,17 @@
       $id("save").click();
       const s = await waitSwal(6000);
       const after = alertLog();
+      if (after.some((a) => ALREADY_FILED.test(a))) return "filed";
       if (after.length) {
         report.portal.push(`${periodLabel(r)}: ${after.join(" / ")}`);
         return "stop";
       }
       if (s) {
         const message = `${s.title} ${s.text}`.trim();
+        if (ALREADY_FILED.test(message)) {
+          closeSwal(s);
+          return "filed";
+        }
         if (/error|not allowed|invalid|kindly|cancel/i.test(message)) {
           report.portal.push(`${periodLabel(r)}: ${message}`);
           closeSwal(s);
@@ -358,13 +411,25 @@
       report.missing.push("No production rows in the renewal sheet — fill the Renewal Sheet in Consultancy Pro first.");
       return "done";
     }
+    await showAllEntries();
     const filed = filedPeriods();
+    const pending = pendingFromManak();
     for (const r of rows) {
-      if (filed.has(`${r.from}|${r.to}`) || addedHere.has(`${r.from}|${r.to}`)) {
+      const key = `${r.from}|${r.to}`;
+      // Manak's "still to file" list wins when present; otherwise the filed-returns tables decide.
+      const onManak = pending ? !pending.has(key) : filed.has(key);
+      if (onManak || addedHere.has(key)) {
         report.skipped.push(periodLabel(r));
         continue;
       }
       const result = await addReturn(data, r, report);
+      if (result === "filed") {
+        // Manak already has this month (not in the tables we could read): count it as filed and go on.
+        addedHere.add(key);
+        report.skipped.push(`${periodLabel(r)} (Manak: already filed)`);
+        await sleep(400);
+        continue;
+      }
       if (result === "added") {
         addedHere.add(`${r.from}|${r.to}`);
         report.filled.push(`${periodLabel(r)} — added`);
