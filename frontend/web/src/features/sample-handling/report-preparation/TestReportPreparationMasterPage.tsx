@@ -97,8 +97,8 @@ function escapeHtml(s: string) {
 }
 
 export default function TestReportPreparationMasterPage() {
-  const { user, profileName, designation, departmentName } = useAuth()
-  const showDelete = canDeleteSampleHandlingRecords(designation)
+  const { user, profileName, departmentName, role } = useAuth()
+  const showDelete = canDeleteSampleHandlingRecords(role)
   const [rows, setRows] = useState<ListRow[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)

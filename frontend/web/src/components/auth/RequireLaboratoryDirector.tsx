@@ -7,7 +7,7 @@ export function RequireLaboratoryDirector({
 }: {
   children: React.ReactNode
 }) {
-  const { user, loading, designation, profileReady } = useAuth()
+  const { user, loading, designation, profileReady, role } = useAuth()
   const location = useLocation()
 
   // Wait for auth session AND profile/designation to be resolved
@@ -17,15 +17,16 @@ export function RequireLaboratoryDirector({
     return <Navigate to="/auth" replace state={{ from: location.pathname }} />
   }
 
-  if (!isLaboratoryDirector(designation)) {
+  if (!isLaboratoryDirector(role)) {
     return (
       <div className="p-6 space-y-4">
         <h1 className="text-2xl font-semibold text-foreground">Access Denied</h1>
         <p className="text-sm text-muted-foreground">
-          Only the Laboratory Director can access this page.
+          Only users with the Admin access role can open this page.
         </p>
         <p className="text-xs text-muted-foreground">
-          Your designation: <strong>{designation || '(not set)'}</strong>
+          Your designation: <strong>{designation || '(not set)'}</strong> · Access role:{' '}
+          <strong>{role || 'staff'}</strong>
         </p>
         <button
           type="button"

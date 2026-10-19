@@ -70,7 +70,7 @@ export function resolveConfiguredAccessLevel(
   ctx: ModuleAccessUserContext,
   rules: ModuleAccessRuleRow[],
 ): ModuleAccessLevel | null {
-  if (isLaboratoryDirector(ctx.designation, ctx.role)) return 'edit'
+  if (isLaboratoryDirector(ctx.role)) return 'edit'
   if (!rules.length) return null
 
   const moduleKey = pathToModuleKey(pathname)
@@ -123,7 +123,8 @@ function resolveSinglePathAccessLevel(
 ): ModuleAccessLevel {
   const configured = resolveConfiguredAccessLevel(pathname, ctx, rules)
   if (configured !== null) return configured
-  return withViewerCap(legacyCanAccessPath(pathname, ctx) ? 'edit' : 'none', ctx)
+  // No matrix rows apply: Dashboard view only (decision #44, same as app_module_level).
+  return legacyCanAccessPath(pathname, ctx) ? 'view' : 'none'
 }
 
 export function resolveModuleAccessLevel(
@@ -131,7 +132,7 @@ export function resolveModuleAccessLevel(
   ctx: ModuleAccessUserContext,
   rules: ModuleAccessRuleRow[],
 ): ModuleAccessLevel {
-  if (isLaboratoryDirector(ctx.designation, ctx.role)) return 'edit'
+  if (isLaboratoryDirector(ctx.role)) return 'edit'
   if (isPublicSupportPath(pathname)) return 'view'
 
   const path = pathname.replace(/\/+$/, '') || '/'
@@ -185,7 +186,7 @@ export function canAccessNavItemWithRules(
   rules: ModuleAccessRuleRow[],
 ): boolean {
   if (!to) return false
-  if (isLaboratoryDirector(ctx.designation, ctx.role)) return true
+  if (isLaboratoryDirector(ctx.role)) return true
   if (isPublicSupportPath(to)) return true
 
   const configured = resolveConfiguredAccessLevel(to, ctx, rules)
