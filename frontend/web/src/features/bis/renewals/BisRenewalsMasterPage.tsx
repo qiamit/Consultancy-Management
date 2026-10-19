@@ -12,6 +12,7 @@ import {
   fetchRenewalById,
   fetchRenewalSlabRates,
   fetchRenewalProjectSummary,
+  fetchLatestRenewalForProject,
   fetchRenewalsPage,
   formatBisApiError,
   saveRenewal,
@@ -140,6 +141,18 @@ export default function BisRenewalsMasterPage({ dialogOnly = false }: { dialogOn
 
     void (async () => {
       try {
+        // The licence's renewal in progress (saved earlier) opens as it is — never a blank copy beside it.
+        const saved = await fetchLatestRenewalForProject(projectId)
+        if (saved && !['Renewal Granted', 'Rejected'].includes(saved.renewal_status ?? '')) {
+          const params = new URLSearchParams(window.location.search)
+          const current = (params.get(dialogOnly ? 'renewalEdit' : 'edit') ?? '').trim()
+          if (current && current !== 'new') return
+          removeRenewalDraft('new')
+          hydratedEditRef.current = null
+          setEdit(saved.id)
+          setMessage('Opened the saved renewal for this licence.')
+          return
+        }
         const summary = await fetchRenewalProjectSummary(projectId)
         if (!summary) {
           setMessage('License not found for renewal.')
