@@ -73,14 +73,22 @@ export function productionPeriod(validityDate) {
   return { from: addDays(addMonths(validityDate, -15), 1), to }
 }
 
-/** One row per calendar month (part months at the ends), like the app's renewal sheet. */
-export function monthlyRows(from, to) {
+/**
+ * One row per calendar month (part months at the ends), as Manak's Production Return lists them:
+ * the month holding the licence anniversary (validity day) is split there, e.g. 01–20 Oct / 21–31 Oct.
+ */
+export function monthlyRows(from, to, validityDate = '') {
   const rows = []
   let cursor = parseIso(from)
   const end = parseIso(to)
-  while (cursor && end && cursor <= end && rows.length < 120) {
+  const anniversary = parseIso(validityDate)
+  while (cursor && end && cursor <= end && rows.length < 150) {
     const monthEnd = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, 0))
-    const rowEnd = monthEnd < end ? monthEnd : end
+    let rowEnd = monthEnd < end ? monthEnd : end
+    if (anniversary && cursor.getUTCMonth() === anniversary.getUTCMonth()) {
+      const split = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth(), anniversary.getUTCDate()))
+      if (split >= cursor && split < rowEnd) rowEnd = split
+    }
     rows.push({ from: iso(cursor), to: iso(rowEnd) })
     cursor = new Date(rowEnd.getTime() + 86_400_000)
   }
@@ -101,8 +109,8 @@ function isCodeLabel(code) {
 }
 
 /** Blank client production sheet — the same layout the app's renewal form downloads. */
-export async function buildProductionWorkbook({ firm, isLabel, cml, unit, period, termYears = '' }) {
-  const rows = monthlyRows(period.from, period.to)
+export async function buildProductionWorkbook({ firm, isLabel, cml, unit, period, validity = '', termYears = '' }) {
+  const rows = monthlyRows(period.from, period.to, validity)
   const workbook = new ExcelJS.Workbook()
   workbook.creator = 'Consultancy Management'
   workbook.title = 'BIS License Renewal Client Production Statement'
