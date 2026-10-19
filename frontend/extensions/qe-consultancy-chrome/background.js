@@ -140,6 +140,8 @@ chrome.runtime.onInstalled.addListener(async () => {
       qeManakNewAppEnabled: false,
       qeManakInclusion: false,
       qeManakInclusionEnabled: false,
+      qeManakRenewal: false,
+      qeManakRenewalEnabled: false,
     });
   }
 });
@@ -167,11 +169,13 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
       "qeManakPortal",
       "qeManakNewApp",
       "qeManakInclusion",
+      "qeManakRenewal",
     ],
     (data) => {
       const importArmed = data && data.qeManakImportQr === true;
-      // Inclusion stays armed across its pages like New Application.
-      const newAppArmed = data && (data.qeManakNewApp === true || data.qeManakInclusion === true);
+      // Inclusion and Renewal stay armed across their pages like New Application.
+      const newAppArmed =
+        data && (data.qeManakNewApp === true || data.qeManakInclusion === true || data.qeManakRenewal === true);
       const trArmed =
         data &&
         data.qeManakEnabled === true &&
@@ -1007,8 +1011,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const importProjectId = String(message.projectId || "").trim();
     const qrCount = Math.max(1, Math.min(5, Number(message.qrCount) || 1));
     const openKey = [
-      message.newApp ? "new-app" : message.inclusion ? "inclusion" : message.loginOnly ? "login" : importQr ? "import-qr" : "tr",
-      message.newApp || message.inclusion ? String(message.projectId || "") : "",
+      message.newApp
+        ? "new-app"
+        : message.inclusion
+          ? "inclusion"
+          : message.renewal
+            ? "renewal"
+            : message.loginOnly
+              ? "login"
+              : importQr
+                ? "import-qr"
+                : "tr",
+      message.newApp || message.inclusion || message.renewal ? String(message.projectId || "") : "",
       portalUserId,
       (payload && payload.sampleId) || "",
       importQr ? String(qrCount) : "",
@@ -1124,6 +1138,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           qeManakNewApp: false,
           qeManakNewAppEnabled: false,
           newAppFill: null,
+          qeManakRenewal: false,
+          qeManakRenewalEnabled: false,
+          renewalFill: null,
           qeManakInclusion: true,
           // Section switches ON once a signed-in Manak page is seen (inclusion-fill.js).
           qeManakInclusionEnabled: false,
@@ -1151,6 +1168,48 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         });
         return;
       }
+      if (message.renewal) {
+        // Manak Assist on BIS License Renewals: login only for now — Test Request / Import QR /
+        // New Application / Inclusion stay OFF. renewalFill holds the licence for the renewal fill.
+        await chrome.storage.local.set({
+          pendingFill: null,
+          manakResult: null,
+          qeManakImportQr: false,
+          qeManakImportQrEnabled: false,
+          qeManakEnabled: false,
+          qeManakArmed: true,
+          qeManakHomeReady: false,
+          qeManakNewApp: false,
+          qeManakNewAppEnabled: false,
+          newAppFill: null,
+          qeManakInclusion: false,
+          qeManakInclusionEnabled: false,
+          inclusionFill: null,
+          qeManakRenewal: true,
+          // Switches ON after captcha sign-in (content.js).
+          qeManakRenewalEnabled: false,
+          renewalFill: payloadWithoutPassword(payload),
+          qeManakPortal: {
+            userId: portalUserId,
+          },
+        });
+        const reused = await findConfirmedLoggedInManakTab();
+        if (reused && reused.tab.id) {
+          clearRememberedPortal();
+          await chrome.storage.local.set({ qeManakRenewalEnabled: true });
+          await safeTabUpdate(reused.tab.id, { active: true });
+          void settle(chrome.windows.update(reused.tab.windowId, { focused: true }));
+          sendResponse({ ok: true, message: "Already logged in. Renewal ON — open Licenses View → Apply for Renewal." });
+          return;
+        }
+        const created = await safeTabCreate({ url: ebisLoginUrl, active: true });
+        if (created && created.id) scheduleLoginFill(created.id, portalUserId, portalPassword);
+        sendResponse({
+          ok: true,
+          message: "Opening Manak in a new tab. User ID / Password are filled — type the captcha.",
+        });
+        return;
+      }
       if (message.newApp) {
         // Manak Assist: login in a new tab, then the New Application section fills the
         // licence application for this project. Test Request / Import QR stay OFF.
@@ -1168,6 +1227,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           qeManakInclusion: false,
           qeManakInclusionEnabled: false,
           inclusionFill: null,
+          qeManakRenewal: false,
+          qeManakRenewalEnabled: false,
+          renewalFill: null,
           newAppFill: payloadWithoutPassword(payload),
           newAppLog: null,
           qeManakPortal: {
@@ -1198,6 +1260,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (message.loginOnly) {
         // App-started login always turns Manak Test Request Auto flow ON.
         await chrome.storage.local.set({
+          qeManakRenewal: false,
+          qeManakRenewalEnabled: false,
           pendingFill: null,
           qeManakImportQr: false,
           qeManakEnabled: true,
@@ -1221,6 +1285,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       // Use confirmed session only (same as Import QR) so User ID / captcha wait are not skipped.
       const reused = await findConfirmedLoggedInManakTab();
       await chrome.storage.local.set({
+        qeManakRenewal: false,
+        qeManakRenewalEnabled: false,
         pendingFill: payloadWithoutPassword(payload),
         manakResult: null,
         qeManakImportQr: false,

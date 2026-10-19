@@ -10,6 +10,8 @@ const newAppStatus = document.getElementById("newAppStatus");
 const inclusionToggle = document.getElementById("inclusionToggle");
 const inclusionLabel = document.getElementById("inclusionLabel");
 const inclusionStatus = document.getElementById("inclusionStatus");
+const renewalToggle = document.getElementById("renewalToggle");
+const renewalStatus = document.getElementById("renewalStatus");
 const enableBypass = document.getElementById("enableBypass");
 const enableCtrlBypass = document.getElementById("enableCtrlBypass");
 
@@ -90,6 +92,23 @@ function paintInclusion(on, waiting, fill, log) {
   }
 }
 
+function paintRenewal(on, waiting, fill) {
+  document.body.classList.toggle("renewal-off", !on && !waiting);
+  if (renewalToggle) {
+    renewalToggle.checked = on || Boolean(waiting);
+    // Turning ON needs a licence from Manak Assist; the switch here only turns it OFF.
+    renewalToggle.disabled = !on && !waiting;
+  }
+  if (renewalStatus) {
+    const who = fill && fill.firmName ? ` — ${fill.firmName}` : "";
+    renewalStatus.textContent = waiting
+      ? `Renewal: waiting for Manak Login…${who}`
+      : on
+        ? `Renewal ON${who}`
+        : "";
+  }
+}
+
 function paintImportQrLast(result) {
   if (!importQrStatus) return;
   const codes = Array.isArray(result?.qr_codes) ? result.qr_codes.filter(Boolean) : [];
@@ -116,6 +135,9 @@ async function loadPower() {
     "qeManakInclusionEnabled",
     "inclusionFill",
     "inclusionLog",
+    "qeManakRenewal",
+    "qeManakRenewalEnabled",
+    "renewalFill",
   ]);
   // Default OFF — only explicit true means Manak auto-flow is active.
   paintPower(data.qeManakEnabled === true);
@@ -134,6 +156,11 @@ async function loadPower() {
     data.qeManakInclusion === true && data.qeManakInclusionEnabled !== true,
     data.inclusionFill || null,
     data.inclusionLog || null,
+  );
+  paintRenewal(
+    data.qeManakRenewalEnabled === true,
+    data.qeManakRenewal === true && data.qeManakRenewalEnabled !== true,
+    data.renewalFill || null,
   );
 }
 
@@ -175,6 +202,9 @@ function init() {
         qeManakInclusion: false,
         qeManakInclusionEnabled: false,
         inclusionFill: null,
+        qeManakRenewal: false,
+        qeManakRenewalEnabled: false,
+        renewalFill: null,
       });
       chrome.runtime.sendMessage({ type: "QE_MANAK_IDLE" }, () => {
         void chrome.runtime.lastError;
@@ -244,6 +274,20 @@ function init() {
     setStatus("Inclusion OFF — Manak pages work normally.", false);
   });
 
+  renewalToggle.addEventListener("change", async () => {
+    if (renewalToggle.checked) return;
+    await chrome.storage.local.set({
+      qeManakRenewal: false,
+      qeManakRenewalEnabled: false,
+      renewalFill: null,
+    });
+    chrome.runtime.sendMessage({ type: "QE_MANAK_IDLE" }, () => {
+      void chrome.runtime.lastError;
+    });
+    void loadPower();
+    setStatus("Renewal OFF — Manak pages work normally.", false);
+  });
+
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
     if (changes.manakQrImport) {
@@ -259,7 +303,9 @@ function init() {
       changes.newAppLog ||
       changes.qeManakInclusion ||
       changes.qeManakInclusionEnabled ||
-      changes.inclusionLog
+      changes.inclusionLog ||
+      changes.qeManakRenewal ||
+      changes.qeManakRenewalEnabled
     ) {
       void loadPower();
     }

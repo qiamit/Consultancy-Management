@@ -9,6 +9,8 @@ import { BisProjectsTable } from './BisProjectsTable'
 import { BisProjectsFooterBar } from './BisProjectsFooterBar'
 import { BisProjectsForm } from './BisProjectsForm'
 import { BisLicenseDocumentsDialog } from './BisLicenseDocumentsDialog'
+import { RenewalRemindersDialog } from '../renewals/RenewalRemindersDialog'
+import { RenewalReminderSendDialog } from '../renewals/RenewalReminderSendDialog'
 import { IsCodeDetailsDialog } from '@/features/masters/is-codes/IsCodeDetailsDialog'
 import { ClientDetailsDialog } from '@/features/masters/clients/ClientDetailsDialog'
 import {
@@ -75,6 +77,8 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
   const [listLoading, setListLoading] = useState(false)
   const [listError, setListError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
+  const [reminderRow, setReminderRow] = useState<BisProjectRow | null>(null)
+  const [remindersOpen, setRemindersOpen] = useState(false)
 
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
@@ -480,27 +484,7 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
   }
 
   const prepareRenewalReminder = (row: BisProjectRow) => {
-    const email = String(row.client?.email ?? '').trim()
-    if (!email) {
-      setMessage('Client email is not available. Update Client Master before preparing a reminder.')
-      return
-    }
-    const license = formatCmL(row.cm_l_digits)
-    const standard = row.is_code ? isCodeDisplayLabel({ is_code: row.is_code }) : 'BIS Standard'
-    const subject = `BIS license renewal reminder — ${license}`
-    const body = [
-      `Dear ${(row.client?.company_name ?? '').trim() || 'Client'},`,
-      '',
-      `This is a reminder regarding your BIS license ${license} for ${standard}.`,
-      `Current validity date: ${row.license_validity_date || 'Please confirm from your records'}.`,
-      '',
-      'Please share the applicable renewal documents and confirm the renewal period so we can proceed through MANAK Online.',
-      '',
-      'Regards,',
-      'Quality Engineering',
-    ].join('\n')
-    window.location.href = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
-    setMessage(`Renewal reminder draft opened for ${email}.`)
+    setReminderRow(row)
   }
 
   const handleDeleteSelected = async () => {
@@ -600,6 +584,7 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
           onStartRenewal={
             listMode === 'due_soon' || listMode === 'expired' ? handleStartRenewal : undefined
           }
+          onAutoReminders={listMode === 'due_soon' ? () => setRemindersOpen(true) : undefined}
           onPrevPage={() => setPage((p) => Math.max(1, p - 1))}
           onNextPage={() => setPage((p) => Math.min(pageCount, p + 1))}
           jumpTo={jumpTo}
@@ -652,6 +637,9 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
         onProjectSaved={() => void refreshDocumentsRow()}
         inclusionMode={listMode === 'inclusion'}
       />
+
+      <RenewalReminderSendDialog row={reminderRow} onOpenChange={(next) => { if (!next) setReminderRow(null) }} />
+      <RenewalRemindersDialog open={remindersOpen} onOpenChange={setRemindersOpen} />
 
       <IsCodeDetailsDialog
         open={detailId != null}

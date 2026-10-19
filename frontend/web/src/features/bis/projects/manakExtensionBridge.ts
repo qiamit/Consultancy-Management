@@ -2,6 +2,7 @@
 
 import { getPortalPasswordForExtension } from './bisPortalSecretApi'
 import type { ManakInclusionPayload } from './inclusionPayload'
+import type { ManakRenewalPayload } from '../renewals/renewalPayload'
 import type { ManakNewAppPayload } from './manakNewAppPayload'
 
 export const MANAK_EBIS_LOGIN_URL = 'https://www.manakonline.in/MANAK/eBISLogin'
@@ -157,6 +158,8 @@ export async function openManakEbisAssist(options: {
   newApp?: ManakNewAppPayload | null
   /** Change in Scope (Inclusion) data: the extension opens the licence's inclusion form and fills it after login. */
   inclusion?: ManakInclusionPayload | null
+  /** Licence renewal: login with Test Request OFF; the extension's Renewal section takes over. */
+  renewal?: ManakRenewalPayload | null
 }): Promise<OpenManakEbisResult> {
   const portalUserId = String(options.portalUserId ?? '').trim()
   const loginUrl = manakEbisLoginHref(portalUserId)
@@ -191,10 +194,11 @@ export async function openManakEbisAssist(options: {
     window.postMessage(
       {
         type: 'QE_MANAK_OPEN',
-        payload: options.newApp ?? options.inclusion ?? null,
-        loginOnly: !options.newApp && !options.inclusion,
+        payload: options.newApp ?? options.inclusion ?? options.renewal ?? null,
+        loginOnly: !options.newApp && !options.inclusion && !options.renewal,
         newApp: Boolean(options.newApp),
         inclusion: Boolean(options.inclusion) && !options.newApp,
+        renewal: Boolean(options.renewal) && !options.newApp && !options.inclusion,
         projectId: options.projectId ?? '',
         loginUrl,
         portalUserId,

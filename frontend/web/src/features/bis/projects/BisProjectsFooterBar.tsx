@@ -1,4 +1,5 @@
 import {
+  BellRing,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -41,6 +42,7 @@ export function BisProjectsFooterBar({
   emailClientLabel = 'Email client',
   onEmailDocument,
   onStartRenewal,
+  onAutoReminders,
   onPrintForm1,
   onPrintAuthLetter,
   onPrintDocument,
@@ -70,6 +72,8 @@ export function BisProjectsFooterBar({
   onEmailDocument?: (kind: BisPrintDocumentKind) => void
   /** Open renewal form for the selected license (Due Soon / Expired). */
   onStartRenewal?: () => void
+  /** Automatic renewal reminder emails: status, today's plan and per-licence pause. */
+  onAutoReminders?: () => void
   onPrintForm1?: () => void
   onPrintAuthLetter?: () => void
   onPrintDocument?: (kind: BisPrintDocumentKind) => void
@@ -221,6 +225,19 @@ export function BisProjectsFooterBar({
             >
               <RefreshCw className="size-3.5 shrink-0 sm:size-4" />
               <span className="hidden lg:inline">Start Renewal</span>
+            </Button>
+          ) : null}
+          {onAutoReminders ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className={actionBtnClass}
+              onClick={onAutoReminders}
+              title="Automatic renewal reminder emails (85 / 50 / 10 days before validity)"
+            >
+              <BellRing className="size-3.5 shrink-0 sm:size-4" />
+              <span className="hidden lg:inline">Auto Reminders</span>
             </Button>
           ) : null}
           {onPrintForm1 ? (

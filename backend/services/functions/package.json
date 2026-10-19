@@ -10,5 +10,8 @@
   "scripts": {
     "start": "node server.mjs",
     "build": "node -e \"process.exit(0)\""
+  },
+  "dependencies": {
+    "exceljs": "^4.4.0"
   }
 }

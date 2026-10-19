@@ -1424,7 +1424,18 @@
           return;
         }
         // Belt-and-suspenders: if Import QR armed mid-flight, never open Test Request.
-        chrome.storage.local.get(["qeManakImportQr", "qeManakNewApp", "qeManakInclusion"], (store) => {
+        chrome.storage.local.get(["qeManakImportQr", "qeManakNewApp", "qeManakInclusion", "qeManakRenewal"], (store) => {
+          // Manak Assist (Renewal): stay signed in; Test Request stays OFF.
+          if (store && store.qeManakRenewal === true) {
+            chrome.storage.local.set({
+              qeManakRenewalEnabled: true,
+              pendingFill: null,
+              qeManakEnabled: false,
+              qeManakImportQr: false,
+            });
+            showBanner("Signed in. Renewal ON — open Licenses View → Apply for Renewal.", true);
+            return;
+          }
           // Manak Assist (Inclusion): inclusion-fill.js opens the licence's Change in Scope (Inclusion).
           if (store && store.qeManakInclusion === true) {
             chrome.storage.local.set({
@@ -2110,17 +2121,23 @@
     // New Application (Manak Assist) owns this session — never open or fill Test Request.
     if (payload.kind === "QE_MANAK_NEWAPP_V1") return { ok: false, message: "New Application payload." };
     if (payload.kind === "QE_MANAK_INCLUSION_V1") return { ok: false, message: "Inclusion payload." };
+    if (payload.kind === "QE_MANAK_RENEWAL_V1") return { ok: false, message: "Renewal payload." };
     const newApp = await new Promise((resolve) =>
-      chrome.storage.local.get(["qeManakNewApp", "qeManakNewAppEnabled", "qeManakInclusion", "qeManakInclusionEnabled"], (d) =>
+      chrome.storage.local.get(["qeManakNewApp", "qeManakNewAppEnabled", "qeManakInclusion", "qeManakInclusionEnabled", "qeManakRenewal", "qeManakRenewalEnabled"], (d) =>
         resolve(
           Boolean(
             d &&
-              (d.qeManakNewApp === true || d.qeManakNewAppEnabled === true || d.qeManakInclusion === true || d.qeManakInclusionEnabled === true),
+              (d.qeManakNewApp === true ||
+                d.qeManakNewAppEnabled === true ||
+                d.qeManakInclusion === true ||
+                d.qeManakInclusionEnabled === true ||
+                d.qeManakRenewal === true ||
+                d.qeManakRenewalEnabled === true),
           ),
         ),
       ),
     );
-    if (newApp && !force) return { ok: false, message: "New Application / Inclusion is ON." };
+    if (newApp && !force) return { ok: false, message: "New Application / Inclusion / Renewal is ON." };
 
     const state = await readArmedState();
     if (!force && state.qeManakArmed !== true) {

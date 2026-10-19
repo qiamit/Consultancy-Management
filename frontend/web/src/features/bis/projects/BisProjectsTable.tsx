@@ -47,6 +47,7 @@ import {
   openManakEbisAssist,
   openManakLicenceRelatedRpt,
 } from './manakExtensionBridge'
+import { buildManakRenewalPayload } from '../renewals/renewalPayload'
 
 export type { BisProjectSortDir, BisProjectSortKey }
 
@@ -159,14 +160,15 @@ function RowActions({
             variant="ghost"
             className={actionGhostBtnClass}
             aria-label={`Manak Assist for ${client}`}
-            title="Open MANAK Online"
+            title="Manak Assist — renewal (Test Request stays off)"
             onClick={() => {
               void openManakEbisAssist({
                 portalUserId: manakLoginFromProject(row).userId,
                 projectId: row.id,
+                renewal: buildManakRenewalPayload(row),
               })
                 .then(({ extensionUsed }) => {
-                  if (extensionUsed) toast.success('Opening Manak eBIS via extension')
+                  if (extensionUsed) toast.success('Manak Assist: Renewal ON — sign in with the captcha')
                   else toast.warning('Extension not detected — opened Manak eBIS in a new tab', {
                     description: EXTENSION_MISSING_MSG,
                   })
@@ -181,9 +183,9 @@ function RowActions({
             size="sm"
             variant="ghost"
             className={actionGhostBtnClass}
-            aria-label={`Prepare renewal reminder for ${client}`}
-            title={row.client?.email ? `Prepare renewal reminder for ${row.client.email}` : 'Client email is not available'}
-            disabled={!row.client?.email || emailBusy}
+            aria-label={`Send renewal reminder to ${client}`}
+            title={row.client?.email ? `Send renewal reminder to ${row.client.email}` : 'Send renewal reminder (client email is not set)'}
+            disabled={emailBusy}
             onClick={() => onRenewalReminder?.(row)}
           >
             <Mail size={16} />

@@ -210,6 +210,7 @@
         importQr: Boolean(data.importQr),
         newApp: Boolean(data.newApp),
         inclusion: Boolean(data.inclusion),
+        renewal: Boolean(data.renewal),
         qrCount: Number(data.qrCount) || 1,
         projectId: data.projectId || "",
         loginUrl: data.loginUrl || "",
