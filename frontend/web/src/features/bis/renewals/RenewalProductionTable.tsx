@@ -13,11 +13,46 @@ import {
   coveredProductionExceedsTotal,
   emptyRenewalProductionRow,
   formatDisplayDate,
+  renewalMarkingFeeSummary,
   renewalSlabForQuantity,
   splitProductionRowForStockMarking,
+  type BisRenewalForm,
+  type RenewalMarkingFeeSummary,
   type RenewalProductionRow,
   type RenewalSlabRate,
 } from './types'
+
+export type RenewalFeeContext = Pick<BisRenewalForm, 'firmScale' | 'minimumFees' | 'renewalPeriodFrom' | 'renewalPeriodTo'>
+
+/** Marking fee payable → + application fee + licence fee → + GST → total fee to pay BIS. */
+function FeeBreakup({ fee, className }: { fee: RenewalMarkingFeeSummary; className?: string }) {
+  const money = (value: number) => `${getCurrencySymbol()} ${formatAmountTotal(value)}`
+  const lines: Array<[string, number, boolean?]> = [
+    [`Marking Fee Payable${fee.basis === 'minimum' ? ' (minimum)' : ''}`, fee.payable],
+    ['Renewal Application Fee', fee.applicationFee],
+    [`Annual Licence Fee${fee.years > 1 ? ` (× ${fee.years} years)` : ''}`, fee.licenceFee],
+    ['Subtotal', fee.subtotal],
+    [`GST @ ${fee.gstRate}%`, fee.gst],
+    ['Total Fee Payable (incl. GST)', fee.total, true],
+  ]
+  return (
+    <div className={cn('border border-amber-400 bg-amber-50 text-xs', className)}>
+      {lines.map(([label, value, strong]) => (
+        <div key={label} className={cn('flex items-center justify-between gap-3 px-3 py-1.5', strong ? 'border-t border-amber-400 bg-amber-100 text-sm font-bold' : label === 'Subtotal' ? 'border-t border-amber-200 font-semibold' : '')}>
+          <span>{label}</span>
+          <span className="tabular-nums">{money(value)}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/** "₹ 1,00,000.00 (Small scale × 1 year)" — or why the minimum is not known. */
+function minimumFeeText(fee: RenewalMarkingFeeSummary): string {
+  if (!fee.scale) return 'Firm scale not set in Client Master'
+  if (fee.minimumPerYear === null) return `No ${fee.scale} scale minimum in IS Code Master`
+  return `${getCurrencySymbol()} ${formatAmountTotal(fee.minimumTotal)} (${fee.scale} scale${fee.years > 1 ? ` × ${fee.years} years` : ''})`
+}
 
 function decimal(value: string): number {
   const parsed = Number.parseFloat(value.replace(/,/g, ''))
@@ -158,6 +193,7 @@ export function RenewalProductionTable({
   renewalPeriodFrom,
   basicUnitRate,
   slabRates,
+  feeContext,
   onRowsChange,
 }: {
   rows: RenewalProductionRow[]
@@ -165,6 +201,8 @@ export function RenewalProductionTable({
   renewalPeriodFrom: string
   basicUnitRate: string
   slabRates: RenewalSlabRate[]
+  /** Firm scale and IS Code minimum fees: the total fee is never below the minimum marking fee. */
+  feeContext: RenewalFeeContext
   onRowsChange: (rows: RenewalProductionRow[]) => void
 }) {
   const [calculationSelection, setCalculationSelection] = useState<{
@@ -177,7 +215,8 @@ export function RenewalProductionTable({
   const totalProductionValue = sumField(calculatedRows, 'productionValue')
   const totalCovered = sumField(calculatedRows, 'coveredUnit')
   const totalCoveredValue = sumField(calculatedRows, 'coveredValue')
-  const totalMarkingFee = sumField(calculatedRows, 'markingFee')
+  const feeSummary = renewalMarkingFeeSummary(calculatedRows, feeContext)
+  const totalMarkingFee = calculatedRows.length ? feeSummary.payable : null
   const totalCoveredPercent = totalProduction && totalProduction > 0 && totalCovered !== null
     ? ((totalCovered / totalProduction) * 100).toFixed(2)
     : '—'
@@ -267,7 +306,13 @@ export function RenewalProductionTable({
               <th className="border border-stone-300 px-1 py-2 text-center font-bold tabular-nums">{formatQuantityTotal(totalCovered)}</th>
               <th className="border border-stone-300 px-1 py-2 text-center font-bold tabular-nums">{formatAmountTotal(totalCoveredValue)}</th>
               <th className="border border-stone-300 px-1 py-2 text-center font-bold tabular-nums">{totalCoveredPercent}</th>
-              <th className="border border-stone-300 px-1 py-2 text-center font-bold tabular-nums">{formatAmountTotal(totalMarkingFee)}</th>
+              <th
+                className="border border-stone-300 px-1 py-2 text-center font-bold tabular-nums"
+                title={`Calculated ${getCurrencySymbol()} ${formatAmountTotal(feeSummary.calculated)} · Minimum ${minimumFeeText(feeSummary)}`}
+              >
+                {formatAmountTotal(totalMarkingFee)}
+                {feeSummary.basis === 'minimum' ? <span className="block text-[10px] font-semibold text-amber-800">Minimum fee</span> : null}
+              </th>
               <th className="border border-stone-300 px-1 py-1 text-center">
                 <Button
                   type="button"
@@ -322,6 +367,9 @@ export function RenewalProductionTable({
             ) : null}
           </tbody>
         </table>
+        <div className="mt-2 flex justify-end">
+          <FeeBreakup fee={feeSummary} className="w-full max-w-md" />
+        </div>
       </div>
 
       <div className="space-y-3 xl:hidden">
@@ -331,7 +379,9 @@ export function RenewalProductionTable({
           <div><span className="block font-medium text-stone-600">Total Covered Production</span><strong className="tabular-nums">{formatQuantityTotal(totalCovered)} {unitOfIs}</strong></div>
           <div><span className="block font-medium text-stone-600">Total Covered Value (Rs)</span><strong className="tabular-nums">{formatAmountTotal(totalCoveredValue)}</strong></div>
           <div><span className="block font-medium text-stone-600">Covered Qty in %</span><strong className="tabular-nums">{totalCoveredPercent}</strong></div>
-          <div><span className="block font-medium text-stone-600">Total Marking Fee (Rs)</span><strong className="tabular-nums">{formatAmountTotal(totalMarkingFee)}</strong></div>
+          <div><span className="block font-medium text-stone-600">Calculated Marking Fee (Rs)</span><strong className="tabular-nums">{formatAmountTotal(feeSummary.calculated)}</strong></div>
+          <div><span className="block font-medium text-stone-600">Minimum Marking Fee (Rs)</span><strong className="tabular-nums">{minimumFeeText(feeSummary)}</strong></div>
+          <FeeBreakup fee={feeSummary} className="col-span-2" />
           <Button
             type="button"
             variant="outline"
@@ -367,6 +417,7 @@ export function RenewalProductionTable({
         unitOfIs={unitOfIs}
         basicUnitRate={basicUnitRate}
         slabRates={slabRates}
+        feeSummary={feeSummary}
         onOpenChange={(open) => { if (!open) setCalculationSelection(null) }}
       />
       <Dialog open={breakSelection !== null} onOpenChange={(open) => { if (!open) setBreakSelection(null) }}>
@@ -399,12 +450,14 @@ function MarkingFeeCalculationDialog({
   unitOfIs,
   basicUnitRate,
   slabRates,
+  feeSummary,
   onOpenChange,
 }: {
   selection: { rows: RenewalProductionRow[]; total: boolean } | null
   unitOfIs: string
   basicUnitRate: string
   slabRates: RenewalSlabRate[]
+  feeSummary: RenewalMarkingFeeSummary
   onOpenChange: (open: boolean) => void
 }) {
   const rows = selection?.rows ?? []
@@ -472,8 +525,8 @@ function MarkingFeeCalculationDialog({
                     <strong className="block break-words tabular-nums">{totalCoveredPercent}%</strong>
                   </div>
                   <div className="min-w-0 border border-amber-500 bg-amber-100 px-3 py-2">
-                    <span className="block text-xs text-stone-700">Total Marking Fee</span>
-                    <strong className="block break-words tabular-nums">{getCurrencySymbol()} {formatAmountTotal(totalFee)}</strong>
+                    <span className="block text-xs text-stone-700">Total Fee (incl. GST)</span>
+                    <strong className="block break-words tabular-nums">{getCurrencySymbol()} {formatAmountTotal(feeSummary.total)}</strong>
                   </div>
                 </div>
                 <section className="space-y-2 border-t border-stone-300 pt-3">
@@ -499,9 +552,33 @@ function MarkingFeeCalculationDialog({
                       <span className="flex size-6 shrink-0 items-center justify-center bg-stone-800 font-semibold text-amber-50">5</span>
                       <p className="min-w-0 break-words [overflow-wrap:anywhere]">Covered quantity percentage = total covered production ÷ total production × 100: <strong>{formatQuantityTotal(totalCovered)} ÷ {formatQuantityTotal(totalProduction)} × 100 = {totalCoveredPercent}%</strong></p>
                     </li>
-                    <li className="flex min-w-0 items-start gap-2 border border-amber-400 bg-amber-50 p-2.5 text-xs leading-relaxed">
-                      <span className="flex size-6 shrink-0 items-center justify-center bg-amber-700 font-semibold text-white">6</span>
-                      <p className="min-w-0 break-words [overflow-wrap:anywhere]">Total marking fee = period covered quantities × their matched IS Code slab rates, then added: <strong>{feeFormula || 'No covered production entered'} = {getCurrencySymbol()} {formatAmountTotal(totalFee)}</strong></p>
+                    <li className="flex min-w-0 items-start gap-2 border border-stone-200 bg-white p-2.5 text-xs leading-relaxed">
+                      <span className="flex size-6 shrink-0 items-center justify-center bg-stone-800 font-semibold text-amber-50">6</span>
+                      <p className="min-w-0 break-words [overflow-wrap:anywhere]">Calculated marking fee = period covered quantities × their matched IS Code slab rates, then added: <strong>{feeFormula || 'No covered production entered'} = {getCurrencySymbol()} {formatAmountTotal(totalFee ?? 0)}</strong></p>
+                    </li>
+                    <li className="flex min-w-0 items-start gap-2 border border-stone-200 bg-white p-2.5 text-xs leading-relaxed">
+                      <span className="flex size-6 shrink-0 items-center justify-center bg-stone-800 font-semibold text-amber-50">7</span>
+                      <p className="min-w-0 break-words [overflow-wrap:anywhere]">Minimum marking fee for the firm scale (IS Code Master){feeSummary.minimumPerYear !== null && feeSummary.years > 1 ? `: ${getCurrencySymbol()} ${formatAmountTotal(feeSummary.minimumPerYear)} per year × ${feeSummary.years} years` : ''}: <strong>{minimumFeeText(feeSummary)}</strong></p>
+                    </li>
+                    <li className="flex min-w-0 items-start gap-2 border border-stone-200 bg-white p-2.5 text-xs leading-relaxed">
+                      <span className="flex size-6 shrink-0 items-center justify-center bg-stone-800 font-semibold text-amber-50">8</span>
+                      <p className="min-w-0 break-words [overflow-wrap:anywhere]">Marking fee payable = the higher of the calculated fee and the minimum marking fee: <strong>max({getCurrencySymbol()} {formatAmountTotal(feeSummary.calculated)}, {getCurrencySymbol()} {formatAmountTotal(feeSummary.minimumTotal)}) = {getCurrencySymbol()} {formatAmountTotal(feeSummary.payable)}</strong>{feeSummary.basis === 'minimum' ? ' — the minimum applies.' : ''}</p>
+                    </li>
+                    <li className="flex min-w-0 items-start gap-2 border border-stone-200 bg-white p-2.5 text-xs leading-relaxed">
+                      <span className="flex size-6 shrink-0 items-center justify-center bg-stone-800 text-amber-50 font-semibold">9</span>
+                      <p className="min-w-0 break-words [overflow-wrap:anywhere]">Renewal application fee + annual licence fee: <strong>{getCurrencySymbol()} {formatAmountTotal(feeSummary.applicationFee)} + {getCurrencySymbol()} {formatAmountTotal(feeSummary.licenceFee)}{feeSummary.years > 1 ? ` (${getCurrencySymbol()} 1,000.00 × ${feeSummary.years} years)` : ''}</strong></p>
+                    </li>
+                    <li className="flex min-w-0 items-start gap-2 border border-stone-200 bg-white p-2.5 text-xs leading-relaxed">
+                      <span className="flex size-6 shrink-0 items-center justify-center bg-stone-800 text-amber-50 font-semibold">10</span>
+                      <p className="min-w-0 break-words [overflow-wrap:anywhere]">Subtotal = marking fee payable + application fee + licence fee: <strong>{getCurrencySymbol()} {formatAmountTotal(feeSummary.payable)} + {getCurrencySymbol()} {formatAmountTotal(feeSummary.applicationFee)} + {getCurrencySymbol()} {formatAmountTotal(feeSummary.licenceFee)} = {getCurrencySymbol()} {formatAmountTotal(feeSummary.subtotal)}</strong></p>
+                    </li>
+                    <li className="flex min-w-0 items-start gap-2 border border-stone-200 bg-white p-2.5 text-xs leading-relaxed">
+                      <span className="flex size-6 shrink-0 items-center justify-center bg-stone-800 text-amber-50 font-semibold">11</span>
+                      <p className="min-w-0 break-words [overflow-wrap:anywhere]">GST @ {feeSummary.gstRate}% on the subtotal: <strong>{getCurrencySymbol()} {formatAmountTotal(feeSummary.subtotal)} × {feeSummary.gstRate}% = {getCurrencySymbol()} {formatAmountTotal(feeSummary.gst)}</strong></p>
+                    </li>
+                    <li className="flex min-w-0 items-start gap-2 border border-amber-400 bg-amber-50 p-2.5 text-xs leading-relaxed lg:col-span-2">
+                      <span className="flex size-6 shrink-0 items-center justify-center bg-amber-700 text-white font-semibold">12</span>
+                      <p className="min-w-0 break-words [overflow-wrap:anywhere]">Total fee payable = subtotal + GST: <strong>{getCurrencySymbol()} {formatAmountTotal(feeSummary.subtotal)} + {getCurrencySymbol()} {formatAmountTotal(feeSummary.gst)} = {getCurrencySymbol()} {formatAmountTotal(feeSummary.total)}</strong></p>
                     </li>
                   </ol>
                 </section>
@@ -567,8 +644,10 @@ function MarkingFeeCalculationDialog({
             })}
 
             <div className="flex items-center justify-between border-t-2 border-stone-400 pt-3 font-semibold">
-              <span>{selection.total ? 'Total Marking Fee' : 'Marking Fee for Period'}</span>
-              <span className="tabular-nums">{formatAmountTotal(totalFee) === '—' ? '—' : `${getCurrencySymbol()} ${formatAmountTotal(totalFee)}`}</span>
+              <span>{selection.total ? 'Total Fee Payable (incl. GST)' : 'Marking Fee for Period'}</span>
+              <span className="tabular-nums">{selection.total
+                ? `${getCurrencySymbol()} ${formatAmountTotal(feeSummary.total)}`
+                : formatAmountTotal(totalFee) === '—' ? '—' : `${getCurrencySymbol()} ${formatAmountTotal(totalFee)}`}</span>
             </div>
           </div>
         ) : null}

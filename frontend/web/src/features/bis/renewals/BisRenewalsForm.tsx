@@ -364,6 +364,7 @@ export function BisRenewalsForm({
             renewalPeriodFrom={form.renewalPeriodFrom}
             basicUnitRate={form.basicUnitRate}
             slabRates={form.slabRates}
+            feeContext={form}
             onRowsChange={(productionRows) => onChange((previous) => ({ ...previous, productionRows }))}
           />
         </div>

@@ -56,7 +56,41 @@ export type RenewalProjectJoin = {
     slab_2_rate?: number | string | null
     slab_3_quantity?: string | null
     slab_3_rate?: number | string | null
+    mmf_large_scale?: number | string | null
+    mmf_medium_scale?: number | string | null
+    mmf_small_scale?: number | string | null
+    mmf_micro_scale?: number | string | null
   } | null
+}
+
+/** Minimum marking fee per year by firm scale (IS Code Master). */
+export type RenewalMinimumFees = { Large: string; Medium: string; Small: string; Micro: string }
+
+export const emptyMinimumFees = (): RenewalMinimumFees => ({ Large: '', Medium: '', Small: '', Micro: '' })
+
+export function minimumFeesFromIsCode(code: {
+  mmf_large_scale?: number | string | null
+  mmf_medium_scale?: number | string | null
+  mmf_small_scale?: number | string | null
+  mmf_micro_scale?: number | string | null
+} | null | undefined): RenewalMinimumFees {
+  const v = (value: number | string | null | undefined) => (value == null ? '' : String(value))
+  return {
+    Large: v(code?.mmf_large_scale),
+    Medium: v(code?.mmf_medium_scale),
+    Small: v(code?.mmf_small_scale),
+    Micro: v(code?.mmf_micro_scale),
+  }
+}
+
+/** Client Master company scale → the IS Code Master minimum fee column ('' when not set). */
+export function renewalFirmScale(value: string | null | undefined): keyof RenewalMinimumFees | '' {
+  const text = String(value ?? '').toLowerCase()
+  if (/micro/.test(text)) return 'Micro'
+  if (/small/.test(text)) return 'Small'
+  if (/medium/.test(text)) return 'Medium'
+  if (/large/.test(text)) return 'Large'
+  return ''
 }
 
 export type RenewalProductionRow = {
@@ -352,7 +386,7 @@ export type BisRenewalRow = {
   production_details: RenewalProductionRow[] | null
   created_at?: string | null
   updated_at?: string | null
-  client: { company_name: string | null; address?: string | null; email?: string | null } | null
+  client: { company_name: string | null; address?: string | null; email?: string | null; company_scale?: string | null } | null
   project: RenewalProjectJoin | null
 }
 
@@ -368,6 +402,9 @@ export type BisRenewalForm = {
   isCodeLabel: string
   unitOfIs: string
   slabRates: RenewalSlabRate[]
+  /** Client Master company scale (Large / Medium / Small / Micro). */
+  firmScale: string
+  minimumFees: RenewalMinimumFees
   renewalPeriodFrom: string
   renewalPeriodTo: string
   renewalTermYears: string
@@ -413,6 +450,8 @@ export function emptyRenewalForm(): BisRenewalForm {
     isCodeLabel: '',
     unitOfIs: '',
     slabRates: [],
+    firmScale: '',
+    minimumFees: emptyMinimumFees(),
     renewalPeriodFrom: '',
     renewalPeriodTo: '',
     renewalTermYears: '5',
@@ -479,6 +518,8 @@ export function rowToRenewalForm(row: BisRenewalRow): BisRenewalForm {
       { quantity: row.project.is_code.slab_2_quantity ?? '', rate: moneyToString(row.project.is_code.slab_2_rate) },
       { quantity: row.project.is_code.slab_3_quantity ?? '', rate: moneyToString(row.project.is_code.slab_3_rate) },
     ] : [],
+    firmScale: row.client?.company_scale?.trim() ?? '',
+    minimumFees: minimumFeesFromIsCode(row.project?.is_code),
     renewalPeriodFrom: row.renewal_period_from ?? '',
     renewalPeriodTo: row.renewal_period_to ?? '',
     renewalTermYears: String(row.renewal_term_years ?? 5),
@@ -542,5 +583,72 @@ export function renewalStatusClass(status: string | null | undefined): string {
       return 'bg-slate-50 text-slate-700 ring-slate-200'
     default:
       return 'bg-amber-50 text-amber-900 ring-amber-200'
+  }
+}
+
+export type RenewalMarkingFeeSummary = {
+  /** Σ covered production × slab rate. */
+  calculated: number
+  scale: keyof RenewalMinimumFees | ''
+  /** Minimum marking fee per year for the firm scale (null when the scale or the IS Code fee is not set). */
+  minimumPerYear: number | null
+  /** Years of production the statement covers (the minimum is charged per year). */
+  years: number
+  minimumTotal: number
+  /** The fee payable: the higher of the calculated fee and the minimum. */
+  payable: number
+  basis: 'calculated' | 'minimum'
+  /** BIS renewal application fee (₹1,000 per licence). */
+  applicationFee: number
+  /** BIS annual licence fee (₹1,000 per year). */
+  licenceFee: number
+  /** Marking fee payable + application fee + licence fee. */
+  subtotal: number
+  gstRate: number
+  gst: number
+  /** Subtotal + GST: the total to pay BIS. */
+  total: number
+}
+
+/** BIS Conformity Assessment Regulations, Scheme-I: renewal application fee and annual licence fee. */
+export const RENEWAL_APPLICATION_FEE = 1000
+export const ANNUAL_LICENCE_FEE = 1000
+export const RENEWAL_GST_RATE = 18
+
+/**
+ * BIS marking fee for the production statement: the production-based fee, or the minimum marking fee for the
+ * firm's scale (IS Code Master) for each year covered, whichever is higher — so it is never 0 with no production.
+ */
+export function renewalMarkingFeeSummary(
+  rows: RenewalProductionRow[],
+  form: Pick<BisRenewalForm, 'firmScale' | 'minimumFees' | 'renewalPeriodFrom' | 'renewalPeriodTo'>,
+): RenewalMarkingFeeSummary {
+  const calculated = rows.reduce((sum, row) => sum + (finiteNumber(row.markingFee) ?? 0), 0)
+  const scale = renewalFirmScale(form.firmScale)
+  const minimumPerYear = scale ? finiteNumber(form.minimumFees?.[scale] ?? '') : null
+  const from = parseIsoUtcDate(form.renewalPeriodFrom)
+  const to = parseIsoUtcDate(form.renewalPeriodTo)
+  const days = from && to && to >= from ? (to.getTime() - from.getTime()) / 86_400_000 + 1 : 0
+  const years = Math.max(1, Math.round(days / 365.25))
+  const minimumTotal = minimumPerYear !== null ? minimumPerYear * years : 0
+  const payable = Math.max(calculated, minimumTotal)
+  const applicationFee = RENEWAL_APPLICATION_FEE
+  const licenceFee = ANNUAL_LICENCE_FEE * years
+  const subtotal = payable + applicationFee + licenceFee
+  const gst = Math.round(subtotal * RENEWAL_GST_RATE) / 100
+  return {
+    calculated,
+    scale,
+    minimumPerYear,
+    years,
+    minimumTotal,
+    payable,
+    basis: minimumTotal > calculated ? 'minimum' : 'calculated',
+    applicationFee,
+    licenceFee,
+    subtotal,
+    gstRate: RENEWAL_GST_RATE,
+    gst,
+    total: subtotal + gst,
   }
 }
