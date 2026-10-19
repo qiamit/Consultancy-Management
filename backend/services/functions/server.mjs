@@ -14,6 +14,30 @@ const RESEND_API_URL = process.env.RESEND_API_URL || 'https://api.resend.com/ema
 const EMAIL_FROM =
   process.env.RESEND_FROM_EMAIL || process.env.MRM_EMAIL_FROM || 'Q Engineering <info@qengineering.in>'
 
+// Same origins as the gateway Caddyfile, which strips this service's CORS headers and sets its
+// own. Kept here too so a direct call to this service never gets "*" (Batch D L7).
+const CORS_ORIGIN_PATTERNS = [
+  /^https:\/\/(www\.)?qengineering\.in$/,
+  /^https?:\/\/(localhost|127\.0\.0\.1):(3000|517[3-9]|518[0-5])$/,
+  /^https:\/\/frontend-production-[a-z0-9]+\.up\.railway\.app$/,
+  /^https:\/\/consultancy-[a-z0-9-]+\.up\.railway\.app$/,
+]
+
+/** The request Origin when it is allowed, else the production site (the browser then blocks it). */
+function corsOriginFor(origin) {
+  const value = String(origin ?? '').trim()
+  return CORS_ORIGIN_PATTERNS.some((re) => re.test(value)) ? value : 'https://qengineering.in'
+}
+
+function corsHeaders(res, methods = 'GET, POST, OPTIONS') {
+  return {
+    'Access-Control-Allow-Origin': res.qeCorsOrigin || 'https://qengineering.in',
+    'Access-Control-Allow-Methods': methods,
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, apikey, X-User-Jwt, x-user-jwt, X-Client-Info',
+    Vary: 'Origin',
+  }
+}
+
 /** Admin = Access role 'admin' only (decision #45; matches public.app_is_admin()). */
 function isAdminRole(role) {
   return String(role ?? '').trim().toLowerCase() === 'admin'
@@ -24,9 +48,7 @@ function corsJson(res, status, body) {
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
     'Content-Length': Buffer.byteLength(payload),
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, apikey, X-User-Jwt',
+    ...corsHeaders(res),
   })
   res.end(payload)
 }
@@ -99,11 +121,7 @@ function writeManakEntry(entry) {
 
 async function handleManakPdf(req, res) {
   if (req.method === 'OPTIONS') {
-    res.writeHead(204, {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization, apikey, X-User-Jwt',
-    })
+    res.writeHead(204, corsHeaders(res))
     res.end()
     return
   }
@@ -912,6 +930,7 @@ const routes = {
 }
 
 const server = http.createServer(async (req, res) => {
+  res.qeCorsOrigin = corsOriginFor(req.headers.origin)
   const url = new URL(req.url || '/', 'http://functions.local')
   const pathname = url.pathname.replace(/\/$/, '') || '/'
   const key = `${req.method} ${pathname}`

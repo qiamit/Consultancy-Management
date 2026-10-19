@@ -560,13 +560,14 @@ export function subscribeManakTestRequestResult(
 /** Poll API inbox until PDF is ready (backup when postMessage is blocked). */
 export async function pollManakPdfInbox(
   token: string,
-  opts?: { timeoutMs?: number; intervalMs?: number },
+  opts?: { timeoutMs?: number; intervalMs?: number; stopWhen?: () => boolean },
 ): Promise<ManakTrResult | null> {
   const timeoutMs = opts?.timeoutMs ?? 12 * 60 * 1000
   const intervalMs = opts?.intervalMs ?? 2500
   const started = Date.now()
   const { supabase } = await import('@/lib/supabaseClient')
   while (Date.now() - started < timeoutMs) {
+    if (opts?.stopWhen?.()) return null
     try {
       // The inbox hands the PDF only to the user who registered the token.
       const { data } = await supabase.auth.getSession()

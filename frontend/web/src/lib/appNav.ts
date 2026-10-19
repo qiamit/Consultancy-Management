@@ -344,6 +344,12 @@ export const PROFILE_MENU_SECTIONS: NavSection[] = [
         clause: 'ai-settings',
       },
       {
+        label: 'Email Log',
+        to: '/settings/email-log',
+        icon: Mail,
+        clause: 'email-log',
+      },
+      {
         label: 'Help',
         to: '/help',
         icon: HelpCircle,

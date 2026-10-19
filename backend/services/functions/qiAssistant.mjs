@@ -44,7 +44,8 @@ export function createQiAssistantHandler(deps) {
   return async function handleQiAssistant(req, res) {
     if (req.method === 'OPTIONS') {
       res.writeHead(204, {
-        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Origin': res.qeCorsOrigin || 'https://qengineering.in',
+        Vary: 'Origin',
         'Access-Control-Allow-Methods': 'POST, OPTIONS',
         'Access-Control-Allow-Headers':
           'Content-Type, Authorization, apikey, X-User-Jwt, x-user-jwt, X-Client-Info',
@@ -124,6 +125,22 @@ export function createQiAssistantHandler(deps) {
         error: err instanceof Error ? err.message : 'Failed to load AI models',
       })
       return
+    }
+
+    // Keys are encrypted at rest (Batch D L6); ai_models.api_key is always NULL now.
+    if (model && !String(model.api_key || '').trim() && model.api_key_set) {
+      try {
+        const key = await rest('/rpc/ai_model_key_for_service', {
+          method: 'POST',
+          body: JSON.stringify({ p_model_id: model.id }),
+        })
+        model = { ...model, api_key: typeof key === 'string' ? key : '' }
+      } catch (err) {
+        corsJson(res, 500, {
+          error: err instanceof Error ? err.message : 'Failed to read the AI model API key',
+        })
+        return
+      }
     }
 
     if (!String(model?.api_key || '').trim()) {
