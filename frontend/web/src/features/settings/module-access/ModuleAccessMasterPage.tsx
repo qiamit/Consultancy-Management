@@ -642,7 +642,7 @@ export default function ModuleAccessMasterPage() {
         ) : null}
 
         <div className="overflow-x-auto rounded-none border-2 border-stone-500">
-          <table className={cn(limsTableClass, 'list-cards min-w-[960px]')}>
+          <table className={cn(limsTableClass, 'list-cards min-w-[900px]')}>
             <thead>
               <tr>
                 <th className={cn(limsTableHeadClass, 'w-12 px-2 py-2')}>

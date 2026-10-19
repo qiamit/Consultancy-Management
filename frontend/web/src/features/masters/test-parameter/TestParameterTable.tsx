@@ -1291,8 +1291,8 @@ export function TestParameterTable({
                 <col style={{ width: '10%' }} />
                 <col style={{ width: '7.5%' }} />
                 <col style={{ width: '7.5%' }} />
-                <col style={{ width: '35%' }} />
-                <col style={{ width: '6%' }} />
+                <col style={{ width: '34%' }} />
+                <col style={{ width: '7%' }} />
               </colgroup>
               <TableHeader>
                 <TableRow className="border-stone-700 bg-stone-800 hover:bg-stone-800">
