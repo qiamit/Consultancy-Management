@@ -369,7 +369,7 @@ export function BisRenewalsForm({
           />
         </div>
 
-        <section className="flex shrink-0 flex-wrap items-center gap-2 border-t border-stone-300 bg-stone-50 px-3 py-2" aria-label="Renewal client actions">
+        <section className="rn-actions flex shrink-0 flex-wrap items-center gap-2 border-t border-stone-300 bg-stone-50 px-3 py-2" aria-label="Renewal client actions">
           <input
             ref={importInputRef}
             type="file"

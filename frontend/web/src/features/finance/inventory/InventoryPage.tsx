@@ -41,7 +41,7 @@ export default function InventoryPage() {
         {tab === 'items' && rows.length === 0 ? <p className="text-sm text-stone-600">No products in stock view yet.</p> : null}
         {tab === 'items' && rows.length > 0 ? (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-sm">
+            <table className="auto-cards list-cards w-full min-w-[720px] text-sm">
               <thead>
                 <tr className="border-b border-stone-300 text-left">
                   <th className="py-2 pr-3">Item</th>
@@ -68,7 +68,7 @@ export default function InventoryPage() {
         {tab === 'category' && categories.length === 0 ? <p className="text-sm text-stone-600">No categories yet.</p> : null}
         {tab === 'category' && categories.length > 0 ? (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[480px] text-sm">
+            <table className="auto-cards list-cards w-full min-w-[480px] text-sm">
               <thead>
                 <tr className="border-b border-stone-300 text-left">
                   <th className="py-2 pr-3">Category</th>

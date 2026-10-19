@@ -82,7 +82,7 @@ export default function AccountsPage() {
         {message ? <p className="text-sm text-stone-700">{message}</p> : null}
         {rows.length === 0 ? <p className="text-sm text-stone-600">No accounts yet.</p> : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[480px] text-sm">
+            <table className="auto-cards list-cards w-full min-w-[480px] text-sm">
               <thead>
                 <tr className="border-b border-stone-300 text-left">
                   <th className="py-2 pr-3">Account</th>

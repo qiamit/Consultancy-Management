@@ -46,7 +46,7 @@ export default function StatementsPage() {
         {message ? <p className="text-sm text-red-700">{message}</p> : null}
         {rows.length === 0 ? <p className="text-sm text-stone-600">No figures for this range.</p> : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[480px] text-sm">
+            <table className="auto-cards list-cards w-full min-w-[480px] text-sm">
               <tbody>
                 {rows.map((row) => (
                   <tr key={`${row.section}-${row.label}`} className="border-b border-stone-200">

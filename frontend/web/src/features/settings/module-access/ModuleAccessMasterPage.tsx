@@ -642,7 +642,7 @@ export default function ModuleAccessMasterPage() {
         ) : null}
 
         <div className="overflow-x-auto rounded-none border-2 border-stone-500">
-          <table className={cn(limsTableClass, 'min-w-[960px]')}>
+          <table className={cn(limsTableClass, 'list-cards min-w-[960px]')}>
             <thead>
               <tr>
                 <th className={cn(limsTableHeadClass, 'w-12 px-2 py-2')}>
@@ -729,7 +729,7 @@ export default function ModuleAccessMasterPage() {
               ) : (
                 pagedRows.map((row) => (
                   <tr key={row.id} className="border-t border-stone-300">
-                    <td className="px-2 py-2 text-center align-middle">
+                    <td className="lc-check px-2 py-2 text-center align-middle">
                       <input
                         type="checkbox"
                         className="h-4 w-4"
@@ -743,7 +743,7 @@ export default function ModuleAccessMasterPage() {
                         aria-label={`Select ${row.userName}`}
                       />
                     </td>
-                    <td className="px-3 py-2 text-left align-middle text-sm font-medium text-stone-900">
+                    <td className="lc-title px-3 py-2 text-left align-middle text-sm font-medium text-stone-900">
                       <div className="min-w-0 space-y-0.5">
                         <p className="truncate font-medium text-stone-900">
                           {row.userName.trim() || '—'}
@@ -756,16 +756,16 @@ export default function ModuleAccessMasterPage() {
                         </p>
                       </div>
                     </td>
-                    <td className="px-3 py-2 text-center align-middle text-sm text-stone-800">
+                    <td data-label="Division" className="px-3 py-2 text-center align-middle text-sm text-stone-800">
                       {row.division.trim() || '—'}
                     </td>
-                    <td className="px-3 py-2 text-center align-middle text-sm text-stone-800">
+                    <td data-label="Department" className="px-3 py-2 text-center align-middle text-sm text-stone-800">
                       {row.department.trim() || '—'}
                     </td>
-                    <td className="px-3 py-2 text-center align-middle text-sm text-stone-800">
+                    <td data-label="Designation" className="px-3 py-2 text-center align-middle text-sm text-stone-800">
                       {row.designation.trim() || '—'}
                     </td>
-                    <td className="px-2 py-2 text-center align-middle">
+                    <td data-label="Status" className="px-2 py-2 text-center align-middle">
                       <span
                         className={cn(
                           'inline-flex whitespace-nowrap border px-2 py-0.5 text-[11px] font-semibold',
@@ -775,7 +775,7 @@ export default function ModuleAccessMasterPage() {
                         {row.status}
                       </span>
                     </td>
-                    <td className="px-2 py-1.5 text-center align-middle">
+                    <td className="lc-actions px-2 py-1.5 text-center align-middle">
                       <Button
                         type="button"
                         size="sm"
@@ -852,7 +852,7 @@ export default function ModuleAccessMasterPage() {
               </div>
             ) : (
               <div className="overflow-x-auto rounded-none border-2 border-stone-500">
-                <table className={cn(limsTableClass, 'min-w-[860px]')}>
+                <table className={cn(limsTableClass, 'am-table min-w-[860px]')}>
                   <thead>
                     <tr>
                       <th className={cn(limsTableHeadClass, 'w-12 px-2 py-2')} rowSpan={2}>

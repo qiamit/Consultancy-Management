@@ -124,7 +124,7 @@ export default function ReportsPage() {
             <p className="text-xs text-stone-600">Draft report only. Confirm PAN, section and tax treatment with your tax professional before filing.</p>
             {tdsRows.length ? (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[760px] text-sm">
+                <table className="auto-cards list-cards w-full min-w-[760px] text-sm">
                   <thead><tr className="border-b border-stone-300 text-left"><th className="py-2 pr-3">Date</th><th className="py-2 pr-3">PAN</th><th className="py-2 pr-3">Party Name</th><th className="py-2 pr-3">TDS Section</th><th className="py-2 pr-3 text-right">Taxable Amount</th><th className="py-2 pr-3 text-right">TDS Amount</th></tr></thead>
                   <tbody>{tdsRows.map((row, index) => <tr key={`${row.txn_date}-${row.party_name}-${index}`} className="border-b border-stone-200"><td className="py-2 pr-3">{row.txn_date}</td><td className="py-2 pr-3">{row.pan || '—'}</td><td className="py-2 pr-3">{row.party_name}</td><td className="py-2 pr-3">{row.tds_section}</td><td className="py-2 pr-3 text-right tabular-nums">{row.taxable_amount.toFixed(2)}</td><td className="py-2 pr-3 text-right tabular-nums">{row.tds_amount.toFixed(2)}</td></tr>)}</tbody>
                 </table>
@@ -153,7 +153,7 @@ export default function ReportsPage() {
         {report !== 'tds_return' && report !== 'ageing' && report !== 'stock' ? (
           rows.length === 0 ? <p className="text-sm text-stone-600">No rows for this report.</p> : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px] text-sm">
+              <table className="auto-cards list-cards w-full min-w-[640px] text-sm">
                 <thead>
                   <tr className="border-b border-stone-300 text-left">
                     <th className="py-2 pr-3">Party</th>

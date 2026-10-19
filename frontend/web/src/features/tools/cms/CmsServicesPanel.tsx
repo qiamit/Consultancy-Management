@@ -120,7 +120,7 @@ export default function CmsServicesPanel() {
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
       <div className="overflow-x-auto">
-        <table className={limsTableClass}>
+        <table className={cn(limsTableClass, 'list-cards')}>
           <thead className={limsTableHeadClass}>
             <tr>
               <th className="px-3 py-2">Title</th>
@@ -146,12 +146,12 @@ export default function CmsServicesPanel() {
             ) : (
               rows.map((row) => (
                 <tr key={row.id}>
-                  <td className="px-3 py-2 text-sm font-medium">{row.title}</td>
-                  <td className="max-w-md px-3 py-2 text-sm text-muted-foreground">
+                  <td className="lc-title px-3 py-2 text-sm font-medium">{row.title}</td>
+                  <td data-label="Description" className="lc-wide max-w-md px-3 py-2 text-sm text-muted-foreground">
                     <span className="line-clamp-2">{row.description}</span>
                   </td>
-                  <td className="px-3 py-2 text-center text-sm">{row.icon_name || '—'}</td>
-                  <td className="px-3 py-2 text-center">
+                  <td data-label="Icon" className="px-3 py-2 text-center text-sm">{row.icon_name || '—'}</td>
+                  <td data-label="Status" className="px-3 py-2 text-center">
                     <Badge
                       variant="outline"
                       className={cn(
@@ -162,7 +162,7 @@ export default function CmsServicesPanel() {
                       {row.is_active ? 'Active' : 'Inactive'}
                     </Badge>
                   </td>
-                  <td className="px-3 py-2">
+                  <td className="lc-actions px-3 py-2">
                     <div className="flex justify-center gap-1">
                       <Button
                         type="button"

@@ -133,7 +133,7 @@ export default function LedgerPage() {
           <p className="text-sm text-stone-600">No ledger rows for this tab.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-sm">
+            <table className="auto-cards list-cards w-full min-w-[640px] text-sm">
               <thead>
                 <tr className="border-b border-stone-300 text-left">
                   <th className="py-2 pr-3">Name</th>
@@ -159,7 +159,7 @@ export default function LedgerPage() {
           <DialogHeader><DialogTitle>{selectedLedger?.party_name || 'Ledger'} entries</DialogTitle></DialogHeader>
           {entriesLoading ? <p className="text-sm text-stone-600">Loading entries…</p> : null}
           {!entriesLoading && !entries.length ? <p className="text-sm text-stone-600">No transaction entries for this ledger.</p> : null}
-          {entries.length ? <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-sm"><thead><tr className="border-b border-stone-300 text-left"><th className="py-2 pr-3">Date</th><th className="py-2 pr-3">Voucher</th><th className="py-2 pr-3">Party / Detail</th><th className="py-2 pr-3 text-right">Amount</th><th className="py-2 pr-3 text-right">TDS</th><th className="py-2 pr-3">Action</th></tr></thead><tbody>{entries.map((entry) => <tr key={entry.id} className="border-b border-stone-200"><td className="py-2 pr-3">{entry.txn_date}</td><td className="py-2 pr-3">{entry.receipt_number || '—'}</td><td className="py-2 pr-3">{entry.client_name || entry.description || entry.mode_of_payment || '—'}</td><td className="py-2 pr-3 text-right">{entry.amount.toFixed(2)} {entry.payment_flow === 'out' ? 'Cr' : 'Dr'}</td><td className="py-2 pr-3 text-right">{entry.tds_amount.toFixed(2)}</td><td className="py-2 pr-3"><Button type="button" variant="outline" size="sm" onClick={() => {
+          {entries.length ? <div className="overflow-x-auto"><table className="auto-cards list-cards w-full min-w-[680px] text-sm"><thead><tr className="border-b border-stone-300 text-left"><th className="py-2 pr-3">Date</th><th className="py-2 pr-3">Voucher</th><th className="py-2 pr-3">Party / Detail</th><th className="py-2 pr-3 text-right">Amount</th><th className="py-2 pr-3 text-right">TDS</th><th className="py-2 pr-3">Action</th></tr></thead><tbody>{entries.map((entry) => <tr key={entry.id} className="border-b border-stone-200"><td className="py-2 pr-3">{entry.txn_date}</td><td className="py-2 pr-3">{entry.receipt_number || '—'}</td><td className="py-2 pr-3">{entry.client_name || entry.description || entry.mode_of_payment || '—'}</td><td className="py-2 pr-3 text-right">{entry.amount.toFixed(2)} {entry.payment_flow === 'out' ? 'Cr' : 'Dr'}</td><td className="py-2 pr-3 text-right">{entry.tds_amount.toFixed(2)}</td><td className="py-2 pr-3"><Button type="button" variant="outline" size="sm" onClick={() => {
             const route = entry.payment_flow !== 'out' ? '/finance/sale/payment-receipt' : entry.book === 'refund' ? '/finance/sale/refund' : '/finance/purchase/payment'
             navigate(`${route}?edit=${encodeURIComponent(entry.id)}`)
           }}>Edit</Button></td></tr>)}</tbody></table></div> : null}
