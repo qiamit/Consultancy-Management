@@ -254,7 +254,10 @@ export function OslSampleRequirementsModuleFields({
   }>({ name: '', address: '', isNumber: '', applicationNo: '' })
   const [extensionBusyId, setExtensionBusyId] = useState<string | null>(null)
   const [mergeBusy, setMergeBusy] = useState(false)
-  const pendingManakTokensRef = useRef<Map<string, string>>(new Map())
+  // Live Extension run per sample row: its return token and when it started.
+  const pendingManakTokensRef = useRef<Map<string, { token: string; startedAt: number }>>(new Map())
+  // Deliveries already taken (by return token, or by row + file for replays).
+  const claimedManakResultsRef = useRef<Set<string>>(new Set())
   const courierSlipInputRef = useRef<HTMLInputElement | null>(null)
   const courierSlipRowIdRef = useRef<string | null>(null)
   const testRequestInputRef = useRef<HTMLInputElement | null>(null)
@@ -290,7 +293,13 @@ export function OslSampleRequirementsModuleFields({
     return () => { cancelled = true }
   }, [draftChargesValue, draftIdForCharges, isCodeId])
 
-  const attachManakPdfToSample = async (result: ManakTrResult) => {
+  /**
+   * The extension hands one Manak PDF over several times: direct inject, bridge
+   * chunks, stored-result replays (page load, focus, timers) and the inbox poll.
+   * Attach once per sample + return token; a delivery outside a live run only
+   * fills a row that has no Test Request yet.
+   */
+  const attachManakPdfToSample = async (result: ManakTrResult, returnToken?: string) => {
     const pid = (projectId ?? '').trim()
     if (!pid) {
       toast.error('Save the BIS project first, then run Extension again.')
@@ -311,16 +320,36 @@ export function OslSampleRequirementsModuleFields({
       return
     }
     const row = current.rows[index]!
-    const binary = Uint8Array.from(atob(result.pdfBase64), (c) => c.charCodeAt(0))
     const pdfName =
       result.pdfName.replace(/[^\w.\-]+/g, '_') ||
       `Test_Request_${result.sample_code || row.id}.pdf`
-    const file = new File([binary], pdfName, { type: 'application/pdf' })
-    const uploaded = await uploadBisProjectFile(pid, file, 'osl-sample-test-request', {
-      displayName: pdfName,
-    })
-    const nextRows = current.rows.map((r, i) =>
-      i === index
+    const pending = pendingManakTokensRef.current.get(row.id)
+    // Poll results name their token; page messages count for the live run unless
+    // the PDF was captured before it started (a replay of an older run).
+    const isLiveRun = Boolean(pending) && (returnToken
+      ? returnToken === pending!.token
+      : !result.filledAt || result.filledAt >= pending!.startedAt)
+    const claimKey = isLiveRun ? `token:${pending!.token}` : `file:${row.id}|${pdfName}`
+    if (claimedManakResultsRef.current.has(claimKey)) return
+    if (!isLiveRun && (row.testRequestFileId || row.testRequestFileName.trim())) return
+    claimedManakResultsRef.current.add(claimKey)
+    let uploaded: Awaited<ReturnType<typeof uploadBisProjectFile>>
+    try {
+      const binary = Uint8Array.from(atob(result.pdfBase64), (c) => c.charCodeAt(0))
+      const file = new File([binary], pdfName, { type: 'application/pdf' })
+      uploaded = await uploadBisProjectFile(pid, file, 'osl-sample-test-request', {
+        displayName: pdfName,
+      })
+    } catch (err) {
+      // Let a later delivery of the same PDF try again.
+      claimedManakResultsRef.current.delete(claimKey)
+      throw err
+    }
+    // A row deleted while the upload ran: nothing to attach to.
+    const latest = valueRef.current
+    if (!latest.rows.some((r) => r.id === row.id)) return
+    const nextRows = latest.rows.map((r) =>
+      r.id === row.id
         ? {
             ...r,
             sampleCode: result.sample_code.trim() || r.sampleCode,
@@ -330,8 +359,7 @@ export function OslSampleRequirementsModuleFields({
           }
         : r,
     )
-    onChangeRef.current({ ...current, rows: nextRows })
-    pendingManakTokensRef.current.delete(row.id)
+    onChangeRef.current({ ...latest, rows: nextRows })
     setExtensionBusyId((prev) => (prev === row.id ? null : prev))
     toast.success(`Test Request PDF attached${result.sample_code ? ` (${result.sample_code})` : ''}`)
   }
@@ -689,7 +717,6 @@ export function OslSampleRequirementsModuleFields({
       return
     }
     const returnToken = newManakReturnToken()
-    pendingManakTokensRef.current.set(row.id, returnToken)
     const buildPayload = (laboratoryOslCode: string) => buildManakTrPayload({
       sampleId: row.id,
       isSearch,
@@ -723,6 +750,8 @@ export function OslSampleRequirementsModuleFields({
     })
     setExtensionBusyId(row.id)
     void (async () => {
+      // Set before the first await, so no delivery can arrive ahead of it.
+      pendingManakTokensRef.current.set(row.id, { token: returnToken, startedAt: Date.now() })
       try {
         const labName = row.laboratoryName.trim() || row.destinationLab.trim()
         const laboratoryOslCode = await findLaboratoryOslCodeByName(labName).catch(() => '')
@@ -748,17 +777,24 @@ export function OslSampleRequirementsModuleFields({
           )
         }
         // Backup poll if postMessage PDF never arrives.
-        void pollManakPdfInbox(returnToken)
+        // Stops once this run's PDF is attached or a newer run replaces it.
+        void pollManakPdfInbox(returnToken, {
+          stopWhen: () =>
+            claimedManakResultsRef.current.has(`token:${returnToken}`) ||
+            pendingManakTokensRef.current.get(row.id)?.token !== returnToken,
+        })
           .then((polled) => {
             if (!polled) return
-            return attachManakPdfToSample({ ...polled, sampleId: polled.sampleId || row.id })
+            return attachManakPdfToSample({ ...polled, sampleId: polled.sampleId || row.id }, returnToken)
           })
           .catch(() => {
             /* ignore poll failures */
           })
       } catch (err) {
         setExtensionBusyId(null)
-        pendingManakTokensRef.current.delete(row.id)
+        if (pendingManakTokensRef.current.get(row.id)?.token === returnToken) {
+          pendingManakTokensRef.current.delete(row.id)
+        }
         toast.error(err instanceof Error ? err.message : 'Failed to start Manak Extension.')
       }
     })()
