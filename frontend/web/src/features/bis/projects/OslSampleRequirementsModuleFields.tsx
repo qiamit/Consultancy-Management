@@ -102,7 +102,10 @@ import {
   type OslSampleRequirementsModulePayload,
 } from './oslSampleRequirementsModel'
 import { formatDisplayDate } from './types'
-import { searchLaboratoryMasterOptions } from '@/features/masters/laboratories/laboratoriesApi'
+import {
+  findLaboratoryOslCodeByName,
+  searchLaboratoryMasterOptions,
+} from '@/features/masters/laboratories/laboratoriesApi'
 
 const thClass =
   'bg-stone-800 text-center text-[10px] font-bold uppercase tracking-[0.12em] text-amber-200'
@@ -687,7 +690,7 @@ export function OslSampleRequirementsModuleFields({
     }
     const returnToken = newManakReturnToken()
     pendingManakTokensRef.current.set(row.id, returnToken)
-    const payload = buildManakTrPayload({
+    const buildPayload = (laboratoryOslCode: string) => buildManakTrPayload({
       sampleId: row.id,
       isSearch,
       isYear: isCodeRevisionYear,
@@ -704,6 +707,8 @@ export function OslSampleRequirementsModuleFields({
         test_required: row.testRequired,
         destination_lab: row.destinationLab,
         laboratory_name: row.laboratoryName,
+        // Manak lists labs by OSL code; the extension picks the lab by this code.
+        laboratory_osl_code: laboratoryOslCode,
         sample_description: row.sampleDescription || row.gradeTypeVariety,
         additional_information: row.additionalInformation,
         grade_type_variety: row.gradeTypeVariety,
@@ -719,6 +724,14 @@ export function OslSampleRequirementsModuleFields({
     setExtensionBusyId(row.id)
     void (async () => {
       try {
+        const labName = row.laboratoryName.trim() || row.destinationLab.trim()
+        const laboratoryOslCode = await findLaboratoryOslCodeByName(labName).catch(() => '')
+        if (labName && !laboratoryOslCode) {
+          toast.message(
+            `No OSL code in Laboratory Master for “${labName}” — the extension will match the lab by name.`,
+          )
+        }
+        const payload = buildPayload(laboratoryOslCode)
         await registerManakPdfInbox(returnToken, row.id)
         const { extensionUsed } = await openManakTestRequestFill({
           payload,
