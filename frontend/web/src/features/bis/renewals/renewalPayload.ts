@@ -43,6 +43,10 @@ export type ManakRenewalPayload = {
 
 const LINK_SECONDS = 60 * 60 * 3
 
+/** Report of Performance → "difficulties experienced in operating the BIS licence" when there were none. */
+export const RENEWAL_DIFFICULTIES_NIL =
+  'Nil. No difficulties were experienced in operating the BIS licence during this period. Production, testing and marking were carried out in accordance with the Indian Standard and the Scheme of Inspection and Testing.'
+
 /** Latest CA certificate attached on the Renewal Sheet, with a link the extension can download for 3 hours. */
 async function caCertificateFile(projectId: string): Promise<ManakRenewalFile | null> {
   const { data, error } = await supabase
@@ -96,7 +100,7 @@ export async function buildManakRenewalPayload(row: BisProjectRow): Promise<Mana
     validityDate: String(row.license_validity_date ?? '').slice(0, 10),
     brand: '',
     returns,
-    difficulties: 'Nil',
+    difficulties: RENEWAL_DIFFICULTIES_NIL,
     files: caCertificate ? [caCertificate] : [],
     copiedAt: new Date().toISOString(),
   }
