@@ -10,7 +10,7 @@ import type { BisPrintDocumentKind } from '../print/printBisDocument'
 import { fetchBisModulePayload, saveBisModulePayload } from './bisModuleDataApi'
 import { BisModuleImportDialog } from './BisModuleImportDialog'
 import type { BisProjectRow } from './types'
-import { RAW_MATERIAL_CONFORMITY_OPTIONS, rawMaterialConformity } from './rawMaterialReferenceModel'
+import { RAW_MATERIAL_CONFORMITY_OPTIONS, isManakRawMaterialConformity } from './rawMaterialReferenceModel'
 import { parseProcessFlowPayload } from './processFlowModel'
 import { EditableRows } from './ManakManagementStep'
 import { DescriptionPointsRows } from './DescriptionPointsRows'
@@ -21,7 +21,7 @@ import { useShowAiButtons } from '@/hooks/useShowAiAssistant'
 import { clientDisplayName, isCodeDisplayLabel, sanitizeBisLicenseScopeNotes } from './types'
 import { importCmpfSpreadsheetRows } from './cmpfSpreadsheetImport'
 import { MANUFACTURING_COMPONENTS_KIND } from './manakModuleKinds'
-import { ManakPanel } from './ManakStepPages'
+import { ManakPanel, ManakWarnings } from './ManakStepPages'
 
 type Rec = Record<string, unknown>
 type Payload = Rec | null | undefined
@@ -127,6 +127,7 @@ export function ManakManufacturingStep({
   const flow = parseProcessFlowPayload(payloads['process-flow-chart'] ?? null)
   const subcontracting = rowsOf(payloads['manufacturing-subcontracting'])
   const hygiene = rowsOf(payloads['hygiene-conditions'])
+  const rawMaterials = rowsOf(payloads['raw-material-reference'], 'rawMaterials')
 
   const savedApplicable = useMemo(() => {
     const raw = payloads[MANUFACTURING_COMPONENTS_KIND]?.applicable
@@ -251,6 +252,19 @@ export function ManakManufacturingStep({
     onChanged()
   }
 
+  // What Manak's Manufacturing step will get: outsourcing = Sub-Contracting applicable; conformity sent as stored.
+  const outsourcing = COMPONENTS.some((c) => c.key === 'subcontracting' && isApplicable(c))
+  const subcontractedProcesses = subcontracting.filter((r) => str(r.process))
+  const badConformity = rawMaterials.filter((r) => str(r.rawMaterial) && !isManakRawMaterialConformity(str(r.bisCertificationMark)))
+  const badConformityValues = Array.from(new Set(badConformity.map((r) => str(r.bisCertificationMark) || 'blank')))
+  const warnings = [
+    outsourcing &&
+      subcontractedProcesses.length === 0 &&
+      'Sub-Contracting of Manufacturing Machinery is "Yes" (Manak: outsourcing), but no sub-contracted process is entered. Add the processes, or set it to "No".',
+    badConformity.length > 0 &&
+      `${badConformity.length} raw material row${badConformity.length === 1 ? ' has' : 's have'} a Conformity of Material Manak does not accept (${badConformityValues.map((v) => `"${v}"`).join(', ')}). Open Raw Material Details, edit ${badConformity.length === 1 ? 'it' : 'them'} and pick one of: ${RAW_MATERIAL_CONFORMITY_OPTIONS.join(', ')}.`,
+  ]
+
   const editComponent = (c: ManufacturingComponent) => () => {
     if (c.editKind) onEdit(c.editKind)
     else setPopup(c)
@@ -271,7 +285,8 @@ export function ManakManufacturingStep({
           { key: 'batchesPackaging', label: 'Batches / Lots & Packaging', options: ['Batch', 'Lot', 'Heat', 'Loose'], width: '9rem' },
         ]}
         blank={() => ({ rawMaterial: '', supplierName: '', bisCertificationMark: 'ISI Marked', testCertificate: 'Yes', batchesPackaging: 'Batch' })}
-        saved={rowsOf(payloads['raw-material-reference'], 'rawMaterials').map((r) => ({ ...r, bisCertificationMark: rawMaterialConformity(str(r.bisCertificationMark)) }))}
+        // Stored values as they are, so an old "With" is flagged instead of looking like ISI Marked (the fill sends what is stored).
+        saved={rawMaterials}
         onChanged={onChanged}
         addLabel="Add raw material"
       />
@@ -413,6 +428,7 @@ export function ManakManufacturingStep({
             </tbody>
           </table>
         </div>
+        <ManakWarnings items={warnings} />
       </ManakPanel>
 
       <Dialog open={popup != null} onOpenChange={(open) => !open && setPopup(null)}>

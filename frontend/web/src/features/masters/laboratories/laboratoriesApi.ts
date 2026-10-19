@@ -68,6 +68,53 @@ export async function searchLaboratoryMasterOptions(
   })
 }
 
+export type LaboratoryOslInfo = { id: string; name: string; oslCode: string; place: string }
+
+const labPlace = (lab: { district?: string | null; state?: string | null }) =>
+  [lab.district, lab.state].map((v) => (v ?? '').trim()).filter(Boolean).join(', ')
+
+/**
+ * Laboratory Master search for Manak's BIS-recognised lab lists. Manak names labs differently (and some names
+ * repeat), so each option shows its OSL code and place, and the term also matches the code or district.
+ */
+export async function searchLaboratoryOslOptions(
+  rawTerm: string,
+): Promise<{ id: string; label: string; secondaryLabel: string }[]> {
+  const term = rawTerm.replace(/[,()"\\*%_]/g, ' ').replace(/\s+/g, ' ').trim()
+  let query = supabase
+    .from('laboratories')
+    .select('id, name, osl_code, district, state')
+    .is('archived_at', null)
+    .order('name', { ascending: true })
+  if (term) query = query.or(['name', 'osl_code', 'district'].map((col) => `${col}.ilike."%${term}%"`).join(','))
+  const { data, error } = await query.limit(30)
+  if (error) throw error
+  return (data ?? []).map((row) => {
+    const lab = row as { id: string; name: string | null; osl_code: string | null; district: string | null; state: string | null }
+    const code = (lab.osl_code ?? '').trim()
+    return {
+      id: String(lab.id),
+      label: (lab.name ?? '').trim() || 'Unnamed Laboratory',
+      secondaryLabel: [code ? `OSL ${code}` : 'No OSL code', labPlace(lab)].filter(Boolean).join(' · '),
+    }
+  })
+}
+
+/** OSL code and place for Laboratory Master entries (archived ones included, so saved rows still resolve). */
+export async function fetchLaboratoryOslInfo(ids: string[]): Promise<Map<string, LaboratoryOslInfo>> {
+  const unique = Array.from(new Set(ids.map((id) => id.trim()).filter(Boolean)))
+  if (unique.length === 0) return new Map()
+  const { data, error } = await supabase.from('laboratories').select('id, name, osl_code, district, state').in('id', unique)
+  if (error) throw error
+  return new Map(
+    (data ?? []).map((row) => {
+      const lab = row as { id: string; name: string | null; osl_code: string | null; district: string | null; state: string | null }
+      const info = { id: String(lab.id), name: (lab.name ?? '').trim(), oslCode: (lab.osl_code ?? '').trim(), place: labPlace(lab) }
+      return [info.id, info] as const
+    }),
+  )
+}
+
 export function normalizeLabType(value: string): LabType {
   const key = value.trim().toLowerCase()
   if (key === 'bis' || key === 'bis lab') return 'BIS'

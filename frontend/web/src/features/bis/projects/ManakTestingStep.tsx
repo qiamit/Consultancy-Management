@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { printKindToStorageDocKind, type BisPrintDocumentKind } from '../print/printBisDocument'
 import { fetchBisModulePayload, saveBisModulePayload } from './bisModuleDataApi'
@@ -9,13 +9,73 @@ import { TESTING_COMPONENTS_KIND } from './manakModuleKinds'
 import { SharedProjectFileButton } from './RowFileAttachment'
 import { ProjectFilesUploadCell } from './ProjectFilesUploadCell'
 import { CMPF306_EXCEL_COLUMNS } from './cmpf306Model'
-import { searchLaboratoryMasterOptions } from '@/features/masters/laboratories/laboratoriesApi'
+import {
+  fetchLaboratoryOslInfo,
+  searchLaboratoryOslOptions,
+  type LaboratoryOslInfo,
+} from '@/features/masters/laboratories/laboratoriesApi'
+import { ManakWarnings } from './ManakStepPages'
 import type { BisProjectRow } from './types'
 
 type Rec = Record<string, unknown>
 type Payload = Rec | null | undefined
 
+const str = (v: unknown) => (typeof v === 'string' ? v.trim() : v == null ? '' : String(v).trim())
 const rowsOf = (p: Payload, key = 'rows'): Rec[] => (Array.isArray(p?.[key]) ? (p?.[key] as Rec[]) : [])
+
+/** Laboratory Master OSL codes for the given lab ids; null until loaded. */
+function useLabOslInfo(ids: string[]): Map<string, LaboratoryOslInfo> | null {
+  const key = Array.from(new Set(ids.filter(Boolean))).sort().join(',')
+  const [loaded, setLoaded] = useState<{ key: string; map: Map<string, LaboratoryOslInfo> } | null>(null)
+  useEffect(() => {
+    if (!key) return
+    let cancelled = false
+    void fetchLaboratoryOslInfo(key.split(','))
+      .then((map) => !cancelled && setLoaded({ key, map }))
+      .catch(() => !cancelled && setLoaded({ key, map: new Map() }))
+    return () => {
+      cancelled = true
+    }
+  }, [key])
+  if (!key) return new Map()
+  return loaded?.key === key ? loaded.map : null
+}
+
+/** Why Manak's lab drop-down cannot be matched for this row (it is matched on the OSL code), or null. */
+function labCodeProblem(row: Rec, labs: Map<string, LaboratoryOslInfo> | null): { label: string; detail: string } | null {
+  const id = str(row.laboratoryId)
+  if (!id) return str(row.laboratoryName) ? { label: 'Not from master', detail: 'Typed in — pick the lab from the Laboratory Master' } : null
+  if (!labs) return null
+  const lab = labs.get(id)
+  if (!lab) return { label: 'Not in master', detail: 'This lab is no longer in the Laboratory Master — pick it again' }
+  return lab.oslCode ? null : { label: 'No OSL code', detail: 'Add this lab’s OSL code in the Laboratory Master' }
+}
+
+/** OSL code of the row's lab (Manak's lab list is matched on it), or what is missing. */
+function LabOslCode({ row, labs }: { row: Rec; labs: Map<string, LaboratoryOslInfo> | null }) {
+  const lab = labs?.get(str(row.laboratoryId))
+  const problem = labCodeProblem(row, labs)
+  if (problem) {
+    return (
+      <span className="whitespace-nowrap text-xs font-medium text-amber-800" title={problem.detail}>
+        {problem.label}
+      </span>
+    )
+  }
+  if (!lab) return <span className="text-stone-400">{str(row.laboratoryId) ? '…' : '—'}</span>
+  return (
+    <span className="whitespace-nowrap" title={lab.place || undefined}>
+      <span className="font-mono text-sm font-semibold text-amber-900">{lab.oslCode}</span>
+      {lab.place ? <span className="block text-[11px] text-stone-500">{lab.place}</span> : null}
+    </span>
+  )
+}
+
+/** Same cell for the input row, whose lab is picked before the row is saved. */
+function DraftLabOslCode({ row }: { row: Rec }) {
+  const labs = useLabOslInfo([str(row.laboratoryId)])
+  return <LabOslCode row={row} labs={labs} />
+}
 
 /** Step 5 — Testing and Inspection, laid out like Manak: in-house facility, then the component table. */
 export function ManakTestingStep({
@@ -50,6 +110,19 @@ export function ManakTestingStep({
       toast.error(err instanceof Error ? err.message : 'Could not save')
     }
   }
+
+  const subRows = rowsOf(payloads['subcontracted-tests']).filter((r) => str(r.testName) || str(r.clauseNo))
+  const labs = useLabOslInfo(subRows.map((r) => str(r.laboratoryId)))
+  const unmatchedLabs = subRows.filter((r) => labCodeProblem(r, labs))
+  const warnings =
+    inHouse === 'No'
+      ? [
+          subRows.length === 0 &&
+            'In-house testing facility is "No", but no test to be sub-contracted is entered. Add the tests with their BIS-recognised lab, or set it to "Yes".',
+          unmatchedLabs.length > 0 &&
+            `${unmatchedLabs.length} sub-contracted test${unmatchedLabs.length === 1 ? ' has a lab' : 's have labs'} without an OSL code. Manak's lab list is matched on the OSL code: pick the lab from the Laboratory Master, and add its OSL code there if it is missing.`,
+        ]
+      : []
 
   const equipment: StepComponent = {
     key: 'equipment',
@@ -112,10 +185,16 @@ export function ManakTestingStep({
               key: 'laboratoryName',
               label: 'Name of Lab (BIS Recognised / Empanelled)',
               alignLeft: true,
-              lookup: { search: searchLaboratoryMasterOptions, idKey: 'laboratoryId', placeholder: 'Search Laboratory Master' },
+              lookup: { search: searchLaboratoryOslOptions, idKey: 'laboratoryId', placeholder: 'Search lab name, OSL code or district' },
             },
           ]}
           extraColumns={[
+            {
+              label: 'OSL Code',
+              compact: true,
+              render: (r) => <LabOslCode row={r} labs={labs} />,
+              renderDraft: (draft) => <DraftLabOslCode row={draft} />,
+            },
             // The consent letter is the one uploaded with the SIT on Step 1 (same file, shown in both places).
             {
               label: 'Consent Letter',
@@ -160,6 +239,7 @@ export function ManakTestingStep({
       onEdit={onEdit}
       renderDocActions={renderDocActions}
       selection={selection}
+      after={<ManakWarnings items={warnings} />}
     />
   )
 }

@@ -12,6 +12,7 @@ import {
   emptyRawMaterialSupplierRow,
   parseRawMaterialReferencePayload,
   RAW_MATERIAL_CONFORMITY_OPTIONS,
+  isManakRawMaterialConformity,
   type RawMaterialReferencePayload,
 } from './rawMaterialReferenceModel'
 import { BisModuleImportDialog } from './BisModuleImportDialog'
@@ -141,7 +142,8 @@ export function RawMaterialReferenceModuleFields({
               <TableCell className="text-center text-xs">{index + 1}</TableCell>
               <TableCell><Input aria-label={`Raw material ${index + 1}`} className={inputClass} value={row.rawMaterial} onChange={(e) => updateRawMaterial(index, 'rawMaterial', e.target.value)} disabled={disabled} /></TableCell>
               <TableCell><Input aria-label={`Supplier ${index + 1}`} className={inputClass} value={row.supplierName} onChange={(e) => updateRawMaterial(index, 'supplierName', e.target.value)} disabled={disabled} /></TableCell>
-              <TableCell><select aria-label={`Conformity of material ${index + 1}`} className={selectClass} value={row.bisCertificationMark} onChange={(e) => updateRawMaterial(index, 'bisCertificationMark', e.target.value)} disabled={disabled}>{(RAW_MATERIAL_CONFORMITY_OPTIONS.includes(row.bisCertificationMark) || !row.bisCertificationMark ? RAW_MATERIAL_CONFORMITY_OPTIONS : [row.bisCertificationMark, ...RAW_MATERIAL_CONFORMITY_OPTIONS]).map((o) => <option key={o} value={o}>{o}</option>)}</select></TableCell>
+              <TableCell>{/* Only Manak's five choices can be picked; an old value stays visible (flagged) until it is changed. */}
+              <select aria-label={`Conformity of material ${index + 1}`} className={cn(selectClass, row.bisCertificationMark && !isManakRawMaterialConformity(row.bisCertificationMark) && 'border-red-500 bg-red-50 text-red-800')} title={row.bisCertificationMark && !isManakRawMaterialConformity(row.bisCertificationMark) ? 'Not a Manak choice — pick one of the five' : undefined} value={row.bisCertificationMark} onChange={(e) => updateRawMaterial(index, 'bisCertificationMark', e.target.value)} disabled={disabled}>{row.bisCertificationMark && !isManakRawMaterialConformity(row.bisCertificationMark) ? <option value={row.bisCertificationMark} disabled>{row.bisCertificationMark} (not a Manak choice)</option> : null}{RAW_MATERIAL_CONFORMITY_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}</select></TableCell>
               <TableCell><select aria-label={`Record maintained ${index + 1}`} className={selectClass} value={row.testCertificate} onChange={(e) => updateRawMaterial(index, 'testCertificate', e.target.value)} disabled={disabled}><option value="Yes">Yes</option><option value="No">No</option></select></TableCell>
               <TableCell><select aria-label={`Batch and packaging ${index + 1}`} className={selectClass} value={row.batchesPackaging} onChange={(e) => updateRawMaterial(index, 'batchesPackaging', e.target.value)} disabled={disabled}><option value="Batch">Batch</option><option value="Lot">Lot</option><option value="Heat">Heat</option><option value="Loose">Loose</option></select></TableCell>
               <TableCell><div className="flex items-center justify-center gap-1">

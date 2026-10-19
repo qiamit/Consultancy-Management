@@ -19,6 +19,7 @@ import { MasterOptionFieldWithAdd } from './MasterOptionFieldWithAdd'
 import type { BisMasterOptionCategory } from './bisMasterOptions'
 import { ManakPanel, ManakSubPanel } from './ManakStepPages'
 import { CORRESPONDENCE_KIND } from './manakModuleKinds'
+import { manakEmailError } from './manakChecks'
 import { RemoteLookupCombobox } from '@/features/bis/shared/RemoteLookupCombobox'
 import { LimsDatePicker } from '@/components/lims/LimsDatePicker'
 import { FilterCombobox } from '@/features/sample-handling/receiving/FilterCombobox'
@@ -164,6 +165,8 @@ export type Field = {
   optional?: boolean
   /** Digits only, exactly this many when filled in. */
   digits?: number
+  /** Email address checked the way Manak does: shown inline, and Add / Save are refused while it is invalid. */
+  email?: boolean
   /** Select-or-add drop-down backed by a shared master list (the + button adds to it). */
   master?: BisMasterOptionCategory
   /** Fixed drop-down choices. */
@@ -177,7 +180,11 @@ export type Field = {
   /** Free text with a suggestions drop-down (any other value can still be typed). */
   suggestions?: string[]
   /** Type-to-search drop-down backed by a master (the selected record's id is kept in idKey). */
-  lookup?: { search: (term: string) => Promise<Array<{ id: string; label: string }>>; idKey: string; placeholder?: string }
+  lookup?: {
+    search: (term: string) => Promise<Array<{ id: string; label: string; secondaryLabel?: string }>>
+    idKey: string
+    placeholder?: string
+  }
 }
 
 /** Free-text cell with suggestions filtered as you type. */
@@ -284,7 +291,8 @@ function MultiOptionSelect({ field, value, onChange }: { field: Field; value: st
 /** Fixed-choice drop-down styled like the other step controls. */
 function OptionSelect({ field, value, onChange }: { field: Field; value: string; onChange: (v: string) => void }) {
   return (
-    <Select value={value || undefined} onValueChange={onChange}>
+    // A value outside the choices (old data) shows the "Select" placeholder rather than a blank box.
+    <Select value={field.options?.includes(value) ? value : ''} onValueChange={onChange}>
       <SelectTrigger className="mx-auto h-8 w-full min-w-[6rem] rounded-none border-stone-400 bg-white text-sm" aria-label={field.label}>
         <SelectValue placeholder="Select" />
       </SelectTrigger>
@@ -300,13 +308,26 @@ function OptionSelect({ field, value, onChange }: { field: Field; value: string;
 }
 
 const cleanField = (f: Field, value: string) => (f.digits ? value.replace(/[^0-9]/g, '').slice(0, f.digits) : value)
+/** Problem shown under the cell itself (saved rows included). */
+const inlineError = (f: Field, value: string): string | null => {
+  if (f.email) return manakEmailError(value)
+  // A fixed drop-down holding an old or typed-in value: the drop-down cannot show it and Manak will not accept it.
+  if (f.options && value.trim() && !f.options.includes(value.trim())) return `"${value.trim()}" is not one of the choices — edit the row and pick one.`
+  return null
+}
 const fieldError = (fields: Field[], values: Rec): string | null => {
   for (const f of fields) {
     const v = str(values[f.key]).trim()
     if (f.digits && v && v.length !== f.digits) return `${f.label} must be ${f.digits} digits.`
+    if (inlineError(f, v)) return `${f.label}: ${inlineError(f, v)}`
   }
   return null
 }
+
+function InlineError({ message }: { message: string | null }) {
+  return message ? <p className="mt-0.5 text-left text-[11px] font-medium leading-tight text-red-700">{message}</p> : null
+}
+const invalidInputCls = 'border-red-500 bg-red-50/60 focus-visible:ring-red-500/30'
 
 /**
  * Manak-style editable table: an input row on top with "+", then saved rows
@@ -346,6 +367,13 @@ export function EditableRows({
   const [editDraft, setEditDraft] = useState<Rec>({})
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [busy, setBusy] = useState(false)
+  // Inline errors wait until the user leaves the cell, so a half-typed value is not flagged.
+  const [focusedCell, setFocusedCell] = useState<string | null>(null)
+  const cellFocus = (cellId: string) => ({
+    onFocus: () => setFocusedCell(cellId),
+    onBlur: () => setFocusedCell((c) => (c === cellId ? null : c)),
+  })
+  const typingError = (f: Field, cellId: string, value: string) => (focusedCell === cellId ? null : inlineError(f, value))
   const listOf = (p: Rec): Rec[] => (Array.isArray(p[rowsKey]) ? (p[rowsKey] as Rec[]) : [])
   // A row counts once its first (required) column is filled; defaulted drop-downs alone do not.
   const isFilled = (r: Rec) => Boolean(fields[0] && str(r[fields[0].key]).trim())
@@ -508,18 +536,29 @@ export function EditableRows({
                       placeholder="Select or Add"
                     />
                   ) : (
-                  <Input
-                    className={inputCls}
-                    type={f.type}
-                    placeholder={f.placeholder ?? f.label}
-                    value={str(draft[f.key])}
-                    onChange={(e) => setDraft({ ...draft, [f.key]: cleanField(f, e.target.value) })}
-                    inputMode={f.digits ? 'numeric' : undefined}
-                    maxLength={f.digits}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') add()
-                    }}
-                  />
+                  (() => {
+                    const cellId = `new:${f.key}`
+                    const err = typingError(f, cellId, str(draft[f.key]))
+                    return (
+                      <>
+                        <Input
+                          className={cn(inputCls, err && invalidInputCls)}
+                          type={f.type ?? (f.email ? 'email' : undefined)}
+                          placeholder={f.placeholder ?? f.label}
+                          value={str(draft[f.key])}
+                          onChange={(e) => setDraft({ ...draft, [f.key]: cleanField(f, e.target.value) })}
+                          inputMode={f.digits ? 'numeric' : f.email ? 'email' : undefined}
+                          maxLength={f.digits}
+                          aria-invalid={err ? true : undefined}
+                          {...cellFocus(cellId)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') add()
+                          }}
+                        />
+                        <InlineError message={err} />
+                      </>
+                    )
+                  })()
                   )}
                 </td>
               ))}
@@ -567,7 +606,10 @@ export function EditableRows({
                         {editing && f.options && f.multiple ? (
                           <MultiOptionSelect field={f} value={str(editDraft[f.key])} onChange={(v) => setEditDraft((d) => ({ ...d, [f.key]: v }))} />
                         ) : editing && f.options ? (
-                          <OptionSelect field={f} value={str(editDraft[f.key])} onChange={(v) => setEditDraft((d) => ({ ...d, [f.key]: v }))} />
+                          <>
+                            <OptionSelect field={f} value={str(editDraft[f.key])} onChange={(v) => setEditDraft((d) => ({ ...d, [f.key]: v }))} />
+                            <InlineError message={inlineError(f, str(editDraft[f.key]))} />
+                          </>
                         ) : editing && f.suggestions ? (
                           <SuggestCell field={f} id={`er-${kind}-${f.key}-${index}`} value={str(editDraft[f.key])} onChange={(v) => setEditDraft((d) => ({ ...d, [f.key]: v }))} />
                         ) : editing && f.type === 'date' ? (
@@ -587,14 +629,30 @@ export function EditableRows({
                             placeholder="Select or Add"
                           />
                         ) : editing ? (
-                          <Input
-                            className={inputCls}
-                            type={f.type}
-                            value={str(editDraft[f.key])}
-                            onChange={(e) => setEditDraft({ ...editDraft, [f.key]: cleanField(f, e.target.value) })}
-                            inputMode={f.digits ? 'numeric' : undefined}
-                            maxLength={f.digits}
-                          />
+                          (() => {
+                            const cellId = `${index}:${f.key}`
+                            const err = typingError(f, cellId, str(editDraft[f.key]))
+                            return (
+                              <>
+                                <Input
+                                  className={cn(inputCls, err && invalidInputCls)}
+                                  type={f.type ?? (f.email ? 'email' : undefined)}
+                                  value={str(editDraft[f.key])}
+                                  onChange={(e) => setEditDraft({ ...editDraft, [f.key]: cleanField(f, e.target.value) })}
+                                  inputMode={f.digits ? 'numeric' : f.email ? 'email' : undefined}
+                                  maxLength={f.digits}
+                                  aria-invalid={err ? true : undefined}
+                                  {...cellFocus(cellId)}
+                                />
+                                <InlineError message={err} />
+                              </>
+                            )
+                          })()
+                        ) : inlineError(f, str(r[f.key])) ? (
+                          <>
+                            <span className="font-medium text-red-700">{str(r[f.key])}</span>
+                            <InlineError message={inlineError(f, str(r[f.key]))} />
+                          </>
                         ) : (
                           (f.type === 'date' && str(r[f.key]) ? formatDisplayDate(str(r[f.key])) : str(r[f.key])) || <span className="text-stone-400">—</span>
                         )}
@@ -688,9 +746,15 @@ export function ManakManagementStep({
   )
   const [corr, setCorr] = useState(initial)
   const [corrBusy, setCorrBusy] = useState(false)
+  const [corrEmailFocused, setCorrEmailFocused] = useState(false)
   useEffect(() => setCorr(initial), [initial])
+  const corrEmailError = manakEmailError(corr.email)
 
   const saveCorr = async () => {
+    if (corrEmailError) {
+      toast.error(`Correspondence E-Mail Id: ${corrEmailError}`)
+      return
+    }
     setCorrBusy(true)
     try {
       await saveBisModulePayload(projectId, CORRESPONDENCE_KIND, { ...corr })
@@ -735,7 +799,7 @@ export function ManakManagementStep({
               { key: 'personName', label: 'Name', alignLeft: true },
               { key: 'designation', label: 'Designation' },
               { key: 'mobile', label: 'Contact No.', width: '9rem' },
-              { key: 'email', label: 'Email ID', width: '17rem' },
+              { key: 'email', label: 'Email ID', width: '17rem', email: true },
               { key: 'din', label: 'DIN', placeholder: '8 Digit DIN', optional: true, digits: 8, width: '7.5rem' },
             ]}
             extraColumns={[
@@ -779,6 +843,7 @@ export function ManakManagementStep({
             const field = (key: 'name' | 'designation' | 'email' | 'mobile') => (
               <Input className={inputCls} value={corr[key]} onChange={(e) => setCorr({ ...corr, [key]: e.target.value })} />
             )
+            const emailErr = corrEmailFocused ? null : corrEmailError
             const thC = 'whitespace-nowrap border border-[#e7e0d4] bg-[#f7f3eb] px-3 py-1.5 text-left align-middle font-bold text-stone-800'
             const tdC = 'border border-[#e7e0d4] px-2 py-1 align-middle text-stone-700'
             return (
@@ -817,7 +882,19 @@ export function ManakManagementStep({
                       <th scope="row" className={thC}>Name of Contact Person*:</th>
                       <td className={tdC} colSpan={2}>{field('name')}</td>
                       <th scope="row" className={thC}>E-Mail Id*:</th>
-                      <td className={tdC} colSpan={2}>{field('email')}</td>
+                      <td className={tdC} colSpan={2}>
+                        <Input
+                          className={cn(inputCls, emailErr && invalidInputCls)}
+                          type="email"
+                          inputMode="email"
+                          value={corr.email}
+                          aria-invalid={emailErr ? true : undefined}
+                          onFocus={() => setCorrEmailFocused(true)}
+                          onBlur={() => setCorrEmailFocused(false)}
+                          onChange={(e) => setCorr({ ...corr, email: e.target.value })}
+                        />
+                        <InlineError message={emailErr} />
+                      </td>
                     </tr>
                   </tbody>
                 </table>

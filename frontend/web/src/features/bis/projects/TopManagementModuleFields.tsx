@@ -22,6 +22,7 @@ import {
   uploadBisProjectFile,
 } from './bisProjectFilesApi'
 import { removeSignatureImageBackground } from './removeSignatureBackground'
+import { manakEmailError } from './manakChecks'
 
 const SIGNATURE_DOC_KIND = 'top-management-signature'
 const AUTHORIZED_SIGNATURE_DOC_KIND = 'top-management-authorized-signature'
@@ -87,6 +88,11 @@ const cellInputClass = cn(limsFieldClass, 'h-8 min-w-0 text-xs sm:text-sm')
 const mobileInputClass = cn(cellInputClass, 'px-2 text-center tabular-nums tracking-wide')
 /** Slightly tighter horizontal padding so longer emails fit the column. */
 const emailInputClass = cn(cellInputClass, 'px-2 text-left')
+/** Red outline + tooltip for an email Manak will not accept. */
+const emailCheck = (email: string) => {
+  const error = manakEmailError(email)
+  return error ? { className: 'border-red-500 bg-red-50/60', title: error, 'aria-invalid': true as const } : null
+}
 const cardFieldLabelClass =
   'mb-1 text-[10px] font-bold uppercase tracking-wide text-stone-500'
 
@@ -746,18 +752,19 @@ export function TopManagementModuleFields({
                     <p className={cardFieldLabelClass}>Email</p>
                     {canEditFields ? (
                       <Input
-                        className={emailInputClass}
+                        className={cn(emailInputClass, emailCheck(row.email)?.className)}
                         value={row.email}
                         disabled={disabled}
                         placeholder="Email"
                         inputMode="email"
-                        title={row.email.trim() || undefined}
+                        title={emailCheck(row.email)?.title ?? (row.email.trim() || undefined)}
+                        aria-invalid={emailCheck(row.email)?.['aria-invalid']}
                         onChange={(e) => setRow(index, 'email', e.target.value)}
                       />
                     ) : (
                       <p
-                        className="truncate text-left text-sm text-[#292524]"
-                        title={row.email.trim() || undefined}
+                        className={cn('truncate text-left text-sm text-[#292524]', emailCheck(row.email) && 'font-medium text-red-700')}
+                        title={emailCheck(row.email)?.title ?? (row.email.trim() || undefined)}
                       >
                         {row.email.trim() || '—'}
                       </p>
@@ -915,18 +922,19 @@ export function TopManagementModuleFields({
                   <TableCell className={cn(tdClass, 'text-center')}>
                     {canEditFields ? (
                       <Input
-                        className={cn(emailInputClass, 'text-center')}
+                        className={cn(emailInputClass, 'text-center', emailCheck(row.email)?.className)}
                         value={row.email}
                         disabled={disabled}
                         placeholder="Email"
                         inputMode="email"
-                        title={row.email.trim() || undefined}
+                        title={emailCheck(row.email)?.title ?? (row.email.trim() || undefined)}
+                        aria-invalid={emailCheck(row.email)?.['aria-invalid']}
                         onChange={(e) => setRow(index, 'email', e.target.value)}
                       />
                     ) : (
                       <p
-                        className="truncate text-center text-sm text-[#292524]"
-                        title={row.email.trim() || undefined}
+                        className={cn('truncate text-center text-sm text-[#292524]', emailCheck(row.email) && 'font-medium text-red-700')}
+                        title={emailCheck(row.email)?.title ?? (row.email.trim() || undefined)}
                       >
                         {row.email.trim() || '—'}
                       </p>
@@ -1032,11 +1040,13 @@ export function TopManagementModuleFields({
             <div>
               <p className={cardFieldLabelClass}>Email ID</p>
               <Input
-                className={emailInputClass}
+                className={cn(emailInputClass, emailCheck(value.authorizedSignatoryEmail)?.className)}
                 value={value.authorizedSignatoryEmail}
                 disabled={disabled}
                 placeholder="Email"
                 inputMode="email"
+                title={emailCheck(value.authorizedSignatoryEmail)?.title}
+                aria-invalid={emailCheck(value.authorizedSignatoryEmail)?.['aria-invalid']}
                 onChange={(e) =>
                   onChange({ ...value, authorizedSignatoryEmail: e.target.value })
                 }
