@@ -13,6 +13,7 @@ import {
   Bot,
   Shield,
   Globe,
+  Mail,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -90,10 +91,12 @@ const DIRECTOR_ONLY_PROFILE_PATHS = new Set([
   '/settings/users',
   '/settings/module-access',
   '/settings/ai',
+  '/settings/email-log',
 ])
 
 function profileMenuIcon(item: NavItem): ElementType {
   if (item.to === '/settings/ai') return Bot
+  if (item.to === '/settings/email-log') return Mail
   if (item.to === '/settings/module-access') return Shield
   if (item.to === '/tools/cms') return Globe
   return item.icon

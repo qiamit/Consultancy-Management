@@ -8,6 +8,7 @@ import PublicSiteLayout from '@/features/public-site/PublicSiteLayout'
 import PublicHomePage from '@/features/public-site/PublicHomePage'
 import {
   AiSettingsRoute,
+  EmailLogRoute,
   AuthenticatedShell,
   BisLicenseRenewalsRoute,
   BisNewApplicationsRoute,
@@ -116,6 +117,7 @@ export default function App() {
           <Route path="/settings/users" element={<UserManagementRoute />} />
           <Route path="/settings/module-access" element={<ModuleAccessRoute />} />
           <Route path="/settings/ai" element={<AiSettingsRoute />} />
+          <Route path="/settings/email-log" element={<EmailLogRoute />} />
           <Route path="/help" element={<HelpRoute />} />
           <Route path="/contact" element={<ContactUsRoute />} />
         </Route>

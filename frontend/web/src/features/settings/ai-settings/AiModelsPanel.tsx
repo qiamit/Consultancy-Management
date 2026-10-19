@@ -27,7 +27,7 @@ import {
   limsRegistryFormClass,
 } from '@/lib/limsThemeUi'
 import { AiSettingsFooterBar } from './AiSettingsFooterBar'
-import { deleteAiModel, fetchAiModels, upsertAiModel } from './aiSettingsApi'
+import { deleteAiModel, fetchAiModels, revealAiModelKey, upsertAiModel } from './aiSettingsApi'
 import {
   AI_PROVIDERS,
   AI_PROVIDER_MODEL_HINTS,
@@ -75,6 +75,9 @@ export const AiModelsPanel = forwardRef<AiModelsPanelHandle, AiModelsPanelProps>
   const [form, setForm] = useState<AiModelForm>(emptyAiModelForm)
   const [saving, setSaving] = useState(false)
   const [hadExistingKey, setHadExistingKey] = useState(false)
+  const [revealedKey, setRevealedKey] = useState('')
+  const [revealBusy, setRevealBusy] = useState(false)
+  const [revealError, setRevealError] = useState('')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [jumpTo, setJumpTo] = useState('')
@@ -100,6 +103,8 @@ export const AiModelsPanel = forwardRef<AiModelsPanelHandle, AiModelsPanelProps>
   const openCreate = useCallback(() => {
     setEditId(null)
     setHadExistingKey(false)
+    setRevealedKey('')
+    setRevealError('')
     setForm(emptyAiModelForm())
     setDialogOpen(true)
   }, [])
@@ -108,7 +113,9 @@ export const AiModelsPanel = forwardRef<AiModelsPanelHandle, AiModelsPanelProps>
 
   const openEdit = (row: AiModelRow) => {
     setEditId(row.id)
-    setHadExistingKey(Boolean(row.api_key?.trim()))
+    setHadExistingKey(Boolean(row.api_key_set || row.api_key?.trim()))
+    setRevealedKey('')
+    setRevealError('')
     setForm({
       provider: row.provider as AiProvider,
       modelId: row.model_id,
@@ -331,7 +338,7 @@ export const AiModelsPanel = forwardRef<AiModelsPanelHandle, AiModelsPanelProps>
                       </TableCell>
                       <TableCell className="text-center text-sm capitalize align-middle">{r.provider}</TableCell>
                       <TableCell className="text-center text-xs text-muted-foreground align-middle">{r.model_id}</TableCell>
-                      <TableCell className="text-center text-xs font-mono align-middle">{maskApiKey(r.api_key)}</TableCell>
+                      <TableCell className="text-center text-xs font-mono align-middle">{r.api_key_set ? 'Key set ✓' : r.api_key ? maskApiKey(r.api_key) : '—'}</TableCell>
                       <TableCell className="text-center align-middle">
                         <span
                           className={cn(
@@ -511,6 +518,34 @@ export const AiModelsPanel = forwardRef<AiModelsPanelHandle, AiModelsPanelProps>
                   onChange={(e) => setForm((p) => ({ ...p, apiKey: e.target.value }))}
                   placeholder={editId && hadExistingKey ? 'Leave blank to keep existing key' : 'Enter API Key'}
                 />
+                {editId && hadExistingKey ? (
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-stone-700">
+                    <button
+                      type="button"
+                      className="underline underline-offset-2 hover:text-amber-800 disabled:opacity-50"
+                      disabled={revealBusy}
+                      onClick={() => {
+                        if (revealedKey) {
+                          setRevealedKey('')
+    setRevealError('')
+                          return
+                        }
+                        setRevealBusy(true)
+                        setRevealError('')
+                        void revealAiModelKey(editId)
+                          .then((key) => setRevealedKey(key || '(no key saved)'))
+                          .catch((err: unknown) =>
+                            setRevealError(err instanceof Error ? err.message : 'Could not show the saved key'),
+                          )
+                          .finally(() => setRevealBusy(false))
+                      }}
+                    >
+                      {revealedKey ? 'Hide saved key' : 'Show saved key (admin, logged)'}
+                    </button>
+                    {revealedKey ? <span className="break-all font-mono">{revealedKey}</span> : null}
+                    {revealError ? <span className="text-destructive">{revealError}</span> : null}
+                  </div>
+                ) : null}
               </div>
             </div>
             <div className="flex flex-wrap gap-4 pt-1">

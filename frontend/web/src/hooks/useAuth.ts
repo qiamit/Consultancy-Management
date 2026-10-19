@@ -165,15 +165,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let canceled = false
 
     const meta = user.user_metadata as Record<string, unknown>
-    const metaDes = typeof meta?.designation === 'string' ? meta.designation.trim() : ''
-    const metaDeptRaw =
-      typeof meta?.department_name === 'string'
-        ? meta.department_name
-        : typeof meta?.department === 'string'
-          ? meta.department
-          : ''
-    const metaDept = metaDeptRaw.trim()
-    const metaDivision = typeof meta?.division === 'string' ? meta.division.trim() : ''
     const metaName = typeof meta?.full_name === 'string' ? meta.full_name.trim() : ''
 
     const applyFromProfile = (
@@ -185,12 +176,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (canceled) return
       profileUserIdRef.current = userId
       setDesignation(profileDes)
-      setDepartmentName(profileDept || metaDept)
-      setDivision(profileDivision || metaDivision)
+      setDepartmentName(profileDept)
+      setDivision(profileDivision)
       setProfileName(profileNameVal || metaName || user?.email || '')
       setProfileReady(true)
-      const dept = profileDept || metaDept
-      const div = profileDivision || metaDivision
+      const dept = profileDept
+      const div = profileDivision
       if (profileDes) {
         try { localStorage.setItem('userDesignation', profileDes) } catch { /* ignore */ }
       }
@@ -202,31 +193,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    const cachedDesignation = (() => {
-      try {
-        return localStorage.getItem('userDesignation')
-      } catch {
-        return null
-      }
-    })()
-
-    const cachedDepartment = (() => {
-      try {
-        return localStorage.getItem('userDepartment')
-      } catch {
-        return null
-      }
-    })()
-
-    const cachedDivision = (() => {
-      try {
-        return localStorage.getItem('userDivision')
-      } catch {
-        return null
-      }
-    })()
-
-    const fetchProfile = async () => {
+    // Designation, department and division decide Module Access rules, so they come only
+    // from user_profiles. A failed fetch grants nothing (Batch D L2) and is retried; the
+    // localStorage copy and user_metadata (which a user can change) are never trusted.
+    const fetchProfile = async (attempt = 0): Promise<void> => {
       const { data, error } = await supabase
         .from('user_profiles')
         .select('designation, department_name, division, full_name, status, role, must_change_password')
@@ -236,12 +206,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (canceled) return
       if (error) {
         setRole('')
-        applyFromProfile(
-          String(cachedDesignation ?? ''),
-          metaDept || String(cachedDepartment ?? ''),
-          metaDivision || String(cachedDivision ?? ''),
-          metaName || user.email || '',
-        )
+        applyFromProfile('', '', '', metaName || user.email || '')
+        if (attempt < 3) {
+          window.setTimeout(() => {
+            if (!canceled) void fetchProfile(attempt + 1)
+          }, 1000 * 3 ** attempt)
+        }
         return
       }
 
@@ -271,15 +241,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         typeof row?.department_name === 'string' ? row.department_name.trim() : ''
       const profileDivision = typeof row?.division === 'string' ? row.division.trim() : ''
       const profileFullName = typeof row?.full_name === 'string' ? row.full_name.trim() : ''
-      const finalDes = profileDes || String(cachedDesignation ?? '')
-      const finalDept = profileDept || metaDept || String(cachedDepartment ?? '')
-      const finalDivision = profileDivision || metaDivision || String(cachedDivision ?? '')
       setRole(normalizeAuthRole(row?.role))
       setMustChangePassword(row?.must_change_password === true)
       applyFromProfile(
-        finalDes,
-        finalDept,
-        finalDivision,
+        profileDes,
+        profileDept,
+        profileDivision,
         profileFullName || metaName || user.email || '',
       )
     }

@@ -18,18 +18,32 @@ import { SetPasswordDialog } from './SetPasswordDialog'
 import { createTeamUser, deleteTeamUser } from './userFunctionsApi'
 import type { AccessRole, UserAccount, UserForm } from './types'
 
-async function syncUserOptionsToLabMaster(users: UserAccount[]) {
-  for (const u of users) {
-    if (u.designation.trim()) {
-      await ensureLabMasterOptionByLabel('designation', u.designation)
-    }
-    if (u.departmentName.trim()) {
-      await ensureLabMasterOptionByLabel('department', u.departmentName)
-    }
-    if (u.division.trim()) {
-      await ensureLabMasterOptionByLabel('division', u.division)
-    }
+/**
+ * Adds user designations / departments / divisions that are missing from lab_master_options.
+ * Reads the options once per load and writes only missing labels (it used to query three
+ * times per user on every load). Returns true when it inserted anything.
+ */
+async function syncUserOptionsToLabMaster(users: UserAccount[]): Promise<boolean> {
+  const grouped = await fetchLabMasterOptionsGrouped()
+  const known = {
+    designation: new Set(grouped.designation.map((o) => o.label.trim().toLowerCase())),
+    department: new Set(grouped.department.map((o) => o.label.trim().toLowerCase())),
+    division: new Set(grouped.division.map((o) => o.label.trim().toLowerCase())),
   }
+  let added = false
+  const ensure = async (category: 'designation' | 'department' | 'division', label: string) => {
+    const key = label.trim().toLowerCase()
+    if (!key || known[category].has(key)) return
+    known[category].add(key)
+    await ensureLabMasterOptionByLabel(category, label)
+    added = true
+  }
+  for (const u of users) {
+    await ensure('designation', u.designation)
+    await ensure('department', u.departmentName)
+    await ensure('division', u.division)
+  }
+  return added
 }
 
 function toUserAccount(row: TeamUserRecord): UserAccount {
@@ -133,8 +147,8 @@ export default function UserManagementMasterPage() {
         setUsers(mapped)
 
         try {
-          await syncUserOptionsToLabMaster(mapped)
-          if (!canceled) await refreshLabOptions()
+          const added = await syncUserOptionsToLabMaster(mapped)
+          if (added && !canceled) await refreshLabOptions()
         } catch {
           /* keep UI usable if sync fails */
         }
@@ -191,8 +205,7 @@ export default function UserManagementMasterPage() {
       setUsers(mapped)
 
       try {
-        await syncUserOptionsToLabMaster(mapped)
-        await refreshLabOptions()
+        if (await syncUserOptionsToLabMaster(mapped)) await refreshLabOptions()
       } catch {
         /* keep UI usable if sync fails */
       }
