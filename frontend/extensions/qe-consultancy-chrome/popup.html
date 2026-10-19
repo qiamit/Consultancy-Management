@@ -50,16 +50,6 @@
           <h2 id="manakTitle">Manak Online</h2>
         </div>
         <div class="toggle-grid manak-toggles">
-          <label class="tile tile-power" for="powerToggle">
-            <span class="tile-top">
-              <span class="tile-title">Manak Test Request</span>
-              <span class="switch">
-                <input id="powerToggle" type="checkbox" />
-                <span class="slider"></span>
-              </span>
-            </span>
-            <span id="powerLabel" class="tile-hint">ON — login → Test Request → save back</span>
-          </label>
           <label class="tile tile-power tile-import-qr" for="importQrToggle">
             <span class="tile-top">
               <span class="tile-title">Import QR Code</span>
@@ -68,59 +58,59 @@
                 <span class="slider"></span>
               </span>
             </span>
-            <span id="importQrLabel" class="tile-hint">OFF — enables after Login</span>
+          </label>
+          <label class="tile tile-power" for="powerToggle">
+            <span class="tile-top">
+              <span class="tile-title">Manak Test Request</span>
+              <span class="switch">
+                <input id="powerToggle" type="checkbox" />
+                <span class="slider"></span>
+              </span>
+            </span>
           </label>
           <label class="tile tile-new-app" for="newAppToggle">
             <span class="tile-top">
-              <span class="tile-title">New Application</span>
+              <span class="tile-title">Submit New Application</span>
               <span class="switch">
                 <input id="newAppToggle" type="checkbox" />
                 <span class="slider"></span>
               </span>
             </span>
-            <span id="newAppLabel" class="tile-hint">OFF — starts from Manak Assist in Consultancy Pro</span>
           </label>
           <label class="tile tile-new-app tile-inclusion" for="inclusionToggle">
             <span class="tile-top">
-              <span class="tile-title">Inclusion</span>
+              <span class="tile-title">Submit New Inclusion</span>
               <span class="switch">
                 <input id="inclusionToggle" type="checkbox" />
                 <span class="slider"></span>
               </span>
             </span>
-            <span id="inclusionLabel" class="tile-hint">OFF — starts from Manak Assist on BIS New Inclusion</span>
+          </label>
+          <!-- Placeholders: the automation for these comes later. -->
+          <label class="tile tile-soon" for="renewalToggle" title="Coming soon">
+            <span class="tile-top">
+              <span class="tile-title">Submit Renewal</span>
+              <span class="switch">
+                <input id="renewalToggle" type="checkbox" disabled />
+                <span class="slider"></span>
+              </span>
+            </span>
+          </label>
+          <label class="tile tile-soon" for="orgProfileToggle" title="Coming soon">
+            <span class="tile-top">
+              <span class="tile-title">Organisation Profile</span>
+              <span class="switch">
+                <input id="orgProfileToggle" type="checkbox" disabled />
+                <span class="slider"></span>
+              </span>
+            </span>
           </label>
         </div>
-        <p class="flow-note">
-          <strong>Test Request:</strong> from Consultancy Pro 🧪 — auto-enables, login → fill → PDF + Sample Code, then turns OFF.
-          <strong>Import QR:</strong> Import → Available list only (no samples / no Test Request).
-          <strong>New Application:</strong> from Manak Assist — login (captcha), opens the draft or Apply for new licence, fills steps 1–7 and moves on when a step is complete; stops at any problem; turns OFF at Preview for your review. Never pays or submits.
-          <strong>Inclusion:</strong> from Manak Assist on BIS New Inclusion — login (captcha), opens the licence's Change in Scope (Inclusion), adds each variety, answers the machinery / testing equipment declaration and uploads the lists and the merged document; turns OFF before Submit and Process Payment for your review.
-        </p>
         <p id="importQrStatus" class="import-qr-status" aria-live="polite"></p>
         <p id="newAppStatus" class="import-qr-status" aria-live="polite"></p>
         <p id="inclusionStatus" class="import-qr-status" aria-live="polite"></p>
       </section>
 
-      <section class="panel panel-bulk" aria-labelledby="fillTitle">
-        <div class="panel-head">
-          <span class="step">3</span>
-          <h2 id="fillTitle">Bulk Fields Fill</h2>
-        </div>
-        <div class="field-row">
-          <div class="field">
-            <label for="fieldName">Field name</label>
-            <input id="fieldName" type="text" placeholder="email, batch…" autocomplete="off" />
-          </div>
-          <div class="field">
-            <label for="fieldValue">Value</label>
-            <input id="fieldValue" type="text" placeholder="Value to apply" autocomplete="off" />
-          </div>
-        </div>
-        <button id="fillButton" class="action-btn action-btn-teal" type="button">
-          Fill matching fields
-        </button>
-      </section>
 
       <p id="status" class="status" aria-live="polite"></p>
     </main>
