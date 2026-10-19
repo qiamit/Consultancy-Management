@@ -552,7 +552,10 @@
     const missing = [];
     for (const field of map.fields || []) {
       if (allow && !allow.has(field.key)) continue;
-      const value = lookup(payload, field.key);
+      const value =
+        field.key === "sample.laboratory_name"
+          ? labOslCode(payload) || lookup(payload, field.key)
+          : lookup(payload, field.key);
       if (!value) continue;
       const el = findBySelectors(field.selectors) || findByLabels(field.labels);
       if (!el || used.has(el)) {
@@ -588,8 +591,23 @@
       .trim();
   }
 
+  // Three letters keep short brand names such as "URS"; dropping them let
+  // "products noida" match Bureau Veritas Consumer Products, Noida.
   function labTokens(value) {
-    return softLabKey(value).split(" ").filter((t) => t.length >= 4);
+    return softLabKey(value).split(" ").filter((t) => t.length >= 3);
+  }
+
+  /** OSL code of the wanted lab: from Laboratory Master, else "(1234567)" in its name. */
+  function labOslCode(payload) {
+    const fromMaster = lookup(payload, "sample.laboratory_osl_code").replace(/\D/g, "");
+    if (fromMaster) return fromMaster;
+    const name = lookup(payload, "sample.laboratory_name") || lookup(payload, "sample.destination_lab");
+    const hit = name.match(/\((\d{6,8})\)/);
+    return hit ? hit[1] : "";
+  }
+
+  function radioOslCode(el) {
+    return text(el && el.value).split("@@")[0].replace(/\D/g, "");
   }
 
   function labMatchScore(blob, wanted) {
@@ -608,9 +626,10 @@
     return labTokens(labName).slice(0, 2).join(" ");
   }
 
-  function findMatchingLabRadio(labName) {
+  function findMatchingLabRadio(labName, oslCode) {
     const wanted = text(labName);
     const radios = Array.from(document.querySelectorAll("input[name='clickonlab']"));
+    if (oslCode) return radios.find((el) => radioOslCode(el) === oslCode) || null;
     let best = null;
     let bestScore = 0;
     radios.forEach((el) => {
@@ -625,22 +644,27 @@
         best = el;
       }
     });
-    if (wanted) return bestScore >= 40 ? best : null;
+    if (wanted) return bestScore >= 70 ? best : null;
     return radios.find((el) => /osl/i.test(String(el.value || ""))) || radios[0] || null;
   }
 
-  function applyLabFilter(labName) {
-    const query = labFilterQuery(labName) || normalize(labName).slice(0, 12);
+  function applyLabFilter(labName, oslCode) {
+    const query = oslCode || labFilterQuery(labName) || normalize(labName).slice(0, 12);
     document.documentElement.setAttribute("data-qe-lab-name", text(labName));
+    document.documentElement.setAttribute("data-qe-lab-osl", text(oslCode));
     document.documentElement.setAttribute("data-qe-lab-filter", query);
     document.dispatchEvent(new Event("qe-manak-filter-lab", { bubbles: true }));
     return query;
   }
 
-  function requestLabPick(labName) {
+  function requestLabPick(labName, oslCode) {
     const token = `${text(labName)}:${Date.now()}`;
     document.documentElement.setAttribute("data-qe-lab-name", text(labName));
-    document.documentElement.setAttribute("data-qe-lab-filter", labFilterQuery(labName) || normalize(labName).slice(0, 12));
+    document.documentElement.setAttribute("data-qe-lab-osl", text(oslCode));
+    document.documentElement.setAttribute(
+      "data-qe-lab-filter",
+      oslCode || labFilterQuery(labName) || normalize(labName).slice(0, 12),
+    );
     document.documentElement.setAttribute("data-qe-lab-pick", token);
     document.dispatchEvent(new Event("qe-manak-pick-lab", { bubbles: true }));
     const confirm = document.getElementById("selectFinalLab");
@@ -649,28 +673,43 @@
     }
   }
 
-  function clickSuggestedLab(labName) {
-    applyLabFilter(labName);
-    const match = findMatchingLabRadio(labName);
+  function clickSuggestedLab(labName, oslCode) {
+    applyLabFilter(labName, oslCode);
+    const match = findMatchingLabRadio(labName, oslCode);
     if (!match) return false;
-    requestLabPick(labName);
+    requestLabPick(labName, oslCode);
     return true;
   }
 
-  function labIsSelected(labName) {
+  function labIsSelected(labName, oslCode) {
     const el = document.getElementById("lab_name");
     if (!el || el.tagName !== "SELECT") return false;
     const opted = el.options[el.selectedIndex];
     const label = (opted && opted.textContent) || "";
     const val = text(el.value);
     if (!val || val === "0" || /select lab name|no lab selected/.test(normalize(label))) return false;
+    // Manak's Lab Name option values are OSL codes.
+    if (oslCode) return val.replace(/\D/g, "") === oslCode;
     if (!text(labName)) return true;
-    return labMatchScore(label + " " + val, labName) >= 40;
+    return labMatchScore(label + " " + val, labName) >= 70;
+  }
+
+  /** Last resort when the lab table does not list the code: pick the select option directly. */
+  function selectLabOptionByCode(oslCode) {
+    const el = document.getElementById("lab_name");
+    if (!oslCode || !el || el.tagName !== "SELECT") return false;
+    const hit = Array.from(el.options || []).find((opt) => text(opt.value).replace(/\D/g, "") === oslCode);
+    if (!hit) return false;
+    el.value = hit.value;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+    el.dispatchEvent(new CustomEvent("qe-manak-set-select", { bubbles: true, detail: { value: hit.value } }));
+    return true;
   }
 
   async function pickLaboratory(payload) {
     const labName = lookup(payload, "sample.laboratory_name") || lookup(payload, "sample.destination_lab");
-    if (labIsSelected(labName)) return true;
+    const oslCode = labOslCode(payload);
+    if (labIsSelected(labName, oslCode)) return true;
 
     const sug = findBySelectors((map.navigation && map.navigation.suggestedLab && map.navigation.suggestedLab.selectors) || []);
     if (sug) sug.click();
@@ -683,17 +722,17 @@
     if (check && !isNeverClick(check)) check.click();
 
     let picked = false;
-    for (let i = 0; i < 24 && !labIsSelected(labName); i += 1) {
+    for (let i = 0; i < 24 && !labIsSelected(labName, oslCode); i += 1) {
       await sleep(700);
       const tableReady = Boolean(
         document.getElementById("filter") && document.querySelector("input[name='clickonlab']"),
       );
       if (tableReady) {
-        applyLabFilter(labName);
+        applyLabFilter(labName, oslCode);
         await sleep(450);
-        picked = clickSuggestedLab(labName) || picked;
+        picked = clickSuggestedLab(labName, oslCode) || picked;
         if (picked) {
-          for (let w = 0; w < 12 && !labIsSelected(labName); w += 1) await sleep(400);
+          for (let w = 0; w < 12 && !labIsSelected(labName, oslCode); w += 1) await sleep(400);
           break;
         }
       } else if (i === 3 || i === 8) {
@@ -701,10 +740,17 @@
         if (again) again.click();
       }
     }
-    if (!labIsSelected(labName) && labName) {
-      showBanner(`Could not match laboratory “${labName}” in Check Lab Availability.`, false, true);
+    if (!labIsSelected(labName, oslCode)) selectLabOptionByCode(oslCode);
+    if (!labIsSelected(labName, oslCode) && (labName || oslCode)) {
+      showBanner(
+        oslCode
+          ? `Could not find OSL code ${oslCode} (“${labName}”) in Check Lab Availability. Pick the lab on Manak.`
+          : `Could not match laboratory “${labName}” in Check Lab Availability. Add its OSL code in Laboratory Master, or pick the lab on Manak.`,
+        false,
+        true,
+      );
     }
-    return labIsSelected(labName);
+    return labIsSelected(labName, oslCode);
   }
 
   function isVisibleEl(el) {

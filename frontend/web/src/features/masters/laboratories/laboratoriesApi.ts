@@ -235,3 +235,22 @@ export async function findLaboratoryAddressByName(companyName: string): Promise<
   const row = data as { address?: string | null; state?: string | null }
   return [row.address, row.state].filter(Boolean).join(', ')
 }
+
+/** OSL code of an active Laboratory Master entry, matched by its exact name. */
+export async function findLaboratoryOslCodeByName(labName: string): Promise<string> {
+  const name = labName.trim()
+  if (!name) return ''
+  const { data, error } = await supabase
+    .from('laboratories')
+    .select('osl_code')
+    .ilike('name', name)
+    .is('archived_at', null)
+    .not('osl_code', 'is', null)
+    .limit(1)
+    .maybeSingle()
+  if (error) {
+    if (error.code === '42P01' || error.code === 'PGRST205') return ''
+    throw error
+  }
+  return String((data as { osl_code?: string | null } | null)?.osl_code ?? '').replace(/\D/g, '')
+}
