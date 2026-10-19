@@ -2,9 +2,9 @@ import { useState, type KeyboardEvent } from 'react'
 import { Calculator, Calendar, Plus, Scissors, Trash2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { LimsFieldWithAdd } from '@/components/lims/LimsFieldWithAdd'
-import { limsFieldAddBtnClass } from '@/lib/limsThemeUi'
+import { limsFieldAddBtnClass, limsManageDialogClass, limsPrimaryBtnClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { formatMoneyInput } from '@/features/masters/products-services/types'
 import { getCurrencySymbol } from '@/lib/appCurrency'
@@ -107,12 +107,16 @@ export function PeriodDateInput({
   value,
   onChange,
   disabled = false,
+  min,
+  max,
 }: {
   id: string
   label: string
   value: string
   onChange: (value: string) => void
   disabled?: boolean
+  min?: string
+  max?: string
 }) {
   return (
     <LimsFieldWithAdd
@@ -135,6 +139,8 @@ export function PeriodDateInput({
         aria-label={label}
         disabled={disabled}
         className={periodDateInputClass}
+        min={min}
+        max={max}
         value={value}
         onChange={(event) => onChange(event.target.value)}
       />
@@ -421,24 +427,71 @@ export function RenewalProductionTable({
         onOpenChange={(open) => { if (!open) setCalculationSelection(null) }}
       />
       <Dialog open={breakSelection !== null} onOpenChange={(open) => { if (!open) setBreakSelection(null) }}>
-        <DialogContent className="max-w-md rounded-none border-stone-500">
-          <DialogHeader><DialogTitle>Add Stock-Marking Break</DialogTitle></DialogHeader>
-          {breakSelection ? <div className="space-y-4">
-            <p className="text-sm text-stone-600">Choose the dates with no production. A zero-production row will be inserted inside this monthly period.</p>
-            <div className="grid grid-cols-2 gap-3">
-              <label className="space-y-1 text-xs font-medium">Break from<Input type="date" min={breakSelection.row.periodFrom} max={breakSelection.row.periodTo} value={breakSelection.from} onChange={(event) => setBreakSelection({ ...breakSelection, from: event.target.value, error: '' })} /></label>
-              <label className="space-y-1 text-xs font-medium">Break to<Input type="date" min={breakSelection.row.periodFrom} max={breakSelection.row.periodTo} value={breakSelection.to} onChange={(event) => setBreakSelection({ ...breakSelection, to: event.target.value, error: '' })} /></label>
-            </div>
-            {breakSelection.error ? <p className="text-sm text-destructive" role="alert">{breakSelection.error}</p> : null}
-            <div className="flex justify-end gap-2"><Button type="button" variant="outline" className="rounded-none" onClick={() => setBreakSelection(null)}>Cancel</Button><Button type="button" className="rounded-none" onClick={() => {
-              try {
-                onRowsChange(splitProductionRowForStockMarking(rows, breakSelection.row.id, breakSelection.from, breakSelection.to))
-                setBreakSelection(null)
-              } catch (error) {
-                setBreakSelection({ ...breakSelection, error: error instanceof Error ? error.message : 'Could not insert this break.' })
-              }
-            }}>Insert Break</Button></div>
-          </div> : null}
+        <DialogContent
+          aria-describedby={undefined}
+          className={cn(limsManageDialogClass, 'w-[min(32rem,calc(100vw_-_var(--app-dialog-overlay-left,0px)_-_1.5rem))]')}
+        >
+          <DialogHeader className="bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 py-2.5 pl-4 pr-12 text-left">
+            <DialogTitle className="flex items-center gap-2 text-base font-semibold text-white">
+              <Scissors className="size-4 text-amber-300" aria-hidden />
+              Add Stock-Marking Break
+            </DialogTitle>
+          </DialogHeader>
+          {breakSelection ? (
+            <>
+              <div className="space-y-3 bg-[#fffcf7] p-4 text-sm">
+                <p className="text-stone-600">
+                  Choose the dates with no production. A zero-production row will be inserted inside{' '}
+                  <span className="font-semibold text-stone-800">
+                    {formatDisplayDate(breakSelection.row.periodFrom)} – {formatDisplayDate(breakSelection.row.periodTo)}
+                  </span>.
+                </p>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="min-w-0 space-y-1">
+                    <label htmlFor="stock-break-from" className="text-xs font-semibold">Break From</label>
+                    <PeriodDateInput
+                      id="stock-break-from"
+                      label="Break from"
+                      min={breakSelection.row.periodFrom}
+                      max={breakSelection.row.periodTo}
+                      value={breakSelection.from}
+                      onChange={(from) => setBreakSelection({ ...breakSelection, from, error: '' })}
+                    />
+                  </div>
+                  <div className="min-w-0 space-y-1">
+                    <label htmlFor="stock-break-to" className="text-xs font-semibold">Break To</label>
+                    <PeriodDateInput
+                      id="stock-break-to"
+                      label="Break to"
+                      min={breakSelection.row.periodFrom}
+                      max={breakSelection.row.periodTo}
+                      value={breakSelection.to}
+                      onChange={(to) => setBreakSelection({ ...breakSelection, to, error: '' })}
+                    />
+                  </div>
+                </div>
+                {breakSelection.error ? <p className="border-l-2 border-destructive bg-destructive/5 px-3 py-2 text-destructive" role="alert">{breakSelection.error}</p> : null}
+              </div>
+              <DialogFooter className="gap-2 border-t border-stone-200 bg-stone-50 px-4 py-3">
+                <Button type="button" variant="outline" className="rounded-none" onClick={() => setBreakSelection(null)}>Cancel</Button>
+                <Button
+                  type="button"
+                  className={cn(limsPrimaryBtnClass, 'min-w-[8rem]')}
+                  onClick={() => {
+                    try {
+                      onRowsChange(splitProductionRowForStockMarking(rows, breakSelection.row.id, breakSelection.from, breakSelection.to))
+                      setBreakSelection(null)
+                    } catch (error) {
+                      setBreakSelection({ ...breakSelection, error: error instanceof Error ? error.message : 'Could not insert this break.' })
+                    }
+                  }}
+                >
+                  <Scissors className="mr-2 size-4" aria-hidden />
+                  Insert Break
+                </Button>
+              </DialogFooter>
+            </>
+          ) : null}
         </DialogContent>
       </Dialog>
     </section>
