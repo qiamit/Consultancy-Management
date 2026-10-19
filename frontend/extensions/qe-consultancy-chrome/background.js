@@ -1191,6 +1191,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           qeManakRenewalEnabled: false,
           renewalFill: payloadWithoutPassword(payload),
           renewalLog: null,
+          renewalStage: null,
           qeManakPortal: {
             userId: portalUserId,
           },
@@ -1409,10 +1410,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     void (async () => {
       try {
         const url = String(message.url || "");
-        const store = await chrome.storage.local.get(["newAppFill", "inclusionFill"]);
+        const store = await chrome.storage.local.get(["newAppFill", "inclusionFill", "renewalFill"]);
         const files = [
           ...((store.newAppFill && store.newAppFill.files) || []),
           ...((store.inclusionFill && store.inclusionFill.files) || []),
+          ...((store.renewalFill && store.renewalFill.files) || []),
         ];
         if (!url || !files.some((f) => f && f.url === url)) {
           sendResponse({ ok: false, error: "File is not part of this application." });

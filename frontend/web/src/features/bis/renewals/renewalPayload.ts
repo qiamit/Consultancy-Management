@@ -3,6 +3,8 @@
  * The extension fills Manak's Production Return Details from it
  * (frontend/extensions/qe-consultancy-chrome/renewal-fill.js — keep the shape in sync).
  */
+import { supabase } from '@/lib/supabaseClient'
+import { BIS_PROJECT_FILES_BUCKET } from '../projects/bisProjectFilesApi'
 import type { BisProjectRow } from '../projects/types'
 import { fetchLatestRenewalForProject } from './bisRenewalsApi'
 import { calculateRenewalProductionRow, rowToRenewalForm } from './types'
@@ -18,6 +20,8 @@ export type ManakRenewalReturn = {
   coveredValue: string
 }
 
+export type ManakRenewalFile = { slot: 'ca-certificate'; label: string; url: string; fileName: string; mime: string }
+
 export type ManakRenewalPayload = {
   kind: 'QE_MANAK_RENEWAL_V1'
   projectId: string
@@ -30,11 +34,45 @@ export type ManakRenewalPayload = {
   brand: string
   /** Month-wise returns from the latest saved Renewal Sheet (empty when none is saved yet). */
   returns: ManakRenewalReturn[]
+  /** Report of Performance: "Brief information regarding difficulties … in operating of BIS Licence". */
+  difficulties: string
+  /** The CA-attested production statement (Renewal Sheet → Attach CA Certificate), for Report of Performance. */
+  files: ManakRenewalFile[]
   copiedAt: string
 }
 
+const LINK_SECONDS = 60 * 60 * 3
+
+/** Latest CA certificate attached on the Renewal Sheet, with a link the extension can download for 3 hours. */
+async function caCertificateFile(projectId: string): Promise<ManakRenewalFile | null> {
+  const { data, error } = await supabase
+    .from('bis_project_files')
+    .select('file_name, storage_path, mime_type')
+    .eq('bis_project_id', projectId)
+    .eq('doc_kind', 'renewal-ca-certificate')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error || !data?.storage_path) return null
+  const { data: link, error: linkError } = await supabase.storage
+    .from(BIS_PROJECT_FILES_BUCKET)
+    .createSignedUrl(data.storage_path, LINK_SECONDS)
+  if (linkError || !link?.signedUrl) return null
+  const name = String(data.file_name ?? '').replace(/^\[(draft|r\d+)\] /, '') || 'CA-Certificate.pdf'
+  return {
+    slot: 'ca-certificate',
+    label: 'CA Certificate',
+    url: link.signedUrl,
+    fileName: /\.pdf$/i.test(name) ? name : `${name}.pdf`,
+    mime: 'application/pdf',
+  }
+}
+
 export async function buildManakRenewalPayload(row: BisProjectRow): Promise<ManakRenewalPayload> {
-  const saved = await fetchLatestRenewalForProject(row.id).catch(() => null)
+  const [saved, caCertificate] = await Promise.all([
+    fetchLatestRenewalForProject(row.id).catch(() => null),
+    caCertificateFile(row.id).catch(() => null),
+  ])
   const form = saved ? rowToRenewalForm(saved) : null
   const returns: ManakRenewalReturn[] = form
     ? form.productionRows
@@ -58,6 +96,8 @@ export async function buildManakRenewalPayload(row: BisProjectRow): Promise<Mana
     validityDate: String(row.license_validity_date ?? '').slice(0, 10),
     brand: '',
     returns,
+    difficulties: 'Nil',
+    files: caCertificate ? [caCertificate] : [],
     copiedAt: new Date().toISOString(),
   }
 }
