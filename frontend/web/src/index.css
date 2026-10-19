@@ -508,7 +508,7 @@ th * {
    Tablets: two label/value pairs per row. Phones: one field per row, label above the value. */
 @media (max-width: 1023px) {
   .manak-kv table,
-  .manak-kv tbody { display: block; width: 100%; }
+  .manak-kv tbody { display: block; width: 100%; min-width: 0 !important; }
   .manak-kv colgroup { display: none; }
   .manak-kv table + table { margin-top: 0; }
   .manak-kv tr { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) minmax(0, 2fr) minmax(0, 3fr); }
@@ -576,4 +576,71 @@ th * {
 }
 @media (max-width: 639px) {
   .er-table tr { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Step component tables (select | component | Applicable | actions): one card per component on phones. */
+@media (max-width: 767px) {
+  .comp-table thead { display: none; }
+  .comp-table,
+  .comp-table tbody { display: block; width: 100%; }
+  .comp-table tr {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    padding: 0.625rem;
+    border: 1px solid #d6d3d1;
+  }
+  .comp-table td { display: block; padding: 0 !important; border: 0 !important; text-align: left !important; }
+  .comp-table td:nth-child(3) { grid-column: 1 / -1; display: flex; align-items: center; gap: 0.5rem; border-top: 1px solid #e7e5e4 !important; padding-top: 0.5rem !important; }
+  .comp-table td:nth-child(3)::before { content: 'Applicable *'; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #78716c; }
+  .comp-table td:nth-child(3) .mx-auto { margin: 0; }
+  .comp-table td:nth-child(4) { grid-column: 1 / -1; white-space: normal !important; text-align: right !important; }
+}
+
+/* Declaration → Weekly Offs: label and Yes/No on one line, the off-days picker or note below on phones. */
+@media (max-width: 767px) {
+  .wo-table,
+  .wo-table tbody { display: block; width: 100%; }
+  .wo-table tr { display: flex; flex-wrap: wrap; align-items: center; }
+  .wo-table th { flex: 1 1 0; min-width: 0; width: auto !important; border-right: 0 !important; }
+  .wo-table td { display: block; width: auto !important; }
+  .wo-table td:last-child { flex: 1 1 100%; border-top: 1px solid #e7e5e4; }
+  .wo-table td:last-child > span { display: flex; width: 100%; }
+}
+
+/* Application / Inclusion Preview: on phones each document is a row card — name on top, then the
+   Preview · Print · PDF · Editable actions in four equal cells; the header keeps the select-all boxes. */
+@media (max-width: 639px) {
+  .pv-table,
+  .pv-table thead,
+  .pv-table tbody { display: block; width: 100%; }
+  .pv-table tr { display: grid; grid-template-columns: 2rem repeat(4, minmax(0, 1fr)); align-items: center; }
+  .pv-table th,
+  .pv-table td { display: flex; justify-content: center; width: auto !important; min-width: 0; border-width: 0 !important; }
+  .pv-table thead th:nth-child(2) { display: none; }
+  .pv-table thead tr { border-bottom: 1px solid #a8a29e; }
+  .pv-table tbody tr:not(.pv-step) { row-gap: 0.25rem; padding: 0.5rem 0; border-bottom: 1px solid #e7e0d4; }
+  .pv-table tbody tr:not(.pv-step) td:nth-child(2) { grid-column: 2 / -1; justify-content: flex-start; padding-bottom: 0 !important; }
+  .pv-table tbody tr:not(.pv-step) td:nth-child(3) { grid-column: 2; }
+  .pv-table tbody tr:not(.pv-step) td { padding-top: 0 !important; padding-bottom: 0 !important; }
+  .pv-table tr.pv-step { display: block; }
+  .pv-table tr.pv-step td { display: block; }
+}
+
+/* Numbered list tables (Existing / New Scope …): on phones each row is a card — the serial number on the
+   left, every value full width with its column name above it, and the row's buttons underneath. */
+@media (max-width: 639px) {
+  .row-cards,
+  .row-cards tbody { display: block; width: 100%; }
+  .row-cards thead,
+  .row-cards colgroup { display: none; }
+  .row-cards tr { display: grid; grid-template-columns: 1.75rem minmax(0, 1fr); gap: 0.375rem 0.5rem; padding: 0.5rem; border-bottom: 1px solid #e7e0d4; }
+  .row-cards td { display: block; width: auto !important; min-width: 0; padding: 0 !important; border: 0 !important; text-align: left !important; }
+  .row-cards td:first-child { grid-column: 1; font-weight: 700; color: #92400e; text-align: center !important; }
+  .row-cards td:not(:first-child) { grid-column: 2; }
+  .row-cards td[colspan] { grid-column: 1 / -1; text-align: center !important; font-weight: 400; color: #78716c; }
+  .row-cards td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 0.125rem; font-size: 0.625rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #78716c; }
+  .row-cards td.rc-actions > div { justify-content: flex-start; }
 }

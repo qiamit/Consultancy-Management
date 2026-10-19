@@ -255,7 +255,7 @@ export function ManakPreviewStep({
       {loading ? <p className="text-xs text-stone-500">Loading application documents…</p> : null}
 
       <div className="overflow-x-auto border border-stone-400 bg-[#fffcf7]">
-        <table className="w-full border-collapse text-sm">
+        <table className="pv-table w-full border-collapse text-sm">
           <thead>
             <tr>
               <th className={cn(thCls, 'w-8 px-1 text-center')}>{headBox(null, 'Select all documents')}</th>
@@ -278,7 +278,7 @@ export function ManakPreviewStep({
             {rows.map((r, n) => {
               const header =
                 n === 0 || rows[n - 1]!.step !== r.step ? (
-                  <tr key={`step-${r.step}`} className="bg-stone-200/70">
+                  <tr key={`step-${r.step}`} className="pv-step bg-stone-200/70">
                     <td colSpan={6} className="border border-[#e7e0d4] px-2 py-1">
                       <span className="flex items-center justify-between gap-2">
                         <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-stone-700">
@@ -286,7 +286,7 @@ export function ManakPreviewStep({
                         </span>
                         <button
                           type="button"
-                          className="inline-flex h-6 items-center gap-1 rounded-none border border-amber-700 bg-amber-700 px-2 text-[11px] font-semibold text-white shadow-sm transition-colors hover:bg-amber-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40"
+                          className="inline-flex h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded-none border border-amber-700 bg-amber-700 px-2 text-[11px] font-semibold text-white shadow-sm transition-colors hover:bg-amber-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40"
                           onClick={() => onEditStep(r.step)}
                         >
                           <Pencil size={12} aria-hidden />

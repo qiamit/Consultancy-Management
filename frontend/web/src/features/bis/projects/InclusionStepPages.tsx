@@ -129,7 +129,7 @@ function ExistingScope({ notes }: { notes: string }) {
   if (scope.mode === 'plain') {
     const lines = scope.text.split('\n').map((l) => l.trim()).filter(Boolean)
     return lines.length ? (
-      <table className="w-full border-collapse">
+      <table className="row-cards w-full border-collapse">
         <thead>
           <tr>
             <th className={cn(thCls, 'w-10 text-center')}>#</th>
@@ -151,7 +151,7 @@ function ExistingScope({ notes }: { notes: string }) {
   }
   const rows = scope.rows.filter((r) => r.some((c) => c.trim()))
   return (
-    <table className="w-full border-collapse">
+    <table className="row-cards w-full border-collapse">
       <thead>
         <tr>
           <th className={cn(thCls, 'w-10 text-center')}>#</th>
@@ -165,7 +165,7 @@ function ExistingScope({ notes }: { notes: string }) {
           <tr key={i}>
             <td className={cn(tdCls, 'text-center')}>{i + 1}</td>
             {scope.headers.map((_, c) => (
-              <td key={c} className={cn(tdCls, 'whitespace-pre-line')}>{r[c] || '—'}</td>
+              <td key={c} data-label={scope.headers[c] || undefined} className={cn(tdCls, 'whitespace-pre-line')}>{r[c] || '—'}</td>
             ))}
           </tr>
         ))}
@@ -267,12 +267,12 @@ function LicenceStep({
         <tbody>
           {info.map(([label, value]) => (
             <tr key={label}>
-              <th className={cn(tdCls, 'w-48 bg-stone-50 text-left font-semibold text-stone-800')}>{label}</th>
+              <th className={cn(tdCls, 'w-32 bg-stone-50 text-left font-semibold text-stone-800 sm:w-48')}>{label}</th>
               <td className={tdCls}>{value}</td>
             </tr>
           ))}
           <tr>
-            <th className={cn(tdCls, 'w-48 bg-stone-50 text-left font-semibold text-stone-800')}>BIS Branch</th>
+            <th className={cn(tdCls, 'w-32 bg-stone-50 text-left font-semibold text-stone-800 sm:w-48')}>BIS Branch</th>
             <td className={tdCls}>
               <BranchPicker row={row} onSaved={onProjectSaved} />
             </td>
@@ -678,7 +678,7 @@ function OtherDocuments({ row, letterOn }: { row: BisProjectRow; letterOn: boole
         </button>
       }
     >
-      <table className="w-full border-collapse">
+      <table className="row-cards w-full border-collapse">
         <thead>
           <tr>
             <th className={cn(thCls, 'w-12 text-center')}>S.No.</th>

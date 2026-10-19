@@ -108,7 +108,7 @@ function FactoryTestReportsList({
   const td = 'border border-[#e7e0d4] px-2 py-1.5 align-middle text-stone-700'
   return (
     <div className="overflow-x-auto">
-      <table className="w-full border-collapse text-sm">
+      <table className="row-cards w-full border-collapse text-sm">
         <thead>
           <tr>
             <th className={cn(th, 'w-12 text-center')}>S.No.</th>
@@ -140,10 +140,10 @@ function FactoryTestReportsList({
               return (
                 <tr key={sample.id} className={i % 2 ? 'bg-[#f7f3eb]' : 'bg-[#fffcf7]'}>
                   <td className={cn(td, 'text-center')}>{i + 1}</td>
-                  <td className={cn(td, 'text-center')}>{sample.gradeTypeVariety.trim() || sample.sampleDescription.trim() || '—'}</td>
-                  <td className={cn(td, 'text-center')}>{sample.declaredValue.trim() || '—'}</td>
-                  <td className={cn(td, 'whitespace-nowrap text-center')}>{sample.batchNumber.trim() || '—'}</td>
-                  <td className={cn(td, 'whitespace-nowrap text-center')}>{sample.dateOfManufacturing.trim() ? formatDisplayDate(sample.dateOfManufacturing) : '—'}</td>
+                  <td data-label="Grade / Type / Variety" className={cn(td, 'text-center')}>{sample.gradeTypeVariety.trim() || sample.sampleDescription.trim() || '—'}</td>
+                  <td data-label="Declared Value" className={cn(td, 'text-center')}>{sample.declaredValue.trim() || '—'}</td>
+                  <td data-label="Batch Number" className={cn(td, 'whitespace-nowrap text-center')}>{sample.batchNumber.trim() || '—'}</td>
+                  <td data-label="Date of Manufacturing" className={cn(td, 'whitespace-nowrap text-center')}>{sample.dateOfManufacturing.trim() ? formatDisplayDate(sample.dateOfManufacturing) : '—'}</td>
                   <td className={cn(td, 'text-center')}>
                     {/* One button: opens the report to generate, edit, save, print or download. */}
                     <Button

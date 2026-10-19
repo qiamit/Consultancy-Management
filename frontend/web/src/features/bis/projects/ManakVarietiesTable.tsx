@@ -592,7 +592,7 @@ export function ManakVarietiesTable({
       {panel(
         docButtons,
         <div className="overflow-x-auto">
-          <table className="w-full table-fixed border-collapse text-sm">
+          <table className="row-cards w-full table-fixed border-collapse text-sm">
             <colgroup>
               {/* # and Action are sized for their content (three 2rem buttons); the data columns share the rest,
                   so the buttons never wrap or push the table wider than the panel on a small screen. */}
@@ -628,7 +628,7 @@ export function ManakVarietiesTable({
               <tr className="bg-[#fffcf7]">
                 <td className={cn(td, 'px-1 text-center text-stone-400')}>+</td>
                 {headers.map((header, i) => (
-                  <td key={i} className={cn(td, 'p-1')}>
+                  <td key={i} data-label={headers.length > 1 ? header : undefined} className={cn(td, 'p-1')}>
                     <AutoGrowInput
                       aria-label={`New scope ${header}`}
                       value={newDraft[i] ?? ''}
@@ -644,7 +644,7 @@ export function ManakVarietiesTable({
                     />
                   </td>
                 ))}
-                <td className={cn(td, 'whitespace-nowrap text-center')}>
+                <td className={cn(td, 'rc-actions whitespace-nowrap text-center')}>
                   <div className="flex flex-nowrap items-center justify-center gap-1">
                     <button type="button" className={cn(iconBtn, 'border-stone-400 text-amber-800')} disabled={!projectId} title="Add row" aria-label="Add scope row" onClick={() => void addRow()}>
                       <Plus size={15} aria-hidden />
@@ -669,7 +669,7 @@ export function ManakVarietiesTable({
                     <tr key={index} className={index % 2 ? 'bg-[#f7f3eb]' : 'bg-[#fffcf7]'}>
                       <td className={cn(td, 'px-1 text-center')}>{index + 1}</td>
                       {headers.map((_, i) => (
-                        <td key={i} className={cn(td, editing && 'p-1')}>
+                        <td key={i} data-label={headers.length > 1 ? headers[i] : undefined} className={cn(td, editing && 'p-1')}>
                           {editing ? (
                             <AutoGrowInput
                               aria-label={`Scope row ${index + 1} ${headers[i] ?? ''}`}
@@ -689,7 +689,7 @@ export function ManakVarietiesTable({
                           )}
                         </td>
                       ))}
-                      <td className={cn(td, 'whitespace-nowrap text-center')}>
+                      <td className={cn(td, 'rc-actions whitespace-nowrap text-center')}>
                         <div className="flex flex-nowrap items-center justify-center gap-1">
                           {editing ? (
                             <button type="button" className={cn(iconBtn, 'border-emerald-600 text-emerald-800')} title="Save row" aria-label={`Save scope row ${index + 1}`} onClick={saveEdit}>
