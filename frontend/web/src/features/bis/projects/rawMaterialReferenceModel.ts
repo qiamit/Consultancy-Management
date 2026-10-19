@@ -30,8 +30,15 @@ export const RAW_MATERIAL_CONFORMITY_OPTIONS = [
   'Any Other',
 ]
 
-/** Older rows stored With / Without BIS mark; "With" is the same as ISI Marked. */
-export const rawMaterialConformity = (value: string): string => (value.trim() === 'With' ? 'ISI Marked' : value)
+/** Older rows stored With / Without BIS mark; "With" is the same as ISI Marked. Other values are kept as they are. */
+export const rawMaterialConformity = (value: string): string => {
+  const v = value.trim()
+  if (v.toLowerCase() === 'with') return 'ISI Marked'
+  return RAW_MATERIAL_CONFORMITY_OPTIONS.find((o) => o.toLowerCase() === v.toLowerCase()) ?? value
+}
+
+/** Manak's Conformity of Material accepts only these five choices (an old "With" / "Without" or free text blocks the fill). */
+export const isManakRawMaterialConformity = (value: string): boolean => RAW_MATERIAL_CONFORMITY_OPTIONS.includes(value.trim())
 
 export const emptyRawMaterialSupplierRow = (): RawMaterialSupplierRow => ({
   rawMaterial: '',

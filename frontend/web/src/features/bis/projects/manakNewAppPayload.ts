@@ -15,7 +15,9 @@ import { fetchBisModulePayload } from './bisModuleDataApi'
 import { BIS_PROJECT_FILES_BUCKET } from './bisProjectFilesApi'
 import { loadBisProjectPrintPageSettings } from './bisPrintPageSettingsApi'
 import { parseCmpf311Payload } from './cmpf311Model'
+import { isManakEmail } from './manakChecks'
 import { APPLICATION_DECLARATION_KIND, CORRESPONDENCE_KIND, MANUFACTURING_COMPONENTS_KIND, TESTING_COMPONENTS_KIND, TEST_REPORT_COMPONENTS_KIND } from './manakModuleKinds'
+import { rawMaterialConformity } from './rawMaterialReferenceModel'
 import { parseBisNotesScope, type BisProjectRow } from './types'
 
 type Rec = Record<string, unknown>
@@ -106,7 +108,7 @@ export type ManakNewAppPayload = {
 /** Signed links must outlive a full application walk. */
 const LINK_SECONDS = 60 * 60 * 3
 
-const validEmail = (v: string) => (/^[^@\s,;]+@[^@\s,;]+\.[a-z]{2,}$/i.test(v) ? v : '')
+const validEmail = (v: string) => (isManakEmail(v) ? v : '')
 const str = (v: unknown) => (typeof v === 'string' ? v.trim() : v == null ? '' : String(v).trim())
 const rowsOf = (p: Rec | null, key = 'rows'): Rec[] =>
   Array.isArray(p?.[key]) ? (p?.[key] as Rec[]).filter((r) => r && typeof r === 'object') : []
@@ -272,7 +274,8 @@ export async function buildManakNewAppPayload(row: BisProjectRow): Promise<Manak
     .map((r) => ({
       rawMaterial: str(r.rawMaterial),
       supplierName: str(r.supplierName),
-      conformity: str(r.bisCertificationMark),
+      // Older rows stored "With"; Manak only accepts its five options.
+      conformity: rawMaterialConformity(str(r.bisCertificationMark)),
       recordsMaintained: str(r.testCertificate),
       batches: str(r.batchesPackaging),
     }))

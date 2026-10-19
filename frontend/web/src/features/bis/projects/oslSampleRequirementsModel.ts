@@ -2,6 +2,8 @@
 
 export type OslSampleFor = string
 export type OslSamplePriority = string
+/** Conformity of sample as per IS (Manak Test Report step): read off the lab report, so blank until someone decides. */
+export type OslSampleConformity = '' | 'Yes' | 'No'
 
 export type OslSampleRequirementRow = {
   id: string
@@ -44,6 +46,7 @@ export type OslSampleRequirementRow = {
   testReportFileId: string
   testReportFileName: string
   testReportStoragePath: string
+  conformity: OslSampleConformity
 }
 
 export type OslSampleRequirementsModulePayload = {
@@ -135,6 +138,7 @@ export function emptyOslSampleRequirementRow(sampleFor: OslSampleFor = 'osl'): O
     testReportFileId: '',
     testReportFileName: '',
     testReportStoragePath: '',
+    conformity: '',
   }
 }
 
@@ -184,6 +188,13 @@ export function oslSampleRowHasContent(row: OslSampleRequirementRow): boolean {
 
 function str(raw: unknown): string {
   return String(raw ?? '').trim()
+}
+
+export function parseOslSampleConformity(raw: unknown): OslSampleConformity {
+  const v = str(raw).toLowerCase()
+  if (v === 'yes') return 'Yes'
+  if (v === 'no') return 'No'
+  return ''
 }
 
 /** Accepts camelCase (QI) and snake_case (QE) keys. */
@@ -242,6 +253,7 @@ export function parseOslSampleRequirementRow(
     testReportStoragePath: str(
       raw.testReportStoragePath ?? raw.test_report_storage_path,
     ),
+    conformity: parseOslSampleConformity(raw.conformity),
   }
 }
 

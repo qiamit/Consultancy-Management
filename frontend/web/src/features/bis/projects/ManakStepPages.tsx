@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState, type ReactNode } from 'react'
-import { ClipboardList, Download, Eye, FileType, Pencil, Printer, type LucideIcon } from 'lucide-react'
+import { AlertTriangle, ClipboardList, Download, Eye, FileType, Pencil, Printer, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { loadBisPrintData, type BisPrintData } from '../print/loadBisPrintData'
 import type { BisPrintDocumentKind } from '../print/printBisDocument'
@@ -97,6 +97,22 @@ export function ManakSubPanel({
         ) : null}
       </div>
       <div className="p-3">{children}</div>
+    </div>
+  )
+}
+
+/** Non-blocking notes about data the Manak "New Application" fill needs; nothing is stopped from saving. */
+export function ManakWarnings({ items }: { items: Array<string | false | null | undefined> }) {
+  const list = items.filter((m): m is string => Boolean(m))
+  if (list.length === 0) return null
+  return (
+    <div role="status" className="flex gap-2 border border-amber-400 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" aria-hidden />
+      <ul className="space-y-1">
+        {list.map((m) => (
+          <li key={m}>{m}</li>
+        ))}
+      </ul>
     </div>
   )
 }

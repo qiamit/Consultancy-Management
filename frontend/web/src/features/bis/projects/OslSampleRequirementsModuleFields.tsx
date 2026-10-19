@@ -103,6 +103,7 @@ import {
   oslSampleRowHasContent,
   oslSampleRowStatusTone,
   sampleForLabel,
+  type OslSampleConformity,
   type OslSampleRequirementRow,
   type OslSampleRequirementsModulePayload,
 } from './oslSampleRequirementsModel'
@@ -213,6 +214,57 @@ function saveManakTrRuns(projectId: string, runs: Map<string, ManakTrRun>): void
   } catch {
     /* storage blocked: runs still work for this page */
   }
+}
+
+const SAMPLE_CONFORMITY_UNSET = 'not-decided'
+
+/** Conformity of sample as per IS: Yes / No from the lab report, or not decided yet. Manak's Test Report step asks for it. */
+function SampleConformitySelect({
+  value,
+  onChange,
+  disabled,
+  id,
+  className,
+  ariaLabel = 'Conformity of sample as per IS',
+  needed = false,
+}: {
+  value: OslSampleConformity
+  onChange: (next: OslSampleConformity) => void
+  disabled?: boolean
+  id?: string
+  className?: string
+  ariaLabel?: string
+  /** Highlight a missing answer (the sample has a QR code, so it goes to Manak). */
+  needed?: boolean
+}) {
+  const missing = needed && !value
+  return (
+    <Select
+      value={value || SAMPLE_CONFORMITY_UNSET}
+      onValueChange={(v) => onChange(v === 'Yes' || v === 'No' ? v : '')}
+      disabled={disabled}
+    >
+      <SelectTrigger
+        id={id}
+        className={cn(
+          limsFieldClass,
+          'rounded-none',
+          !value && 'text-stone-500',
+          missing && 'border-amber-600 bg-amber-50',
+          className,
+        )}
+        aria-label={ariaLabel}
+        title={missing ? 'Set from the lab report — Manak’s Test Report step needs it for this QR code' : undefined}
+      >
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent className="z-[80]">
+        <SelectItem value={SAMPLE_CONFORMITY_UNSET}>Not decided</SelectItem>
+        <SelectItem value="Yes">Yes</SelectItem>
+        <SelectItem value="No">No</SelectItem>
+      </SelectContent>
+    </Select>
+  )
 }
 
 export function OslSampleRequirementsModuleFields({
@@ -565,6 +617,7 @@ export function OslSampleRequirementsModuleFields({
       id: emptyOslSampleRequirementRow().id,
       qrCode,
       serialNumber: nextSerial,
+      conformity: '',
       sampleCode: source.sampleCode.trim()
         ? `${source.sampleCode.trim()}${qrCode ? '' : '-COPY'}`
         : '',
@@ -1945,6 +1998,19 @@ export function OslSampleRequirementsModuleFields({
                         {row.sampleCode || '—'}
                       </p>
                     </div>
+                    <div className="min-w-0">
+                      <p className={cardFieldLabelClass}>Conformity of Sample as per IS</p>
+                      <SampleConformitySelect
+                        className="h-8 w-full max-w-[12rem] text-sm"
+                        value={row.conformity}
+                        needed={Boolean(row.qrCode.trim())}
+                        disabled={disabled}
+                        ariaLabel={`Conformity of sample ${index + 1} as per IS`}
+                        onChange={(next) =>
+                          setRows(rows.map((r, i) => (i === index ? { ...r, conformity: next } : r)))
+                        }
+                      />
+                    </div>
                     <div className="min-w-0 sm:col-span-2">
                       <p className={cardFieldLabelClass}>Sample Details</p>
                       {row.batchNumber.trim() ? (
@@ -1999,7 +2065,7 @@ export function OslSampleRequirementsModuleFields({
 
         {/* Table — lg+ */}
         <div className={TABLE_MQ_SHOW}>
-          <Table className="w-full min-w-[52rem] table-fixed border-collapse">
+          <Table className="w-full min-w-[58rem] table-fixed border-collapse">
             <TableHeader>
               <TableRow className="border-stone-700 bg-stone-800 hover:bg-stone-800">
                 <TableHead className={cn(thClass, 'w-10 px-1')}>
@@ -2021,6 +2087,9 @@ export function OslSampleRequirementsModuleFields({
                 <TableHead className={cn(thClass, 'w-[20%]')}>Sample Details</TableHead>
                 <TableHead className={cn(thClass, 'w-[5.5rem]')}>Priority</TableHead>
                 <TableHead className={cn(thClass, 'w-[5.5rem]')}>In Offer Letter</TableHead>
+                <TableHead className={cn(thClass, 'w-[7rem]')} title="Conformity of sample as per IS (from the lab report)">
+                  Conformity
+                </TableHead>
                 <TableHead className={cn(thClass, 'w-14')}>Test Request</TableHead>
                 <TableHead className={cn(thClass, 'w-14')}>Courier Slip</TableHead>
                 <TableHead className={cn(thClass, 'w-14')}>Test Report</TableHead>
@@ -2031,7 +2100,7 @@ export function OslSampleRequirementsModuleFields({
               {rows.length === 0 ? (
                 <TableRow className={cn('border-[#e7e0d4]', rowBlankClass)}>
                   <TableCell
-                    colSpan={11}
+                    colSpan={12}
                     className="px-3 py-8 text-center text-sm text-stone-500"
                   >
                     No samples yet. Use + to add a sample.
@@ -2110,6 +2179,18 @@ export function OslSampleRequirementsModuleFields({
                                 i === index ? { ...r, includeInPrint: e.target.checked } : r,
                               ),
                             )
+                          }
+                        />
+                      </TableCell>
+                      <TableCell className="px-1.5 py-2 text-center align-middle">
+                        <SampleConformitySelect
+                          className="h-8 w-full px-2 text-xs"
+                          value={row.conformity}
+                          needed={Boolean(row.qrCode.trim())}
+                          disabled={disabled}
+                          ariaLabel={`Conformity of sample ${index + 1} as per IS`}
+                          onChange={(next) =>
+                            setRows(rows.map((r, i) => (i === index ? { ...r, conformity: next } : r)))
                           }
                         />
                       </TableCell>
@@ -3068,7 +3149,7 @@ export function OslSampleRequirementsModuleFields({
               </div>
 
               <div className="space-y-3">
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   <Field label="Name of the Laboratory" htmlFor="osl-lab">
                     <div className="border border-stone-400 bg-white">
                       <RemoteLookupCombobox
@@ -3096,6 +3177,15 @@ export function OslSampleRequirementsModuleFields({
                       className={cn(limsFieldClass, 'h-9')}
                       value={draft.destinationLab}
                       readOnly
+                    />
+                  </Field>
+                  <Field label="Conformity of Sample as per IS" htmlFor="osl-conformity">
+                    <SampleConformitySelect
+                      id="osl-conformity"
+                      className="h-9 w-full"
+                      value={draft.conformity}
+                      needed={Boolean(draft.qrCode.trim())}
+                      onChange={(next) => patchDraft('conformity', next)}
                     />
                   </Field>
                 </div>
