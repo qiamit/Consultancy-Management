@@ -598,7 +598,22 @@ export type RenewalMarkingFeeSummary = {
   /** The fee payable: the higher of the calculated fee and the minimum. */
   payable: number
   basis: 'calculated' | 'minimum'
+  /** BIS renewal application fee (₹1,000 per licence). */
+  applicationFee: number
+  /** BIS annual licence fee (₹1,000 per year). */
+  licenceFee: number
+  /** Marking fee payable + application fee + licence fee. */
+  subtotal: number
+  gstRate: number
+  gst: number
+  /** Subtotal + GST: the total to pay BIS. */
+  total: number
 }
+
+/** BIS Conformity Assessment Regulations, Scheme-I: renewal application fee and annual licence fee. */
+export const RENEWAL_APPLICATION_FEE = 1000
+export const ANNUAL_LICENCE_FEE = 1000
+export const RENEWAL_GST_RATE = 18
 
 /**
  * BIS marking fee for the production statement: the production-based fee, or the minimum marking fee for the
@@ -617,6 +632,10 @@ export function renewalMarkingFeeSummary(
   const years = Math.max(1, Math.round(days / 365.25))
   const minimumTotal = minimumPerYear !== null ? minimumPerYear * years : 0
   const payable = Math.max(calculated, minimumTotal)
+  const applicationFee = RENEWAL_APPLICATION_FEE
+  const licenceFee = ANNUAL_LICENCE_FEE * years
+  const subtotal = payable + applicationFee + licenceFee
+  const gst = Math.round(subtotal * RENEWAL_GST_RATE) / 100
   return {
     calculated,
     scale,
@@ -625,5 +644,11 @@ export function renewalMarkingFeeSummary(
     minimumTotal,
     payable,
     basis: minimumTotal > calculated ? 'minimum' : 'calculated',
+    applicationFee,
+    licenceFee,
+    subtotal,
+    gstRate: RENEWAL_GST_RATE,
+    gst,
+    total: subtotal + gst,
   }
 }
