@@ -7,8 +7,8 @@
  *
  * Flow: Licences → View (Granted Licenses) → this CM/L's "Apply for Renewal" → the renewal letter → Next →
  * Production Return Details: each month of the saved renewal sheet through "Add Return" (one month per page
- * load; months already on Manak are skipped). It never clicks Next on the Production Return page, the
- * Report of Performance or the payment — it turns OFF and leaves the application for review.
+ * load; months already on Manak are skipped) → Next → Report of Performance: difficulties, the CA certificate
+ * (Renewal Sheet → Attach CA Certificate), "I Agree" → Next. On the payment page it turns OFF: it never pays.
  */
 (function () {
   if (window.__qeRenewalLoaded) return;
@@ -55,7 +55,8 @@
   /* ───────── values ───────── */
 
   function setText(el, value) {
-    const desc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+    const proto = el.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+    const desc = Object.getOwnPropertyDescriptor(proto, "value");
     if (desc && desc.set) desc.set.call(el, value);
     else el.value = value;
     el.dispatchEvent(new Event("input", { bubbles: true }));
@@ -145,7 +146,7 @@
     return root;
   }
 
-  function renderPanel(data, note, report, done) {
+  function renderPanel(data, note, report, done, doneText) {
     const root = panel();
     root.getElementById("t").textContent = `QE · Renewal${data.firmName ? ` · ${data.firmName}` : ""}`;
     const list = (items, cls) => (items && items.length ? `<ul class="${cls}">${items.map((i) => `<li>${esc(i)}</li>`).join("")}</ul>` : "");
@@ -159,7 +160,7 @@
       if (report.skipped.length) html += `<div class="mut">Already on Manak:</div>${list(report.skipped, "mut")}`;
     }
     if (done) {
-      html += `<p><b>Renewal is now OFF.</b> Check the returns in the table, add the Consignee details, then click <b>Next</b> for the Report of Performance and the payment yourself. The extension never submits or pays.</p>`;
+      html += `<p><b>Renewal is now OFF.</b> ${doneText || "Check the returns in the table, add the Consignee details, then click <b>Next</b> for the Report of Performance and the payment yourself."} The extension never pays.</p>`;
     }
     html += `<div class="row">${done ? "" : '<button class="pri" id="again">Fill again</button>'}<button id="off">Turn OFF</button></div>`;
     root.getElementById("b").innerHTML = html;
@@ -176,8 +177,42 @@
       qeManakRenewal: false,
       qeManakRenewalEnabled: false,
       renewalFill: null,
+      renewalStage: null,
       renewalLog: log,
     });
+  }
+
+  /* ───────── files (downloaded by background.js from the renewal payload links) ───────── */
+
+  function fetchFile(file) {
+    return new Promise((resolve) => {
+      try {
+        chrome.runtime.sendMessage({ type: "QE_NEWAPP_FETCH_FILE", url: file.url }, (res) => {
+          if (chrome.runtime.lastError || !res || !res.ok) {
+            resolve({ error: (res && res.error) || "Download failed" });
+            return;
+          }
+          const bin = atob(res.base64);
+          const bytes = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+          resolve({ file: new File([bytes], file.fileName || "document.pdf", { type: file.mime || res.mime || "application/pdf" }) });
+        });
+      } catch (error) {
+        resolve({ error: String(error && error.message ? error.message : error) });
+      }
+    });
+  }
+
+  async function setFile(input, file) {
+    if (input.files && input.files.length > 0) return "same";
+    const got = await fetchFile(file);
+    if (!got.file) return `error: ${got.error}`;
+    const dt = new DataTransfer();
+    dt.items.add(got.file);
+    input.files = dt.files;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    return "filled";
   }
 
   /* ───────── navigation ───────── */
@@ -193,6 +228,7 @@
 
   const digitsOnPage = () => norm(document.body.innerText).replace(/\D+/g, " ").split(" ");
   const onReturns = () => Boolean($id("todate") && $id("save") && $id("quantity10"));
+  const onPerformance = () => Boolean($id("brief_info_diff") && $id("test_file") && $id("Next"));
 
   async function licenceRow(cml) {
     const find = () => Array.from(document.querySelectorAll("table tbody tr")).find((tr) => norm(tr.innerText).replace(/\D+/g, " ").split(" ").includes(cml));
@@ -255,22 +291,70 @@
 
   /* ───────── Production Return Details ───────── */
 
-  /** Periods already filed: the returns table under "Advance Marking Fee" (From Date / To Date columns). */
+  const ALREADY_FILED = /not allowed to file return for same month/i;
+
+  /** Show every row of the returns DataTables ("Show N entries" → All), so filed months past page 1 count too. */
+  async function showAllEntries() {
+    let changed = false;
+    for (const select of document.querySelectorAll(".dataTables_length select, select[name$='_length']")) {
+      const all = Array.from(select.options).find((o) => o.value === "-1" || /^all$/i.test(norm(o.text)));
+      if (all && select.value !== all.value) {
+        select.value = all.value;
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+        changed = true;
+      }
+    }
+    if (changed) await sleep(600);
+  }
+
+  /**
+   * Periods already filed, from every returns table on the page — the Advance Marking Fee table and
+   * "Previous Years Production Return". DataTables may draw the header in a separate table from the rows
+   * (scrolling layout), so headers are read from the table or its .dataTables_wrapper.
+   */
   function filedPeriods() {
     const out = new Set();
     for (const table of document.querySelectorAll("table")) {
-      const head = Array.from(table.querySelectorAll("thead th, tr:first-child th")).map((th) => low(th.innerText));
-      const fromIdx = head.findIndex((h) => h === "from date");
-      const toIdx = head.findIndex((h) => h === "to date");
-      if (fromIdx < 0 || toIdx < 0) continue;
-      for (const tr of table.querySelectorAll("tbody tr")) {
-        const cells = Array.from(tr.cells).map((c) => c.innerText);
+      const rows = Array.from(table.querySelectorAll("tbody tr")).filter((tr) => tr.cells.length > 2);
+      if (!rows.length) continue;
+      const wrapper = table.closest(".dataTables_wrapper") || table;
+      const head = Array.from(wrapper.querySelectorAll("thead tr:last-child th, thead tr:last-child td"))
+        .slice(0, rows[0].cells.length)
+        .map((th) => low(th.innerText).replace(/[^a-z ]/g, "").trim());
+      let fromIdx = head.findIndex((h) => h === "from date" || h === "from");
+      let toIdx = head.findIndex((h) => h === "to date" || h === "to");
+      for (const tr of rows) {
+        const cells = Array.from(tr.cells).map((c) => norm(c.innerText));
+        if (fromIdx < 0 || toIdx < 0) {
+          // No usable header: take the first two date cells of the row.
+          const dates = cells.map(isoDate).filter(Boolean);
+          if (dates.length >= 2 && dates[0] <= dates[1]) out.add(`${dates[0]}|${dates[1]}`);
+          continue;
+        }
         const from = isoDate(cells[fromIdx]);
         const to = isoDate(cells[toIdx]);
         if (from && to) out.add(`${from}|${to}`);
       }
     }
     return out;
+  }
+
+  /**
+   * Manak's own list of months still to file ("Please fill the production return for the period: 01-Jul-2026
+   * To 20-Jul-2026, …"), when the page carries it. Null when there is no such message.
+   */
+  function pendingFromManak() {
+    const text = norm(document.body.innerText + " " + Array.from(document.querySelectorAll(".sweet-alert p, .swal-text, .swal2-html-container, .lead")).map((e) => e.textContent).join(" "));
+    const at = text.search(/please fill the production return for the period\s*:/i);
+    if (at < 0) return null;
+    const list = text.slice(at).replace(/^[^:]*:/, "").split(/if you have nil production/i)[0];
+    const out = new Set();
+    for (const m of list.matchAll(/(\d{1,2}-[A-Za-z]{3}-\d{4})\s+to\s+(\d{1,2}-[A-Za-z]{3}-\d{4})/gi)) {
+      const from = isoDate(m[1]);
+      const to = isoDate(m[2]);
+      if (from && to) out.add(`${from}|${to}`);
+    }
+    return out.size ? out : null;
   }
 
   /** The #todate option for a period ("21-Jul-2025  To  31-Jul-2025"). */
@@ -330,12 +414,17 @@
       $id("save").click();
       const s = await waitSwal(6000);
       const after = alertLog();
+      if (after.some((a) => ALREADY_FILED.test(a))) return "filed";
       if (after.length) {
         report.portal.push(`${periodLabel(r)}: ${after.join(" / ")}`);
         return "stop";
       }
       if (s) {
         const message = `${s.title} ${s.text}`.trim();
+        if (ALREADY_FILED.test(message)) {
+          closeSwal(s);
+          return "filed";
+        }
         if (/error|not allowed|invalid|kindly|cancel/i.test(message)) {
           report.portal.push(`${periodLabel(r)}: ${message}`);
           closeSwal(s);
@@ -358,13 +447,25 @@
       report.missing.push("No production rows in the renewal sheet — fill the Renewal Sheet in Consultancy Pro first.");
       return "done";
     }
+    await showAllEntries();
     const filed = filedPeriods();
+    const pending = pendingFromManak();
     for (const r of rows) {
-      if (filed.has(`${r.from}|${r.to}`) || addedHere.has(`${r.from}|${r.to}`)) {
+      const key = `${r.from}|${r.to}`;
+      // Manak's "still to file" list wins when present; otherwise the filed-returns tables decide.
+      const onManak = pending ? !pending.has(key) : filed.has(key);
+      if (onManak || addedHere.has(key)) {
         report.skipped.push(periodLabel(r));
         continue;
       }
       const result = await addReturn(data, r, report);
+      if (result === "filed") {
+        // Manak already has this month (not in the tables we could read): count it as filed and go on.
+        addedHere.add(key);
+        report.skipped.push(`${periodLabel(r)} (Manak: already filed)`);
+        await sleep(400);
+        continue;
+      }
       if (result === "added") {
         addedHere.add(`${r.from}|${r.to}`);
         report.filled.push(`${periodLabel(r)} — added`);
@@ -374,6 +475,76 @@
       if (result === "stop") return "stop";
     }
     return "done";
+  }
+
+  /** Production Return Details → Next (Manak checks every month is filed, then opens Report of Performance). */
+  async function returnsNext(report) {
+    const next = $id("nxt");
+    if (!next) {
+      report.missing.push('Click "Next" below the returns table.');
+      return "stop";
+    }
+    await chrome.storage.local.set({ renewalStage: "returns-next" });
+    alertCapture(true);
+    try {
+      next.click();
+      const s = await waitSwal(6000);
+      const said = [...alertLog(), ...(s ? [`${s.title} ${s.text}`.trim()] : [])].filter(Boolean);
+      if (said.length) {
+        if (s) closeSwal(s);
+        report.portal.push(`Next: ${said.join(" / ")}`);
+        return "stop";
+      }
+      return "next";
+    } finally {
+      alertCapture(false);
+    }
+  }
+
+  /** Report of Performance: Manak fills the quantities; we add difficulties, the CA certificate and I Agree, then Next. */
+  async function fillPerformance(data, report) {
+    const difficulties = $id("brief_info_diff");
+    if (difficulties && !norm(difficulties.value)) setText(difficulties, data.difficulties || "Nil");
+    report.filled.push(`Difficulties: ${norm(difficulties && difficulties.value) || "—"}`);
+    const reason = $id("reason");
+    if (reason && visible(reason) && !norm(reason.value)) {
+      setText(reason, "Not applicable");
+      report.filled.push("Reason for non-covered quantity: Not applicable");
+    }
+    const ca = (Array.isArray(data.files) ? data.files : []).find((f) => f && f.slot === "ca-certificate");
+    if (!ca) {
+      report.missing.push("CA certificate: attach it on the Renewal Sheet (Attach CA Certificate), then run Manak Assist again — or upload it here yourself.");
+      return "stop";
+    }
+    const upload = await setFile($id("test_file"), ca);
+    if (upload.startsWith("error")) {
+      report.missing.push(`CA certificate could not be downloaded (${upload.slice(7)}) — reopen Manak Assist from Consultancy Pro.`);
+      return "stop";
+    }
+    report.filled.push(`CA certificate: ${ca.fileName}${upload === "same" ? " (already chosen)" : ""}`);
+    const agree = $id("agree");
+    if (agree && !agree.checked) agree.click();
+    report.filled.push("Declaration: I Agree");
+    await sleep(500);
+    await chrome.storage.local.set({ renewalStage: "performance-next" });
+    alertCapture(true);
+    try {
+      $id("Next").click();
+      const s = await waitSwal(8000);
+      const said = [...alertLog(), ...(s ? [`${s.title} ${s.text}`.trim()] : [])].filter(Boolean);
+      // Manak's checks ("… should be between …", "Kindly …", "Cancelled") stop here; any other box is a
+      // confirmation of the step, which goes on to the payment page.
+      if (said.length && /error|kindly|please|should|invalid|cancel|not allowed|must|select|upload/i.test(said.join(" "))) {
+        if (s) closeSwal(s);
+        await chrome.storage.local.set({ renewalStage: null });
+        report.portal.push(`Report of Performance: ${said.join(" / ")}`);
+        return "stop";
+      }
+      if (s) closeSwal(s);
+      return "next";
+    } finally {
+      alertCapture(false);
+    }
   }
 
   /* ───────── run ───────── */
@@ -399,7 +570,7 @@
   async function run() {
     if (running || finished) return;
     if (/ebislogin/i.test(location.pathname)) return;
-    const store = await chrome.storage.local.get(["qeManakRenewal", "qeManakRenewalEnabled", "renewalFill"]);
+    const store = await chrome.storage.local.get(["qeManakRenewal", "qeManakRenewalEnabled", "renewalFill", "renewalStage"]);
     if (store.qeManakRenewal === true && store.qeManakRenewalEnabled !== true && store.renewalFill && signedIn()) {
       await chrome.storage.local.set({ qeManakRenewalEnabled: true });
       store.qeManakRenewalEnabled = true;
@@ -409,6 +580,37 @@
       return;
     }
     const data = store.renewalFill;
+    // Report of Performance went through: this is the payment page. Stop here — the extension never pays.
+    if (store.renewalStage === "performance-next" && !onPerformance() && !onReturns() && signedIn()) {
+      finished = true;
+      await turnOff({ message: "Payment page reached — review and pay on Manak", at: Date.now() });
+      renderPanel(data, "Report of Performance submitted. This is the payment step.", null, true, "Check the fee details on this page and make the payment yourself.");
+      chrome.runtime.sendMessage({ type: "QE_MANAK_IDLE" }, () => void chrome.runtime.lastError);
+      return;
+    }
+    if (onPerformance()) {
+      sessionStorage.removeItem(NAV_KEY);
+      if (!digitsOnPage().includes(data.cmlNo)) {
+        renderPanel(data, `This Report of Performance is not for CM/L ${data.cmlNo} — nothing filled.`, null, false);
+        return;
+      }
+      running = true;
+      const report = { filled: [], missing: [], skipped: [], portal: [] };
+      renderPanel(data, "Filling the Report of Performance…", null, false);
+      try {
+        const result = await fillPerformance(data, report);
+        renderPanel(data, result === "next" ? "Report of Performance sent — opening the payment step…" : "Stopped — see below. Fix it, then Fill again.", report, false);
+        if (result === "next") setTimeout(() => safeRun(false), 6000);
+      } finally {
+        running = false;
+      }
+      return;
+    }
+    if (!onReturns() && store.renewalStage) {
+      // Mid-flow (Next was clicked): never navigate away from what Manak opened.
+      renderPanel(data, "Waiting for Manak's next page…", null, false);
+      return;
+    }
     if (!onReturns()) {
       const note = signedIn() ? await autoNavigate(data) : "";
       if (note) renderPanel(data, note, null, false);
@@ -434,11 +636,13 @@
         renderPanel(data, "Stopped — see below. Fix it, then Fill again.", report, false);
         return;
       }
-      finished = true;
-      const added = (await chrome.storage.local.get("renewalLog")).renewalLog;
-      await turnOff({ message: `Production returns done (${report.skipped.length} on Manak)`, missing: report.missing, at: Date.now(), last: added || null });
-      renderPanel(data, report.missing.length ? "Returns done — some items need you." : "All months are on Manak.", report, true);
-      chrome.runtime.sendMessage({ type: "QE_MANAK_IDLE" }, () => void chrome.runtime.lastError);
+      if (report.missing.length) {
+        renderPanel(data, "Returns done — some items need you before Next.", report, false);
+        return;
+      }
+      renderPanel(data, "All months are on Manak — clicking Next for the Report of Performance…", report, false);
+      const next = await returnsNext(report);
+      if (next === "stop") renderPanel(data, "Stopped at Next — see below. Fix it, then Fill again.", report, false);
     } finally {
       running = false;
     }
