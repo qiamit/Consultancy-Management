@@ -1,0 +1,17 @@
+{
+  "name": "qe-consultancy-mcp",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.0",
+    "express": "5.2.1",
+    "zod": "4.6.5"
+  }
+}

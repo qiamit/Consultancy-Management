@@ -38,6 +38,7 @@ import BisSampleFailureReplyMasterPage from '@/features/bis/sample-failure-reply
 import BisKnowledgeSearchPage from '@/features/bis/knowledge-search/BisKnowledgeSearchPage'
 import EmailToolsPage from '@/features/tools/email/EmailToolsPage'
 import CmsToolsPage from '@/features/tools/cms/CmsToolsPage'
+import ClaudeConnectorPage from '@/features/tools/mcp/ClaudeConnectorPage'
 import { RequireAuth } from '@/components/auth/RequireAuth'
 import { RequireLaboratoryDirector } from '@/components/auth/RequireLaboratoryDirector'
 
@@ -163,4 +164,8 @@ export function EmailToolsRoute() {
 
 export function CmsToolsRoute() {
   return <CmsToolsPage />
+}
+
+export function ClaudeConnectorRoute() {
+  return <ClaudeConnectorPage />
 }
