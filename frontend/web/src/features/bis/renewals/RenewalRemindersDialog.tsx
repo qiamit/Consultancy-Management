@@ -113,7 +113,7 @@ export function RenewalRemindersDialog({ open, onOpenChange }: { open: boolean; 
               </p>
               <p className="text-xs text-stone-600">
                 Email to the client at {settings ? settings.stages.join(' / ') : '85 / 50 / 10'} days before validity, every day after{' '}
-                {settings?.sendHourIst ?? 9}:00 AM IST, with the blank monthly production sheet (Excel).
+                {settings?.sendHourIst ?? 9}:00 AM IST, with the Excel for month-wise production and consignee details.
                 {settings?.lastRunOn ? ` Last run: ${formatDisplayDate(settings.lastRunOn)}.` : ''}
               </p>
             </div>

@@ -211,7 +211,51 @@ export async function buildProductionWorkbook({ firm, isLabel, cml, unit, period
   sheet.pageSetup.printArea = `A1:E${headerRow + rows.length}`
   sheet.pageSetup.printTitlesRow = `${headerRow}:${headerRow}`
   await sheet.protect('QE-Renewal-Client-Input', { selectLockedCells: false, selectUnlockedCells: true, autoFilter: true })
+  addConsigneeSheet(workbook, { firm, cml, period })
   return Buffer.from(await workbook.xlsx.writeBuffer())
+}
+
+/** Columns of BIS's Consignee Master File (Manak → Production Return → Consignee Details upload). */
+export const CONSIGNEE_COLUMNS = [
+  ['Brand Name', 16], ["Consignee's Name", 28], ['Address', 36], ['Country', 12], ['State', 16], ['District', 16],
+  ['City', 16], ['Pincode', 10], ['Telephone', 14], ['Mobile', 14], ['Email Id', 26], ['Quantity', 12], ['Year', 8], ['Month', 8],
+]
+
+function addConsigneeSheet(workbook, { firm, cml, period }) {
+  const sheet = workbook.addWorksheet('Consignee Details', { views: [{ state: 'frozen', ySplit: 3 }] })
+  sheet.columns = CONSIGNEE_COLUMNS.map(([, width]) => ({ width }))
+  const last = String.fromCharCode(64 + CONSIGNEE_COLUMNS.length)
+  sheet.mergeCells(`A1:${last}1`)
+  sheet.getCell('A1').value = `CONSIGNEE DETAILS — ${firm || 'Client'} • CM/L ${cml || '—'}`
+  sheet.getCell('A1').font = { name: 'Aptos Display', size: 14, bold: true, color: { argb: 'FFFFFFFF' } }
+  sheet.getCell('A1').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF292524' } }
+  sheet.getCell('A1').alignment = { vertical: 'middle', horizontal: 'center' }
+  sheet.getRow(1).height = 28
+  sheet.mergeCells(`A2:${last}2`)
+  sheet.getCell('A2').value =
+    `One row per buyer (consignee) per month, ${displayDate(period.from)} to ${displayDate(period.to)}. Quantity in the licence unit; Year as 2026, Month as 1–12.`
+  sheet.getCell('A2').font = { name: 'Aptos', size: 9, italic: true, color: { argb: 'FF57534E' } }
+  sheet.getCell('A2').alignment = { vertical: 'middle', wrapText: true }
+  sheet.getRow(2).height = 28
+  const border = { style: 'thin', color: { argb: 'FFD6D3D1' } }
+  const header = sheet.getRow(3)
+  header.values = CONSIGNEE_COLUMNS.map(([label]) => label)
+  header.height = 30
+  header.eachCell((cell) => {
+    cell.font = { name: 'Aptos', size: 10, bold: true, color: { argb: 'FFFFFFFF' } }
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF44403C' } }
+    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
+    cell.border = { top: border, left: border, bottom: border, right: border }
+  })
+  for (let r = 4; r < 4 + 100; r += 1) {
+    const row = sheet.getRow(r)
+    for (let c = 1; c <= CONSIGNEE_COLUMNS.length; c += 1) {
+      row.getCell(c).border = { top: border, left: border, bottom: border, right: border }
+    }
+    row.getCell(12).numFmt = '#,##0.00'
+    row.getCell(13).dataValidation = { type: 'whole', operator: 'between', formulae: [2000, 2100], allowBlank: true, showErrorMessage: true, error: 'Enter the year, e.g. 2026.' }
+    row.getCell(14).dataValidation = { type: 'whole', operator: 'between', formulae: [1, 12], allowBlank: true, showErrorMessage: true, error: 'Enter the month as 1–12.' }
+  }
 }
 
 export function reminderEmail({ firm, contact, cml, isLabel, product, validity, daysLeft, period, stage }) {
@@ -230,11 +274,15 @@ export function reminderEmail({ firm, contact, cml, isLabel, product, validity, 
 <tr><td style="border:1px solid #d6d3d1;background:#f5f5f4;font-weight:bold">Indian Standard</td><td style="border:1px solid #d6d3d1">${escapeHtml(isLabel)}${product ? ` — ${escapeHtml(product)}` : ''}</td></tr>
 <tr><td style="border:1px solid #d6d3d1;background:#f5f5f4;font-weight:bold">Valid till</td><td style="border:1px solid #d6d3d1"><b>${escapeHtml(displayDate(validity))}</b> (${daysLeft} day${daysLeft === 1 ? '' : 's'} left)</td></tr>
 </table>
-<p>Please fill the attached <b>production sheet</b> with the month-wise <b>total production</b> and <b>rejection</b> for <b>${escapeHtml(displayDate(period.from))} to ${escapeHtml(displayDate(period.to))}</b>, and reply to this email with it.</p>
+<p>Please fill the attached Excel and reply to this email with it:</p>
+<ul>
+<li><b>Production Data</b> sheet: month-wise <b>total production</b> and <b>rejection</b> for <b>${escapeHtml(displayDate(period.from))} to ${escapeHtml(displayDate(period.to))}</b>.</li>
+<li><b>Consignee Details</b> sheet: the buyers the ISI-marked goods were supplied to in the same period (name, address, quantity, month).</li>
+</ul>
 <p>Regards,<br/>Q Engineering<br/>info@qengineering.in</p>
 <p style="font-size:12px;color:#78716c">This is an automatic reminder for your BIS licence renewal. If the renewal is already filed, please ignore this email.</p>
 </div>`
-  const text = `${lead}\n\nFirm: ${firm}\nLicence No.: CM/L-${cml}\nIndian Standard: ${isLabel}\nValid till: ${displayDate(validity)} (${daysLeft} days left)\n\nPlease fill the attached production sheet (month-wise total production and rejection for ${displayDate(period.from)} to ${displayDate(period.to)}) and reply to this email with it.\n\nRegards,\nQ Engineering`
+  const text = `${lead}\n\nFirm: ${firm}\nLicence No.: CM/L-${cml}\nIndian Standard: ${isLabel}\nValid till: ${displayDate(validity)} (${daysLeft} days left)\n\nPlease fill the attached Excel and reply with it: the Production Data sheet (month-wise total production and rejection for ${displayDate(period.from)} to ${displayDate(period.to)}) and the Consignee Details sheet (buyers supplied in the same period).\n\nRegards,\nQ Engineering`
   return { subject, html, text }
 }
 

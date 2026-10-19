@@ -81,7 +81,7 @@ function SendDialog({ row, onOpenChange }: { row: BisProjectRow | null; onOpenCh
               <input id="renewal-reminder-to" type="email" className={cn(limsFieldClass, 'w-full px-2')} value={to} disabled={busy} onChange={(e) => setTo(e.target.value)} placeholder="client@company.com" />
             </div>
             <p className="text-xs text-stone-600">
-              Attached: blank production sheet (Excel){period ? `, ${formatDisplayDate(period.from)} to ${formatDisplayDate(period.to)}` : ''}. The client fills the month-wise total production and rejection and replies.
+              Attached Excel: Production Data{period ? ` (${formatDisplayDate(period.from)} to ${formatDisplayDate(period.to)})` : ''} and Consignee Details. The client fills the month-wise production and the buyers, and replies.
             </p>
             {history.length ? (
               <div className="text-xs">
