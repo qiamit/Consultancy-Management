@@ -1169,8 +1169,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return;
       }
       if (message.renewal) {
-        // Manak Assist on BIS License Renewals: login only for now — Test Request / Import QR /
-        // New Application / Inclusion stay OFF. renewalFill holds the licence for the renewal fill.
+        // Manak Assist on BIS License Renewals: login, then the Renewal section (renewal-fill.js) opens this
+        // licence's Apply for Renewal and adds the production returns. Test Request / Import QR /
+        // New Application / Inclusion stay OFF.
         await chrome.storage.local.set({
           pendingFill: null,
           manakResult: null,
@@ -1189,6 +1190,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           // Switches ON after captcha sign-in (content.js).
           qeManakRenewalEnabled: false,
           renewalFill: payloadWithoutPassword(payload),
+          renewalLog: null,
           qeManakPortal: {
             userId: portalUserId,
           },
@@ -1199,7 +1201,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           await chrome.storage.local.set({ qeManakRenewalEnabled: true });
           await safeTabUpdate(reused.tab.id, { active: true });
           void settle(chrome.windows.update(reused.tab.windowId, { focused: true }));
-          sendResponse({ ok: true, message: "Already logged in. Renewal ON — open Licenses View → Apply for Renewal." });
+          void safeSendTab(reused.tab.id, { type: "QE_RENEWAL_REFRESH" });
+          sendResponse({ ok: true, message: "Already logged in. Renewal ON — opening this licence's Apply for Renewal." });
           return;
         }
         const created = await safeTabCreate({ url: ebisLoginUrl, active: true });

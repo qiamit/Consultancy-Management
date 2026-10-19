@@ -18,7 +18,9 @@ import {
 } from './bisRenewalsApi'
 import {
   coveredProductionExceedsTotal,
+  defaultRenewalProductionPeriod,
   emptyRenewalForm,
+  generateMonthlyRenewalRows,
   rowToRenewalForm,
   type BisRenewalForm,
   type BisRenewalRow,
@@ -160,9 +162,19 @@ export default function BisRenewalsMasterPage({ dialogOnly = false }: { dialogOn
           slabRates: summary.slabRates,
         }
         const savedDraft = readRenewalDraft('new')
+        // A new renewal starts on Manak's production period, with its monthly rows.
+        const period = defaultRenewalProductionPeriod(summary.currentValidity ?? '')
+        const fresh = { ...emptyRenewalForm(), ...projectMetadata }
         setForm(savedDraft?.form.projectId === projectId
           ? { ...savedDraft.form, ...projectMetadata }
-          : { ...emptyRenewalForm(), ...projectMetadata })
+          : period
+            ? {
+                ...fresh,
+                renewalPeriodFrom: period.from,
+                renewalPeriodTo: period.to,
+                productionRows: generateMonthlyRenewalRows(period.from, period.to, [], summary.currentValidity ?? ''),
+              }
+            : fresh)
         setFormError(null)
         hydratedEditRef.current = 'new'
         setEdit('new')

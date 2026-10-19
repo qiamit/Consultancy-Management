@@ -942,6 +942,13 @@ async function handleRenewalReminderSend(req, res) {
   json(res, 200, { ok: true, ...result })
 }
 
+/** Admin: turn automatic reminders on without mailing today's backlog. */
+async function handleRenewalRemindersEnable(req, res) {
+  const caller = await requireFullAccess(req)
+  const result = await renewalReminders.enable(String(caller?.id ?? ''))
+  json(res, 200, { ok: true, ...result })
+}
+
 const routes = {
   'GET /health': async (_req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' })
@@ -950,6 +957,7 @@ const routes = {
   'POST /send-email': handleSendEmail,
   'GET /renewal-reminders/preview': handleRenewalRemindersPreview,
   'POST /renewal-reminders/send': handleRenewalReminderSend,
+  'POST /renewal-reminders/enable': handleRenewalRemindersEnable,
   'POST /create-user': handleCreateUser,
   'POST /delete-user': handleDeleteUser,
   'POST /set-user-password': handleSetUserPassword,

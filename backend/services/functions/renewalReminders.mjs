@@ -391,7 +391,7 @@ export function createRenewalReminders({ rest, sendResendEmail, logEmail }) {
       let reason = ''
       if (!stage) [action, reason] = ['wait', 'Not at a reminder stage yet']
       else if (existing?.status === 'sent') [action, reason] = ['done', `${stage}-day reminder already sent`]
-      else if (existing?.status === 'skipped') [action, reason] = ['done', 'Skipped earlier']
+      else if (existing?.status === 'skipped') [action, reason] = ['done', `${stage}-day reminder skipped (due before reminders were on)`]
       else if (existing && existing.attempts >= MAX_ATTEMPTS && existing.status === 'failed') [action, reason] = ['skip', 'Failed 3 times']
       else if (existing?.status === 'sending' && Date.now() - Date.parse(existing.updated_at) < SENDING_STALE_MS) [action, reason] = ['skip', 'Sending now']
       else if (info.paused) [action, reason] = ['skip', 'Reminders paused for this licence']
@@ -558,5 +558,52 @@ export function createRenewalReminders({ rest, sendResendEmail, logEmail }) {
     return { recipient, subject: result.subject }
   }
 
-  return { plan, sendNow, startScheduler, tick, istNow }
+  /**
+   * Turn automatic reminders on. Reminders already due today are marked skipped (no backlog mail):
+   * only the stages licences reach from now on are emailed.
+   */
+  async function enable(userId) {
+    const today = istNow().date
+    const { items } = await plan(today)
+    const backlog = items
+      .filter((i) => i.action === 'send' && !i.existingId)
+      .map((i) => ({
+        project_id: i.projectId,
+        validity_date: i.validity,
+        stage: i.stage,
+        status: 'skipped',
+        attempts: 0,
+        recipient: i.email || null,
+        error: 'Already due when automatic reminders were turned on',
+      }))
+    // The stage index is partial (stage > 0), so PostgREST cannot upsert on it: insert, and on a clash
+    // (a run claimed a stage meanwhile) fall back to one row at a time.
+    for (let k = 0; k < backlog.length; k += 200) {
+      const chunk = backlog.slice(k, k + 200)
+      try {
+        await rest('/bis_renewal_reminders', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(chunk) })
+      } catch {
+        for (const row of chunk) {
+          await rest('/bis_renewal_reminders', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) }).catch(() => null)
+        }
+      }
+    }
+    // Failed / stale rows of today's stage would otherwise retry: close them too.
+    const reopen = items.filter((i) => i.action === 'send' && i.existingId).map((i) => i.existingId)
+    if (reopen.length) {
+      await rest(`/bis_renewal_reminders?id=in.(${reopen.join(',')})`, {
+        method: 'PATCH',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({ status: 'skipped', error: 'Already due when automatic reminders were turned on', updated_at: new Date().toISOString() }),
+      })
+    }
+    await rest('/bis_renewal_reminder_settings?id=eq.1', {
+      method: 'PATCH',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({ enabled: true, updated_by: userId || null, updated_at: new Date().toISOString() }),
+    })
+    return { skipped: backlog.length + reopen.length }
+  }
+
+  return { plan, sendNow, enable, startScheduler, tick, istNow }
 }

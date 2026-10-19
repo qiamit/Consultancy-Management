@@ -162,11 +162,11 @@ function RowActions({
             aria-label={`Manak Assist for ${client}`}
             title="Manak Assist — renewal (Test Request stays off)"
             onClick={() => {
-              void openManakEbisAssist({
-                portalUserId: manakLoginFromProject(row).userId,
-                projectId: row.id,
-                renewal: buildManakRenewalPayload(row),
-              })
+              void buildManakRenewalPayload(row)
+                .then((renewal) => {
+                  if (!renewal.returns.length) toast.info('No saved Renewal Sheet yet — Manak opens, but the production returns are not filled.')
+                  return openManakEbisAssist({ portalUserId: manakLoginFromProject(row).userId, projectId: row.id, renewal })
+                })
                 .then(({ extensionUsed }) => {
                   if (extensionUsed) toast.success('Manak Assist: Renewal ON — sign in with the captcha')
                   else toast.warning('Extension not detected — opened Manak eBIS in a new tab', {
