@@ -155,8 +155,9 @@ export async function createRenewalClientWorkbook(form: BisRenewalForm): Promise
 
   form.productionRows.forEach((row, index) => {
     const excelRow = sheet.addRow([
-      row.periodFrom ? new Date(`${row.periodFrom}T00:00:00`) : '',
-      row.periodTo ? new Date(`${row.periodTo}T00:00:00`) : '',
+      // UTC midnight: Excel stores dates without a time zone, so a local (IST) midnight would show the day before.
+      row.periodFrom ? new Date(`${row.periodFrom}T00:00:00Z`) : '',
+      row.periodTo ? new Date(`${row.periodTo}T00:00:00Z`) : '',
       row.stockMarkingBreak ? 0 : '',
       row.stockMarkingBreak ? 0 : '',
       row.stockMarkingBreak ? 0 : { formula: `IF(C${headerRow + index + 1}="","",MAX(0,C${headerRow + index + 1}-IF(D${headerRow + index + 1}="",0,D${headerRow + index + 1})))`, result: '' },
@@ -319,7 +320,9 @@ export async function importRenewalClientWorkbook(
     if (!periodFrom && !periodTo) continue
     const key = `${periodFrom}|${periodTo}`
     const original = existingByDates.get(key)
-    if (!original) throw new Error(`The workbook period ${periodFrom || '—'} to ${periodTo || '—'} does not match this renewal. Download a fresh template for this period.`)
+    if (!original) {
+      throw new Error(`The workbook period ${formatDisplayDate(periodFrom) || '—'} to ${formatDisplayDate(periodTo) || '—'} does not match the periods in this Renewal Sheet. If you split periods or changed the dates after downloading, download a fresh Blank Sheet and enter the data again.`)
+    }
     if (updated.has(key)) throw new Error(`Duplicate period found in workbook: ${periodFrom} to ${periodTo}.`)
     const total = amount(String(source[indexes.total] ?? ''))
     const rejection = indexes.rejection >= 0 ? amount(String(source[indexes.rejection] ?? '')) : null
