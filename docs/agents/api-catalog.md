@@ -67,7 +67,6 @@ Masters: `clients`, `is_codes`, `is_code_files`, `test_parameters`, `products_se
 |---|---|
 | `GET /health` | Healthcheck |
 | `POST /qi-assistant` | QE Assistant chat (text reply only) |
-| `POST /send-email` | Send email via Resend (never in tests). F7 payment reminders use this only after the user confirms, and only for invoices `invoice_needs_reminder` allows. |
-| `POST /send-mrm-agenda` | MRM agenda email |
+| `POST /send-email` | Send email via Resend (never in tests). Needs `source_path` (the app module, sent by `sendAppEmail`) with **edit** access for the caller, at most 20 recipients, and 60/hour, 300/day per user. Every attempt is logged in `email_send_log`. F7 payment reminders use this only after the user confirms, and only for invoices `invoice_needs_reminder` allows. |
 | `POST /create-user`, `POST /delete-user`, `POST /set-user-password` | Admin user management (admin role only). Create sets the access role and `must_change_password`. Delete needs an Inactive user and removes the GoTrue user first; the profile goes through the FK cascade. Set-password logs the user out everywhere. All three write `audit_log` rows (`table_name = 'auth.users'`) with the calling admin's id. |
-| `GET/POST /osl/manak-pdf` | Manak PDF upload/fetch used by the extension |
+| `GET/POST /osl/manak-pdf` | Manak PDF hand-off used by the extension. `register` and `GET` need the user's session, and only the registering user can `GET`. `chunk`/`finish` use the token only (32–128 characters, chunks ≤ 200 000 base64 characters, ≤ 300 chunks, body ≤ 1 MB). Entries expire after 45 minutes. |
