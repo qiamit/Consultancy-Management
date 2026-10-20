@@ -6,14 +6,16 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { limsDarkBarBtnClass, limsDarkBarGlowStyle, limsPageShellClass, limsPanelClass, limsPrimaryBtnClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { fetchBisProjectById } from '../projects/bisProjectsApi'
 import { factoryTestReportHasContent, parseFactoryTestReportPayload } from '../projects/factoryTestReportModel'
 import { oslSampleRowHasContent, parseOslSampleRequirementsPayload } from '../projects/oslSampleRequirementsModel'
 import { formatCmL, type BisProjectRow } from '../projects/types'
-import { draftStopMarkingReply, readStopMarkingReport, readStopMarkingTestReport } from './stopMarkingAi'
+import { readStopMarkingReport, readStopMarkingTestReport } from './stopMarkingAi'
+import { BisDocumentPrintPreviewDialog } from '../projects/BisDocumentPrintPreviewDialog'
+import { StopMarkingDocumentsTable } from './StopMarkingDocumentsTable'
+import { StopMarkingReplyEditor } from './StopMarkingReplyEditor'
 import {
   addStopMarkingDocument,
   closeStopMarkingCase,
@@ -27,11 +29,11 @@ import {
   uploadStopMarkingReport,
 } from './stopMarkingApi'
 import { openStopMarkingManak } from './stopMarkingManak'
-import { downloadStopMarkingReplyWord, emailStopMarkingReplyToClient, printStopMarkingReply } from './printStopMarkingReply'
+import { buildStopMarkingReplyHtml, downloadStopMarkingReplyWord, emailStopMarkingReplyToClient, printStopMarkingReply } from './printStopMarkingReply'
 import { AutoGrowTextarea } from '../shared/AutoGrowTextarea'
 import { StopMarkingTestReportModule } from './StopMarkingTestReportModule'
 import { StopMarkingLetterPicker } from './StopMarkingLetterPicker'
-import { findingsToText, noticeHoldsMarking, noticeTypeLabel, rowToCaseForm, stopMarkingClientName, stopMarkingIsCodeLabel, stopMarkingStatusLabel, type StopMarkingCaseForm, type StopMarkingRow } from './types'
+import { noticeHoldsMarking, replySectionsToText, noticeTypeLabel, rowToCaseForm, stopMarkingClientName, stopMarkingIsCodeLabel, stopMarkingStatusLabel, type StopMarkingCaseForm, type StopMarkingRow } from './types'
 
 const STEPS = ['BIS Letter & Review', 'Test Report Review', 'Factory Test Report', 'Reply to BIS', 'Documents & Submission'] as const
 const label = 'block text-[11px] font-semibold uppercase tracking-wide text-stone-600'
@@ -59,6 +61,7 @@ export function StopMarkingModuleDialog({
   const [error, setError] = useState<string | null>(null)
   const [bisRow, setBisRow] = useState<BisProjectRow | null>(null)
   const [docLabel, setDocLabel] = useState('')
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null)
 
   useEffect(() => {
     setForm(row ? rowToCaseForm(row) : null)
@@ -163,7 +166,7 @@ export function StopMarkingModuleDialog({
       setBusy(null)
     }
   }
-  const live = (): StopMarkingRow => ({ ...row, stop_date: form.stopDate, bis_reference: form.bisReference, reply_draft: form.replyDraft, reply_date: form.replyDate || null })
+  const live = (): StopMarkingRow => ({ ...row, stop_date: form.stopDate, bis_reference: form.bisReference, reply_draft: replySectionsToText(form.replySections) || form.replyDraft, reply_sections: form.replySections, reply_date: form.replyDate || null })
   const save = async (nextStatus?: string) => {
     const updated = await saveStopMarkingCase(row.id, { ...form, status: nextStatus ?? form.status })
     onUpdated(updated)
@@ -185,7 +188,7 @@ export function StopMarkingModuleDialog({
       toast.success('Letter read — check the details.')
     })
 
-  const hasReply = form.replyDraft.trim().length > 0
+  const hasReply = replySectionsToText(form.replySections).trim().length > 0 || form.replyDraft.trim().length > 0
   const checks: Array<[string, boolean, string]> = [
     ['BIS Letter Received', Boolean(row.report_path), row.report_name || 'Not Attached'],
     ['Reason and Points Reviewed', Boolean(form.bisReason.trim() || form.reviewNotes.trim()), form.bisReference || 'Not Entered'],
@@ -330,36 +333,11 @@ export function StopMarkingModuleDialog({
 
                   {step === 3 ? (
                     <div className="space-y-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className={tbtn}
-                          disabled={busy !== null || closed}
-                          onClick={() =>
-                            void run('draft', async () => {
-                              set('replyDraft', await draftStopMarkingReply(row, { reference: form.bisReference, reason: form.bisReason, deadline: form.bisDeadline, reviewNotes: form.reviewNotes, reportFindings: [findingsToText(form.reportFindings), form.reportObservations && `Observations on Failed Parameters as per the Standard:\n${form.reportObservations}`].filter(Boolean).join('\n\n'), currentDraft: form.replyDraft }))
-                              toast.success('Reply drafted — edit it, then save.')
-                            })
-                          }
-                        >
-                          {busy === 'draft' ? <LoaderCircle size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                          {hasReply ? 'Improve Reply with AI' : 'Draft Reply with AI'}
-                        </Button>
-                        <div className="sm:ml-auto sm:w-48">
-                          <LimsDatePicker className="h-8 w-full" aria-label="Reply Date" disabled={closed} placeholder="Reply Date" value={form.replyDate} onChange={(v) => set('replyDate', v)} />
-                        </div>
-                      </div>
-                      <Textarea
-                        aria-label="Reply Letter to BIS"
-                        rows={16}
-                        disabled={closed}
-                        className="rounded-none border-stone-500 bg-white font-serif text-sm leading-relaxed"
-                        placeholder="Reply Letter to BIS — Draft It with AI or Type It Here."
-                        value={form.replyDraft}
-                        onChange={(e) => set('replyDraft', e.target.value)}
-                      />
+                      <StopMarkingReplyEditor row={row} form={form} bisRow={bisRow} closed={closed} onChange={(next) => set('replySections', next)} onDate={(v) => set('replyDate', v)} />
                       <div className="flex flex-wrap items-center gap-1.5">
+                        <Button type="button" variant="outline" className={tbtn} disabled={!hasReply || busy !== null} onClick={() => void run('preview', async () => { setPreviewHtml(await buildStopMarkingReplyHtml(live())) })}>
+                          {busy === 'preview' ? <LoaderCircle size={14} className="animate-spin" /> : <Eye size={14} />} Preview
+                        </Button>
                         <Button type="button" variant="outline" className={tbtn} disabled={!hasReply || busy !== null} onClick={() => void run('print', async () => { const m = await printStopMarkingReply(live()); if (m) setError(m) })}>
                           <Printer size={14} /> Print / PDF
                         </Button>
@@ -563,11 +541,12 @@ export function StopMarkingModuleDialog({
                           </ul>
                         ) : null}
                       </div>
+                      <StopMarkingDocumentsTable row={live()} bisRow={bisRow} />
                       <div className="flex flex-wrap items-center gap-2">
                         <Button type="button" variant="outline" className={tbtn} disabled={!hasReply || busy !== null} onClick={() => void run('print', async () => { const m = await printStopMarkingReply(live()); if (m) setError(m) })}>
                           <Printer size={14} /> Print Reply
                         </Button>
-                        <Button type="button" variant="outline" className={tbtn} disabled={busy !== null} title="Open Manak eBIS (login ready); the reply text is copied for pasting" onClick={() => void run('manak', () => openStopMarkingManak({ ...row, reply_draft: form.replyDraft }))}>
+                        <Button type="button" variant="outline" className={tbtn} disabled={busy !== null} title="Open Manak eBIS (login ready); the reply text is copied for pasting" onClick={() => void run('manak', () => openStopMarkingManak({ ...row, reply_draft: replySectionsToText(form.replySections) || form.replyDraft }))}>
                           <ExternalLink size={14} /> Manak Assist
                         </Button>
                         {!closed && form.status !== 'replied' ? (
@@ -634,6 +613,15 @@ export function StopMarkingModuleDialog({
           </div>
         </DialogContent>
       </Dialog>
+      <BisDocumentPrintPreviewDialog
+        open={previewHtml !== null}
+        onOpenChange={(open) => { if (!open) setPreviewHtml(null) }}
+        row={bisRow}
+        kind="osl-sample-requirements"
+        title="Reply Letter to BIS"
+        generatedHtml={previewHtml}
+        editable={{ format: 'word', onDownload: () => void run('word', () => downloadStopMarkingReplyWord(live())) }}
+      />
     </>
   )
 }

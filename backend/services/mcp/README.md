@@ -25,12 +25,12 @@
 - **Redirect URIs.** Only `https://claude.ai/api/mcp/auth_callback`, `https://claude.com/api/mcp/auth_callback` and loopback (`http://localhost:*`, `http://127.0.0.1:*`) can register.
 
 ## Tools (v1, read-only)
-`whoami`, `search_clients`, `get_client`, `search_projects`, `get_project`, `get_project_module`, `get_file_link`, `search_is_codes`, `get_is_code`, `search_laboratories`, `licences_due`.
+`whoami`, `search_clients`, `get_client`, `search_projects`, `get_project`, `get_project_module`, `get_file_link`, `search_is_codes`, `get_is_code`, `search_laboratories`, `licences_due`, and for License Non-Conformity (module `/bis/stop-marking`): `search_noncompliance_cases`, `get_noncompliance_case`, `get_noncompliance_file_link`.
 
 Secret-looking keys (`password`, `secret`, `api_key`, `token`, …) are stripped from every result.
 
 ## Edit tools (when `MCP_WRITE_ENABLED=true`)
-- Tools: `preview_update_project`, `preview_add_project_note`, `preview_update_client`, `apply_change`.
+- Tools: `preview_update_project`, `preview_add_project_note`, `preview_update_client`, `preview_update_noncompliance_case`, `apply_change`.
 - **A preview saves nothing.**
   - It returns a before → after list and a single-use `confirm_token`, valid 5 minutes and bound to this user and this Claude connection.
   - The token is stored hashed in `mcp_pending_changes` (migration `20261019200000`).
@@ -43,6 +43,7 @@ Secret-looking keys (`password`, `secret`, `api_key`, `token`, …) are stripped
   - Project: stage, numbers, dates, branch and officer details, status.
   - Client: contact details.
   - Not editable: firm name, client or IS code links, portal or Manak credentials, finance fields.
+- Non-Conformity case (module `/bis/stop-marking`, edit): BIS letter facts, test report sample details, failed parameters (replaces the list), observations, and the reply letter section by section (`reply_sections`, merged with what is there; `reply_draft` is kept in sync). Closing a case, files and the case's own sample / factory test report module are not editable here.
 - Notes are appended (existing notes are kept). No delete tools.
 - A user sees the edit tools only for modules where they have **edit**.
 - `apply_change` is limited to 10 per minute per user.

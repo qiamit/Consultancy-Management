@@ -71,7 +71,82 @@ const clientFields = z
   })
   .strict()
 
+
+const REPLY_SECTION_KEYS = ['ourRef', 'otherRefs', 'subject', 'general', 'rootCause', 'corrective', 'preventive', 'effectiveness', 'newSamples', 'stock', 'payments', 'request', 'signatoryName', 'signatoryDesignation']
+const EMPTY_SECTIONS = Object.fromEntries(REPLY_SECTION_KEYS.map((k) => [k, '']))
+const BODY_SECTIONS = [
+  ['subject', 'Subject'], ['general', 'General Paragraph'], ['rootCause', 'Root Cause of the Failure'], ['corrective', 'Corrective Action'],
+  ['preventive', 'Preventive Action'], ['effectiveness', 'Effectiveness of the Action'], ['newSamples', 'Details of the New Samples'],
+  ['stock', 'Stock and Marking Details'], ['payments', 'Payment Details'], ['request', 'Request to BIS'],
+]
+/** The letter as plain text, the same as the app keeps in reply_draft. */
+function sectionsText(sec) {
+  return BODY_SECTIONS.map(([k, title]) => (String(sec[k] ?? '').trim() ? (k === 'subject' ? `Subject: ${String(sec[k]).trim()}` : `${title}:\n${String(sec[k]).trim()}`) : ''))
+    .filter(Boolean)
+    .join('\n\n')
+}
+
+const replySections = z
+  .object({
+    ourRef: text(120, 'Our letter number'),
+    otherRefs: text(3000, 'Other references, one per line'),
+    subject: text(500, 'Subject line of the letter (without the word "Subject:")'),
+    general: text(6000, 'General opening paragraph'),
+    rootCause: text(6000, 'Root cause of the failure, numbered points'),
+    corrective: text(6000, 'Corrective action, numbered points'),
+    preventive: text(6000, 'Preventive action, numbered points'),
+    effectiveness: text(6000, 'Effectiveness of the action, numbered points'),
+    newSamples: text(6000, 'Details of the new samples being sent'),
+    stock: text(6000, 'Stock and marking details'),
+    payments: text(6000, 'Payment details'),
+    request: text(6000, 'Request to BIS'),
+    signatoryName: text(120, 'Signatory name'),
+    signatoryDesignation: text(120, 'Signatory designation'),
+  })
+  .strict()
+
+const caseFields = z
+  .object({
+    bis_reference: text(300, 'BIS letter reference number and date'),
+    bis_reason: text(2000, 'The non-conformity as stated by BIS'),
+    review_notes: text(8000, 'Points raised by BIS / review notes, numbered'),
+    bis_deadline: date('Reply due date'),
+    reason_type: text(200, 'Non-conformity category'),
+    status: z.enum(['open', 'reviewed', 'replied']).optional().describe('Case status (closing a case is done in the app)'),
+    sample_code: text(60, 'Sample code of the failed sample'),
+    sample_qr_code: text(60, 'QR code of the failed sample'),
+    reply_date: date('Date of the reply letter'),
+    report_details: z
+      .object({
+        batchNumber: text(120, 'Batch number'),
+        manufactureDate: date('Date of manufacturing'),
+        description: text(1500, 'Sample description'),
+        declaredValue: text(500, 'Declared value'),
+      })
+      .strict()
+      .optional()
+      .describe('Test report sample details; only the keys to change'),
+    report_findings: z
+      .array(
+        z
+          .object({
+            parameter: z.string().max(300),
+            specified: z.string().max(300).optional(),
+            observed: z.string().max(300).optional(),
+            remark: z.string().max(80).optional().describe('Fail'),
+          })
+          .strict(),
+      )
+      .max(60)
+      .optional()
+      .describe('The FAILED parameters only (replaces the whole list)'),
+    report_observations: text(8000, 'Observations on the failed parameters as per the Indian Standard'),
+    reply_sections: replySections.optional().describe('The reply letter sections to change; others stay as they are'),
+  })
+  .strict()
+
 const TARGETS = {
+  noncompliance: { table: 'bis_stop_marking_cases', path: '/bis/stop-marking', label: 'Non-Conformity case' },
   project: { table: 'bis_projects', path: '/bis/projects', label: 'BIS project' },
   client: { table: 'clients', path: '/masters/clients', label: 'client' },
 }
@@ -96,8 +171,8 @@ async function loadRow(ctx, target, id, columns) {
 }
 
 /** Stores the pending change and returns the preview text with its confirm token. */
-async function stage(ctx, { kind, target, targetId, title, changes, before }) {
-  const lines = Object.keys(changes).map((k) => `- ${k}: ${show(before[k])} → ${show(changes[k])}`)
+async function stage(ctx, { kind, target, targetId, title, changes, before, lines: customLines }) {
+  const lines = customLines ?? Object.keys(changes).map((k) => `- ${k}: ${show(before[k])} → ${show(changes[k])}`)
   const summary = `${title}\n${lines.join('\n')}`
   const token = randomToken('qep')
   await svc('/mcp_pending_changes', {
@@ -185,6 +260,77 @@ export const WRITE_TOOLS = [
     run: async ({ client_id, fields }, ctx) => previewUpdate(ctx, 'client', client_id, fields, `Edit client ${client_id}:`),
   },
   {
+    name: 'preview_update_noncompliance_case',
+    path: '/bis/stop-marking',
+    title: 'Preview a Non-Conformity case edit',
+    description:
+      'Prepare changes to one License Non-Conformity case: the BIS letter facts, the test report details / failed parameters / observations, and the reply letter section by section ' +
+      '(reply_sections: subject, general, rootCause, corrective, preventive, effectiveness, newSamples, stock, payments, request, signatory). ' +
+      'Read the case first with get_noncompliance_case (and open the BIS letter and test reports with get_noncompliance_file_link). ' +
+      'Write the reply in formal Indian business English, numbered points, no greeting or sign-off; never invent test results, dates or quantities: leave a [square-bracket placeholder] for what the licensee must supply. ' +
+      'Only report_findings that FAIL belong in the list. Nothing is saved: it returns a before → after preview and a confirm token for apply_change.',
+    inputSchema: { case_id: uuid('Non-Conformity case'), fields: caseFields.describe('Only the fields to change') },
+    run: async ({ case_id, fields }, ctx) => {
+      const keys = Object.keys(fields)
+      if (!keys.length) return asText('No fields given, nothing to preview.')
+      const cols = new Set()
+      for (const k of keys) cols.add(k)
+      if (fields.reply_sections) cols.add('reply_draft')
+      if (fields.report_findings) cols.add('report_review')
+      const row = await loadRow(ctx, 'noncompliance', case_id, [...cols])
+      if (!row) return asText('That Non-Conformity case was not found or is not visible to you.')
+      const changes = {}
+      const before = {}
+      const lines = []
+      const put = (col, next, label) => {
+        if (same(row[col], next)) return
+        changes[col] = next
+        before[col] = row[col] ?? null
+        if (label) lines.push(label)
+      }
+      for (const k of keys) {
+        const v = fields[k]
+        if (k === 'reply_sections') {
+          const merged = { ...EMPTY_SECTIONS, ...(row.reply_sections ?? {}) }
+          const edited = []
+          for (const [sk, sv] of Object.entries(v)) {
+            const next = sv === null || sv === undefined ? '' : String(sv)
+            if (String(merged[sk] ?? '') !== next) {
+              lines.push(`- reply_sections.${sk}: ${show(merged[sk])} → ${show(next)}`)
+              merged[sk] = next
+              edited.push(sk)
+            }
+          }
+          if (edited.length) {
+            put('reply_sections', merged)
+            put('reply_draft', sectionsText(merged))
+          }
+        } else if (k === 'report_details') {
+          const merged = { ...(row.report_details ?? {}) }
+          for (const [dk, dv] of Object.entries(v)) {
+            const next = dv ?? ''
+            if (String(merged[dk] ?? '') !== String(next)) {
+              lines.push(`- report_details.${dk}: ${show(merged[dk])} → ${show(next)}`)
+              merged[dk] = next
+            }
+          }
+          put('report_details', merged)
+        } else if (k === 'report_findings') {
+          const next = v.map((f, i) => ({ id: `mcp-${Date.now().toString(36)}-${i}`, selected: true, parameter: f.parameter, specified: f.specified ?? '', observed: f.observed ?? '', remark: f.remark ?? 'Fail' }))
+          lines.push(`- report_findings: ${(row.report_findings ?? []).length} row(s) → ${next.length} failed parameter(s): ${next.map((f) => f.parameter).join('; ').slice(0, 300)}`)
+          put('report_findings', next)
+          put('report_review', next.map((f, i) => `${i + 1}. ${f.parameter} — Specified: ${f.specified || '—'}; Observed: ${f.observed || '—'}; ${f.remark || '—'}`).join('\n'))
+        } else {
+          const next = v === '' ? null : v
+          if (!same(row[k], next)) lines.push(`- ${k}: ${show(row[k])} → ${show(next)}`)
+          put(k, next)
+        }
+      }
+      if (!Object.keys(changes).length) return asText('Every value already matches; nothing would change.')
+      return stage(ctx, { kind: 'update_noncompliance', target: 'noncompliance', targetId: case_id, title: `Edit Non-Conformity case ${case_id}:`, changes, before, lines })
+    },
+  },
+  {
     name: 'apply_change',
     path: null,
     title: 'Apply a confirmed change',
@@ -202,7 +348,7 @@ export const WRITE_TOOLS = [
       )
       const pending = Array.isArray(claimed) ? claimed[0] : null
       if (!pending) return asText('This confirm token is invalid, expired or already used. Make a new preview.')
-      const target = pending.kind === 'update_project' ? 'project' : pending.kind === 'update_client' ? 'client' : null
+      const target = pending.kind === 'update_project' ? 'project' : pending.kind === 'update_client' ? 'client' : pending.kind === 'update_noncompliance' ? 'noncompliance' : null
       if (!target) return asText('Unknown change type.')
       if ((ctx.levels[TARGETS[target].path] || 'none') !== 'edit') {
         return asText(`You do not have edit access to ${TARGETS[target].label}s.`)
