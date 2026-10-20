@@ -190,7 +190,7 @@ export function NablTestMethodSelect({
               className="inline-flex h-full w-9 shrink-0 items-center justify-center border-l border-stone-500 bg-stone-100 text-amber-800 transition-colors hover:bg-amber-500/15 hover:text-amber-950 disabled:pointer-events-none"
               onClick={openAddDialog}
               onMouseDown={(e) => e.preventDefault()}
-              aria-label="Add IS code"
+              aria-label="Add IS Code"
               title="Add New IS Code"
               disabled={disabled}
             >

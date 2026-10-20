@@ -102,9 +102,9 @@ export function IsCodeSearchPicker({
           onFocus={() => setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 150)}
           onKeyDown={handleKeyDown}
-          placeholder="Type IS number… e.g. 1786 or IS 1786: 2008"
+          placeholder="Type IS Number… e.g. 1786 or IS 1786: 2008"
           autoComplete="off"
-          aria-label="Search IS code by number"
+          aria-label="Search IS Code by Number"
           aria-expanded={open}
           aria-autocomplete="list"
           role="combobox"

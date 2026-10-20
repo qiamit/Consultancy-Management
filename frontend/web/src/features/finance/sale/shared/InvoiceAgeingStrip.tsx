@@ -25,7 +25,7 @@ export function InvoiceAgeingStrip({
   const selectedLabel = INVOICE_AGE_BUCKETS.find((bucket) => bucket.id === selected)?.label
   return (
     <div>
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4" aria-label="Open invoices by age">
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4" aria-label="Open Invoices by Age">
         {INVOICE_AGE_BUCKETS.map((bucket) => {
           const row = byId.get(bucket.id)
           const count = row?.invoice_count ?? 0

@@ -151,7 +151,7 @@ export function LimsDatePicker({
             <button
               type="button"
               className="inline-flex h-7 w-7 items-center justify-center rounded-none text-amber-100 hover:bg-amber-500/20"
-              aria-label="Previous month"
+              aria-label="Previous Month"
               onClick={(e) => {
                 e.preventDefault()
                 e.stopPropagation()
@@ -166,7 +166,7 @@ export function LimsDatePicker({
             <button
               type="button"
               className="inline-flex h-7 w-7 items-center justify-center rounded-none text-amber-100 hover:bg-amber-500/20"
-              aria-label="Next month"
+              aria-label="Next Month"
               onClick={(e) => {
                 e.preventDefault()
                 e.stopPropagation()

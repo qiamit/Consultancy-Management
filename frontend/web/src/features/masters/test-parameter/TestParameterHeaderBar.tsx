@@ -63,7 +63,7 @@ export function TestParameterHeaderBar({
               value={search}
               onChange={(e) => onSearchChange(e.target.value)}
               className={cn(limsDarkBarSearchClass, 'h-8 min-w-0 pl-7 text-xs sm:pl-9 sm:text-sm')}
-              aria-label="Search by IS code, parameter, method, clause, or unit"
+              aria-label="Search by IS Code, Parameter, Method, Clause, or Unit"
             />
           </div>
 
@@ -73,7 +73,7 @@ export function TestParameterHeaderBar({
                 limsDarkBarFieldClass,
                 'h-8 w-[3.5rem] shrink-0 px-1 text-[11px] tabular-nums sm:w-[4.25rem] sm:px-2 sm:text-xs',
               )}
-              aria-label="Rows per page"
+              aria-label="Rows per Page"
               title={`${pageSize} per page`}
             >
               <SelectValue />

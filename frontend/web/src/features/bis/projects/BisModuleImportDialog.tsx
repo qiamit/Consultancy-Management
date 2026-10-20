@@ -449,7 +449,7 @@ export function BisModuleImportDialog({
                   type="search"
                   value={clientSearch}
                   onChange={(e) => setClientSearch(e.target.value)}
-                  placeholder="Search client name…"
+                  placeholder="Search Client Name…"
                   className={cn(limsFieldClass, 'pl-8')}
                   autoFocus
                 />
@@ -481,7 +481,7 @@ export function BisModuleImportDialog({
                   type="search"
                   value={isSearch}
                   onChange={(e) => setIsSearch(e.target.value)}
-                  placeholder="Search IS number…"
+                  placeholder="Search IS Number…"
                   className={cn(limsFieldClass, 'pl-8')}
                   autoFocus
                 />

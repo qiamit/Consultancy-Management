@@ -312,7 +312,7 @@ export function ManageQuotationNotesDialog({
                             <button
                               type="button"
                               className="text-amber-800 hover:text-amber-950"
-                              aria-label="Edit note"
+                              aria-label="Edit Note"
                               title="Edit"
                               disabled={saving}
                               onClick={() => {
@@ -330,7 +330,7 @@ export function ManageQuotationNotesDialog({
                             <button
                               type="button"
                               className="text-red-600 hover:text-red-800 disabled:opacity-40"
-                              aria-label="Delete note"
+                              aria-label="Delete Note"
                               title="Delete"
                               disabled={saving || notes.length <= 1}
                               onClick={() => void handleDelete(note.id)}

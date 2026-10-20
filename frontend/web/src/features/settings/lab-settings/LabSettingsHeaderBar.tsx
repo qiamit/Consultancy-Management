@@ -57,7 +57,7 @@ export function LabSettingsHeaderBar({
               className={cn('gap-2 shrink-0', limsPrimaryBtnClass)}
               onClick={onSave}
               disabled={saveLoading}
-              aria-label="Save lab settings"
+              aria-label="Save Lab Settings"
             >
               <Save size={14} />
               {saveLoading ? 'Saving…' : 'Save'}

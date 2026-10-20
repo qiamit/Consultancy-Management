@@ -105,7 +105,7 @@ export function ManakSitRow({
             <div className="flex items-center gap-2">
               <Input
                 className="h-8 min-w-0 flex-1 rounded-none border-stone-300 bg-white text-sm"
-                aria-label="Product Manual number"
+                aria-label="Product Manual Number"
                 value={number}
                 placeholder={bisSit ? 'Set Product Manual Number in IS Code master' : 'Enter Product Manual / SIT number'}
                 disabled={!projectId || bisSit}

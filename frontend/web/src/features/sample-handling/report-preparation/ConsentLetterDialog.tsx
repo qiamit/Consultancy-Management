@@ -239,7 +239,7 @@ export function ConsentLetterDialog({
                   if (next) setClientQuery((prev) => prev || selectedClientLabel)
                   else setClientQuery(selectedClientLabel)
                 }}
-                placeholder="Search client"
+                placeholder="Search Client"
                 inputId="consent-client"
                 listId="consent-client-combobox"
                 disabled={!formData?.clients.length}
@@ -255,7 +255,7 @@ export function ConsentLetterDialog({
               <Label htmlFor="consent-is-code">IS Code</Label>
               <Select value={isCodeId} onValueChange={setIsCodeId} disabled={!formData?.isCodes.length}>
                 <SelectTrigger id="consent-is-code">
-                  <SelectValue placeholder="Select IS code" />
+                  <SelectValue placeholder="Select IS Code" />
                 </SelectTrigger>
                 <SelectContent>
                   {(formData?.isCodes ?? []).map((c) => (
@@ -285,7 +285,7 @@ export function ConsentLetterDialog({
                 ) : null}
               </div>
               {(formData?.testParameters.length ?? 0) === 0 ? (
-                <p className="text-sm text-muted-foreground">No test parameters found for this SRF.</p>
+                <p className="text-sm text-muted-foreground">No Test Parameters Found for This SRF.</p>
               ) : (
                 <div className="max-h-40 overflow-y-auto rounded-md border border-border/80 divide-y">
                   {(formData?.testParameters ?? []).map((p) => (
@@ -334,7 +334,7 @@ export function ConsentLetterDialog({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="consent-clause-summary">Clause summary (optional)</Label>
+              <Label htmlFor="consent-clause-summary">Clause Summary (Optional)</Label>
               <Input
                 id="consent-clause-summary"
                 value={clauseSummary}

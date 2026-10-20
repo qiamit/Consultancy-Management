@@ -564,8 +564,8 @@ function InlineEntryPlusButton({
       size="sm"
       className={cn('h-8 w-8 rounded-none p-0', limsPrimaryBtnClass)}
       disabled={!canAdd}
-      aria-label="Add test parameter"
-      title="Add test parameter"
+      aria-label="Add Test Parameter"
+      title="Add Test Parameter"
       onClick={onAdd}
     >
       <Plus size={16} className={busy ? 'animate-pulse' : undefined} />
@@ -722,7 +722,7 @@ function InlineEntryCard({
       <div className="flex items-stretch">
         <div className="w-1 shrink-0 bg-gradient-to-b from-amber-400 via-amber-500 to-amber-600" />
         <div className="min-w-0 flex-1 space-y-2 px-2.5 py-2.5">
-          <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-amber-800">New entry</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-amber-800">New Entry</p>
           <InlineIsCodePicker
             value={form.isCodeLabel}
             isCodeId={form.isCodeId}
@@ -1129,7 +1129,7 @@ export function TestParameterTable({
       ) : null}
 
       {loading ? (
-        <p className="shrink-0 px-3 py-1.5 text-center text-xs text-[#78716c] sm:px-5">Loading records…</p>
+        <p className="shrink-0 px-3 py-1.5 text-center text-xs text-[#78716c] sm:px-5">Loading Records…</p>
       ) : null}
 
       {searchActive && rows.length === 0 && !loading ? (
@@ -1145,7 +1145,7 @@ export function TestParameterTable({
               <input
                 type="checkbox"
                 className={checkboxClass}
-                aria-label="Select all"
+                aria-label="Select All"
                 checked={allChecked}
                 ref={(el) => {
                   if (el) el.indeterminate = !allChecked && someChecked
@@ -1300,7 +1300,7 @@ export function TestParameterTable({
                     <input
                       type="checkbox"
                       className={checkboxClass}
-                      aria-label="Select all"
+                      aria-label="Select All"
                       checked={allChecked}
                       ref={(el) => {
                         if (el) el.indeterminate = !allChecked && someChecked

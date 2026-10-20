@@ -32,7 +32,7 @@ export function EquipmentHeaderBar({
         </div>
         <div className="w-28">
           <Select value={String(pageSize)} onValueChange={(v) => onPageSizeChange(Number(v))}>
-            <SelectTrigger className={cn(limsDarkBarFieldClass, 'w-full')} aria-label="Rows per page">
+            <SelectTrigger className={cn(limsDarkBarFieldClass, 'w-full')} aria-label="Rows per Page">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

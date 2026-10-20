@@ -208,7 +208,7 @@ export default function EmailToolsPage() {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="email-client">Client (optional)</Label>
+          <Label htmlFor="email-client">Client (Optional)</Label>
           <RemoteLookupCombobox
             inputId="email-client"
             listId="email-client-list"
@@ -296,7 +296,7 @@ export default function EmailToolsPage() {
             value={body}
             onChange={(e) => setBody(e.target.value)}
             rows={10}
-            placeholder="Write your message…"
+            placeholder="Write Your Message…"
           />
         </div>
 
@@ -334,7 +334,7 @@ export default function EmailToolsPage() {
               ))}
             </ul>
           ) : (
-            <p className="text-xs text-muted-foreground">Optional — PDF, Office, or images (max 10).</p>
+            <p className="text-xs text-muted-foreground">Optional — PDF, Office, or Images (Max 10).</p>
           )}
         </div>
 
@@ -352,7 +352,7 @@ export default function EmailToolsPage() {
 
       {sentLog.length > 0 ? (
         <div className={cn(limsPanelClass, 'overflow-x-auto p-6')}>
-          <h2 className="mb-3 text-sm font-semibold text-foreground">Recent sent (this browser)</h2>
+          <h2 className="mb-3 text-sm font-semibold text-foreground">Recent Sent (This Browser)</h2>
           <table className="w-full min-w-[36rem] border-collapse text-left text-xs">
             <thead>
               <tr className="border-b border-border text-muted-foreground">

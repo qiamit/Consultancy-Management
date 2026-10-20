@@ -277,7 +277,7 @@ export function QuotationTemplatesDialog({
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-gradient-to-b from-stone-100/80 to-white p-3 sm:p-4">
           {loading ? (
-            <p className="px-2 py-6 text-sm text-stone-600">Loading templates…</p>
+            <p className="px-2 py-6 text-sm text-stone-600">Loading Templates…</p>
           ) : (
             <TemplatesTab
               templates={templates}
@@ -321,7 +321,7 @@ export function QuotationTemplatesDialog({
               ) : null}
             </div>
             {!canEditTemplates ? (
-              <p className="min-w-0 truncate text-[10px] text-amber-200 sm:text-xs">Only Admin can change templates</p>
+              <p className="min-w-0 truncate text-[10px] text-amber-200 sm:text-xs">Only Admin Can Change Templates</p>
             ) : null}
             <Button
               type="button"
@@ -389,7 +389,7 @@ export function QuotationTemplatesDialog({
                       onChange={(e) => patchCurrent({ documentTitle: e.target.value })}
                       className={cn(labFieldControlClass, '!h-8')}
                       placeholder={kindLabel}
-                      aria-label="Document title"
+                      aria-label="Document Title"
                     />
                   </div>
                   <div className="space-y-1">
@@ -561,7 +561,7 @@ export function QuotationTemplatesDialog({
                             className="max-h-[64px] max-w-full object-contain"
                           />
                         ) : (
-                          <span className="text-[10px] text-stone-500">Header preview</span>
+                          <span className="text-[10px] text-stone-500">Header Preview</span>
                         )}
                       </div>
                     </div>
@@ -590,7 +590,7 @@ export function QuotationTemplatesDialog({
                             className="max-h-[64px] max-w-full object-contain"
                           />
                         ) : (
-                          <span className="text-[10px] text-stone-500">Footer preview</span>
+                          <span className="text-[10px] text-stone-500">Footer Preview</span>
                         )}
                       </div>
                     </div>

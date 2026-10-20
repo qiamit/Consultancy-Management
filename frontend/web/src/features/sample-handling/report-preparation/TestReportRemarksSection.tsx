@@ -59,8 +59,8 @@ export function TestReportRemarksSection({
                 rows={2}
                 disabled={disabled}
                 className="min-h-[2.75rem] w-full resize-y rounded-none border-0 bg-transparent px-2 py-1.5 shadow-none focus-visible:ring-1 focus-visible:ring-amber-500/40 focus-visible:ring-offset-0"
-                placeholder="2. Additional remarks (optional)"
-                aria-label="Part D remarks line 2"
+                placeholder="2. Additional Remarks (Optional)"
+                aria-label="Part D Remarks Line 2"
               />
             </td>
           </tr>

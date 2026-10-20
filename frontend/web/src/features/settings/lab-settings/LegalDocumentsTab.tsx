@@ -55,7 +55,7 @@ export function LegalDocumentsTab(props: LegalDocumentsTabProps) {
               <button
                 type="button"
                 className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-none border border-stone-500 bg-stone-100 text-amber-800 transition-colors hover:bg-amber-500/15 hover:text-amber-950"
-                aria-label="Add registration document"
+                aria-label="Add Registration Document"
                 title="Add New"
               >
                 <Plus size={14} strokeWidth={2.25} aria-hidden />

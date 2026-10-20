@@ -111,7 +111,7 @@ export function Cmpf306ModuleFields({
     try {
       await deleteBisProjectFile(file)
       await reloadAttachments(projectId)
-      toast.success('Attachment removed.')
+      toast.success('Attachment Removed.')
     } catch (error) {
       toast.error(formatBisProjectFilesError(error))
     } finally {
@@ -135,7 +135,7 @@ export function Cmpf306ModuleFields({
         cmpf306RowHasContent,
       )
       if (!importedRows.length) {
-        toast.error('No testing equipment rows were found in the selected spreadsheet.')
+        toast.error('No Testing Equipment Rows Were Found in the Selected Spreadsheet.')
         return
       }
       onChange({ ...value, rows: [...savedRows, ...importedRows] })
@@ -183,12 +183,12 @@ export function Cmpf306ModuleFields({
   const commitDraft = () => {
     if (disabled) return
     if (!draft.equipmentName.trim()) {
-      toast.error('Enter the name of the test equipment before adding.')
+      toast.error('Enter the Name of the Test Equipment Before Adding.')
       focusName()
       return
     }
     if (!cmpf306RowHasContent(draft)) {
-      toast.error('Enter testing equipment details before adding.')
+      toast.error('Enter Testing Equipment Details Before Adding.')
       focusName()
       return
     }
@@ -447,8 +447,8 @@ export function Cmpf306ModuleFields({
                           className={cn(limsOutlineBtnClass, actionBtnClass)}
                           disabled={disabled}
                           onClick={() => startEdit(index)}
-                          title="Edit row"
-                          aria-label="Edit row"
+                          title="Edit Row"
+                          aria-label="Edit Row"
                         >
                           <Pencil size={14} aria-hidden />
                         </Button>
@@ -463,8 +463,8 @@ export function Cmpf306ModuleFields({
                           )}
                           disabled={disabled}
                           onClick={() => removeSaved(index)}
-                          title="Delete row"
-                          aria-label="Delete row"
+                          title="Delete Row"
+                          aria-label="Delete Row"
                         >
                           <Trash2 size={15} aria-hidden />
                         </Button>

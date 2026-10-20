@@ -319,7 +319,7 @@ export default function ContactUsPage() {
                     </NavLink>{' '}
                     guide.
                   </li>
-                  <li>This Contact Us page is available to every signed-in user.</li>
+                  <li>This Contact Us Page Is Available to Every Signed-in User.</li>
                 </ul>
               </section>
             </div>

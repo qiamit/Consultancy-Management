@@ -52,7 +52,7 @@ export default function PublicSiteLayout() {
               </span>
             </NavLink>
 
-            <nav className="ml-auto hidden flex-wrap items-center justify-end gap-1 lg:flex" aria-label="Public site">
+            <nav className="ml-auto hidden flex-wrap items-center justify-end gap-1 lg:flex" aria-label="Public Site">
               {PUBLIC_NAV_ITEMS.map((item) => (
                 <NavLink
                   key={item.to}
@@ -85,11 +85,11 @@ export default function PublicSiteLayout() {
             <NavLink
               to="/home"
               className="flex h-11 max-w-[200px] shrink-0 items-center border border-amber-500/35 bg-white px-2"
-              aria-label="Company logo"
+              aria-label="Company Logo"
             >
               <img
                 src={companyLogoUrl}
-                alt="Company logo"
+                alt="Company Logo"
                 className="h-9 w-auto max-w-[180px] object-contain"
               />
             </NavLink>
@@ -97,7 +97,7 @@ export default function PublicSiteLayout() {
         </div>
 
         {menuOpen ? (
-          <nav className="relative border-t border-amber-500/20 px-3 py-2 lg:hidden" aria-label="Public site mobile">
+          <nav className="relative border-t border-amber-500/20 px-3 py-2 lg:hidden" aria-label="Public Site Mobile">
             <div className="flex flex-col gap-1">
               {PUBLIC_NAV_ITEMS.map((item) => (
                 <NavLink

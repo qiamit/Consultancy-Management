@@ -122,7 +122,7 @@ export function PlantLayoutModuleFields({
     setEditingId(null)
     setSelectedId(boxId)
     setFreehandDraw({ boxId, points: [], stroking: false })
-    toast.message('Draw freehand outline on the canvas, then release')
+    toast.message('Draw Freehand Outline on the Canvas, Then Release')
   }
 
   const cancelFreehandDraw = () => {
@@ -137,7 +137,7 @@ export function PlantLayoutModuleFields({
     }
     const built = boxFromFreehandCanvasPoints(points, box)
     if (!built) {
-      toast.error('Draw a larger freehand shape')
+      toast.error('Draw a Larger Freehand Shape')
       setFreehandDraw({ boxId, points: [], stroking: false })
       return
     }
@@ -147,7 +147,7 @@ export function PlantLayoutModuleFields({
     })
     setFreehandDraw(null)
     setSelectedId(boxId)
-    toast.success('Freehand shape applied')
+    toast.success('Freehand Shape Applied')
   }
 
   const patchShape = (id: string, shape: PlantLayoutShape) => {
@@ -241,7 +241,7 @@ export function PlantLayoutModuleFields({
       toast.success(`Box added inside “${plantLayoutBoxDisplayLabel(parent)}”`)
     } else {
       box = constrainBoxPlacement(box, boxes, box)
-      toast.success('Box added')
+      toast.success('Box Added')
     }
     setBoxes([...boxes, box])
     setSelectedId(box.id)
@@ -272,7 +272,7 @@ export function PlantLayoutModuleFields({
     onChange(emptyPlantLayoutPayload())
     setSelectedId(null)
     setEditingId(null)
-    toast.message('Canvas cleared — outer border only')
+    toast.message('Canvas Cleared — Outer Border Only')
   }
 
   useEffect(() => {
@@ -348,7 +348,7 @@ export function PlantLayoutModuleFields({
       if (e.key === 'Escape' && freehandDrawRef.current) {
         e.preventDefault()
         setFreehandDraw(null)
-        toast.message('Freehand drawing cancelled')
+        toast.message('Freehand Drawing Cancelled')
         return
       }
       if (e.key === 'Delete' || e.key === 'Backspace') {
@@ -574,7 +574,7 @@ export function PlantLayoutModuleFields({
                       className="h-7 w-[92%] rounded-none border border-amber-700/50 bg-white/95 px-1 text-center text-xs font-bold text-stone-900 outline-none focus:ring-1 focus:ring-amber-500"
                       value={box.label}
                       disabled={disabled}
-                      placeholder="Box name"
+                      placeholder="Box Name"
                       onChange={(e) => patchLabel(box.id, e.target.value)}
                       onPointerDown={(e) => e.stopPropagation()}
                       onBlur={() => setEditingId(null)}
@@ -610,7 +610,7 @@ export function PlantLayoutModuleFields({
                   <button
                     type="button"
                     className="absolute bottom-0 right-0 z-20 h-3.5 w-3.5 cursor-se-resize border border-amber-800 bg-amber-500"
-                    aria-label="Resize box"
+                    aria-label="Resize Box"
                     onPointerDown={(e) => startDrag(e, box, 'resize')}
                   />
                 ) : null}
@@ -685,7 +685,7 @@ export function PlantLayoutModuleFields({
             className={cn(limsOutlineBtnClass, 'h-8 w-8 shrink-0 p-0 text-red-700')}
             disabled={disabled || !selected}
             onClick={deleteSelected}
-            title="Delete selected box"
+            title="Delete Selected Box"
             aria-label="Delete"
           >
             <Trash2 size={16} aria-hidden />
@@ -697,7 +697,7 @@ export function PlantLayoutModuleFields({
             className={cn(limsOutlineBtnClass, 'h-8 w-8 shrink-0 p-0')}
             disabled={disabled}
             onClick={resetDefaults}
-            title="Defaults — clear all boxes, outer border only"
+            title="Defaults — Clear All Boxes, Outer Border Only"
             aria-label="Defaults"
           >
             <RotateCcw size={16} aria-hidden />
@@ -723,7 +723,7 @@ export function PlantLayoutModuleFields({
                   className={cn(limsFieldClass, 'text-sm')}
                   value={selected.label}
                   disabled={disabled}
-                  placeholder="Box name"
+                  placeholder="Box Name"
                   onChange={(e) => patchLabel(selected.id, e.target.value)}
                 />
               </div>

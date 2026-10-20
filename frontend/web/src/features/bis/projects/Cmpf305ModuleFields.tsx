@@ -57,7 +57,7 @@ export function Cmpf305ModuleFields({
         cmpf305RowHasContent,
       )
       if (!importedRows.length) {
-        toast.error('No machinery rows were found in the selected spreadsheet.')
+        toast.error('No Machinery Rows Were Found in the Selected Spreadsheet.')
         return
       }
       onChange({ ...value, rows: [...savedRows, ...importedRows] })
@@ -103,12 +103,12 @@ export function Cmpf305ModuleFields({
   const commitDraft = () => {
     if (disabled) return
     if (!draft.machineryName.trim()) {
-      toast.error('Enter the name of the machinery before adding.')
+      toast.error('Enter the Name of the Machinery Before Adding.')
       focusName()
       return
     }
     if (!cmpf305RowHasContent(draft)) {
-      toast.error('Enter machinery details before adding.')
+      toast.error('Enter Machinery Details Before Adding.')
       focusName()
       return
     }
@@ -327,8 +327,8 @@ export function Cmpf305ModuleFields({
                           className={cn(limsOutlineBtnClass, actionBtnClass)}
                           disabled={disabled}
                           onClick={() => startEdit(index)}
-                          title="Edit row"
-                          aria-label="Edit row"
+                          title="Edit Row"
+                          aria-label="Edit Row"
                         >
                           <Pencil size={14} aria-hidden />
                         </Button>
@@ -343,8 +343,8 @@ export function Cmpf305ModuleFields({
                           )}
                           disabled={disabled}
                           onClick={() => removeSaved(index)}
-                          title="Delete row"
-                          aria-label="Delete row"
+                          title="Delete Row"
+                          aria-label="Delete Row"
                         >
                           <Trash2 size={15} aria-hidden />
                         </Button>

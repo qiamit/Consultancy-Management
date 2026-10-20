@@ -101,7 +101,7 @@ export function ClientsTableFooterBar({
                 className={actionBtn}
                 onClick={onArchiveSelected}
                 disabled={loading || selectionDisabled}
-                title="Archive selected"
+                title="Archive Selected"
               >
                 <Archive size={14} />
                 <span className="laboratories-footer-label hidden md:inline">Archive</span>
@@ -115,7 +115,7 @@ export function ClientsTableFooterBar({
                 className={actionBtn}
                 onClick={onRestoreSelected}
                 disabled={loading || selectionDisabled}
-                title="Restore selected"
+                title="Restore Selected"
               >
                 <ArchiveRestore size={14} />
                 <span className="laboratories-footer-label hidden md:inline">Restore</span>
@@ -129,8 +129,8 @@ export function ClientsTableFooterBar({
                 className={cn(actionBtn, 'h-10 min-h-10')}
                 onClick={onHistory}
                 disabled={loading || selectedCount !== 1}
-                aria-label="Change history"
-                title="Change history"
+                aria-label="Change History"
+                title="Change History"
               >
                 <History size={14} />
                 <span className="laboratories-footer-label hidden sm:inline">History</span>
@@ -178,10 +178,10 @@ export function ClientsTableFooterBar({
                 className={cn(clientDeleteBtnClass, 'h-10 min-h-10 shrink-0 gap-1 px-2 text-xs sm:px-2.5')}
                 onClick={onDeleteSelected}
                 disabled={loading || selectionDisabled}
-                title="Delete permanently"
+                title="Delete Permanently"
               >
                 <Trash2 size={14} />
-                <span className="laboratories-footer-label hidden md:inline">Delete permanently</span>
+                <span className="laboratories-footer-label hidden md:inline">Delete Permanently</span>
               </Button>
             </LaboratoryDirectorOnly>
             {selectedCount > 0 ? (
@@ -213,7 +213,7 @@ export function ClientsTableFooterBar({
               {`Showing ${rangeFrom.toLocaleString('en-IN')}–${rangeTo.toLocaleString('en-IN')} of ${totalCount.toLocaleString('en-IN')}`}
             </span>
             <Input
-              aria-label="Jump to page"
+              aria-label="Jump to Page"
               placeholder="Page"
               value={jumpTo}
               onChange={(e) => onJumpToChange(e.target.value.replace(/[^0-9]/g, ''))}
@@ -242,7 +242,7 @@ export function ClientsTableFooterBar({
               disabled={loading || page <= 1}
             >
               <ChevronLeft size={16} />
-              <span className="sr-only">Previous page</span>
+              <span className="sr-only">Previous Page</span>
             </Button>
             <span className="shrink-0 whitespace-nowrap text-center text-xs font-medium text-stone-300 sm:min-w-[5rem]">
               <span className="hidden sm:inline">Page </span>
@@ -257,7 +257,7 @@ export function ClientsTableFooterBar({
               disabled={loading || page >= pageCount}
             >
               <ChevronRight size={16} />
-              <span className="sr-only">Next page</span>
+              <span className="sr-only">Next Page</span>
             </Button>
           </div>
         </div>

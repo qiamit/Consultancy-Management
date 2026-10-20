@@ -259,7 +259,7 @@ function TypeAUncertaintySection({
                           size="icon"
                           variant="outline"
                           className={cn('h-8 w-8', limsOutlineBtnClass)}
-                          aria-label="Add another value"
+                          aria-label="Add Another Value"
                           title="Add Another Value"
                           onClick={() =>
                             onChange([
@@ -464,7 +464,7 @@ function TypeBUncertaintySection({
                       onValueChange={(value) => handleSourceTypeChange(c.key, value)}
                     >
                       <SelectTrigger className="h-8 w-max min-w-[10.5rem] text-xs">
-                        <SelectValue placeholder="Select type" />
+                        <SelectValue placeholder="Select Type" />
                       </SelectTrigger>
                       <SelectContent>
                         {TYPE_B_SOURCE_TYPE_OPTIONS.map((option) => (
@@ -529,7 +529,7 @@ function TypeBUncertaintySection({
                     ) : (
                       <Input
                         value={c.sourceName}
-                        placeholder="Source name"
+                        placeholder="Source Name"
                         onChange={(e) => updateContributor(c.key, { sourceName: e.target.value })}
                       />
                     )}
@@ -590,8 +590,8 @@ function TypeBUncertaintySection({
                         size="icon"
                         variant="outline"
                         className={cn('h-8 w-8', limsOutlineBtnClass)}
-                        aria-label="Add source"
-                        title="Add source"
+                        aria-label="Add Source"
+                        title="Add Source"
                         onClick={() =>
                           onChange([...contributors, newUncertaintyContributor(defaultUnit)])
                         }
@@ -604,7 +604,7 @@ function TypeBUncertaintySection({
                         size="icon"
                         variant="ghost"
                         className="h-8 w-8 text-destructive hover:bg-rose-50 hover:text-destructive"
-                        aria-label="Remove source"
+                        aria-label="Remove Source"
                         onClick={() => onChange(contributors.filter((rowItem) => rowItem.key !== c.key))}
                       >
                         <Trash2 size={14} />
@@ -1108,7 +1108,7 @@ export function TestParameterUncertaintyDialog({
                         value={confidenceLevel}
                         placeholder="95"
                         className="text-center"
-                        aria-label="Confidence level value"
+                        aria-label="Confidence Level Value"
                         onChange={(e) => handleConfidenceLevelChange(e.target.value)}
                         onBlur={handleConfidenceLevelBlur}
                       />

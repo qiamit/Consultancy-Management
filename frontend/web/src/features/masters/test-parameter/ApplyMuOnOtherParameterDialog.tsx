@@ -340,9 +340,9 @@ export function ApplyMuOnOtherParameterDialog({
                     id="apply-mu-peer-search"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search parameter / unit / MU..."
+                    placeholder="Search Parameter / Unit / MU..."
                     className={limsDarkBarSearchClass}
-                    aria-label="Search parameters"
+                    aria-label="Search Parameters"
                   />
                 </div>
                 <p
@@ -392,7 +392,7 @@ export function ApplyMuOnOtherParameterDialog({
                       }}
                       onChange={(e) => toggleAll(e.target.checked)}
                       disabled={sortedPeers.length === 0 || anyBusy}
-                      aria-label="Select all parameters"
+                      aria-label="Select All Parameters"
                     />
                   </TableHead>
                   <SortHeader

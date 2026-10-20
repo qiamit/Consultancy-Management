@@ -419,7 +419,7 @@ export function BisProjectsForm({
                   <LimsFieldWithAdd
                     addButton={
                       <LimsFieldAddButton
-                        aria-label="Add new client"
+                        aria-label="Add New Client"
                         title="Add New Client"
                         onClick={() => openAddClient(form.clientLabel)}
                       />
@@ -533,8 +533,8 @@ export function BisProjectsForm({
                         <button
                           type="button"
                           className={limsFieldAddBtnClass}
-                          aria-label="Open calendar"
-                          title="Pick date"
+                          aria-label="Open Calendar"
+                          title="Pick Date"
                           onClick={openValidityPicker}
                         >
                           <Calendar size={14} strokeWidth={2.25} aria-hidden />
@@ -563,8 +563,8 @@ export function BisProjectsForm({
                         <button
                           type="button"
                           className={limsFieldAddBtnClass}
-                          aria-label="Open calendar"
-                          title="Pick date"
+                          aria-label="Open Calendar"
+                          title="Pick Date"
                           onClick={openGrantedPicker}
                         >
                           <Calendar size={14} strokeWidth={2.25} aria-hidden />
@@ -654,7 +654,7 @@ export function BisProjectsForm({
               <div className="col-span-12 space-y-2 md:col-span-3">
                 <Label>Billing Frequency</Label>
                 <Select value={form.billingFrequency} onValueChange={(v) => set('billingFrequency', v)}>
-                  <SelectTrigger aria-label="Billing frequency">
+                  <SelectTrigger aria-label="Billing Frequency">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="rounded-none border-stone-500">

@@ -209,7 +209,7 @@ export function ClientIdentitySections({
               type="checkbox"
               className="h-4 w-4"
               checked={allSelected}
-              aria-label="Select all documents"
+              aria-label="Select All Documents"
               onChange={() => setSelected(allSelected ? [] : rows.map((row) => row.key))}
             />
             Select all
@@ -220,7 +220,7 @@ export function ClientIdentitySections({
                 type="checkbox"
                 className="h-4 w-4"
                 checked={allSelected}
-                aria-label="Select all documents"
+                aria-label="Select All Documents"
                 onChange={() => setSelected(allSelected ? [] : rows.map((row) => row.key))}
               />
             </div>
@@ -263,8 +263,8 @@ export function ClientIdentitySections({
                         addButton={
                           <DialogTrigger asChild>
                             <LimsFieldAddButton
-                              aria-label="Add document type"
-                              title="Add document type"
+                              aria-label="Add Document Type"
+                              title="Add Document Type"
                               onClick={() => {
                                 setNameDialogRowKey(entry.key)
                                 setNewDocumentName(name)
@@ -342,8 +342,8 @@ export function ClientIdentitySections({
                           <button
                             type="button"
                             className={limsFieldAddBtnClass}
-                            aria-label="Open calendar"
-                            title="Pick date"
+                            aria-label="Open Calendar"
+                            title="Pick Date"
                             onClick={() => openIssueDatePicker(`document-issued-${entry.key}`)}
                           >
                             <Calendar size={14} strokeWidth={2.25} aria-hidden />
@@ -430,13 +430,13 @@ export function ClientIdentitySections({
                             )
                           }}
                         />
-                        <Button type="button" variant="outline" className={documentIconBtnClass} title="Upload" aria-label="Upload document" disabled={!name.trim()} onClick={() => document.getElementById(`document-file-${entry.key}`)?.click()}>
+                        <Button type="button" variant="outline" className={documentIconBtnClass} title="Upload" aria-label="Upload Document" disabled={!name.trim()} onClick={() => document.getElementById(`document-file-${entry.key}`)?.click()}>
                           <Upload size={15} aria-hidden />
                         </Button>
-                        <Button type="button" variant="outline" className={documentIconBtnClass} title="View" aria-label="View document" disabled={!hasFile || !saved} onClick={() => saved && onOpenCertificate(saved)}>
+                        <Button type="button" variant="outline" className={documentIconBtnClass} title="View" aria-label="View Document" disabled={!hasFile || !saved} onClick={() => saved && onOpenCertificate(saved)}>
                           <Eye size={15} aria-hidden />
                         </Button>
-                        <Button type="button" variant="outline" className={documentIconBtnClass} title="Delete" aria-label="Delete document" disabled={!hasFile || !saved} onClick={() => saved && onDeleteCertificate(saved)}>
+                        <Button type="button" variant="outline" className={documentIconBtnClass} title="Delete" aria-label="Delete Document" disabled={!hasFile || !saved} onClick={() => saved && onDeleteCertificate(saved)}>
                           <Trash2 size={15} aria-hidden />
                         </Button>
                       </div>
@@ -444,7 +444,7 @@ export function ClientIdentitySections({
                     <div className="min-w-0 xl:border xl:border-stone-300 xl:px-0.5 xl:py-1.5">
                       <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-stone-500 xl:hidden">Action</p>
                       <div className="flex w-full items-center justify-start gap-1 xl:justify-center xl:gap-0.5">
-                        <Button type="button" variant="outline" className={documentIconBtnClass} title="Add row" aria-label="Add document row" onClick={addDraft}>
+                        <Button type="button" variant="outline" className={documentIconBtnClass} title="Add Row" aria-label="Add Document Row" onClick={addDraft}>
                           <Plus size={15} aria-hidden />
                         </Button>
                         <Button
@@ -452,7 +452,7 @@ export function ClientIdentitySections({
                           variant="outline"
                           className={`${documentIconBtnClass} text-red-700 hover:bg-red-50 hover:text-red-800`}
                           title="Delete"
-                          aria-label="Delete row"
+                          aria-label="Delete Row"
                           onClick={() => {
                             if (saved) onDeleteCertificate(saved)
                             else if (draft) removeDraft(draft.key)

@@ -121,7 +121,7 @@ export function TestReportPreparationTable({
                 <input
                   type="checkbox"
                   className={checkboxClass}
-                  aria-label="Select all"
+                  aria-label="Select All"
                   checked={allChecked}
                   ref={(el) => {
                     if (el) el.indeterminate = !allChecked && someChecked

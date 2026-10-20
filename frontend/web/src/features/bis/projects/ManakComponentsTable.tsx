@@ -143,7 +143,7 @@ export function ManakComponentsTable({
         (r) => Boolean(str(r[config.idKey])),
       )
       if (imported.length === 0) {
-        toast.error('No rows were found in the selected spreadsheet.')
+        toast.error('No Rows Were Found in the Selected Spreadsheet.')
         return
       }
       const current = (await fetchBisModulePayload(projectId, config.kind)) ?? {}
@@ -181,7 +181,7 @@ export function ManakComponentsTable({
     const known = new Set(existing.map(rowKey))
     const added = await Promise.all(sourceRows.filter((r) => !known.has(rowKey(r))).map(withCopiedFiles))
     if (added.length === 0) {
-      toast.message('Nothing new to import', { description: `All ${popup.label} rows are already in this application.` })
+      toast.message('Nothing New to Import', { description: `All ${popup.label} rows are already in this application.` })
       return
     }
     await saveBisModulePayload(projectId, table.kind, { ...current, [table.rowsKey]: [...existing, ...added] })
@@ -363,8 +363,8 @@ export function ManakComponentsTable({
                   variant="ghost"
                   size="sm"
                   className={headerBtn}
-                  title="Import from another Application"
-                  aria-label="Import from another Application"
+                  title="Import from Another Application"
+                  aria-label="Import from Another Application"
                   onClick={() => setImportOpen(true)}
                 >
                   <Import size={15} aria-hidden />

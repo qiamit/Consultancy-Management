@@ -207,7 +207,7 @@ export function LaboratoriesForm({
           <div className="col-span-12 min-w-0 space-y-2 sm:col-span-6 xl:col-span-4">
             <Label htmlFor="lab-type" className="text-xs">Type</Label>
             <Select value={form.labType} onValueChange={(value) => onChange({ ...form, labType: value })}>
-              <SelectTrigger id="lab-type" aria-label="Laboratory type"><SelectValue /></SelectTrigger>
+              <SelectTrigger id="lab-type" aria-label="Laboratory Type"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {LAB_TYPES.map((type) => <SelectItem key={type} value={type}>{type}</SelectItem>)}
               </SelectContent>
@@ -247,7 +247,7 @@ export function LaboratoriesForm({
           <div className="col-span-12 min-w-0 space-y-2 sm:col-span-6 xl:col-span-3">
             <Label htmlFor="lab-pin" className="text-xs">PIN Code</Label>
             <Dialog open={pinDialog} onOpenChange={(open) => { setPinDialog(open); if (open) setDraft('') }}>
-              <LimsFieldWithAdd addButton={<DialogTrigger asChild><LimsFieldAddButton aria-label="Add PIN code" /></DialogTrigger>}>
+              <LimsFieldWithAdd addButton={<DialogTrigger asChild><LimsFieldAddButton aria-label="Add PIN Code" /></DialogTrigger>}>
                 <FilterCombobox
                   value={form.pinCode}
                   onValueChange={(value) => onChange({ ...form, pinCode: value.replace(/[^0-9]/g, '').slice(0, 6) })}
@@ -255,7 +255,7 @@ export function LaboratoriesForm({
                   onSelectOption={(option) => applyPin(option.label)}
                   open={pinOpen}
                   onOpenChange={setPinOpen}
-                  placeholder="Type or select PIN"
+                  placeholder="Type or Select PIN"
                   listId="lab-pin-combobox"
                   inputId="lab-pin"
                   inputClassName="h-10"
@@ -266,7 +266,7 @@ export function LaboratoriesForm({
                 title="Manage PIN Codes"
                 addLabel="Add PIN Code"
                 inputId="new-lab-pin"
-                placeholder="6-digit PIN"
+                placeholder="6-Digit PIN"
                 value={draft}
                 onValueChange={setDraft}
                 inlineAdd
@@ -293,7 +293,7 @@ export function LaboratoriesForm({
           <div className="col-span-12 min-w-0 space-y-2 sm:col-span-6 xl:col-span-3">
             <Label htmlFor="lab-district" className="text-xs">District</Label>
             <Dialog open={districtDialog} onOpenChange={(open) => { setDistrictDialog(open); if (open) setDraft('') }}>
-              <LimsFieldWithAdd addButton={<DialogTrigger asChild><LimsFieldAddButton aria-label="Add district" /></DialogTrigger>}>
+              <LimsFieldWithAdd addButton={<DialogTrigger asChild><LimsFieldAddButton aria-label="Add District" /></DialogTrigger>}>
                 <FilterCombobox
                   value={form.district}
                   onValueChange={(value) => onChange({ ...form, district: value })}
@@ -301,7 +301,7 @@ export function LaboratoriesForm({
                   onSelectOption={(option) => onChange({ ...form, district: option.label })}
                   open={districtOpen}
                   onOpenChange={setDistrictOpen}
-                  placeholder="Type or select District"
+                  placeholder="Type or Select District"
                   listId="lab-district-combobox"
                   inputId="lab-district"
                   inputClassName="h-10"
@@ -338,7 +338,7 @@ export function LaboratoriesForm({
           <div className="col-span-12 min-w-0 space-y-2 sm:col-span-6 xl:col-span-3">
             <Label htmlFor="lab-state" className="text-xs">State</Label>
             <Dialog open={stateDialog} onOpenChange={(open) => { setStateDialog(open); if (open) setDraft('') }}>
-              <LimsFieldWithAdd addButton={<DialogTrigger asChild><LimsFieldAddButton aria-label="Add state" /></DialogTrigger>}>
+              <LimsFieldWithAdd addButton={<DialogTrigger asChild><LimsFieldAddButton aria-label="Add State" /></DialogTrigger>}>
                 <FilterCombobox
                   value={form.state}
                   onValueChange={(value) => onChange({ ...form, state: value })}
@@ -346,7 +346,7 @@ export function LaboratoriesForm({
                   onSelectOption={(option) => onChange({ ...form, state: option.label })}
                   open={stateOpen}
                   onOpenChange={setStateOpen}
-                  placeholder="Type or select State"
+                  placeholder="Type or Select State"
                   listId="lab-state-combobox"
                   inputId="lab-state"
                   inputClassName="h-10"
@@ -357,7 +357,7 @@ export function LaboratoriesForm({
                 title="Manage States"
                 addLabel="Add State"
                 inputId="new-lab-state"
-                placeholder="Enter state"
+                placeholder="Enter State"
                 value={draft}
                 onValueChange={setDraft}
                 inlineAdd
@@ -383,9 +383,9 @@ export function LaboratoriesForm({
           <div className="col-span-12 min-w-0 space-y-2 sm:col-span-6 xl:col-span-3">
             <Label htmlFor="lab-country" className="text-xs">Country</Label>
             <Dialog open={countryDialog} onOpenChange={(open) => { setCountryDialog(open); if (open) setDraft('') }}>
-              <LimsFieldWithAdd addButton={<DialogTrigger asChild><LimsFieldAddButton aria-label="Add country" /></DialogTrigger>}>
+              <LimsFieldWithAdd addButton={<DialogTrigger asChild><LimsFieldAddButton aria-label="Add Country" /></DialogTrigger>}>
                 <Select value={form.country} onValueChange={(value) => onChange({ ...form, country: value })}>
-                  <SelectTrigger id="lab-country"><SelectValue placeholder="Select country" /></SelectTrigger>
+                  <SelectTrigger id="lab-country"><SelectValue placeholder="Select Country" /></SelectTrigger>
                   <SelectContent>
                     {countries.map((country) => <SelectItem key={country.id} value={country.label}>{country.label}</SelectItem>)}
                   </SelectContent>
@@ -396,7 +396,7 @@ export function LaboratoriesForm({
                 title="Manage Countries"
                 addLabel="Add Country"
                 inputId="new-lab-country"
-                placeholder="Enter country"
+                placeholder="Enter Country"
                 value={draft}
                 onValueChange={setDraft}
                 inlineAdd
@@ -437,7 +437,7 @@ export function LaboratoriesForm({
             <div className="flex min-w-0 flex-col space-y-2">
               <Label>Mobile Number</Label>
               <Dialog open={codeDialog} onOpenChange={(open) => { setCodeDialog(open); if (open) setDraft('') }}>
-                <LimsFieldWithAdd addButton={<DialogTrigger asChild><LimsFieldAddButton aria-label="Add country code" /></DialogTrigger>}>
+                <LimsFieldWithAdd addButton={<DialogTrigger asChild><LimsFieldAddButton aria-label="Add Country Code" /></DialogTrigger>}>
                   <div className="flex h-10 gap-2">
                     <div className="w-20 shrink-0">
                       <FilterCombobox
@@ -538,7 +538,7 @@ export function LaboratoriesForm({
             <div className="flex min-w-0 flex-col space-y-2">
               <Label htmlFor="lab-payment-term">Payment Term</Label>
               <Dialog open={paymentDialog} onOpenChange={(open) => { setPaymentDialog(open); if (open) setDraft('') }}>
-                <LimsFieldWithAdd addButton={<DialogTrigger asChild><LimsFieldAddButton aria-label="Add payment term" /></DialogTrigger>}>
+                <LimsFieldWithAdd addButton={<DialogTrigger asChild><LimsFieldAddButton aria-label="Add Payment Term" /></DialogTrigger>}>
                   <FilterCombobox
                     value={form.paymentTerm}
                     onValueChange={(value) => onChange({ ...form, paymentTerm: value })}
@@ -546,7 +546,7 @@ export function LaboratoriesForm({
                     onSelectOption={(option) => onChange({ ...form, paymentTerm: option.label })}
                     open={paymentOpen}
                     onOpenChange={setPaymentOpen}
-                    placeholder="Type or select Payment Term"
+                    placeholder="Type or Select Payment Term"
                     listId="lab-payment-term-combobox"
                     inputId="lab-payment-term"
                     inputClassName="h-10"

@@ -1146,7 +1146,7 @@ function buildEquipmentPrintHtml(
           </div>
           <div class="grid">
             <div class="field"><div class="k">Make / Model / Serial</div><div class="v">${esc(r.manufacturer || '-')} / ${esc(r.model_number || '-')} / ${esc(r.serial_number || '-')}</div></div>
-            <div class="field"><div class="k">Custodian / In-charge</div><div class="v">${esc(custodianName)}</div></div>
+            <div class="field"><div class="k">Custodian / In-Charge</div><div class="v">${esc(custodianName)}</div></div>
             <div class="field"><div class="k">Purchased From / Date</div><div class="v">${esc(supplierName)} / ${esc(r.date_of_purchase || '-')}</div></div>
             <div class="field"><div class="k">Date Placed in Service</div><div class="v">${esc(r.date_placed_in_service || '-')}</div></div>
             

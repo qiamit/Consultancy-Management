@@ -61,7 +61,7 @@ export default function HelpPage() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search Guide | FAQ"
-                aria-label="Search help content"
+                aria-label="Search Help Content"
                 className={cn(limsDarkBarSearchClass, 'h-8 pl-8 text-xs')}
               />
             </div>

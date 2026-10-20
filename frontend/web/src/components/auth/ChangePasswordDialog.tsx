@@ -138,7 +138,7 @@ function ChangePasswordPanel(props: ChangePasswordDialogProps) {
             )}
             {!forced && (
               <div className="space-y-2">
-                <Label htmlFor="current-password">Current password</Label>
+                <Label htmlFor="current-password">Current Password</Label>
                 <PasswordInput
                   id="current-password"
                   value={currentPassword}
@@ -149,7 +149,7 @@ function ChangePasswordPanel(props: ChangePasswordDialogProps) {
               </div>
             )}
             <div className="space-y-2">
-              <Label htmlFor="new-password">New password</Label>
+              <Label htmlFor="new-password">New Password</Label>
               <PasswordInput
                 id="new-password"
                 value={newPassword}
@@ -159,7 +159,7 @@ function ChangePasswordPanel(props: ChangePasswordDialogProps) {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="confirm-password">Confirm new password</Label>
+              <Label htmlFor="confirm-password">Confirm New Password</Label>
               <PasswordInput id="confirm-password" value={confirmPassword} onChange={setConfirmPassword} />
             </div>
           </>

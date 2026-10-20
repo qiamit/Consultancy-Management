@@ -252,7 +252,7 @@ export function StaffDocumentsCell({
     if (!(await confirm(`Delete the generated Appointment Letter of ${str(row.personName) || 'this person'}?`, { title: 'Delete Appointment Letter', confirmLabel: 'Delete', destructive: true }))) return
     try {
       await patchRow({ appointmentDate: '', appointmentReferenceNo: '' })
-      toast.success('Appointment Letter deleted')
+      toast.success('Appointment Letter Deleted')
       onChanged()
     } catch (err) {
       toast.error(formatBisProjectFilesError(err))
@@ -273,11 +273,11 @@ export function StaffDocumentsCell({
 
   const openGenerate = () => {
     if (!projectRow) {
-      toast.warning('Save the license first, then create the Appointment Letter.')
+      toast.warning('Save the License First, Then Create the Appointment Letter.')
       return
     }
     if (!str(row.personName).trim()) {
-      toast.warning('Enter the person name before creating the Appointment Letter.')
+      toast.warning('Enter the Person Name Before Creating the Appointment Letter.')
       return
     }
     setGenDate(str(row.appointmentDate) || new Date().toISOString().slice(0, 10))
@@ -323,8 +323,8 @@ export function StaffDocumentsCell({
                 <button
                   type="button"
                   className={cn(btnCls, 'border-emerald-600 text-emerald-700 hover:bg-emerald-50')}
-                  title="View the generated Appointment Letter (double click to delete)"
-                  aria-label="View generated Appointment Letter"
+                  title="View the Generated Appointment Letter (Double Click to Delete)"
+                  aria-label="View Generated Appointment Letter"
                   onClick={onGeneratedClick}
                   onDoubleClick={onGeneratedDoubleClick}
                 >
@@ -390,7 +390,7 @@ export function StaffDocumentsCell({
           disabled={!hasSignature}
           checked={applySignature && hasSignature}
           onChange={(e) => void setApply(e.target.checked)}
-          aria-label="Apply signature to test reports"
+          aria-label="Apply Signature to Test Reports"
         />
       </label>
       {viewer}
@@ -424,8 +424,8 @@ export function StaffDocumentsCell({
                         <button
                           type="button"
                           className={limsFieldAddBtnClass}
-                          aria-label="Open calendar"
-                          title="Pick date"
+                          aria-label="Open Calendar"
+                          title="Pick Date"
                           disabled={genBusy}
                           onClick={() => openDatePicker(genDateRef.current)}
                         >

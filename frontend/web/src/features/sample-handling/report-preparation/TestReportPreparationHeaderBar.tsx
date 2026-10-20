@@ -60,7 +60,7 @@ export function TestReportPreparationHeaderBar({
                   limsDarkBarFieldClass,
                   'w-full border-amber-500/40 text-amber-100 focus:border-amber-500 focus:bg-stone-900 focus:text-amber-50',
                 )}
-                aria-label="Rows per page"
+                aria-label="Rows per Page"
               >
                 <SelectValue />
               </SelectTrigger>

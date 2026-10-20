@@ -85,7 +85,7 @@ function SendDialog({ row, onOpenChange }: { row: BisProjectRow | null; onOpenCh
             </p>
             {history.length ? (
               <div className="text-xs">
-                <div className="mb-1 font-semibold">Earlier reminders</div>
+                <div className="mb-1 font-semibold">Earlier Reminders</div>
                 <ul className="space-y-0.5 text-stone-700">
                   {history.map((h) => (
                     <li key={h.id}>

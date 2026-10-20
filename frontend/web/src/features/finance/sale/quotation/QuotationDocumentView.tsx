@@ -671,7 +671,7 @@ export function QuotationDocumentView({
                       {assets.sealSignUrl ? (
                         <img
                           src={assets.sealSignUrl}
-                          alt="Company seal and signature"
+                          alt="Company Seal and Signature"
                           className="mb-1 max-h-[18mm] max-w-[45mm] object-contain"
                         />
                       ) : row.signature_text?.trim() ? (

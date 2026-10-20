@@ -177,7 +177,7 @@ export function ProductsServicesForm({
               showLabel={false}
               value={form.itemCategory}
               onChange={(itemCategory) => set('itemCategory', itemCategory)}
-              placeholder="Type or select category"
+              placeholder="Type or Select Category"
               className="min-w-0"
             />
           </div>
@@ -199,7 +199,7 @@ export function ProductsServicesForm({
                 target="_blank"
                 rel="noreferrer"
                 className="absolute inset-y-0 right-0 flex w-8 items-center justify-center text-amber-800 hover:bg-amber-500/10 hover:text-amber-950"
-                aria-label="Open HSN Code Finder on GST portal"
+                aria-label="Open HSN Code Finder on GST Portal"
                 title="HSN Code Finder"
               >
                 <Search size={15} strokeWidth={2.25} aria-hidden />
@@ -280,7 +280,7 @@ export function ProductsServicesForm({
               showLabel={false}
               value={form.make}
               onChange={(make) => set('make', make)}
-              placeholder="Type or select make"
+              placeholder="Type or Select Make"
               className="min-w-0"
             />
           </div>

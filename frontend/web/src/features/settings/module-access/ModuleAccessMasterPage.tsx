@@ -591,13 +591,13 @@ export default function ModuleAccessMasterPage() {
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search Name | Division | Department"
                   className={cn(limsDarkBarSearchClass, 'h-7 pl-8 text-xs sm:h-8')}
-                  aria-label="Search module access users"
+                  aria-label="Search Module Access Users"
                 />
               </div>
               <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v))}>
                 <SelectTrigger
                   className={cn(limsDarkBarFieldClass, 'h-7 w-[6.5rem] shrink-0 text-xs sm:h-8 sm:w-[7.5rem]')}
-                  aria-label="Rows per page"
+                  aria-label="Rows per Page"
                 >
                   <SelectValue />
                 </SelectTrigger>
@@ -620,7 +620,7 @@ export default function ModuleAccessMasterPage() {
                 void loadUsers()
                 void refreshGlobalRules()
               }}
-              aria-label="Refresh users from User Management"
+              aria-label="Refresh Users from User Management"
             >
               <RefreshCw size={14} className={optionsLoading ? 'animate-spin' : undefined} />
               Refresh
@@ -662,7 +662,7 @@ export default function ModuleAccessMasterPage() {
                         ),
                       )
                     }}
-                    aria-label="Select all rows on this page"
+                    aria-label="Select All Rows on This Page"
                   />
                 </th>
                 <SortableHead
@@ -876,7 +876,7 @@ export default function ModuleAccessMasterPage() {
                               checked ? new Set(MODULE_CATALOG.map((m) => m.key)) : new Set(),
                             )
                           }}
-                          aria-label="Select all modules"
+                          aria-label="Select All Modules"
                         />
                       </th>
                       <th className={cn(limsTableHeadClass, 'px-3 py-2 text-left')} rowSpan={2}>

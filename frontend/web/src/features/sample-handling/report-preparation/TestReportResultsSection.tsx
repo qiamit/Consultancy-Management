@@ -9,7 +9,7 @@ function TestReportEndNotesBlock() {
     <div
       className="mt-0 border border-t-0 border-black bg-white px-3 py-3 font-[Times_New_Roman,Times,serif] text-[10pt] font-bold leading-relaxed text-black"
       role="note"
-      aria-label="End of report notes"
+      aria-label="End of Report Notes"
     >
       <p className="mb-2 text-center font-bold tracking-wide">{TEST_REPORT_END_MARKER}</p>
       <p className="text-justify font-bold">{formatTestReportEndNotesText()}</p>
@@ -47,9 +47,9 @@ export function TestReportResultsSection({
   return (
     <div className="overflow-hidden border-2 border-stone-500 bg-white p-2 shadow-sm ring-1 ring-amber-700/15 sm:p-3">
       {resultsLoading ? (
-        <p className="py-2 text-sm text-stone-600">Loading test results…</p>
+        <p className="py-2 text-sm text-stone-600">Loading Test Results…</p>
       ) : applicableScopes.length === 0 ? (
-        <p className="py-2 text-sm text-stone-600">No completed test results for this SRF.</p>
+        <p className="py-2 text-sm text-stone-600">No Completed Test Results for This SRF.</p>
       ) : (
         <Tabs
           value={activeScope}

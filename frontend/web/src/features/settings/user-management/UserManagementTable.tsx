@@ -86,7 +86,7 @@ export function UserManagementTable(props: UserManagementTableProps) {
           onClick={() => props.onSetPassword(user)}
           disabled={busy}
           aria-label={`Set password for ${user.name}`}
-          title="Set password"
+          title="Set Password"
         >
           <KeyRound size={16} />
         </Button>
@@ -97,7 +97,7 @@ export function UserManagementTable(props: UserManagementTableProps) {
   return (
     <div className="overflow-x-auto rounded-none border-2 border-stone-500 bg-white shadow-sm ring-1 ring-amber-700/20">
       {props.loading ? (
-        <div className="p-6 text-center text-sm text-muted-foreground" role="status">Loading team members…</div>
+        <div className="p-6 text-center text-sm text-muted-foreground" role="status">Loading Team Members…</div>
       ) : props.users.length > 0 ? (
         <>
         {/* Phones and tablets: one card per team member. */}
@@ -111,7 +111,7 @@ export function UserManagementTable(props: UserManagementTableProps) {
                 if (el) el.indeterminate = someSelected
               }}
               onChange={(e) => props.onToggleAll(e.target.checked)}
-              aria-label="Select all users"
+              aria-label="Select All Users"
             />
             <span className="uppercase">{props.users.length} {props.users.length === 1 ? "Member" : "Members"}</span>
           </label>
@@ -175,7 +175,7 @@ export function UserManagementTable(props: UserManagementTableProps) {
                     if (el) el.indeterminate = someSelected
                   }}
                   onChange={(e) => props.onToggleAll(e.target.checked)}
-                  aria-label="Select all users"
+                  aria-label="Select All Users"
                 />
               </TableHead>
               <TableHead className="text-[11px] font-bold uppercase tracking-[0.14em] text-amber-200 text-center">Name</TableHead>
@@ -245,7 +245,7 @@ export function UserManagementTable(props: UserManagementTableProps) {
               : 'No team members added yet.'}
           </p>
           {!props.searchActive && (
-            <p className="text-xs text-muted-foreground mt-1">Use "Add User" to invite your first colleague.</p>
+            <p className="text-xs text-muted-foreground mt-1">Use "Add User" to Invite Your First Colleague.</p>
           )}
         </div>
       )}

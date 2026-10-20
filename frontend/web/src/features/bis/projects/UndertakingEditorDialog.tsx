@@ -61,10 +61,10 @@ export function UndertakingEditorDialog({ row, kind, open, onOpenChange }: { row
   const payload = () => usesAi ? { ...raw, lines, ...(other ? { documentTitle } : {}) } : { ...raw, ...general }
   /** Save, then close; the undertaking is previewed / printed from its row on Step 7. */
   const save = async () => {
-    if (usesAi && (!lines.length || lines.some((line) => !line.text?.trim()))) { toast.error('Add the undertaking text for every line before saving.'); return }
+    if (usesAi && (!lines.length || lines.some((line) => !line.text?.trim()))) { toast.error('Add the Undertaking Text for Every Line Before Saving.'); return }
     if (!usesAi && general.lines !== null) {
       const defaults = undertakingGeneralDefaultPoints({ ...general, isNumber: isLabel })
-      if (!general.lines.length || general.lines.some((line) => !resolvedUndertakingLine(line, defaults).trim())) { toast.error('Enter text for each line, or delete unused blank lines.'); return }
+      if (!general.lines.length || general.lines.some((line) => !resolvedUndertakingLine(line, defaults).trim())) { toast.error('Enter Text for Each Line, or Delete Unused Blank Lines.'); return }
     }
     if (other && !documentTitle.trim()) { toast.error('Enter the Undertaking Title.'); return }
     setBusy(true)
@@ -91,7 +91,7 @@ export function UndertakingEditorDialog({ row, kind, open, onOpenChange }: { row
     const sourceLines = (parseUndertakingLines(source.lines) ?? []).filter((line) => line.text?.trim())
     const known = new Set(lines.map((line) => line.text?.trim().toLowerCase()))
     const fresh = sourceLines.filter((line) => !known.has(line.text?.trim().toLowerCase())).map((line) => ({ ...line, id: crypto.randomUUID() }))
-    if (!fresh.length) { toast.message('Nothing new to import'); return }
+    if (!fresh.length) { toast.message('Nothing New to Import'); return }
     setLines([...lines, ...fresh])
     if (other && String(source.documentTitle ?? '').trim() && !documentTitle.trim()) setDocumentTitle(String(source.documentTitle))
     toast.success(`Imported ${fresh.length} line${fresh.length === 1 ? '' : 's'} — review, then Save.`)
@@ -99,14 +99,14 @@ export function UndertakingEditorDialog({ row, kind, open, onOpenChange }: { row
   /** Indian Standards: AI reads the selected Standard / Product Manual only and adds undertakings to the table. */
   const draftFromStandard = async () => {
     if (!sources.count) {
-      toast.message('Select the Indian Standard and Product Manual first.')
+      toast.message('Select the Indian Standard and Product Manual First.')
       setSourceOpen(true)
       return
     }
     setDrafting(true)
     try {
       const added = await draftStandardUndertakings(await sources.files(), lines.map((line) => line.text ?? '').filter(Boolean))
-      if (!added.length) { toast.message('AI found no new undertakings in the selected sources.'); return }
+      if (!added.length) { toast.message('AI Found No New Undertakings in the Selected Sources.'); return }
       setLines((current) => [...current, ...added.map((text) => ({ id: crypto.randomUUID(), text, source: '', clause: '', agreementRequired: false }))])
       toast.success(`Added ${added.length} undertaking${added.length === 1 ? '' : 's'} — review, then Save.`)
     } catch (err) { toast.error(err instanceof Error ? err.message : 'AI could not prepare undertakings.') }

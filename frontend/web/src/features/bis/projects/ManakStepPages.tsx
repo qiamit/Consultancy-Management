@@ -443,7 +443,7 @@ export function ManakStepPage({
               type="button"
               className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-none border border-stone-400 bg-white text-amber-800 transition-colors hover:bg-amber-50"
               title="Open the All India First marking fee form (Annexure 1: capacity, costs, testing charges, unit rate)"
-              aria-label="Open All India First marking fee form"
+              aria-label="Open All India First Marking Fee Form"
               onClick={onMarkingFee.edit}
             >
               <ClipboardList size={15} aria-hidden />
@@ -640,7 +640,7 @@ export function ManakStepPage({
 
   return (
     <div className="font-jakarta">
-      {loading ? <p className="mb-2 text-xs text-stone-500">Loading application data…</p> : null}
+      {loading ? <p className="mb-2 text-xs text-stone-500">Loading Application Data…</p> : null}
       {error ? <p className="mb-2 text-xs text-red-700">{error}</p> : null}
       <div className={cn(loading && 'opacity-60')}>{body}</div>
     </div>

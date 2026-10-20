@@ -115,7 +115,7 @@ function SetPasswordPanel(props: SetPasswordDialogProps & { user: UserAccount })
               </p>
             )}
             <div className="space-y-2">
-              <Label htmlFor="admin-new-password">New password</Label>
+              <Label htmlFor="admin-new-password">New Password</Label>
               <PasswordInput
                 id="admin-new-password"
                 value={password}
@@ -125,7 +125,7 @@ function SetPasswordPanel(props: SetPasswordDialogProps & { user: UserAccount })
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="admin-confirm-password">Confirm password</Label>
+              <Label htmlFor="admin-confirm-password">Confirm Password</Label>
               <PasswordInput id="admin-confirm-password" value={confirm} onChange={setConfirm} />
             </div>
             {!props.isSelf && (
@@ -136,7 +136,7 @@ function SetPasswordPanel(props: SetPasswordDialogProps & { user: UserAccount })
                   checked={mustChange}
                   onChange={(e) => setMustChange(e.target.checked)}
                 />
-                <span>User must choose a new password at next login</span>
+                <span>User Must Choose a New Password at Next Login</span>
               </label>
             )}
           </>

@@ -176,7 +176,7 @@ export function TestReportPrepareDialog({
               {saveMessage && <p className="text-sm text-stone-600">{saveMessage}</p>}
 
               {coverLoading ? (
-                <p className="text-sm text-stone-600">Loading report cover details…</p>
+                <p className="text-sm text-stone-600">Loading Report Cover Details…</p>
               ) : liveCoverDetails ? (
                 <div className="space-y-4">
                   <TestReportCoverDetailsGrid
@@ -201,7 +201,7 @@ export function TestReportPrepareDialog({
                   )}
                 </div>
               ) : (
-                <p className="text-sm text-stone-600">Unable to load report cover details.</p>
+                <p className="text-sm text-stone-600">Unable to Load Report Cover Details.</p>
               )}
 
               <TestReportResultsSection

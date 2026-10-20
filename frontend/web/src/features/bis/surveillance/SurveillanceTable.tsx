@@ -74,7 +74,7 @@ export function SurveillanceTable({
                   <input
                     type="checkbox"
                     className={checkboxClass}
-                    aria-label="Select all on this page"
+                    aria-label="Select All on This Page"
                     checked={allChecked}
                     ref={(el) => {
                       if (el) el.indeterminate = !allChecked && someChecked

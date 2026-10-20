@@ -54,7 +54,7 @@ function LongDurationTests({
           <span className="text-red-600">*</span>
         </span>
         <Select value={relaxation} onValueChange={(v) => void setRelaxation(v as YesNo)}>
-          <SelectTrigger className="h-8 w-28 rounded-none border-stone-400 bg-white text-sm" aria-label="Opting for relaxation">
+          <SelectTrigger className="h-8 w-28 rounded-none border-stone-400 bg-white text-sm" aria-label="Opting for Relaxation">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

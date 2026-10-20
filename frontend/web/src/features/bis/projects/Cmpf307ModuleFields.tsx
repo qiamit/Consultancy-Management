@@ -47,9 +47,9 @@ export function Cmpf307ModuleFields({ value, onChange, disabled = false, project
 
   const uploadAttachment = async (row: Cmpf307BrandRow, key: AttachmentKey, file?: File) => {
     if (!file) return
-    if (!projectId) { toast.error('Save the project before uploading an attachment.'); return }
+    if (!projectId) { toast.error('Save the Project Before Uploading an Attachment.'); return }
     if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
-      toast.error('Please select a PDF file.')
+      toast.error('Please Select a PDF File.')
       return
     }
     const uploadKey = `${row.rowId}:${key}`
@@ -129,7 +129,7 @@ export function Cmpf307ModuleFields({ value, onChange, disabled = false, project
     <section className="space-y-2">
       <h3 className="text-sm font-bold text-stone-800">Brand Names / Trade Marks to Be Marked on BIS Standard Mark Product</h3>
       <div className="overflow-x-auto border border-stone-400 bg-white"><table className="list-cards w-full min-w-[900px] table-fixed border-collapse text-xs"><thead><tr>
-        <th className={cn(headingClass, 'w-[6%]')}><input type="checkbox" aria-label="Select all brand rows" checked={allSelected} disabled={disabled} onChange={(event) => setSelectedRows(event.target.checked ? value.rows.map((row) => row.rowId) : [])} /></th>
+        <th className={cn(headingClass, 'w-[6%]')}><input type="checkbox" aria-label="Select All Brand Rows" checked={allSelected} disabled={disabled} onChange={(event) => setSelectedRows(event.target.checked ? value.rows.map((row) => row.rowId) : [])} /></th>
         <th className={cn(headingClass, 'w-[31%]')}>Brand Name / Trade Mark</th>
         <th className={cn(headingClass, 'w-[18%]')}>Self / Others</th>
         <th className={cn(headingClass, 'w-[18%]')}>Registered / Unregistered</th>

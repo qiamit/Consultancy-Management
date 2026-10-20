@@ -537,7 +537,7 @@ export function IsCodesForm({
                 <LimsFieldWithAdd
                   addButton={
                     <DialogTrigger asChild>
-                      <LimsFieldAddButton aria-label="Add aspect" />
+                      <LimsFieldAddButton aria-label="Add Aspect" />
                     </DialogTrigger>
                   }
                 >
@@ -554,7 +554,7 @@ export function IsCodesForm({
                       if (open || form.aspect.trim()) return
                       onChange({ ...form, aspect: 'Specification' })
                     }}
-                    placeholder="Type or select Aspect"
+                    placeholder="Type or Select Aspect"
                     listId="is-code-aspect-combobox"
                     inputId="aspect-of-is"
                     inputClassName="h-8 border-0 bg-transparent px-2 shadow-none focus-visible:ring-0"
@@ -638,7 +638,7 @@ export function IsCodesForm({
                 </p>
                 <Field label="Quantity">
                   <Input
-                    placeholder="Quantity band"
+                    placeholder="Quantity Band"
                     value={form[qtyKey] ?? ''}
                     onChange={(e) => onChange({ ...form, [qtyKey]: e.target.value })}
                   />

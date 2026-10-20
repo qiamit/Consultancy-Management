@@ -38,7 +38,7 @@ export default function InventoryPage() {
         </div>
         {message ? <p className="text-sm text-red-700">{message}</p> : null}
         {tab === 'settings' ? <InventorySettingsPanel /> : null}
-        {tab === 'items' && rows.length === 0 ? <p className="text-sm text-stone-600">No products in stock view yet.</p> : null}
+        {tab === 'items' && rows.length === 0 ? <p className="text-sm text-stone-600">No Products in Stock View Yet.</p> : null}
         {tab === 'items' && rows.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="auto-cards list-cards w-full min-w-[720px] text-sm">
@@ -65,7 +65,7 @@ export default function InventoryPage() {
             </table>
           </div>
         ) : null}
-        {tab === 'category' && categories.length === 0 ? <p className="text-sm text-stone-600">No categories yet.</p> : null}
+        {tab === 'category' && categories.length === 0 ? <p className="text-sm text-stone-600">No Categories Yet.</p> : null}
         {tab === 'category' && categories.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="auto-cards list-cards w-full min-w-[480px] text-sm">

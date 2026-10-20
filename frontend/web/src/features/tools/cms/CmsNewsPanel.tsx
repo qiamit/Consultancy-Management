@@ -78,7 +78,7 @@ export default function CmsNewsPanel() {
 
   const save = async () => {
     if (!form.title.trim()) {
-      toast.error('Title is required')
+      toast.error('Title Is Required')
       return
     }
     setSaving(true)
@@ -108,7 +108,7 @@ export default function CmsNewsPanel() {
       toast.error(err.message)
       return
     }
-    toast.success('News deleted')
+    toast.success('News Deleted')
     void load()
   }
 
@@ -164,7 +164,7 @@ export default function CmsNewsPanel() {
                         variant="outline"
                         className={cn(limsOutlineBtnClass, 'h-7 w-7 p-0')}
                         onClick={() => openEdit(row)}
-                        aria-label="Edit news"
+                        aria-label="Edit News"
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
@@ -174,7 +174,7 @@ export default function CmsNewsPanel() {
                         variant="outline"
                         className={cn(limsOutlineBtnClass, 'h-7 w-7 p-0 text-red-700')}
                         onClick={() => void remove(row)}
-                        aria-label="Delete news"
+                        aria-label="Delete News"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
@@ -191,7 +191,7 @@ export default function CmsNewsPanel() {
         <DialogContent className={cn(limsDialogClass, 'max-w-lg')}>
           <DialogHeader className="border-b border-stone-300 bg-stone-100 px-5 py-3">
             <DialogTitle>{editingId ? 'Edit News' : 'Add News'}</DialogTitle>
-            <DialogDescription>Shown in the News section of the public website.</DialogDescription>
+            <DialogDescription>Shown in the News Section of the Public Website.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3 p-5">
             <div className="space-y-1">
@@ -214,7 +214,7 @@ export default function CmsNewsPanel() {
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="news-image">Image URL (optional)</Label>
+              <Label htmlFor="news-image">Image URL (Optional)</Label>
               <Input
                 id="news-image"
                 type="url"
@@ -224,7 +224,7 @@ export default function CmsNewsPanel() {
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="news-date">Publish date</Label>
+              <Label htmlFor="news-date">Publish Date</Label>
               <Input
                 id="news-date"
                 type="datetime-local"

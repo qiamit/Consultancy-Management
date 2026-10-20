@@ -358,7 +358,7 @@ export function FactoryTestReportModuleFields({
                     </MetaCell>
                   </tr>
                   <tr>
-                    <MetaCell label="Declared Values, if any" colSpan={6}>
+                    <MetaCell label="Declared Values, if Any" colSpan={6}>
                       <span className="whitespace-pre-wrap">
                         {displayOrDash(activeReport.declaredValue)}
                       </span>
@@ -394,7 +394,7 @@ export function FactoryTestReportModuleFields({
                           onChange={(next) =>
                             patchActiveReport({ dateOfTestingStart: next })
                           }
-                          aria-label="Date of testing start"
+                          aria-label="Date of Testing Start"
                         />
                       </div>
                     </td>
@@ -412,7 +412,7 @@ export function FactoryTestReportModuleFields({
                           onChange={(next) =>
                             patchActiveReport({ dateOfTestingFinish: next })
                           }
-                          aria-label="Date of testing completion"
+                          aria-label="Date of Testing Completion"
                         />
                       </div>
                     </td>
@@ -607,7 +607,7 @@ export function FactoryTestReportModuleFields({
                     {testedBySignatureImageUrl.trim() ? (
                       <img
                         src={testedBySignatureImageUrl.trim()}
-                        alt="Tested By signature"
+                        alt="Tested By Signature"
                         className="max-h-9 max-w-[6rem] object-contain"
                       />
                     ) : null}

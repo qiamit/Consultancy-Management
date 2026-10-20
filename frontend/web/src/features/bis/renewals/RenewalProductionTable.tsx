@@ -124,8 +124,8 @@ export function PeriodDateInput({
         <button
           type="button"
           className={limsFieldAddBtnClass}
-          aria-label="Open calendar"
-          title="Pick date"
+          aria-label="Open Calendar"
+          title="Pick Date"
           disabled={disabled}
           onClick={() => openDatePicker(id)}
         >
@@ -245,7 +245,7 @@ export function RenewalProductionTable({
           variant="ghost"
           size="icon"
           aria-label={`Add production period after row ${index + 1}`}
-          title="Add period"
+          title="Add Period"
           className="size-7 shrink-0 rounded-none text-emerald-800 hover:bg-emerald-50"
           onClick={addPeriod}
         >
@@ -257,7 +257,7 @@ export function RenewalProductionTable({
         variant="ghost"
         size="icon"
         aria-label={`Add stock-marking break to production period ${index + 1}`}
-        title="Insert stock-marking break within this period"
+        title="Insert Stock-Marking Break Within This Period"
         className="size-7 shrink-0 rounded-none text-stone-700 hover:bg-stone-100"
         disabled={!row.periodFrom || !row.periodTo}
         onClick={() => setBreakSelection({ row, breaks: [{ from: row.periodFrom, to: row.periodTo }], error: '' })}
@@ -269,7 +269,7 @@ export function RenewalProductionTable({
         variant="ghost"
         size="icon"
         aria-label={`Delete production period ${index + 1}`}
-        title="Delete period"
+        title="Delete Period"
         className="size-7 shrink-0 rounded-none text-red-700 hover:bg-red-50 hover:text-red-800"
         onClick={() => onRowsChange(rows.filter((item) => item.id !== row.id))}
       >
@@ -280,7 +280,7 @@ export function RenewalProductionTable({
         variant="ghost"
         size="icon"
         aria-label={`Calculation step for production period ${index + 1}`}
-        title="Show marking fee calculation steps"
+        title="Show Marking Fee Calculation Steps"
         className="size-7 shrink-0 rounded-none text-amber-800 hover:bg-amber-50"
         onClick={() => setCalculationSelection({ rows: [row], total: false })}
       >
@@ -324,8 +324,8 @@ export function RenewalProductionTable({
                   type="button"
                   variant="ghost"
                   size="icon"
-                  aria-label="Calculation steps for total marking fee"
-                  title="Show total marking fee calculation"
+                  aria-label="Calculation Steps for Total Marking Fee"
+                  title="Show Total Marking Fee Calculation"
                   className="size-7 rounded-none text-amber-800 hover:bg-amber-50"
                   onClick={() => setCalculationSelection({ rows: calculatedRows, total: true })}
                 >
@@ -338,11 +338,11 @@ export function RenewalProductionTable({
                 { key: 'from', label: 'Period Start' },
                 { key: 'to', label: 'Period End' },
                 { key: 'production', label: <><span>Total Production</span>{unitOfIs ? <span className="block">in {unitOfIs}</span> : null}</> },
-                { key: 'productionValue', label: <><span>Value</span><span className="block">in Rs</span></> },
+                { key: 'productionValue', label: <><span>Value</span><span className="block">In Rs</span></> },
                 { key: 'covered', label: <><span>Covered Production</span>{unitOfIs ? <span className="block">in {unitOfIs}</span> : null}</> },
-                { key: 'coveredValue', label: <><span>Value</span><span className="block">in Rs</span></> },
-                { key: 'percent', label: <><span>Covered Qty</span><span className="block">in %</span></> },
-                { key: 'markingFee', label: <><span>Marking Fee</span><span className="block">in Rs</span></> },
+                { key: 'coveredValue', label: <><span>Value</span><span className="block">In Rs</span></> },
+                { key: 'percent', label: <><span>Covered Qty</span><span className="block">In %</span></> },
+                { key: 'markingFee', label: <><span>Marking Fee</span><span className="block">In Rs</span></> },
                 { key: 'action', label: 'Action' },
               ].map(({ key, label }) => (
                 <th key={key} className="border border-stone-600 px-1 py-2 text-center font-semibold leading-tight">
@@ -487,7 +487,7 @@ export function RenewalProductionTable({
                           size="icon"
                           className="h-8 w-8 rounded-none border border-stone-400 text-red-700 hover:bg-red-50 disabled:opacity-30"
                           aria-label={`Remove break ${index + 1}`}
-                          title="Remove this break"
+                          title="Remove This Break"
                           disabled={breakSelection.breaks.length === 1}
                           onClick={() => setBreakSelection({ ...breakSelection, breaks: breakSelection.breaks.filter((_, i) => i !== index), error: '' })}
                         >
@@ -619,7 +619,7 @@ function MarkingFeeCalculationDialog({
                     <strong className="block break-words tabular-nums">{totalCoveredPercent}%</strong>
                   </div>
                   <div className="min-w-0 border border-amber-500 bg-amber-100 px-3 py-2">
-                    <span className="block text-xs text-stone-700">Total Fee (incl. GST)</span>
+                    <span className="block text-xs text-stone-700">Total Fee (Incl. GST)</span>
                     <strong className="block break-words tabular-nums">{getCurrencySymbol()} {formatAmountTotal(feeSummary.total)}</strong>
                   </div>
                 </div>
@@ -660,7 +660,7 @@ function MarkingFeeCalculationDialog({
                     </li>
                     <li className="flex min-w-0 items-start gap-2 border border-stone-200 bg-white p-2.5 text-xs leading-relaxed">
                       <span className="flex size-6 shrink-0 items-center justify-center bg-stone-800 text-amber-50 font-semibold">9</span>
-                      <p className="min-w-0 break-words [overflow-wrap:anywhere]">Renewal application fee + annual licence fee: <strong>{getCurrencySymbol()} {formatAmountTotal(feeSummary.applicationFee)} + {getCurrencySymbol()} {formatAmountTotal(feeSummary.licenceFee)}{feeSummary.years > 1 ? ` (${getCurrencySymbol()} 1,000.00 × ${feeSummary.years} years)` : ''}</strong></p>
+                      <p className="min-w-0 break-words [overflow-wrap:anywhere]">Renewal Application Fee + Annual Licence Fee: <strong>{getCurrencySymbol()} {formatAmountTotal(feeSummary.applicationFee)} + {getCurrencySymbol()} {formatAmountTotal(feeSummary.licenceFee)}{feeSummary.years > 1 ? ` (${getCurrencySymbol()} 1,000.00 × ${feeSummary.years} years)` : ''}</strong></p>
                     </li>
                     <li className="flex min-w-0 items-start gap-2 border border-stone-200 bg-white p-2.5 text-xs leading-relaxed">
                       <span className="flex size-6 shrink-0 items-center justify-center bg-stone-800 text-amber-50 font-semibold">10</span>
@@ -689,7 +689,7 @@ function MarkingFeeCalculationDialog({
                 <article key={row.id} className="space-y-3 border border-stone-300 bg-white p-3 sm:p-4">
                   <h3 className="border-b border-stone-300 pb-2 font-semibold text-stone-900">Period {index + 1}: {period}</h3>
                   <section className="space-y-2">
-                    <h4 className="text-xs font-semibold uppercase tracking-wide text-stone-600">Calculation summary</h4>
+                    <h4 className="text-xs font-semibold uppercase tracking-wide text-stone-600">Calculation Summary</h4>
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
                       <div className="min-w-0 border border-stone-200 bg-stone-50 px-3 py-2">
                         <span className="block text-xs text-stone-600">Covered Production</span>
@@ -711,19 +711,19 @@ function MarkingFeeCalculationDialog({
                   </section>
 
                   <section className="space-y-2">
-                    <h4 className="text-xs font-semibold uppercase tracking-wide text-stone-600">Calculation steps</h4>
+                    <h4 className="text-xs font-semibold uppercase tracking-wide text-stone-600">Calculation Steps</h4>
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
                       <div className="flex min-w-0 items-start gap-2 border border-stone-200 bg-stone-50 p-2.5 text-xs leading-relaxed">
                         <span className="flex size-6 shrink-0 items-center justify-center bg-stone-800 font-semibold text-amber-50">1</span>
-                        <p className="min-w-0 break-words [overflow-wrap:anywhere]">Covered production: <strong>{row.coveredUnit || '0'} {unit}</strong></p>
+                        <p className="min-w-0 break-words [overflow-wrap:anywhere]">Covered Production: <strong>{row.coveredUnit || '0'} {unit}</strong></p>
                       </div>
                       <div className="flex min-w-0 items-start gap-2 border border-stone-200 bg-stone-50 p-2.5 text-xs leading-relaxed">
                         <span className="flex size-6 shrink-0 items-center justify-center bg-stone-800 font-semibold text-amber-50">2</span>
-                        <p className="min-w-0 break-words [overflow-wrap:anywhere]">Matched IS Code slab: <strong>{slab?.quantity || 'No matching slab'}</strong></p>
+                        <p className="min-w-0 break-words [overflow-wrap:anywhere]">Matched IS Code Slab: <strong>{slab?.quantity || 'No matching slab'}</strong></p>
                       </div>
                       <div className="flex min-w-0 items-start gap-2 border border-stone-200 bg-stone-50 p-2.5 text-xs leading-relaxed">
                         <span className="flex size-6 shrink-0 items-center justify-center bg-stone-800 font-semibold text-amber-50">3</span>
-                        <p className="min-w-0 break-words [overflow-wrap:anywhere]">Applicable rate: <strong>{rate === null ? 'Unavailable' : `${getCurrencySymbol()} ${formatMoneyInput(String(rate))} per ${unit}`}</strong></p>
+                        <p className="min-w-0 break-words [overflow-wrap:anywhere]">Applicable Rate: <strong>{rate === null ? 'Unavailable' : `${getCurrencySymbol()} ${formatMoneyInput(String(rate))} per ${unit}`}</strong></p>
                       </div>
                       <div className="flex min-w-0 items-start gap-2 border border-amber-400 bg-amber-50 p-2.5 text-xs leading-relaxed">
                         <span className="flex size-6 shrink-0 items-center justify-center bg-amber-700 font-semibold text-white">4</span>

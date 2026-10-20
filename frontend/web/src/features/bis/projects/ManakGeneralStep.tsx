@@ -138,8 +138,8 @@ function EditableValue({ value, onSave, type = 'text', options, disabled, title,
               <button
                 type="button"
                 className={limsFieldAddBtnClass}
-                aria-label="Open calendar"
-                title="Pick date"
+                aria-label="Open Calendar"
+                title="Pick Date"
                 disabled={disabled}
                 onClick={() => openDatePicker(dateId)}
               >
@@ -365,7 +365,7 @@ function ProofButton({
           </DialogHeader>
           <ul className="max-h-64 divide-y divide-stone-200 overflow-y-auto border border-stone-300">
             {available.filter((d) => d.storage_path && d.id !== doc?.id).length === 0 ? (
-              <li className="px-3 py-4 text-center text-sm text-stone-500">No other documents with a file in Client Master.</li>
+              <li className="px-3 py-4 text-center text-sm text-stone-500">No Other Documents with a File in Client Master.</li>
             ) : (
               available
                 .filter((d) => d.storage_path && d.id !== doc?.id)
@@ -700,7 +700,7 @@ export function ManakGeneralStep({
         state: officeState || null,
         pin_code: officePin || null,
       }, siteId)
-      toast.success('Factory address now follows the office address')
+      toast.success('Factory Address Now Follows the Office Address')
       onChanged()
     } catch (err) {
       setSameAsOffice(false)

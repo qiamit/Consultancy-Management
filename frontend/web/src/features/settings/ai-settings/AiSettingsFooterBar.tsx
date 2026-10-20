@@ -68,7 +68,7 @@ export function AiSettingsFooterBar({
             <Select value={String(pageSize)} onValueChange={(v) => onPageSizeChange(Number(v))}>
               <SelectTrigger
                 className={cn(footerFieldClass, 'h-7 w-[6.5rem] shrink-0 text-[11px] sm:h-8 sm:text-xs')}
-                aria-label="Rows per page"
+                aria-label="Rows per Page"
               >
                 <SelectValue />
               </SelectTrigger>
@@ -83,7 +83,7 @@ export function AiSettingsFooterBar({
 
           <div className="flex min-w-0 flex-nowrap items-center justify-end gap-1 overflow-x-auto overscroll-x-contain sm:gap-1.5 md:gap-2 [-webkit-overflow-scrolling:touch]">
             <Input
-              aria-label="Jump to page"
+              aria-label="Jump to Page"
               placeholder="Page"
               value={jumpTo}
               onChange={(e) => onJumpToChange(e.target.value.replace(/[^0-9]/g, ''))}
@@ -114,7 +114,7 @@ export function AiSettingsFooterBar({
               disabled={page <= 1}
             >
               <ChevronLeft size={16} />
-              <span className="sr-only">Previous page</span>
+              <span className="sr-only">Previous Page</span>
             </Button>
             <span className="shrink-0 whitespace-nowrap text-center text-[10px] font-medium text-stone-300 sm:min-w-[4.5rem] sm:text-xs md:min-w-[5.5rem]">
               <span className="hidden sm:inline">Page </span>
@@ -129,7 +129,7 @@ export function AiSettingsFooterBar({
               disabled={page >= pageCount}
             >
               <ChevronRight size={16} />
-              <span className="sr-only">Next page</span>
+              <span className="sr-only">Next Page</span>
             </Button>
           </div>
         </div>

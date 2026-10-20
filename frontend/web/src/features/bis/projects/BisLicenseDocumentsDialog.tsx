@@ -412,7 +412,7 @@ export function BisLicenseDocumentsDialog({
   const handleModuleEdit = (kind: BisPrintDocumentKind) => {
     setUndertakingFocus(null)
     if (!row?.id) {
-      toast.error('Save the license first, then open the document module.')
+      toast.error('Save the License First, Then Open the Document Module.')
       return
     }
     if (!isFileModuleKind(kind)) {
@@ -490,7 +490,7 @@ export function BisLicenseDocumentsDialog({
 
   const handlePreview = (kind: BisPrintDocumentKind) => {
     if (!row) {
-      toast.error('Select a license first.')
+      toast.error('Select a License First.')
       return
     }
     setPreviewKindsList([])
@@ -526,7 +526,7 @@ export function BisLicenseDocumentsDialog({
         margin: { top: '0mm', right: '0mm', bottom: '0mm', left: '0mm' },
       })
       triggerPdfDownload(blob, filename)
-      toast.success('PDF downloaded: Undertaking for Manufacturing Scope')
+      toast.success('PDF Downloaded: Undertaking for Manufacturing Scope')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'PDF download failed')
     } finally {
@@ -536,11 +536,11 @@ export function BisLicenseDocumentsDialog({
 
   const handleImport = (kind: BisPrintDocumentKind) => {
     if (!row?.id) {
-      toast.error('Save the license first, then import module data.')
+      toast.error('Save the License First, Then Import Module Data.')
       return
     }
     if (!isImportableBisModuleKind(kind)) {
-      toast.message('Import not available', {
+      toast.message('Import Not Available', {
         description: `${BIS_PRINT_DOCUMENT_LABEL[kind]} has no stored module data.`,
       })
       return
@@ -615,7 +615,7 @@ export function BisLicenseDocumentsDialog({
     if (!row) return
     if (kinds.length) {
       const target = openPendingPrintWindow('Preparing to print…')
-      if (!target) toast.error('Allow popups to print.')
+      if (!target) toast.error('Allow Popups to Print.')
       else {
         try {
           const settings = await loadBisProjectPrintPageSettings(row.id).catch(() => DEFAULT_BIS_DOCUMENT_PRINT_PAGE_SETTINGS)
@@ -632,7 +632,7 @@ export function BisLicenseDocumentsDialog({
     if (files.length) {
       const target = openPendingPrintWindow('Preparing the selected files…')
       if (!target) {
-        toast.error('Allow popups to print.')
+        toast.error('Allow Popups to Print.')
         return
       }
       try {
@@ -1047,7 +1047,7 @@ export function BisLicenseDocumentsDialog({
                   )}
                   onImportData={(bundle) => {
                     if (!row?.id) {
-                      toast.error('Save the license first, then import data.')
+                      toast.error('Save the License First, Then Import Data.')
                       return
                     }
                     setImportKind(null)

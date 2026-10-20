@@ -435,21 +435,21 @@ export function TestReportTemplateSettingDialog({
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                       <HeaderCheckbox
                         id="hdr-show-print-header"
-                        label="Show letterhead header"
+                        label="Show Letterhead Header"
                         checked={settings.showPrintHeader}
                         disabled={formBusy}
                         onChange={(showPrintHeader) => patchHeader({ showPrintHeader })}
                       />
                       <HeaderCheckbox
                         id="hdr-fit-page-width"
-                        label="Header fit to page width"
+                        label="Header Fit to Page Width"
                         checked={settings.headerFitToPageWidth}
                         disabled={formBusy || !settings.showPrintHeader}
                         onChange={(headerFitToPageWidth) => patchHeader({ headerFitToPageWidth })}
                       />
                       <HeaderCheckbox
                         id="hdr-show-watermark"
-                        label="Show watermark on print / PDF"
+                        label="Show Watermark on Print / PDF"
                         checked={settings.showWatermark}
                         disabled={formBusy}
                         onChange={(showWatermark) => patchHeader({ showWatermark })}
@@ -458,7 +458,7 @@ export function TestReportTemplateSettingDialog({
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                       <HeaderNumberField
                         id="hdr-max-height"
-                        label="Header max height (mm)"
+                        label="Header Max Height (Mm)"
                         value={settings.headerMaxHeightMm}
                         min={12}
                         max={60}
@@ -467,7 +467,7 @@ export function TestReportTemplateSettingDialog({
                       />
                       <HeaderNumberField
                         id="hdr-margin-below"
-                        label="Margin below header (mm)"
+                        label="Margin Below Header (Mm)"
                         value={settings.headerMarginBelowMm}
                         min={0}
                         max={20}
@@ -475,7 +475,7 @@ export function TestReportTemplateSettingDialog({
                         onChange={(headerMarginBelowMm) => patchHeader({ headerMarginBelowMm })}
                       />
                       <div className="space-y-1.5 min-w-0">
-                        <Label htmlFor="hdr-align">Header alignment</Label>
+                        <Label htmlFor="hdr-align">Header Alignment</Label>
                         <Select
                           value={settings.headerAlign}
                           onValueChange={(v) =>
@@ -496,7 +496,7 @@ export function TestReportTemplateSettingDialog({
                         </Select>
                       </div>
                       <div className="space-y-1.5 min-w-0">
-                        <Label htmlFor="hdr-image-fit">Header image fit</Label>
+                        <Label htmlFor="hdr-image-fit">Header Image Fit</Label>
                         <Select
                           value={settings.headerImageFit}
                           onValueChange={(v) =>

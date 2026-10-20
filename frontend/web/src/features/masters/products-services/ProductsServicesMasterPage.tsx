@@ -108,7 +108,7 @@ function buildPrintHtml(rows: ProductServiceRow[]) {
         r.item_type === 'Product'
           ? `<div class="field"><div class="k">Opening Stock</div><div class="v">${esc(String(r.opening_stock))}</div></div>
              <div class="field"><div class="k">Low Stock Alert</div><div class="v">${esc(String(r.low_stock_alert))}</div></div>`
-          : `<div class="field span2"><div class="k">Stock</div><div class="v">Not applicable (Service)</div></div>`
+          : `<div class="field span2"><div class="k">Stock</div><div class="v">Not Applicable (Service)</div></div>`
 
       return `
       <section class="card">

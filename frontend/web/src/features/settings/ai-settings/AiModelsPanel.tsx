@@ -263,7 +263,7 @@ export const AiModelsPanel = forwardRef<AiModelsPanelHandle, AiModelsPanelProps>
 
       {loading ? (
         <div className="overflow-hidden rounded-none border-2 border-stone-500 bg-white shadow-sm ring-1 ring-amber-700/20 px-5 py-8 text-center shadow-sm">
-          <p className="text-sm text-muted-foreground">Loading models…</p>
+          <p className="text-sm text-muted-foreground">Loading Models…</p>
         </div>
       ) : (
         <>
@@ -294,7 +294,7 @@ export const AiModelsPanel = forwardRef<AiModelsPanelHandle, AiModelsPanelProps>
                       <input
                         type="checkbox"
                         className={checkboxClass}
-                        aria-label="Select all on this page"
+                        aria-label="Select All on This Page"
                         checked={allPagedChecked}
                         ref={(el) => {
                           if (el) el.indeterminate = !allPagedChecked && somePagedChecked

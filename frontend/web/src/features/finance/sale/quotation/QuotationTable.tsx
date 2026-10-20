@@ -153,7 +153,7 @@ function RowActions({
           variant="ghost"
           className={ghostBtnClass}
           aria-label={`Email ${row.quotation_number} to client`}
-          title="Email to client"
+          title="Email to Client"
           disabled={busy || loading || emailBusyId === row.id}
           onClick={() => onEmailClient(row)}
         >
@@ -353,7 +353,7 @@ export function QuotationTable({
               <input
                 type="checkbox"
                 className={checkboxClass}
-                aria-label="Select all"
+                aria-label="Select All"
                 checked={allChecked}
                 ref={(el) => {
                   if (el) el.indeterminate = !allChecked && someChecked
@@ -551,7 +551,7 @@ export function QuotationTable({
                     <input
                       type="checkbox"
                       className={checkboxClass}
-                      aria-label="Select all"
+                      aria-label="Select All"
                       checked={allChecked}
                       ref={(el) => {
                         if (el) el.indeterminate = !allChecked && someChecked

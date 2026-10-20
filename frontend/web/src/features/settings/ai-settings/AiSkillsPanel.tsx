@@ -220,7 +220,7 @@ export const AiSkillsPanel = forwardRef<AiSkillsPanelHandle, AiSkillsPanelProps>
 
       {loading ? (
         <div className="overflow-hidden rounded-none border-2 border-stone-500 bg-white shadow-sm ring-1 ring-amber-700/20 px-5 py-8 text-center shadow-sm">
-          <p className="text-sm text-muted-foreground">Loading skills…</p>
+          <p className="text-sm text-muted-foreground">Loading Skills…</p>
         </div>
       ) : (
         <>
@@ -251,7 +251,7 @@ export const AiSkillsPanel = forwardRef<AiSkillsPanelHandle, AiSkillsPanelProps>
                       <input
                         type="checkbox"
                         className={checkboxClass}
-                        aria-label="Select all on this page"
+                        aria-label="Select All on This Page"
                         checked={allPagedChecked}
                         ref={(el) => {
                           if (el) el.indeterminate = !allPagedChecked && somePagedChecked
@@ -440,7 +440,7 @@ export const AiSkillsPanel = forwardRef<AiSkillsPanelHandle, AiSkillsPanelProps>
                   className="min-h-[180px] rounded-md border-slate-300 bg-white font-mono text-xs shadow-none focus-visible:ring-teal-600/30"
                   value={form.instructions}
                   onChange={(e) => setForm((p) => ({ ...p, instructions: e.target.value }))}
-                  placeholder="Step-by-step rules the AI must follow…"
+                  placeholder="Step-by-Step Rules the AI Must Follow…"
                 />
               </div>
             </div>

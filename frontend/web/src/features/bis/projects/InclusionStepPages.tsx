@@ -146,7 +146,7 @@ function ExistingScope({ notes }: { notes: string }) {
         </tbody>
       </table>
     ) : (
-      <p className="text-sm text-stone-500">No scope saved on the licence.</p>
+      <p className="text-sm text-stone-500">No Scope Saved on the Licence.</p>
     )
   }
   const rows = scope.rows.filter((r) => r.some((c) => c.trim()))
@@ -213,7 +213,7 @@ function BranchPicker({ row, onSaved }: { row: BisProjectRow; onSaved?: () => vo
       toast.error(error.message)
       return
     }
-    toast.success('BIS branch saved')
+    toast.success('BIS Branch Saved')
     onSaved?.()
   }
 
@@ -597,11 +597,11 @@ function OtherDocuments({ row, letterOn }: { row: BisProjectRow; letterOn: boole
 
   const add = async () => {
     if (!name.trim()) {
-      toast.error('Document name is required.')
+      toast.error('Document Name Is Required.')
       return
     }
     if (!picked) {
-      toast.error('Choose the PDF file.')
+      toast.error('Choose the PDF File.')
       return
     }
     setBusy(true)
@@ -610,7 +610,7 @@ function OtherDocuments({ row, letterOn }: { row: BisProjectRow; letterOn: boole
       setName('')
       setPicked(null)
       setTick((t) => t + 1)
-      toast.success('Document added')
+      toast.success('Document Added')
     } catch (err) {
       toast.error(formatBisProjectFilesError(err))
     } finally {
@@ -653,7 +653,7 @@ function OtherDocuments({ row, letterOn }: { row: BisProjectRow; letterOn: boole
     try {
       const blob = await buildInclusionOtherDocumentPdf(row)
       if (!blob) {
-        toast.error('Nothing to merge yet.')
+        toast.error('Nothing to Merge Yet.')
         return
       }
       openPdf(URL.createObjectURL(blob), 'Any Other Document (merged)')
@@ -666,7 +666,7 @@ function OtherDocuments({ row, letterOn }: { row: BisProjectRow; letterOn: boole
 
   return (
     <ManakSubPanel
-      title="Other Documents (merged into Manak's “Any Other Document”)"
+      title="Other Documents (Merged into Manak's “Any Other Document”)"
       headerExtra={
         <button
           type="button"
@@ -694,8 +694,8 @@ function OtherDocuments({ row, letterOn }: { row: BisProjectRow; letterOn: boole
               <td className={cn(tdCls, 'text-center')}>
                 <button
                   type="button"
-                  title="Inclusion Request Letter & Undertaking — view PDF"
-                  aria-label="View the request letter PDF"
+                  title="Inclusion Request Letter & Undertaking — View PDF"
+                  aria-label="View the Request Letter PDF"
                   disabled={busy}
                   className="inline-flex h-8 w-8 items-center justify-center rounded-none border border-green-800 bg-green-600 p-0 text-white shadow-sm hover:bg-green-700 disabled:opacity-60"
                   onClick={() => void viewLetter()}
@@ -732,10 +732,10 @@ function OtherDocuments({ row, letterOn }: { row: BisProjectRow; letterOn: boole
             <td className={tdCls}>
               <input
                 className={inputCls}
-                placeholder="Document name (e.g. Test Report, Drawing)"
+                placeholder="Document Name (e.g. Test Report, Drawing)"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                aria-label="Name of the new document"
+                aria-label="Name of the New Document"
               />
             </td>
             <td className={cn(tdCls, 'text-center')}>
@@ -762,7 +762,7 @@ function OtherDocuments({ row, letterOn }: { row: BisProjectRow; letterOn: boole
                         const f = e.target.files?.[0] ?? null
                         e.target.value = ''
                         if (f && !(f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'))) {
-                          toast.error('Only PDF files can be added.')
+                          toast.error('Only PDF Files Can Be Added.')
                           return
                         }
                         setPicked(f)
@@ -774,8 +774,8 @@ function OtherDocuments({ row, letterOn }: { row: BisProjectRow; letterOn: boole
                 <Button
                   type="button"
                   className="h-8 w-8 rounded-none bg-amber-700 p-0 text-white shadow-sm hover:bg-amber-800"
-                  title="Add document"
-                  aria-label="Add document"
+                  title="Add Document"
+                  aria-label="Add Document"
                   disabled={busy}
                   onClick={() => void add()}
                 >

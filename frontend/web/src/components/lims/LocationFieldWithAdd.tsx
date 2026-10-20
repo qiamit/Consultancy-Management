@@ -221,7 +221,7 @@ export function LocationFieldWithAdd({
       <LimsFieldWithAdd
         addButton={
           <LimsFieldAddButton
-            aria-label="Add new location"
+            aria-label="Add New Location"
             title="Add New Location"
             disabled={disabled}
             onClick={openManage}
@@ -248,7 +248,7 @@ export function LocationFieldWithAdd({
             setOpen(next)
             if (next) setQuery(value)
           }}
-          placeholder="Select from created locations"
+          placeholder="Select from Created Locations"
           disabled={disabled}
         />
       </LimsFieldWithAdd>
@@ -334,7 +334,7 @@ export function LocationFieldWithAdd({
                     </div>
                   ))
                 ) : (
-                  <p className="text-xs text-stone-500">No locations added yet.</p>
+                  <p className="text-xs text-stone-500">No Locations Added Yet.</p>
                 )}
               </div>
             </div>

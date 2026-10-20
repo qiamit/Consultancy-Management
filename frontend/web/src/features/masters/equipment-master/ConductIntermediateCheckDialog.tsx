@@ -97,7 +97,7 @@ export function ConductIntermediateCheckDialog({
                   size="sm"
                   className={cn('h-8 shrink-0 gap-1.5', limsOutlineBtnClass)}
                   onClick={onEnvironmentCondition}
-                  aria-label="Add environmental condition table"
+                  aria-label="Add Environmental Condition Table"
                 >
                   <Thermometer size={14} aria-hidden />
                   Environmental Condition

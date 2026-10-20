@@ -182,8 +182,8 @@ export function RawMaterialReferenceModuleFields({
                     <button
                       type="button"
                       className={limsFieldAddBtnClass}
-                      aria-label="Open calendar"
-                      title="Pick date"
+                      aria-label="Open Calendar"
+                      title="Pick Date"
                       disabled={disabled}
                       onClick={() => openDatePicker(`crm-validity-${index}`)}
                     >
