@@ -279,6 +279,7 @@ export function OslSampleRequirementsModuleFields({
   isCodeRevisionYear = null,
   portalUserId = null,
   hasPortalPassword = false,
+  qrOnlyFields = false,
 }: {
   value: OslSampleRequirementsModulePayload
   onChange: (next: OslSampleRequirementsModulePayload) => void
@@ -296,6 +297,8 @@ export function OslSampleRequirementsModuleFields({
   isCodeRevisionYear?: string | null
   portalUserId?: string | null
   hasPortalPassword?: boolean
+  /** Sample code, QR code, laboratory, description, additional information and payment fields only for samples that have a QR code; a sample without one defaults to FT. */
+  qrOnlyFields?: boolean
   onPrintTestRequest?: (row: OslSampleRequirementRow) => void
   onPrintTestReport?: (row: OslSampleRequirementRow) => void
   /** @deprecated Courier Slip now opens a read-only A4 preview (print + PDF download). */
@@ -616,6 +619,7 @@ export function OslSampleRequirementsModuleFields({
       ...source,
       id: emptyOslSampleRequirementRow().id,
       qrCode,
+      sampleFor: qrOnlyFields && !qrCode ? 'ft' : source.sampleFor,
       serialNumber: nextSerial,
       conformity: '',
       sampleCode: source.sampleCode.trim()
@@ -2994,6 +2998,8 @@ export function OslSampleRequirementsModuleFields({
                   </Field>
                 </div>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                  {(!qrOnlyFields || Boolean(draft.qrCode.trim())) ? (
+<>
                   <Field label="Sample Code" htmlFor="osl-sample-code">
                     <Input
                       id="osl-sample-code"
@@ -3011,6 +3017,8 @@ export function OslSampleRequirementsModuleFields({
                       placeholder="12-Digit Manak QR (Optional)"
                     />
                   </Field>
+</>
+) : null}
                   <MasterOptionFieldWithAdd
                     category="osl_sample_shelf_life"
                     value={draft.shelfLife}
@@ -3150,6 +3158,8 @@ export function OslSampleRequirementsModuleFields({
 
               <div className="space-y-3">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  {(!qrOnlyFields || Boolean(draft.qrCode.trim())) ? (
+<>
                   <Field label="Name of the Laboratory" htmlFor="osl-lab">
                     <div className="border border-stone-400 bg-white">
                       <RemoteLookupCombobox
@@ -3179,6 +3189,8 @@ export function OslSampleRequirementsModuleFields({
                       readOnly
                     />
                   </Field>
+</>
+) : null}
                   <Field label="Conformity of Sample as per IS" htmlFor="osl-conformity">
                     <SampleConformitySelect
                       id="osl-conformity"
@@ -3191,6 +3203,7 @@ export function OslSampleRequirementsModuleFields({
                 </div>
               </div>
 
+              {(!qrOnlyFields || Boolean(draft.qrCode.trim())) ? (
               <div className="space-y-3">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <Field label="Sample Description" htmlFor="osl-desc">
@@ -3214,6 +3227,8 @@ export function OslSampleRequirementsModuleFields({
                 </div>
               </div>
 
+) : null}
+              {(!qrOnlyFields || Boolean(draft.qrCode.trim())) ? (
               <div className="space-y-3">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   <Field label="Testing Charges" htmlFor="osl-charges">
@@ -3281,6 +3296,7 @@ export function OslSampleRequirementsModuleFields({
                   </Field>
                 </div>
               </div>
+) : null}
             </div>
           ) : null}
 

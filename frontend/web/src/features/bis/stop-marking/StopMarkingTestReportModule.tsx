@@ -251,6 +251,7 @@ export function StopMarkingTestReportModule({
               isCodeLabel={stopMarkingIsCodeLabel(row)}
               isCodeSearch={String(row.is_code?.is_number ?? '').trim() || null}
               isCodeRevisionYear={String(row.is_code?.revision_year ?? '').trim() || null}
+              qrOnlyFields
             />
           </div>
           <DialogFooter className="flex-row items-center justify-end gap-2">
