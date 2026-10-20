@@ -13,6 +13,7 @@ import { factoryTestReportHasContent, parseFactoryTestReportPayload } from '../p
 import { oslSampleRowHasContent, parseOslSampleRequirementsPayload } from '../projects/oslSampleRequirementsModel'
 import { formatCmL, type BisProjectRow } from '../projects/types'
 import { readStopMarkingReport, readStopMarkingTestReport } from './stopMarkingAi'
+import { StopMarkingDocumentsTable } from './StopMarkingDocumentsTable'
 import { StopMarkingReplyEditor } from './StopMarkingReplyEditor'
 import {
   addStopMarkingDocument,
@@ -539,6 +540,7 @@ export function StopMarkingModuleDialog({
                           </ul>
                         ) : null}
                       </div>
+                      <StopMarkingDocumentsTable row={live()} bisRow={bisRow} />
                       <div className="flex flex-wrap items-center gap-2">
                         <Button type="button" variant="outline" className={tbtn} disabled={!hasReply || busy !== null} onClick={() => void run('print', async () => { const m = await printStopMarkingReply(live()); if (m) setError(m) })}>
                           <Printer size={14} /> Print Reply

@@ -66,7 +66,8 @@ export async function buildStopMarkingReplyHtml(row: StopMarkingRow): Promise<st
   const sections: StopMarkingReplySections = { ...EMPTY_REPLY_SECTIONS, ...(row.reply_sections ?? {}) }
   const hasSections = REPLY_BODY_SECTIONS.some(({ key }) => sections[key].trim())
   const project = row.bis_project_id ? await fetchBisProjectById(row.bis_project_id).catch(() => null) : null
-  if (!hasSections || !project) return buildPlainReplyHtml(row)
+  const draftOnly = !hasSections && (row.reply_draft ?? '').trim().length > 0
+  if ((!hasSections && !draftOnly) || !project) return buildPlainReplyHtml(row)
 
   const printData = await loadBisPrintData(project)
   const ctx = applicantContextFromPrintData(printData)
@@ -116,7 +117,7 @@ export async function buildStopMarkingReplyHtml(row: StopMarkingRow): Promise<st
     ${sections.subject.trim() ? `<div class="rl-subject">Subject: ${esc(sections.subject.replace(/^subject\s*:\s*/i, '').trim())}</div>` : ''}
     <div class="rl-p">Sir / Madam,</div>
     ${sections.general.trim() ? `<div class="rl-p">${para(sections.general)}</div>` : ''}
-    ${bodyHtml}
+    ${draftOnly ? `<div class="rl-p">${para(row.reply_draft ?? '')}</div>` : bodyHtml}
     <div class="rl-close">Yours faithfully,</div>
     <div class="rl-seal"><span>(Seal)</span></div>
     ${signatoryHtml({ firmName: ctx.applicantName, name: sections.signatoryName.trim() || sig.signatoryName, designation: sections.signatoryDesignation.trim() || sig.signatoryDesignation, signatureImageUrl: sig.signatureImageUrl })}
