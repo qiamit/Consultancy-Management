@@ -126,7 +126,7 @@ export function StopMarkingModuleDialog({
         sampleCode: r.sampleCode || f.sampleCode,
         sampleQrCode: r.qrCode || f.sampleQrCode,
         reportDetails: {
-          reportNumber: r.reportNumber || f.reportDetails.reportNumber,
+          ...f.reportDetails,
           batchNumber: r.batchNumber || f.reportDetails.batchNumber,
           manufactureDate: r.manufactureDate || f.reportDetails.manufactureDate,
           description: r.description || f.reportDetails.description,
@@ -359,7 +359,7 @@ export function StopMarkingModuleDialog({
                           disabled={busy !== null || closed}
                           onClick={() =>
                             void run('draft', async () => {
-                              set('replyDraft', await draftStopMarkingReply(row, { reference: form.bisReference, reason: form.bisReason, deadline: form.bisDeadline, reviewNotes: form.reviewNotes, reportFindings: [findingsToText(form.reportFindings), form.reportObservations && `Observations as per the Standard:\n${form.reportObservations}`].filter(Boolean).join('\n\n'), currentDraft: form.replyDraft }))
+                              set('replyDraft', await draftStopMarkingReply(row, { reference: form.bisReference, reason: form.bisReason, deadline: form.bisDeadline, reviewNotes: form.reviewNotes, reportFindings: [findingsToText(form.reportFindings), form.reportObservations && `Observations on Failed Parameters as per the Standard:\n${form.reportObservations}`].filter(Boolean).join('\n\n'), currentDraft: form.replyDraft }))
                               toast.success('Reply drafted — edit it, then save.')
                             })
                           }
@@ -457,7 +457,6 @@ export function StopMarkingModuleDialog({
                       </div>
                       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                         {([
-                          ['Report Number', form.reportDetails.reportNumber, (v: string) => setDetail('reportNumber', v)],
                           ['Sample Code', form.sampleCode, (v: string) => set('sampleCode', v)],
                           ['QR Code', form.sampleQrCode, (v: string) => set('sampleQrCode', v)],
                           ['Batch Number', form.reportDetails.batchNumber, (v: string) => setDetail('batchNumber', v)],
@@ -478,7 +477,7 @@ export function StopMarkingModuleDialog({
                         <AutoGrowTextarea id="smk-m-desc" disabled={closed} className="rounded-none border-stone-500 bg-white" value={form.reportDetails.description} onChange={(e) => setDetail('description', e.target.value)} />
                       </div>
                       <div className="space-y-2">
-                        <Label className={label}>Test Report Findings (Pass / Fail by Parameter)</Label>
+                        <Label className={label}>Test Report Findings (Failed Parameters)</Label>
                         <div className="border border-stone-400 bg-white">
                           <div className="hidden grid-cols-[2rem_2fr_1.3fr_1.3fr_1fr_2rem] gap-2 border-b border-stone-300 bg-stone-100 px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-stone-600 sm:grid">
                             <span />
@@ -506,10 +505,10 @@ export function StopMarkingModuleDialog({
                               )
                             })
                           ) : (
-                            <p className="px-3 py-4 text-center text-sm text-stone-500">No Findings Yet — Read the Reports with AI or Add a Row.</p>
+                            <p className="px-3 py-4 text-center text-sm text-stone-500">No Failed Parameters Yet — Read the Reports with AI or Add a Row.</p>
                           )}
                           <div className="border-t border-stone-300 px-2 py-1.5">
-                            <Button type="button" variant="outline" size="sm" className="h-7 rounded-none border-stone-400 text-xs" disabled={closed} onClick={() => set('reportFindings', [...form.reportFindings, { id: crypto.randomUUID(), selected: false, parameter: '', specified: '', observed: '', remark: '' }])}>
+                            <Button type="button" variant="outline" size="sm" className="h-7 rounded-none border-stone-400 text-xs" disabled={closed} onClick={() => set('reportFindings', [...form.reportFindings, { id: crypto.randomUUID(), selected: true, parameter: '', specified: '', observed: '', remark: '' }])}>
                               + Add Row
                             </Button>
                           </div>
