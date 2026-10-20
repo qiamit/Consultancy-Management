@@ -5,7 +5,6 @@ import {
   RefreshCw,
   Ban,
   Eye,
-  BadgeCheck,
   FolderKanban,
   CalendarX2,
   Users,
@@ -78,12 +77,6 @@ export const SIDEBAR_NAV_SECTIONS: NavSection[] = [
         to: '/bis/surveillance',
         icon: Eye,
         clause: 'bis-surveillance',
-      },
-      {
-        label: 'QE BIS Licenses',
-        to: '/bis/our-licenses',
-        icon: BadgeCheck,
-        clause: 'our-bis-licenses',
       },
       {
         label: 'All BIS Licenses',

@@ -133,7 +133,8 @@ export function BisSampleFailureReplyRoute() {
 }
 
 export function OurBisLicensesRoute() {
-  return <BisProjectsMasterPage key="our" listMode="our" />
+  // QE-managed licences are the "Managed by QE" filter of All BIS Licenses.
+  return <Navigate to="/bis/projects" replace />
 }
 
 export function BisProjectsRoute() {

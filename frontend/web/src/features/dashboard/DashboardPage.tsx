@@ -164,7 +164,7 @@ export default function DashboardPage() {
       value: counts.qeManaged,
       subtitle: 'Licenses managed by Q Engineering',
       icon: BadgeCheck,
-      href: '/bis/our-licenses',
+      href: '/bis/projects',
     },
     {
       title: 'Non-Conformity',
