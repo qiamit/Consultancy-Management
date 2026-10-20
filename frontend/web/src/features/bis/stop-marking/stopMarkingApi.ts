@@ -1,20 +1,15 @@
 import { supabase } from '@/lib/supabaseClient'
 import { currentUserId } from '../shared/bisLookupApi'
-import type { StopMarkingAddForm, StopMarkingCaseForm, StopMarkingRow } from './types'
+import type { OslSampleRequirementRow } from '../projects/oslSampleRequirementsModel'
+import type { StopMarkingAddForm, StopMarkingCaseForm, StopMarkingRow, StopMarkingStatusFilter } from './types'
 
-export { formatBisApiError } from '../projects/bisProjectsApi'
+import { formatBisApiError } from '../projects/bisProjectsApi'
+
+export { formatBisApiError }
 
 const BUCKET = 'bis-stop-marking-files'
 const SELECT_WITH_JOINS =
   '*, client:clients(company_name), is_code:is_codes(is_number, title, revision_year, part_no, section_no, standard_prefix)'
-
-async function ensureBucket(): Promise<void> {
-  try {
-    await supabase.storage.createBucket(BUCKET, { public: false })
-  } catch {
-    // bucket may already exist
-  }
-}
 
 const sanitize = (raw: string) => raw.replace(/[,()"\\*%_]/g, ' ').replace(/\s+/g, ' ').trim()
 
@@ -22,12 +17,12 @@ export async function fetchStopMarkingPage({
   search,
   page,
   pageSize,
-  showClosed,
+  statusFilter,
 }: {
   search: string
   page: number
   pageSize: number
-  showClosed: boolean
+  statusFilter: StopMarkingStatusFilter
 }): Promise<{ rows: StopMarkingRow[]; total: number }> {
   const term = sanitize(search)
   let orFilter: string | null = null
@@ -48,7 +43,8 @@ export async function fetchStopMarkingPage({
     orFilter = parts.join(',')
   }
   let query = supabase.from('bis_stop_marking_cases').select(SELECT_WITH_JOINS, { count: 'exact' })
-  if (!showClosed) query = query.neq('status', 'closed')
+  if (statusFilter === 'active') query = query.neq('status', 'closed')
+  else if (statusFilter === 'closed') query = query.eq('status', 'closed')
   if (orFilter) query = query.or(orFilter)
   query = query.order('stop_date', { ascending: false }).order('created_at', { ascending: false }).order('id')
   const from = (Math.max(1, page) - 1) * pageSize
@@ -78,7 +74,7 @@ async function restoreProjectStatus(projectId: string | null, previousStatus: st
 }
 
 /** Adds a licence to Stop Marking: opens a case and marks the licence's status as Stop Marking. */
-export async function createStopMarkingCase(form: StopMarkingAddForm): Promise<string> {
+export async function createStopMarkingCase(form: StopMarkingAddForm): Promise<{ id: string; letterError: string | null }> {
   let previous = 'completed'
   if (form.bisProjectId) {
     const { data: project, error: projectError } = await supabase
@@ -106,6 +102,7 @@ export async function createStopMarkingCase(form: StopMarkingAddForm): Promise<s
       cm_l_digits: form.cmLDigits || null,
       project_kind: form.projectKind || null,
       stop_date: form.stopDate || new Date().toISOString().slice(0, 10),
+      bis_reason: form.bisReason.trim(),
       previous_project_status: previous,
       created_by: await currentUserId(),
     })
@@ -116,7 +113,16 @@ export async function createStopMarkingCase(form: StopMarkingAddForm): Promise<s
     const { error: statusError } = await supabase.from('bis_projects').update({ status: 'stop_marking' }).eq('id', form.bisProjectId)
     if (statusError) throw statusError
   }
-  return String((data as { id: string }).id)
+  const id = String((data as { id: string }).id)
+  let letterError: string | null = null
+  if (form.letterFile) {
+    try {
+      await uploadStopMarkingReport(id, form.letterFile)
+    } catch (err) {
+      letterError = formatBisApiError(err)
+    }
+  }
+  return { id, letterError }
 }
 
 export async function saveStopMarkingCase(id: string, form: StopMarkingCaseForm): Promise<StopMarkingRow> {
@@ -162,7 +168,6 @@ export async function deleteStopMarkingCases(rows: StopMarkingRow[]): Promise<vo
 }
 
 export async function uploadStopMarkingReport(caseId: string, file: File): Promise<StopMarkingRow> {
-  await ensureBucket()
   const path = `${caseId}/report_${crypto.randomUUID()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
   const { error: uploadError } = await supabase.storage.from(BUCKET).upload(path, file, { upsert: true, contentType: file.type || undefined })
   if (uploadError) throw uploadError
@@ -199,4 +204,23 @@ export async function downloadStopMarkingReport(path: string, name: string): Pro
   const { data, error } = await supabase.storage.from(BUCKET).download(path.trim())
   if (error || !data) throw error ?? new Error('Could not download the report.')
   return new File([data], name || 'report.pdf', { type: data.type || 'application/pdf' })
+}
+
+/** Samples for the case's Factory Test Reports (the reports themselves are saved by the generator on the licence). */
+export async function saveStopMarkingFtrSamples(id: string, samples: OslSampleRequirementRow[]): Promise<StopMarkingRow> {
+  const { data, error } = await supabase
+    .from('bis_stop_marking_cases')
+    .update({ ftr_samples: samples })
+    .eq('id', id)
+    .select(SELECT_WITH_JOINS)
+    .single()
+  if (error) throw error
+  return data as unknown as StopMarkingRow
+}
+
+/** One case by id (used when the address names a case that is not on the current list page). */
+export async function fetchStopMarkingCase(id: string): Promise<StopMarkingRow | null> {
+  const { data, error } = await supabase.from('bis_stop_marking_cases').select(SELECT_WITH_JOINS).eq('id', id).maybeSingle()
+  if (error) throw error
+  return (data as unknown as StopMarkingRow | null) ?? null
 }

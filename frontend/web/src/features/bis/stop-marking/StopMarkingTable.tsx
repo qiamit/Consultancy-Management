@@ -1,4 +1,4 @@
-import { Pencil } from 'lucide-react'
+import { ExternalLink, FileText, Mail, Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
@@ -13,6 +13,7 @@ import {
 
 const GRID_TABLE = 'w-full border-collapse [&_th]:border [&_td]:border [&_th]:border-border [&_td]:border-border list-cards min-w-[900px]'
 const checkboxClass = 'h-4 w-4 rounded border-muted-foreground/30 text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+const actionBtn = 'h-8 w-8 p-0 text-amber-800 hover:bg-amber-50'
 const headClass = 'text-center text-[11px] font-bold uppercase tracking-[0.14em] text-amber-200'
 
 export function StopMarkingTable({
@@ -23,7 +24,11 @@ export function StopMarkingTable({
   selectedIds,
   onToggle,
   onToggleAll,
-  onOpen,
+  onEdit,
+  onModule,
+  onManak,
+  onEmail,
+  emailBusy,
   onRetry,
 }: {
   rows: StopMarkingRow[]
@@ -33,7 +38,11 @@ export function StopMarkingTable({
   selectedIds: Set<string>
   onToggle: (id: string) => void
   onToggleAll: (checked: boolean) => void
-  onOpen: (row: StopMarkingRow) => void
+  onEdit: (row: StopMarkingRow) => void
+  onModule: (row: StopMarkingRow) => void
+  onManak: (row: StopMarkingRow) => void
+  onEmail: (row: StopMarkingRow) => void
+  emailBusy?: boolean
   onRetry?: () => void
 }) {
   const allChecked = rows.length > 0 && rows.every((r) => selectedIds.has(r.id))
@@ -83,7 +92,7 @@ export function StopMarkingTable({
                 <TableHead className={cn(headClass, 'min-w-[110px]')}>Stopped On</TableHead>
                 <TableHead className={cn(headClass, 'min-w-[110px]')}>Reply Due</TableHead>
                 <TableHead className={cn(headClass, 'min-w-[120px]')}>Status</TableHead>
-                <TableHead className={cn(headClass, 'min-w-[80px]')}>Action</TableHead>
+                <TableHead className={cn(headClass, 'min-w-[140px]')}>Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -92,7 +101,7 @@ export function StopMarkingTable({
                 const client = stopMarkingClientName(r) || '—'
                 const overdue = r.status !== 'closed' && r.status !== 'replied' && r.bis_deadline && r.bis_deadline.slice(0, 10) < new Date().toISOString().slice(0, 10)
                 return (
-                  <TableRow key={r.id} data-state={selected ? 'selected' : undefined} className="group cursor-pointer" onDoubleClick={() => onOpen(r)}>
+                  <TableRow key={r.id} data-state={selected ? 'selected' : undefined} className="group cursor-pointer" onDoubleClick={() => onModule(r)}>
                     <TableCell className="lc-check text-center align-middle">
                       <input type="checkbox" className={checkboxClass} aria-label={`Select ${client}`} checked={selected} onChange={() => onToggle(r.id)} />
                     </TableCell>
@@ -117,9 +126,20 @@ export function StopMarkingTable({
                       </span>
                     </TableCell>
                     <TableCell className="lc-actions align-middle text-center">
-                      <Button type="button" size="icon" variant="ghost" aria-label={`Open ${client}`} title="Open case" onClick={() => onOpen(r)}>
-                        <Pencil size={16} />
-                      </Button>
+                      <div className="inline-flex shrink-0 items-center justify-center gap-0.5">
+                        <Button type="button" size="sm" variant="ghost" className={actionBtn} aria-label={`Edit ${client}`} title="Edit — date, reason and BIS letter" onClick={() => onEdit(r)}>
+                          <Pencil size={16} />
+                        </Button>
+                        <Button type="button" size="sm" variant="ghost" className={actionBtn} aria-label={`Open Stop Marking module for ${client}`} title="Stop Marking module — letter review, reply, Factory Test Report, submission" onClick={() => onModule(r)}>
+                          <FileText size={16} />
+                        </Button>
+                        <Button type="button" size="sm" variant="ghost" className={actionBtn} aria-label={`Manak Assist for ${client}`} title="Manak Assist — open Manak eBIS" onClick={() => onManak(r)}>
+                          <ExternalLink size={16} />
+                        </Button>
+                        <Button type="button" size="sm" variant="ghost" className={actionBtn} aria-label={`Email reply to ${client}`} title="Email the reply letter to the client" disabled={emailBusy || !r.reply_draft?.trim()} onClick={() => onEmail(r)}>
+                          <Mail size={16} />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 )

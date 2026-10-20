@@ -1,5 +1,6 @@
 import { formatIsCodeLabel } from '@/features/masters/is-codes/formatIsCodeLabel'
 import { EMPTY_CLIENT_IS_LICENSE, type ClientIsLicenseValue } from '../shared/ClientIsLicenseFields'
+import type { OslSampleRequirementRow } from '../projects/oslSampleRequirementsModel'
 
 export const STOP_MARKING_STATUS_OPTIONS = [
   { value: 'open', label: 'Report Awaited' },
@@ -37,6 +38,7 @@ export type StopMarkingRow = {
   review_notes: string
   reply_draft: string
   reply_date: string | null
+  ftr_samples: OslSampleRequirementRow[] | null
   status: string
   notes: string
   closed_at: string | null
@@ -53,7 +55,7 @@ export type StopMarkingRow = {
 }
 
 /** Add dialog: the licence (client + IS code + CM/L) and the date BIS stopped marking. */
-export type StopMarkingAddForm = ClientIsLicenseValue & { stopDate: string }
+export type StopMarkingAddForm = ClientIsLicenseValue & { stopDate: string; bisReason: string; letterFile: File | null }
 
 /** Everything editable on an open case. */
 export type StopMarkingCaseForm = {
@@ -68,10 +70,13 @@ export type StopMarkingCaseForm = {
   notes: string
 }
 
+/** Which cases the list shows: still open, everything, or only closed ones. */
+export type StopMarkingStatusFilter = 'active' | 'all' | 'closed'
+
 export const todayIso = () => new Date().toISOString().slice(0, 10)
 
 export function emptyStopMarkingAddForm(): StopMarkingAddForm {
-  return { ...EMPTY_CLIENT_IS_LICENSE, stopDate: todayIso() }
+  return { ...EMPTY_CLIENT_IS_LICENSE, stopDate: todayIso(), bisReason: '', letterFile: null }
 }
 
 export function stopMarkingClientName(row: Pick<StopMarkingRow, 'client'>): string {
