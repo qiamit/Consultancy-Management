@@ -171,6 +171,39 @@
     );
   }
 
+
+  /**
+   * Best Manak variety option for a sample's own variety text, when the texts differ (Manak lists the Step 1 names, e.g.
+   * "Class 2 (0.25 MPa) for Size 12 mm / 16 mm / 20 mm"; the sample says "Class 2, 0.25 MPa, 16 mm").
+   * Words and numbers are compared (numbers as numbers, so 0.2 = 0.20); the option that holds most of the sample's words
+   * wins, and only when it clearly beats the rest. Returns null when nothing is clear (the user then picks it).
+   */
+  function pickVarietyFuzzy(select, value) {
+    const STOP = new Set(["for", "size", "sizes", "of", "the", "and", "with", "mm", "mpa", "kg", "cm", "type", "to", "in", "a", "an", "is", "as"]);
+    const tokens = (text) =>
+      String(text || "")
+        .toLowerCase()
+        .match(/\d+(?:\.\d+)?|[a-z]+/g)
+        ?.map((t) => (/^\d/.test(t) ? String(parseFloat(t)) : t))
+        .filter((t) => !STOP.has(t)) || [];
+    const want = Array.from(new Set(tokens(value)));
+    if (!want.length) return null;
+    const opts = Array.from(select.options).filter((o) => o.value !== "" && !/^-*\s*select/i.test(o.text));
+    const scored = opts
+      .map((o) => {
+        const have = new Set(tokens(o.text));
+        const hit = want.filter((t) => have.has(t)).length;
+        // A different class number or pressure is a miss even when the sizes agree.
+        const clash = want.some((t, i) => /^\d/.test(t) && want[i - 1] === "class" && !have.has(t));
+        return { o, score: clash ? 0 : hit / want.length, hit };
+      })
+      .sort((a, b) => b.score - a.score);
+    const best = scored[0];
+    if (!best || best.score < 0.5 || best.hit < 1) return null;
+    if (scored[1] && scored[1].score === best.score) return null;
+    return best.o;
+  }
+
   /** Returns "filled" | "same" | "no-option". */
   function setValue(el, raw) {
     const value = el.type === "date" ? String(raw) : /date/i.test(nameBlobOf(el)) ? toPortalDate(raw) : String(raw);
@@ -673,6 +706,17 @@
             res = "filled";
           } else {
             res = setValue(el, cell.value);
+            // The sample's variety text can differ from Manak's variety names: match by class, pressure and size.
+            if (res === "no-option" && cell.id === "productVarirtyDescription" && el.tagName === "SELECT") {
+              const fuzzy = pickVarietyFuzzy(el, cell.value);
+              if (fuzzy) {
+                el.value = fuzzy.value;
+                el.dispatchEvent(new Event("change", { bubbles: true }));
+                nudgePage(el);
+                res = "filled";
+                report.filled.push(`${prefix}Variety matched to "${norm(fuzzy.text)}"`);
+              }
+            }
             // One real option (e.g. the single variety from step 1) — that is the one.
             const real = el.tagName === "SELECT" ? Array.from(el.options).filter((o) => o.value && o.value !== "0" && !/^\s*-*\s*select/i.test(o.text)) : [];
             if (res === "no-option" && real.length === 1) {
@@ -683,7 +727,8 @@
             }
           }
           if (res === "no-option") {
-            report.missing.push(`${prefix}${cell.key} (no option "${cell.value}")`);
+            const listed = el.tagName === "SELECT" && cell.id === "productVarirtyDescription" ? ` — Manak has: ${Array.from(el.options).filter((o) => o.value).map((o) => norm(o.text)).join(" | ")}` : "";
+            report.missing.push(`${prefix}${cell.key} (no option "${cell.value}"${listed})`);
             ok = false;
           } else report.filled.push(`${prefix}${cell.key}`);
           await sleep(cell.wait || 500);
