@@ -3014,6 +3014,43 @@ export function OslSampleRequirementsModuleFields({
                       onChange={(e) => patchDraft('batchQuantity', e.target.value)}
                     />
                   </Field>
+                  {(qrOnlyFields && !draft.qrCode.trim()) ? (
+<>
+                  <Field label="Batch Number" htmlFor="osl-batch">
+                    <Input
+                      id="osl-batch"
+                      className={cn(limsFieldClass, 'h-9')}
+                      value={draft.batchNumber}
+                      onChange={(e) => patchDraft('batchNumber', e.target.value)}
+                    />
+                  </Field>
+                  <Field label="Date of Manufacturing" htmlFor="osl-dom">
+                    <LimsFieldWithAdd
+                      className="h-9"
+                      addButton={
+                        <button
+                          type="button"
+                          className={cn(limsFieldAddBtnClass, 'w-9')}
+                          aria-label="Open Calendar"
+                          title="Pick Date"
+                          onClick={() => openDatePicker(manufacturingDateRef.current)}
+                        >
+                          <Calendar size={14} strokeWidth={2.25} aria-hidden />
+                        </button>
+                      }
+                    >
+                      <Input
+                        ref={manufacturingDateRef}
+                        id="osl-dom"
+                        type="date"
+                        className={dateInputClass}
+                        value={draft.dateOfManufacturing}
+                        onChange={(e) => patchDraft('dateOfManufacturing', e.target.value)}
+                      />
+                    </LimsFieldWithAdd>
+                  </Field>
+</>
+) : null}
                 </div>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
                   {(!qrOnlyFields || Boolean(draft.qrCode.trim())) ? (
@@ -3061,6 +3098,16 @@ export function OslSampleRequirementsModuleFields({
                     inputId="osl-test"
                     listId="osl-test-list"
                   />
+                  {(qrOnlyFields && !draft.qrCode.trim()) ? (
+                  <Field label="Sample Quantity" htmlFor="osl-qty">
+                    <Input
+                      id="osl-qty"
+                      className={cn(limsFieldClass, 'h-9')}
+                      value={draft.sampleQuantity}
+                      onChange={(e) => patchDraft('sampleQuantity', e.target.value)}
+                    />
+                  </Field>
+) : null}
                 </div>
               </div>
 
@@ -3129,6 +3176,7 @@ export function OslSampleRequirementsModuleFields({
                     </div>
                   </Field>
                 </div>
+                {!(qrOnlyFields && !draft.qrCode.trim()) ? (
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   <Field label="Batch Number" htmlFor="osl-batch">
                     <Input
@@ -3172,6 +3220,7 @@ export function OslSampleRequirementsModuleFields({
                     />
                   </Field>
                 </div>
+                ) : null}
               </div>
 
               <div className="space-y-3">
