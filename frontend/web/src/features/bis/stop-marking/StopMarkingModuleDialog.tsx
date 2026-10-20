@@ -9,11 +9,13 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { limsDarkBarBtnClass, limsDarkBarGlowStyle, limsPageShellClass, limsPanelClass, limsPrimaryBtnClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
-import { fetchBisModulePayload } from '../projects/bisModuleDataApi'
+import { fetchBisModulePayload, saveBisModulePayload } from '../projects/bisModuleDataApi'
+import { fetchBisProjectById } from '../projects/bisProjectsApi'
+import { BisLicenseDocumentsDialog } from '../projects/BisLicenseDocumentsDialog'
+import { printBisDocument, type BisPrintDocumentKind } from '../print/printBisDocument'
 import { factoryTestReportHasContent, parseFactoryTestReportPayload } from '../projects/factoryTestReportModel'
-import { FactoryTestReportGenerateDialog } from '../projects/FactoryTestReportGenerateDialog'
-import { emptyOslSampleRequirementRow, type OslSampleRequirementRow } from '../projects/oslSampleRequirementsModel'
-import { formatCmL } from '../projects/types'
+import { emptyOslSampleRequirementRow, oslSampleRowHasContent, parseOslSampleRequirementsPayload, type OslSampleRequirementRow } from '../projects/oslSampleRequirementsModel'
+import { formatCmL, type BisProjectRow } from '../projects/types'
 import { draftStopMarkingReply, readStopMarkingReport, readStopMarkingTestReport } from './stopMarkingAi'
 import {
   addStopMarkingDocument,
@@ -25,7 +27,6 @@ import {
   removeStopMarkingTestReport,
   addStopMarkingTestReports,
   saveStopMarkingCase,
-  saveStopMarkingFtrSamples,
   uploadStopMarkingReport,
 } from './stopMarkingApi'
 import { openStopMarkingManak } from './stopMarkingManak'
@@ -59,9 +60,11 @@ export function StopMarkingModuleDialog({
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [ftrDone, setFtrDone] = useState<Set<string>>(() => new Set())
-  const [generateId, setGenerateId] = useState<string | null>(null)
+  const [bisRow, setBisRow] = useState<BisProjectRow | null>(null)
+  const [oslSamples, setOslSamples] = useState<OslSampleRequirementRow[]>([])
+  const [testReportOpen, setTestReportOpen] = useState(false)
+  const [moduleKind, setModuleKind] = useState<BisPrintDocumentKind | null>(null)
   const [docLabel, setDocLabel] = useState('')
-  const [draftSample, setDraftSample] = useState({ gradeTypeVariety: '', batchNumber: '', dateOfManufacturing: '', declaredValue: '' })
 
   useEffect(() => {
     setForm(row ? rowToCaseForm(row) : null)
@@ -70,14 +73,20 @@ export function StopMarkingModuleDialog({
   }, [row?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const projectId = row?.bis_project_id ?? null
-  const samples = row?.ftr_samples ?? []
+  const samples = oslSamples.filter(oslSampleRowHasContent)
 
-  /** Which samples already have a saved Factory Test Report (the generator saves them on the licence). */
+  /** The licence's Sample Offer Letter samples and which of them already have a saved Factory Test Report (both live on the licence, as in the application). */
   const loadFtrStatus = useCallback(async () => {
     if (!projectId) return
     try {
-      const payload = parseFactoryTestReportPayload(await fetchBisModulePayload(projectId, 'factory-test-report'))
-      setFtrDone(new Set(payload.reports.filter((r) => factoryTestReportHasContent(r)).map((r) => r.sampleRowId)))
+      const [project, osl, ftr] = await Promise.all([
+        fetchBisProjectById(projectId),
+        fetchBisModulePayload(projectId, 'osl-sample-requirements'),
+        fetchBisModulePayload(projectId, 'factory-test-report'),
+      ])
+      setBisRow(project)
+      setOslSamples(parseOslSampleRequirementsPayload(osl).rows)
+      setFtrDone(new Set(parseFactoryTestReportPayload(ftr).reports.filter((r) => factoryTestReportHasContent(r)).map((r) => r.sampleRowId)))
     } catch {
       /* status is informational */
     }
@@ -133,12 +142,6 @@ export function StopMarkingModuleDialog({
           declaredValue: r.declaredValue || f.reportDetails.declaredValue,
         },
       })
-      setDraftSample((d) => ({
-        gradeTypeVariety: d.gradeTypeVariety || r.description,
-        batchNumber: d.batchNumber || r.batchNumber,
-        dateOfManufacturing: d.dateOfManufacturing || r.manufactureDate,
-        declaredValue: d.declaredValue || r.declaredValue,
-      }))
       toast.success(r.standardsUsed.length ? 'Test Reports Read and Checked Against the Standard — Review the Details.' : 'Test Reports Read — No Standard Attached to Check Against.')
     } catch (err) {
       setError(formatBisApiError(err))
@@ -192,17 +195,36 @@ export function StopMarkingModuleDialog({
       toast.success('Letter read — check the details.')
     })
 
-  const addSample = () => {
-    if (!draftSample.gradeTypeVariety.trim()) return setError('Enter the Grade / Type / Variety of the sample.')
-    const next: OslSampleRequirementRow = { ...emptyOslSampleRequirementRow('osl'), id: crypto.randomUUID(), ...draftSample, includeInPrint: true }
+  /** Adds the sample of the test report (step 2 details) to the licence's Sample Offer Letter. */
+  const addSampleFromReport = () =>
     void run('samples', async () => {
-      onUpdated(await saveStopMarkingFtrSamples(row.id, [...samples, next]))
-      setDraftSample({ gradeTypeVariety: '', batchNumber: '', dateOfManufacturing: '', declaredValue: '' })
-    })
-  }
-  const removeSample = (id: string) =>
-    void run('samples', async () => {
-      onUpdated(await saveStopMarkingFtrSamples(row.id, samples.filter((s) => s.id !== id)))
+      if (!projectId) return
+      const d = form.reportDetails
+      if (!form.sampleCode.trim() && !form.sampleQrCode.trim() && !d.batchNumber.trim() && !d.description.trim()) {
+        throw new Error('Fill the sample details in Test Report Review (step 2) first.')
+      }
+      const current = parseOslSampleRequirementsPayload(await fetchBisModulePayload(projectId, 'osl-sample-requirements'))
+      const duplicate = current.rows.some((r) => (form.sampleQrCode.trim() && r.qrCode.trim() === form.sampleQrCode.trim()) || (form.sampleCode.trim() && r.sampleCode.trim() === form.sampleCode.trim()))
+      if (duplicate) throw new Error('This sample is already in the Sample Offer Letter.')
+      const next: OslSampleRequirementRow = {
+        ...emptyOslSampleRequirementRow('osl'),
+        id: crypto.randomUUID(),
+        sampleCode: form.sampleCode.trim(),
+        qrCode: form.sampleQrCode.trim(),
+        gradeTypeVariety: d.description.trim(),
+        batchNumber: d.batchNumber.trim(),
+        dateOfManufacturing: d.manufactureDate,
+        declaredValue: d.declaredValue.trim(),
+        includeInPrint: true,
+      }
+      await saveBisModulePayload(projectId, 'osl-sample-requirements', {
+        rows: [...current.rows.filter(oslSampleRowHasContent), next],
+        importedQrCodes: current.importedQrCodes ?? [],
+        signatoryName: current.signatoryName.trim(),
+        signatoryDesignation: current.signatoryDesignation.trim(),
+      })
+      await loadFtrStatus()
+      toast.success('Sample Added to the Sample Offer Letter.')
     })
 
   const hasReply = form.replyDraft.trim().length > 0
@@ -523,59 +545,39 @@ export function StopMarkingModuleDialog({
 
                   {step === 2 ? (
                     <div className="space-y-3">
-                      <p className="text-sm text-stone-700">
-                        Add the Sample(s) BIS Tested or Asked About, Then Generate the Factory Test Report for Each — the Same Generator as the Application Module (Parameters, Save, Print, PDF).
-                      </p>
-                      {!projectId ? <p className="text-sm text-destructive">This Case Is Not Linked to a Licence, so a Factory Test Report Cannot Be Generated.</p> : null}
-                      <div className="grid gap-2 border border-stone-400 bg-white p-3 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1fr_auto] lg:items-end">
-                        <div className="space-y-1">
-                          <Label className={label}>Grade / Type / Variety</Label>
-                          <Input disabled={closed || !projectId} value={draftSample.gradeTypeVariety} onChange={(e) => setDraftSample({ ...draftSample, gradeTypeVariety: e.target.value })} />
+                      {!projectId ? <p className="text-sm text-destructive">This Case Is Not Linked to a Licence, so the Test Report Documents Cannot Be Prepared.</p> : null}
+                      <div className="border border-stone-400 bg-[#fffcf7]">
+                        <div className="bg-stone-900 px-3 py-2 text-sm font-semibold text-stone-100">Test Report - Details</div>
+                        <div className="space-y-3 p-3">
+                          <div className="border border-[#e7e0d4] bg-[#fffcf7] p-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div>
+                                <p className="text-sm font-semibold text-stone-900">Sample Offer Letter &amp; Test Request</p>
+                                <p className="text-xs text-stone-600">{samples.length ? `${samples.length} Sample${samples.length > 1 ? 's' : ''}` : 'No Sample Yet'}</p>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <Button type="button" variant="outline" className={tbtn} disabled={closed || !projectId || busy !== null} onClick={addSampleFromReport}>
+                                  <Plus size={14} /> Add Sample from Test Report
+                                </Button>
+                                <Button type="button" variant="outline" className={tbtn} disabled={!bisRow} onClick={() => { setModuleKind('osl-sample-requirements'); setTestReportOpen(true) }}>
+                                  Open
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="border border-[#e7e0d4] bg-[#fffcf7] p-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div>
+                                <p className="text-sm font-semibold text-stone-900">Factory Test Report</p>
+                                <p className="text-xs text-stone-600">{samples.length ? `${ftrCount} of ${samples.length} Generated` : 'Add a Sample First'}</p>
+                              </div>
+                              <Button type="button" variant="outline" className={tbtn} disabled={!bisRow} onClick={() => setTestReportOpen(true)}>
+                                Open
+                              </Button>
+                            </div>
+                          </div>
                         </div>
-                        <div className="space-y-1">
-                          <Label className={label}>Batch Number</Label>
-                          <Input disabled={closed || !projectId} value={draftSample.batchNumber} onChange={(e) => setDraftSample({ ...draftSample, batchNumber: e.target.value })} />
-                        </div>
-                        <div className="space-y-1">
-                          <Label className={label}>Date of Manufacturing</Label>
-                          <LimsDatePicker className="h-8 w-full" aria-label="Date of manufacturing" disabled={closed || !projectId} value={draftSample.dateOfManufacturing} onChange={(v) => setDraftSample({ ...draftSample, dateOfManufacturing: v })} />
-                        </div>
-                        <div className="space-y-1">
-                          <Label className={label}>Declared Value</Label>
-                          <Input disabled={closed || !projectId} value={draftSample.declaredValue} onChange={(e) => setDraftSample({ ...draftSample, declaredValue: e.target.value })} />
-                        </div>
-                        <Button type="button" className={cn(limsPrimaryBtnClass, 'h-8 gap-1.5')} disabled={closed || !projectId || busy !== null} onClick={addSample}>
-                          <Plus size={14} /> Add Sample
-                        </Button>
                       </div>
-                      {samples.length === 0 ? (
-                        <p className="border border-dashed border-stone-400 bg-white px-3 py-6 text-center text-sm text-muted-foreground">No Samples Yet. A Factory Test Report Is Optional — Add a Sample Only if BIS Asked for One.</p>
-                      ) : (
-                        <ul className="space-y-2">
-                          {samples.map((s, i) => (
-                            <li key={s.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 border border-stone-300 bg-white px-3 py-2">
-                              <span className="w-6 text-sm font-bold text-amber-800">{i + 1}</span>
-                              <div className="min-w-0 flex-1 basis-56">
-                                <p className="break-words text-sm font-semibold text-stone-900">{s.gradeTypeVariety}</p>
-                                <p className="text-xs text-stone-600">
-                                  Batch {s.batchNumber || '—'} · Mfg {shortDate(s.dateOfManufacturing)} · Declared {s.declaredValue || '—'}
-                                </p>
-                              </div>
-                              <span className={cn('inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset', ftrDone.has(s.id) ? 'bg-emerald-50 text-emerald-800 ring-emerald-200' : 'bg-stone-100 text-stone-700 ring-stone-300')}>
-                                {ftrDone.has(s.id) ? 'Report Generated' : 'Not Generated'}
-                              </span>
-                              <div className="flex items-center gap-1.5">
-                                <Button type="button" variant="outline" className={tbtn} disabled={!projectId || busy !== null} onClick={() => setGenerateId(s.id)}>
-                                  {ftrDone.has(s.id) ? 'Edit Report' : 'Generate Report'}
-                                </Button>
-                                <Button type="button" variant="outline" size="icon" className="h-8 w-8 rounded-none border-stone-400 text-red-700" aria-label={`Remove Sample ${i + 1}`} disabled={closed || busy !== null} onClick={() => removeSample(s.id)}>
-                                  <Trash2 size={14} />
-                                </Button>
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
                     </div>
                   ) : null}
 
@@ -706,14 +708,21 @@ export function StopMarkingModuleDialog({
           </div>
         </DialogContent>
       </Dialog>
-      <FactoryTestReportGenerateDialog
-        projectId={projectId}
-        sample={generateId ? samples.find((s) => s.id === generateId) ?? null : null}
-        samples={samples}
-        isCodeId={row.is_code_id}
-        isCodeLabel={stopMarkingIsCodeLabel(row)}
-        onClose={() => setGenerateId(null)}
-        onSaved={() => void loadFtrStatus()}
+      <BisLicenseDocumentsDialog
+        open={testReportOpen && bisRow != null}
+        onOpenChange={(next) => {
+          if (!next) {
+            setTestReportOpen(false)
+            setModuleKind(null)
+            void loadFtrStatus()
+          }
+        }}
+        row={bisRow}
+        onlyStepId="test-reports"
+        onViewDocument={(kind) => void printBisDocument(bisRow!, kind).then((err) => { if (err) toast.error(err) })}
+        moduleKind={moduleKind}
+        onModuleKindChange={setModuleKind}
+        onProjectSaved={() => void loadFtrStatus()}
       />
     </>
   )
