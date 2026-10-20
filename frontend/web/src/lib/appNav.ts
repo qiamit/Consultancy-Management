@@ -5,7 +5,6 @@ import {
   RefreshCw,
   Ban,
   Eye,
-  MessageSquareWarning,
   BadgeCheck,
   FolderKanban,
   CalendarX2,
@@ -69,7 +68,7 @@ export const SIDEBAR_NAV_SECTIONS: NavSection[] = [
         clause: 'bis-license-renewals',
       },
       {
-        label: 'License Stop Marking',
+        label: 'License Non-Conformity',
         to: '/bis/stop-marking',
         icon: Ban,
         clause: 'license-stop-marking',
@@ -79,12 +78,6 @@ export const SIDEBAR_NAV_SECTIONS: NavSection[] = [
         to: '/bis/surveillance',
         icon: Eye,
         clause: 'bis-surveillance',
-      },
-      {
-        label: 'Sample Failure Reply',
-        to: '/bis/sample-failure-reply',
-        icon: MessageSquareWarning,
-        clause: 'bis-sample-failure-reply',
       },
       {
         label: 'QE BIS Licenses',

@@ -36,7 +36,6 @@ import BisLicenseLifecyclePage from '@/features/bis/renewals/BisLicenseLifecycle
 import { Navigate } from 'react-router-dom'
 import BisSurveillanceMasterPage from '@/features/bis/surveillance/BisSurveillanceMasterPage'
 import StopMarkingMasterPage from '@/features/bis/stop-marking/StopMarkingMasterPage'
-import BisSampleFailureReplyMasterPage from '@/features/bis/sample-failure-reply/BisSampleFailureReplyMasterPage'
 import BisKnowledgeSearchPage from '@/features/bis/knowledge-search/BisKnowledgeSearchPage'
 import EmailToolsPage from '@/features/tools/email/EmailToolsPage'
 import CmsToolsPage from '@/features/tools/cms/CmsToolsPage'
@@ -129,7 +128,8 @@ export function BisSurveillanceRoute() {
 }
 
 export function BisSampleFailureReplyRoute() {
-  return <BisSampleFailureReplyMasterPage />
+  // Sample failure replies are now cases in License Non-Conformity.
+  return <Navigate to="/bis/stop-marking" replace />
 }
 
 export function OurBisLicensesRoute() {

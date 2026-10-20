@@ -27,7 +27,7 @@ import {
 import { openStopMarkingManak } from './stopMarkingManak'
 import { downloadStopMarkingReplyWord, emailStopMarkingReplyToClient, printStopMarkingReply } from './printStopMarkingReply'
 import { StopMarkingLetterPicker } from './StopMarkingLetterPicker'
-import { rowToCaseForm, stopMarkingClientName, stopMarkingIsCodeLabel, stopMarkingStatusLabel, type StopMarkingCaseForm, type StopMarkingRow } from './types'
+import { noticeHoldsMarking, noticeTypeLabel, rowToCaseForm, stopMarkingClientName, stopMarkingIsCodeLabel, stopMarkingStatusLabel, type StopMarkingCaseForm, type StopMarkingRow } from './types'
 
 const STEPS = ['BIS Letter & Review', 'Reply to BIS', 'Factory Test Report', 'Submission'] as const
 const label = 'block text-[11px] font-semibold uppercase tracking-wide text-stone-600'
@@ -162,7 +162,7 @@ export function StopMarkingModuleDialog({
                 <div className="relative flex min-w-0 items-center gap-2.5">
                   <DialogHeader className="min-w-0 flex-1 space-y-0 text-left">
                     <DialogTitle className="line-clamp-2 break-words text-sm font-semibold leading-snug text-stone-100 sm:text-base md:text-lg">
-                      Stop Marking — {stopMarkingClientName(row) || 'Licence'}
+                      {noticeTypeLabel(row.case_type)} — {stopMarkingClientName(row) || 'Licence'}
                     </DialogTitle>
                     <p className="line-clamp-2 break-words text-xs text-stone-300">
                       {[stopMarkingIsCodeLabel(row), formatCmL(row.cm_l_digits), stopMarkingStatusLabel(row.status)].filter(Boolean).join(' · ')}
@@ -256,7 +256,7 @@ export function StopMarkingModuleDialog({
                         </div>
                       </div>
                       <div className="space-y-2">
-                        <Label className={label} htmlFor="smk-m-reason">Reason for Stop Marking (As per BIS)</Label>
+                        <Label className={label} htmlFor="smk-m-reason">Non-Conformity as Stated by BIS</Label>
                         <Textarea id="smk-m-reason" rows={3} disabled={closed} className="rounded-none border-stone-500 bg-white" value={form.bisReason} onChange={(e) => set('bisReason', e.target.value)} />
                       </div>
                       <div className="space-y-2">
@@ -400,23 +400,23 @@ export function StopMarkingModuleDialog({
                       </div>
                       {!closed ? (
                         <div className="border border-emerald-300 bg-emerald-50/60 p-3">
-                          <p className="mb-2 text-sm text-stone-800">When BIS Permits Marking Again, Close the Case: the Licence Goes Back to Its Earlier Status.</p>
+                          <p className="mb-2 text-sm text-stone-800">{noticeHoldsMarking(row.case_type) ? 'When BIS Permits Marking Again, Close the Case: the Licence Goes Back to Its Earlier Status.' : 'When BIS Accepts the Reply and the Matter Is Settled, Close the Case.'}</p>
                           <Button
                             type="button"
                             variant="outline"
                             className="h-8 rounded-none border-emerald-700 text-emerald-800 hover:bg-emerald-50"
                             disabled={busy !== null}
                             onClick={() => {
-                              if (!window.confirm('Marking resumed? This closes the case and puts the licence back to its earlier status.')) return
+                              if (!window.confirm(noticeHoldsMarking(row.case_type) ? 'Marking resumed? This closes the case and puts the licence back to its earlier status.' : 'Close this case?')) return
                               void run('close', async () => {
                                 await save()
                                 await closeStopMarkingCase(row)
-                                toast.success('Case closed — licence status restored.')
+                                toast.success(noticeHoldsMarking(row.case_type) ? 'Case closed — licence status restored.' : 'Case closed.')
                                 onClosedCase()
                               })
                             }}
                           >
-                            {busy === 'close' ? 'Closing…' : 'Marking Resumed — Close Case'}
+                            {busy === 'close' ? 'Closing…' : noticeHoldsMarking(row.case_type) ? 'Marking Resumed — Close Case' : 'Close Case'}
                           </Button>
                         </div>
                       ) : (

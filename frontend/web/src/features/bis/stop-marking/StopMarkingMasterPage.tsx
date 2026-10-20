@@ -24,12 +24,14 @@ import {
   stopMarkingStatusLabel,
   type StopMarkingAddForm,
   type StopMarkingRow,
+  type StopMarkingNoticeFilter,
   type StopMarkingStatusFilter,
+  NOTICE_TYPE_OPTIONS,
 } from './types'
 
 const SEARCH_DEBOUNCE_MS = 350
 
-/** License Stop Marking: add a licence, review the BIS report, reply with AI help, then resume marking. */
+/** License Non-Conformity: every BIS notice to a licensee — add the licence, review the letter, reply with AI help, submit, close. */
 export default function StopMarkingMasterPage() {
   const { editId, viewId, setEdit, setView } = useMasterUiSearchState()
   const [, setSearchParams] = useSearchParams()
@@ -41,6 +43,7 @@ export default function StopMarkingMasterPage() {
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<StopMarkingStatusFilter>('active')
+  const [noticeFilter, setNoticeFilter] = useState<StopMarkingNoticeFilter>('all')
   const [emailBusy, setEmailBusy] = useState(false)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
@@ -85,7 +88,7 @@ export default function StopMarkingMasterPage() {
     setListError(null)
     void (async () => {
       try {
-        const result = await fetchStopMarkingPage({ search, page, pageSize, statusFilter })
+        const result = await fetchStopMarkingPage({ search, page, pageSize, statusFilter, noticeFilter })
         if (requestId !== requestRef.current) return
         const lastPage = Math.max(1, Math.ceil(result.total / pageSize))
         if (result.rows.length === 0 && result.total > 0 && page > lastPage) {
@@ -103,7 +106,7 @@ export default function StopMarkingMasterPage() {
         if (requestId === requestRef.current) setListLoading(false)
       }
     })()
-  }, [search, page, pageSize, statusFilter, reloadKey])
+  }, [search, page, pageSize, statusFilter, noticeFilter, reloadKey])
 
   const reload = useCallback(() => setReloadKey((k) => k + 1), [])
 
@@ -141,7 +144,7 @@ export default function StopMarkingMasterPage() {
     setFormError(null)
     try {
       const { id, letterError } = await createStopMarkingCase(addForm)
-      setMessage('Licence added to Stop Marking.')
+      setMessage('Case Added.')
       if (letterError) toast.warning('Case added, but the BIS letter was not uploaded', { description: `${letterError} — attach it again from Edit.` })
       setSearchInput('')
       setSearch('')
@@ -229,7 +232,7 @@ export default function StopMarkingMasterPage() {
   return (
     <div className={limsPageShellClass}>
       <BisProjectsHeaderBar
-        title="License in Stop Marking"
+        title="License Non-Conformity"
         search={searchInput}
         onSearchChange={setSearchInput}
         pageSize={pageSize}
@@ -243,7 +246,27 @@ export default function StopMarkingMasterPage() {
         searchAriaLabel="Search by firm, IS code or CM/L number"
         showListFilters={false}
         extraFilters={
-          <Select
+          <>
+            <Select
+              value={noticeFilter}
+              onValueChange={(v) => {
+                setNoticeFilter(v as StopMarkingNoticeFilter)
+                setPage(1)
+              }}
+            >
+              <SelectTrigger className={cn(limsDarkBarFieldClass, 'h-8 w-[min(100%,13rem)] shrink-0 px-2 text-[11px] sm:w-[14rem] sm:text-xs')} aria-label="Filter by notice type" title="All Notices / a Notice Type">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="end">
+                <SelectItem value="all">All Notices</SelectItem>
+                {NOTICE_TYPE_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
             value={statusFilter}
             onValueChange={(v) => {
               setStatusFilter(v as StopMarkingStatusFilter)
@@ -259,6 +282,7 @@ export default function StopMarkingMasterPage() {
               <SelectItem value="closed">Closed Cases</SelectItem>
             </SelectContent>
           </Select>
+          </>
         }
       />
       <StopMarkingTable

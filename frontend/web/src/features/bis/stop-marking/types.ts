@@ -9,14 +9,51 @@ export const STOP_MARKING_STATUS_OPTIONS = [
   { value: 'closed', label: 'Closed' },
 ] as const
 
-/** Fixed reasons BIS gives for stopping marking, picked when a licence is added. */
+/**
+ * What BIS has issued to the licensee. Only the notices that prohibit use of the Standard Mark
+ * (`holdsMarking`) put the licence into Stop Marking status while the case is open.
+ */
+export const NOTICE_TYPE_OPTIONS = [
+  { value: 'sample_failure', label: 'Sample Failure Notice', holdsMarking: false },
+  { value: 'consecutive_nc', label: 'Consecutive Non-Conformity Notice', holdsMarking: false },
+  { value: 'show_cause', label: 'Show Cause Notice', holdsMarking: false },
+  { value: 'product_recall', label: 'Product Recall Notice', holdsMarking: false },
+  { value: 'stop_marking', label: 'Stop Marking Notice', holdsMarking: true },
+  { value: 'suspension', label: 'Suspension Notice', holdsMarking: true },
+  { value: 'cancellation', label: 'Cancellation Notice', holdsMarking: false },
+  { value: 'warning', label: 'Warning Letter', holdsMarking: false },
+  { value: 'other', label: 'Other Notice', holdsMarking: false },
+] as const
+
+export function noticeTypeLabel(value: string | null | undefined): string {
+  return NOTICE_TYPE_OPTIONS.find((o) => o.value === (value ?? '').trim())?.label ?? '—'
+}
+
+export const noticeHoldsMarking = (value: string | null | undefined) => NOTICE_TYPE_OPTIONS.some((o) => o.value === (value ?? '').trim() && o.holdsMarking)
+
+/** Notices that concern a tested sample, so the sample code and QR code are asked. */
+export const noticeHasSample = (value: string | null | undefined) => ['sample_failure', 'consecutive_nc', 'product_recall'].includes((value ?? '').trim())
+
+/** The non-conformity BIS gives as the ground, from BIS (Conformity Assessment) Regulations 2018 and its non-conformity guidelines. */
 export const STOP_MARKING_REASON_OPTIONS = [
-  'Sample Failure',
-  'Multiple Sample Failure',
+  'Sample Failure — PI Sample',
+  'Sample Failure — Market Sample',
+  'Sample Failure — Surveillance Sample',
+  'Sample Failure — Verification Sample',
+  'Sample Failure — Factory Testing',
+  'Consecutive Sample Failure',
+  'Labelling / Marking Deviation',
+  'Misuse of Standard Mark',
   'Non-submission of Reply',
   'Non-submission of Production Returns on Time',
   'Non-payment of Marking Fee',
   'Non-compliance of Scheme of Testing & Inspection',
+  'Testing Equipment Not Calibrated / Out of Order',
+  'Complaint Against Product Quality',
+  'Incorrect Records / False Declaration',
+  'Change in Premises / Ownership Without Approval',
+  'Breach of Licence Conditions',
+  'Licence Under Suspension for More Than a Year',
   'Other',
 ] as const
 
@@ -43,6 +80,9 @@ export type StopMarkingRow = {
   previous_project_status: string
   report_path: string | null
   report_name: string | null
+  case_type: string
+  sample_code: string
+  sample_qr_code: string
   reason_type: string
   bis_reference: string
   bis_reason: string
@@ -67,12 +107,15 @@ export type StopMarkingRow = {
 }
 
 /** Add dialog: the licence (client + IS code + CM/L) and the date BIS stopped marking. */
-export type StopMarkingAddForm = ClientIsLicenseValue & { stopDate: string; reasonType: string; letterFile: File | null }
+export type StopMarkingAddForm = ClientIsLicenseValue & { noticeType: string; stopDate: string; reasonType: string; sampleCode: string; sampleQrCode: string; letterFile: File | null }
 
 /** Everything editable on an open case. */
 export type StopMarkingCaseForm = {
+  noticeType: string
   stopDate: string
   reasonType: string
+  sampleCode: string
+  sampleQrCode: string
   bisReference: string
   bisReason: string
   bisDeadline: string
@@ -85,11 +128,12 @@ export type StopMarkingCaseForm = {
 
 /** Which cases the list shows: still open, everything, or only closed ones. */
 export type StopMarkingStatusFilter = 'active' | 'all' | 'closed'
+export type StopMarkingNoticeFilter = 'all' | (typeof NOTICE_TYPE_OPTIONS)[number]['value']
 
 export const todayIso = () => new Date().toISOString().slice(0, 10)
 
 export function emptyStopMarkingAddForm(): StopMarkingAddForm {
-  return { ...EMPTY_CLIENT_IS_LICENSE, stopDate: todayIso(), reasonType: '', letterFile: null }
+  return { ...EMPTY_CLIENT_IS_LICENSE, noticeType: 'stop_marking', stopDate: todayIso(), reasonType: '', sampleCode: '', sampleQrCode: '', letterFile: null }
 }
 
 export function stopMarkingClientName(row: Pick<StopMarkingRow, 'client'>): string {
@@ -102,8 +146,11 @@ export function stopMarkingIsCodeLabel(row: Pick<StopMarkingRow, 'is_code'>): st
 
 export function rowToCaseForm(row: StopMarkingRow): StopMarkingCaseForm {
   return {
+    noticeType: row.case_type || 'stop_marking',
     stopDate: row.stop_date?.slice(0, 10) || todayIso(),
     reasonType: row.reason_type ?? '',
+    sampleCode: row.sample_code ?? '',
+    sampleQrCode: row.sample_qr_code ?? '',
     bisReference: row.bis_reference ?? '',
     bisReason: row.bis_reason ?? '',
     bisDeadline: row.bis_deadline?.slice(0, 10) ?? '',

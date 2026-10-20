@@ -1,7 +1,7 @@
 import { loadCompanyPrintContext } from '../print/loadCompanyPrintContext'
 import { escapeHtml as esc, openPendingPrintWindow, openPrintHtml } from '../print/openPrintHtml'
 import { emailHtmlDocumentToClient } from '../shared/emailHtmlToClient'
-import { stopMarkingClientName, stopMarkingIsCodeLabel, type StopMarkingRow } from './types'
+import { noticeTypeLabel, stopMarkingClientName, stopMarkingIsCodeLabel, type StopMarkingRow } from './types'
 
 const longDate = (iso: string | null | undefined) =>
   iso ? new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' }) : ''
@@ -71,7 +71,7 @@ export async function downloadStopMarkingReplyWord(row: StopMarkingRow): Promise
 /** Emails the reply letter to the client's master email. */
 export async function emailStopMarkingReplyToClient(row: StopMarkingRow): Promise<string> {
   const html = await buildStopMarkingReplyHtml(row)
-  const title = 'Reply to BIS — Stop Marking'
+  const title = `Reply to BIS — ${noticeTypeLabel(row.case_type)}`
   return emailHtmlDocumentToClient({
     clientId: row.client_id,
     title,

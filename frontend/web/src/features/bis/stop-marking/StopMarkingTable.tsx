@@ -6,6 +6,7 @@ import { formatCmL, formatDisplayDate } from '../projects/types'
 import {
   STOP_MARKING_STATUS_STYLES,
   stopMarkingClientName,
+  noticeTypeLabel,
   stopMarkingIsCodeLabel,
   stopMarkingStatusLabel,
   type StopMarkingRow,
@@ -66,7 +67,7 @@ export function StopMarkingTable({
       ) : rows.length === 0 ? (
         <div className="m-3 rounded-lg border border-dashed border-border p-4 text-center sm:m-4 sm:p-6">
           <p className="text-sm text-muted-foreground">
-            {searchActive ? 'No Stop Marking Cases Match Your Search.' : 'No Licence Is in Stop Marking. Use Add to Put One Here.'}
+            {searchActive ? 'No Cases Match Your Search.' : 'No Non-Conformity Cases. Use Add to Create One.'}
           </p>
         </div>
       ) : (
@@ -89,8 +90,9 @@ export function StopMarkingTable({
                 <TableHead className={cn(headClass, 'min-w-[220px] text-left')}>Firm Name</TableHead>
                 <TableHead className={cn(headClass, 'min-w-[150px]')}>IS Code</TableHead>
                 <TableHead className={cn(headClass, 'min-w-[120px]')}>CM/L Number</TableHead>
-                <TableHead className={cn(headClass, 'min-w-[150px]')}>Reason</TableHead>
-                <TableHead className={cn(headClass, 'min-w-[110px]')}>Stopped On</TableHead>
+                <TableHead className={cn(headClass, 'min-w-[150px]')}>Notice</TableHead>
+                <TableHead className={cn(headClass, 'min-w-[150px]')}>Non-Conformity</TableHead>
+                <TableHead className={cn(headClass, 'min-w-[110px]')}>Notice Date</TableHead>
                 <TableHead className={cn(headClass, 'min-w-[110px]')}>Reply Due</TableHead>
                 <TableHead className={cn(headClass, 'min-w-[120px]')}>Status</TableHead>
                 <TableHead className={cn(headClass, 'min-w-[140px]')}>Action</TableHead>
@@ -115,10 +117,13 @@ export function StopMarkingTable({
                     <TableCell data-label="CM/L" className="align-middle text-center">
                       <p className="font-mono text-xs tabular-nums">{formatCmL(r.cm_l_digits) || '—'}</p>
                     </TableCell>
-                    <TableCell data-label="Reason" className="align-middle text-center text-sm">
+                    <TableCell data-label="Notice" className="align-middle text-center text-sm font-medium">
+                      {noticeTypeLabel(r.case_type)}
+                    </TableCell>
+                    <TableCell data-label="Non-Conformity" className="align-middle text-center text-sm">
                       {r.reason_type || '—'}
                     </TableCell>
-                    <TableCell data-label="Stopped On" className="align-middle text-center text-sm tabular-nums">
+                    <TableCell data-label="Notice Date" className="align-middle text-center text-sm tabular-nums">
                       {formatDisplayDate(r.stop_date)}
                     </TableCell>
                     <TableCell data-label="Reply Due" className={cn('align-middle text-center text-sm tabular-nums', overdue && 'font-semibold text-red-700')}>
@@ -134,7 +139,7 @@ export function StopMarkingTable({
                         <Button type="button" size="sm" variant="ghost" className={actionBtn} aria-label={`Edit ${client}`} title="Edit — date, reason and BIS letter" onClick={() => onEdit(r)}>
                           <Pencil size={16} />
                         </Button>
-                        <Button type="button" size="sm" variant="ghost" className={actionBtn} aria-label={`Open Stop Marking module for ${client}`} title="Stop Marking module — letter review, reply, Factory Test Report, submission" onClick={() => onModule(r)}>
+                        <Button type="button" size="sm" variant="ghost" className={actionBtn} aria-label={`Open Non-Conformity Module for ${client}`} title="Non-Conformity Module — Letter Review, Reply, Factory Test Report, Submission" onClick={() => onModule(r)}>
                           <FileText size={16} />
                         </Button>
                         <Button type="button" size="sm" variant="ghost" className={actionBtn} aria-label={`Manak Assist for ${client}`} title="Manak Assist — open Manak eBIS" onClick={() => onManak(r)}>

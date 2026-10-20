@@ -1,7 +1,10 @@
 import { supabase } from '@/lib/supabaseClient'
 import { currentUserId } from '../shared/bisLookupApi'
 import type { OslSampleRequirementRow } from '../projects/oslSampleRequirementsModel'
-import type { StopMarkingAddForm, StopMarkingCaseForm, StopMarkingRow, StopMarkingStatusFilter } from './types'
+import { NOTICE_TYPE_OPTIONS, noticeHoldsMarking, type StopMarkingAddForm, type StopMarkingCaseForm, type StopMarkingNoticeFilter, type StopMarkingRow, type StopMarkingStatusFilter } from './types'
+
+/** Case types that prohibit marking, so they put the licence into Stop Marking status. */
+const HOLDING_TYPES = NOTICE_TYPE_OPTIONS.filter((o) => o.holdsMarking).map((o) => o.value)
 
 import { formatBisApiError } from '../projects/bisProjectsApi'
 
@@ -18,11 +21,13 @@ export async function fetchStopMarkingPage({
   page,
   pageSize,
   statusFilter,
+  noticeFilter = 'all',
 }: {
   search: string
   page: number
   pageSize: number
   statusFilter: StopMarkingStatusFilter
+  noticeFilter?: StopMarkingNoticeFilter
 }): Promise<{ rows: StopMarkingRow[]; total: number }> {
   const term = sanitize(search)
   let orFilter: string | null = null
@@ -45,6 +50,7 @@ export async function fetchStopMarkingPage({
   let query = supabase.from('bis_stop_marking_cases').select(SELECT_WITH_JOINS, { count: 'exact' })
   if (statusFilter === 'active') query = query.neq('status', 'closed')
   else if (statusFilter === 'closed') query = query.eq('status', 'closed')
+  if (noticeFilter !== 'all') query = query.eq('case_type', noticeFilter)
   if (orFilter) query = query.or(orFilter)
   query = query.order('stop_date', { ascending: false }).order('created_at', { ascending: false }).order('id')
   const from = (Math.max(1, page) - 1) * pageSize
@@ -60,6 +66,7 @@ async function restoreProjectStatus(projectId: string | null, previousStatus: st
     .from('bis_stop_marking_cases')
     .select('id', { count: 'exact', head: true })
     .eq('bis_project_id', projectId)
+    .in('case_type', HOLDING_TYPES)
     .neq('status', 'closed')
   if (excludeCaseIds.length) query = query.not('id', 'in', `(${excludeCaseIds.join(',')})`)
   const { count, error } = await query
@@ -73,10 +80,11 @@ async function restoreProjectStatus(projectId: string | null, previousStatus: st
   if (updateError) throw updateError
 }
 
-/** Adds a licence to Stop Marking: opens a case and marks the licence's status as Stop Marking. */
+/** Opens a case for a BIS notice. A notice that prohibits marking also sets the licence's status to Stop Marking. */
 export async function createStopMarkingCase(form: StopMarkingAddForm): Promise<{ id: string; letterError: string | null }> {
   let previous = 'completed'
-  if (form.bisProjectId) {
+  const holds = noticeHoldsMarking(form.noticeType)
+  if (form.bisProjectId && holds) {
     const { data: project, error: projectError } = await supabase
       .from('bis_projects')
       .select('status')
@@ -89,9 +97,10 @@ export async function createStopMarkingCase(form: StopMarkingAddForm): Promise<{
       .from('bis_stop_marking_cases')
       .select('id', { count: 'exact', head: true })
       .eq('bis_project_id', form.bisProjectId)
+      .in('case_type', HOLDING_TYPES)
       .neq('status', 'closed')
     if (dupError) throw dupError
-    if ((count ?? 0) > 0) throw new Error('This licence already has an open Stop Marking case.')
+    if ((count ?? 0) > 0) throw new Error('This licence already has an open Stop Marking or Suspension case.')
   }
   const { data, error } = await supabase
     .from('bis_stop_marking_cases')
@@ -101,15 +110,18 @@ export async function createStopMarkingCase(form: StopMarkingAddForm): Promise<{
       bis_project_id: form.bisProjectId || null,
       cm_l_digits: form.cmLDigits || null,
       project_kind: form.projectKind || null,
+      case_type: form.noticeType,
       stop_date: form.stopDate || new Date().toISOString().slice(0, 10),
       reason_type: form.reasonType,
+      sample_code: form.sampleCode.trim(),
+      sample_qr_code: form.sampleQrCode.trim(),
       previous_project_status: previous,
       created_by: await currentUserId(),
     })
     .select('id')
     .single()
   if (error) throw error
-  if (form.bisProjectId) {
+  if (form.bisProjectId && holds) {
     const { error: statusError } = await supabase.from('bis_projects').update({ status: 'stop_marking' }).eq('id', form.bisProjectId)
     if (statusError) throw statusError
   }
@@ -131,6 +143,8 @@ export async function saveStopMarkingCase(id: string, form: StopMarkingCaseForm)
     .update({
       stop_date: form.stopDate || new Date().toISOString().slice(0, 10),
       reason_type: form.reasonType,
+      sample_code: form.sampleCode.trim(),
+      sample_qr_code: form.sampleQrCode.trim(),
       bis_reference: form.bisReference.trim(),
       bis_reason: form.bisReason.trim(),
       bis_deadline: form.bisDeadline || null,
@@ -154,7 +168,7 @@ export async function closeStopMarkingCase(row: StopMarkingRow): Promise<void> {
     .update({ status: 'closed', closed_at: new Date().toISOString() })
     .eq('id', row.id)
   if (error) throw error
-  await restoreProjectStatus(row.bis_project_id, row.previous_project_status, [])
+  if (noticeHoldsMarking(row.case_type)) await restoreProjectStatus(row.bis_project_id, row.previous_project_status, [])
 }
 
 export async function deleteStopMarkingCases(rows: StopMarkingRow[]): Promise<void> {
@@ -163,7 +177,7 @@ export async function deleteStopMarkingCases(rows: StopMarkingRow[]): Promise<vo
   const { error } = await supabase.from('bis_stop_marking_cases').delete().in('id', ids)
   if (error) throw error
   if (paths.length) await supabase.storage.from(BUCKET).remove(paths)
-  for (const row of rows.filter((r) => r.status !== 'closed')) {
+  for (const row of rows.filter((r) => r.status !== 'closed' && noticeHoldsMarking(r.case_type))) {
     await restoreProjectStatus(row.bis_project_id, row.previous_project_status, ids)
   }
 }

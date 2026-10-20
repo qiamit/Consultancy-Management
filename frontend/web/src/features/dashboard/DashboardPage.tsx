@@ -11,7 +11,6 @@ import {
   FilePlus2,
   FolderKanban,
   Globe,
-  MessageSquareWarning,
   RefreshCw,
   Users,
   Wallet,
@@ -43,7 +42,6 @@ type DashCounts = {
   dueSoonLicenses: number
   renewals: number
   surveillance: number
-  sampleFailures: number
   quotations: number
 }
 
@@ -58,7 +56,6 @@ const EMPTY: DashCounts = {
   dueSoonLicenses: 0,
   renewals: 0,
   surveillance: 0,
-  sampleFailures: 0,
   quotations: 0,
 }
 
@@ -84,7 +81,6 @@ export default function DashboardPage() {
         due,
         ren,
         surv,
-        sfr,
         qtn,
       ] = await Promise.all([
         supabase.from('clients').select('*', { count: 'exact', head: true }),
@@ -95,7 +91,7 @@ export default function DashboardPage() {
           .or('project_kind.eq.Application,project_kind.eq.application'),
         supabase.from('is_codes').select('*', { count: 'exact', head: true }),
         supabase.from('bis_projects').select('*', { count: 'exact', head: true }).eq('is_qe_managed', true),
-        supabase.from('bis_projects').select('*', { count: 'exact', head: true }).eq('status', 'stop_marking'),
+        supabase.from('bis_stop_marking_cases').select('*', { count: 'exact', head: true }).neq('status', 'closed'),
         supabase
           .from('bis_projects')
           .select('*', { count: 'exact', head: true })
@@ -107,7 +103,6 @@ export default function DashboardPage() {
           .lte('license_validity_date', dueEnd),
         supabase.from('bis_renewal_applications').select('*', { count: 'exact', head: true }),
         supabase.from('license_surveillance').select('*', { count: 'exact', head: true }),
-        supabase.from('bis_sample_failure_replies').select('*', { count: 'exact', head: true }),
         supabase.from('quotations').select('*', { count: 'exact', head: true }),
       ])
       if (canceled) return
@@ -122,7 +117,6 @@ export default function DashboardPage() {
         dueSoonLicenses: due.count ?? 0,
         renewals: ren.count ?? 0,
         surveillance: surv.count ?? 0,
-        sampleFailures: sfr.count ?? 0,
         quotations: qtn.count ?? 0,
       })
       setLoading(false)
@@ -173,9 +167,9 @@ export default function DashboardPage() {
       href: '/bis/our-licenses',
     },
     {
-      title: 'Stop Marking',
+      title: 'Non-Conformity',
       value: counts.stopMarking,
-      subtitle: 'Licenses in stop marking status',
+      subtitle: 'Open BIS Notices to Licensees',
       icon: Ban,
       href: '/bis/stop-marking',
     },
@@ -211,13 +205,6 @@ export default function DashboardPage() {
       href: '/bis/surveillance',
     },
     {
-      title: 'Sample Failure Reply',
-      value: counts.sampleFailures,
-      subtitle: 'Sample failure replies on file',
-      icon: MessageSquareWarning,
-      href: '/bis/sample-failure-reply',
-    },
-    {
       title: 'Quotations',
       value: counts.quotations,
       subtitle: 'Finance sale quotations',
@@ -228,9 +215,8 @@ export default function DashboardPage() {
 
   const shortcuts = [
     { label: 'Renewals', href: '/bis/license-renewals', icon: RefreshCw },
-    { label: 'Stop Marking', href: '/bis/stop-marking', icon: Ban },
+    { label: 'Non-Conformity', href: '/bis/stop-marking', icon: Ban },
     { label: 'Surveillance', href: '/bis/surveillance', icon: Eye },
-    { label: 'Sample Failure Reply', href: '/bis/sample-failure-reply', icon: MessageSquareWarning },
     { label: 'Website CMS', href: '/tools/cms', icon: Globe },
     { label: 'Quotation', href: '/finance/sale/quotation', icon: Wallet },
   ]
