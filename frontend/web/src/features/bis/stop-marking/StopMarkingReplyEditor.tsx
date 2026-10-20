@@ -102,7 +102,7 @@ export function StopMarkingReplyEditor({
           <Label className={label} htmlFor="smk-reply-instruction">Tell the AI Anything Extra (Optional)</Label>
           <Input id="smk-reply-instruction" className={cn(field, 'h-9')} value={instruction} disabled={busy !== null || closed} placeholder="e.g. Failure due to a faulty tensile test setup; stock of 5 tonne is on hold" onChange={(e) => setInstruction(e.target.value)} />
         </div>
-        <Button type="button" variant="outline" className="h-9 gap-1.5 rounded-none border-amber-600 bg-white px-3 text-xs font-semibold text-amber-900 hover:bg-amber-100" disabled={busy !== null || closed} onClick={() => void draft(ALL_KEYS, 'all')}>
+        <Button type="button" variant="outline" className="h-9 gap-1.5 rounded-none border-amber-600 bg-white px-3 text-xs font-semibold text-amber-900 hover:bg-amber-100" disabled={busy !== null || closed} onClick={() => { const filled = ALL_KEYS.some((k) => String(s[k] ?? '').trim()); if (filled && !window.confirm('The AI will rewrite every section of the letter and replace what is written now. Continue?')) return; void draft(ALL_KEYS, 'all') }}>
           {busy === 'all' ? <LoaderCircle size={14} className="animate-spin" aria-hidden /> : <Sparkles size={14} aria-hidden />} {busy === 'all' ? 'Drafting the Reply…' : 'Draft Full Reply with AI'}
         </Button>
       </div>
