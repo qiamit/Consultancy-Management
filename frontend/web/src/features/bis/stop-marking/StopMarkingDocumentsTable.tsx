@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { Eye, FileDown, FileType, LoaderCircle, Paperclip, Printer } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import type { BisProjectRow } from '../projects/types'
+import { BisDocumentPrintPreviewDialog } from '../projects/BisDocumentPrintPreviewDialog'
 import { ManakDocumentActions } from '../projects/ManakDocumentActions'
 import { openStopMarkingReport } from './stopMarkingApi'
 import {
@@ -34,6 +34,8 @@ export function StopMarkingDocumentsTable({ row, bisRow }: { row: StopMarkingRow
   const [picked, setPicked] = useState<Set<string>>(() => new Set())
   const [busy, setBusy] = useState<string | null>(null)
   const [previewHtml, setPreviewHtml] = useState<string | null>(null)
+  const [previewDocs, setPreviewDocs] = useState<CaseDocument[]>([])
+  const [previewTitle, setPreviewTitle] = useState('Documents')
   const seen = useRefSet()
 
   // Everything available is ticked at first; new uploads join the selection.
@@ -64,7 +66,10 @@ export function StopMarkingDocumentsTable({ row, bisRow }: { row: StopMarkingRow
     run('preview', async () => {
       const files = list.filter((d) => d.kind === 'file')
       if (list.length === 1 && files.length === 1) return openStopMarkingReport(files[0]!.path)
-      setPreviewHtml(await previewHtmlFor(row, bisRow, list))
+      const html = await previewHtmlFor(row, bisRow, list)
+      setPreviewDocs(list)
+      setPreviewTitle(list.length === 1 ? list[0]!.label : 'Selected Documents')
+      setPreviewHtml(html)
     })
 
   const actions = (d: CaseDocument) => (
@@ -163,16 +168,21 @@ export function StopMarkingDocumentsTable({ row, bisRow }: { row: StopMarkingRow
         </table>
       </div>
 
-      <Dialog open={previewHtml !== null} onOpenChange={(open) => { if (!open) setPreviewHtml(null) }}>
-        <DialogContent className="flex h-[92vh] w-[min(64rem,calc(100vw-1.5rem))] max-w-none flex-col gap-2 overflow-hidden rounded-none border-2 border-stone-500 bg-[#e7e0d4] p-3">
-          <DialogHeader className="space-y-0">
-            <DialogTitle className="font-jakarta text-base">Preview</DialogTitle>
-          </DialogHeader>
-          <div className="min-h-0 flex-1 overflow-hidden border border-stone-400 bg-stone-300 p-2">
-            {previewHtml ? <iframe title="Document preview" srcDoc={previewHtml} sandbox="allow-same-origin" className="mx-auto h-full w-full max-w-[210mm] border-0 bg-white shadow-md" /> : null}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <BisDocumentPrintPreviewDialog
+        open={previewHtml !== null}
+        onOpenChange={(open) => { if (!open) setPreviewHtml(null) }}
+        row={bisRow}
+        kind="osl-sample-requirements"
+        title={previewTitle}
+        generatedHtml={previewHtml}
+        editable={{
+          format: 'word',
+          onDownload: () => void run('word-prev', async () => {
+            const n = await downloadSelectedWord(row, bisRow, previewDocs, previewTitle)
+            toast.success(`${n} Letter${n > 1 ? 's' : ''} Downloaded as Word.`)
+          }),
+        }}
+      />
     </div>
   )
 }

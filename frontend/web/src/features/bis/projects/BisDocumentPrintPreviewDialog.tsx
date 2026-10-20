@@ -120,6 +120,7 @@ export function BisDocumentPrintPreviewDialog({
   /** When set, skip uploads/default builder and show this generated HTML. */
   generatedHtml = null,
   editable,
+  title: titleOverride,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -128,6 +129,8 @@ export function BisDocumentPrintPreviewDialog({
   generatedHtml?: string | null
   /** Word / Excel download, shown like the document's own row buttons. */
   editable?: { format: 'word' | 'excel'; onDownload: () => void } | null
+  /** Heading of the preview, when the document is not one of the BIS print kinds. */
+  title?: string
 }) {
   const [settings, setSettings] = useState<BisDocumentPrintPageSettings>(
     DEFAULT_BIS_DOCUMENT_PRINT_PAGE_SETTINGS,
@@ -168,7 +171,7 @@ export function BisDocumentPrintPreviewDialog({
       ? null
       : pdfUrl
 
-  const title = kind ? BIS_PRINT_DOCUMENT_LABEL[kind] : 'Document'
+  const title = titleOverride ?? (kind ? BIS_PRINT_DOCUMENT_LABEL[kind] : 'Document')
   const mergePdfMode = previewSource === 'attachments' && Boolean(visiblePdfUrl)
 
   const revokePdfUrl = () => {
