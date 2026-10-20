@@ -43,11 +43,14 @@ export function ClientIsLicenseFields({
   value,
   onChange,
   clientLabelText = 'Name of Client',
+  qeManagedOnly = false,
 }: {
   idPrefix: string
   value: ClientIsLicenseValue
   onChange: (next: ClientIsLicenseValue) => void
   clientLabelText?: string
+  /** List only licences that Quality Engineering manages. */
+  qeManagedOnly?: boolean
 }) {
   const [licenses, setLicenses] = useState<BisLicenseOption[]>([])
   const [licensesLoading, setLicensesLoading] = useState(false)
@@ -65,7 +68,7 @@ export function ClientIsLicenseFields({
     }
     let cancelled = false
     setLicensesLoading(true)
-    void fetchLicenseOptions(clientId, isCodeId)
+    void fetchLicenseOptions(clientId, isCodeId, { qeManagedOnly })
       .then((list) => {
         if (cancelled) return
         setLicenses(list)
@@ -93,7 +96,7 @@ export function ClientIsLicenseFields({
     return () => {
       cancelled = true
     }
-  }, [clientId, isCodeId])
+  }, [clientId, isCodeId, qeManagedOnly])
 
   const selectedLicenseValue = licenses.some((o) => o.id === value.bisProjectId)
     ? value.bisProjectId
@@ -108,7 +111,7 @@ export function ClientIsLicenseFields({
         <RemoteLookupCombobox
           inputId={`${idPrefix}-client`}
           listId={`${idPrefix}-client-list`}
-          placeholder="Search client name…"
+          placeholder="Search Client Name…"
           label={value.clientLabel}
           selectedId={value.clientId}
           search={searchClientOptions}
@@ -133,7 +136,7 @@ export function ClientIsLicenseFields({
         <RemoteLookupCombobox
           inputId={`${idPrefix}-is-code`}
           listId={`${idPrefix}-is-code-list`}
-          placeholder={value.clientId ? 'Search IS code…' : 'Select client first…'}
+          placeholder={value.clientId ? 'Search IS Code…' : 'Select Client First…'}
           label={value.isCodeLabel}
           selectedId={value.isCodeId}
           disabled={!value.clientId}
@@ -173,7 +176,7 @@ export function ClientIsLicenseFields({
             }}
           >
             <SelectTrigger id={`${idPrefix}-cml`} aria-label="CM/L Number">
-              <SelectValue placeholder="Select license" />
+              <SelectValue placeholder="Select License" />
             </SelectTrigger>
             <SelectContent className="rounded-none border-stone-500">
               {licenses.map((o) => (

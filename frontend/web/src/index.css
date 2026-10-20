@@ -686,6 +686,33 @@ th * {
   .list-cards:not(.auto-cards) td[colspan] { grid-column: 1 / -1; text-align: center !important; }
 }
 
+/* Same cards, switched by the width of the page area (container) instead of the screen: the License
+   Non-Conformity table turns into cards as soon as its columns no longer fit — beside a docked sidebar too. */
+.sm-container { container-type: inline-size; container-name: smtable; }
+@container smtable (max-width: 1239px) {
+  .sm-cards { min-width: 0 !important; display: block; width: 100%; }
+  .sm-cards thead { display: none; }
+  .sm-cards thead:has(th:first-child input[type='checkbox']) { display: block; }
+  .sm-cards thead tr { display: flex; align-items: center; }
+  .sm-cards thead th { display: none; }
+  .sm-cards thead th:first-child { display: flex; align-items: center; gap: 0.5rem; width: 100% !important; border: 0 !important; padding: 0.5rem 0.75rem !important; }
+  .sm-cards thead th:first-child::after { content: 'Select all'; font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+  .sm-cards tbody { display: grid; gap: 0.5rem; padding: 0.5rem; }
+  .sm-cards tbody tr { position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem 0.75rem; padding: 0.625rem 0.75rem; border: 1px solid #d6d3d1 !important; background: #fff; box-shadow: 0 1px 2px rgba(28, 25, 23, 0.06); }
+  .sm-cards td { display: block; padding: 0 !important; text-align: left !important; border: 0 !important; min-width: 0; max-width: none !important; white-space: normal !important; }
+  .sm-cards td.lc-check { position: absolute; top: 0.75rem; left: 0.75rem; }
+  .sm-cards td.lc-title { order: -1; font-weight: 600; color: #1c1917; grid-column: 1 / -1; padding-bottom: 0.5rem !important; border-bottom: 1px solid #e7e5e4 !important; }
+  .sm-cards tr:has(> td.lc-check) td.lc-title { padding-left: 1.75rem !important; }
+  .sm-cards tr:has(> td.lc-check):not(:has(> td.lc-title)) > td:nth-child(2) { padding-left: 1.75rem !important; }
+  .sm-cards td.lc-wide { grid-column: 1 / -1; }
+  .sm-cards td.lc-title p { white-space: normal; }
+  .sm-cards td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 0.125rem; font-size: 0.625rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #78716c; }
+  .sm-cards td.lc-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 0.375rem; padding-top: 0.5rem !important; border-top: 1px solid #e7e5e4 !important; }
+  .sm-cards td[colspan] { grid-column: 1 / -1; text-align: center !important; }}
+@container smtable (min-width: 640px) and (max-width: 1239px) {
+  .sm-cards tbody { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 /* Simple data tables (finance reports, ledgers …): the same cards, on phones only; labels come from
    src/lib/autoCardLabels.ts. */
 @media (max-width: 639px) {

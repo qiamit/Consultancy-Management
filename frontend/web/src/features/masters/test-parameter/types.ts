@@ -111,6 +111,8 @@ function shouldPreserveToken(core: string): boolean {
 
 function capitalizeCore(core: string): string {
   if (!core) return core
+  // A word the user typed with a capital letter (A, AA, SY, A1, McD …) is kept exactly as typed.
+  if (/[A-Z]/.test(core)) return core
   if (shouldPreserveToken(core)) return core
   if (/^\d+[a-z]?$/i.test(core)) return core
   return core.charAt(0).toUpperCase() + core.slice(1).toLowerCase()
@@ -121,6 +123,7 @@ function formatTitleSegment(segment: string, capitalize: boolean): string {
   if (!match) return capitalize ? capitalizeCore(segment) : segment.toLowerCase()
   const [, lead, core, trail] = match
   if (!core) return segment
+  if (/[A-Z]/.test(core)) return `${lead}${core}${trail}`
   if (shouldPreserveToken(core)) return `${lead}${core}${trail}`
   if (!capitalize) return `${lead}${core.toLowerCase()}${trail}`
   return `${lead}${capitalizeCore(core)}${trail}`

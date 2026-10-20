@@ -35,7 +35,7 @@ import BisProjectsMasterPage from '@/features/bis/projects/BisProjectsMasterPage
 import BisLicenseLifecyclePage from '@/features/bis/renewals/BisLicenseLifecyclePage'
 import { Navigate } from 'react-router-dom'
 import BisSurveillanceMasterPage from '@/features/bis/surveillance/BisSurveillanceMasterPage'
-import BisSampleFailureReplyMasterPage from '@/features/bis/sample-failure-reply/BisSampleFailureReplyMasterPage'
+import StopMarkingMasterPage from '@/features/bis/stop-marking/StopMarkingMasterPage'
 import BisKnowledgeSearchPage from '@/features/bis/knowledge-search/BisKnowledgeSearchPage'
 import EmailToolsPage from '@/features/tools/email/EmailToolsPage'
 import CmsToolsPage from '@/features/tools/cms/CmsToolsPage'
@@ -120,7 +120,7 @@ export function BisLicenseRenewalsRoute() {
 }
 
 export function LicenseStopMarkingRoute() {
-  return <BisProjectsMasterPage key="stop_marking" listMode="stop_marking" />
+  return <StopMarkingMasterPage />
 }
 
 export function BisSurveillanceRoute() {
@@ -128,11 +128,13 @@ export function BisSurveillanceRoute() {
 }
 
 export function BisSampleFailureReplyRoute() {
-  return <BisSampleFailureReplyMasterPage />
+  // Sample failure replies are now cases in License Non-Conformity.
+  return <Navigate to="/bis/stop-marking" replace />
 }
 
 export function OurBisLicensesRoute() {
-  return <BisProjectsMasterPage key="our" listMode="our" />
+  // QE-managed licences are the "Managed by QE" filter of All BIS Licenses.
+  return <Navigate to="/bis/projects" replace />
 }
 
 export function BisProjectsRoute() {

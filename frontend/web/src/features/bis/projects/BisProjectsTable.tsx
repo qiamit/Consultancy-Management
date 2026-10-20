@@ -9,9 +9,12 @@ import {
   Mail,
   Pencil,
   RefreshCw,
+  ShieldAlert,
   Wallet,
 } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
+import { OpenNoticeBadge } from './OpenNoticeBadge'
 import { buildManakNewAppPayload } from './manakNewAppPayload'
 import { buildManakInclusionPayload } from './inclusionPayload'
 import { Button } from '@/components/ui/button'
@@ -139,6 +142,7 @@ function RowActions({
   /** BIS New Inclusion list: Manak Assist runs the inclusion flow, never the New Application fill. */
   inclusionMode?: boolean
 }) {
+  const navigate = useNavigate()
   return (
     <div className="bis-project-row-actions inline-flex shrink-0 items-center gap-0.5">
       {renewalMode ? (
@@ -268,6 +272,19 @@ function RowActions({
       >
         <ExternalLink size={16} />
       </Button>
+      {!inclusionMode && row.is_qe_managed && (row.project_kind ?? '').trim().toLowerCase() !== 'application' ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className={actionGhostBtnClass}
+          aria-label={`Add Non-Conformity for ${client}`}
+          title="Add Non-Conformity — a BIS Notice for This Licence"
+          onClick={() => navigate(`/bis/stop-marking?edit=new&licence=${row.id}`)}
+        >
+          <ShieldAlert size={16} />
+        </Button>
+      ) : null}
       {onEmailDocument ? (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -410,6 +427,7 @@ export function BisProjectsTable({
   onEmailDocument,
   renewalMode = false,
   inclusionMode = false,
+  noticeCounts = {},
   onStartRenewal,
   onRenewalReminder,
   emailBusy = false,
@@ -432,6 +450,8 @@ export function BisProjectsTable({
   onEmailDocument?: (row: BisProjectRow, kind: BisPrintDocumentKind) => void
   renewalMode?: boolean
   inclusionMode?: boolean
+  /** Open BIS notices (License Non-Conformity cases) per licence id. */
+  noticeCounts?: Record<string, number>
   onStartRenewal?: (row: BisProjectRow) => void
   onRenewalReminder?: (row: BisProjectRow) => void
   emailBusy?: boolean
@@ -543,6 +563,7 @@ export function BisProjectsTable({
                               kind="Client"
                               className="break-words text-[14px] font-bold leading-snug tracking-tight text-stone-900"
                             />
+                            <OpenNoticeBadge count={noticeCounts[r.id] ?? 0} />
                             <div className="mt-0.5 text-xs font-semibold text-amber-800">
                               <TableTextLink
                                 label={isLabel}
@@ -728,6 +749,7 @@ export function BisProjectsTable({
                           kind="Client"
                           className="break-words text-sm font-semibold leading-snug [hyphens:auto]"
                         />
+                        <OpenNoticeBadge count={noticeCounts[r.id] ?? 0} />
                       </TableCell>
                       <TableCell className="px-2 py-2 text-center align-middle text-sm">
                         <TableTextLink
