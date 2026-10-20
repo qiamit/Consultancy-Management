@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { LimsDatePicker } from '@/components/lims/LimsDatePicker'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Select, SelectContent, selectFitTriggerClass, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { formatCmL } from '../projects/types'
 import { BisFormDialog } from '../shared/BisFormDialog'
@@ -114,7 +114,7 @@ export function StopMarkingEditDialog({
           <SelectTrigger aria-label="Status">
             <SelectValue />
           </SelectTrigger>
-          <SelectContent className="rounded-none border-stone-500">
+          <SelectContent className={selectFitTriggerClass}>
             {STOP_MARKING_STATUS_OPTIONS.filter((o) => o.value !== 'closed' || closed).map((o) => (
               <SelectItem key={o.value} value={o.value}>
                 {o.label}
@@ -129,7 +129,7 @@ export function StopMarkingEditDialog({
           <SelectTrigger aria-label="Non-conformity">
             <SelectValue placeholder="Select Non-Conformity" />
           </SelectTrigger>
-          <SelectContent className="rounded-none border-stone-500">
+          <SelectContent className={selectFitTriggerClass}>
             {STOP_MARKING_REASON_OPTIONS.map((r) => (
               <SelectItem key={r} value={r}>
                 {r}

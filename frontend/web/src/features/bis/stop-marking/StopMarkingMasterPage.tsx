@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Select, SelectContent, selectFitTriggerClass, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
 import { useSearchParams } from 'react-router-dom'
 import { limsDarkBarFieldClass, limsPageShellClass } from '@/lib/limsThemeUi'
@@ -257,7 +257,7 @@ export default function StopMarkingMasterPage() {
               <SelectTrigger className={cn(limsDarkBarFieldClass, 'h-8 w-[min(100%,13rem)] shrink-0 px-2 text-[11px] sm:w-[14rem] sm:text-xs')} aria-label="Filter by notice type" title="All Notices / a Notice Type">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent align="end">
+              <SelectContent align="end" className={selectFitTriggerClass}>
                 <SelectItem value="all">All Notices</SelectItem>
                 {NOTICE_TYPE_OPTIONS.map((o) => (
                   <SelectItem key={o.value} value={o.value}>
@@ -276,7 +276,7 @@ export default function StopMarkingMasterPage() {
             <SelectTrigger className={cn(limsDarkBarFieldClass, 'h-8 w-[min(100%,11.5rem)] shrink-0 px-2 text-[11px] sm:w-[12.5rem] sm:text-xs')} aria-label="Filter by case status" title="Open cases / All cases / Closed cases">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent align="end">
+            <SelectContent align="end" className={selectFitTriggerClass}>
               <SelectItem value="active">Open Cases</SelectItem>
               <SelectItem value="all">All Cases</SelectItem>
               <SelectItem value="closed">Closed Cases</SelectItem>

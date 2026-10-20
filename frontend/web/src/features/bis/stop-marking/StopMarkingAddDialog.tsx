@@ -1,7 +1,7 @@
 import { LimsDatePicker } from '@/components/lims/LimsDatePicker'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Select, SelectContent, selectFitTriggerClass, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { BisFormDialog } from '../shared/BisFormDialog'
 import { ClientIsLicenseFields } from '../shared/ClientIsLicenseFields'
 import { StopMarkingLetterPicker } from './StopMarkingLetterPicker'
@@ -51,7 +51,7 @@ export function StopMarkingAddDialog({
           <SelectTrigger aria-label="Notice received from BIS">
             <SelectValue placeholder="Select Notice" />
           </SelectTrigger>
-          <SelectContent className="rounded-none border-stone-500">
+          <SelectContent className={selectFitTriggerClass}>
             {NOTICE_TYPE_OPTIONS.map((o) => (
               <SelectItem key={o.value} value={o.value}>
                 {o.label}
@@ -66,7 +66,7 @@ export function StopMarkingAddDialog({
           <SelectTrigger aria-label="Non-conformity">
             <SelectValue placeholder="Select Non-Conformity" />
           </SelectTrigger>
-          <SelectContent className="rounded-none border-stone-500">
+          <SelectContent className={selectFitTriggerClass}>
             {STOP_MARKING_REASON_OPTIONS.map((r) => (
               <SelectItem key={r} value={r}>
                 {r}
