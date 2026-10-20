@@ -58,9 +58,6 @@ export function StopMarkingAddDialog({
       <div className="col-span-12 space-y-2">
         <Label>BIS Letter Received</Label>
         <StopMarkingLetterPicker pendingFile={form.letterFile} onPick={(letterFile) => onChange({ ...form, letterFile })} onClear={() => onChange({ ...form, letterFile: null })} />
-        <p className="text-xs text-muted-foreground">
-          Only QE-managed licences are listed. Saving sets the licence status to Stop Marking. Open the module from the Action column to review the letter, prepare the reply and Factory Test Report, and submit.
-        </p>
       </div>
     </BisFormDialog>
   )
