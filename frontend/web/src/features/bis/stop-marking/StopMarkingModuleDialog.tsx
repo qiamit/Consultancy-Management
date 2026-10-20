@@ -30,7 +30,7 @@ import { StopMarkingLetterPicker } from './StopMarkingLetterPicker'
 import { rowToCaseForm, stopMarkingClientName, stopMarkingIsCodeLabel, stopMarkingStatusLabel, type StopMarkingCaseForm, type StopMarkingRow } from './types'
 
 const STEPS = ['BIS Letter & Review', 'Reply to BIS', 'Factory Test Report', 'Submission'] as const
-const label = 'text-[11px] font-semibold uppercase tracking-wide text-stone-600'
+const label = 'block text-[11px] font-semibold uppercase tracking-wide text-stone-600'
 const tbtn = 'h-8 gap-1.5 rounded-none border-stone-400 px-2.5 text-xs'
 const shortDate = (iso: string | null | undefined) => (iso ? iso.slice(0, 10).split('-').reverse().join('/') : '—')
 
@@ -252,7 +252,7 @@ export function StopMarkingModuleDialog({
                         </div>
                         <div className="space-y-2">
                           <Label className={label}>Reply Due By</Label>
-                          <LimsDatePicker aria-label="Reply due by" disabled={closed} value={form.bisDeadline} onChange={(v) => set('bisDeadline', v)} />
+                          <LimsDatePicker className="h-8 w-full" aria-label="Reply due by" disabled={closed} value={form.bisDeadline} onChange={(v) => set('bisDeadline', v)} />
                         </div>
                       </div>
                       <div className="space-y-2">
@@ -290,7 +290,7 @@ export function StopMarkingModuleDialog({
                           {hasReply ? 'Improve Reply with AI' : 'Draft Reply with AI'}
                         </Button>
                         <div className="sm:ml-auto sm:w-48">
-                          <LimsDatePicker aria-label="Reply date" disabled={closed} placeholder="Reply date" value={form.replyDate} onChange={(v) => set('replyDate', v)} />
+                          <LimsDatePicker className="h-8 w-full" aria-label="Reply date" disabled={closed} placeholder="Reply date" value={form.replyDate} onChange={(v) => set('replyDate', v)} />
                         </div>
                       </div>
                       <Textarea
@@ -333,7 +333,7 @@ export function StopMarkingModuleDialog({
                         </div>
                         <div className="space-y-1">
                           <Label className={label}>Date of Manufacturing</Label>
-                          <LimsDatePicker aria-label="Date of manufacturing" disabled={closed || !projectId} value={draftSample.dateOfManufacturing} onChange={(v) => setDraftSample({ ...draftSample, dateOfManufacturing: v })} />
+                          <LimsDatePicker className="h-8 w-full" aria-label="Date of manufacturing" disabled={closed || !projectId} value={draftSample.dateOfManufacturing} onChange={(v) => setDraftSample({ ...draftSample, dateOfManufacturing: v })} />
                         </div>
                         <div className="space-y-1">
                           <Label className={label}>Declared Value</Label>

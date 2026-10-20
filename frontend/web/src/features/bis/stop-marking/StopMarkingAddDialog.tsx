@@ -39,10 +39,10 @@ export function StopMarkingAddDialog({
     >
       <ClientIsLicenseFields idPrefix="smk" clientLabelText="Firm Name" qeManagedOnly value={form} onChange={(next) => onChange({ ...form, ...next })} />
       <div className="col-span-12 space-y-2 md:col-span-6">
-        <Label>
+        <Label className="block">
           Stop Marking Date <span className="text-destructive">*</span>
         </Label>
-        <LimsDatePicker aria-label="Stop marking date" value={form.stopDate} onChange={(stopDate) => onChange({ ...form, stopDate })} />
+        <LimsDatePicker className="h-8 w-full" aria-label="Stop marking date" value={form.stopDate} onChange={(stopDate) => onChange({ ...form, stopDate })} />
       </div>
       <div className="col-span-12 space-y-2">
         <Label htmlFor="smk-add-reason">Reason for Stop Marking</Label>

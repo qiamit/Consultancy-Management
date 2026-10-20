@@ -97,8 +97,8 @@ export function StopMarkingEditDialog({
         </div>
       </div>
       <div className="col-span-12 space-y-2 md:col-span-6">
-        <Label>Stop Marking Date</Label>
-        <LimsDatePicker aria-label="Stop marking date" disabled={closed} value={stopDate} onChange={setStopDate} />
+        <Label className="block">Stop Marking Date</Label>
+        <LimsDatePicker className="h-8 w-full" aria-label="Stop marking date" disabled={closed} value={stopDate} onChange={setStopDate} />
       </div>
       <div className="col-span-12 space-y-2 md:col-span-6">
         <Label>Status</Label>
