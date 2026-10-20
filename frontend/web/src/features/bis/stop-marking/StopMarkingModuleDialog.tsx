@@ -263,8 +263,8 @@ export function StopMarkingModuleDialog({
 
             {/* Step body */}
             <div className={cn(limsPanelClass, 'flex min-h-0 flex-1 flex-col bg-[#f7f3eb]')}>
-              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 sm:p-4">
-                <div className="mx-auto max-w-4xl space-y-4">
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3">
+                <div className="w-full space-y-4">
                   <div className="border-b border-stone-300 pb-1 text-[11px] font-bold uppercase tracking-[0.14em] text-amber-800">
                     Step {step + 1} of {STEPS.length} — {STEPS[step]}
                   </div>
