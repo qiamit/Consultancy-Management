@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Eye, FileDown, FileType, Pencil, Plus, Printer, ScrollText } from 'lucide-react'
+import { Eye, FileDown, FileType, Pencil, Printer, ScrollText } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -29,7 +29,7 @@ import {
 } from '../projects/oslSampleRequirementsModel'
 import { formatDisplayDate, isCodeDisplayLabel, type BisProjectRow } from '../projects/types'
 import { saveStopMarkingTestReportModule } from './stopMarkingApi'
-import { stopMarkingIsCodeLabel, type StopMarkingCaseForm, type StopMarkingRow, type StopMarkingTestReportModule } from './types'
+import { stopMarkingIsCodeLabel, type StopMarkingRow, type StopMarkingTestReportModule } from './types'
 
 const thCls = 'border border-stone-700 bg-stone-800 px-2 py-1.5 text-left text-[11px] font-bold uppercase tracking-[0.1em] text-amber-200'
 const tdCls = 'border border-[#e7e0d4] px-2 py-1.5 align-middle text-stone-700'
@@ -55,13 +55,11 @@ function downloadBlob(blob: Blob, filename: string) {
  */
 export function StopMarkingTestReportModule({
   row,
-  form,
   bisRow,
   closed,
   onUpdated,
 }: {
   row: StopMarkingRow
-  form: StopMarkingCaseForm
   /** The licence, read only for the firm / IS Code / letterhead details on the printed documents. */
   bisRow: BisProjectRow | null
   closed: boolean
@@ -119,27 +117,6 @@ export function StopMarkingTestReportModule({
       setSampleOpen(false)
       toast.success('Sample Offer Letter Saved.')
     })
-  /** Adds the sample read from the test report (step 2) as a new row of the draft. */
-  const addFromReport = () => {
-    const d = form.reportDetails
-    if (!form.sampleCode.trim() && !form.sampleQrCode.trim() && !d.batchNumber.trim() && !d.description.trim()) {
-      toast.error('Fill the sample details in Test Report Review (step 2) first.')
-      return
-    }
-    const next: OslSampleRequirementRow = {
-      ...emptyOslSampleRequirementRow('osl'),
-      id: crypto.randomUUID(),
-      sampleCode: form.sampleCode.trim(),
-      qrCode: form.sampleQrCode.trim(),
-      gradeTypeVariety: d.description.trim(),
-      batchNumber: d.batchNumber.trim(),
-      dateOfManufacturing: d.manufactureDate,
-      declaredValue: d.declaredValue.trim(),
-      includeInPrint: true,
-    }
-    setSampleDraft((cur) => ({ ...cur, rows: [...cur.rows.filter(oslSampleRowHasContent), next] }))
-  }
-
   /** Letterhead HTML of one component, built from this case's own data. */
   const buildHtml = async (c: Component): Promise<{ html: string; title: string }> => {
     if (!bisRow) throw new Error('The licence of this case could not be loaded.')
@@ -276,10 +253,7 @@ export function StopMarkingTestReportModule({
               isCodeRevisionYear={String(row.is_code?.revision_year ?? '').trim() || null}
             />
           </div>
-          <DialogFooter className="flex-row flex-wrap items-center justify-between gap-2 sm:justify-between">
-            <Button type="button" variant="outline" className={cn(limsOutlineBtnClass, 'h-8 gap-1.5')} disabled={busy || closed} onClick={addFromReport}>
-              <Plus size={14} /> Add Sample from Test Report
-            </Button>
+          <DialogFooter className="flex-row items-center justify-end gap-2">
             <div className="flex gap-2">
               <Button type="button" variant="outline" className={cn(limsOutlineBtnClass, 'h-8')} onClick={() => setSampleOpen(false)}>Cancel</Button>
               <Button type="button" className={cn(limsPrimaryBtnClass, 'h-8')} disabled={busy || closed} onClick={saveSamples}>Save</Button>
