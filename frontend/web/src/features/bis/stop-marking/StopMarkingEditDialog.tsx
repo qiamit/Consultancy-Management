@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { LimsDatePicker } from '@/components/lims/LimsDatePicker'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, selectFitTriggerClass, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
@@ -18,7 +17,6 @@ import {
 import {
   STOP_MARKING_REASON_OPTIONS,
   STOP_MARKING_STATUS_OPTIONS,
-  noticeHasSample,
   noticeTypeLabel,
   rowToCaseForm,
   stopMarkingClientName,
@@ -38,8 +36,6 @@ export function StopMarkingEditDialog({
 }) {
   const [stopDate, setStopDate] = useState('')
   const [reasonType, setReasonType] = useState('')
-  const [sampleCode, setSampleCode] = useState('')
-  const [sampleQrCode, setSampleQrCode] = useState('')
   const [status, setStatus] = useState('open')
   const [notes, setNotes] = useState('')
   const [busy, setBusy] = useState<'save' | 'letter' | null>(null)
@@ -50,8 +46,6 @@ export function StopMarkingEditDialog({
     const form = rowToCaseForm(row)
     setStopDate(form.stopDate)
     setReasonType(form.reasonType)
-    setSampleCode(form.sampleCode)
-    setSampleQrCode(form.sampleQrCode)
     setStatus(form.status === 'closed' ? 'closed' : form.status)
     setNotes(form.notes)
     setError(null)
@@ -83,7 +77,7 @@ export function StopMarkingEditDialog({
       errorMessage={error}
       onSave={() =>
         void run('save', async () => {
-          const updated = await saveStopMarkingCase(row.id, { ...rowToCaseForm(row), stopDate, reasonType, sampleCode, sampleQrCode, status, notes })
+          const updated = await saveStopMarkingCase(row.id, { ...rowToCaseForm(row), stopDate, reasonType, status, notes })
           onUpdated(updated)
           toast.success('Saved.')
           onOpenChange(false)
@@ -138,18 +132,6 @@ export function StopMarkingEditDialog({
           </SelectContent>
         </Select>
       </div>
-      {noticeHasSample(row.case_type) ? (
-        <>
-          <div className="col-span-12 space-y-2 md:col-span-6">
-            <Label htmlFor="smk-edit-sample">Sample Code</Label>
-            <Input id="smk-edit-sample" autoComplete="off" disabled={closed} value={sampleCode} onChange={(e) => setSampleCode(e.target.value)} />
-          </div>
-          <div className="col-span-12 space-y-2 md:col-span-6">
-            <Label htmlFor="smk-edit-qr">Sample QR Code</Label>
-            <Input id="smk-edit-qr" autoComplete="off" disabled={closed} value={sampleQrCode} onChange={(e) => setSampleQrCode(e.target.value)} />
-          </div>
-        </>
-      ) : null}
       <div className="col-span-12 space-y-2">
         <Label className="block">BIS Letter Received</Label>
         <StopMarkingLetterPicker

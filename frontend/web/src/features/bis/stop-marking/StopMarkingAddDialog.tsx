@@ -1,11 +1,10 @@
 import { LimsDatePicker } from '@/components/lims/LimsDatePicker'
 import { Label } from '@/components/ui/label'
-import { Input } from '@/components/ui/input'
 import { Select, SelectContent, selectFitTriggerClass, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { BisFormDialog } from '../shared/BisFormDialog'
 import { ClientIsLicenseFields } from '../shared/ClientIsLicenseFields'
 import { StopMarkingLetterPicker } from './StopMarkingLetterPicker'
-import { NOTICE_TYPE_OPTIONS, STOP_MARKING_REASON_OPTIONS, noticeHasSample, type StopMarkingAddForm } from './types'
+import { NOTICE_TYPE_OPTIONS, STOP_MARKING_REASON_OPTIONS, type StopMarkingAddForm } from './types'
 
 /** Add a licence to Stop Marking: the licence, the date, why marking was stopped, and the BIS letter received. */
 export function StopMarkingAddDialog({
@@ -75,18 +74,6 @@ export function StopMarkingAddDialog({
           </SelectContent>
         </Select>
       </div>
-      {noticeHasSample(form.noticeType) ? (
-        <>
-          <div className="col-span-12 space-y-2 md:col-span-6">
-            <Label htmlFor="smk-add-sample">Sample Code</Label>
-            <Input id="smk-add-sample" autoComplete="off" value={form.sampleCode} onChange={(e) => onChange({ ...form, sampleCode: e.target.value })} />
-          </div>
-          <div className="col-span-12 space-y-2 md:col-span-6">
-            <Label htmlFor="smk-add-qr">Sample QR Code</Label>
-            <Input id="smk-add-qr" autoComplete="off" value={form.sampleQrCode} onChange={(e) => onChange({ ...form, sampleQrCode: e.target.value })} />
-          </div>
-        </>
-      ) : null}
       <div className="col-span-12 space-y-2">
         <Label className="block">BIS Letter Received</Label>
         <StopMarkingLetterPicker compact pendingFile={form.letterFile} onPick={(letterFile) => onChange({ ...form, letterFile })} onClear={() => onChange({ ...form, letterFile: null })} />
