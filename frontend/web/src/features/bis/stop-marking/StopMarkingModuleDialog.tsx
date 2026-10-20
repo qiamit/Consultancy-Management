@@ -26,6 +26,7 @@ import {
 } from './stopMarkingApi'
 import { openStopMarkingManak } from './stopMarkingManak'
 import { downloadStopMarkingReplyWord, emailStopMarkingReplyToClient, printStopMarkingReply } from './printStopMarkingReply'
+import { AutoGrowTextarea } from '../shared/AutoGrowTextarea'
 import { StopMarkingLetterPicker } from './StopMarkingLetterPicker'
 import { noticeHoldsMarking, noticeTypeLabel, rowToCaseForm, stopMarkingClientName, stopMarkingIsCodeLabel, stopMarkingStatusLabel, type StopMarkingCaseForm, type StopMarkingRow } from './types'
 
@@ -271,7 +272,6 @@ export function StopMarkingModuleDialog({
                             </Button>
                           }
                         />
-                        <p className="text-xs text-muted-foreground">AI fills the reference, reply due date, non-conformity and points from a PDF letter. For a photo or scan, type them in.</p>
                       </div>
                       <div className="grid gap-4 md:grid-cols-2">
                         <div className="space-y-2">
@@ -285,11 +285,11 @@ export function StopMarkingModuleDialog({
                       </div>
                       <div className="space-y-2">
                         <Label className={label} htmlFor="smk-m-reason">Non-Conformity as Stated by BIS</Label>
-                        <Textarea id="smk-m-reason" rows={3} disabled={closed} className="rounded-none border-stone-500 bg-white" value={form.bisReason} onChange={(e) => set('bisReason', e.target.value)} />
+                        <AutoGrowTextarea id="smk-m-reason" disabled={closed} className="rounded-none border-stone-500 bg-white" value={form.bisReason} onChange={(e) => set('bisReason', e.target.value)} />
                       </div>
                       <div className="space-y-2">
                         <Label className={label} htmlFor="smk-m-points">Points Raised by BIS / Review Notes</Label>
-                        <Textarea id="smk-m-points" rows={5} disabled={closed} className="rounded-none border-stone-500 bg-white" value={form.reviewNotes} onChange={(e) => set('reviewNotes', e.target.value)} />
+                        <AutoGrowTextarea id="smk-m-points" disabled={closed} className="rounded-none border-stone-500 bg-white" value={form.reviewNotes} onChange={(e) => set('reviewNotes', e.target.value)} />
                       </div>
                       {!closed && form.status === 'open' ? (
                         <Button type="button" variant="outline" className={tbtn} disabled={busy !== null} onClick={() => void run('save', async () => { await save('reviewed'); toast.success('Marked as reviewed.') })}>
