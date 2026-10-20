@@ -162,8 +162,12 @@
     const want = low(value);
     if (!want) return null;
     const opts = Array.from(select.options).filter((o) => o.value !== "" && !/^-*\s*select/i.test(o.text));
+    // Units: Manak writes "1 K.G", "1 Mtr" … (the unit per 1), the app writes "Kg", "Mtr". Compare letters and digits only.
+    const unitKey = (t) => low(t).replace(/^1\s+(?=\D)/, "").replace(/[^a-z0-9]/g, "");
+    const wantUnit = unitKey(value);
     return (
       opts.find((o) => low(o.text) === want || low(o.value) === want) ||
+      (wantUnit ? opts.find((o) => unitKey(o.text) === wantUnit) : null) ||
       opts.find((o) => low(o.text).startsWith(want)) ||
       opts.find((o) => low(o.text).includes(want)) ||
       opts.find((o) => want.includes(low(o.text)) && low(o.text).length > 2) ||
@@ -426,7 +430,7 @@
       );
       plan.push(scalar("Outsourcing", mf.outsourcing, [/^isOutsource$/], []));
       plan.push(scalar("Hygienic conditions", mf.hygiene, [/^isHyygenicCondition$/, /hygien/i], []));
-      plan.push(scalar("Production unit", mf.productionUnit, [/^unit$/], []));
+      plan.push(scalar("Production unit", mf.productionUnit, [/^unit$/], [], { single: true }));
       plan.push(scalar("Production value", mf.productionValue, [/^productionValue$/], []));
       plan.push(scalar("Installed capacity", mf.installedCapacity, [/^presentCapacity$/], []));
       ["process-flow", "plant-layout", "machinery", "outsource-controls", "hygiene"].forEach((slot) =>
@@ -553,7 +557,16 @@
       el.__qeUsed = true;
       const res = setValue(el, cell.value);
       if (res === "filled") report.filled.push(`${prefix}${cell.key}`);
-      else if (res === "no-option") report.missing.push(`${prefix}${cell.key} (no option "${cell.value}")`);
+      else if (res === "no-option") {
+        // Manak lists only the unit(s) that belong to this IS: a single real option is the one to take.
+        const real = cell.single && el.tagName === "SELECT" ? Array.from(el.options).filter((o) => o.value && o.value !== "0" && !/^\s*-*\s*select/i.test(o.text)) : [];
+        if (real.length === 1) {
+          el.value = real[0].value;
+          el.dispatchEvent(new Event("change", { bubbles: true }));
+          nudgePage(el);
+          report.filled.push(`${prefix}${cell.key} (Manak's only option "${norm(real[0].text)}")`);
+        } else report.missing.push(`${prefix}${cell.key} (no option "${cell.value}")`);
+      }
       else if (String(res).startsWith("too-long")) report.missing.push(`${prefix}${cell.key} is ${String(cell.value).length} characters — Manak allows ${String(res).split(":")[1]}`);
       // A select change can reveal dependent fields — let the page react.
       if (el.tagName === "SELECT" && res === "filled") await sleep(400);
