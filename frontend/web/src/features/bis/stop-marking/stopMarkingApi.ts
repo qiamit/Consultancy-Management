@@ -102,7 +102,7 @@ export async function createStopMarkingCase(form: StopMarkingAddForm): Promise<{
       cm_l_digits: form.cmLDigits || null,
       project_kind: form.projectKind || null,
       stop_date: form.stopDate || new Date().toISOString().slice(0, 10),
-      bis_reason: form.bisReason.trim(),
+      reason_type: form.reasonType,
       previous_project_status: previous,
       created_by: await currentUserId(),
     })
@@ -130,6 +130,7 @@ export async function saveStopMarkingCase(id: string, form: StopMarkingCaseForm)
     .from('bis_stop_marking_cases')
     .update({
       stop_date: form.stopDate || new Date().toISOString().slice(0, 10),
+      reason_type: form.reasonType,
       bis_reference: form.bisReference.trim(),
       bis_reason: form.bisReason.trim(),
       bis_deadline: form.bisDeadline || null,

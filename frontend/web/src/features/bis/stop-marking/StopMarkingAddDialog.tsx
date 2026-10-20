@@ -1,10 +1,10 @@
 import { LimsDatePicker } from '@/components/lims/LimsDatePicker'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { BisFormDialog } from '../shared/BisFormDialog'
 import { ClientIsLicenseFields } from '../shared/ClientIsLicenseFields'
 import { StopMarkingLetterPicker } from './StopMarkingLetterPicker'
-import type { StopMarkingAddForm } from './types'
+import { STOP_MARKING_REASON_OPTIONS, type StopMarkingAddForm } from './types'
 
 /** Add a licence to Stop Marking: the licence, the date, why marking was stopped, and the BIS letter received. */
 export function StopMarkingAddDialog({
@@ -44,20 +44,24 @@ export function StopMarkingAddDialog({
         </Label>
         <LimsDatePicker className="h-8 w-full" aria-label="Stop marking date" value={form.stopDate} onChange={(stopDate) => onChange({ ...form, stopDate })} />
       </div>
-      <div className="col-span-12 space-y-2">
-        <Label htmlFor="smk-add-reason">Reason for Stop Marking</Label>
-        <Textarea
-          id="smk-add-reason"
-          rows={3}
-          className="rounded-none border-stone-500 bg-stone-50"
-          placeholder="Why BIS stopped marking, as stated in the letter"
-          value={form.bisReason}
-          onChange={(e) => onChange({ ...form, bisReason: e.target.value })}
-        />
+      <div className="col-span-12 space-y-2 md:col-span-6">
+        <Label className="block">Reason for Stop Marking</Label>
+        <Select value={form.reasonType || undefined} onValueChange={(reasonType) => onChange({ ...form, reasonType })}>
+          <SelectTrigger aria-label="Reason for stop marking">
+            <SelectValue placeholder="Select reason" />
+          </SelectTrigger>
+          <SelectContent className="rounded-none border-stone-500">
+            {STOP_MARKING_REASON_OPTIONS.map((r) => (
+              <SelectItem key={r} value={r}>
+                {r}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
-      <div className="col-span-12 space-y-2">
-        <Label>BIS Letter Received</Label>
-        <StopMarkingLetterPicker pendingFile={form.letterFile} onPick={(letterFile) => onChange({ ...form, letterFile })} onClear={() => onChange({ ...form, letterFile: null })} />
+      <div className="col-span-12 space-y-2 md:col-span-6">
+        <Label className="block">BIS Letter Received</Label>
+        <StopMarkingLetterPicker compact pendingFile={form.letterFile} onPick={(letterFile) => onChange({ ...form, letterFile })} onClear={() => onChange({ ...form, letterFile: null })} />
       </div>
     </BisFormDialog>
   )

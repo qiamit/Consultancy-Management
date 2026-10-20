@@ -89,6 +89,7 @@ export function StopMarkingTable({
                 <TableHead className={cn(headClass, 'min-w-[220px] text-left')}>Firm Name</TableHead>
                 <TableHead className={cn(headClass, 'min-w-[150px]')}>IS Code</TableHead>
                 <TableHead className={cn(headClass, 'min-w-[120px]')}>CM/L Number</TableHead>
+                <TableHead className={cn(headClass, 'min-w-[150px]')}>Reason</TableHead>
                 <TableHead className={cn(headClass, 'min-w-[110px]')}>Stopped On</TableHead>
                 <TableHead className={cn(headClass, 'min-w-[110px]')}>Reply Due</TableHead>
                 <TableHead className={cn(headClass, 'min-w-[120px]')}>Status</TableHead>
@@ -113,6 +114,9 @@ export function StopMarkingTable({
                     </TableCell>
                     <TableCell data-label="CM/L" className="align-middle text-center">
                       <p className="font-mono text-xs tabular-nums">{formatCmL(r.cm_l_digits) || '—'}</p>
+                    </TableCell>
+                    <TableCell data-label="Reason" className="align-middle text-center text-sm">
+                      {r.reason_type || '—'}
                     </TableCell>
                     <TableCell data-label="Stopped On" className="align-middle text-center text-sm tabular-nums">
                       {formatDisplayDate(r.stop_date)}

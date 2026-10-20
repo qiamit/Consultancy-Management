@@ -7,6 +7,7 @@ export function StopMarkingLetterPicker({
   storedName,
   disabled,
   busy,
+  compact,
   onPick,
   onClear,
   onOpen,
@@ -15,24 +16,26 @@ export function StopMarkingLetterPicker({
   storedName?: string | null
   disabled?: boolean
   busy?: boolean
+  /** Sits in a half-width column: one line, file name truncated, icon-only Open / Remove. */
+  compact?: boolean
   onPick: (file: File) => void
   onClear?: () => void
   onOpen?: () => void
 }) {
   const name = pendingFile?.name || storedName || ''
   return (
-    <div className="flex flex-wrap items-center gap-2 border border-stone-400 bg-white px-3 py-2 text-sm">
+    <div className={compact ? 'flex h-8 items-center gap-2 border border-stone-500 bg-stone-50 pl-2.5 text-sm' : 'flex flex-wrap items-center gap-2 border border-stone-400 bg-white px-3 py-2 text-sm'}>
       <Paperclip size={15} className="shrink-0 text-amber-800" aria-hidden />
-      <span className="min-w-0 flex-1 basis-40 truncate">{name || 'No letter attached'}</span>
-      <div className="flex flex-wrap items-center gap-1.5">
+      <span className={compact ? 'min-w-0 flex-1 truncate text-stone-600' : 'min-w-0 flex-1 basis-40 truncate'} title={name || undefined}>{name || 'No letter attached'}</span>
+      <div className={compact ? 'flex h-full shrink-0 items-stretch' : 'flex flex-wrap items-center gap-1.5'}>
         {name && onOpen ? (
-          <Button type="button" variant="outline" className="h-8 gap-1.5 rounded-none border-stone-400 px-2.5 text-xs" disabled={busy} onClick={onOpen}>
-            <Eye size={14} /> Open
+          <Button type="button" variant="outline" className="h-8 gap-1.5 rounded-none border-stone-400 px-2.5 text-xs" disabled={busy} onClick={onOpen} title="Open the letter" aria-label="Open the letter">
+            <Eye size={14} /> {compact ? null : 'Open'}
           </Button>
         ) : null}
         {name && onClear ? (
-          <Button type="button" variant="outline" className="h-8 gap-1.5 rounded-none border-stone-400 px-2.5 text-xs text-red-700" disabled={busy || disabled} onClick={onClear}>
-            <X size={14} /> Remove
+          <Button type="button" variant="outline" className="h-8 gap-1.5 rounded-none border-stone-400 px-2.5 text-xs text-red-700" disabled={busy || disabled} onClick={onClear} title="Remove the letter" aria-label="Remove the letter">
+            <X size={14} /> {compact ? null : 'Remove'}
           </Button>
         ) : null}
         <label className="inline-flex h-8 cursor-pointer items-center border border-stone-400 bg-white px-2.5 text-xs font-medium hover:bg-stone-100">

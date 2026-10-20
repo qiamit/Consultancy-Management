@@ -15,6 +15,7 @@ import {
   uploadStopMarkingReport,
 } from './stopMarkingApi'
 import {
+  STOP_MARKING_REASON_OPTIONS,
   STOP_MARKING_STATUS_OPTIONS,
   rowToCaseForm,
   stopMarkingClientName,
@@ -33,7 +34,7 @@ export function StopMarkingEditDialog({
   onUpdated: (row: StopMarkingRow) => void
 }) {
   const [stopDate, setStopDate] = useState('')
-  const [reason, setReason] = useState('')
+  const [reasonType, setReasonType] = useState('')
   const [status, setStatus] = useState('open')
   const [notes, setNotes] = useState('')
   const [busy, setBusy] = useState<'save' | 'letter' | null>(null)
@@ -43,7 +44,7 @@ export function StopMarkingEditDialog({
     if (!row) return
     const form = rowToCaseForm(row)
     setStopDate(form.stopDate)
-    setReason(form.bisReason)
+    setReasonType(form.reasonType)
     setStatus(form.status === 'closed' ? 'closed' : form.status)
     setNotes(form.notes)
     setError(null)
@@ -75,7 +76,7 @@ export function StopMarkingEditDialog({
       errorMessage={error}
       onSave={() =>
         void run('save', async () => {
-          const updated = await saveStopMarkingCase(row.id, { ...rowToCaseForm(row), stopDate, bisReason: reason, status, notes })
+          const updated = await saveStopMarkingCase(row.id, { ...rowToCaseForm(row), stopDate, reasonType, status, notes })
           onUpdated(updated)
           toast.success('Saved.')
           onOpenChange(false)
@@ -115,13 +116,25 @@ export function StopMarkingEditDialog({
           </SelectContent>
         </Select>
       </div>
-      <div className="col-span-12 space-y-2">
-        <Label htmlFor="smk-edit-reason">Reason for Stop Marking</Label>
-        <Textarea id="smk-edit-reason" rows={3} disabled={closed} className="rounded-none border-stone-500 bg-stone-50" value={reason} onChange={(e) => setReason(e.target.value)} />
+      <div className="col-span-12 space-y-2 md:col-span-6">
+        <Label className="block">Reason for Stop Marking</Label>
+        <Select value={reasonType || undefined} disabled={closed} onValueChange={setReasonType}>
+          <SelectTrigger aria-label="Reason for stop marking">
+            <SelectValue placeholder="Select reason" />
+          </SelectTrigger>
+          <SelectContent className="rounded-none border-stone-500">
+            {STOP_MARKING_REASON_OPTIONS.map((r) => (
+              <SelectItem key={r} value={r}>
+                {r}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
-      <div className="col-span-12 space-y-2">
-        <Label>BIS Letter Received</Label>
+      <div className="col-span-12 space-y-2 md:col-span-6">
+        <Label className="block">BIS Letter Received</Label>
         <StopMarkingLetterPicker
+          compact
           storedName={row.report_name}
           busy={busy === 'letter'}
           disabled={closed}

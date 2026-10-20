@@ -9,6 +9,17 @@ export const STOP_MARKING_STATUS_OPTIONS = [
   { value: 'closed', label: 'Closed' },
 ] as const
 
+/** Fixed reasons BIS gives for stopping marking, picked when a licence is added. */
+export const STOP_MARKING_REASON_OPTIONS = [
+  'Sample Failure',
+  'Multiple Sample Failure',
+  'Non-submission of Reply',
+  'Non-submission of Production Returns on Time',
+  'Non-payment of Marking Fee',
+  'Non-compliance of Scheme of Testing & Inspection',
+  'Other',
+] as const
+
 export function stopMarkingStatusLabel(value: string | null | undefined): string {
   const v = (value ?? '').trim()
   return STOP_MARKING_STATUS_OPTIONS.find((o) => o.value === v)?.label ?? (v || '—')
@@ -32,6 +43,7 @@ export type StopMarkingRow = {
   previous_project_status: string
   report_path: string | null
   report_name: string | null
+  reason_type: string
   bis_reference: string
   bis_reason: string
   bis_deadline: string | null
@@ -55,11 +67,12 @@ export type StopMarkingRow = {
 }
 
 /** Add dialog: the licence (client + IS code + CM/L) and the date BIS stopped marking. */
-export type StopMarkingAddForm = ClientIsLicenseValue & { stopDate: string; bisReason: string; letterFile: File | null }
+export type StopMarkingAddForm = ClientIsLicenseValue & { stopDate: string; reasonType: string; letterFile: File | null }
 
 /** Everything editable on an open case. */
 export type StopMarkingCaseForm = {
   stopDate: string
+  reasonType: string
   bisReference: string
   bisReason: string
   bisDeadline: string
@@ -76,7 +89,7 @@ export type StopMarkingStatusFilter = 'active' | 'all' | 'closed'
 export const todayIso = () => new Date().toISOString().slice(0, 10)
 
 export function emptyStopMarkingAddForm(): StopMarkingAddForm {
-  return { ...EMPTY_CLIENT_IS_LICENSE, stopDate: todayIso(), bisReason: '', letterFile: null }
+  return { ...EMPTY_CLIENT_IS_LICENSE, stopDate: todayIso(), reasonType: '', letterFile: null }
 }
 
 export function stopMarkingClientName(row: Pick<StopMarkingRow, 'client'>): string {
@@ -90,6 +103,7 @@ export function stopMarkingIsCodeLabel(row: Pick<StopMarkingRow, 'is_code'>): st
 export function rowToCaseForm(row: StopMarkingRow): StopMarkingCaseForm {
   return {
     stopDate: row.stop_date?.slice(0, 10) || todayIso(),
+    reasonType: row.reason_type ?? '',
     bisReference: row.bis_reference ?? '',
     bisReason: row.bis_reason ?? '',
     bisDeadline: row.bis_deadline?.slice(0, 10) ?? '',

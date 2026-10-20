@@ -32,7 +32,8 @@ function licenceFacts(row: StopMarkingRow): string {
     `Indian Standard: ${stopMarkingIsCodeLabel(row) || '—'}${row.is_code?.title ? ` — ${row.is_code.title}` : ''}`,
     `Licence (CM/L): ${row.cm_l_digits ? `CM/L-${row.cm_l_digits}` : '—'}`,
     `Stop marking date: ${row.stop_date?.slice(0, 10) || '—'}`,
-  ].join('\n')
+    row.reason_type ? `Reason category: ${row.reason_type}` : '',
+  ].filter(Boolean).join('\n')
 }
 
 export type StopMarkingReportReading = { reference: string; reason: string; deadline: string; points: string }
