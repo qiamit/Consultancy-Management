@@ -72,6 +72,15 @@ export const STOP_MARKING_STATUS_STYLES: Record<string, string> = {
 /** A supporting document uploaded for the submission (corrective action evidence, test reports, calibration …). */
 export type StopMarkingDocument = { id: string; label: string; name: string; path: string }
 
+/** One parameter line of the test report: ticked rows go into the reply. */
+export type StopMarkingFinding = { id: string; selected: boolean; parameter: string; specified: string; observed: string; remark: string }
+
+/** The ticked findings (all when none is ticked) as plain lines, for the reply draft. */
+export function findingsToText(rows: StopMarkingFinding[]): string {
+  const picked = rows.some((r) => r.selected) ? rows.filter((r) => r.selected) : rows
+  return picked.map((r, i) => `${i + 1}. ${r.parameter} — Specified: ${r.specified || '—'}; Observed: ${r.observed || '—'}; ${r.remark || '—'}`).join('\n')
+}
+
 /** Details read from the test report (step 2). Sample code and QR code live in their own columns. */
 export type StopMarkingReportDetails = { reportNumber: string; batchNumber: string; manufactureDate: string; description: string; declaredValue: string }
 export const EMPTY_REPORT_DETAILS: StopMarkingReportDetails = { reportNumber: '', batchNumber: '', manufactureDate: '', description: '', declaredValue: '' }
@@ -91,6 +100,7 @@ export type StopMarkingRow = {
   test_report_name: string | null
   test_reports: StopMarkingDocument[] | null
   report_review: string
+  report_findings: StopMarkingFinding[] | null
   report_details: Partial<StopMarkingReportDetails> | null
   report_observations: string
   documents: StopMarkingDocument[] | null
@@ -134,7 +144,7 @@ export type StopMarkingCaseForm = {
   bisReason: string
   bisDeadline: string
   reviewNotes: string
-  reportReview: string
+  reportFindings: StopMarkingFinding[]
   reportObservations: string
   reportDetails: StopMarkingReportDetails
   replyDraft: string
@@ -172,7 +182,7 @@ export function rowToCaseForm(row: StopMarkingRow): StopMarkingCaseForm {
     bisReason: row.bis_reason ?? '',
     bisDeadline: row.bis_deadline?.slice(0, 10) ?? '',
     reviewNotes: row.review_notes ?? '',
-    reportReview: row.report_review ?? '',
+    reportFindings: row.report_findings ?? [],
     reportObservations: row.report_observations ?? '',
     reportDetails: { ...EMPTY_REPORT_DETAILS, ...(row.report_details ?? {}) },
     replyDraft: row.reply_draft ?? '',

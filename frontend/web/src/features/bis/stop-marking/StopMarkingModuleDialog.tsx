@@ -32,7 +32,7 @@ import { openStopMarkingManak } from './stopMarkingManak'
 import { downloadStopMarkingReplyWord, emailStopMarkingReplyToClient, printStopMarkingReply } from './printStopMarkingReply'
 import { AutoGrowTextarea } from '../shared/AutoGrowTextarea'
 import { StopMarkingLetterPicker } from './StopMarkingLetterPicker'
-import { noticeHoldsMarking, noticeTypeLabel, rowToCaseForm, stopMarkingClientName, stopMarkingIsCodeLabel, stopMarkingStatusLabel, type StopMarkingCaseForm, type StopMarkingRow } from './types'
+import { findingsToText, noticeHoldsMarking, noticeTypeLabel, rowToCaseForm, stopMarkingClientName, stopMarkingIsCodeLabel, stopMarkingStatusLabel, type StopMarkingCaseForm, type StopMarkingRow } from './types'
 
 const STEPS = ['BIS Letter & Review', 'Test Report Review', 'Factory Test Report', 'Reply to BIS', 'Documents & Submission'] as const
 const label = 'block text-[11px] font-semibold uppercase tracking-wide text-stone-600'
@@ -121,7 +121,7 @@ export function StopMarkingModuleDialog({
       const r = await readStopMarkingTestReport(current, files)
       setForm((f) => f && {
         ...f,
-        reportReview: r.findings,
+        reportFindings: r.findings,
         reportObservations: r.observations,
         sampleCode: r.sampleCode || f.sampleCode,
         sampleQrCode: r.qrCode || f.sampleQrCode,
@@ -210,7 +210,7 @@ export function StopMarkingModuleDialog({
   const checks: Array<[string, boolean, string]> = [
     ['BIS Letter Received', Boolean(row.report_path), row.report_name || 'Not Attached'],
     ['Reason and Points Reviewed', Boolean(form.bisReason.trim() || form.reviewNotes.trim()), form.bisReference || 'Not Entered'],
-    ['Test Report Reviewed', Boolean(form.reportReview.trim()), (row.test_reports ?? []).length ? `${(row.test_reports ?? []).length} Attached` : 'Not Attached'],
+    ['Test Report Reviewed', form.reportFindings.length > 0, (row.test_reports ?? []).length ? `${(row.test_reports ?? []).length} Attached` : 'Not Attached'],
     ['Reply Letter Ready', hasReply, hasReply ? 'Drafted' : 'Not Drafted'],
     ['Factory Test Report', samples.length > 0 && ftrCount === samples.length, samples.length ? `${ftrCount} of ${samples.length} Generated` : 'None Added (Optional)'],
     ['Supporting Documents', (row.documents ?? []).length > 0, `${(row.documents ?? []).length} Uploaded`],
@@ -359,7 +359,7 @@ export function StopMarkingModuleDialog({
                           disabled={busy !== null || closed}
                           onClick={() =>
                             void run('draft', async () => {
-                              set('replyDraft', await draftStopMarkingReply(row, { reference: form.bisReference, reason: form.bisReason, deadline: form.bisDeadline, reviewNotes: form.reviewNotes, reportFindings: [form.reportReview, form.reportObservations && `Observations as per the Standard:\n${form.reportObservations}`].filter(Boolean).join('\n\n'), currentDraft: form.replyDraft }))
+                              set('replyDraft', await draftStopMarkingReply(row, { reference: form.bisReference, reason: form.bisReason, deadline: form.bisDeadline, reviewNotes: form.reviewNotes, reportFindings: [findingsToText(form.reportFindings), form.reportObservations && `Observations as per the Standard:\n${form.reportObservations}`].filter(Boolean).join('\n\n'), currentDraft: form.replyDraft }))
                               toast.success('Reply drafted — edit it, then save.')
                             })
                           }
@@ -478,8 +478,42 @@ export function StopMarkingModuleDialog({
                         <AutoGrowTextarea id="smk-m-desc" disabled={closed} className="rounded-none border-stone-500 bg-white" value={form.reportDetails.description} onChange={(e) => setDetail('description', e.target.value)} />
                       </div>
                       <div className="space-y-2">
-                        <Label className={label} htmlFor="smk-m-findings">Test Report Findings (Pass / Fail by Parameter)</Label>
-                        <AutoGrowTextarea id="smk-m-findings" disabled={closed} className="rounded-none border-stone-500 bg-white" value={form.reportReview} onChange={(e) => set('reportReview', e.target.value)} />
+                        <Label className={label}>Test Report Findings (Pass / Fail by Parameter)</Label>
+                        <div className="border border-stone-400 bg-white">
+                          <div className="hidden grid-cols-[2rem_2fr_1.3fr_1.3fr_1fr_2rem] gap-2 border-b border-stone-300 bg-stone-100 px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-stone-600 sm:grid">
+                            <span />
+                            <span>Test Parameter</span>
+                            <span>Specified Value</span>
+                            <span>Observed Value</span>
+                            <span>Remark</span>
+                            <span />
+                          </div>
+                          {form.reportFindings.length ? (
+                            form.reportFindings.map((f) => {
+                              const edit = (patch: Partial<typeof f>) => set('reportFindings', form.reportFindings.map((x) => (x.id === f.id ? { ...x, ...patch } : x)))
+                              const cell = 'h-8 rounded-none border-stone-400 px-2 text-sm'
+                              return (
+                                <div key={f.id} className="grid grid-cols-1 items-center gap-2 border-b border-stone-200 px-2 py-2 last:border-b-0 sm:grid-cols-[2rem_2fr_1.3fr_1.3fr_1fr_2rem]">
+                                  <input type="checkbox" aria-label={`Select ${f.parameter || 'row'}`} className="h-4 w-4 accent-amber-700" checked={f.selected} disabled={closed} onChange={(e) => edit({ selected: e.target.checked })} />
+                                  <Input aria-label="Test parameter" placeholder="Test Parameter" className={cell} disabled={closed} value={f.parameter} onChange={(e) => edit({ parameter: e.target.value })} />
+                                  <Input aria-label="Specified value" placeholder="Specified Value" className={cell} disabled={closed} value={f.specified} onChange={(e) => edit({ specified: e.target.value })} />
+                                  <Input aria-label="Observed value" placeholder="Observed Value" className={cell} disabled={closed} value={f.observed} onChange={(e) => edit({ observed: e.target.value })} />
+                                  <Input aria-label="Remark" placeholder="Remark" className={cn(cell, /fail/i.test(f.remark) ? 'font-semibold text-red-700' : /pass/i.test(f.remark) ? 'text-emerald-800' : '')} disabled={closed} value={f.remark} onChange={(e) => edit({ remark: e.target.value })} />
+                                  <Button type="button" variant="outline" size="icon" className="h-7 w-7 rounded-none border-stone-400 text-red-700" aria-label="Remove row" disabled={closed} onClick={() => set('reportFindings', form.reportFindings.filter((x) => x.id !== f.id))}>
+                                    <Trash2 size={13} />
+                                  </Button>
+                                </div>
+                              )
+                            })
+                          ) : (
+                            <p className="px-3 py-4 text-center text-sm text-stone-500">No Findings Yet — Read the Reports with AI or Add a Row.</p>
+                          )}
+                          <div className="border-t border-stone-300 px-2 py-1.5">
+                            <Button type="button" variant="outline" size="sm" className="h-7 rounded-none border-stone-400 text-xs" disabled={closed} onClick={() => set('reportFindings', [...form.reportFindings, { id: crypto.randomUUID(), selected: false, parameter: '', specified: '', observed: '', remark: '' }])}>
+                              + Add Row
+                            </Button>
+                          </div>
+                        </div>
                       </div>
                       <div className="space-y-2">
                         <Label className={label} htmlFor="smk-m-obs">Observations as per the Standard</Label>
