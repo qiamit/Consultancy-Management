@@ -30,10 +30,10 @@ function parseJson(reply: string): Record<string, unknown> {
 
 const text = (v: unknown) => (typeof v === 'string' ? v.trim() : '')
 
-async function askJson(page: string, message: string, context: string): Promise<Record<string, unknown>> {
+async function askJson(page: string, message: string, context: string, image?: File): Promise<Record<string, unknown>> {
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      const { reply } = await sendQiAssistantMessage({ page, responseFormat: 'json_object', history: [], context, message })
+      const { reply } = await sendQiAssistantMessage({ page, responseFormat: 'json_object', history: [], context, message, ...(image ? { attachedImage: image } : {}) })
       if (reply.includes('{')) return parseJson(reply)
     } catch (err) {
       if (attempt === 2) throw err
@@ -293,7 +293,15 @@ export async function fillStopMarkingSample(
   context: { reference: string; reason: string; points: string; sampleCode: string; qrCode: string; details: StopMarkingReportDetails; findings: string; observations: string },
   current: Record<string, string>,
   instruction: string,
+  files: File[] = [],
 ): Promise<StopMarkingSampleFill> {
+  const attachedTexts: string[] = []
+  for (const f of files.filter((x) => x.name.toLowerCase().endsWith('.pdf'))) {
+    const t = (await extractProductManualText(f).catch(() => '')).trim()
+    if (t.length > 20) attachedTexts.push(`--- ATTACHED FILE: ${f.name} ---\n${t.slice(0, 20_000)}`)
+  }
+  const image = files.find((x) => /^image\//.test(x.type) || /\.(png|jpe?g)$/i.test(x.name))
+
   const standards = await loadStandardTexts(row.is_code_id)
   const queries = [context.details.description, context.details.declaredValue, row.is_code?.title ?? '', context.reason]
   const excerpts = standards.length ? relevantExcerpts(standards, queries, 14_000) : ''
@@ -313,9 +321,12 @@ export async function fillStopMarkingSample(
       `Failed parameters:\n${context.findings || 'none'}`,
       context.observations ? `Observations as per the standard:\n${context.observations}` : '',
       `Current form values: ${JSON.stringify(current)}`,
+      attachedTexts.length ? `Documents attached by the user (e.g. an earlier sample or test request; use them for the sample description and declared value):\n${attachedTexts.join('\n\n')}` : '',
+      image ? 'An image attached by the user is included; read the sample details from it.' : '',
       excerpts ? `PASSAGES OF THE STANDARD AND PRODUCT MANUAL:\n${excerpts}` : 'No standard or product manual is attached to this IS Code.',
     ].filter(Boolean).join('\n\n'),
     `Licence facts:\n${licenceFacts(row)}`,
+    image,
   )
   const date = text(parsed.dateOfManufacturing)
   const out: StopMarkingSampleFill = {}

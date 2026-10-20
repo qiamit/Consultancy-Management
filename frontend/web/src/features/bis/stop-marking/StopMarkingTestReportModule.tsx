@@ -256,7 +256,7 @@ export function StopMarkingTestReportModule({
               isCodeSearch={String(row.is_code?.is_number ?? '').trim() || null}
               isCodeRevisionYear={String(row.is_code?.revision_year ?? '').trim() || null}
               qrOnlyFields
-              onAiFill={(current, instruction) =>
+              onAiFill={(current, instruction, files) =>
                 fillStopMarkingSample(
                   row,
                   {
@@ -278,6 +278,7 @@ export function StopMarkingTestReportModule({
                     sampleQuantity: current.sampleQuantity,
                   },
                   instruction,
+                  files,
                 )
               }
             />

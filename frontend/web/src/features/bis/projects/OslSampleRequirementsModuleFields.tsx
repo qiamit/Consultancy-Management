@@ -10,7 +10,11 @@ import {
   FolderInput,
   Globe,
   Loader2,
+  Mic,
+  MicOff,
+  Paperclip,
   Sparkles,
+  X,
   Package,
   Pencil,
   Plus,
@@ -22,6 +26,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { useVoiceInput } from '../shared/useVoiceInput'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -302,7 +307,7 @@ export function OslSampleRequirementsModuleFields({
   /** Sample code, QR code, laboratory, description, additional information and payment fields only for samples that have a QR code; a sample without one defaults to FT. */
   qrOnlyFields?: boolean
   /** An AI helper for the sample form: gets the current values and the user's instruction, returns the fields to fill. */
-  onAiFill?: (current: OslSampleRequirementRow, instruction: string) => Promise<Partial<OslSampleRequirementRow>>
+  onAiFill?: (current: OslSampleRequirementRow, instruction: string, files: File[]) => Promise<Partial<OslSampleRequirementRow>>
   onPrintTestRequest?: (row: OslSampleRequirementRow) => void
   onPrintTestReport?: (row: OslSampleRequirementRow) => void
   /** @deprecated Courier Slip now opens a read-only A4 preview (print + PDF download). */
@@ -1518,11 +1523,14 @@ export function OslSampleRequirementsModuleFields({
 
   const [aiInstruction, setAiInstruction] = useState('')
   const [aiBusy, setAiBusy] = useState(false)
+  const [aiFiles, setAiFiles] = useState<File[]>([])
+  const [voiceLang, setVoiceLang] = useState<'en-IN' | 'hi-IN'>('en-IN')
+  const voice = useVoiceInput(setAiInstruction, voiceLang)
   const runAiFill = async () => {
     if (!draft || !onAiFill) return
     setAiBusy(true)
     try {
-      const filled = await onAiFill(draft, aiInstruction)
+      const filled = await onAiFill(draft, aiInstruction, aiFiles)
       const keys = Object.keys(filled)
       if (!keys.length) {
         toast.message('AI Found Nothing to Fill.')
@@ -2996,9 +3004,48 @@ export function OslSampleRequirementsModuleFields({
                       onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void runAiFill() } }}
                     />
                   </div>
+                  {voice.supported ? (
+                    <div className="flex h-9 items-stretch">
+                      <Button type="button" variant="outline" className={cn(limsOutlineBtnClass, 'h-9 w-9 shrink-0 p-0', voice.listening && 'border-red-600 bg-red-50 text-red-700')} disabled={aiBusy} title={voice.listening ? 'Stop Listening' : 'Voice Typing'} aria-label={voice.listening ? 'Stop Voice Typing' : 'Start Voice Typing'} onClick={() => (voice.listening ? voice.stop() : voice.start(aiInstruction))}>
+                        {voice.listening ? <MicOff size={15} aria-hidden /> : <Mic size={15} aria-hidden />}
+                      </Button>
+                      <Button type="button" variant="outline" className={cn(limsOutlineBtnClass, 'h-9 w-10 shrink-0 border-l-0 p-0 text-[11px] font-bold')} disabled={aiBusy || voice.listening} title="Voice Language" aria-label="Voice Language" onClick={() => setVoiceLang((l) => (l === 'en-IN' ? 'hi-IN' : 'en-IN'))}>
+                        {voiceLang === 'en-IN' ? 'EN' : 'हि'}
+                      </Button>
+                    </div>
+                  ) : null}
+                  <label className={cn(limsOutlineBtnClass, 'inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center border', aiBusy && 'pointer-events-none opacity-50')} title="Attach PDF or Image" aria-label="Attach PDF or Image">
+                    <Paperclip size={15} aria-hidden />
+                    <input
+                      type="file"
+                      multiple
+                      className="sr-only"
+                      accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
+                      disabled={aiBusy}
+                      onChange={(e) => {
+                        const picked = Array.from(e.target.files ?? [])
+                        e.target.value = ''
+                        if (picked.length) setAiFiles((cur) => [...cur, ...picked])
+                      }}
+                    />
+                  </label>
                   <Button type="button" variant="outline" className={cn(limsOutlineBtnClass, 'h-9 gap-1.5 border-amber-600 bg-white font-semibold text-amber-900')} disabled={aiBusy} onClick={() => void runAiFill()}>
                     {aiBusy ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Sparkles size={14} aria-hidden />} {aiBusy ? 'Filling…' : 'Fill with AI'}
                   </Button>
+                  {aiFiles.length || voice.error ? (
+                    <div className="flex basis-full flex-wrap items-center gap-1.5">
+                      {aiFiles.map((f, i) => (
+                        <span key={`${f.name}-${i}`} className="inline-flex max-w-full items-center gap-1 border border-stone-400 bg-white px-2 py-0.5 text-xs text-stone-700">
+                          <Paperclip size={12} aria-hidden />
+                          <span className="truncate" title={f.name}>{f.name}</span>
+                          <button type="button" className="text-red-700" aria-label={`Remove ${f.name}`} disabled={aiBusy} onClick={() => setAiFiles((cur) => cur.filter((_, j) => j !== i))}>
+                            <X size={12} aria-hidden />
+                          </button>
+                        </span>
+                      ))}
+                      {voice.error ? <span className="text-xs text-destructive">{voice.error}</span> : null}
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
               <div className="space-y-3">
