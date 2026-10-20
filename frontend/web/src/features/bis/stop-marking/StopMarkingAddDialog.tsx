@@ -27,6 +27,7 @@ export function StopMarkingAddDialog({
   const canSave = !saving && Boolean(form.clientId && form.isCodeId && form.bisProjectId && form.stopDate)
   return (
     <BisFormDialog
+      compact
       open={open}
       onOpenChange={onOpenChange}
       title="Add License to Stop Marking"
@@ -47,7 +48,7 @@ export function StopMarkingAddDialog({
         <Label htmlFor="smk-add-reason">Reason for Stop Marking</Label>
         <Textarea
           id="smk-add-reason"
-          rows={4}
+          rows={3}
           className="rounded-none border-stone-500 bg-stone-50"
           placeholder="Why BIS stopped marking, as stated in the letter"
           value={form.bisReason}

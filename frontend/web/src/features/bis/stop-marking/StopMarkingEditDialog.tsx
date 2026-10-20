@@ -65,6 +65,7 @@ export function StopMarkingEditDialog({
 
   return (
     <BisFormDialog
+      compact
       open
       onOpenChange={onOpenChange}
       title={`Edit Stop Marking — ${stopMarkingClientName(row) || 'Licence'}`}
@@ -116,7 +117,7 @@ export function StopMarkingEditDialog({
       </div>
       <div className="col-span-12 space-y-2">
         <Label htmlFor="smk-edit-reason">Reason for Stop Marking</Label>
-        <Textarea id="smk-edit-reason" rows={4} disabled={closed} className="rounded-none border-stone-500 bg-stone-50" value={reason} onChange={(e) => setReason(e.target.value)} />
+        <Textarea id="smk-edit-reason" rows={3} disabled={closed} className="rounded-none border-stone-500 bg-stone-50" value={reason} onChange={(e) => setReason(e.target.value)} />
       </div>
       <div className="col-span-12 space-y-2">
         <Label>BIS Letter Received</Label>
@@ -131,7 +132,7 @@ export function StopMarkingEditDialog({
       </div>
       <div className="col-span-12 space-y-2">
         <Label htmlFor="smk-edit-notes">Notes</Label>
-        <Textarea id="smk-edit-notes" rows={3} disabled={closed} className="rounded-none border-stone-500 bg-stone-50" value={notes} onChange={(e) => setNotes(e.target.value)} />
+        <Textarea id="smk-edit-notes" rows={2} disabled={closed} className="rounded-none border-stone-500 bg-stone-50" value={notes} onChange={(e) => setNotes(e.target.value)} />
       </div>
     </BisFormDialog>
   )
