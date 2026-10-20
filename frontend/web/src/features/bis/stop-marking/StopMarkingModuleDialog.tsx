@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Check, ChevronLeft, ChevronRight, ExternalLink, FileDown, LoaderCircle, Mail, Plus, Printer, Sparkles, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { LimsDatePicker } from '@/components/lims/LimsDatePicker'
@@ -79,6 +79,33 @@ export function StopMarkingModuleDialog({
   useEffect(() => {
     void loadFtrStatus()
   }, [loadFtrStatus, row?.id])
+
+  /** Reads the stored PDF letter with AI and fills reference, due date, non-conformity and points. */
+  const readStored = async () => {
+    if (!row?.report_path) return
+    setBusy('read')
+    setError(null)
+    try {
+      const file = await downloadStopMarkingReport(row.report_path, row.report_name ?? 'letter.pdf')
+      const reading = await readStopMarkingReport(row, file)
+      setForm((f) => f && { ...f, bisReference: reading.reference || f.bisReference, bisReason: reading.reason || f.bisReason, bisDeadline: reading.deadline || f.bisDeadline, reviewNotes: reading.points || f.reviewNotes })
+      toast.success('Letter read — check the details.')
+    } catch (err) {
+      setError(formatBisApiError(err))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  // A PDF letter with nothing filled yet is read automatically, once per case, when the module opens.
+  const autoRead = useRef<string | null>(null)
+  useEffect(() => {
+    if (!row || !form || autoRead.current === row.id) return
+    if (row.status === 'closed' || !row.report_path || !/\.pdf$/i.test(row.report_name ?? '')) return
+    if (form.bisReference || form.bisReason || form.reviewNotes || form.bisDeadline) return
+    autoRead.current = row.id
+    void readStored()
+  }, [row?.id, row?.report_path, form !== null]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!row || !form) return null
   const closed = row.status === 'closed'
@@ -218,6 +245,7 @@ export function StopMarkingModuleDialog({
                       <div className="space-y-2">
                         <Label className={label}>BIS Letter Received</Label>
                         <StopMarkingLetterPicker
+                          inline
                           storedName={row.report_name}
                           busy={busy === 'upload'}
                           disabled={closed}
@@ -230,20 +258,20 @@ export function StopMarkingModuleDialog({
                             })
                           }
                           onOpen={row.report_path ? () => void run('open', () => openStopMarkingReport(row.report_path!)) : undefined}
+                          extra={
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="h-full gap-1.5 rounded-none border-amber-600 bg-amber-50 px-2.5 text-xs font-semibold text-amber-900 hover:bg-amber-100"
+                              disabled={!row.report_path || busy !== null || closed}
+                              title="Read the Letter with AI and Fill the Details Below"
+                              onClick={() => void readStored()}
+                            >
+                              {busy === 'read' ? <LoaderCircle size={14} className="animate-spin" /> : <Sparkles size={14} />} {busy === 'read' ? 'Reading…' : 'Read Letter with AI'}
+                            </Button>
+                          }
                         />
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className={tbtn}
-                            disabled={!row.report_path || busy !== null || closed}
-                            title="Read the Letter with AI and Fill the Details Below"
-                            onClick={() => void run('read', async () => { applyReading(await readStopMarkingReport(row, await downloadStopMarkingReport(row.report_path!, row.report_name ?? 'letter.pdf'))); toast.success('Letter read — check the details.') })}
-                          >
-                            {busy === 'read' ? <LoaderCircle size={14} className="animate-spin" /> : <Sparkles size={14} />} Read Letter with AI
-                          </Button>
-                          <span className="text-xs text-muted-foreground">A PDF Is Read Automatically; for a Photo or Scan, Type the Details Yourself.</span>
-                        </div>
+                        <p className="text-xs text-muted-foreground">AI fills the reference, reply due date, non-conformity and points from a PDF letter. For a photo or scan, type them in.</p>
                       </div>
                       <div className="grid gap-4 md:grid-cols-2">
                         <div className="space-y-2">
