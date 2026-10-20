@@ -18,6 +18,7 @@ export function BisFormDialog({
   saving,
   errorMessage,
   onSave,
+  footerExtra,
   children,
 }: {
   open: boolean
@@ -28,6 +29,8 @@ export function BisFormDialog({
   saving: boolean
   errorMessage: string | null
   onSave: () => void
+  /** Extra buttons at the left of the footer (for example "Close case"). */
+  footerExtra?: ReactNode
   children: ReactNode
 }) {
   return (
@@ -65,7 +68,8 @@ export function BisFormDialog({
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center justify-end gap-2 border-t-2 border-stone-500 bg-stone-100 px-4 py-3 sm:px-6">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t-2 border-stone-500 bg-stone-100 px-4 py-3 sm:px-6">
+          {footerExtra ? <div className="mr-auto flex flex-wrap items-center gap-2">{footerExtra}</div> : null}
           <Button
             type="button"
             variant="outline"

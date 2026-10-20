@@ -35,6 +35,7 @@ import BisProjectsMasterPage from '@/features/bis/projects/BisProjectsMasterPage
 import BisLicenseLifecyclePage from '@/features/bis/renewals/BisLicenseLifecyclePage'
 import { Navigate } from 'react-router-dom'
 import BisSurveillanceMasterPage from '@/features/bis/surveillance/BisSurveillanceMasterPage'
+import StopMarkingMasterPage from '@/features/bis/stop-marking/StopMarkingMasterPage'
 import BisSampleFailureReplyMasterPage from '@/features/bis/sample-failure-reply/BisSampleFailureReplyMasterPage'
 import BisKnowledgeSearchPage from '@/features/bis/knowledge-search/BisKnowledgeSearchPage'
 import EmailToolsPage from '@/features/tools/email/EmailToolsPage'
@@ -120,7 +121,7 @@ export function BisLicenseRenewalsRoute() {
 }
 
 export function LicenseStopMarkingRoute() {
-  return <BisProjectsMasterPage key="stop_marking" listMode="stop_marking" />
+  return <StopMarkingMasterPage />
 }
 
 export function BisSurveillanceRoute() {
