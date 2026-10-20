@@ -594,9 +594,9 @@ export function BisProjectsTable({
                     <div className={cn('grid gap-3 border-t border-stone-200 bg-[#faf8f3] px-3 py-2.5 sm:px-4', inclusionMode ? 'grid-cols-1' : 'grid-cols-2')}>
                       <div className="min-w-0">
                         <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">Validity</p>
-                        <div className="mt-1 flex min-w-0 items-center gap-1.5 text-xs">
+                        <div className="mt-1 flex min-w-0 items-start gap-1.5 text-xs">
                           <Calendar className="h-3.5 w-3.5 shrink-0 text-amber-700" aria-hidden />
-                          <p className="truncate tabular-nums text-stone-700">
+                          <p className="min-w-0 break-words tabular-nums text-stone-700">
                             {formatDisplayDate(r.license_validity_date)}
                             {validity.daysLeft != null && validity.state === 'expiring'
                               ? ` · ${validity.daysLeft}d left`
@@ -607,9 +607,9 @@ export function BisProjectsTable({
                       {!inclusionMode ? (
                         <div className="min-w-0">
                           <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">Billing</p>
-                          <div className="mt-1 flex min-w-0 items-center gap-1.5 text-xs">
+                          <div className="mt-1 flex min-w-0 items-start gap-1.5 text-xs">
                             <Wallet className="h-3.5 w-3.5 shrink-0 text-amber-700" aria-hidden />
-                            <p className="truncate text-stone-700">
+                            <p className="min-w-0 break-words text-stone-700">
                               {formatInr(r.billing_amount)}
                               {r.billing_frequency ? ` · ${r.billing_frequency}` : ''}
                             </p>

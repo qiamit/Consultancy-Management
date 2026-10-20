@@ -10,7 +10,7 @@ import { ProductManualValue } from './ManakVarietiesTable'
 import { SharedProjectFileButton } from './RowFileAttachment'
 
 const labelCls =
-  'whitespace-nowrap border border-[#e7e0d4] bg-[#f7f3eb] px-3 py-1.5 text-left align-middle text-sm font-bold text-stone-800'
+  'break-words border border-[#e7e0d4] bg-[#f7f3eb] px-3 py-1.5 text-left align-middle text-sm font-bold text-stone-800'
 const valueCls = 'border border-[#e7e0d4] px-2 py-1 align-middle text-sm text-stone-700'
 
 /**
@@ -63,7 +63,7 @@ export function ManakSitRow({
     .join(' · ')
 
   return (
-    <>
+    <div className="manak-kv">
     <table className="-mt-px w-full table-fixed border-collapse">
       {/* The first label is as wide as the Standard Title label above (15%). */}
       <colgroup>
@@ -140,6 +140,6 @@ export function ManakSitRow({
         </tr>
       </tbody>
     </table>
-    </>
+    </div>
   )
 }

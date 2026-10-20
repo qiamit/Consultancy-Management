@@ -177,7 +177,7 @@ function PackagingMarkingDialog({
             </Button>
           </DialogHeader>
           <div className="min-h-0 flex-1 overflow-y-auto bg-[#fffcf7] p-4">
-            <table className="w-full border-collapse text-sm">
+            <table className="kv-stack w-full border-collapse text-sm">
               <tbody>
                 <tr>
                   <th scope="row" className={labelCls}>Nature of Packaging{req}:</th>

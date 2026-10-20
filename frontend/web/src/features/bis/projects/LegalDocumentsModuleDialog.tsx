@@ -1811,7 +1811,7 @@ export function LegalDocumentsModuleDialog({
             <DialogTitle className="text-base font-semibold tracking-tight text-white">
               {title}
             </DialogTitle>
-            <p className="mt-0.5 truncate text-xs text-stone-300" title={subtitle}>
+            <p className="mt-0.5 line-clamp-2 break-words text-xs text-stone-300" title={subtitle}>
               {subtitle}
             </p>
           </DialogHeader>

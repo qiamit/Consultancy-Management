@@ -397,9 +397,12 @@ export function ManakManufacturingStep({
                     )}
                   </div>
                 </div>
-                <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-stone-200 pt-2">
-                  <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-stone-500">
-                    Applicable<span className="text-red-500">*</span>
+                {/* Applicable and the action buttons share one line; the buttons drop below only when they do not fit. */}
+                <div className="mt-2 flex flex-wrap items-end justify-between gap-x-2 gap-y-1.5 border-t border-stone-200 pt-2">
+                  <div className="flex flex-col items-start gap-0.5 text-[10px] font-semibold uppercase tracking-wide text-stone-500">
+                    <span>
+                      Applicable<span className="text-red-500">*</span>
+                    </span>
                     <Select value={yes ? 'Yes' : 'No'} onValueChange={(v) => void setComponentApplicable(c, v as YesNo)}>
                       <SelectTrigger className="h-8 w-20 rounded-none border-stone-300 bg-white text-sm normal-case tracking-normal text-stone-900" aria-label={`${c.label} applicable`}>
                         <SelectValue />
@@ -410,7 +413,7 @@ export function ManakManufacturingStep({
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="flex min-w-0 flex-wrap items-center justify-end gap-1">
+                  <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-0.5">
                     {yes ? renderDocActions?.(c.printKind, editComponent(c)) ?? muted : <span className="text-xs text-stone-400">Not applicable</span>}
                   </div>
                 </div>

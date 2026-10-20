@@ -52,7 +52,7 @@ export function IsCodesFilesDialog({
             <DialogTitle className="text-base font-semibold tracking-tight text-white">
               IS Code Files
             </DialogTitle>
-            <p className="mt-0.5 truncate text-xs text-stone-300">{title}</p>
+            <p className="mt-0.5 line-clamp-2 break-words text-xs text-stone-300">{title}</p>
           </DialogHeader>
         </div>
 

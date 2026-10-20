@@ -186,9 +186,9 @@ function StatusSelect({
     >
       <SelectTrigger
         className={cn(
-          'relative mx-auto h-8 w-full max-w-[15rem] justify-center rounded-none border-stone-500 px-2 pr-7 text-center text-xs font-medium shadow-none',
+          'relative mx-auto h-auto min-h-8 w-full max-w-[15rem] justify-center rounded-none border-stone-500 px-2 py-1 pr-7 text-center text-xs font-medium shadow-none',
           'focus:ring-amber-500/20',
-          '[&>span]:block [&>span]:w-full [&>span]:truncate [&>span]:text-center',
+          '[&>span]:block [&>span]:w-full [&>span]:!line-clamp-2 [&>span]:break-words [&>span]:text-center [&>span]:leading-tight',
           '[&>svg]:absolute [&>svg]:right-2 [&>svg]:top-1/2 [&>svg]:-translate-y-1/2',
           statusClass(row.status),
         )}
@@ -398,9 +398,9 @@ export function QuotationTable({
                           onChange={() => onToggle(r.id)}
                         />
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <Building2 className="h-3.5 w-3.5 shrink-0 text-amber-700" aria-hidden />
-                            <p className="truncate text-[14px] font-bold tracking-tight text-[#1c1917]">
+                          <div className="flex items-start gap-1.5">
+                            <Building2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-700" aria-hidden />
+                            <p className="min-w-0 break-words text-[14px] font-bold tracking-tight text-[#1c1917]">
                               {r.client_name || '—'}
                             </p>
                           </div>
@@ -408,7 +408,7 @@ export function QuotationTable({
                             {r.quotation_number}
                           </p>
                           {againstInvoiceText(r, againstMode) ? (
-                            <p className="mt-0.5 truncate text-[11px] text-stone-600">
+                            <p className="mt-0.5 break-words text-[11px] text-stone-600">
                               {againstInvoiceText(r, againstMode)}
                             </p>
                           ) : null}

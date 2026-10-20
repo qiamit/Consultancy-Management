@@ -201,9 +201,9 @@ export function ProductsServicesTable({
                           onChange={() => onToggle(r.id)}
                         />
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <Package className="h-3.5 w-3.5 shrink-0 text-amber-700" aria-hidden />
-                            <p className="truncate text-[14px] font-bold tracking-tight text-[#1c1917]" title={r.item_name}>
+                          <div className="flex items-start gap-1.5">
+                            <Package className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-700" aria-hidden />
+                            <p className="min-w-0 break-words text-[14px] font-bold tracking-tight text-[#1c1917]" title={r.item_name}>
                               {r.item_name}
                               {r.archived_at ? (
                                 <span className="ml-1 bg-stone-200 px-1 text-[9px] font-semibold uppercase text-stone-600">

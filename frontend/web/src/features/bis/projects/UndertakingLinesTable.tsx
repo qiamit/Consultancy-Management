@@ -96,11 +96,11 @@ export function UndertakingLinesTable({
 
   const refCells = (value: Draft, set: (patch: Partial<Draft>) => void, idPrefix: string) => (
     <>
-      <td className={cn(tdCls, 'w-48')}>
+      <td data-label="Source / Clause" className={cn(tdCls, 'w-48')}>
         <Input aria-label={`Source ${idPrefix}`} className="h-8 rounded-none border-stone-400 bg-white text-sm" value={value.source} placeholder="Standard / Product Manual" disabled={disabled} onChange={(e) => set({ source: e.target.value })} />
         <Input aria-label={`Clause ${idPrefix}`} className="mt-1 h-8 rounded-none border-stone-400 bg-white text-sm" value={value.clause} placeholder="Clause / Page" disabled={disabled} onChange={(e) => set({ clause: e.target.value })} />
       </td>
-      <td className={cn(tdCls, 'w-28 text-center')}>
+      <td data-label="Agreement Required" className={cn(tdCls, 'w-28 text-center')}>
         <input type="checkbox" className="h-4 w-4" aria-label={`Agreement Required ${idPrefix}`} checked={value.agreementRequired} disabled={disabled} onChange={(e) => set({ agreementRequired: e.target.checked })} />
       </td>
     </>
@@ -152,7 +152,7 @@ export function UndertakingLinesTable({
         </div>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px] border-collapse text-sm">
+        <table className="list-cards w-full min-w-[640px] border-collapse text-sm">
           <thead>
             <tr>
               <th className={cn(thCls, 'w-8 px-1 text-center')} aria-label="Select" />
@@ -170,12 +170,12 @@ export function UndertakingLinesTable({
           </thead>
           <tbody>
             <tr className="bg-[#fffcf7]">
-              <td className={tdCls} />
-              <td className={tdCls}>
+              <td className={cn(tdCls, 'lc-check')} />
+              <td data-label="New line" className={cn(tdCls, 'lc-wide')}>
                 <textarea aria-label="New Undertaking Line" className={areaCls} rows={2} placeholder="Undertaking / Requirement" disabled={disabled} value={draft.text} onChange={(e) => setDraft((d) => ({ ...d, text: e.target.value }))} />
               </td>
               {references ? refCells(draft, (patch) => setDraft((d) => ({ ...d, ...patch })), 'for the new line') : null}
-              <td className={cn(tdCls, 'text-center')}>
+              <td className={cn(tdCls, 'lc-actions text-center')}>
                 <span className="inline-flex gap-1">
                   {onAiLines ? (
                     <Button
@@ -200,7 +200,7 @@ export function UndertakingLinesTable({
               const editing = editIndex === index
               return (
                 <tr key={row.id} className={index % 2 ? 'bg-[#fffcf7]' : 'bg-[#f7f3eb]'}>
-                  <td className={cn(tdCls, 'px-1 text-center')}>
+                  <td className={cn(tdCls, 'lc-check px-1 text-center')}>
                     <input
                       type="checkbox"
                       className="h-4 w-4 rounded-none border-stone-500 text-amber-700"
@@ -216,7 +216,7 @@ export function UndertakingLinesTable({
                       }
                     />
                   </td>
-                  <td className={tdCls}>
+                  <td className={cn(tdCls, 'lc-wide')}>
                     {editing ? (
                       <textarea aria-label={`Undertaking Line ${index + 1}`} className={areaCls} rows={3} disabled={disabled} value={edit.text} onChange={(e) => setEdit((d) => ({ ...d, text: e.target.value }))} />
                     ) : (
@@ -228,12 +228,12 @@ export function UndertakingLinesTable({
                       refCells(edit, (patch) => setEdit((d) => ({ ...d, ...patch })), `for line ${index + 1}`)
                     ) : (
                       <>
-                        <td className={cn(tdCls, 'text-center text-xs')}>{[row.source, row.clause].filter(Boolean).join(' — ') || '—'}</td>
-                        <td className={cn(tdCls, 'text-center text-xs')}>{row.agreementRequired ? 'Yes' : 'No'}</td>
+                        <td data-label="Source / Clause" className={cn(tdCls, 'text-center text-xs')}>{[row.source, row.clause].filter(Boolean).join(' — ') || '—'}</td>
+                        <td data-label="Agreement Required" className={cn(tdCls, 'text-center text-xs')}>{row.agreementRequired ? 'Yes' : 'No'}</td>
                       </>
                     )
                   ) : null}
-                  <td className={cn(tdCls, 'text-center')}>
+                  <td className={cn(tdCls, 'lc-actions text-center')}>
                     <span className="inline-flex gap-1">
                       {editing ? (
                         <>

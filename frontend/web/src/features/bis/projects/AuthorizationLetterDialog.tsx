@@ -119,14 +119,14 @@ export function AuthorizationLetterDialog({ open, onOpenChange, projectRow, lega
     const signatureFlag = role === 'person' ? 'includePersonSignature' : 'includeBySignature'
     const roleLabel = role === 'person' ? 'Authorized Person' : 'Authorized By'
     return <tr className={role === 'person' ? 'bg-[#fffcf7]' : 'bg-[#f7f3eb]'}>
-      <th className={cn(td, 'font-semibold')}>{roleLabel} <span className="text-red-600">*</span></th>
-      <td className={td}><select aria-label={roleLabel} className={cn(limsFieldClass, 'w-full min-w-48 text-center [text-align-last:center]')} disabled={loading || busy || !!error} value={form[key]} onChange={(event) => setForm((previous) => ({ ...previous, [key]: event.target.value }))}>
+      <td className={cn(td, 'lc-title font-semibold')}>{roleLabel} <span className="text-red-600">*</span></td>
+      <td data-label="Name" className={cn(td, 'lc-wide')}><select aria-label={roleLabel} className={cn(limsFieldClass, 'w-full min-w-48 text-center [text-align-last:center]')} disabled={loading || busy || !!error} value={form[key]} onChange={(event) => setForm((previous) => ({ ...previous, [key]: event.target.value }))}>
         <option value="">Select from Top Management</option>
         {form[key] && !selected ? <option value={form[key]}>Previously Selected Person — No Longer Available</option> : null}
         {people.map((person) => <option key={person.key} value={person.key}>{person.name}</option>)}
       </select></td>
-      <td className={cn(td, 'text-center')}>{selected?.designation || '—'}</td>
-      <td className={td}><div className="flex flex-wrap items-center justify-center gap-2">
+      <td data-label="Designation" className={cn(td, 'text-center')}>{selected?.designation || '—'}</td>
+      <td className={cn(td, 'lc-actions')}><div className="flex flex-wrap items-center justify-center gap-2">
         {selected?.signature ? <>
           <Button type="button" variant="ghost" size="sm" title={`Include Signature — ${roleLabel}`} aria-label={`Include Signature — ${roleLabel}`} aria-pressed={form[signatureFlag]} disabled={busy || loading || !!error} className={cn('h-8 w-8 rounded-none border border-stone-400 p-0 shadow-sm focus-visible:ring-2 focus-visible:ring-amber-500/40', form[signatureFlag] ? 'border-amber-700 bg-amber-700 text-white hover:bg-amber-800 hover:text-white' : 'bg-white/70 text-amber-800 hover:bg-amber-50')} onClick={() => setForm((previous) => ({ ...previous, [signatureFlag]: !previous[signatureFlag] }))}><Check size={15} aria-hidden /></Button>
           <ManakDocumentActions disabled={busy || loading} actions={[{ label: `View Signature — ${roleLabel}`, icon: Eye, onClick: () => void view(selected.signature!, `${selected.name} — Signature`) }]} />
@@ -143,7 +143,7 @@ export function AuthorizationLetterDialog({ open, onOpenChange, projectRow, lega
         <div className="min-h-0 flex-1 space-y-3 overflow-auto bg-[#fffcf7] p-4">
           {loading ? <p className="text-sm text-stone-500">Loading Top Management…</p> : error ? <p role="alert" className="text-sm text-red-700">{error}</p> : !people.length ? <p className="text-sm text-amber-800">Add the persons in Step 2 → Top Management before generating this letter.</p> : null}
           <div className="max-w-xs space-y-1"><label htmlFor="authorization-letter-date" className="text-xs font-semibold">Letter Date</label><LimsFieldWithAdd addButton={<button type="button" className={limsFieldAddBtnClass} aria-label="Open Letter Date Calendar" disabled={busy || loading} onClick={() => { try { dateInput.current?.showPicker() } catch { dateInput.current?.focus() } }}><Calendar size={14} /></button>}><input id="authorization-letter-date" ref={dateInput} type="date" className={cn(limsFieldClass, 'min-w-0 tabular-nums [&::-webkit-calendar-picker-indicator]:pointer-events-none [&::-webkit-calendar-picker-indicator]:opacity-0')} disabled={busy || loading} value={form.letterDate} onChange={(event) => setForm((previous) => ({ ...previous, letterDate: event.target.value }))} /></LimsFieldWithAdd></div>
-          <div className="overflow-x-auto"><table className="w-full min-w-[780px] border-collapse text-sm"><thead><tr><th className={th}>Role</th><th className={th}>Name</th><th className={cn(th, 'text-center')}>Designation</th><th className={cn(th, 'text-center')}>Action</th></tr></thead><tbody>
+          <div className="overflow-x-auto"><table className="list-cards w-full min-w-[780px] border-collapse text-sm"><thead><tr><th className={th}>Role</th><th className={th}>Name</th><th className={cn(th, 'text-center')}>Designation</th><th className={cn(th, 'text-center')}>Action</th></tr></thead><tbody>
             {selectPerson('person')}{selectPerson('by')}
           </tbody></table></div>
           {legacyFile ? <Button type="button" variant="outline" className="rounded-none" onClick={() => void view(legacyFile, 'Previously Uploaded Authorization Letter')}><Eye size={15} className="mr-2" />View Previously Uploaded Letter</Button> : null}
