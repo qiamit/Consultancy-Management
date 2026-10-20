@@ -2959,6 +2959,111 @@ export function OslSampleRequirementsModuleFields({
                 onChange={handleDeclaredValueFileChange}
               />
               <div className="space-y-3">
+                {(qrOnlyFields && !draft.qrCode.trim()) ? (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                  <MasterOptionFieldWithAdd
+                    category="osl_sample_for"
+                    value={sampleForLabel(draft.sampleFor)}
+                    onChange={(value) => {
+                      const normalized = value.trim().toLowerCase()
+                      patchDraft(
+                        'sampleFor',
+                        normalized === 'osl' || normalized === 'ft' || normalized === 'it'
+                          ? normalized
+                          : value,
+                      )
+                    }}
+                    label="Sample For"
+                    inputId="osl-sample-for"
+                    listId="osl-sample-for-list"
+                    defaultOptions={OSL_SAMPLE_FOR_OPTIONS}
+                  />
+                  <MasterOptionFieldWithAdd
+                    category="osl_sample_shelf_life"
+                    value={draft.shelfLife}
+                    onChange={(value) => patchDraft('shelfLife', value)}
+                    label="Shelf Life"
+                    inputId="osl-shelf"
+                    listId="osl-shelf-list"
+                  />
+                  <MasterOptionFieldWithAdd
+                    category="osl_sample_mode_of_disposal"
+                    value={draft.modeOfDisposal}
+                    onChange={(value) => patchDraft('modeOfDisposal', value)}
+                    label="Mode Of Disposal"
+                    inputId="osl-disposal"
+                    listId="osl-disposal-list"
+                  />
+                  <MasterOptionFieldWithAdd
+                    category="osl_sample_test_required"
+                    value={draft.testRequired}
+                    onChange={(value) => patchDraft('testRequired', value)}
+                    label="Test Required"
+                    inputId="osl-test"
+                    listId="osl-test-list"
+                  />
+                  <Field label="Serial Number" htmlFor="osl-serial">
+                    <Input
+                      id="osl-serial"
+                      className={cn(limsFieldClass, 'h-9')}
+                      value={draft.serialNumber}
+                      onChange={(e) => patchDraft('serialNumber', e.target.value)}
+                    />
+                  </Field>
+                  <Field label="Batch Quantity" htmlFor="osl-batch-qty">
+                    <Input
+                      id="osl-batch-qty"
+                      className={cn(limsFieldClass, 'h-9')}
+                      value={draft.batchQuantity}
+                      onChange={(e) => patchDraft('batchQuantity', e.target.value)}
+                    />
+                  </Field>
+                  <div className="min-w-0 sm:col-span-2 lg:col-span-2">
+                  <Field label="Sample Quantity" htmlFor="osl-qty">
+                    <Input
+                      id="osl-qty"
+                      className={cn(limsFieldClass, 'h-9')}
+                      value={draft.sampleQuantity}
+                      onChange={(e) => patchDraft('sampleQuantity', e.target.value)}
+                    />
+                  </Field>
+                  </div>
+                  <Field label="Batch Number" htmlFor="osl-batch">
+                    <Input
+                      id="osl-batch"
+                      className={cn(limsFieldClass, 'h-9')}
+                      value={draft.batchNumber}
+                      onChange={(e) => patchDraft('batchNumber', e.target.value)}
+                    />
+                  </Field>
+                  <Field label="Date of Manufacturing" htmlFor="osl-dom">
+                    <LimsFieldWithAdd
+                      className="h-9"
+                      addButton={
+                        <button
+                          type="button"
+                          className={cn(limsFieldAddBtnClass, 'w-9')}
+                          aria-label="Open Calendar"
+                          title="Pick Date"
+                          onClick={() => openDatePicker(manufacturingDateRef.current)}
+                        >
+                          <Calendar size={14} strokeWidth={2.25} aria-hidden />
+                        </button>
+                      }
+                    >
+                      <Input
+                        ref={manufacturingDateRef}
+                        id="osl-dom"
+                        type="date"
+                        className={dateInputClass}
+                        value={draft.dateOfManufacturing}
+                        onChange={(e) => patchDraft('dateOfManufacturing', e.target.value)}
+                      />
+                    </LimsFieldWithAdd>
+                  </Field>
+                </div>
+                ) : (
+<>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
                   <MasterOptionFieldWithAdd
                     category="osl_sample_for"
@@ -3014,43 +3119,6 @@ export function OslSampleRequirementsModuleFields({
                       onChange={(e) => patchDraft('batchQuantity', e.target.value)}
                     />
                   </Field>
-                  {(qrOnlyFields && !draft.qrCode.trim()) ? (
-<>
-                  <Field label="Batch Number" htmlFor="osl-batch">
-                    <Input
-                      id="osl-batch"
-                      className={cn(limsFieldClass, 'h-9')}
-                      value={draft.batchNumber}
-                      onChange={(e) => patchDraft('batchNumber', e.target.value)}
-                    />
-                  </Field>
-                  <Field label="Date of Manufacturing" htmlFor="osl-dom">
-                    <LimsFieldWithAdd
-                      className="h-9"
-                      addButton={
-                        <button
-                          type="button"
-                          className={cn(limsFieldAddBtnClass, 'w-9')}
-                          aria-label="Open Calendar"
-                          title="Pick Date"
-                          onClick={() => openDatePicker(manufacturingDateRef.current)}
-                        >
-                          <Calendar size={14} strokeWidth={2.25} aria-hidden />
-                        </button>
-                      }
-                    >
-                      <Input
-                        ref={manufacturingDateRef}
-                        id="osl-dom"
-                        type="date"
-                        className={dateInputClass}
-                        value={draft.dateOfManufacturing}
-                        onChange={(e) => patchDraft('dateOfManufacturing', e.target.value)}
-                      />
-                    </LimsFieldWithAdd>
-                  </Field>
-</>
-) : null}
                 </div>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
                   {(!qrOnlyFields || Boolean(draft.qrCode.trim())) ? (
@@ -3098,17 +3166,9 @@ export function OslSampleRequirementsModuleFields({
                     inputId="osl-test"
                     listId="osl-test-list"
                   />
-                  {(qrOnlyFields && !draft.qrCode.trim()) ? (
-                  <Field label="Sample Quantity" htmlFor="osl-qty">
-                    <Input
-                      id="osl-qty"
-                      className={cn(limsFieldClass, 'h-9')}
-                      value={draft.sampleQuantity}
-                      onChange={(e) => patchDraft('sampleQuantity', e.target.value)}
-                    />
-                  </Field>
-) : null}
                 </div>
+</>
+                )}
               </div>
 
               <div className="space-y-3">
