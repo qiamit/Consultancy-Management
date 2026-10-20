@@ -22,10 +22,11 @@ import {
   formatBisApiError,
   openStopMarkingReport,
   removeStopMarkingDocument,
+  removeStopMarkingTestReport,
+  addStopMarkingTestReports,
   saveStopMarkingCase,
   saveStopMarkingFtrSamples,
   uploadStopMarkingReport,
-  uploadStopMarkingTestReport,
 } from './stopMarkingApi'
 import { openStopMarkingManak } from './stopMarkingManak'
 import { downloadStopMarkingReplyWord, emailStopMarkingReplyToClient, printStopMarkingReply } from './printStopMarkingReply'
@@ -112,24 +113,25 @@ export function StopMarkingModuleDialog({
     void readStored()
   }, [row?.id, row?.report_path, form !== null]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  /** Test report: read a freshly uploaded or stored PDF and put the summary in the findings. */
-  const readTestReport = async (file: File, current: StopMarkingRow) => {
+  /** Test reports: read the PDFs (fresh or stored) and put the summary in the findings. */
+  const readTestReports = async (current: StopMarkingRow, files: File[]) => {
     setBusy('treport-read')
     setError(null)
     try {
-      const findings = await readStopMarkingTestReport(current, file)
+      const findings = await readStopMarkingTestReport(current, files)
       setForm((f) => f && { ...f, reportReview: findings })
-      toast.success('Test Report Read — Check the Findings.')
+      toast.success('Test Reports Read — Check the Findings.')
     } catch (err) {
       setError(formatBisApiError(err))
     } finally {
       setBusy(null)
     }
   }
-  const readStoredTestReport = async () => {
-    if (!row?.test_report_path) return
+  const readStoredTestReports = async () => {
+    const docs = (row?.test_reports ?? []).filter((d) => /\.pdf$/i.test(d.name))
+    if (!row || !docs.length) return
     try {
-      await readTestReport(await downloadStopMarkingReport(row.test_report_path, row.test_report_name ?? 'report.pdf'), row)
+      await readTestReports(row, await Promise.all(docs.map((d) => downloadStopMarkingReport(d.path, d.name))))
     } catch (err) {
       setError(formatBisApiError(err))
     }
@@ -138,9 +140,9 @@ export function StopMarkingModuleDialog({
   const autoReadReport = useRef<string | null>(null)
   useEffect(() => {
     if (!row || !form || step !== 1 || autoReadReport.current === row.id) return
-    if (row.status === 'closed' || !row.test_report_path || !/\.pdf$/i.test(row.test_report_name ?? '') || form.reportReview) return
+    if (row.status === 'closed' || !(row.test_reports ?? []).some((d) => /\.pdf$/i.test(d.name)) || form.reportReview) return
     autoReadReport.current = row.id
-    void readStoredTestReport()
+    void readStoredTestReports()
   }, [row?.id, step, form !== null]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!row || !form) return null
@@ -197,7 +199,7 @@ export function StopMarkingModuleDialog({
   const checks: Array<[string, boolean, string]> = [
     ['BIS Letter Received', Boolean(row.report_path), row.report_name || 'Not Attached'],
     ['Reason and Points Reviewed', Boolean(form.bisReason.trim() || form.reviewNotes.trim()), form.bisReference || 'Not Entered'],
-    ['Test Report Reviewed', Boolean(form.reportReview.trim()), row.test_report_name || 'Not Attached'],
+    ['Test Report Reviewed', Boolean(form.reportReview.trim()), (row.test_reports ?? []).length ? `${(row.test_reports ?? []).length} Attached` : 'Not Attached'],
     ['Reply Letter Ready', hasReply, hasReply ? 'Drafted' : 'Not Drafted'],
     ['Factory Test Report', samples.length > 0 && ftrCount === samples.length, samples.length ? `${ftrCount} of ${samples.length} Generated` : 'None Added (Optional)'],
     ['Supporting Documents', (row.documents ?? []).length > 0, `${(row.documents ?? []).length} Uploaded`],
@@ -384,35 +386,63 @@ export function StopMarkingModuleDialog({
                   {step === 1 ? (
                     <div className="space-y-4">
                       <div className="space-y-2">
-                        <Label className={label}>Test Report Received from BIS</Label>
-                        <StopMarkingLetterPicker
-                          inline
-                          noun="Report"
-                          storedName={row.test_report_name}
-                          busy={busy === 'treport'}
-                          disabled={closed}
-                          onPick={(file) =>
-                            void run('treport', async () => {
-                              const updated = await uploadStopMarkingTestReport(row.id, file, row.test_report_path)
-                              onUpdated(updated)
-                              toast.success('Test Report Uploaded.')
-                              if (file.name.toLowerCase().endsWith('.pdf')) await readTestReport(file, updated)
-                            })
-                          }
-                          onOpen={row.test_report_path ? () => void run('open', () => openStopMarkingReport(row.test_report_path!)) : undefined}
-                          extra={
+                        <Label className={label}>Test Reports Received from BIS</Label>
+                        <div className="flex h-9 items-center gap-2 border border-stone-400 bg-white pl-3 text-sm">
+                          <Paperclip size={15} className="shrink-0 text-amber-800" aria-hidden />
+                          <span className="min-w-0 flex-1 truncate text-stone-700">
+                            {(row.test_reports ?? []).length ? `${(row.test_reports ?? []).length} Report${(row.test_reports ?? []).length > 1 ? 's' : ''} Attached` : 'No Report Attached'}
+                          </span>
+                          <div className="flex h-full shrink-0 items-stretch">
+                            <label className="inline-flex h-full cursor-pointer items-center border border-stone-400 bg-white px-2.5 text-xs font-medium hover:bg-stone-100">
+                              {busy === 'treport' ? 'Uploading…' : 'Attach Reports'}
+                              <input
+                                type="file"
+                                multiple
+                                className="sr-only"
+                                accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/*"
+                                disabled={closed || busy !== null}
+                                onChange={(e) => {
+                                  const files = Array.from(e.target.files ?? [])
+                                  e.target.value = ''
+                                  if (!files.length) return
+                                  void run('treport', async () => {
+                                    const updated = await addStopMarkingTestReports(row.id, row.test_reports ?? [], files)
+                                    onUpdated(updated)
+                                    toast.success('Test Reports Uploaded.')
+                                    const pdfs = (updated.test_reports ?? []).filter((d) => /\.pdf$/i.test(d.name))
+                                    if (pdfs.length) await readTestReports(updated, await Promise.all(pdfs.map((d) => downloadStopMarkingReport(d.path, d.name))))
+                                  })
+                                }}
+                              />
+                            </label>
                             <Button
                               type="button"
                               variant="outline"
                               className="h-full gap-1.5 rounded-none border-amber-600 bg-amber-50 px-2.5 text-xs font-semibold text-amber-900 hover:bg-amber-100"
-                              disabled={!row.test_report_path || busy !== null || closed}
-                              title="Read the Test Report with AI and Summarise the Failed Parameters"
-                              onClick={() => void readStoredTestReport()}
+                              disabled={!(row.test_reports ?? []).length || busy !== null || closed}
+                              title="Read the Test Reports with AI and Summarise the Failed Parameters"
+                              onClick={() => void readStoredTestReports()}
                             >
-                              {busy === 'treport-read' ? <LoaderCircle size={14} className="animate-spin" /> : <Sparkles size={14} />} {busy === 'treport-read' ? 'Reading…' : 'Read Report with AI'}
+                              {busy === 'treport-read' ? <LoaderCircle size={14} className="animate-spin" /> : <Sparkles size={14} />} {busy === 'treport-read' ? 'Reading…' : 'Read Reports with AI'}
                             </Button>
-                          }
-                        />
+                          </div>
+                        </div>
+                        {(row.test_reports ?? []).length ? (
+                          <ul className="divide-y divide-stone-200 border border-stone-300 bg-white">
+                            {(row.test_reports ?? []).map((d) => (
+                              <li key={d.id} className="flex items-center gap-2 px-3 py-1.5 text-sm">
+                                <Paperclip size={14} className="shrink-0 text-amber-800" aria-hidden />
+                                <span className="min-w-0 flex-1 truncate" title={d.name}>{d.name}</span>
+                                <Button type="button" variant="outline" size="icon" className="h-7 w-7 rounded-none border-stone-400" aria-label={`Open ${d.name}`} onClick={() => void run('open', () => openStopMarkingReport(d.path))}>
+                                  <Eye size={13} />
+                                </Button>
+                                <Button type="button" variant="outline" size="icon" className="h-7 w-7 rounded-none border-stone-400 text-red-700" aria-label={`Remove ${d.name}`} disabled={closed || busy !== null} onClick={() => void run('treport', async () => { onUpdated(await removeStopMarkingTestReport(row.id, row.test_reports ?? [], d.id)) })}>
+                                  <Trash2 size={13} />
+                                </Button>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
                       </div>
                       <div className="space-y-2">
                         <Label className={label} htmlFor="smk-m-findings">Test Report Findings (Failed Parameters and Results)</Label>
@@ -505,12 +535,13 @@ export function StopMarkingModuleDialog({
                             <Upload size={14} /> {busy === 'doc' ? 'Uploading…' : 'Attach and Upload'}
                             <input
                               type="file"
+                              multiple
                               className="sr-only"
                               disabled={closed || busy !== null}
                               onChange={(e) => {
-                                const file = e.target.files?.[0]
+                                const files = Array.from(e.target.files ?? [])
                                 e.target.value = ''
-                                if (file) void run('doc', async () => { onUpdated(await addStopMarkingDocument(row.id, row.documents ?? [], docLabel, file)); setDocLabel(''); toast.success('Document Uploaded.') })
+                                if (files.length) void run('doc', async () => { onUpdated(await addStopMarkingDocument(row.id, row.documents ?? [], docLabel, files)); setDocLabel(''); toast.success('Documents Uploaded.') })
                               }}
                             />
                           </label>

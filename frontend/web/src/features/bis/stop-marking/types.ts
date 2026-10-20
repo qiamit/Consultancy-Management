@@ -85,6 +85,7 @@ export type StopMarkingRow = {
   report_name: string | null
   test_report_path: string | null
   test_report_name: string | null
+  test_reports: StopMarkingDocument[] | null
   report_review: string
   documents: StopMarkingDocument[] | null
   case_type: string
