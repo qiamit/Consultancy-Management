@@ -1983,7 +1983,7 @@ export function OslSampleRequirementsModuleFields({
                       <span className="rounded-none border border-stone-400 bg-white/70 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-950">
                         {sampleForLabel(row.sampleFor)}
                       </span>
-                      <span className="truncate text-stone-600">{row.priority}</span>
+                      {!qrOnlyFields || row.qrCode.trim() ? <span className="truncate text-stone-600">{row.priority}</span> : null}
                     </label>
                     {renderActionButtons(row, index)}
                   </div>
@@ -2977,6 +2977,8 @@ export function OslSampleRequirementsModuleFields({
                     listId="osl-sample-for-list"
                     defaultOptions={OSL_SAMPLE_FOR_OPTIONS}
                   />
+                  {(!qrOnlyFields || Boolean(draft.qrCode.trim())) ? (
+<>
                   <MasterOptionFieldWithAdd
                     category="osl_sample_priority"
                     value={draft.priority}
@@ -2994,6 +2996,8 @@ export function OslSampleRequirementsModuleFields({
                     inputId="osl-sample-type"
                     listId="osl-sample-type-list"
                   />
+</>
+) : null}
                   <Field label="Serial Number" htmlFor="osl-serial">
                     <Input
                       id="osl-serial"
