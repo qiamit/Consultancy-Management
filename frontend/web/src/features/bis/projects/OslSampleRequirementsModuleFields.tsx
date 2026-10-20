@@ -10,6 +10,7 @@ import {
   FolderInput,
   Globe,
   Loader2,
+  Sparkles,
   Package,
   Pencil,
   Plus,
@@ -280,6 +281,7 @@ export function OslSampleRequirementsModuleFields({
   portalUserId = null,
   hasPortalPassword = false,
   qrOnlyFields = false,
+  onAiFill,
 }: {
   value: OslSampleRequirementsModulePayload
   onChange: (next: OslSampleRequirementsModulePayload) => void
@@ -299,6 +301,8 @@ export function OslSampleRequirementsModuleFields({
   hasPortalPassword?: boolean
   /** Sample code, QR code, laboratory, description, additional information and payment fields only for samples that have a QR code; a sample without one defaults to FT. */
   qrOnlyFields?: boolean
+  /** An AI helper for the sample form: gets the current values and the user's instruction, returns the fields to fill. */
+  onAiFill?: (current: OslSampleRequirementRow, instruction: string) => Promise<Partial<OslSampleRequirementRow>>
   onPrintTestRequest?: (row: OslSampleRequirementRow) => void
   onPrintTestReport?: (row: OslSampleRequirementRow) => void
   /** @deprecated Courier Slip now opens a read-only A4 preview (print + PDF download). */
@@ -1512,6 +1516,26 @@ export function OslSampleRequirementsModuleFields({
       })
   }
 
+  const [aiInstruction, setAiInstruction] = useState('')
+  const [aiBusy, setAiBusy] = useState(false)
+  const runAiFill = async () => {
+    if (!draft || !onAiFill) return
+    setAiBusy(true)
+    try {
+      const filled = await onAiFill(draft, aiInstruction)
+      const keys = Object.keys(filled)
+      if (!keys.length) {
+        toast.message('AI Found Nothing to Fill.')
+        return
+      }
+      setDraft({ ...draft, ...filled })
+      toast.success('Sample Filled by AI — Check the Fields.')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'AI Could Not Fill the Sample.')
+    } finally {
+      setAiBusy(false)
+    }
+  }
   const patchDraft = <K extends keyof OslSampleRequirementRow>(
     key: K,
     next: OslSampleRequirementRow[K],
@@ -2958,6 +2982,25 @@ export function OslSampleRequirementsModuleFields({
                 tabIndex={-1}
                 onChange={handleDeclaredValueFileChange}
               />
+              {qrOnlyFields && !draft.qrCode.trim() && onAiFill ? (
+                <div className="flex flex-wrap items-end gap-2 border border-amber-300 bg-amber-50/70 p-2.5">
+                  <div className="min-w-0 flex-1 basis-72 space-y-1.5">
+                    <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-stone-600" htmlFor="osl-ai-instruction">Tell the AI (Batch Number, Date, Quantities, or Use Dummy Values)</label>
+                    <Input
+                      id="osl-ai-instruction"
+                      className={cn(limsFieldClass, 'h-9')}
+                      value={aiInstruction}
+                      disabled={aiBusy}
+                      placeholder="e.g. Dummy Batch Number, Mfg Date Today, Batch 5 Tonne, Sample 1 Mtr x 2 Nos"
+                      onChange={(e) => setAiInstruction(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void runAiFill() } }}
+                    />
+                  </div>
+                  <Button type="button" variant="outline" className={cn(limsOutlineBtnClass, 'h-9 gap-1.5 border-amber-600 bg-white font-semibold text-amber-900')} disabled={aiBusy} onClick={() => void runAiFill()}>
+                    {aiBusy ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Sparkles size={14} aria-hidden />} {aiBusy ? 'Filling…' : 'Fill with AI'}
+                  </Button>
+                </div>
+              ) : null}
               <div className="space-y-3">
                 {(qrOnlyFields && !draft.qrCode.trim()) ? (
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">

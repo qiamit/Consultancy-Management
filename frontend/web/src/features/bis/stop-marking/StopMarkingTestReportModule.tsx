@@ -29,7 +29,8 @@ import {
 } from '../projects/oslSampleRequirementsModel'
 import { formatDisplayDate, isCodeDisplayLabel, type BisProjectRow } from '../projects/types'
 import { saveStopMarkingTestReportModule } from './stopMarkingApi'
-import { stopMarkingIsCodeLabel, type StopMarkingRow, type StopMarkingTestReportModule } from './types'
+import { fillStopMarkingSample } from './stopMarkingAi'
+import { findingsToText, stopMarkingIsCodeLabel, type StopMarkingCaseForm, type StopMarkingRow, type StopMarkingTestReportModule } from './types'
 
 const thCls = 'border border-stone-700 bg-stone-800 px-2 py-1.5 text-left text-[11px] font-bold uppercase tracking-[0.1em] text-amber-200'
 const tdCls = 'border border-[#e7e0d4] px-2 py-1.5 align-middle text-stone-700'
@@ -55,11 +56,14 @@ function downloadBlob(blob: Blob, filename: string) {
  */
 export function StopMarkingTestReportModule({
   row,
+  form,
   bisRow,
   closed,
   onUpdated,
 }: {
   row: StopMarkingRow
+  /** The case as edited in steps 1 and 2 — read only, for the AI to fill a sample from. */
+  form: StopMarkingCaseForm
   /** The licence, read only for the firm / IS Code / letterhead details on the printed documents. */
   bisRow: BisProjectRow | null
   closed: boolean
@@ -252,6 +256,30 @@ export function StopMarkingTestReportModule({
               isCodeSearch={String(row.is_code?.is_number ?? '').trim() || null}
               isCodeRevisionYear={String(row.is_code?.revision_year ?? '').trim() || null}
               qrOnlyFields
+              onAiFill={(current, instruction) =>
+                fillStopMarkingSample(
+                  row,
+                  {
+                    reference: form.bisReference,
+                    reason: form.bisReason,
+                    points: form.reviewNotes,
+                    sampleCode: form.sampleCode,
+                    qrCode: form.sampleQrCode,
+                    details: form.reportDetails,
+                    findings: findingsToText(form.reportFindings),
+                    observations: form.reportObservations,
+                  },
+                  {
+                    gradeTypeVariety: current.gradeTypeVariety,
+                    declaredValue: current.declaredValue,
+                    batchNumber: current.batchNumber,
+                    dateOfManufacturing: current.dateOfManufacturing,
+                    batchQuantity: current.batchQuantity,
+                    sampleQuantity: current.sampleQuantity,
+                  },
+                  instruction,
+                )
+              }
             />
           </div>
           <DialogFooter className="flex-row items-center justify-end gap-2">

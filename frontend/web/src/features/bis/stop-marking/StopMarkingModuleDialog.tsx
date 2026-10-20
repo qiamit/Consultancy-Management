@@ -503,7 +503,7 @@ export function StopMarkingModuleDialog({
                   {step === 2 ? (
                     <div className="space-y-3">
                       {!projectId ? <p className="text-sm text-destructive">This Case Is Not Linked to a Licence, so the Documents Cannot Be Printed.</p> : null}
-                      <StopMarkingTestReportModule row={row} bisRow={bisRow} closed={closed} onUpdated={onUpdated} />
+                      <StopMarkingTestReportModule row={row} form={form} bisRow={bisRow} closed={closed} onUpdated={onUpdated} />
                     </div>
                   ) : null}
 
