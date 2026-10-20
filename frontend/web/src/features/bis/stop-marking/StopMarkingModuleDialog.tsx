@@ -132,10 +132,10 @@ export function StopMarkingModuleDialog({
   const hasReply = form.replyDraft.trim().length > 0
   const ftrCount = samples.filter((s) => ftrDone.has(s.id)).length
   const checks: Array<[string, boolean, string]> = [
-    ['BIS letter received', Boolean(row.report_path), row.report_name || 'Not attached'],
-    ['Reason and points reviewed', Boolean(form.bisReason.trim() || form.reviewNotes.trim()), form.bisReference || 'Not entered'],
-    ['Reply letter ready', hasReply, hasReply ? 'Drafted' : 'Not drafted'],
-    ['Factory Test Report', samples.length > 0 && ftrCount === samples.length, samples.length ? `${ftrCount} of ${samples.length} generated` : 'None added (optional)'],
+    ['BIS Letter Received', Boolean(row.report_path), row.report_name || 'Not Attached'],
+    ['Reason and Points Reviewed', Boolean(form.bisReason.trim() || form.reviewNotes.trim()), form.bisReference || 'Not Entered'],
+    ['Reply Letter Ready', hasReply, hasReply ? 'Drafted' : 'Not Drafted'],
+    ['Factory Test Report', samples.length > 0 && ftrCount === samples.length, samples.length ? `${ftrCount} of ${samples.length} Generated` : 'None Added (Optional)'],
   ]
 
   return (
@@ -237,12 +237,12 @@ export function StopMarkingModuleDialog({
                             variant="outline"
                             className={tbtn}
                             disabled={!row.report_path || busy !== null || closed}
-                            title="Read the letter with AI and fill the details below"
+                            title="Read the Letter with AI and Fill the Details Below"
                             onClick={() => void run('read', async () => { applyReading(await readStopMarkingReport(row, await downloadStopMarkingReport(row.report_path!, row.report_name ?? 'letter.pdf'))); toast.success('Letter read — check the details.') })}
                           >
                             {busy === 'read' ? <LoaderCircle size={14} className="animate-spin" /> : <Sparkles size={14} />} Read Letter with AI
                           </Button>
-                          <span className="text-xs text-muted-foreground">A PDF is read automatically; for a photo or scan, type the details yourself.</span>
+                          <span className="text-xs text-muted-foreground">A PDF Is Read Automatically; for a Photo or Scan, Type the Details Yourself.</span>
                         </div>
                       </div>
                       <div className="grid gap-4 md:grid-cols-2">
@@ -256,7 +256,7 @@ export function StopMarkingModuleDialog({
                         </div>
                       </div>
                       <div className="space-y-2">
-                        <Label className={label} htmlFor="smk-m-reason">Reason for Stop Marking (as per BIS)</Label>
+                        <Label className={label} htmlFor="smk-m-reason">Reason for Stop Marking (As per BIS)</Label>
                         <Textarea id="smk-m-reason" rows={3} disabled={closed} className="rounded-none border-stone-500 bg-white" value={form.bisReason} onChange={(e) => set('bisReason', e.target.value)} />
                       </div>
                       <div className="space-y-2">
@@ -290,15 +290,15 @@ export function StopMarkingModuleDialog({
                           {hasReply ? 'Improve Reply with AI' : 'Draft Reply with AI'}
                         </Button>
                         <div className="sm:ml-auto sm:w-48">
-                          <LimsDatePicker className="h-8 w-full" aria-label="Reply date" disabled={closed} placeholder="Reply date" value={form.replyDate} onChange={(v) => set('replyDate', v)} />
+                          <LimsDatePicker className="h-8 w-full" aria-label="Reply Date" disabled={closed} placeholder="Reply Date" value={form.replyDate} onChange={(v) => set('replyDate', v)} />
                         </div>
                       </div>
                       <Textarea
-                        aria-label="Reply letter to BIS"
+                        aria-label="Reply Letter to BIS"
                         rows={16}
                         disabled={closed}
                         className="rounded-none border-stone-500 bg-white font-serif text-sm leading-relaxed"
-                        placeholder="Reply letter to BIS — draft it with AI or type it here."
+                        placeholder="Reply Letter to BIS — Draft It with AI or Type It Here."
                         value={form.replyDraft}
                         onChange={(e) => set('replyDraft', e.target.value)}
                       />
@@ -309,7 +309,7 @@ export function StopMarkingModuleDialog({
                         <Button type="button" variant="outline" className={tbtn} disabled={!hasReply || busy !== null} onClick={() => void run('word', () => downloadStopMarkingReplyWord(live()))}>
                           <FileDown size={14} /> Word
                         </Button>
-                        <Button type="button" variant="outline" className={tbtn} disabled={!hasReply || busy !== null} title="Email the letter to the client's master email" onClick={() => void run('mail', async () => { toast.success(await emailStopMarkingReplyToClient(live())) })}>
+                        <Button type="button" variant="outline" className={tbtn} disabled={!hasReply || busy !== null} title="Email the Letter to the Client's Master Email" onClick={() => void run('mail', async () => { toast.success(await emailStopMarkingReplyToClient(live())) })}>
                           {busy === 'mail' ? <LoaderCircle size={14} className="animate-spin" /> : <Mail size={14} />} Email Client
                         </Button>
                       </div>
@@ -319,9 +319,9 @@ export function StopMarkingModuleDialog({
                   {step === 2 ? (
                     <div className="space-y-3">
                       <p className="text-sm text-stone-700">
-                        Add the sample(s) BIS tested or asked about, then generate the Factory Test Report for each — the same generator as the Application module (parameters, Save, Print, PDF).
+                        Add the Sample(s) BIS Tested or Asked About, Then Generate the Factory Test Report for Each — the Same Generator as the Application Module (Parameters, Save, Print, PDF).
                       </p>
-                      {!projectId ? <p className="text-sm text-destructive">This case is not linked to a licence, so a Factory Test Report cannot be generated.</p> : null}
+                      {!projectId ? <p className="text-sm text-destructive">This Case Is Not Linked to a Licence, so a Factory Test Report Cannot Be Generated.</p> : null}
                       <div className="grid gap-2 border border-stone-400 bg-white p-3 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1fr_auto] lg:items-end">
                         <div className="space-y-1">
                           <Label className={label}>Grade / Type / Variety</Label>
@@ -344,7 +344,7 @@ export function StopMarkingModuleDialog({
                         </Button>
                       </div>
                       {samples.length === 0 ? (
-                        <p className="border border-dashed border-stone-400 bg-white px-3 py-6 text-center text-sm text-muted-foreground">No samples yet. A Factory Test Report is optional — add a sample only if BIS asked for one.</p>
+                        <p className="border border-dashed border-stone-400 bg-white px-3 py-6 text-center text-sm text-muted-foreground">No Samples Yet. A Factory Test Report Is Optional — Add a Sample Only if BIS Asked for One.</p>
                       ) : (
                         <ul className="space-y-2">
                           {samples.map((s, i) => (
@@ -357,13 +357,13 @@ export function StopMarkingModuleDialog({
                                 </p>
                               </div>
                               <span className={cn('inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset', ftrDone.has(s.id) ? 'bg-emerald-50 text-emerald-800 ring-emerald-200' : 'bg-stone-100 text-stone-700 ring-stone-300')}>
-                                {ftrDone.has(s.id) ? 'Report generated' : 'Not generated'}
+                                {ftrDone.has(s.id) ? 'Report Generated' : 'Not Generated'}
                               </span>
                               <div className="flex items-center gap-1.5">
                                 <Button type="button" variant="outline" className={tbtn} disabled={!projectId || busy !== null} onClick={() => setGenerateId(s.id)}>
                                   {ftrDone.has(s.id) ? 'Edit Report' : 'Generate Report'}
                                 </Button>
-                                <Button type="button" variant="outline" size="icon" className="h-8 w-8 rounded-none border-stone-400 text-red-700" aria-label={`Remove sample ${i + 1}`} disabled={closed || busy !== null} onClick={() => removeSample(s.id)}>
+                                <Button type="button" variant="outline" size="icon" className="h-8 w-8 rounded-none border-stone-400 text-red-700" aria-label={`Remove Sample ${i + 1}`} disabled={closed || busy !== null} onClick={() => removeSample(s.id)}>
                                   <Trash2 size={14} />
                                 </Button>
                               </div>
@@ -400,7 +400,7 @@ export function StopMarkingModuleDialog({
                       </div>
                       {!closed ? (
                         <div className="border border-emerald-300 bg-emerald-50/60 p-3">
-                          <p className="mb-2 text-sm text-stone-800">When BIS permits marking again, close the case: the licence goes back to its earlier status.</p>
+                          <p className="mb-2 text-sm text-stone-800">When BIS Permits Marking Again, Close the Case: the Licence Goes Back to Its Earlier Status.</p>
                           <Button
                             type="button"
                             variant="outline"

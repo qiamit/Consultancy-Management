@@ -26,15 +26,15 @@ export function StopMarkingLetterPicker({
   return (
     <div className={compact ? 'flex h-8 items-center gap-2 border border-stone-500 bg-stone-50 pl-2.5 text-sm' : 'flex flex-wrap items-center gap-2 border border-stone-400 bg-white px-3 py-2 text-sm'}>
       <Paperclip size={15} className="shrink-0 text-amber-800" aria-hidden />
-      <span className={compact ? 'min-w-0 flex-1 truncate text-stone-600' : 'min-w-0 flex-1 basis-40 truncate'} title={name || undefined}>{name || 'No letter attached'}</span>
+      <span className={compact ? 'min-w-0 flex-1 truncate text-stone-600' : 'min-w-0 flex-1 basis-40 truncate'} title={name || undefined}>{name || 'No Letter Attached'}</span>
       <div className={compact ? 'flex h-full shrink-0 items-stretch' : 'flex flex-wrap items-center gap-1.5'}>
         {name && onOpen ? (
-          <Button type="button" variant="outline" className="h-8 gap-1.5 rounded-none border-stone-400 px-2.5 text-xs" disabled={busy} onClick={onOpen} title="Open the letter" aria-label="Open the letter">
+          <Button type="button" variant="outline" className="h-8 gap-1.5 rounded-none border-stone-400 px-2.5 text-xs" disabled={busy} onClick={onOpen} title="Open the Letter" aria-label="Open the Letter">
             <Eye size={14} /> {compact ? null : 'Open'}
           </Button>
         ) : null}
         {name && onClear ? (
-          <Button type="button" variant="outline" className="h-8 gap-1.5 rounded-none border-stone-400 px-2.5 text-xs text-red-700" disabled={busy || disabled} onClick={onClear} title="Remove the letter" aria-label="Remove the letter">
+          <Button type="button" variant="outline" className="h-8 gap-1.5 rounded-none border-stone-400 px-2.5 text-xs text-red-700" disabled={busy || disabled} onClick={onClear} title="Remove the Letter" aria-label="Remove the Letter">
             <X size={14} /> {compact ? null : 'Remove'}
           </Button>
         ) : null}

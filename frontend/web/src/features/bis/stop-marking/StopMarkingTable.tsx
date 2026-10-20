@@ -66,7 +66,7 @@ export function StopMarkingTable({
       ) : rows.length === 0 ? (
         <div className="m-3 rounded-lg border border-dashed border-border p-4 text-center sm:m-4 sm:p-6">
           <p className="text-sm text-muted-foreground">
-            {searchActive ? 'No stop marking cases match your search.' : 'No licence is in Stop Marking. Use Add to put one here.'}
+            {searchActive ? 'No Stop Marking Cases Match Your Search.' : 'No Licence Is in Stop Marking. Use Add to Put One Here.'}
           </p>
         </div>
       ) : (

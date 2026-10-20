@@ -48,7 +48,7 @@ export function StopMarkingAddDialog({
         <Label className="block">Reason for Stop Marking</Label>
         <Select value={form.reasonType || undefined} onValueChange={(reasonType) => onChange({ ...form, reasonType })}>
           <SelectTrigger aria-label="Reason for stop marking">
-            <SelectValue placeholder="Select reason" />
+            <SelectValue placeholder="Select Reason" />
           </SelectTrigger>
           <SelectContent className="rounded-none border-stone-500">
             {STOP_MARKING_REASON_OPTIONS.map((r) => (
