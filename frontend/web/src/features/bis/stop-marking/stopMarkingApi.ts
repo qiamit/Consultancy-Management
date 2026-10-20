@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/supabaseClient'
 import { currentUserId } from '../shared/bisLookupApi'
 import type { OslSampleRequirementRow } from '../projects/oslSampleRequirementsModel'
-import { findingsToText, type StopMarkingDocument } from './types'
+import { findingsToText, type StopMarkingDocument, type StopMarkingTestReportModule } from './types'
 import { NOTICE_TYPE_OPTIONS, noticeHoldsMarking, type StopMarkingAddForm, type StopMarkingCaseForm, type StopMarkingNoticeFilter, type StopMarkingRow, type StopMarkingStatusFilter } from './types'
 
 /** Case types that prohibit marking, so they put the licence into Stop Marking status. */
@@ -285,6 +285,12 @@ export async function removeStopMarkingDocument(caseId: string, current: StopMar
   const doc = current.find((d) => d.id === documentId)
   if (doc?.path) await supabase.storage.from(BUCKET).remove([doc.path])
   const { data, error } = await supabase.from('bis_stop_marking_cases').update({ documents: current.filter((d) => d.id !== documentId) }).eq('id', caseId).select(SELECT_WITH_JOINS).single()
+  if (error) throw error
+  return data as unknown as StopMarkingRow
+}
+
+export async function saveStopMarkingTestReportModule(caseId: string, module: StopMarkingTestReportModule): Promise<StopMarkingRow> {
+  const { data, error } = await supabase.from('bis_stop_marking_cases').update({ test_report_module: module }).eq('id', caseId).select(SELECT_WITH_JOINS).single()
   if (error) throw error
   return data as unknown as StopMarkingRow
 }

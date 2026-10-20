@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { Check, ChevronLeft, ChevronRight, ExternalLink, Eye, FileDown, LoaderCircle, Mail, Paperclip, Plus, Printer, Sparkles, Trash2, Upload, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Check, ChevronLeft, ChevronRight, ExternalLink, Eye, FileDown, LoaderCircle, Mail, Paperclip, Printer, Sparkles, Trash2, Upload, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { LimsDatePicker } from '@/components/lims/LimsDatePicker'
 import { Button } from '@/components/ui/button'
@@ -9,12 +9,9 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { limsDarkBarBtnClass, limsDarkBarGlowStyle, limsPageShellClass, limsPanelClass, limsPrimaryBtnClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
-import { fetchBisModulePayload, saveBisModulePayload } from '../projects/bisModuleDataApi'
 import { fetchBisProjectById } from '../projects/bisProjectsApi'
-import { BisLicenseDocumentsDialog } from '../projects/BisLicenseDocumentsDialog'
-import { printBisDocument, type BisPrintDocumentKind } from '../print/printBisDocument'
 import { factoryTestReportHasContent, parseFactoryTestReportPayload } from '../projects/factoryTestReportModel'
-import { emptyOslSampleRequirementRow, oslSampleRowHasContent, parseOslSampleRequirementsPayload, type OslSampleRequirementRow } from '../projects/oslSampleRequirementsModel'
+import { oslSampleRowHasContent, parseOslSampleRequirementsPayload } from '../projects/oslSampleRequirementsModel'
 import { formatCmL, type BisProjectRow } from '../projects/types'
 import { draftStopMarkingReply, readStopMarkingReport, readStopMarkingTestReport } from './stopMarkingAi'
 import {
@@ -32,6 +29,7 @@ import {
 import { openStopMarkingManak } from './stopMarkingManak'
 import { downloadStopMarkingReplyWord, emailStopMarkingReplyToClient, printStopMarkingReply } from './printStopMarkingReply'
 import { AutoGrowTextarea } from '../shared/AutoGrowTextarea'
+import { StopMarkingTestReportModule } from './StopMarkingTestReportModule'
 import { StopMarkingLetterPicker } from './StopMarkingLetterPicker'
 import { findingsToText, noticeHoldsMarking, noticeTypeLabel, rowToCaseForm, stopMarkingClientName, stopMarkingIsCodeLabel, stopMarkingStatusLabel, type StopMarkingCaseForm, type StopMarkingRow } from './types'
 
@@ -59,11 +57,7 @@ export function StopMarkingModuleDialog({
   const [step, setStep] = useState(0)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [ftrDone, setFtrDone] = useState<Set<string>>(() => new Set())
   const [bisRow, setBisRow] = useState<BisProjectRow | null>(null)
-  const [oslSamples, setOslSamples] = useState<OslSampleRequirementRow[]>([])
-  const [testReportOpen, setTestReportOpen] = useState(false)
-  const [moduleKind, setModuleKind] = useState<BisPrintDocumentKind | null>(null)
   const [docLabel, setDocLabel] = useState('')
 
   useEffect(() => {
@@ -73,27 +67,23 @@ export function StopMarkingModuleDialog({
   }, [row?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const projectId = row?.bis_project_id ?? null
-  const samples = oslSamples.filter(oslSampleRowHasContent)
+  const caseOsl = parseOslSampleRequirementsPayload(row?.test_report_module?.osl ?? null)
+  const samples = caseOsl.rows.filter(oslSampleRowHasContent)
+  const ftrReports = parseFactoryTestReportPayload(row?.test_report_module?.ftr ?? null).reports
+  const ftrCount = samples.filter((s) => ftrReports.some((r) => r.sampleRowId === s.id && factoryTestReportHasContent(r))).length
 
-  /** The licence's Sample Offer Letter samples and which of them already have a saved Factory Test Report (both live on the licence, as in the application). */
-  const loadFtrStatus = useCallback(async () => {
-    if (!projectId) return
-    try {
-      const [project, osl, ftr] = await Promise.all([
-        fetchBisProjectById(projectId),
-        fetchBisModulePayload(projectId, 'osl-sample-requirements'),
-        fetchBisModulePayload(projectId, 'factory-test-report'),
-      ])
-      setBisRow(project)
-      setOslSamples(parseOslSampleRequirementsPayload(osl).rows)
-      setFtrDone(new Set(parseFactoryTestReportPayload(ftr).reports.filter((r) => factoryTestReportHasContent(r)).map((r) => r.sampleRowId)))
-    } catch {
-      /* status is informational */
-    }
-  }, [projectId])
+  /** The licence, only to read the firm / IS Code / letterhead details for the printed documents. */
   useEffect(() => {
-    void loadFtrStatus()
-  }, [loadFtrStatus, row?.id])
+    if (!projectId) {
+      setBisRow(null)
+      return
+    }
+    let canceled = false
+    void fetchBisProjectById(projectId)
+      .then((p) => { if (!canceled) setBisRow(p) })
+      .catch(() => { /* informational */ })
+    return () => { canceled = true }
+  }, [projectId])
 
   /** Reads the stored PDF letter with AI and fills reference, due date, non-conformity and points. */
   const readStored = async () => {
@@ -195,40 +185,7 @@ export function StopMarkingModuleDialog({
       toast.success('Letter read — check the details.')
     })
 
-  /** Adds the sample of the test report (step 2 details) to the licence's Sample Offer Letter. */
-  const addSampleFromReport = () =>
-    void run('samples', async () => {
-      if (!projectId) return
-      const d = form.reportDetails
-      if (!form.sampleCode.trim() && !form.sampleQrCode.trim() && !d.batchNumber.trim() && !d.description.trim()) {
-        throw new Error('Fill the sample details in Test Report Review (step 2) first.')
-      }
-      const current = parseOslSampleRequirementsPayload(await fetchBisModulePayload(projectId, 'osl-sample-requirements'))
-      const duplicate = current.rows.some((r) => (form.sampleQrCode.trim() && r.qrCode.trim() === form.sampleQrCode.trim()) || (form.sampleCode.trim() && r.sampleCode.trim() === form.sampleCode.trim()))
-      if (duplicate) throw new Error('This sample is already in the Sample Offer Letter.')
-      const next: OslSampleRequirementRow = {
-        ...emptyOslSampleRequirementRow('osl'),
-        id: crypto.randomUUID(),
-        sampleCode: form.sampleCode.trim(),
-        qrCode: form.sampleQrCode.trim(),
-        gradeTypeVariety: d.description.trim(),
-        batchNumber: d.batchNumber.trim(),
-        dateOfManufacturing: d.manufactureDate,
-        declaredValue: d.declaredValue.trim(),
-        includeInPrint: true,
-      }
-      await saveBisModulePayload(projectId, 'osl-sample-requirements', {
-        rows: [...current.rows.filter(oslSampleRowHasContent), next],
-        importedQrCodes: current.importedQrCodes ?? [],
-        signatoryName: current.signatoryName.trim(),
-        signatoryDesignation: current.signatoryDesignation.trim(),
-      })
-      await loadFtrStatus()
-      toast.success('Sample Added to the Sample Offer Letter.')
-    })
-
   const hasReply = form.replyDraft.trim().length > 0
-  const ftrCount = samples.filter((s) => ftrDone.has(s.id)).length
   const checks: Array<[string, boolean, string]> = [
     ['BIS Letter Received', Boolean(row.report_path), row.report_name || 'Not Attached'],
     ['Reason and Points Reviewed', Boolean(form.bisReason.trim() || form.reviewNotes.trim()), form.bisReference || 'Not Entered'],
@@ -545,39 +502,8 @@ export function StopMarkingModuleDialog({
 
                   {step === 2 ? (
                     <div className="space-y-3">
-                      {!projectId ? <p className="text-sm text-destructive">This Case Is Not Linked to a Licence, so the Test Report Documents Cannot Be Prepared.</p> : null}
-                      <div className="border border-stone-400 bg-[#fffcf7]">
-                        <div className="bg-stone-900 px-3 py-2 text-sm font-semibold text-stone-100">Test Report - Details</div>
-                        <div className="space-y-3 p-3">
-                          <div className="border border-[#e7e0d4] bg-[#fffcf7] p-3">
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                              <div>
-                                <p className="text-sm font-semibold text-stone-900">Sample Offer Letter &amp; Test Request</p>
-                                <p className="text-xs text-stone-600">{samples.length ? `${samples.length} Sample${samples.length > 1 ? 's' : ''}` : 'No Sample Yet'}</p>
-                              </div>
-                              <div className="flex flex-wrap items-center gap-1.5">
-                                <Button type="button" variant="outline" className={tbtn} disabled={closed || !projectId || busy !== null} onClick={addSampleFromReport}>
-                                  <Plus size={14} /> Add Sample from Test Report
-                                </Button>
-                                <Button type="button" variant="outline" className={tbtn} disabled={!bisRow} onClick={() => { setModuleKind('osl-sample-requirements'); setTestReportOpen(true) }}>
-                                  Open
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="border border-[#e7e0d4] bg-[#fffcf7] p-3">
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                              <div>
-                                <p className="text-sm font-semibold text-stone-900">Factory Test Report</p>
-                                <p className="text-xs text-stone-600">{samples.length ? `${ftrCount} of ${samples.length} Generated` : 'Add a Sample First'}</p>
-                              </div>
-                              <Button type="button" variant="outline" className={tbtn} disabled={!bisRow} onClick={() => setTestReportOpen(true)}>
-                                Open
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
+                      {!projectId ? <p className="text-sm text-destructive">This Case Is Not Linked to a Licence, so the Documents Cannot Be Printed.</p> : null}
+                      <StopMarkingTestReportModule row={row} form={form} bisRow={bisRow} closed={closed} onUpdated={onUpdated} />
                     </div>
                   ) : null}
 
@@ -708,22 +634,6 @@ export function StopMarkingModuleDialog({
           </div>
         </DialogContent>
       </Dialog>
-      <BisLicenseDocumentsDialog
-        open={testReportOpen && bisRow != null}
-        onOpenChange={(next) => {
-          if (!next) {
-            setTestReportOpen(false)
-            setModuleKind(null)
-            void loadFtrStatus()
-          }
-        }}
-        row={bisRow}
-        onlyStepId="test-reports"
-        onViewDocument={(kind) => void printBisDocument(bisRow!, kind).then((err) => { if (err) toast.error(err) })}
-        moduleKind={moduleKind}
-        onModuleKindChange={setModuleKind}
-        onProjectSaved={() => void loadFtrStatus()}
-      />
     </>
   )
 }

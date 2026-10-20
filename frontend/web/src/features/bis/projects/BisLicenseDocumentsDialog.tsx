@@ -294,7 +294,6 @@ export function BisLicenseDocumentsDialog({
   onModuleKindChange,
   onProjectSaved,
   inclusionMode = false,
-  onlyStepId,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -307,13 +306,11 @@ export function BisLicenseDocumentsDialog({
   onProjectSaved?: () => void
   /** BIS New Inclusion: the Change in Scope (Inclusion) steps instead of the New Application steps. */
   inclusionMode?: boolean
-  /** Show just this one step of the wizard (no stepper, no Back / Next) — used inside another module. */
-  onlyStepId?: string
 }) {
   const wizardSteps = inclusionMode ? BIS_INCLUSION_STEPS : BIS_APPLICATION_STEPS
   const [selectedKinds, setSelectedKinds] = useState<Set<BisPrintDocumentKind>>(() => new Set())
   const [downloadBusy, setDownloadBusy] = useState(false)
-  const [step, setStep] = useState(() => (onlyStepId ? Math.max(0, wizardSteps.findIndex((w) => w.id === onlyStepId)) : 0))
+  const [step, setStep] = useState(0)
   const [refreshKey, setRefreshKey] = useState(0)
   const [previewKind, setPreviewKind] = useState<BisPrintDocumentKind | null>(null)
   // Generated letterhead HTML to preview instead of attached files (Undertaking for Manufacturing Scope).
@@ -334,9 +331,7 @@ export function BisLicenseDocumentsDialog({
   // The step the user is on survives a page refresh (kept per application until the dialog is closed).
   const stepKey = row?.id ? `${inclusionMode ? 'bis-inclusion-step' : 'bis-application-step'}:${row.id}` : null
   const wasOpen = useRef(false)
-  const onlyStepIndex = onlyStepId ? wizardSteps.findIndex((w) => w.id === onlyStepId) : -1
   const readSavedStep = () => {
-    if (onlyStepIndex >= 0) return onlyStepIndex
     try {
       const n = Number(stepKey ? window.localStorage.getItem(stepKey) : null)
       return Number.isInteger(n) && n >= 0 && n < stepLabels.length ? n : 0
@@ -360,7 +355,7 @@ export function BisLicenseDocumentsDialog({
     }
     setSelectedKinds(new Set())
     setDownloadBusy(false)
-    setStep(onlyStepIndex >= 0 ? onlyStepIndex : 0)
+    setStep(0)
     setPreviewKind(null)
     setImportKind(null)
     setImportBundle(null)
@@ -374,7 +369,7 @@ export function BisLicenseDocumentsDialog({
   }, [row?.id])
 
   useEffect(() => {
-    if (!open || !stepKey || onlyStepIndex >= 0) return
+    if (!open || !stepKey) return
     try {
       window.localStorage.setItem(stepKey, String(step))
     } catch {
@@ -906,7 +901,6 @@ export function BisLicenseDocumentsDialog({
           </div>
 
           {/* Stepper — same order as Manak Online */}
-          {onlyStepIndex >= 0 ? null : (
           <div className={cn(limsPanelClass, 'shrink-0 bg-[#f7f3eb] px-2 py-1.5 font-jakarta sm:px-4')}>
             <ol className="flex items-center gap-1 overflow-x-auto">
               {stepLabels.map((label, i) => {
@@ -945,7 +939,6 @@ export function BisLicenseDocumentsDialog({
               })}
             </ol>
           </div>
-          )}
 
           {/* Step body */}
           <div className={cn(limsPanelClass, 'flex min-h-0 flex-1 flex-col bg-[#f7f3eb]')}>
@@ -1146,7 +1139,6 @@ export function BisLicenseDocumentsDialog({
               />
               <div className="absolute top-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
               <div className="relative flex min-w-0 flex-wrap items-center justify-between gap-2">
-                {onlyStepIndex >= 0 ? <span aria-hidden /> : (
                 <Button
                   type="button"
                   variant="outline"
@@ -1157,9 +1149,8 @@ export function BisLicenseDocumentsDialog({
                 >
                   <ChevronLeft size={16} aria-hidden /> Back
                 </Button>
-                )}
                 <span className="text-xs font-medium text-stone-200">
-                  {onlyStepIndex >= 0 ? stepLabels[step] : `Step ${step + 1} of ${stepLabels.length}`}
+                  Step {step + 1} of {stepLabels.length}
                   {selectedKinds.size > 0 ? ` · ${selectedKinds.size} selected (PDF / Word / Excel bundle selection)` : ''}
                   {downloadBusy || busy ? (
                     <span className="ml-2 text-amber-200">
@@ -1167,7 +1158,7 @@ export function BisLicenseDocumentsDialog({
                     </span>
                   ) : null}
                 </span>
-                {isPreviewStep || onlyStepIndex >= 0 ? (
+                {isPreviewStep ? (
                   <Button
                     type="button"
                     variant="outline"

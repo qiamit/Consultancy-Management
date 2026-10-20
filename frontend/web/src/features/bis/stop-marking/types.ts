@@ -85,6 +85,13 @@ export function findingsToText(rows: StopMarkingFinding[]): string {
 export type StopMarkingReportDetails = { reportNumber: string; batchNumber: string; manufactureDate: string; description: string; declaredValue: string }
 export const EMPTY_REPORT_DETAILS: StopMarkingReportDetails = { reportNumber: '', batchNumber: '', manufactureDate: '', description: '', declaredValue: '' }
 
+/** The case's own Test Report - Details (step 3): Sample Offer Letter samples and Factory Test Reports, separate from the application / licence. */
+export type StopMarkingTestReportModule = {
+  applicable?: { sample?: 'Yes' | 'No'; ftr?: 'Yes' | 'No' }
+  osl?: Record<string, unknown>
+  ftr?: Record<string, unknown>
+}
+
 export type StopMarkingRow = {
   id: string
   client_id: string
@@ -103,6 +110,7 @@ export type StopMarkingRow = {
   report_findings: StopMarkingFinding[] | null
   report_details: Partial<StopMarkingReportDetails> | null
   report_observations: string
+  test_report_module: StopMarkingTestReportModule | null
   documents: StopMarkingDocument[] | null
   case_type: string
   sample_code: string

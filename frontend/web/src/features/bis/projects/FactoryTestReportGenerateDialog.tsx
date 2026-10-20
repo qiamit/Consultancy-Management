@@ -39,6 +39,7 @@ export function FactoryTestReportGenerateDialog({
   disabled = false,
   onClose,
   onSaved,
+  storage,
 }: {
   projectId: string | null
   /** The sample to generate for; the dialog is open while set. */
@@ -52,6 +53,8 @@ export function FactoryTestReportGenerateDialog({
   onClose: () => void
   /** After the report is saved (Save / Print / Download save first). */
   onSaved?: () => void
+  /** Keep the reports somewhere other than the licence's Factory Test Report module (e.g. a Non-Conformity case). */
+  storage?: { load: () => Promise<Record<string, unknown> | null>; save: (payload: Record<string, unknown>) => Promise<void> }
 }) {
   const [testReportGenerateOpen, setTestReportGenerateOpen] = useState(false)
   const [testReportGenerateBusy, setTestReportGenerateBusy] = useState(false)
@@ -82,7 +85,7 @@ export function FactoryTestReportGenerateDialog({
     void (async () => {
       try {
         const [raw, project, techRaw] = await Promise.all([
-          fetchBisModulePayload(pid, 'factory-test-report'),
+          storage ? storage.load() : fetchBisModulePayload(pid, 'factory-test-report'),
           fetchBisProjectById(pid),
           fetchBisModulePayload(pid, 'technical-staff').catch(() => null),
         ])
@@ -210,11 +213,9 @@ export function FactoryTestReportGenerateDialog({
   const saveGenerateTestReport = async () => {
     const pid = (projectId ?? '').trim()
     if (!pid) throw new Error('Save the BIS project first, then save the Test Report.')
-    await saveBisModulePayload(
-      pid,
-      'factory-test-report',
-      testReportGeneratePayload as unknown as Record<string, unknown>,
-    )
+    const payload = testReportGeneratePayload as unknown as Record<string, unknown>
+    if (storage) await storage.save(payload)
+    else await saveBisModulePayload(pid, 'factory-test-report', payload)
   }
 
   const handleGenerateTestReportSave = () => {
