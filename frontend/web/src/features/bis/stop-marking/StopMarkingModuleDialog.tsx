@@ -27,7 +27,7 @@ import {
   uploadStopMarkingReport,
 } from './stopMarkingApi'
 import { openStopMarkingManak } from './stopMarkingManak'
-import { downloadStopMarkingReplyWord, emailStopMarkingReplyToClient, printStopMarkingReply } from './printStopMarkingReply'
+import { buildStopMarkingReplyHtml, downloadStopMarkingReplyWord, emailStopMarkingReplyToClient, printStopMarkingReply } from './printStopMarkingReply'
 import { AutoGrowTextarea } from '../shared/AutoGrowTextarea'
 import { StopMarkingTestReportModule } from './StopMarkingTestReportModule'
 import { StopMarkingLetterPicker } from './StopMarkingLetterPicker'
@@ -59,6 +59,7 @@ export function StopMarkingModuleDialog({
   const [error, setError] = useState<string | null>(null)
   const [bisRow, setBisRow] = useState<BisProjectRow | null>(null)
   const [docLabel, setDocLabel] = useState('')
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null)
 
   useEffect(() => {
     setForm(row ? rowToCaseForm(row) : null)
@@ -332,6 +333,9 @@ export function StopMarkingModuleDialog({
                     <div className="space-y-3">
                       <StopMarkingReplyEditor row={row} form={form} bisRow={bisRow} closed={closed} onChange={(next) => set('replySections', next)} onDate={(v) => set('replyDate', v)} />
                       <div className="flex flex-wrap items-center gap-1.5">
+                        <Button type="button" variant="outline" className={tbtn} disabled={!hasReply || busy !== null} onClick={() => void run('preview', async () => { setPreviewHtml(await buildStopMarkingReplyHtml(live())) })}>
+                          {busy === 'preview' ? <LoaderCircle size={14} className="animate-spin" /> : <Eye size={14} />} Preview
+                        </Button>
                         <Button type="button" variant="outline" className={tbtn} disabled={!hasReply || busy !== null} onClick={() => void run('print', async () => { const m = await printStopMarkingReply(live()); if (m) setError(m) })}>
                           <Printer size={14} /> Print / PDF
                         </Button>
@@ -603,6 +607,19 @@ export function StopMarkingModuleDialog({
                 </div>
               </div>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={previewHtml !== null} onOpenChange={(open) => { if (!open) setPreviewHtml(null) }}>
+        <DialogContent className="flex h-[92vh] w-[min(64rem,calc(100vw-1.5rem))] max-w-none flex-col gap-2 overflow-hidden rounded-none border-2 border-stone-500 bg-[#e7e0d4] p-3">
+          <DialogHeader className="flex-row items-center justify-between gap-2 space-y-0">
+            <DialogTitle className="font-jakarta text-base">Reply Letter Preview</DialogTitle>
+            <Button type="button" variant="outline" className={tbtn} disabled={busy !== null} onClick={() => void run('print', async () => { const m = await printStopMarkingReply(live()); if (m) setError(m) })}>
+              <Printer size={14} /> Print / PDF
+            </Button>
+          </DialogHeader>
+          <div className="min-h-0 flex-1 overflow-hidden border border-stone-400 bg-stone-300 p-2">
+            {previewHtml ? <iframe title="Reply letter preview" srcDoc={previewHtml} sandbox="allow-same-origin" className="mx-auto h-full w-full max-w-[210mm] border-0 bg-white shadow-md" /> : null}
           </div>
         </DialogContent>
       </Dialog>
