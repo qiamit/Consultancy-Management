@@ -92,6 +92,47 @@ export type StopMarkingTestReportModule = {
   ftr?: Record<string, unknown>
 }
 
+/** The reply letter to BIS, section by section (step 4). */
+export type StopMarkingReplySections = {
+  ourRef: string
+  otherRefs: string
+  subject: string
+  general: string
+  rootCause: string
+  corrective: string
+  preventive: string
+  effectiveness: string
+  newSamples: string
+  stock: string
+  payments: string
+  request: string
+  signatoryName: string
+  signatoryDesignation: string
+}
+export const EMPTY_REPLY_SECTIONS: StopMarkingReplySections = {
+  ourRef: '', otherRefs: '', subject: '', general: '', rootCause: '', corrective: '', preventive: '', effectiveness: '',
+  newSamples: '', stock: '', payments: '', request: '', signatoryName: '', signatoryDesignation: '',
+}
+/** The headed sections of the letter body, in letter order. */
+export const REPLY_BODY_SECTIONS: Array<{ key: keyof StopMarkingReplySections; title: string }> = [
+  { key: 'subject', title: 'Subject' },
+  { key: 'general', title: 'General Paragraph' },
+  { key: 'rootCause', title: 'Root Cause of the Failure' },
+  { key: 'corrective', title: 'Corrective Action' },
+  { key: 'preventive', title: 'Preventive Action' },
+  { key: 'effectiveness', title: 'Effectiveness of the Action' },
+  { key: 'newSamples', title: 'Details of the New Samples' },
+  { key: 'stock', title: 'Stock and Marking Details' },
+  { key: 'payments', title: 'Payment Details' },
+  { key: 'request', title: 'Request to BIS' },
+]
+/** The letter as plain text (kept in reply_draft for the "reply ready" check and as a fallback). */
+export function replySectionsToText(s: StopMarkingReplySections): string {
+  return REPLY_BODY_SECTIONS.map(({ key, title }) => (s[key].trim() ? (key === 'subject' ? `Subject: ${s[key].trim()}` : `${title}:\n${s[key].trim()}`) : ''))
+    .filter(Boolean)
+    .join('\n\n')
+}
+
 export type StopMarkingRow = {
   id: string
   client_id: string
@@ -110,6 +151,7 @@ export type StopMarkingRow = {
   report_findings: StopMarkingFinding[] | null
   report_details: Partial<StopMarkingReportDetails> | null
   report_observations: string
+  reply_sections: Partial<StopMarkingReplySections> | null
   test_report_module: StopMarkingTestReportModule | null
   documents: StopMarkingDocument[] | null
   case_type: string
@@ -153,6 +195,7 @@ export type StopMarkingCaseForm = {
   bisDeadline: string
   reviewNotes: string
   reportFindings: StopMarkingFinding[]
+  replySections: StopMarkingReplySections
   reportObservations: string
   reportDetails: StopMarkingReportDetails
   replyDraft: string
@@ -191,6 +234,7 @@ export function rowToCaseForm(row: StopMarkingRow): StopMarkingCaseForm {
     bisDeadline: row.bis_deadline?.slice(0, 10) ?? '',
     reviewNotes: row.review_notes ?? '',
     reportFindings: row.report_findings ?? [],
+    replySections: { ...EMPTY_REPLY_SECTIONS, ...(row.reply_sections ?? {}) },
     reportObservations: row.report_observations ?? '',
     reportDetails: { ...EMPTY_REPORT_DETAILS, ...(row.report_details ?? {}) },
     replyDraft: row.reply_draft ?? '',

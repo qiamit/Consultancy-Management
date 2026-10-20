@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/supabaseClient'
 import { currentUserId } from '../shared/bisLookupApi'
 import type { OslSampleRequirementRow } from '../projects/oslSampleRequirementsModel'
-import { findingsToText, type StopMarkingDocument, type StopMarkingTestReportModule } from './types'
+import { findingsToText, replySectionsToText, type StopMarkingDocument, type StopMarkingTestReportModule } from './types'
 import { NOTICE_TYPE_OPTIONS, noticeHoldsMarking, type StopMarkingAddForm, type StopMarkingCaseForm, type StopMarkingNoticeFilter, type StopMarkingRow, type StopMarkingStatusFilter } from './types'
 
 /** Case types that prohibit marking, so they put the licence into Stop Marking status. */
@@ -154,7 +154,8 @@ export async function saveStopMarkingCase(id: string, form: StopMarkingCaseForm)
       report_review: findingsToText(form.reportFindings),
       report_observations: form.reportObservations.trim(),
       report_details: form.reportDetails,
-      reply_draft: form.replyDraft,
+      reply_sections: form.replySections,
+      reply_draft: replySectionsToText(form.replySections) || form.replyDraft,
       reply_date: form.replyDate || null,
       status: form.status === 'closed' ? 'reviewed' : form.status || 'open',
       notes: form.notes.trim(),
