@@ -1,4 +1,7 @@
 import { fetchBisProjectById } from '../projects/bisProjectsApi'
+import { loadBisProjectPrintPageSettings } from '../projects/bisPrintPageSettingsApi'
+import { applyBisDocumentPrintPageSettings, DEFAULT_BIS_DOCUMENT_PRINT_PAGE_SETTINGS } from '../print/bisDocumentPrintPageSettings'
+import { paginateHtmlForDownload } from '../print/bisPreviewPagination'
 import { formatDisplayDate } from '../projects/types'
 import { oslSampleRowHasContent, parseOslSampleRequirementsPayload } from '../projects/oslSampleRequirementsModel'
 import { loadBisPrintData, printSignatoryDefaults } from '../print/loadBisPrintData'
@@ -133,11 +136,18 @@ export async function buildStopMarkingReplyHtml(row: StopMarkingRow): Promise<st
   return buildPrintPage({ title: `Reply to BIS — ${ctx.applicantName}`, styles, body })
 }
 
+/** The letter with the licence's Page & Print settings applied and paginated (every page gets its border and letterhead). */
+export async function buildStopMarkingReplyPrintHtml(row: StopMarkingRow): Promise<string> {
+  const project = row.bis_project_id ? await fetchBisProjectById(row.bis_project_id).catch(() => null) : null
+  const settings = project ? await loadBisProjectPrintPageSettings(project.id).catch(() => DEFAULT_BIS_DOCUMENT_PRINT_PAGE_SETTINGS) : DEFAULT_BIS_DOCUMENT_PRINT_PAGE_SETTINGS
+  return paginateHtmlForDownload(applyBisDocumentPrintPageSettings(await buildStopMarkingReplyHtml(row), settings))
+}
+
 export async function printStopMarkingReply(row: StopMarkingRow): Promise<string | null> {
   const target = openPendingPrintWindow('Preparing reply…')
   if (!target) return 'Popup blocked. Allow popups to print.'
   try {
-    return openPrintHtml(await buildStopMarkingReplyHtml(row), { target })
+    return openPrintHtml(await buildStopMarkingReplyPrintHtml(row), { target })
   } catch (err) {
     try { target.close() } catch { /* ignore */ }
     return err instanceof Error ? err.message : 'Unable to prepare the reply.'
@@ -146,7 +156,7 @@ export async function printStopMarkingReply(row: StopMarkingRow): Promise<string
 
 /** Word opens an HTML .doc, so the same letter becomes an editable Word file. */
 export async function downloadStopMarkingReplyWord(row: StopMarkingRow): Promise<void> {
-  const html = await buildStopMarkingReplyHtml(row)
+  const html = await buildStopMarkingReplyPrintHtml(row)
   const url = URL.createObjectURL(new Blob(['﻿', html], { type: 'application/msword' }))
   const a = document.createElement('a')
   a.href = url
@@ -159,7 +169,7 @@ export async function downloadStopMarkingReplyWord(row: StopMarkingRow): Promise
 
 /** Emails the reply letter to the client's master email. */
 export async function emailStopMarkingReplyToClient(row: StopMarkingRow): Promise<string> {
-  const html = await buildStopMarkingReplyHtml(row)
+  const html = await buildStopMarkingReplyPrintHtml(row)
   const title = `Reply to BIS — ${noticeTypeLabel(row.case_type)}`
   return emailHtmlDocumentToClient({
     clientId: row.client_id,
