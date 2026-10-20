@@ -10,6 +10,11 @@ import {
   FolderInput,
   Globe,
   Loader2,
+  Mic,
+  MicOff,
+  Paperclip,
+  Sparkles,
+  X,
   Package,
   Pencil,
   Plus,
@@ -21,6 +26,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { useVoiceInput } from '../shared/useVoiceInput'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -279,6 +285,8 @@ export function OslSampleRequirementsModuleFields({
   isCodeRevisionYear = null,
   portalUserId = null,
   hasPortalPassword = false,
+  qrOnlyFields = false,
+  onAiFill,
 }: {
   value: OslSampleRequirementsModulePayload
   onChange: (next: OslSampleRequirementsModulePayload) => void
@@ -296,12 +304,18 @@ export function OslSampleRequirementsModuleFields({
   isCodeRevisionYear?: string | null
   portalUserId?: string | null
   hasPortalPassword?: boolean
+  /** Sample code, QR code, laboratory, description, additional information and payment fields only for samples that have a QR code; a sample without one defaults to FT. */
+  qrOnlyFields?: boolean
+  /** An AI helper for the sample form: gets the current values and the user's instruction, returns the fields to fill. */
+  onAiFill?: (current: OslSampleRequirementRow, instruction: string, files: File[]) => Promise<Partial<OslSampleRequirementRow>>
   onPrintTestRequest?: (row: OslSampleRequirementRow) => void
   onPrintTestReport?: (row: OslSampleRequirementRow) => void
   /** @deprecated Courier Slip now opens a read-only A4 preview (print + PDF download). */
   onPrintCourierSlip?: (row: OslSampleRequirementRow) => void
 }) {
   const rows = value.rows
+  /** Without a QR code on any sample the QR code, sample code and conformity columns are not needed. */
+  const showQrCols = !qrOnlyFields || rows.some((r) => r.qrCode.trim() !== '')
   const [editIndex, setEditIndex] = useState<number | null>(null)
   const [draft, setDraft] = useState<OslSampleRequirementRow | null>(null)
   const [declaredValueUploadBusy, setDeclaredValueUploadBusy] = useState(false)
@@ -616,6 +630,7 @@ export function OslSampleRequirementsModuleFields({
       ...source,
       id: emptyOslSampleRequirementRow().id,
       qrCode,
+      sampleFor: qrOnlyFields && !qrCode ? 'ft' : source.sampleFor,
       serialNumber: nextSerial,
       conformity: '',
       sampleCode: source.sampleCode.trim()
@@ -1506,6 +1521,29 @@ export function OslSampleRequirementsModuleFields({
       })
   }
 
+  const [aiInstruction, setAiInstruction] = useState('')
+  const [aiBusy, setAiBusy] = useState(false)
+  const [aiFiles, setAiFiles] = useState<File[]>([])
+  const [voiceLang, setVoiceLang] = useState<'en-IN' | 'hi-IN'>('en-IN')
+  const voice = useVoiceInput(setAiInstruction, voiceLang)
+  const runAiFill = async () => {
+    if (!draft || !onAiFill) return
+    setAiBusy(true)
+    try {
+      const filled = await onAiFill(draft, aiInstruction, aiFiles)
+      const keys = Object.keys(filled)
+      if (!keys.length) {
+        toast.message('AI Found Nothing to Fill.')
+        return
+      }
+      setDraft({ ...draft, ...filled })
+      toast.success('Sample Filled by AI — Check the Fields.')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'AI Could Not Fill the Sample.')
+    } finally {
+      setAiBusy(false)
+    }
+  }
   const patchDraft = <K extends keyof OslSampleRequirementRow>(
     key: K,
     next: OslSampleRequirementRow[K],
@@ -1977,12 +2015,14 @@ export function OslSampleRequirementsModuleFields({
                       <span className="rounded-none border border-stone-400 bg-white/70 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-950">
                         {sampleForLabel(row.sampleFor)}
                       </span>
-                      <span className="truncate text-stone-600">{row.priority}</span>
+                      {!qrOnlyFields || row.qrCode.trim() ? <span className="truncate text-stone-600">{row.priority}</span> : null}
                     </label>
                     {renderActionButtons(row, index)}
                   </div>
 
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {!qrOnlyFields || row.qrCode.trim() ? (
+<>
                     <div className="min-w-0">
                       <p className={cardFieldLabelClass}>QR Code</p>
                       <p className="truncate text-sm font-medium text-stone-900" title={row.qrCode || undefined}>
@@ -2011,6 +2051,8 @@ export function OslSampleRequirementsModuleFields({
                         }
                       />
                     </div>
+</>
+) : null}
                     <div className="min-w-0 sm:col-span-2">
                       <p className={cardFieldLabelClass}>Sample Details</p>
                       {row.batchNumber.trim() ? (
@@ -2082,14 +2124,16 @@ export function OslSampleRequirementsModuleFields({
                   />
                 </TableHead>
                 <TableHead className={cn(thClass, 'w-[4.5rem]')}>Sample For</TableHead>
-                <TableHead className={cn(thClass, 'w-[16%]')}>QR Code</TableHead>
-                <TableHead className={cn(thClass, 'w-[16%]')}>Sample Code</TableHead>
+                {showQrCols ? <TableHead className={cn(thClass, 'w-[16%]')}>QR Code</TableHead> : null}
+                {showQrCols ? <TableHead className={cn(thClass, 'w-[16%]')}>Sample Code</TableHead> : null}
                 <TableHead className={cn(thClass, 'w-[20%]')}>Sample Details</TableHead>
                 <TableHead className={cn(thClass, 'w-[5.5rem]')}>Priority</TableHead>
                 <TableHead className={cn(thClass, 'w-[5.5rem]')}>In Offer Letter</TableHead>
+                {showQrCols ? (
                 <TableHead className={cn(thClass, 'w-[7rem]')} title="Conformity of Sample as per IS (from the Lab Report)">
                   Conformity
                 </TableHead>
+                ) : null}
                 <TableHead className={cn(thClass, 'w-14')}>Test Request</TableHead>
                 <TableHead className={cn(thClass, 'w-14')}>Courier Slip</TableHead>
                 <TableHead className={cn(thClass, 'w-14')}>Test Report</TableHead>
@@ -2100,7 +2144,7 @@ export function OslSampleRequirementsModuleFields({
               {rows.length === 0 ? (
                 <TableRow className={cn('border-[#e7e0d4]', rowBlankClass)}>
                   <TableCell
-                    colSpan={12}
+                    colSpan={showQrCols ? 12 : 9}
                     className="px-3 py-8 text-center text-sm text-stone-500"
                   >
                     No samples yet. Use + to add a sample.
@@ -2128,6 +2172,8 @@ export function OslSampleRequirementsModuleFields({
                       <TableCell className="px-2 py-2 text-center text-xs font-semibold align-middle">
                         {sampleForLabel(row.sampleFor)}
                       </TableCell>
+                      {showQrCols ? (
+<>
                       <TableCell
                         className="truncate px-2 py-2 text-center text-xs align-middle"
                         title={row.qrCode || undefined}
@@ -2140,6 +2186,8 @@ export function OslSampleRequirementsModuleFields({
                       >
                         {row.sampleCode || '—'}
                       </TableCell>
+</>
+) : null}
                       <TableCell className="truncate px-2 py-2 text-center text-xs font-medium align-middle">
                         {row.batchNumber.trim() ? (
                           <button
@@ -2182,6 +2230,7 @@ export function OslSampleRequirementsModuleFields({
                           }
                         />
                       </TableCell>
+                      {showQrCols ? (
                       <TableCell className="px-1.5 py-2 text-center align-middle">
                         <SampleConformitySelect
                           className="h-8 w-full px-2 text-xs"
@@ -2194,6 +2243,7 @@ export function OslSampleRequirementsModuleFields({
                           }
                         />
                       </TableCell>
+) : null}
                       <TableCell className="px-2 py-2 text-center align-middle">
                         {renderTestRequestMenu(row)}
                       </TableCell>
@@ -2940,7 +2990,66 @@ export function OslSampleRequirementsModuleFields({
                 tabIndex={-1}
                 onChange={handleDeclaredValueFileChange}
               />
+              {qrOnlyFields && !draft.qrCode.trim() && onAiFill ? (
+                <div className="flex flex-wrap items-end gap-2 border border-amber-300 bg-amber-50/70 p-2.5">
+                  <div className="min-w-0 flex-1 basis-72 space-y-1.5">
+                    <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-stone-600" htmlFor="osl-ai-instruction">Tell the AI (Batch Number, Date, Quantities, or Use Dummy Values)</label>
+                    <Input
+                      id="osl-ai-instruction"
+                      className={cn(limsFieldClass, 'h-9')}
+                      value={aiInstruction}
+                      disabled={aiBusy}
+                      placeholder="e.g. Dummy Batch Number, Mfg Date Today, Batch 5 Tonne, Sample 1 Mtr x 2 Nos"
+                      onChange={(e) => setAiInstruction(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void runAiFill() } }}
+                    />
+                  </div>
+                  {voice.supported ? (
+                    <div className="flex h-9 items-stretch">
+                      <Button type="button" variant="outline" className={cn(limsOutlineBtnClass, 'h-9 w-9 shrink-0 p-0', voice.listening && 'border-red-600 bg-red-50 text-red-700')} disabled={aiBusy} title={voice.listening ? 'Stop Listening' : 'Voice Typing'} aria-label={voice.listening ? 'Stop Voice Typing' : 'Start Voice Typing'} onClick={() => (voice.listening ? voice.stop() : voice.start(aiInstruction))}>
+                        {voice.listening ? <MicOff size={15} aria-hidden /> : <Mic size={15} aria-hidden />}
+                      </Button>
+                      <Button type="button" variant="outline" className={cn(limsOutlineBtnClass, 'h-9 w-10 shrink-0 border-l-0 p-0 text-[11px] font-bold')} disabled={aiBusy || voice.listening} title="Voice Language" aria-label="Voice Language" onClick={() => setVoiceLang((l) => (l === 'en-IN' ? 'hi-IN' : 'en-IN'))}>
+                        {voiceLang === 'en-IN' ? 'EN' : 'हि'}
+                      </Button>
+                    </div>
+                  ) : null}
+                  <label className={cn(limsOutlineBtnClass, 'inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center border', aiBusy && 'pointer-events-none opacity-50')} title="Attach PDF or Image" aria-label="Attach PDF or Image">
+                    <Paperclip size={15} aria-hidden />
+                    <input
+                      type="file"
+                      multiple
+                      className="sr-only"
+                      accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
+                      disabled={aiBusy}
+                      onChange={(e) => {
+                        const picked = Array.from(e.target.files ?? [])
+                        e.target.value = ''
+                        if (picked.length) setAiFiles((cur) => [...cur, ...picked])
+                      }}
+                    />
+                  </label>
+                  <Button type="button" variant="outline" className={cn(limsOutlineBtnClass, 'h-9 gap-1.5 border-amber-600 bg-white font-semibold text-amber-900')} disabled={aiBusy} onClick={() => void runAiFill()}>
+                    {aiBusy ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Sparkles size={14} aria-hidden />} {aiBusy ? 'Filling…' : 'Fill with AI'}
+                  </Button>
+                  {aiFiles.length || voice.error ? (
+                    <div className="flex basis-full flex-wrap items-center gap-1.5">
+                      {aiFiles.map((f, i) => (
+                        <span key={`${f.name}-${i}`} className="inline-flex max-w-full items-center gap-1 border border-stone-400 bg-white px-2 py-0.5 text-xs text-stone-700">
+                          <Paperclip size={12} aria-hidden />
+                          <span className="truncate" title={f.name}>{f.name}</span>
+                          <button type="button" className="text-red-700" aria-label={`Remove ${f.name}`} disabled={aiBusy} onClick={() => setAiFiles((cur) => cur.filter((_, j) => j !== i))}>
+                            <X size={12} aria-hidden />
+                          </button>
+                        </span>
+                      ))}
+                      {voice.error ? <span className="text-xs text-destructive">{voice.error}</span> : null}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
               <div className="space-y-3">
+                {(qrOnlyFields && !draft.qrCode.trim()) ? (
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
                   <MasterOptionFieldWithAdd
                     category="osl_sample_for"
@@ -2960,6 +3069,112 @@ export function OslSampleRequirementsModuleFields({
                     defaultOptions={OSL_SAMPLE_FOR_OPTIONS}
                   />
                   <MasterOptionFieldWithAdd
+                    category="osl_sample_shelf_life"
+                    value={draft.shelfLife}
+                    onChange={(value) => patchDraft('shelfLife', value)}
+                    label="Shelf Life"
+                    inputId="osl-shelf"
+                    listId="osl-shelf-list"
+                  />
+                  <MasterOptionFieldWithAdd
+                    category="osl_sample_mode_of_disposal"
+                    value={draft.modeOfDisposal}
+                    onChange={(value) => patchDraft('modeOfDisposal', value)}
+                    label="Mode Of Disposal"
+                    inputId="osl-disposal"
+                    listId="osl-disposal-list"
+                  />
+                  <MasterOptionFieldWithAdd
+                    category="osl_sample_test_required"
+                    value={draft.testRequired}
+                    onChange={(value) => patchDraft('testRequired', value)}
+                    label="Test Required"
+                    inputId="osl-test"
+                    listId="osl-test-list"
+                  />
+                  <Field label="Serial Number" htmlFor="osl-serial">
+                    <Input
+                      id="osl-serial"
+                      className={cn(limsFieldClass, 'h-9')}
+                      value={draft.serialNumber}
+                      onChange={(e) => patchDraft('serialNumber', e.target.value)}
+                    />
+                  </Field>
+                  <Field label="Batch Quantity" htmlFor="osl-batch-qty">
+                    <Input
+                      id="osl-batch-qty"
+                      className={cn(limsFieldClass, 'h-9')}
+                      value={draft.batchQuantity}
+                      onChange={(e) => patchDraft('batchQuantity', e.target.value)}
+                    />
+                  </Field>
+                  <div className="min-w-0 sm:col-span-2 lg:col-span-2">
+                  <Field label="Sample Quantity" htmlFor="osl-qty">
+                    <Input
+                      id="osl-qty"
+                      className={cn(limsFieldClass, 'h-9')}
+                      value={draft.sampleQuantity}
+                      onChange={(e) => patchDraft('sampleQuantity', e.target.value)}
+                    />
+                  </Field>
+                  </div>
+                  <Field label="Batch Number" htmlFor="osl-batch">
+                    <Input
+                      id="osl-batch"
+                      className={cn(limsFieldClass, 'h-9')}
+                      value={draft.batchNumber}
+                      onChange={(e) => patchDraft('batchNumber', e.target.value)}
+                    />
+                  </Field>
+                  <Field label="Date of Manufacturing" htmlFor="osl-dom">
+                    <LimsFieldWithAdd
+                      className="h-9"
+                      addButton={
+                        <button
+                          type="button"
+                          className={cn(limsFieldAddBtnClass, 'w-9')}
+                          aria-label="Open Calendar"
+                          title="Pick Date"
+                          onClick={() => openDatePicker(manufacturingDateRef.current)}
+                        >
+                          <Calendar size={14} strokeWidth={2.25} aria-hidden />
+                        </button>
+                      }
+                    >
+                      <Input
+                        ref={manufacturingDateRef}
+                        id="osl-dom"
+                        type="date"
+                        className={dateInputClass}
+                        value={draft.dateOfManufacturing}
+                        onChange={(e) => patchDraft('dateOfManufacturing', e.target.value)}
+                      />
+                    </LimsFieldWithAdd>
+                  </Field>
+                </div>
+                ) : (
+<>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                  <MasterOptionFieldWithAdd
+                    category="osl_sample_for"
+                    value={sampleForLabel(draft.sampleFor)}
+                    onChange={(value) => {
+                      const normalized = value.trim().toLowerCase()
+                      patchDraft(
+                        'sampleFor',
+                        normalized === 'osl' || normalized === 'ft' || normalized === 'it'
+                          ? normalized
+                          : value,
+                      )
+                    }}
+                    label="Sample For"
+                    inputId="osl-sample-for"
+                    listId="osl-sample-for-list"
+                    defaultOptions={OSL_SAMPLE_FOR_OPTIONS}
+                  />
+                  {(!qrOnlyFields || Boolean(draft.qrCode.trim())) ? (
+<>
+                  <MasterOptionFieldWithAdd
                     category="osl_sample_priority"
                     value={draft.priority}
                     onChange={(value) => patchDraft('priority', value)}
@@ -2976,6 +3191,8 @@ export function OslSampleRequirementsModuleFields({
                     inputId="osl-sample-type"
                     listId="osl-sample-type-list"
                   />
+</>
+) : null}
                   <Field label="Serial Number" htmlFor="osl-serial">
                     <Input
                       id="osl-serial"
@@ -2994,6 +3211,8 @@ export function OslSampleRequirementsModuleFields({
                   </Field>
                 </div>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                  {(!qrOnlyFields || Boolean(draft.qrCode.trim())) ? (
+<>
                   <Field label="Sample Code" htmlFor="osl-sample-code">
                     <Input
                       id="osl-sample-code"
@@ -3011,6 +3230,8 @@ export function OslSampleRequirementsModuleFields({
                       placeholder="12-Digit Manak QR (Optional)"
                     />
                   </Field>
+</>
+) : null}
                   <MasterOptionFieldWithAdd
                     category="osl_sample_shelf_life"
                     value={draft.shelfLife}
@@ -3036,6 +3257,8 @@ export function OslSampleRequirementsModuleFields({
                     listId="osl-test-list"
                   />
                 </div>
+</>
+                )}
               </div>
 
               <div className="space-y-3">
@@ -3103,6 +3326,7 @@ export function OslSampleRequirementsModuleFields({
                     </div>
                   </Field>
                 </div>
+                {!(qrOnlyFields && !draft.qrCode.trim()) ? (
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   <Field label="Batch Number" htmlFor="osl-batch">
                     <Input
@@ -3146,10 +3370,13 @@ export function OslSampleRequirementsModuleFields({
                     />
                   </Field>
                 </div>
+                ) : null}
               </div>
 
               <div className="space-y-3">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  {(!qrOnlyFields || Boolean(draft.qrCode.trim())) ? (
+<>
                   <Field label="Name of the Laboratory" htmlFor="osl-lab">
                     <div className="border border-stone-400 bg-white">
                       <RemoteLookupCombobox
@@ -3179,6 +3406,9 @@ export function OslSampleRequirementsModuleFields({
                       readOnly
                     />
                   </Field>
+</>
+) : null}
+                  {!qrOnlyFields || draft.qrCode.trim() ? (
                   <Field label="Conformity of Sample as per IS" htmlFor="osl-conformity">
                     <SampleConformitySelect
                       id="osl-conformity"
@@ -3188,9 +3418,11 @@ export function OslSampleRequirementsModuleFields({
                       onChange={(next) => patchDraft('conformity', next)}
                     />
                   </Field>
+                  ) : null}
                 </div>
               </div>
 
+              {(!qrOnlyFields || Boolean(draft.qrCode.trim())) ? (
               <div className="space-y-3">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <Field label="Sample Description" htmlFor="osl-desc">
@@ -3214,6 +3446,8 @@ export function OslSampleRequirementsModuleFields({
                 </div>
               </div>
 
+) : null}
+              {(!qrOnlyFields || Boolean(draft.qrCode.trim())) ? (
               <div className="space-y-3">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   <Field label="Testing Charges" htmlFor="osl-charges">
@@ -3281,6 +3515,7 @@ export function OslSampleRequirementsModuleFields({
                   </Field>
                 </div>
               </div>
+) : null}
             </div>
           ) : null}
 
