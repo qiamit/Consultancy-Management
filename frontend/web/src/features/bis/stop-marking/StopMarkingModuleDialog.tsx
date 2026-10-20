@@ -173,6 +173,15 @@ export function StopMarkingModuleDialog({
     if (nextStatus) setForm((f) => f && { ...f, status: nextStatus })
     return updated
   }
+  /** Closing keeps what was typed or read by the AI: unsaved changes are saved first. */
+  const requestClose = () => {
+    const dirty = !closed && JSON.stringify(rowToCaseForm(row)) !== JSON.stringify(form)
+    if (!dirty) return onOpenChange(false)
+    void run('close', async () => {
+      await save()
+      onOpenChange(false)
+    })
+  }
   const go = (next: number) => {
     if (closed) return setStep(next)
     void run('nav', async () => {
@@ -200,7 +209,7 @@ export function StopMarkingModuleDialog({
 
   return (
     <>
-      <Dialog open onOpenChange={onOpenChange}>
+      <Dialog open onOpenChange={(open) => (open ? onOpenChange(true) : requestClose())}>
         <DialogContent
           persistOnFocusLoss
           showCloseButton={false}
@@ -228,7 +237,7 @@ export function StopMarkingModuleDialog({
                       {[stopMarkingIsCodeLabel(row), formatCmL(row.cm_l_digits), stopMarkingStatusLabel(row.status)].filter(Boolean).join(' · ')}
                     </p>
                   </DialogHeader>
-                  <Button type="button" variant="outline" size="sm" className={cn(limsDarkBarBtnClass, 'h-8 shrink-0 gap-1.5 px-2.5')} onClick={() => onOpenChange(false)} title="Close">
+                  <Button type="button" variant="outline" size="sm" className={cn(limsDarkBarBtnClass, 'h-8 shrink-0 gap-1.5 px-2.5')} onClick={requestClose} title="Close">
                     <X className="h-4 w-4" aria-hidden />
                     <span className="hidden sm:inline">Close</span>
                   </Button>
