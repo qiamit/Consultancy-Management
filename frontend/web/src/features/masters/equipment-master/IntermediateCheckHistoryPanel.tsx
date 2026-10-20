@@ -230,7 +230,7 @@ function RecordDetails({
         ) : null}
         <MetaChip label="Readings" value={String(readings.length)} />
         {nextDueDate ? (
-          <MetaChip label="Next due" value={formatDisplayDate(nextDueDate)} />
+          <MetaChip label="Next Due" value={formatDisplayDate(nextDueDate)} />
         ) : null}
       </div>
 
@@ -336,7 +336,7 @@ export function IntermediateCheckHistoryPanel({
 
       {hasCurrent ? (
         <RecordDetails
-          label="Latest saved (current)"
+          label="Latest Saved (Current)"
           conductedOn={currentLastDate!}
           doneByName={currentDoneByName ?? ''}
           status={currentStatus ?? 'N/A'}

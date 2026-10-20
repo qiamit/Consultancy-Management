@@ -352,7 +352,7 @@ export function EquipmentMasterForm({
             setMaintDoneByOpen(open)
             if (open) setMaintDoneByQuery(selectedMaintDoneByLabel)
           }}
-          placeholder="Type to search employee…"
+          placeholder="Type to Search Employee…"
         />
       </div>
       <div className="col-span-12 min-w-0 space-y-2 md:col-span-3">
@@ -504,7 +504,7 @@ export function EquipmentMasterForm({
               id={`eq-cal-uncertainty-${idSuffix}`}
               inputMode="decimal"
               placeholder="Value"
-              aria-label="UOM of calibration value, plus or minus"
+              aria-label="UOM of Calibration Value, Plus or Minus"
               value={form.calibrationCertificateUncertainty}
               onChange={(e) =>
                 onChange({
@@ -554,7 +554,7 @@ export function EquipmentMasterForm({
           <LimsFieldWithAdd
             addButton={
               <LimsFieldAddButton
-                aria-label="Add new calibration agency client"
+                aria-label="Add New Calibration Agency Client"
                 title="Add New Client"
                 onClick={() => onAddNewClientClick('externalCalibrationAgency')}
               />
@@ -1225,7 +1225,7 @@ export function EquipmentMasterForm({
             className={cn('h-9', limsOutlineBtnClass)}
             onClick={() => setIcEnvSetupOpen(true)}
             aria-label="Environment Condition"
-            title="Set up environment condition columns"
+            title="Set Up Environment Condition Columns"
           >
             <Thermometer size={16} className="mr-1.5" aria-hidden />
             Environment Condition
@@ -1664,7 +1664,7 @@ export function EquipmentMasterForm({
                           </table>
                         </div>
                       ) : (
-                        <p className="text-[10px] text-muted-foreground">No calibration points recorded for this master.</p>
+                        <p className="text-[10px] text-muted-foreground">No Calibration Points Recorded for This Master.</p>
                       )}
                     </div>
                   )
@@ -1779,7 +1779,7 @@ export function EquipmentMasterForm({
                               variant="ghost"
                               size="icon"
                               className="h-6 w-6 text-destructive hover:bg-rose-50"
-                              aria-label="Delete reading"
+                              aria-label="Delete Reading"
                               onClick={() => {
                                 const newR = parsedReadings.filter((_, i) => i !== idx)
                                 handleUpdateCheck(newR)
@@ -1794,7 +1794,7 @@ export function EquipmentMasterForm({
                               variant="ghost"
                               size="icon"
                               className="h-6 w-6 text-primary hover:bg-primary/10"
-                              aria-label="Add reading"
+                              aria-label="Add Reading"
                               onClick={() => {
                                 const newR = [...parsedReadings, emptyIntermediateCheckReading()]
                                 handleUpdateCheck(newR)
@@ -1896,7 +1896,7 @@ export function EquipmentMasterForm({
                 })
                 
                 if (!hasValid) {
-                  return <span className="text-[10px] font-semibold text-slate-400">No readings</span>
+                  return <span className="text-[10px] font-semibold text-slate-400">No Readings</span>
                 }
                 if (hasFail) {
                   return (
@@ -2192,7 +2192,7 @@ export function EquipmentMasterForm({
                 onChange={(e) =>
                   onChange({ ...form, assetCode: e.target.value.toUpperCase() })
                 }
-                placeholder="Enter unique asset code"
+                placeholder="Enter Unique Asset Code"
                 className="font-mono font-medium uppercase"
                 autoComplete="off"
                 required
@@ -2265,7 +2265,7 @@ export function EquipmentMasterForm({
             </div>
 
             <div className="col-span-12 space-y-0.5 md:col-span-3">
-              <Label htmlFor="eq-custodian">Custodian / In-charge</Label>
+              <Label htmlFor="eq-custodian">Custodian / In-Charge</Label>
               <FilterCombobox
                 inputId="eq-custodian"
                 listId="eq-custodian-list"
@@ -2288,7 +2288,7 @@ export function EquipmentMasterForm({
                   setCustodianOpen(open)
                   if (open) setCustodianQuery(selectedCustodianLabel)
                 }}
-                placeholder="Type to search employee…"
+                placeholder="Type to Search Employee…"
               />
             </div>
             </div>
@@ -2324,7 +2324,7 @@ export function EquipmentMasterForm({
               <LimsFieldWithAdd
                 addButton={
                   <LimsFieldAddButton
-                    aria-label="Add new supplier client"
+                    aria-label="Add New Supplier Client"
                     title="Add New Client"
                     onClick={() => onAddNewClientClick('purchasedFrom')}
                   />
@@ -2334,7 +2334,7 @@ export function EquipmentMasterForm({
                   value={form.purchasedFrom}
                   onValueChange={(v) => onChange({ ...form, purchasedFrom: v })}
                   options={clients}
-                  placeholder="Type to search supplier…"
+                  placeholder="Type to Search Supplier…"
                 />
               </LimsFieldWithAdd>
             </div>
@@ -2362,7 +2362,7 @@ export function EquipmentMasterForm({
                 <Input
                   id="eq-range"
                   placeholder="Value"
-                  aria-label="Range / capacity value"
+                  aria-label="Range / Capacity Value"
                   value={form.rangeCapacity}
                   onChange={(e) => onChange({ ...form, rangeCapacity: e.target.value })}
                   className="h-full min-w-0 flex-1 rounded-none border-0 bg-transparent px-2 shadow-none focus-visible:ring-0"
@@ -2389,7 +2389,7 @@ export function EquipmentMasterForm({
                 <Input
                   id="eq-resolution"
                   placeholder="Value"
-                  aria-label="Resolution / least count value"
+                  aria-label="Resolution / Least Count Value"
                   value={form.resolutionLeastCount}
                   onChange={(e) => onChange({ ...form, resolutionLeastCount: e.target.value })}
                   className="h-full min-w-0 flex-1 rounded-none border-0 bg-transparent px-2 shadow-none focus-visible:ring-0"
@@ -2418,7 +2418,7 @@ export function EquipmentMasterForm({
                 <Input
                   id="eq-accuracy"
                   placeholder="Value"
-                  aria-label="Acceptance criteria value"
+                  aria-label="Acceptance Criteria Value"
                   value={form.accuracyAcceptanceCriteria}
                   onChange={(e) =>
                     onChange({ ...form, accuracyAcceptanceCriteria: e.target.value })
@@ -2779,7 +2779,7 @@ export function EquipmentMasterForm({
               <Label htmlFor="eq-damage">History of Damage/Malfunction</Label>
               <Input
                 id="eq-damage"
-                placeholder="Describe any history of damages or malfunctions…"
+                placeholder="Describe Any History of Damages or Malfunctions…"
                 value={form.historyOfDamage}
                 onChange={(e) => onChange({ ...form, historyOfDamage: e.target.value })}
                 className="h-8"

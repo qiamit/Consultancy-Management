@@ -299,7 +299,7 @@ export function MeasurementUnitSelect({
                 className="inline-flex h-full w-9 shrink-0 items-center justify-center self-stretch border-l border-stone-500 bg-stone-100 text-amber-800 transition-colors hover:bg-amber-500/15 hover:text-amber-950 disabled:pointer-events-none disabled:opacity-50"
                 onClick={() => openManageDialog()}
                 onMouseDown={(e) => e.preventDefault()}
-                aria-label="Add measurement unit"
+                aria-label="Add Measurement Unit"
                 title="Add New"
                 disabled={disabled}
               >
@@ -450,7 +450,7 @@ export function MeasurementUnitSelect({
                     </div>
                   ))
                 ) : (
-                  <p className="text-xs text-stone-500">No units added yet.</p>
+                  <p className="text-xs text-stone-500">No Units Added Yet.</p>
                 )}
               </div>
             </div>

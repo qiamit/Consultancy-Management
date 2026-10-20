@@ -75,7 +75,7 @@ export function RenewalRemindersDialog({ open, onOpenChange }: { open: boolean; 
         toast.success(`Automatic renewal reminders are on.${skipped ? ` ${skipped} already-due reminder(s) skipped.` : ''}`)
       } else {
         await setRenewalRemindersEnabled(false)
-        toast.success('Automatic renewal reminders are off.')
+        toast.success('Automatic Renewal Reminders Are Off.')
       }
       await load()
     } catch (err) {

@@ -48,7 +48,7 @@ export function UndertakingAiDialog({
       setDraft(result.lines.map((line) => ({ ...line, checked: true })))
       setNotes(result.notes)
       setTitle(result.title)
-      if (!result.lines.length) toast.message('AI found no new lines', { description: 'Try other sources or add instructions.' })
+      if (!result.lines.length) toast.message('AI Found No New Lines', { description: 'Try other sources or add instructions.' })
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'AI could not prepare undertaking lines.')
     } finally {

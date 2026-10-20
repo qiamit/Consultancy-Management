@@ -127,7 +127,7 @@ export default function ResetPasswordPage() {
           </div>
 
           <div className={cn(limsRegistryFormClass, 'space-y-4 p-5')}>
-            {phase === 'checking' && <p className="text-sm text-stone-600">Checking your reset link…</p>}
+            {phase === 'checking' && <p className="text-sm text-stone-600">Checking Your Reset Link…</p>}
 
             {phase === 'invalid' && (
               <>
@@ -158,7 +158,7 @@ export default function ResetPasswordPage() {
                   </div>
                 )}
                 <div className="space-y-2">
-                  <Label htmlFor="reset-new-password">New password</Label>
+                  <Label htmlFor="reset-new-password">New Password</Label>
                   <PasswordInput
                     id="reset-new-password"
                     value={newPassword}
@@ -168,7 +168,7 @@ export default function ResetPasswordPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="reset-confirm-password">Confirm new password</Label>
+                  <Label htmlFor="reset-confirm-password">Confirm New Password</Label>
                   <PasswordInput
                     id="reset-confirm-password"
                     value={confirmPassword}
@@ -191,7 +191,7 @@ export default function ResetPasswordPage() {
             {phase === 'done' && (
               <>
                 <div className="rounded-none border border-emerald-600/40 bg-emerald-50 px-3 py-2.5">
-                  <p className="text-sm text-emerald-800">Your password has been changed.</p>
+                  <p className="text-sm text-emerald-800">Your Password Has Been Changed.</p>
                 </div>
                 <div className="flex justify-end">
                   <Button

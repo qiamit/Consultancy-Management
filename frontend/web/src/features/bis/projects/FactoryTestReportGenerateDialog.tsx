@@ -71,7 +71,7 @@ export function FactoryTestReportGenerateDialog({
   const openGenerateTestReport = (row: OslSampleRequirementRow) => {
     const pid = (projectId ?? '').trim()
     if (!pid) {
-      toast.error('Save the BIS project first, then generate a Test Report.')
+      toast.error('Save the BIS Project First, Then Generate a Test Report.')
       return
     }
     setTestReportGenerateSampleId(row.id)
@@ -220,7 +220,7 @@ export function FactoryTestReportGenerateDialog({
   const handleGenerateTestReportSave = () => {
     setTestReportGenerateBusy(true)
     void saveGenerateTestReport()
-      .then(() => { toast.success('Test Report module saved.'); onSaved?.() })
+      .then(() => { toast.success('Test Report Module Saved.'); onSaved?.() })
       .catch((err) =>
         toast.error(err instanceof Error ? err.message : 'Could not save Test Report.'),
       )
@@ -230,7 +230,7 @@ export function FactoryTestReportGenerateDialog({
   const handleGenerateTestReportPrint = () => {
     const pid = (projectId ?? '').trim()
     if (!pid) {
-      toast.error('Save the BIS project first, then print the Test Report.')
+      toast.error('Save the BIS Project First, Then Print the Test Report.')
       return
     }
     setTestReportGenerateBusy(true)
@@ -265,7 +265,7 @@ export function FactoryTestReportGenerateDialog({
         const pending = openPendingPrintWindow('Preparing Test Report…')
         const err = openPrintHtml(html, { target: pending })
         if (err) toast.error(err)
-        else toast.success('Test Report ready to print.')
+        else toast.success('Test Report Ready to Print.')
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Could not print Test Report.')
       } finally {
@@ -277,7 +277,7 @@ export function FactoryTestReportGenerateDialog({
   const handleGenerateTestReportDownload = () => {
     const pid = (projectId ?? '').trim()
     if (!pid) {
-      toast.error('Save the BIS project first, then download the Test Report.')
+      toast.error('Save the BIS Project First, Then Download the Test Report.')
       return
     }
     setTestReportGenerateBusy(true)
@@ -337,7 +337,7 @@ export function FactoryTestReportGenerateDialog({
           ),
           filename,
         })
-        toast.success('Test Report PDF downloaded.')
+        toast.success('Test Report PDF Downloaded.')
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Could not download Test Report.')
       } finally {
@@ -390,7 +390,7 @@ export function FactoryTestReportGenerateDialog({
 
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             {testReportGenerateLoading ? (
-              <p className="py-8 text-center text-sm text-stone-500">Loading Test Report module…</p>
+              <p className="py-8 text-center text-sm text-stone-500">Loading Test Report Module…</p>
             ) : (
               <FactoryTestReportModuleFields
                 value={testReportGeneratePayload}

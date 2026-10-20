@@ -79,7 +79,7 @@ export function ProductsServicesFooterBar({
                 className={actionBtnClass}
                 onClick={onArchiveSelected}
                 disabled={loading || selectionDisabled}
-                title="Archive selected"
+                title="Archive Selected"
               >
                 <Archive size={14} />
                 <span className="hidden md:inline">Archive</span>
@@ -93,7 +93,7 @@ export function ProductsServicesFooterBar({
                 className={actionBtnClass}
                 onClick={onRestoreSelected}
                 disabled={loading || selectionDisabled}
-                title="Restore selected"
+                title="Restore Selected"
               >
                 <ArchiveRestore size={14} />
                 <span className="hidden md:inline">Restore</span>
@@ -107,8 +107,8 @@ export function ProductsServicesFooterBar({
                 className={cn(actionBtnClass, 'h-10 min-h-10')}
                 onClick={onHistory}
                 disabled={loading || selectedCount !== 1}
-                aria-label="Change history"
-                title="Change history"
+                aria-label="Change History"
+                title="Change History"
               >
                 <History size={14} />
                 <span className="hidden sm:inline">History</span>
@@ -144,7 +144,7 @@ export function ProductsServicesFooterBar({
                 className={actionBtnClass}
                 onClick={onPrintSelected}
                 disabled={loading || selectionDisabled}
-                title="Print selected items"
+                title="Print Selected Items"
               >
                 <Printer size={14} />
                 <span className="hidden md:inline">Print</span>
@@ -156,10 +156,10 @@ export function ProductsServicesFooterBar({
                 className={cn(limsDeleteBtnClass, 'h-8 shrink-0 gap-1 px-2 text-xs sm:px-2.5')}
                 onClick={onDeleteSelected}
                 disabled={loading || selectionDisabled}
-                title="Delete permanently"
+                title="Delete Permanently"
               >
                 <Trash2 size={14} />
-                <span className="hidden md:inline">Delete permanently</span>
+                <span className="hidden md:inline">Delete Permanently</span>
               </Button>
             </LaboratoryDirectorOnly>
             {selectedCount > 0 ? (
@@ -190,7 +190,7 @@ export function ProductsServicesFooterBar({
 
           <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5">
             <Input
-              aria-label="Jump to page"
+              aria-label="Jump to Page"
               placeholder="Page"
               value={jumpTo}
               onChange={(e) => onJumpToChange(e.target.value.replace(/[^0-9]/g, ''))}
@@ -219,7 +219,7 @@ export function ProductsServicesFooterBar({
               disabled={loading || page <= 1}
             >
               <ChevronLeft size={16} />
-              <span className="sr-only">Previous page</span>
+              <span className="sr-only">Previous Page</span>
             </Button>
             <span className="shrink-0 whitespace-nowrap text-center text-xs font-medium text-stone-300 sm:min-w-[5rem]">
               <span className="hidden sm:inline">Page </span>
@@ -234,7 +234,7 @@ export function ProductsServicesFooterBar({
               disabled={loading || page >= pageCount}
             >
               <ChevronRight size={16} />
-              <span className="sr-only">Next page</span>
+              <span className="sr-only">Next Page</span>
             </Button>
           </div>
         </div>

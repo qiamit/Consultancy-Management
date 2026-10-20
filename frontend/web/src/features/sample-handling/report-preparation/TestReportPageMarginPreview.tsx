@@ -355,7 +355,7 @@ export function TestReportPageMarginPreview({
           <>
             <div
               role="slider"
-              aria-label="Adjust top margin"
+              aria-label="Adjust Top Margin"
               aria-valuenow={settings.bodyPaddingTopMm}
               className={`${handleClass} left-2 right-2 h-0.5 cursor-ns-resize rounded-none ${dragging === 'top' ? 'ring-1 ring-primary' : ''}`}
               style={{ top: contentTop - 1 }}
@@ -363,7 +363,7 @@ export function TestReportPageMarginPreview({
             />
             <div
               role="slider"
-              aria-label="Adjust bottom margin"
+              aria-label="Adjust Bottom Margin"
               aria-valuenow={settings.bodyPaddingBottomMm}
               className={`${handleClass} left-2 right-2 h-0.5 cursor-ns-resize rounded-none ${dragging === 'bottom' ? 'ring-1 ring-primary' : ''}`}
               style={{ top: contentBottom - 1 }}
@@ -371,7 +371,7 @@ export function TestReportPageMarginPreview({
             />
             <div
               role="slider"
-              aria-label="Adjust left margin"
+              aria-label="Adjust Left Margin"
               aria-valuenow={settings.bodyPaddingLeftMm}
               className={`${handleClass} top-8 bottom-8 w-0.5 cursor-ew-resize rounded-none ${dragging === 'left' ? 'ring-1 ring-primary' : ''}`}
               style={{ left: contentLeft - 1 }}
@@ -379,7 +379,7 @@ export function TestReportPageMarginPreview({
             />
             <div
               role="slider"
-              aria-label="Adjust right margin"
+              aria-label="Adjust Right Margin"
               aria-valuenow={settings.bodyPaddingRightMm}
               className={`${handleClass} top-8 bottom-8 w-0.5 cursor-ew-resize rounded-none ${dragging === 'right' ? 'ring-1 ring-primary' : ''}`}
               style={{ left: contentRight - 1 }}

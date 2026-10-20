@@ -40,7 +40,7 @@ export function FileAttachButton({
 
   const upload = async (picked: File) => {
     if (picked.type !== 'application/pdf' && !picked.name.toLowerCase().endsWith('.pdf')) {
-      toast.error('Please select a PDF file.')
+      toast.error('Please Select a PDF File.')
       return
     }
     setWorking(true)
@@ -58,7 +58,7 @@ export function FileAttachButton({
 
   const view = async (f: BisProjectViewFile) => {
     const target = openPendingPrintWindow(`Opening ${label}…`)
-    if (!target) { toast.error('Allow popups to view this PDF.'); return }
+    if (!target) { toast.error('Allow Popups to View This PDF.'); return }
     target.opener = null
     try {
       const urls = await createBisProjectFileUrls(f.storage_path, f.file_name)

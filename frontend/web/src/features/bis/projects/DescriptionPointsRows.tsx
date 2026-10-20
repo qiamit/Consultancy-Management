@@ -47,7 +47,7 @@ export function DescriptionPointsRows({
   const add = () => {
     const text = draft.trim()
     if (!text) {
-      toast.error('Description point is required.')
+      toast.error('Description Point Is Required.')
       return
     }
     void run(async () => {
@@ -60,7 +60,7 @@ export function DescriptionPointsRows({
     if (editIndex == null) return
     const text = editDraft.trim()
     if (!text) {
-      toast.error('Description point is required.')
+      toast.error('Description Point Is Required.')
       return
     }
     void run(async () => {
@@ -96,7 +96,7 @@ export function DescriptionPointsRows({
               <td className={tdCls}>
                 <Textarea
                   className={textCls}
-                  placeholder="Type description point…"
+                  placeholder="Type Description Point…"
                   value={draft}
                   disabled={busy}
                   onChange={(e) => setDraft(e.target.value)}
@@ -112,8 +112,8 @@ export function DescriptionPointsRows({
                   disabled={busy}
                   className="h-7 w-7 rounded-none bg-amber-700 p-0 text-white hover:bg-amber-800"
                   onClick={add}
-                  title="Add point"
-                  aria-label="Add point"
+                  title="Add Point"
+                  aria-label="Add Point"
                 >
                   <Plus className="h-4 w-4" aria-hidden />
                 </Button>
@@ -155,7 +155,7 @@ export function DescriptionPointsRows({
                               type="button"
                               variant="ghost"
                               className={iconBtn}
-                              title="Edit row"
+                              title="Edit Row"
                               onClick={() => {
                                 setEditIndex(index)
                                 setEditDraft(point)
@@ -163,7 +163,7 @@ export function DescriptionPointsRows({
                             >
                               <Pencil size={13} />
                             </Button>
-                            <Button type="button" variant="ghost" className={iconBtn} disabled={busy} title="Delete row" onClick={() => remove([index])}>
+                            <Button type="button" variant="ghost" className={iconBtn} disabled={busy} title="Delete Row" onClick={() => remove([index])}>
                               <Trash2 size={13} />
                             </Button>
                           </>

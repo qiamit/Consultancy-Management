@@ -316,7 +316,7 @@ export function ConductMaintenanceDialog({
                               variant="ghost"
                               size="icon"
                               className="h-6 w-6 text-amber-800 hover:bg-amber-500/15"
-                              aria-label="Add check point"
+                              aria-label="Add Check Point"
                               onClick={addRow}
                             >
                               <Plus size={12} />

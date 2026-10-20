@@ -179,7 +179,7 @@ export function ManakManufacturingStep({
       const known = new Set(existing.map((r) => str(r.aspect).toLowerCase()))
       const fresh = generated.filter((r) => !known.has(r.aspect.toLowerCase()))
       if (fresh.length === 0) {
-        toast.message('Nothing new to add', { description: 'The AI suggested only aspects already in the table.' })
+        toast.message('Nothing New to Add', { description: 'The AI suggested only aspects already in the table.' })
         return
       }
       await saveBisModulePayload(projectId, 'hygiene-conditions', { ...current, rows: [...existing, ...fresh] })
@@ -200,7 +200,7 @@ export function ManakManufacturingStep({
     try {
       const imported = await importCmpfSpreadsheetRows<Record<string, string>>(file, config.columns, (r) => Boolean(str(r[config.idKey])))
       if (imported.length === 0) {
-        toast.error('No rows were found in the selected spreadsheet.')
+        toast.error('No Rows Were Found in the Selected Spreadsheet.')
         return
       }
       const current = (await fetchBisModulePayload(projectId, config.kind)) ?? {}
@@ -226,7 +226,7 @@ export function ManakManufacturingStep({
         added = fresh.length
         return [...list, ...fresh]
       })
-      if (added === 0) toast.message('Nothing new to import', { description: 'All these points are already in this application.' })
+      if (added === 0) toast.message('Nothing New to Import', { description: 'All these points are already in this application.' })
       else toast.success(`Imported ${added} point${added === 1 ? '' : 's'}`)
       onChanged()
       return
@@ -242,7 +242,7 @@ export function ManakManufacturingStep({
     const known = new Set(existing.map(rowKey))
     const added = sourceRows.filter((r) => !known.has(rowKey(r)))
     if (added.length === 0) {
-      toast.message('Nothing new to import', { description: `All ${popup.label} rows are already in this application.` })
+      toast.message('Nothing New to Import', { description: `All ${popup.label} rows are already in this application.` })
       return
     }
     await saveBisModulePayload(projectId, table.kind, { ...current, [table.rowsKey]: [...existing, ...added] })
@@ -414,7 +414,7 @@ export function ManakManufacturingStep({
                     </Select>
                   </div>
                   <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-0.5">
-                    {yes ? renderDocActions?.(c.printKind, editComponent(c)) ?? muted : <span className="text-xs text-stone-400">Not applicable</span>}
+                    {yes ? renderDocActions?.(c.printKind, editComponent(c)) ?? muted : <span className="text-xs text-stone-400">Not Applicable</span>}
                   </div>
                 </div>
               </article>
@@ -469,7 +469,7 @@ export function ManakManufacturingStep({
                       </Select>
                     </td>
                     <td className={cn(tdCls, 'whitespace-nowrap text-center')}>
-                      {yes ? renderDocActions?.(c.printKind, editComponent(c)) ?? muted : <span className="text-xs text-stone-400">Not applicable</span>}
+                      {yes ? renderDocActions?.(c.printKind, editComponent(c)) ?? muted : <span className="text-xs text-stone-400">Not Applicable</span>}
                     </td>
                   </tr>
                 )
@@ -521,8 +521,8 @@ export function ManakManufacturingStep({
                 variant="ghost"
                 size="sm"
                 className="h-8 w-8 shrink-0 rounded-none border border-amber-500/60 bg-stone-800 p-0 text-amber-200 shadow-sm transition-colors hover:border-amber-400 hover:bg-amber-600 hover:text-white focus-visible:ring-2 focus-visible:ring-amber-400/50"
-                title="Import from another Application"
-                aria-label="Import from another Application"
+                title="Import from Another Application"
+                aria-label="Import from Another Application"
                 onClick={() => setImportOpen(true)}
               >
                 <Import size={15} aria-hidden />
@@ -536,7 +536,7 @@ export function ManakManufacturingStep({
                 disabled={hygieneAiBusy}
                 className="h-8 w-8 shrink-0 rounded-none border border-amber-500/60 bg-stone-800 p-0 text-amber-200 shadow-sm transition-colors hover:border-amber-400 hover:bg-amber-600 hover:text-white focus-visible:ring-2 focus-visible:ring-amber-400/50"
                 title="Generate hygiene conditions with AI (from the IS, product manual and manufacturing scope)"
-                aria-label="Generate hygiene conditions with AI"
+                aria-label="Generate Hygiene Conditions with AI"
                 onClick={() => void generateHygiene()}
               >
                 {hygieneAiBusy ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Sparkles size={15} aria-hidden />}
@@ -548,8 +548,8 @@ export function ManakManufacturingStep({
                 variant="ghost"
                 size="sm"
                 className="h-8 w-8 shrink-0 rounded-none border border-amber-500/60 bg-stone-800 p-0 text-amber-200 shadow-sm transition-colors hover:border-amber-400 hover:bg-amber-600 hover:text-white focus-visible:ring-2 focus-visible:ring-amber-400/50"
-                title="Generate description points with AI"
-                aria-label="Generate description points with AI"
+                title="Generate Description Points with AI"
+                aria-label="Generate Description Points with AI"
                 onClick={() => setAiOpen(true)}
               >
                 <Sparkles size={15} aria-hidden />

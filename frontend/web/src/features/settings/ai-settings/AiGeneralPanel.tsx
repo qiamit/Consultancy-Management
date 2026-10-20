@@ -206,7 +206,7 @@ export const AiGeneralPanel = forwardRef<AiGeneralPanelHandle, AiGeneralPanelPro
   if (loading) {
     return (
       <div className={cn(limsPanelClass, 'px-5 py-8 text-center')}>
-        <p className="text-sm text-muted-foreground">Loading settings…</p>
+        <p className="text-sm text-muted-foreground">Loading Settings…</p>
       </div>
     )
   }
@@ -254,7 +254,7 @@ export const AiGeneralPanel = forwardRef<AiGeneralPanelHandle, AiGeneralPanelPro
             id="ai-agent-crud"
             checked={agentCrudEnabled}
             onChange={setAgentCrudEnabled}
-            label="Allow QE Assistant to Edit Data (coming later)"
+            label="Allow QE Assistant to Edit Data (Coming Later)"
             disabled
           />
           <ToggleRow

@@ -250,7 +250,7 @@ export function QiAssistantChatPanel({
           type="button"
           size="icon"
           className="shrink-0 self-end"
-          aria-label="Send message"
+          aria-label="Send Message"
           disabled={loading || !input.trim()}
           onClick={() => void sendMessage(input)}
         >

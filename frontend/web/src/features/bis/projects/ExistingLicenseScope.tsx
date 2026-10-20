@@ -43,15 +43,15 @@ export function ExistingLicenseScope({ cmLDigits }: { cmLDigits: string }) {
   const error = currentResult?.error ?? ''
 
   return (
-    <section className="space-y-3 border border-stone-400 bg-white p-3 sm:p-4" aria-label="Existing license scope">
+    <section className="space-y-3 border border-stone-400 bg-white p-3 sm:p-4" aria-label="Existing License Scope">
       <div className="border-b border-stone-300 pb-2">
         <h3 className="text-sm font-semibold text-stone-900">Existing License Scope</h3>
       </div>
 
-      {loading ? <p className="text-sm text-stone-600">Loading existing scope…</p> : null}
+      {loading ? <p className="text-sm text-stone-600">Loading Existing Scope…</p> : null}
       {error ? <p role="status" className="text-sm text-red-700">{error}</p> : null}
       {!loading && !error && records.length === 0 ? (
-        <p className="text-sm text-stone-600">No existing license scope was found for this CM/L number.</p>
+        <p className="text-sm text-stone-600">No Existing License Scope Was Found for This CM/L Number.</p>
       ) : null}
 
       {records.map((record) => {
@@ -84,7 +84,7 @@ export function ExistingLicenseScope({ cmLDigits }: { cmLDigits: string }) {
                 </table>
               </div>
             ) : (
-              <p className="text-sm text-stone-500">No text or table scope is saved on this license.</p>
+              <p className="text-sm text-stone-500">No Text or Table Scope Is Saved on This License.</p>
             )}
 
             {record.files.length ? (

@@ -42,7 +42,7 @@ export function ProjectFilesUploadCell({ projectId, docKind, label }: { projectI
 
   const upload = async (picked: File[]) => {
     const pdfs = picked.filter((f) => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'))
-    if (pdfs.length < picked.length) toast.error('Only PDF files can be uploaded.')
+    if (pdfs.length < picked.length) toast.error('Only PDF Files Can Be Uploaded.')
     if (pdfs.length === 0) return
     setBusy(true)
     try {
@@ -134,7 +134,7 @@ export function ProjectFilesUploadCell({ projectId, docKind, label }: { projectI
                 </Button>
               </li>
             ))}
-            {files.length === 0 ? <li className="py-3 text-center text-sm text-stone-500">No files uploaded.</li> : null}
+            {files.length === 0 ? <li className="py-3 text-center text-sm text-stone-500">No Files Uploaded.</li> : null}
           </ul>
           <DialogFooter className="border-t border-stone-200 bg-stone-50 px-4 py-3">
             <Button type="button" className={cn(limsPrimaryBtnClass, 'min-w-[7rem]')} onClick={() => setListOpen(false)}>

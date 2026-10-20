@@ -147,7 +147,7 @@ export function ApplicationDetailsFields({
                 <Input
                   id="app-number"
                   inputMode="numeric"
-                  placeholder="Application number"
+                  placeholder="Application Number"
                   className={cn(limsFieldClass, 'font-mono tabular-nums')}
                   value={form.applicationNumber}
                   disabled={disabled}
@@ -163,8 +163,8 @@ export function ApplicationDetailsFields({
                   <button
                     type="button"
                     className={limsFieldAddBtnClass}
-                    aria-label="Open calendar"
-                    title="Pick date"
+                    aria-label="Open Calendar"
+                    title="Pick Date"
                     disabled={disabled}
                     onClick={() => openDatePicker(applicationDateRef.current)}
                   >
@@ -191,8 +191,8 @@ export function ApplicationDetailsFields({
                   <button
                     type="button"
                     className={limsFieldAddBtnClass}
-                    aria-label="Open calendar"
-                    title="Pick date"
+                    aria-label="Open Calendar"
+                    title="Pick Date"
                     disabled={disabled}
                     onClick={() => openDatePicker(inspectionDateRef.current)}
                   >
@@ -245,8 +245,8 @@ export function ApplicationDetailsFields({
                   <button
                     type="button"
                     className={limsFieldAddBtnClass}
-                    aria-label="Open calendar"
-                    title="Pick date"
+                    aria-label="Open Calendar"
+                    title="Pick Date"
                     disabled={disabled}
                     onClick={() => openDatePicker(grantedDateRef.current)}
                   >
@@ -273,8 +273,8 @@ export function ApplicationDetailsFields({
                   <button
                     type="button"
                     className={limsFieldAddBtnClass}
-                    aria-label="Open calendar"
-                    title="Pick date"
+                    aria-label="Open Calendar"
+                    title="Pick Date"
                     disabled={disabled}
                     onClick={() => openDatePicker(validityDateRef.current)}
                   >
@@ -435,7 +435,7 @@ export function ApplicationDetailsFields({
         <div className="min-w-0">
           <div className="min-w-0 space-y-0.5">
             <Label htmlFor="app-branch-state">Branch State</Label>
-            <Input id="app-branch-state" className={limsFieldClass} value={form.branchState} readOnly disabled={disabled} placeholder="Auto-selected from branch" />
+            <Input id="app-branch-state" className={limsFieldClass} value={form.branchState} readOnly disabled={disabled} placeholder="Auto-Selected from Branch" />
           </div>
         </div>
 

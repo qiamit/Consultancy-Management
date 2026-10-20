@@ -279,7 +279,7 @@ export function TopManagementModuleFields({
 
   const openSignaturePicker = (index: number) => {
     if (!projectId || disabled) {
-      toast.warning('Save the license first, then attach signatures.')
+      toast.warning('Save the License First, Then Attach Signatures.')
       return
     }
     pendingUploadIndex.current = index
@@ -330,7 +330,7 @@ export function TopManagementModuleFields({
             downloadUrl: uploaded.downloadUrl,
           },
         }))
-        toast.success('Authorized signature attached')
+        toast.success('Authorized Signature Attached')
         return
       }
 
@@ -361,7 +361,7 @@ export function TopManagementModuleFields({
           downloadUrl: uploaded.downloadUrl,
         },
       }))
-      toast.success('Signature attached')
+      toast.success('Signature Attached')
     } catch (err) {
       toast.error(formatBisProjectFilesError(err))
     } finally {
@@ -508,7 +508,7 @@ export function TopManagementModuleFields({
               'cursor-pointer',
               disabled && 'pointer-events-none opacity-50',
             )}
-            title="Apply this signature on all BIS documents"
+            title="Apply This Signature on All BIS Documents"
           >
             <input
               type="checkbox"
@@ -533,8 +533,8 @@ export function TopManagementModuleFields({
           variant="ghost"
           className={actionBtnClass}
           disabled={disabled || !filled}
-          title="Add person"
-          aria-label="Add person"
+          title="Add Person"
+          aria-label="Add Person"
           onClick={addRow}
         >
           <Plus size={14} />
@@ -559,7 +559,7 @@ export function TopManagementModuleFields({
         variant="ghost"
         className={deleteBtnClass}
         disabled={disabled || rows.length <= 1}
-        title="Delete person"
+        title="Delete Person"
         aria-label={`Delete person ${index + 1}`}
         onClick={() => removeRow(index)}
       >
@@ -626,7 +626,7 @@ export function TopManagementModuleFields({
             size="sm"
             className={cn(limsOutlineBtnClass, 'h-7 gap-1 px-2 text-[11px]')}
             disabled={disabled}
-            title="Hide & clear authorized signatory fields"
+            title="Hide & Clear Authorized Signatory Fields"
             onClick={clearSignatory}
           >
             <X className="h-3.5 w-3.5" />
@@ -674,7 +674,7 @@ export function TopManagementModuleFields({
               if (e.target.checked) setSelected(new Set(rows.map((_, i) => i)))
               else setSelected(new Set())
             }}
-            aria-label="Select all persons"
+            aria-label="Select All Persons"
           />
           <span className="text-[11px] font-bold uppercase tracking-[0.14em]">
             {selected.size > 0 ? `${selected.size} selected` : `${rows.length} person${rows.length === 1 ? '' : 's'}`}
@@ -839,7 +839,7 @@ export function TopManagementModuleFields({
                     if (e.target.checked) setSelected(new Set(rows.map((_, i) => i)))
                     else setSelected(new Set())
                   }}
-                  aria-label="Select all persons"
+                  aria-label="Select All Persons"
                 />
               </TableHead>
               <TableHead className={cn(thBase, 'min-w-[11.5rem] w-[20%]')}>Name</TableHead>

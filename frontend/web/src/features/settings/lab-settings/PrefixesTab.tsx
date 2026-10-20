@@ -62,7 +62,7 @@ export function PrefixesTab(props: PrefixesTabProps) {
               <button
                 type="button"
                 className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-none border border-stone-500 bg-stone-100 text-amber-800 shadow-sm transition-colors hover:bg-amber-500/15 hover:text-amber-950"
-                aria-label="Add prefix"
+                aria-label="Add Prefix"
                 title="Add New"
               >
                 <Plus size={14} strokeWidth={2.25} aria-hidden />

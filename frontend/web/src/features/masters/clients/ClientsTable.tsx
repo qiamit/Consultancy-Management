@@ -188,7 +188,7 @@ export function ClientsTable({
               <input
                 type="checkbox"
                 className={checkboxClass}
-                aria-label="Select all"
+                aria-label="Select All"
                 checked={allChecked}
                 ref={(el) => {
                   if (el) el.indeterminate = !allChecked && someChecked
@@ -290,7 +290,7 @@ export function ClientsTable({
                               <p className="break-all font-medium text-[#92400e]">{contact.email}</p>
                             ) : null}
                             {!contact.name && !contact.email ? (
-                              <p className="text-[#78716c]">No email</p>
+                              <p className="text-[#78716c]">No Email</p>
                             ) : null}
                           </div>
                         </div>
@@ -332,7 +332,7 @@ export function ClientsTable({
                     <input
                       type="checkbox"
                       className={checkboxClass}
-                      aria-label="Select all"
+                      aria-label="Select All"
                       checked={allChecked}
                       ref={(el) => {
                         if (el) el.indeterminate = !allChecked && someChecked

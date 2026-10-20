@@ -112,8 +112,8 @@ export function TestReportPreparationAssistant({
 
           <TabsContent value="srf" className="mt-3 flex min-h-0 flex-1 flex-col data-[state=inactive]:hidden">
             <p className="mb-2 text-xs text-muted-foreground">
-              Type an <strong>SRF number</strong>, then your question. Answers use consolidated results and sample
-              details for that SRF only — <strong>suggestions only</strong>.
+              Type an <strong>SRF Number</strong>, then your question. Answers use consolidated results and sample
+              details for that SRF only — <strong>Suggestions Only</strong>.
             </p>
             <QiAssistantChatPanel
               page="samples/report-preparation"

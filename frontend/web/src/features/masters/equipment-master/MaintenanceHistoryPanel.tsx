@@ -73,7 +73,7 @@ export function MaintenanceHistoryPanel({
 
       {hasCurrent ? (
         <div className="rounded-none border-2 border-stone-400 bg-stone-50 p-2.5 text-xs">
-          <p className="font-semibold text-amber-800">Latest saved (current)</p>
+          <p className="font-semibold text-amber-800">Latest Saved (Current)</p>
           <p className="mt-0.5 text-stone-500">
             Date: {formatDisplayDate(currentLastDate!)} · Done by: {currentDoneByName || '-'} ·{' '}
             {currentChecklist!.length} check point(s)

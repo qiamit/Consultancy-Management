@@ -446,7 +446,7 @@ export function ClientsForm({
     void revealClientPortalPassword(recordId)
       .then((value) => {
         if (!value) {
-          toast.error('No password saved')
+          toast.error('No Password Saved')
           return
         }
         setRevealedPassword(value)
@@ -619,10 +619,10 @@ export function ClientsForm({
             <Label htmlFor="client-sector">Sector</Label>
             <Select value={form.sector || 'none'} onValueChange={(v) => onChange({ ...form, sector: v === 'none' ? '' : (v as ClientForm['sector']) })}>
               <SelectTrigger id="client-sector">
-                <SelectValue placeholder="Not set" />
+                <SelectValue placeholder="Not Set" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">Not set</SelectItem>
+                <SelectItem value="none">Not Set</SelectItem>
                 {CLIENT_SECTORS.map((sector) => (
                   <SelectItem key={sector} value={sector}>{sector}</SelectItem>
                 ))}
@@ -634,10 +634,10 @@ export function ClientsForm({
             <Label htmlFor="client-nature">Nature of Firm</Label>
             <Select value={form.constitution || 'none'} onValueChange={(v) => onChange({ ...form, constitution: v === 'none' ? '' : v })}>
               <SelectTrigger id="client-nature">
-                <SelectValue placeholder="Not set" />
+                <SelectValue placeholder="Not Set" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">Not set</SelectItem>
+                <SelectItem value="none">Not Set</SelectItem>
                 {['Pvt. Limited', 'Public Limited', 'LLP', 'Partnership', 'Proprietorship', 'Trust / Society', 'Government'].map((n) => (
                   <SelectItem key={n} value={n}>{n}</SelectItem>
                 ))}
@@ -651,7 +651,7 @@ export function ClientsForm({
               <LimsFieldWithAdd
                 addButton={
                   <DialogTrigger asChild>
-                    <LimsFieldAddButton aria-label="Add company type" />
+                    <LimsFieldAddButton aria-label="Add Company Type" />
                   </DialogTrigger>
                 }
               >
@@ -694,7 +694,7 @@ export function ClientsForm({
               <LimsFieldWithAdd
                 addButton={
                   <DialogTrigger asChild>
-                    <LimsFieldAddButton aria-label="Add company scale" />
+                    <LimsFieldAddButton aria-label="Add Company Scale" />
                   </DialogTrigger>
                 }
               >
@@ -747,12 +747,12 @@ export function ClientsForm({
               />
             </div>
             <div className={cn('min-w-0', compact ? 'space-y-1' : 'space-y-2')}>
-              <Label htmlFor="client-women">Women entrepreneur</Label>
+              <Label htmlFor="client-women">Women Entrepreneur</Label>
               <Dialog open={womenDialogOpen} onOpenChange={setWomenDialogOpen}>
                 <LimsFieldWithAdd
                   addButton={
                     <DialogTrigger asChild>
-                      <LimsFieldAddButton aria-label="Add women entrepreneur option" />
+                      <LimsFieldAddButton aria-label="Add Women Entrepreneur Option" />
                     </DialogTrigger>
                   }
                 >
@@ -799,7 +799,7 @@ export function ClientsForm({
                 <LimsFieldWithAdd
                   addButton={
                     <DialogTrigger asChild>
-                      <LimsFieldAddButton aria-label="Add startup option" />
+                      <LimsFieldAddButton aria-label="Add Startup Option" />
                     </DialogTrigger>
                   }
                 >
@@ -899,7 +899,7 @@ export function ClientsForm({
               <LimsFieldWithAdd
                 addButton={
                   <DialogTrigger asChild>
-                    <LimsFieldAddButton aria-label="Add PIN code" />
+                    <LimsFieldAddButton aria-label="Add PIN Code" />
                   </DialogTrigger>
                 }
               >
@@ -927,7 +927,7 @@ export function ClientsForm({
                 title="Manage PIN Codes"
                 addLabel="Add PIN Code"
                 inputId="new-pin"
-                placeholder="6 digit PIN"
+                placeholder="6 Digit PIN"
                 value={newPinCode}
                 onValueChange={(v) => setNewPinCode(v.replace(/[^0-9]/g, '').slice(0, 6))}
                 inputMode="numeric"
@@ -951,7 +951,7 @@ export function ClientsForm({
                 <LimsFieldWithAdd
                   addButton={
                     <DialogTrigger asChild>
-                      <LimsFieldAddButton aria-label="Add city" />
+                      <LimsFieldAddButton aria-label="Add City" />
                     </DialogTrigger>
                   }
                 >
@@ -962,7 +962,7 @@ export function ClientsForm({
                     onSelectOption={(opt) => onChange({ ...form, city: opt.label })}
                     open={cityOpen}
                     onOpenChange={setCityOpen}
-                    placeholder="Type or select City"
+                    placeholder="Type or Select City"
                     listId="client-city-combobox"
                     inputId="client-city"
                     inputClassName="h-10"
@@ -1002,7 +1002,7 @@ export function ClientsForm({
               <LimsFieldWithAdd
                 addButton={
                   <DialogTrigger asChild>
-                    <LimsFieldAddButton aria-label="Add district" />
+                    <LimsFieldAddButton aria-label="Add District" />
                   </DialogTrigger>
                 }
               >
@@ -1013,7 +1013,7 @@ export function ClientsForm({
                   onSelectOption={(opt) => onChange({ ...form, district: opt.label })}
                   open={districtOpen}
                   onOpenChange={setDistrictOpen}
-                  placeholder="Type or select District"
+                  placeholder="Type or Select District"
                   listId="client-district-combobox"
                   inputId="district"
                   inputClassName="h-10"
@@ -1045,7 +1045,7 @@ export function ClientsForm({
               <LimsFieldWithAdd
                 addButton={
                   <DialogTrigger asChild>
-                    <LimsFieldAddButton aria-label="Add state" />
+                    <LimsFieldAddButton aria-label="Add State" />
                   </DialogTrigger>
                 }
               >
@@ -1056,7 +1056,7 @@ export function ClientsForm({
                   onSelectOption={(opt) => onChange({ ...form, state: opt.label })}
                   open={stateOpen}
                   onOpenChange={setStateOpen}
-                  placeholder="Type or select State"
+                  placeholder="Type or Select State"
                   listId="client-state-combobox"
                   inputId="state"
                   inputClassName="h-10"
@@ -1067,7 +1067,7 @@ export function ClientsForm({
                 title="Manage States"
                 addLabel="Add State"
                 inputId="new-state"
-                placeholder="Enter state"
+                placeholder="Enter State"
                 value={newStateName}
                 onValueChange={setNewStateName}
                 inlineAdd
@@ -1088,13 +1088,13 @@ export function ClientsForm({
               <LimsFieldWithAdd
                 addButton={
                   <DialogTrigger asChild>
-                    <LimsFieldAddButton aria-label="Add country" />
+                    <LimsFieldAddButton aria-label="Add Country" />
                   </DialogTrigger>
                 }
               >
                 <Select value={form.country} onValueChange={(v) => onChange({ ...form, country: v })}>
                   <SelectTrigger id="country">
-                    <SelectValue placeholder="Select country" />
+                    <SelectValue placeholder="Select Country" />
                   </SelectTrigger>
                   <SelectContent>
                     {countryChoices.map((label) => (
@@ -1110,7 +1110,7 @@ export function ClientsForm({
                 title="Manage Countries"
                 addLabel="Add Country"
                 inputId="new-country"
-                placeholder="Enter country"
+                placeholder="Enter Country"
                 value={newCountryName}
                 onValueChange={setNewCountryName}
                 inlineAdd
@@ -1153,7 +1153,7 @@ export function ClientsForm({
                 <LimsFieldWithAdd
                   addButton={
                     <DialogTrigger asChild>
-                      <LimsFieldAddButton aria-label="Add country code" />
+                      <LimsFieldAddButton aria-label="Add Country Code" />
                     </DialogTrigger>
                   }
                 >
@@ -1253,7 +1253,7 @@ export function ClientsForm({
                 <LimsFieldWithAdd
                   addButton={
                     <DialogTrigger asChild>
-                      <LimsFieldAddButton aria-label="Add payment term" />
+                      <LimsFieldAddButton aria-label="Add Payment Term" />
                     </DialogTrigger>
                   }
                 >
@@ -1264,7 +1264,7 @@ export function ClientsForm({
                     onSelectOption={(opt) => onChange({ ...form, paymentTerm: opt.label as PaymentTerm })}
                     open={paymentTermOpen}
                     onOpenChange={setPaymentTermOpen}
-                    placeholder="Type or select Payment Term"
+                    placeholder="Type or Select Payment Term"
                     listId="client-payment-term-combobox"
                     inputId="payment-term"
                     inputClassName="h-10"

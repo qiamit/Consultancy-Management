@@ -119,7 +119,7 @@ export default function EmailLogPage() {
             value={filters.status}
             onChange={(e) => setFilter({ status: e.target.value as EmailLogFilters['status'] })}
           >
-            <option value="">All statuses</option>
+            <option value="">All Statuses</option>
             <option value="sent">Sent</option>
             <option value="failed">Failed</option>
             <option value="blocked">Blocked</option>
@@ -130,7 +130,7 @@ export default function EmailLogPage() {
             value={filters.userId}
             onChange={(e) => setFilter({ userId: e.target.value })}
           >
-            <option value="">All users</option>
+            <option value="">All Users</option>
             {userOptions.map(([id, name]) => (
               <option key={id} value={id}>
                 {name}
@@ -139,14 +139,14 @@ export default function EmailLogPage() {
           </select>
           <input
             type="date"
-            aria-label="From date"
+            aria-label="From Date"
             className={cn(limsDarkBarFieldClass, 'px-2 text-sm')}
             value={filters.from}
             onChange={(e) => setFilter({ from: e.target.value })}
           />
           <input
             type="date"
-            aria-label="To date"
+            aria-label="To Date"
             className={cn(limsDarkBarFieldClass, 'px-2 text-sm')}
             value={filters.to}
             onChange={(e) => setFilter({ to: e.target.value })}

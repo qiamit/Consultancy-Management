@@ -388,7 +388,7 @@ export function NablLookupSelect({
                     </div>
                   ))
                 ) : (
-                  <p className="text-xs text-stone-500">No entries added yet.</p>
+                  <p className="text-xs text-stone-500">No Entries Added Yet.</p>
                 )}
               </div>
             </div>

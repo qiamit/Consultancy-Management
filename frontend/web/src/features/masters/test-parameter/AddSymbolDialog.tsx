@@ -88,7 +88,7 @@ export function AddSymbolDialog({
             </Label>
             <Input
               id="add-symbol-search"
-              placeholder="Search symbols…"
+              placeholder="Search Symbols…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               autoFocus

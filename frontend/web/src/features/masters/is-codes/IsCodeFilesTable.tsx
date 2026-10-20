@@ -342,7 +342,7 @@ export function IsCodeFilesTable({
             disabled={busy}
             onClick={() => openFilePicker({ type: 'draft', id: entry.draft.id })}
             title="Upload"
-            aria-label="Upload document"
+            aria-label="Upload Document"
           >
             <Upload size={15} aria-hidden />
           </Button>
@@ -352,8 +352,8 @@ export function IsCodeFilesTable({
             variant="outline"
             className={cn(limsOutlineBtnClass, actionBtnClass)}
             disabled
-            title="View (upload a file first)"
-            aria-label="View document"
+            title="View (Upload a File First)"
+            aria-label="View Document"
           >
             <Eye size={15} aria-hidden />
           </Button>
@@ -397,7 +397,7 @@ export function IsCodeFilesTable({
             className={cn(limsOutlineBtnClass, actionBtnClass)}
             disabled
             title={file.error || 'View unavailable'}
-            aria-label="View unavailable"
+            aria-label="View Unavailable"
           >
             <Eye size={15} aria-hidden />
           </Button>
@@ -412,8 +412,8 @@ export function IsCodeFilesTable({
       addButton={
         <DialogTrigger asChild>
           <LimsFieldAddButton
-            aria-label="Add document type"
-            title="Add document type"
+            aria-label="Add Document Type"
+            title="Add Document Type"
             disabled={busy}
             onClick={() => {
               setKindDialogRowKey(entry.key)
@@ -493,8 +493,8 @@ export function IsCodeFilesTable({
         className={cn(limsOutlineBtnClass, actionBtnClass)}
         disabled={busy}
         onClick={addNewRow}
-        title="Add new row"
-        aria-label="Add new row"
+        title="Add New Row"
+        aria-label="Add New Row"
       >
         <Plus size={15} aria-hidden />
       </Button>
@@ -509,8 +509,8 @@ export function IsCodeFilesTable({
         )}
         disabled={busy}
         onClick={() => deleteRow(entry)}
-        title="Delete row"
-        aria-label="Delete row"
+        title="Delete Row"
+        aria-label="Delete Row"
       >
         <Trash2 size={15} aria-hidden />
       </Button>
@@ -551,7 +551,7 @@ export function IsCodeFilesTable({
                 <input
                   type="checkbox"
                   className={checkboxClass}
-                  aria-label="Select all rows"
+                  aria-label="Select All Rows"
                   checked={allChecked}
                   ref={(el) => {
                     if (el) el.indeterminate = !allChecked && someChecked
@@ -629,7 +629,7 @@ export function IsCodeFilesTable({
                     <input
                       type="checkbox"
                       className={checkboxClass}
-                      aria-label="Select all rows"
+                      aria-label="Select All Rows"
                       checked={allChecked}
                       ref={(el) => {
                         if (el) el.indeterminate = !allChecked && someChecked

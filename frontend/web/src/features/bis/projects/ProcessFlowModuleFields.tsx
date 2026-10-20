@@ -437,7 +437,7 @@ export function ProcessFlowModuleFields({
   ): number | null => {
     const n = Number(raw)
     if (!Number.isFinite(n)) {
-      toast.error('Enter a valid number in px')
+      toast.error('Enter a Valid Number in Px')
       return null
     }
     return Math.min(max, Math.max(min, Math.round(n)))
@@ -800,7 +800,7 @@ export function ProcessFlowModuleFields({
           }}
           value={displayLabel}
           disabled={disabled}
-          placeholder="Type step name…"
+          placeholder="Type Step Name…"
           onChange={(e) => {
             const nextLabel = e.target.value
             setEditingLabel(nextLabel)
@@ -877,8 +877,8 @@ export function ProcessFlowModuleFields({
                     size="sm"
                     disabled={disabled}
                     className={headerBtn}
-                    title="Import from another Application"
-                    aria-label="Import from another Application"
+                    title="Import from Another Application"
+                    aria-label="Import from Another Application"
                     onClick={() => setImportOpen(true)}
                   >
                     <Import size={15} aria-hidden />
@@ -891,8 +891,8 @@ export function ProcessFlowModuleFields({
                     size="sm"
                     disabled={disabled}
                     className={headerBtn}
-                    title="Generate description points with AI"
-                    aria-label="Generate description points with AI"
+                    title="Generate Description Points with AI"
+                    aria-label="Generate Description Points with AI"
                     onClick={() => setDescriptionAiOpen(true)}
                   >
                     <Sparkles size={15} aria-hidden />
@@ -917,7 +917,7 @@ export function ProcessFlowModuleFields({
             const known = new Set(points.map((p) => p.toLowerCase()))
             const fresh = source.filter((p) => !known.has(p.toLowerCase()))
             if (fresh.length === 0) {
-              toast.message('Nothing new to import', { description: 'All these points are already here.' })
+              toast.message('Nothing New to Import', { description: 'All these points are already here.' })
               return
             }
             applyPoints((list) => [...list, ...fresh])
@@ -984,8 +984,8 @@ export function ProcessFlowModuleFields({
               type="button"
               className={toolBtnClass}
               disabled={disabled}
-              title="Add step at end"
-              aria-label="Add step"
+              title="Add Step at End"
+              aria-label="Add Step"
               onClick={addRoot}
             >
               <Plus className="h-4 w-4" />
@@ -994,8 +994,8 @@ export function ProcessFlowModuleFields({
               type="button"
               className={toolBtnClass}
               disabled={toolDisabled}
-              title="Add below (Enter)"
-              aria-label="Add below"
+              title="Add Below (Enter)"
+              aria-label="Add Below"
               onClick={() => primary && addSiblingAfter(primary, false)}
             >
               <ArrowDownToLine className="h-4 w-4" />
@@ -1004,8 +1004,8 @@ export function ProcessFlowModuleFields({
               type="button"
               className={toolBtnClass}
               disabled={toolDisabled}
-              title="Add beside (Shift+Enter)"
-              aria-label="Add beside"
+              title="Add Beside (Shift+Enter)"
+              aria-label="Add Beside"
               onClick={() => primary && addSiblingAfter(primary, true)}
             >
               <ArrowRightLeft className="h-4 w-4" />
@@ -1014,8 +1014,8 @@ export function ProcessFlowModuleFields({
               type="button"
               className={toolBtnClass}
               disabled={toolDisabled}
-              title="Add child"
-              aria-label="Add child"
+              title="Add Child"
+              aria-label="Add Child"
               onClick={() => primary && addChild(primary.id)}
             >
               <CornerDownRight className="h-4 w-4" />
@@ -1027,8 +1027,8 @@ export function ProcessFlowModuleFields({
               type="button"
               className={toolBtnClass}
               disabled={toolDisabled}
-              title="Move up"
-              aria-label="Move up"
+              title="Move Up"
+              aria-label="Move Up"
               onClick={() => moveSelection(-1)}
             >
               <ChevronUp className="h-4 w-4" />
@@ -1037,8 +1037,8 @@ export function ProcessFlowModuleFields({
               type="button"
               className={toolBtnClass}
               disabled={toolDisabled}
-              title="Move down"
-              aria-label="Move down"
+              title="Move Down"
+              aria-label="Move Down"
               onClick={() => moveSelection(1)}
             >
               <ChevronDown className="h-4 w-4" />
@@ -1083,8 +1083,8 @@ export function ProcessFlowModuleFields({
                 primary?.horizontalWithPrev && 'border-sky-500 bg-sky-50',
               )}
               disabled={toolDisabled || !canAlignHorizontal}
-              title="Align horizontal with previous"
-              aria-label="Align horizontal"
+              title="Align Horizontal with Previous"
+              aria-label="Align Horizontal"
               onClick={() => toggleHorizontalAlign(selectedIds)}
             >
               <GitBranch className="h-4 w-4 rotate-90" />
@@ -1109,8 +1109,8 @@ export function ProcessFlowModuleFields({
                 settingsPanel === 'arrow' && 'border-amber-600 bg-amber-100',
               )}
               disabled={disabled}
-              title="Arrow style settings"
-              aria-label="Arrow style settings"
+              title="Arrow Style Settings"
+              aria-label="Arrow Style Settings"
               aria-pressed={settingsPanel === 'arrow'}
               onClick={() =>
                 setSettingsPanel((prev) => (prev === 'arrow' ? null : 'arrow'))
@@ -1125,8 +1125,8 @@ export function ProcessFlowModuleFields({
                 settingsPanel === 'box' && 'border-amber-600 bg-amber-100',
               )}
               disabled={disabled}
-              title="Box size & spacing"
-              aria-label="Box size and spacing"
+              title="Box Size & Spacing"
+              aria-label="Box Size and Spacing"
               aria-pressed={settingsPanel === 'box'}
               onClick={() => {
                 if (settingsPanel === 'box') {
@@ -1150,8 +1150,8 @@ export function ProcessFlowModuleFields({
                 <button
                   type="button"
                   className={toolBtnClass}
-                  title="Close settings"
-                  aria-label="Close settings"
+                  title="Close Settings"
+                  aria-label="Close Settings"
                   onClick={() => setSettingsPanel(null)}
                 >
                   <X className="h-3.5 w-3.5" />
@@ -1245,7 +1245,7 @@ export function ProcessFlowModuleFields({
                     </label>
 
                     <label className="flex items-center justify-between gap-2 text-xs text-stone-700">
-                      <span className="font-semibold">Dashed line</span>
+                      <span className="font-semibold">Dashed Line</span>
                       <input
                         type="checkbox"
                         className="h-4 w-4 accent-amber-700"

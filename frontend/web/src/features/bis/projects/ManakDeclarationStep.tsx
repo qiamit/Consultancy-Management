@@ -191,8 +191,8 @@ export function ManakDeclarationStep({
               variant="ghost"
               size="sm"
               className="h-8 w-8 shrink-0 rounded-none border border-amber-500/60 bg-stone-800 p-0 text-amber-200 shadow-sm transition-colors hover:border-amber-400 hover:bg-amber-600 hover:text-white"
-              title="Find files with AI (from any application of this client)"
-              aria-label="Find files with AI"
+              title="Find Files with AI (from Any Application of This Client)"
+              aria-label="Find Files with AI"
               onClick={() => setAiFor(key)}
             >
               <Sparkles size={15} aria-hidden />
@@ -400,7 +400,7 @@ export function ManakDeclarationStep({
                               onCheckedChange={(checked) => {
                                 const next = DAYS.filter((d) => (d === day ? checked === true : offDays.includes(d)))
                                 if (next.length === 0) {
-                                  toast.error('Select at least one weekly off day, or choose No.')
+                                  toast.error('Select at Least One Weekly Off Day, or Choose No.')
                                   return
                                 }
                                 void saveWeekly({ weeklyOffs: 'Yes', offDays: next })

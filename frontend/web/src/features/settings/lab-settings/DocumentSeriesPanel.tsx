@@ -49,7 +49,7 @@ export function DocumentSeriesPanel() {
 
   return (
     <section className="space-y-3 border border-stone-300 p-3">
-      <h3 className="text-sm font-semibold text-stone-800">Document series</h3>
+      <h3 className="text-sm font-semibold text-stone-800">Document Series</h3>
       <p className="text-xs text-stone-600">
         Tax invoice numbers should stay within 16 characters. The next number is taken from the database so two users cannot get the same number.
       </p>

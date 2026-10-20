@@ -129,11 +129,11 @@ export default function ReportsPage() {
                   <tbody>{tdsRows.map((row, index) => <tr key={`${row.txn_date}-${row.party_name}-${index}`} className="border-b border-stone-200"><td className="py-2 pr-3">{row.txn_date}</td><td className="py-2 pr-3">{row.pan || '—'}</td><td className="py-2 pr-3">{row.party_name}</td><td className="py-2 pr-3">{row.tds_section}</td><td className="py-2 pr-3 text-right tabular-nums">{row.taxable_amount.toFixed(2)}</td><td className="py-2 pr-3 text-right tabular-nums">{row.tds_amount.toFixed(2)}</td></tr>)}</tbody>
                 </table>
               </div>
-            ) : <p className="text-sm text-stone-600">No TDS rows for this period.</p>}
+            ) : <p className="text-sm text-stone-600">No TDS Rows for This Period.</p>}
           </>
         ) : null}
         {report === 'ageing' ? (
-          ageing.length === 0 ? <p className="text-sm text-stone-600">No open invoices.</p> : (
+          ageing.length === 0 ? <p className="text-sm text-stone-600">No Open Invoices.</p> : (
             <ul className="space-y-1 text-sm">
               {ageing.map((row) => (
                 <li key={row.bucket}>{row.bucket}: {row.invoice_count} invoices, {row.outstanding.toFixed(2)}</li>
@@ -142,7 +142,7 @@ export default function ReportsPage() {
           )
         ) : null}
         {report === 'stock' ? (
-          stock.length === 0 ? <p className="text-sm text-stone-600">No stock rows.</p> : (
+          stock.length === 0 ? <p className="text-sm text-stone-600">No Stock Rows.</p> : (
             <ul className="space-y-1 text-sm">
               {stock.map((row) => (
                 <li key={row.product_id}>{row.item_name}: {row.stock_on_hand.toFixed(2)}{row.low_stock ? ' · Low stock' : ''}</li>
@@ -151,7 +151,7 @@ export default function ReportsPage() {
           )
         ) : null}
         {report !== 'tds_return' && report !== 'ageing' && report !== 'stock' ? (
-          rows.length === 0 ? <p className="text-sm text-stone-600">No rows for this report.</p> : (
+          rows.length === 0 ? <p className="text-sm text-stone-600">No Rows for This Report.</p> : (
             <div className="overflow-x-auto">
               <table className="auto-cards list-cards w-full min-w-[640px] text-sm">
                 <thead>

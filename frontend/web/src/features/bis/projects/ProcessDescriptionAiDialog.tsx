@@ -184,7 +184,7 @@ export function ProcessDescriptionAiDialog({
     if (disabled || genBusy) return
     const labeled = nodes.filter(processFlowNodeHasContent)
     if (labeled.length === 0) {
-      toast.error('Add process flow steps first, then generate description.')
+      toast.error('Add Process Flow Steps First, Then Generate Description.')
       return
     }
     setGenBusy(true)
@@ -221,7 +221,7 @@ export function ProcessDescriptionAiDialog({
             msg,
           )
         ) {
-          toast.message('Retrying AI without IS file context…')
+          toast.message('Retrying AI Without IS File Context…')
           points = await generateProcessDescription(baseInput)
         } else {
           throw firstErr
@@ -389,13 +389,13 @@ export function ProcessDescriptionAiDialog({
                     submit()
                   }
                 }}
-                aria-label="Special instructions for the generated points"
+                aria-label="Special Instructions for the Generated Points"
               />
               <Button
                 type="button"
                 size="icon"
                 className="h-10 w-10 shrink-0 rounded-none bg-amber-700 text-white hover:bg-amber-800"
-                aria-label="Generate points"
+                aria-label="Generate Points"
                 title="Generate points with the options above and your instructions, and fill the table"
                 disabled={busy || disabled}
                 onClick={submit}

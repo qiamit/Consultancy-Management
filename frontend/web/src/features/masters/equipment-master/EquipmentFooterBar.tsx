@@ -76,7 +76,7 @@ export function EquipmentFooterBar({
 
             <div className="flex items-center gap-2">
               <Input
-                aria-label="Jump to page"
+                aria-label="Jump to Page"
                 placeholder="Page"
                 value={jumpTo}
                 onChange={(e) => onJumpToChange(e.target.value.replace(/[^0-9]/g, ''))}

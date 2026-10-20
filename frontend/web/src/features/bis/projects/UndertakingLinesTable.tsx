@@ -71,7 +71,7 @@ export function UndertakingLinesTable({
 
   const add = () => {
     if (!draft.text.trim()) {
-      toast.error('Enter the undertaking text, or use AI to draft it.')
+      toast.error('Enter the Undertaking Text, or Use AI to Draft It.')
       return
     }
     onChange([...rows, { id: crypto.randomUUID(), text: draft.text.trim(), source: draft.source.trim(), clause: draft.clause.trim(), agreementRequired: draft.agreementRequired }])
@@ -81,7 +81,7 @@ export function UndertakingLinesTable({
   const saveEdit = () => {
     if (editIndex == null) return
     if (!edit.text.trim()) {
-      toast.error('The undertaking text cannot be empty.')
+      toast.error('The Undertaking Text Cannot Be Empty.')
       return
     }
     onChange(rows.map((row, i) => (i === editIndex ? { ...row, text: edit.text.trim(), source: edit.source, clause: edit.clause, agreementRequired: edit.agreementRequired } : row)))
@@ -119,7 +119,7 @@ export function UndertakingLinesTable({
             </Button>
           ) : null}
           {onImport ? (
-            <Button type="button" variant="ghost" className={headerBtn} disabled={disabled} title="Import from another Application" aria-label="Import from another Application" onClick={onImport}>
+            <Button type="button" variant="ghost" className={headerBtn} disabled={disabled} title="Import from Another Application" aria-label="Import from Another Application" onClick={onImport}>
               <Import size={15} aria-hidden />
             </Button>
           ) : null}
@@ -136,7 +136,7 @@ export function UndertakingLinesTable({
               className={headerBtn}
               disabled={disabled || aiBusy !== null || aiHeaderBusy}
               title={onSource ? 'Draft undertakings with AI from the selected sources' : 'Suggest more undertaking lines with AI'}
-              aria-label="Suggest more undertaking lines with AI"
+              aria-label="Suggest More Undertaking Lines with AI"
               onClick={() =>
                 onAiHeader ? onAiHeader() : void runAi('header', '', 3).then((more) => {
                   if (more?.length) {
@@ -171,7 +171,7 @@ export function UndertakingLinesTable({
           <tbody>
             <tr className="bg-[#fffcf7]">
               <td className={cn(tdCls, 'lc-check')} />
-              <td data-label="New line" className={cn(tdCls, 'lc-wide')}>
+              <td data-label="New Line" className={cn(tdCls, 'lc-wide')}>
                 <textarea aria-label="New Undertaking Line" className={areaCls} rows={2} placeholder="Undertaking / Requirement" disabled={disabled} value={draft.text} onChange={(e) => setDraft((d) => ({ ...d, text: e.target.value }))} />
               </td>
               {references ? refCells(draft, (patch) => setDraft((d) => ({ ...d, ...patch })), 'for the new line') : null}
@@ -184,13 +184,13 @@ export function UndertakingLinesTable({
                       className={iconBtn}
                       disabled={disabled || aiBusy !== null}
                       title={draft.text.trim() ? 'Improve this line with AI' : 'Draft a line with AI'}
-                      aria-label="AI for the new line"
+                      aria-label="AI for the New Line"
                       onClick={() => void runAi('draft', draft.text, 1).then((out) => out?.[0] && setDraft((d) => ({ ...d, text: out[0]! })))}
                     >
                       {aiBusy === 'draft' ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
                     </Button>
                   ) : null}
-                  <Button type="button" size="sm" disabled={disabled} className="h-7 w-7 rounded-none bg-amber-700 p-0 text-white hover:bg-amber-800" title="Add line" aria-label="Add line" onClick={add}>
+                  <Button type="button" size="sm" disabled={disabled} className="h-7 w-7 rounded-none bg-amber-700 p-0 text-white hover:bg-amber-800" title="Add Line" aria-label="Add Line" onClick={add}>
                     <Plus className="h-4 w-4" aria-hidden />
                   </Button>
                 </span>
@@ -251,7 +251,7 @@ export function UndertakingLinesTable({
                             variant="ghost"
                             className={iconBtn}
                             disabled={disabled}
-                            title="Edit line"
+                            title="Edit Line"
                             aria-label={`Edit line ${index + 1}`}
                             onClick={() => {
                               setEditIndex(index)
@@ -266,7 +266,7 @@ export function UndertakingLinesTable({
                               variant="ghost"
                               className={iconBtn}
                               disabled={disabled || aiBusy !== null}
-                              title="Improve this line with AI"
+                              title="Improve This Line with AI"
                               aria-label={`AI for line ${index + 1}`}
                               onClick={() =>
                                 void runAi(`row-${index}`, texts[index] ?? '', 1).then((out) => {
@@ -277,7 +277,7 @@ export function UndertakingLinesTable({
                               {aiBusy === `row-${index}` ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
                             </Button>
                           ) : null}
-                          <Button type="button" variant="ghost" className={iconBtn} disabled={disabled} title="Delete line" aria-label={`Delete line ${index + 1}`} onClick={() => remove([index])}>
+                          <Button type="button" variant="ghost" className={iconBtn} disabled={disabled} title="Delete Line" aria-label={`Delete line ${index + 1}`} onClick={() => remove([index])}>
                             <Trash2 size={13} />
                           </Button>
                         </>

@@ -150,7 +150,7 @@ function SidebarMainNav() {
   }, [location.pathname])
 
   return (
-    <nav className="w-full min-w-0 max-w-full space-y-2 overflow-x-hidden px-2 pb-3" aria-label="Main navigation">
+    <nav className="w-full min-w-0 max-w-full space-y-2 overflow-x-hidden px-2 pb-3" aria-label="Main Navigation">
       <div className="min-w-0 max-w-full overflow-hidden rounded-none border border-stone-600/80 bg-stone-900/50 p-1">
         <NavItemLink
           item={{ label: 'Dashboard', to: '/', icon: LayoutDashboard }}
@@ -620,8 +620,8 @@ export default function GlobalLayout() {
             type="button"
             onClick={toggleSidebarCollapsed}
             className="relative z-10 shrink-0 rounded-none border border-transparent p-1.5 text-stone-200 transition-colors hover:border-amber-500/40 hover:bg-white/10 hover:text-white"
-            aria-label="Hide sidebar"
-            title="Hide sidebar"
+            aria-label="Hide Sidebar"
+            title="Hide Sidebar"
           >
             <Menu size={18} aria-hidden />
           </button>
@@ -630,7 +630,7 @@ export default function GlobalLayout() {
             type="button"
             className="relative z-10 shrink-0 rounded-none p-1.5 text-stone-200 hover:bg-white/10 hover:text-white xl:hidden"
             onClick={() => setMobileNavOpen(false)}
-            aria-label="Close navigation menu"
+            aria-label="Close Navigation Menu"
           >
             <X size={18} />
           </button>
@@ -650,7 +650,7 @@ export default function GlobalLayout() {
         <button
           type="button"
           className="fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-[2px] xl:hidden"
-          aria-label="Close navigation menu"
+          aria-label="Close Navigation Menu"
           onClick={() => setMobileNavOpen(false)}
         />
       )}

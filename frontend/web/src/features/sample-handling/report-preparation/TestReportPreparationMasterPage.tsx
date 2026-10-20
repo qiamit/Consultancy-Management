@@ -476,7 +476,7 @@ export default function TestReportPreparationMasterPage() {
   th,td{border:1px solid #e2e8f0;padding:8px;text-align:center}
   th{background:#f8fafc;font-weight:600}
 </style></head><body>
-  <h1>Test Report Preparation — SRFs ready for reporting</h1>
+  <h1>Test Report Preparation — SRFs Ready for Reporting</h1>
   <table><thead><tr>
     <th>SRF</th><th>Client</th><th>IS Code</th><th>Received Date</th>
   </tr></thead><tbody>${rowsHtml}</tbody></table>
@@ -941,7 +941,7 @@ export default function TestReportPreparationMasterPage() {
             {resultsViewRow && (
               <div className="space-y-3 text-sm">
                 {resultsViewLoading ? (
-                  <p className="text-stone-600">Loading completed test results…</p>
+                  <p className="text-stone-600">Loading Completed Test Results…</p>
                 ) : resultsViewRows.length === 0 ? (
                   <p className="rounded-none border border-dashed border-stone-400 bg-stone-50 px-3 py-6 text-center text-stone-500">
                     No completed test parameter results for this SRF.

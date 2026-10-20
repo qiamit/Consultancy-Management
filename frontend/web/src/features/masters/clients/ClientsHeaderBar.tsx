@@ -70,7 +70,7 @@ export function ClientsHeaderBar({
               onChange={(e) => onSearchChange(e.target.value)}
               placeholder="Search Client | Address | Email | Mobile | Scale | Type"
               className={cn(clientDarkBarSearchClass, 'h-10 min-h-10 min-w-[8rem] pl-7 text-xs sm:pl-9 sm:text-sm')}
-              aria-label="Search by client, address, email, mobile, scale, or type"
+              aria-label="Search by Client, Address, Email, Mobile, Scale, or Type"
             />
           </div>
 
@@ -80,7 +80,7 @@ export function ClientsHeaderBar({
                 clientDarkBarFieldClass,
                 'h-10 min-h-10 w-[3.5rem] shrink-0 px-1 text-[11px] tabular-nums sm:w-[4.25rem] sm:px-2 sm:text-xs',
               )}
-              aria-label="Rows per page"
+              aria-label="Rows per Page"
               title={`${pageSize} per page`}
             >
               <SelectValue />

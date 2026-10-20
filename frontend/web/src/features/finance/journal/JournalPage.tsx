@@ -85,7 +85,7 @@ export default function JournalPage() {
           <Button type="button" className="min-h-10" onClick={start}>Add New Journal</Button>
           {message ? <p className="text-sm text-stone-700">{message}</p> : null}
         </div>
-        {rows.length === 0 ? <p className="text-sm text-stone-600">No journals added yet.</p> : (
+        {rows.length === 0 ? <p className="text-sm text-stone-600">No Journals Added Yet.</p> : (
           <ul className="space-y-1 text-sm">
             {rows.map((row) => (
               <li key={row.id}>{row.journal_number} · {row.journal_date} · {row.journal_name || 'Adjustment'}</li>
@@ -95,7 +95,7 @@ export default function JournalPage() {
         {open ? (
           <div className="grid grid-cols-1 gap-3 border border-stone-300 p-3 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="journal-number">Journal number</Label>
+              <Label htmlFor="journal-number">Journal Number</Label>
               <Input id="journal-number" className="min-h-10" value={number} onChange={(e) => setNumber(e.target.value)} />
             </div>
             <div className="space-y-2">
@@ -103,25 +103,25 @@ export default function JournalPage() {
               <Input id="journal-date" className="min-h-10" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             </div>
             <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="journal-name">Journal name</Label>
+              <Label htmlFor="journal-name">Journal Name</Label>
               <Input id="journal-name" className="min-h-10" value={name} onChange={(e) => setName(e.target.value)} />
             </div>
             <div className="space-y-2">
-              <Label>Debit account</Label>
+              <Label>Debit Account</Label>
               <Select value={debitAccount || 'none'} onValueChange={(value) => setDebitAccount(value === 'none' ? '' : value)}>
-                <SelectTrigger className="min-h-10"><SelectValue placeholder="Select an account" /></SelectTrigger>
+                <SelectTrigger className="min-h-10"><SelectValue placeholder="Select an Account" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">Select an account</SelectItem>
+                  <SelectItem value="none">Select an Account</SelectItem>
                   {accounts.map((row) => <SelectItem key={row.id} value={row.id}>{row.account_name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Credit account</Label>
+              <Label>Credit Account</Label>
               <Select value={creditAccount || 'none'} onValueChange={(value) => setCreditAccount(value === 'none' ? '' : value)}>
-                <SelectTrigger className="min-h-10"><SelectValue placeholder="Select an account" /></SelectTrigger>
+                <SelectTrigger className="min-h-10"><SelectValue placeholder="Select an Account" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">Select an account</SelectItem>
+                  <SelectItem value="none">Select an Account</SelectItem>
                   {accounts.map((row) => <SelectItem key={row.id} value={row.id}>{row.account_name}</SelectItem>)}
                 </SelectContent>
               </Select>

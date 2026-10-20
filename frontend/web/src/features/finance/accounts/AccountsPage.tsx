@@ -80,7 +80,7 @@ export default function AccountsPage() {
     <BookChrome title="Chart of Accounts" hint="Sale and purchase documents stay in their own books. These accounts are for the manual journal.">
       <div className={`${limsPanelClass} space-y-3`}>
         {message ? <p className="text-sm text-stone-700">{message}</p> : null}
-        {rows.length === 0 ? <p className="text-sm text-stone-600">No accounts yet.</p> : (
+        {rows.length === 0 ? <p className="text-sm text-stone-600">No Accounts Yet.</p> : (
           <div className="overflow-x-auto">
             <table className="auto-cards list-cards w-full min-w-[480px] text-sm">
               <thead>
@@ -102,7 +102,7 @@ export default function AccountsPage() {
         )}
         <div className="grid grid-cols-1 gap-3 border border-stone-300 p-3 sm:grid-cols-3">
           <div className="space-y-2">
-            <Label htmlFor="account-name">Account name</Label>
+            <Label htmlFor="account-name">Account Name</Label>
             <Input id="account-name" className="min-h-10" value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div className="space-y-2">
@@ -136,11 +136,11 @@ export default function AccountsPage() {
                 </li>
               ))}
             </ul>
-          ) : <p className="text-sm text-stone-600">No bank accounts configured.</p>}
+          ) : <p className="text-sm text-stone-600">No Bank Accounts Configured.</p>}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            <div className="space-y-2"><Label htmlFor="bank-account-label">Account name</Label><Input id="bank-account-label" className="min-h-10" value={bankAccountName} onChange={(e) => setBankAccountName(e.target.value)} /></div>
+            <div className="space-y-2"><Label htmlFor="bank-account-label">Account Name</Label><Input id="bank-account-label" className="min-h-10" value={bankAccountName} onChange={(e) => setBankAccountName(e.target.value)} /></div>
             <div className="space-y-2"><Label htmlFor="bank-name">Bank</Label><Input id="bank-name" className="min-h-10" value={bankName} onChange={(e) => setBankName(e.target.value)} /></div>
-            <div className="space-y-2"><Label htmlFor="bank-last4">Account last four digits</Label><Input id="bank-last4" inputMode="numeric" maxLength={4} className="min-h-10" value={bankLast4} onChange={(e) => setBankLast4(e.target.value.replace(/\D/g, '').slice(0, 4))} /></div>
+            <div className="space-y-2"><Label htmlFor="bank-last4">Account Last Four Digits</Label><Input id="bank-last4" inputMode="numeric" maxLength={4} className="min-h-10" value={bankLast4} onChange={(e) => setBankLast4(e.target.value.replace(/\D/g, '').slice(0, 4))} /></div>
             <div className="space-y-2"><Label htmlFor="bank-ifsc">IFSC</Label><Input id="bank-ifsc" className="min-h-10 uppercase" value={bankIfsc} onChange={(e) => setBankIfsc(e.target.value.toUpperCase())} /></div>
             <div className="flex items-end"><Button type="button" className="min-h-10 w-full" onClick={saveBankAccount} disabled={!bankAccountName.trim()}>Add Bank Account</Button></div>
           </div>

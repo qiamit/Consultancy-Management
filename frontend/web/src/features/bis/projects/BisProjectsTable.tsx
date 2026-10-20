@@ -153,7 +153,7 @@ function RowActions({
             variant="ghost"
             className={actionGhostBtnClass}
             aria-label={`Start renewal for ${client}`}
-            title="Open renewal form"
+            title="Open Renewal Form"
             onClick={() => onStartRenewal?.(row)}
           >
             <RefreshCw size={16} />
@@ -164,7 +164,7 @@ function RowActions({
             variant="ghost"
             className={actionGhostBtnClass}
             aria-label={`Manak Assist for ${client}`}
-            title="Manak Assist — renewal (Test Request stays off)"
+            title="Manak Assist — Renewal (Test Request Stays Off)"
             onClick={() => {
               void buildManakRenewalPayload(row)
                 .then((renewal) => {
@@ -172,7 +172,7 @@ function RowActions({
                   return openManakEbisAssist({ portalUserId: manakLoginFromProject(row).userId, projectId: row.id, renewal })
                 })
                 .then(({ extensionUsed }) => {
-                  if (extensionUsed) toast.success('Manak Assist: Renewal ON — sign in with the captcha')
+                  if (extensionUsed) toast.success('Manak Assist: Renewal ON — Sign in with the Captcha')
                   else toast.warning('Extension not detected — opened Manak eBIS in a new tab', {
                     description: EXTENSION_MISSING_MSG,
                   })
@@ -203,7 +203,7 @@ function RowActions({
         variant="ghost"
         className={actionGhostBtnClass}
         aria-label={`Edit ${client}`}
-        title="Edit license"
+        title="Edit License"
         onClick={() => onEdit(row)}
       >
         <Pencil size={16} />
@@ -229,7 +229,7 @@ function RowActions({
         onClick={() => {
           if (inclusionMode || (row.project_kind ?? '').trim().toLowerCase() === 'inclusion') {
             // Inclusion has its own Manak flow (Change in Scope); never the New Application fill.
-            const preparing = toast.loading('Preparing inclusion data, lists and the merged document for Manak…')
+            const preparing = toast.loading('Preparing Inclusion Data, Lists and the Merged Document for Manak…')
             void buildManakInclusionPayload(row)
               .finally(() => toast.dismiss(preparing))
               .then((inclusion) => openManakEbisAssist({ portalUserId: manakLoginFromProject(row).userId, projectId: row.id, inclusion }))
@@ -244,7 +244,7 @@ function RowActions({
           void buildManakNewAppPayload(row)
             .finally(() => toast.dismiss(preparing))
             .catch((err: unknown) => {
-              toast.warning('Could not load application data — opening Manak login only', {
+              toast.warning('Could Not Load Application Data — Opening Manak Login Only', {
                 description: err instanceof Error ? err.message : undefined,
               })
               return null
@@ -295,7 +295,7 @@ function RowActions({
               className={actionGhostBtnClass}
               disabled={emailBusy}
               aria-label={`Email documents for ${client}`}
-              title="Email docs to client"
+              title="Email Docs to Client"
             >
               <Mail size={16} />
             </Button>
@@ -360,7 +360,7 @@ function CmLNumberLink({
               description: 'Manak Licence Related Report opened.',
             })
           } else {
-            toast.warning('Manak page opened', {
+            toast.warning('Manak Page Opened', {
               description: copiedDigits
                 ? `Copy manually: ${copiedDigits}`
                 : 'Could not copy CM/L number.',
@@ -511,7 +511,7 @@ export function BisProjectsTable({
               <input
                 type="checkbox"
                 className={checkboxClass}
-                aria-label="Select all"
+                aria-label="Select All"
                 checked={allChecked}
                 ref={(el) => {
                   if (el) el.indeterminate = !allChecked && someChecked
@@ -662,7 +662,7 @@ export function BisProjectsTable({
                     <input
                       type="checkbox"
                       className={checkboxClass}
-                      aria-label="Select all on this page"
+                      aria-label="Select All on This Page"
                       checked={allChecked}
                       ref={(el) => {
                         if (el) el.indeterminate = !allChecked && someChecked

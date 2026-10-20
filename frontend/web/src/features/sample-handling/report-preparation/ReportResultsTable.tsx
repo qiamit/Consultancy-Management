@@ -95,7 +95,7 @@ function ResultDataRow({
                 size="icon"
                 variant="ghost"
                 className="h-7 w-7 shrink-0"
-                aria-label="Edit specified requirement"
+                aria-label="Edit Specified Requirement"
                 onClick={(e) => {
                   e.stopPropagation()
                   onEditSpecifiedRequirement(row)
@@ -390,7 +390,7 @@ export function ReportResultsTable({
   )
 
   if (rows.length === 0 && !embedded) {
-    return <p className="text-sm text-muted-foreground py-4 px-3">No completed test parameter results.</p>
+    return <p className="text-sm text-muted-foreground py-4 px-3">No Completed Test Parameter Results.</p>
   }
 
   if (sections) {

@@ -1806,7 +1806,7 @@ export default function ClientsMasterPage() {
             ) : null}
             {duplicates.length > 0 ? (
               <div className="mb-4 border border-amber-600 bg-amber-50 p-3 text-sm text-stone-800">
-                <p className="font-medium">Possible duplicate</p>
+                <p className="font-medium">Possible Duplicate</p>
                 <ul className="mt-2 space-y-1">
                   {duplicates.map((hit) => (
                     <li key={hit.id}>{hit.company_name}</li>
@@ -2054,10 +2054,10 @@ export default function ClientsMasterPage() {
       <Dialog open={copySourceId != null} onOpenChange={(open) => { if (!open) setCopySourceId(null) }}>
         <DialogContent className={cn(limsDialogClass, 'w-[min(28rem,calc(100vw-1rem))]')}>
           <DialogHeader>
-            <DialogTitle>Copy client</DialogTitle>
+            <DialogTitle>Copy Client</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 p-4">
-            <label className="text-sm" htmlFor="copy-client-name">New company name</label>
+            <label className="text-sm" htmlFor="copy-client-name">New Company Name</label>
             <Input id="copy-client-name" className="h-10 min-h-10" value={copyName} onChange={(e) => setCopyName(e.target.value)} />
             <Button type="button" className="h-10 min-h-10" onClick={confirmCopy} disabled={!copyName.trim()}>Continue</Button>
           </div>
@@ -2066,14 +2066,14 @@ export default function ClientsMasterPage() {
       <Dialog open={csvPreview != null} onOpenChange={(open) => { if (!open) setCsvPreview(null) }}>
         <DialogContent className={cn(limsDialogClass, 'w-[min(36rem,calc(100vw-1rem))]')}>
           <DialogHeader>
-            <DialogTitle>Import preview</DialogTitle>
+            <DialogTitle>Import Preview</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 p-4 text-sm">
             <p>{csvPreview?.valid.length ?? 0} valid row(s) will be imported.</p>
             <p>{csvPreview?.invalid.length ?? 0} invalid row(s) will be skipped.</p>
             <div className="flex flex-wrap gap-2">
-              <Button type="button" className="h-10 min-h-10" onClick={commitCsvImport} disabled={!csvPreview?.valid.length}>Import valid rows</Button>
-              <Button type="button" variant="outline" className="h-10 min-h-10" onClick={downloadCsvErrors} disabled={!csvPreview?.invalid.length}>Download error CSV</Button>
+              <Button type="button" className="h-10 min-h-10" onClick={commitCsvImport} disabled={!csvPreview?.valid.length}>Import Valid Rows</Button>
+              <Button type="button" variant="outline" className="h-10 min-h-10" onClick={downloadCsvErrors} disabled={!csvPreview?.invalid.length}>Download Error CSV</Button>
             </div>
           </div>
         </DialogContent>

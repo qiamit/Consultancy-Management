@@ -182,7 +182,7 @@ export function BisRenewalsForm({
     try {
       await navigator.share({ files: [pendingWhatsAppShare.file], text: pendingWhatsAppShare.message })
       setPendingWhatsAppShare(null)
-      toast.success('The file was shared from your device share sheet.')
+      toast.success('The File Was Shared from Your Device Share Sheet.')
     } catch (error) {
       if (!(error instanceof DOMException && error.name === 'AbortError')) {
         toast.error(error instanceof Error ? error.message : 'Could not share the file.')
@@ -240,7 +240,7 @@ export function BisRenewalsForm({
     setWorkflowBusy('pdf')
     try {
       await downloadRenewalCalculationPdf(form)
-      toast.success('Calculated production report downloaded as PDF.')
+      toast.success('Calculated Production Report Downloaded as PDF.')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not create the calculation PDF.')
     } finally {
@@ -255,7 +255,7 @@ export function BisRenewalsForm({
         displayName: `${form.clientLabel || 'Client'} - CM-L ${form.cmLDigits || 'license'} - Renewal ${form.renewalPeriodFrom || 'period'} - CA Certificate - ${file.name}`,
       })
       setCertificateFile({ name: uploaded.file_name, url: uploaded.viewUrl })
-      toast.success('CA certificate uploaded and attached to the BIS license project.')
+      toast.success('CA Certificate Uploaded and Attached to the BIS License Project.')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not upload the CA certificate.')
     } finally {
@@ -300,7 +300,7 @@ export function BisRenewalsForm({
               <Label htmlFor="renewal-period-from">Period From</Label>
               <PeriodDateInput
                 id="renewal-period-from"
-                label="Renewal period from"
+                label="Renewal Period from"
                 value={form.renewalPeriodFrom}
                 onChange={(renewalPeriodFrom) => onChange((previous) => ({
                   ...previous,
@@ -318,7 +318,7 @@ export function BisRenewalsForm({
               <Label htmlFor="renewal-period-to">Period To</Label>
               <PeriodDateInput
                 id="renewal-period-to"
-                label="Renewal period to"
+                label="Renewal Period to"
                 value={form.renewalPeriodTo}
                 onChange={(renewalPeriodTo) => onChange((previous) => ({
                   ...previous,
@@ -338,7 +338,7 @@ export function BisRenewalsForm({
                 value={form.renewalTermYears}
                 onValueChange={(renewalTermYears) => onChange((previous) => ({ ...previous, renewalTermYears }))}
               >
-                <SelectTrigger id="renewal-term-years" aria-label="Production for year">
+                <SelectTrigger id="renewal-term-years" aria-label="Production for Year">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -369,13 +369,13 @@ export function BisRenewalsForm({
           />
         </div>
 
-        <section className="rn-actions flex shrink-0 flex-wrap items-center gap-2 border-t border-stone-300 bg-stone-50 px-3 py-2" aria-label="Renewal client actions">
+        <section className="rn-actions flex shrink-0 flex-wrap items-center gap-2 border-t border-stone-300 bg-stone-50 px-3 py-2" aria-label="Renewal Client Actions">
           <input
             ref={importInputRef}
             type="file"
             accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
             className="hidden"
-            aria-label="Import completed client renewal workbook"
+            aria-label="Import Completed Client Renewal Workbook"
             onChange={(event) => { const file = event.target.files?.[0]; if (file) void importClientWorkbook(file) }}
           />
           <input
@@ -383,7 +383,7 @@ export function BisRenewalsForm({
             type="file"
             accept="application/pdf,.pdf"
             className="hidden"
-            aria-label="Upload CA-attested renewal certificate"
+            aria-label="Upload CA-Attested Renewal Certificate"
             onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadCertificate(file) }}
           />
           <DropdownMenu>
@@ -503,7 +503,7 @@ export function BisRenewalsForm({
             <DialogTitle>Share File with WhatsApp</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 text-sm text-stone-700">
-            <p><strong>{pendingWhatsAppShare?.file.name}</strong> is ready. WhatsApp chat links cannot attach a file automatically.</p>
+            <p><strong>{pendingWhatsAppShare?.file.name}</strong> Is Ready. WhatsApp Chat Links Cannot Attach a File Automatically.</p>
             {canSharePendingFile ? (
               <p className="rounded border border-emerald-200 bg-emerald-50 p-2.5 text-xs text-emerald-900">This browser supports file sharing. Choose Share File, then select WhatsApp and the recipient in the device share sheet.</p>
             ) : (

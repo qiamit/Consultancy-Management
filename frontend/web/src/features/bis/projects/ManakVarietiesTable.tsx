@@ -53,7 +53,7 @@ function openProductManualOnline(isNumber: string, setBusy: (busy: boolean) => v
   }
   if (!isQeExtensionPresent()) {
     window.open(url, '_blank', 'noopener,noreferrer')
-    toast.warning('Reload the QE Consultancy extension to auto-search the IS number.')
+    toast.warning('Reload the QE Consultancy Extension to Auto-Search the IS Number.')
     return
   }
   const requestId = `${Date.now()}-${Math.random().toString(36).slice(2)}`
@@ -118,7 +118,7 @@ export function ProductManualValue({
           type="button"
           className={cn(iconBtn, 'h-7 w-7 border-stone-400 text-amber-800', missing && 'opacity-50')}
           title={missing ? `${manual.file_name} is attached in IS Code master but the file is missing in storage` : `View product manual: ${manual.file_name}`}
-          aria-label="View product manual PDF"
+          aria-label="View Product Manual PDF"
           onClick={() =>
             viewFile(
               manual.url,
@@ -318,7 +318,7 @@ export function ManakVarietiesTable({
   const addRow = async () => {
     const values = headers.map((_, i) => (newDraft[i] ?? '').trim())
     if (!values.some(Boolean)) {
-      toast.warning('Enter the scope text first.')
+      toast.warning('Enter the Scope Text First.')
       return
     }
     const newIndex = scopeRows.length
@@ -433,7 +433,7 @@ export function ManakVarietiesTable({
     if (!projectId || !file) return
     const okType = file.type === 'application/pdf' || /^image\//.test(file.type) || /\.(pdf|png|jpe?g|webp)$/i.test(file.name)
     if (!okType) {
-      toast.error('Upload a PDF or image file.')
+      toast.error('Upload a PDF or Image File.')
       return
     }
     setBusy(true)
@@ -461,7 +461,7 @@ export function ManakVarietiesTable({
     try {
       await deleteBisProjectFile(file)
       setScopeFiles((prev) => prev.filter((f) => f.id !== file.id))
-      toast.success('File deleted')
+      toast.success('File Deleted')
     } catch (error) {
       toast.error(formatBisProjectFilesError(error))
     } finally {
@@ -479,7 +479,7 @@ export function ManakVarietiesTable({
         className={cn(iconBtn, 'border-stone-400 text-amber-800')}
         disabled={filesLoading || !standardFile?.url}
         title={standardFile?.file_name ? `View specification: ${standardFile.file_name}` : 'No specification attached to this IS Code'}
-        aria-label="View specification"
+        aria-label="View Specification"
         onClick={() => viewFile(standardFile?.url, standardFile?.file_name || 'Specification', 'Specification file not found for this IS Code.')}
       >
         <BookOpen size={15} aria-hidden />
@@ -489,7 +489,7 @@ export function ManakVarietiesTable({
         className={cn(iconBtn, 'border-stone-400 text-amber-800')}
         disabled={filesLoading || !manualFile?.url}
         title={manualFile?.file_name ? `View product manual: ${manualFile.file_name}` : 'No product manual attached to this IS Code'}
-        aria-label="View product manual"
+        aria-label="View Product Manual"
         onClick={() => viewFile(manualFile?.url, manualFile?.file_name || 'Product manual', 'Product manual file not found for this IS Code.')}
       >
         <FileText size={15} aria-hidden />
@@ -499,7 +499,7 @@ export function ManakVarietiesTable({
         className={cn(iconBtn, 'border-stone-400 text-amber-800')}
         disabled={searchBusy}
         title="Open the standard / product manual online (BIS) and search this IS number"
-        aria-label="Open standard online"
+        aria-label="Open Standard Online"
         onClick={() => openProductManualOnline(isNumber, setSearchBusy)}
       >
         <ExternalLink size={15} aria-hidden />
@@ -509,8 +509,8 @@ export function ManakVarietiesTable({
         href="https://standards.bis.gov.in/website"
         target="_blank"
         rel="noopener noreferrer"
-        title="BIS Standards website (standards.bis.gov.in)"
-        aria-label="BIS Standards website"
+        title="BIS Standards Website (standards.bis.gov.in)"
+        aria-label="BIS Standards Website"
       >
         <Globe size={15} aria-hidden />
       </a>
@@ -519,8 +519,8 @@ export function ManakVarietiesTable({
         href="https://standardsbis.bsbedge.com/BIS_Login"
         target="_blank"
         rel="noopener noreferrer"
-        title="BIS portal login (standardsbis.bsbedge.com)"
-        aria-label="BIS portal login"
+        title="BIS Portal Login (standardsbis.bsbedge.com)"
+        aria-label="BIS Portal Login"
       >
         <LogIn size={15} aria-hidden />
       </a>
@@ -529,7 +529,7 @@ export function ManakVarietiesTable({
         className={cn(iconBtn, 'border-stone-400 text-amber-800')}
         disabled={!projectId}
         title="Set License Scope columns (1 = plain text, 2+ = table)"
-        aria-label="License scope columns"
+        aria-label="License Scope Columns"
         onClick={() => {
           setColumnDraft(String(currentColumns))
           setColumnOpen(true)
@@ -540,17 +540,17 @@ export function ManakVarietiesTable({
       {scopeDocument ? (
         <>
           <span className="mx-1 h-6 w-px bg-stone-500" aria-hidden />
-          <button type="button" className={cn(iconBtn, 'border-stone-400 text-amber-800')} title={`${scopeDocumentLabel} — preview`} aria-label="Preview undertaking for scope" onClick={scopeDocument.preview}>
+          <button type="button" className={cn(iconBtn, 'border-stone-400 text-amber-800')} title={`${scopeDocumentLabel} — preview`} aria-label="Preview Undertaking for Scope" onClick={scopeDocument.preview}>
             <Eye size={15} aria-hidden />
           </button>
-          <button type="button" className={cn(iconBtn, 'border-stone-400 text-amber-800')} title={`${scopeDocumentLabel} — PDF`} aria-label="Undertaking for scope PDF" onClick={scopeDocument.pdf}>
+          <button type="button" className={cn(iconBtn, 'border-stone-400 text-amber-800')} title={`${scopeDocumentLabel} — PDF`} aria-label="Undertaking for Scope PDF" onClick={scopeDocument.pdf}>
             <Download size={15} aria-hidden />
           </button>
-          <button type="button" className={cn(iconBtn, 'border-stone-400 text-amber-800')} title={`${scopeDocumentLabel} — Word`} aria-label="Undertaking for scope Word" onClick={scopeDocument.word}>
+          <button type="button" className={cn(iconBtn, 'border-stone-400 text-amber-800')} title={`${scopeDocumentLabel} — Word`} aria-label="Undertaking for Scope Word" onClick={scopeDocument.word}>
             <FileType size={15} aria-hidden />
           </button>
           {scopeDocument.print ? (
-            <button type="button" className={cn(iconBtn, 'border-stone-400 text-amber-800')} title={`${scopeDocumentLabel} — Print`} aria-label="Print undertaking for scope" onClick={scopeDocument.print}>
+            <button type="button" className={cn(iconBtn, 'border-stone-400 text-amber-800')} title={`${scopeDocumentLabel} — Print`} aria-label="Print Undertaking for Scope" onClick={scopeDocument.print}>
               <Printer size={15} aria-hidden />
             </button>
           ) : null}
@@ -613,7 +613,7 @@ export function ManakVarietiesTable({
                         role="separator"
                         aria-orientation="vertical"
                         aria-label={`Resize ${header} column (double-click to reset)`}
-                        title="Drag to resize the column · double-click to reset"
+                        title="Drag to Resize the Column · Double-Click to Reset"
                         className="absolute -right-1 top-0 z-10 h-full w-2 cursor-col-resize touch-none hover:bg-amber-400/60"
                         onPointerDown={(e) => startColumnResize(i, e)}
                         onDoubleClick={() => persistShares(null)}
@@ -646,11 +646,11 @@ export function ManakVarietiesTable({
                 ))}
                 <td className={cn(td, 'rc-actions whitespace-nowrap text-center')}>
                   <div className="flex flex-nowrap items-center justify-center gap-1">
-                    <button type="button" className={cn(iconBtn, 'border-stone-400 text-amber-800')} disabled={!projectId} title="Add row" aria-label="Add scope row" onClick={() => void addRow()}>
+                    <button type="button" className={cn(iconBtn, 'border-stone-400 text-amber-800')} disabled={!projectId} title="Add Row" aria-label="Add Scope Row" onClick={() => void addRow()}>
                       <Plus size={15} aria-hidden />
                     </button>
                     {attachButton('draft')}
-                    <button type="button" className={cn(iconBtn, 'border-red-300 text-red-700')} title="Clear the new row (and its attachments)" aria-label="Clear new scope row" onClick={() => void clearNewRow()}>
+                    <button type="button" className={cn(iconBtn, 'border-red-300 text-red-700')} title="Clear the New Row (and Its Attachments)" aria-label="Clear New Scope Row" onClick={() => void clearNewRow()}>
                       <Trash2 size={14} aria-hidden />
                     </button>
                   </div>
@@ -692,7 +692,7 @@ export function ManakVarietiesTable({
                       <td className={cn(td, 'rc-actions whitespace-nowrap text-center')}>
                         <div className="flex flex-nowrap items-center justify-center gap-1">
                           {editing ? (
-                            <button type="button" className={cn(iconBtn, 'border-emerald-600 text-emerald-800')} title="Save row" aria-label={`Save scope row ${index + 1}`} onClick={saveEdit}>
+                            <button type="button" className={cn(iconBtn, 'border-emerald-600 text-emerald-800')} title="Save Row" aria-label={`Save scope row ${index + 1}`} onClick={saveEdit}>
                               <Check size={15} aria-hidden />
                             </button>
                           ) : (
@@ -700,7 +700,7 @@ export function ManakVarietiesTable({
                               type="button"
                               className={cn(iconBtn, 'border-stone-400 text-amber-800')}
                               disabled={!projectId}
-                              title="Edit row"
+                              title="Edit Row"
                               aria-label={`Edit scope row ${index + 1}`}
                               onClick={() => {
                                 setEditingIndex(index)
@@ -710,7 +710,7 @@ export function ManakVarietiesTable({
                               <Pencil size={14} aria-hidden />
                             </button>
                           )}
-                          <button type="button" className={cn(iconBtn, 'border-red-300 text-red-700')} disabled={!projectId} title="Delete row" aria-label={`Delete scope row ${index + 1}`} onClick={() => void deleteRow(index)}>
+                          <button type="button" className={cn(iconBtn, 'border-red-300 text-red-700')} disabled={!projectId} title="Delete Row" aria-label={`Delete scope row ${index + 1}`} onClick={() => void deleteRow(index)}>
                             {editing ? <X size={14} aria-hidden /> : <Trash2 size={14} aria-hidden />}
                           </button>
                           {attachButton(index)}
@@ -737,10 +737,10 @@ export function ManakVarietiesTable({
           </div>
           <div className={cn(limsRegistryFormClass, 'space-y-3 px-4 py-4')}>
             <div className="space-y-2">
-              <Label htmlFor="varieties-column-count">Number of columns</Label>
+              <Label htmlFor="varieties-column-count">Number of Columns</Label>
               <Select value={columnDraft} onValueChange={setColumnDraft}>
                 <SelectTrigger id="varieties-column-count" className="h-9 rounded-none text-sm font-medium">
-                  <SelectValue placeholder="Select columns" />
+                  <SelectValue placeholder="Select Columns" />
                 </SelectTrigger>
                 <SelectContent>
                   {BIS_NOTES_COLUMN_COUNT_OPTIONS.map((n) => (
@@ -776,7 +776,7 @@ export function ManakVarietiesTable({
           <div className={cn(limsRegistryFormClass, 'space-y-3 px-4 py-4')}>
             <ul className="max-h-56 divide-y divide-[#e7e0d4] overflow-y-auto border border-[#e7e0d4] bg-[#fffcf7]">
               {filesTarget == null || filesOf(filesTarget).length === 0 ? (
-                <li className="px-3 py-4 text-center text-sm text-stone-500">No files attached to this row yet.</li>
+                <li className="px-3 py-4 text-center text-sm text-stone-500">No Files Attached to This Row Yet.</li>
               ) : (
                 filesOf(filesTarget).map((f) => (
                   <li key={f.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
@@ -787,14 +787,14 @@ export function ManakVarietiesTable({
                       {stripKey(f.file_name).replace(`${typeOf(f)} - `, '')}
                     </span>
                     <span className="inline-flex shrink-0 gap-1">
-                      <button type="button" className={cn(iconBtn, 'h-7 w-7 border-stone-400 text-amber-800')} title="View" aria-label="View file" onClick={() => viewFile(f.viewUrl, f.file_name, f.error || 'File is unavailable.')}>
+                      <button type="button" className={cn(iconBtn, 'h-7 w-7 border-stone-400 text-amber-800')} title="View" aria-label="View File" onClick={() => viewFile(f.viewUrl, f.file_name, f.error || 'File is unavailable.')}>
                         <Eye size={14} aria-hidden />
                       </button>
                       <button
                         type="button"
                         className={cn(iconBtn, 'h-7 w-7 border-red-300 text-red-700')}
                         title="Delete"
-                        aria-label="Delete file"
+                        aria-label="Delete File"
                         disabled={busy}
                         onClick={async () => {
                           if (await confirmAction(`Delete ${f.file_name}?`, { title: 'Delete file' })) void removeFile(f)
@@ -809,7 +809,7 @@ export function ManakVarietiesTable({
             </ul>
             <div className="flex items-center gap-2">
               <Select value={fileType} onValueChange={(v) => setFileType(v as (typeof FILE_TYPES)[number])}>
-                <SelectTrigger className="h-9 flex-1 rounded-none text-sm font-medium" aria-label="Type of file">
+                <SelectTrigger className="h-9 flex-1 rounded-none text-sm font-medium" aria-label="Type of File">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

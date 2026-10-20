@@ -281,7 +281,7 @@ function MultiOptionSelect({ field, value, onChange }: { field: Field; value: st
             </DropdownMenuCheckboxItem>
           ))
         ) : (
-          <p className="px-2 py-1.5 text-sm text-stone-500">No choices</p>
+          <p className="px-2 py-1.5 text-sm text-stone-500">No Choices</p>
         )}
       </DropdownMenuContent>
     </DropdownMenu>
@@ -680,7 +680,7 @@ export function EditableRows({
                               type="button"
                               variant="ghost"
                               className={iconBtn}
-                              title="Edit row"
+                              title="Edit Row"
                               onClick={() => {
                                 setEditIndex(index)
                                 setEditDraft({ ...r })
@@ -688,7 +688,7 @@ export function EditableRows({
                             >
                               <Pencil size={13} />
                             </Button>
-                            <Button type="button" variant="ghost" className={iconBtn} disabled={busy} title="Delete row" onClick={() => remove([index])}>
+                            <Button type="button" variant="ghost" className={iconBtn} disabled={busy} title="Delete Row" onClick={() => remove([index])}>
                               <Trash2 size={13} />
                             </Button>
                           </>
@@ -758,7 +758,7 @@ export function ManakManagementStep({
     setCorrBusy(true)
     try {
       await saveBisModulePayload(projectId, CORRESPONDENCE_KIND, { ...corr })
-      toast.success('Correspondence details saved')
+      toast.success('Correspondence Details Saved')
       onChanged()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not save')

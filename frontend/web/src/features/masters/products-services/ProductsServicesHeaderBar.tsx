@@ -64,7 +64,7 @@ export function ProductsServicesHeaderBar({
               onChange={(e) => onSearchChange(e.target.value)}
               placeholder="Search Item | Code | Category | HSN | Type"
               className={cn(limsDarkBarSearchClass, 'h-8 min-w-0 pl-7 text-xs sm:pl-9 sm:text-sm')}
-              aria-label="Search products and services"
+              aria-label="Search Products and Services"
             />
           </div>
 
@@ -74,7 +74,7 @@ export function ProductsServicesHeaderBar({
                 limsDarkBarFieldClass,
                 'h-8 w-[3.5rem] shrink-0 px-1 text-[11px] tabular-nums sm:w-[4.25rem] sm:px-2 sm:text-xs',
               )}
-              aria-label="Rows per page"
+              aria-label="Rows per Page"
               title={`${pageSize} per page`}
             >
               <SelectValue />

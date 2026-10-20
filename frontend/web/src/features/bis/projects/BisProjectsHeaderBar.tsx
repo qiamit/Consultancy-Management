@@ -79,7 +79,7 @@ export function BisProjectsHeaderBar({
               limsDarkBarFieldClass,
               'bis-projects-filter-trigger h-8 w-[min(100%,11.5rem)] shrink-0 px-2 text-[11px] sm:w-[12.5rem] sm:text-xs',
             )}
-            aria-label="Filter by QE management"
+            aria-label="Filter by QE Management"
             title="Managed by QE / Not Managed by QE"
           >
             <SelectValue placeholder="QE Management" />
@@ -100,7 +100,7 @@ export function BisProjectsHeaderBar({
               limsDarkBarFieldClass,
               'bis-projects-filter-trigger h-8 w-[min(100%,9.5rem)] shrink-0 px-2 text-[11px] sm:w-[10.5rem] sm:text-xs',
             )}
-            aria-label="Filter by type of project"
+            aria-label="Filter by Type of Project"
             title="Application / License"
           >
             <SelectValue placeholder="Type of Project" />
@@ -121,7 +121,7 @@ export function BisProjectsHeaderBar({
               limsDarkBarFieldClass,
               'bis-projects-filter-trigger h-8 w-[min(100%,9.5rem)] shrink-0 px-2 text-[11px] sm:w-[10.5rem] sm:text-xs',
             )}
-            aria-label="Filter by license status"
+            aria-label="Filter by License Status"
             title="Operative / Renewal / Deferred / Expired"
           >
             <SelectValue placeholder="License Status" />
@@ -184,7 +184,7 @@ export function BisProjectsHeaderBar({
                   limsDarkBarFieldClass,
                   'h-8 w-[3.5rem] shrink-0 px-1 text-[11px] tabular-nums sm:w-[4.25rem] sm:px-2 sm:text-xs',
                 )}
-                aria-label="Rows per page"
+                aria-label="Rows per Page"
                 title={`${pageSize} per page`}
               >
                 <SelectValue />

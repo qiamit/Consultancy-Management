@@ -139,12 +139,12 @@ export function ClientDetailsDialog({
             <DialogTitle className="truncate text-base font-semibold tracking-tight text-white sm:text-lg">
               {title}
             </DialogTitle>
-            <p className="mt-0.5 text-xs text-stone-300">Client details (view only)</p>
+            <p className="mt-0.5 text-xs text-stone-300">Client Details (View Only)</p>
           </DialogHeader>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-gradient-to-b from-stone-100/80 to-white px-3 py-3 sm:px-5 sm:py-4 md:px-6 md:py-5">
-          {loading ? <p className="text-sm text-stone-600">Loading client details…</p> : null}
+          {loading ? <p className="text-sm text-stone-600">Loading Client Details…</p> : null}
           {error ? (
             <p className="border-l-2 border-destructive bg-destructive/5 px-3 py-2 text-sm text-destructive">
               {error}

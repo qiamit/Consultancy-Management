@@ -315,7 +315,7 @@ export function ManageQuotationTermsDialog({
                               <button
                                 type="button"
                                 className="text-amber-800 hover:text-amber-950"
-                                aria-label="Edit term"
+                                aria-label="Edit Term"
                                 title="Edit"
                                 disabled={saving}
                                 onClick={() => {
@@ -333,7 +333,7 @@ export function ManageQuotationTermsDialog({
                               <button
                                 type="button"
                                 className="text-red-600 hover:text-red-800 disabled:opacity-40"
-                                aria-label="Delete term"
+                                aria-label="Delete Term"
                                 title="Delete"
                                 disabled={saving || terms.length <= 1}
                                 onClick={() => void handleDelete(term.id)}

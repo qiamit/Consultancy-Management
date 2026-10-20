@@ -307,7 +307,7 @@ export function ManageQuotationRemarksDialog({
                             <button
                               type="button"
                               className="text-amber-800 hover:text-amber-950"
-                              aria-label="Edit remark"
+                              aria-label="Edit Remark"
                               title="Edit"
                               disabled={saving}
                               onClick={() => {
@@ -325,7 +325,7 @@ export function ManageQuotationRemarksDialog({
                             <button
                               type="button"
                               className="text-red-600 hover:text-red-800 disabled:opacity-40"
-                              aria-label="Delete remark"
+                              aria-label="Delete Remark"
                               title="Delete"
                               disabled={saving || remarks.length <= 1}
                               onClick={() => void handleDelete(note.id)}

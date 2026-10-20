@@ -92,7 +92,7 @@ export default function ExpensePage() {
           {message ? <p className="text-sm text-stone-700">{message}</p> : null}
         </div>
         {rows.length === 0 ? (
-          <p className="text-sm text-stone-600">No expenses added yet.</p>
+          <p className="text-sm text-stone-600">No Expenses Added Yet.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="auto-cards list-cards w-full min-w-[640px] text-sm">
@@ -120,7 +120,7 @@ export default function ExpensePage() {
         {open ? (
           <div className="grid grid-cols-1 gap-3 border border-stone-300 p-3 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="expense-number">Expense number</Label>
+              <Label htmlFor="expense-number">Expense Number</Label>
               <Input id="expense-number" className="min-h-10" value={number} onChange={(e) => setNumber(e.target.value)} />
             </div>
             <div className="space-y-2">
@@ -130,9 +130,9 @@ export default function ExpensePage() {
             <div className="space-y-2">
               <Label>Category</Label>
               <Select value={categoryId || 'none'} onValueChange={(value) => setCategoryId(value === 'none' ? '' : value)}>
-                <SelectTrigger className="min-h-10"><SelectValue placeholder="Select a category" /></SelectTrigger>
+                <SelectTrigger className="min-h-10"><SelectValue placeholder="Select a Category" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">No category</SelectItem>
+                  <SelectItem value="none">No Category</SelectItem>
                   {categories.map((row) => (
                     <SelectItem key={row.id} value={row.id}>{row.name}</SelectItem>
                   ))}
@@ -148,7 +148,7 @@ export default function ExpensePage() {
               <Input id="expense-notes" className="min-h-10" value={notes} onChange={(e) => setNotes(e.target.value)} />
             </div>
             <div className="flex flex-wrap items-end gap-2 sm:col-span-2">
-              <Input className="min-h-10 max-w-xs" aria-label="New category" placeholder="New category" value={newCategory} onChange={(e) => setNewCategory(e.target.value)} />
+              <Input className="min-h-10 max-w-xs" aria-label="New Category" placeholder="New Category" value={newCategory} onChange={(e) => setNewCategory(e.target.value)} />
               <Button type="button" variant="outline" className="min-h-10" onClick={addCategory}>Add Category</Button>
             </div>
             <div className="flex gap-2 sm:col-span-2">
