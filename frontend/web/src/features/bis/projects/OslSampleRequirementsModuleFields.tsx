@@ -305,6 +305,8 @@ export function OslSampleRequirementsModuleFields({
   onPrintCourierSlip?: (row: OslSampleRequirementRow) => void
 }) {
   const rows = value.rows
+  /** Without a QR code on any sample the QR code, sample code and conformity columns are not needed. */
+  const showQrCols = !qrOnlyFields || rows.some((r) => r.qrCode.trim() !== '')
   const [editIndex, setEditIndex] = useState<number | null>(null)
   const [draft, setDraft] = useState<OslSampleRequirementRow | null>(null)
   const [declaredValueUploadBusy, setDeclaredValueUploadBusy] = useState(false)
@@ -1987,6 +1989,8 @@ export function OslSampleRequirementsModuleFields({
                   </div>
 
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {!qrOnlyFields || row.qrCode.trim() ? (
+<>
                     <div className="min-w-0">
                       <p className={cardFieldLabelClass}>QR Code</p>
                       <p className="truncate text-sm font-medium text-stone-900" title={row.qrCode || undefined}>
@@ -2015,6 +2019,8 @@ export function OslSampleRequirementsModuleFields({
                         }
                       />
                     </div>
+</>
+) : null}
                     <div className="min-w-0 sm:col-span-2">
                       <p className={cardFieldLabelClass}>Sample Details</p>
                       {row.batchNumber.trim() ? (
@@ -2086,14 +2092,16 @@ export function OslSampleRequirementsModuleFields({
                   />
                 </TableHead>
                 <TableHead className={cn(thClass, 'w-[4.5rem]')}>Sample For</TableHead>
-                <TableHead className={cn(thClass, 'w-[16%]')}>QR Code</TableHead>
-                <TableHead className={cn(thClass, 'w-[16%]')}>Sample Code</TableHead>
+                {showQrCols ? <TableHead className={cn(thClass, 'w-[16%]')}>QR Code</TableHead> : null}
+                {showQrCols ? <TableHead className={cn(thClass, 'w-[16%]')}>Sample Code</TableHead> : null}
                 <TableHead className={cn(thClass, 'w-[20%]')}>Sample Details</TableHead>
                 <TableHead className={cn(thClass, 'w-[5.5rem]')}>Priority</TableHead>
                 <TableHead className={cn(thClass, 'w-[5.5rem]')}>In Offer Letter</TableHead>
+                {showQrCols ? (
                 <TableHead className={cn(thClass, 'w-[7rem]')} title="Conformity of Sample as per IS (from the Lab Report)">
                   Conformity
                 </TableHead>
+                ) : null}
                 <TableHead className={cn(thClass, 'w-14')}>Test Request</TableHead>
                 <TableHead className={cn(thClass, 'w-14')}>Courier Slip</TableHead>
                 <TableHead className={cn(thClass, 'w-14')}>Test Report</TableHead>
@@ -2104,7 +2112,7 @@ export function OslSampleRequirementsModuleFields({
               {rows.length === 0 ? (
                 <TableRow className={cn('border-[#e7e0d4]', rowBlankClass)}>
                   <TableCell
-                    colSpan={12}
+                    colSpan={showQrCols ? 12 : 9}
                     className="px-3 py-8 text-center text-sm text-stone-500"
                   >
                     No samples yet. Use + to add a sample.
@@ -2132,6 +2140,8 @@ export function OslSampleRequirementsModuleFields({
                       <TableCell className="px-2 py-2 text-center text-xs font-semibold align-middle">
                         {sampleForLabel(row.sampleFor)}
                       </TableCell>
+                      {showQrCols ? (
+<>
                       <TableCell
                         className="truncate px-2 py-2 text-center text-xs align-middle"
                         title={row.qrCode || undefined}
@@ -2144,6 +2154,8 @@ export function OslSampleRequirementsModuleFields({
                       >
                         {row.sampleCode || '—'}
                       </TableCell>
+</>
+) : null}
                       <TableCell className="truncate px-2 py-2 text-center text-xs font-medium align-middle">
                         {row.batchNumber.trim() ? (
                           <button
@@ -2186,6 +2198,7 @@ export function OslSampleRequirementsModuleFields({
                           }
                         />
                       </TableCell>
+                      {showQrCols ? (
                       <TableCell className="px-1.5 py-2 text-center align-middle">
                         <SampleConformitySelect
                           className="h-8 w-full px-2 text-xs"
@@ -2198,6 +2211,7 @@ export function OslSampleRequirementsModuleFields({
                           }
                         />
                       </TableCell>
+) : null}
                       <TableCell className="px-2 py-2 text-center align-middle">
                         {renderTestRequestMenu(row)}
                       </TableCell>
@@ -3191,6 +3205,7 @@ export function OslSampleRequirementsModuleFields({
                   </Field>
 </>
 ) : null}
+                  {!qrOnlyFields || draft.qrCode.trim() ? (
                   <Field label="Conformity of Sample as per IS" htmlFor="osl-conformity">
                     <SampleConformitySelect
                       id="osl-conformity"
@@ -3200,6 +3215,7 @@ export function OslSampleRequirementsModuleFields({
                       onChange={(next) => patchDraft('conformity', next)}
                     />
                   </Field>
+                  ) : null}
                 </div>
               </div>
 
