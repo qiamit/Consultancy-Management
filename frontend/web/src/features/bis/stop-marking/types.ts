@@ -69,6 +69,9 @@ export const STOP_MARKING_STATUS_STYLES: Record<string, string> = {
   closed: 'bg-emerald-50 text-emerald-800 ring-emerald-200',
 }
 
+/** A supporting document uploaded for the submission (corrective action evidence, test reports, calibration …). */
+export type StopMarkingDocument = { id: string; label: string; name: string; path: string }
+
 export type StopMarkingRow = {
   id: string
   client_id: string
@@ -80,6 +83,10 @@ export type StopMarkingRow = {
   previous_project_status: string
   report_path: string | null
   report_name: string | null
+  test_report_path: string | null
+  test_report_name: string | null
+  report_review: string
+  documents: StopMarkingDocument[] | null
   case_type: string
   sample_code: string
   sample_qr_code: string
@@ -120,6 +127,7 @@ export type StopMarkingCaseForm = {
   bisReason: string
   bisDeadline: string
   reviewNotes: string
+  reportReview: string
   replyDraft: string
   replyDate: string
   status: string
@@ -155,6 +163,7 @@ export function rowToCaseForm(row: StopMarkingRow): StopMarkingCaseForm {
     bisReason: row.bis_reason ?? '',
     bisDeadline: row.bis_deadline?.slice(0, 10) ?? '',
     reviewNotes: row.review_notes ?? '',
+    reportReview: row.report_review ?? '',
     replyDraft: row.reply_draft ?? '',
     replyDate: row.reply_date?.slice(0, 10) ?? '',
     status: row.status || 'open',

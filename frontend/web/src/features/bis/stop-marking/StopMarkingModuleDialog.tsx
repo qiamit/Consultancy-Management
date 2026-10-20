@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Check, ChevronLeft, ChevronRight, ExternalLink, FileDown, LoaderCircle, Mail, Plus, Printer, Sparkles, Trash2, X } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, ExternalLink, Eye, FileDown, LoaderCircle, Mail, Paperclip, Plus, Printer, Sparkles, Trash2, Upload, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { LimsDatePicker } from '@/components/lims/LimsDatePicker'
 import { Button } from '@/components/ui/button'
@@ -14,15 +14,18 @@ import { factoryTestReportHasContent, parseFactoryTestReportPayload } from '../p
 import { FactoryTestReportGenerateDialog } from '../projects/FactoryTestReportGenerateDialog'
 import { emptyOslSampleRequirementRow, type OslSampleRequirementRow } from '../projects/oslSampleRequirementsModel'
 import { formatCmL } from '../projects/types'
-import { draftStopMarkingReply, readStopMarkingReport } from './stopMarkingAi'
+import { draftStopMarkingReply, readStopMarkingReport, readStopMarkingTestReport } from './stopMarkingAi'
 import {
+  addStopMarkingDocument,
   closeStopMarkingCase,
   downloadStopMarkingReport,
   formatBisApiError,
   openStopMarkingReport,
+  removeStopMarkingDocument,
   saveStopMarkingCase,
   saveStopMarkingFtrSamples,
   uploadStopMarkingReport,
+  uploadStopMarkingTestReport,
 } from './stopMarkingApi'
 import { openStopMarkingManak } from './stopMarkingManak'
 import { downloadStopMarkingReplyWord, emailStopMarkingReplyToClient, printStopMarkingReply } from './printStopMarkingReply'
@@ -30,7 +33,7 @@ import { AutoGrowTextarea } from '../shared/AutoGrowTextarea'
 import { StopMarkingLetterPicker } from './StopMarkingLetterPicker'
 import { noticeHoldsMarking, noticeTypeLabel, rowToCaseForm, stopMarkingClientName, stopMarkingIsCodeLabel, stopMarkingStatusLabel, type StopMarkingCaseForm, type StopMarkingRow } from './types'
 
-const STEPS = ['BIS Letter & Review', 'Reply to BIS', 'Factory Test Report', 'Submission'] as const
+const STEPS = ['BIS Letter & Review', 'Test Report Review', 'Factory Test Report', 'Reply to BIS', 'Documents & Submission'] as const
 const label = 'block text-[11px] font-semibold uppercase tracking-wide text-stone-600'
 const tbtn = 'h-8 gap-1.5 rounded-none border-stone-400 px-2.5 text-xs'
 const shortDate = (iso: string | null | undefined) => (iso ? iso.slice(0, 10).split('-').reverse().join('/') : '—')
@@ -56,6 +59,7 @@ export function StopMarkingModuleDialog({
   const [error, setError] = useState<string | null>(null)
   const [ftrDone, setFtrDone] = useState<Set<string>>(() => new Set())
   const [generateId, setGenerateId] = useState<string | null>(null)
+  const [docLabel, setDocLabel] = useState('')
   const [draftSample, setDraftSample] = useState({ gradeTypeVariety: '', batchNumber: '', dateOfManufacturing: '', declaredValue: '' })
 
   useEffect(() => {
@@ -107,6 +111,37 @@ export function StopMarkingModuleDialog({
     autoRead.current = row.id
     void readStored()
   }, [row?.id, row?.report_path, form !== null]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Test report: read a freshly uploaded or stored PDF and put the summary in the findings. */
+  const readTestReport = async (file: File, current: StopMarkingRow) => {
+    setBusy('treport-read')
+    setError(null)
+    try {
+      const findings = await readStopMarkingTestReport(current, file)
+      setForm((f) => f && { ...f, reportReview: findings })
+      toast.success('Test Report Read — Check the Findings.')
+    } catch (err) {
+      setError(formatBisApiError(err))
+    } finally {
+      setBusy(null)
+    }
+  }
+  const readStoredTestReport = async () => {
+    if (!row?.test_report_path) return
+    try {
+      await readTestReport(await downloadStopMarkingReport(row.test_report_path, row.test_report_name ?? 'report.pdf'), row)
+    } catch (err) {
+      setError(formatBisApiError(err))
+    }
+  }
+  // A PDF test report with no findings yet is read automatically, once per case, when step 2 is opened.
+  const autoReadReport = useRef<string | null>(null)
+  useEffect(() => {
+    if (!row || !form || step !== 1 || autoReadReport.current === row.id) return
+    if (row.status === 'closed' || !row.test_report_path || !/\.pdf$/i.test(row.test_report_name ?? '') || form.reportReview) return
+    autoReadReport.current = row.id
+    void readStoredTestReport()
+  }, [row?.id, step, form !== null]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!row || !form) return null
   const closed = row.status === 'closed'
@@ -162,8 +197,10 @@ export function StopMarkingModuleDialog({
   const checks: Array<[string, boolean, string]> = [
     ['BIS Letter Received', Boolean(row.report_path), row.report_name || 'Not Attached'],
     ['Reason and Points Reviewed', Boolean(form.bisReason.trim() || form.reviewNotes.trim()), form.bisReference || 'Not Entered'],
+    ['Test Report Reviewed', Boolean(form.reportReview.trim()), row.test_report_name || 'Not Attached'],
     ['Reply Letter Ready', hasReply, hasReply ? 'Drafted' : 'Not Drafted'],
     ['Factory Test Report', samples.length > 0 && ftrCount === samples.length, samples.length ? `${ftrCount} of ${samples.length} Generated` : 'None Added (Optional)'],
+    ['Supporting Documents', (row.documents ?? []).length > 0, `${(row.documents ?? []).length} Uploaded`],
   ]
 
   return (
@@ -299,7 +336,7 @@ export function StopMarkingModuleDialog({
                     </div>
                   ) : null}
 
-                  {step === 1 ? (
+                  {step === 3 ? (
                     <div className="space-y-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <Button
@@ -309,7 +346,7 @@ export function StopMarkingModuleDialog({
                           disabled={busy !== null || closed}
                           onClick={() =>
                             void run('draft', async () => {
-                              set('replyDraft', await draftStopMarkingReply(row, { reference: form.bisReference, reason: form.bisReason, deadline: form.bisDeadline, reviewNotes: form.reviewNotes, currentDraft: form.replyDraft }))
+                              set('replyDraft', await draftStopMarkingReply(row, { reference: form.bisReference, reason: form.bisReason, deadline: form.bisDeadline, reviewNotes: form.reviewNotes, reportFindings: form.reportReview, currentDraft: form.replyDraft }))
                               toast.success('Reply drafted — edit it, then save.')
                             })
                           }
@@ -340,6 +377,46 @@ export function StopMarkingModuleDialog({
                         <Button type="button" variant="outline" className={tbtn} disabled={!hasReply || busy !== null} title="Email the Letter to the Client's Master Email" onClick={() => void run('mail', async () => { toast.success(await emailStopMarkingReplyToClient(live())) })}>
                           {busy === 'mail' ? <LoaderCircle size={14} className="animate-spin" /> : <Mail size={14} />} Email Client
                         </Button>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {step === 1 ? (
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label className={label}>Test Report Received from BIS</Label>
+                        <StopMarkingLetterPicker
+                          inline
+                          noun="Report"
+                          storedName={row.test_report_name}
+                          busy={busy === 'treport'}
+                          disabled={closed}
+                          onPick={(file) =>
+                            void run('treport', async () => {
+                              const updated = await uploadStopMarkingTestReport(row.id, file, row.test_report_path)
+                              onUpdated(updated)
+                              toast.success('Test Report Uploaded.')
+                              if (file.name.toLowerCase().endsWith('.pdf')) await readTestReport(file, updated)
+                            })
+                          }
+                          onOpen={row.test_report_path ? () => void run('open', () => openStopMarkingReport(row.test_report_path!)) : undefined}
+                          extra={
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="h-full gap-1.5 rounded-none border-amber-600 bg-amber-50 px-2.5 text-xs font-semibold text-amber-900 hover:bg-amber-100"
+                              disabled={!row.test_report_path || busy !== null || closed}
+                              title="Read the Test Report with AI and Summarise the Failed Parameters"
+                              onClick={() => void readStoredTestReport()}
+                            >
+                              {busy === 'treport-read' ? <LoaderCircle size={14} className="animate-spin" /> : <Sparkles size={14} />} {busy === 'treport-read' ? 'Reading…' : 'Read Report with AI'}
+                            </Button>
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className={label} htmlFor="smk-m-findings">Test Report Findings (Failed Parameters and Results)</Label>
+                        <AutoGrowTextarea id="smk-m-findings" disabled={closed} className="rounded-none border-stone-500 bg-white" value={form.reportReview} onChange={(e) => set('reportReview', e.target.value)} />
                       </div>
                     </div>
                   ) : null}
@@ -402,7 +479,7 @@ export function StopMarkingModuleDialog({
                     </div>
                   ) : null}
 
-                  {step === 3 ? (
+                  {step === 4 ? (
                     <div className="space-y-4">
                       <ul className="divide-y divide-stone-200 border border-stone-300 bg-white">
                         {checks.map(([name, ok, detail]) => (
@@ -413,6 +490,50 @@ export function StopMarkingModuleDialog({
                           </li>
                         ))}
                       </ul>
+                      <div className="space-y-2">
+                        <Label className={label}>Upload Supporting Documents</Label>
+                        <div className="flex flex-wrap items-center gap-2 border border-stone-400 bg-white p-2">
+                          <Input
+                            aria-label="Document Name"
+                            className="h-8 min-w-0 flex-1 basis-48"
+                            placeholder="Document Name (e.g. Corrective Action Report)"
+                            value={docLabel}
+                            disabled={closed}
+                            onChange={(e) => setDocLabel(e.target.value)}
+                          />
+                          <label className="inline-flex h-8 cursor-pointer items-center gap-1.5 border border-stone-400 bg-white px-2.5 text-xs font-medium hover:bg-stone-100">
+                            <Upload size={14} /> {busy === 'doc' ? 'Uploading…' : 'Attach and Upload'}
+                            <input
+                              type="file"
+                              className="sr-only"
+                              disabled={closed || busy !== null}
+                              onChange={(e) => {
+                                const file = e.target.files?.[0]
+                                e.target.value = ''
+                                if (file) void run('doc', async () => { onUpdated(await addStopMarkingDocument(row.id, row.documents ?? [], docLabel, file)); setDocLabel(''); toast.success('Document Uploaded.') })
+                              }}
+                            />
+                          </label>
+                        </div>
+                        {(row.documents ?? []).length ? (
+                          <ul className="divide-y divide-stone-200 border border-stone-300 bg-white">
+                            {(row.documents ?? []).map((d) => (
+                              <li key={d.id} className="flex items-center gap-2 px-3 py-1.5 text-sm">
+                                <Paperclip size={14} className="shrink-0 text-amber-800" aria-hidden />
+                                <span className="min-w-0 flex-1 truncate" title={d.name}>
+                                  <span className="font-medium text-stone-800">{d.label}</span> <span className="text-xs text-stone-500">· {d.name}</span>
+                                </span>
+                                <Button type="button" variant="outline" size="icon" className="h-7 w-7 rounded-none border-stone-400" aria-label={`Open ${d.label}`} onClick={() => void run('open', () => openStopMarkingReport(d.path))}>
+                                  <Eye size={13} />
+                                </Button>
+                                <Button type="button" variant="outline" size="icon" className="h-7 w-7 rounded-none border-stone-400 text-red-700" aria-label={`Remove ${d.label}`} disabled={closed || busy !== null} onClick={() => void run('doc', async () => { onUpdated(await removeStopMarkingDocument(row.id, row.documents ?? [], d.id)) })}>
+                                  <Trash2 size={13} />
+                                </Button>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
+                      </div>
                       <div className="flex flex-wrap items-center gap-2">
                         <Button type="button" variant="outline" className={tbtn} disabled={!hasReply || busy !== null} onClick={() => void run('print', async () => { const m = await printStopMarkingReply(live()); if (m) setError(m) })}>
                           <Printer size={14} /> Print Reply

@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabaseClient'
 import { currentUserId } from '../shared/bisLookupApi'
 import type { OslSampleRequirementRow } from '../projects/oslSampleRequirementsModel'
+import type { StopMarkingDocument } from './types'
 import { NOTICE_TYPE_OPTIONS, noticeHoldsMarking, type StopMarkingAddForm, type StopMarkingCaseForm, type StopMarkingNoticeFilter, type StopMarkingRow, type StopMarkingStatusFilter } from './types'
 
 /** Case types that prohibit marking, so they put the licence into Stop Marking status. */
@@ -149,6 +150,7 @@ export async function saveStopMarkingCase(id: string, form: StopMarkingCaseForm)
       bis_reason: form.bisReason.trim(),
       bis_deadline: form.bisDeadline || null,
       review_notes: form.reviewNotes.trim(),
+      report_review: form.reportReview.trim(),
       reply_draft: form.replyDraft,
       reply_date: form.replyDate || null,
       status: form.status === 'closed' ? 'reviewed' : form.status || 'open',
@@ -173,7 +175,7 @@ export async function closeStopMarkingCase(row: StopMarkingRow): Promise<void> {
 
 export async function deleteStopMarkingCases(rows: StopMarkingRow[]): Promise<void> {
   const ids = rows.map((r) => r.id)
-  const paths = rows.map((r) => r.report_path).filter((p): p is string => Boolean(p?.trim()))
+  const paths = rows.flatMap((r) => [r.report_path, r.test_report_path, ...(r.documents ?? []).map((d) => d.path)]).filter((p): p is string => Boolean(p?.trim()))
   const { error } = await supabase.from('bis_stop_marking_cases').delete().in('id', ids)
   if (error) throw error
   if (paths.length) await supabase.storage.from(BUCKET).remove(paths)
@@ -238,4 +240,34 @@ export async function fetchStopMarkingCase(id: string): Promise<StopMarkingRow |
   const { data, error } = await supabase.from('bis_stop_marking_cases').select(SELECT_WITH_JOINS).eq('id', id).maybeSingle()
   if (error) throw error
   return (data as unknown as StopMarkingRow | null) ?? null
+}
+
+/** The lab test report BIS sent with the notice (step 2). */
+export async function uploadStopMarkingTestReport(caseId: string, file: File, existingPath: string | null): Promise<StopMarkingRow> {
+  const path = `${caseId}/testreport_${crypto.randomUUID()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
+  const { error: uploadError } = await supabase.storage.from(BUCKET).upload(path, file, { upsert: true, contentType: file.type || undefined })
+  if (uploadError) throw uploadError
+  if (existingPath?.trim()) await supabase.storage.from(BUCKET).remove([existingPath.trim()])
+  const { data, error } = await supabase.from('bis_stop_marking_cases').update({ test_report_path: path, test_report_name: file.name }).eq('id', caseId).select(SELECT_WITH_JOINS).single()
+  if (error) throw error
+  return data as unknown as StopMarkingRow
+}
+
+/** Supporting documents for the submission (step 5): add one with a label, or remove one. */
+export async function addStopMarkingDocument(caseId: string, current: StopMarkingDocument[], label: string, file: File): Promise<StopMarkingRow> {
+  const path = `${caseId}/doc_${crypto.randomUUID()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
+  const { error: uploadError } = await supabase.storage.from(BUCKET).upload(path, file, { upsert: true, contentType: file.type || undefined })
+  if (uploadError) throw uploadError
+  const next = [...current, { id: crypto.randomUUID(), label: label.trim() || file.name, name: file.name, path }]
+  const { data, error } = await supabase.from('bis_stop_marking_cases').update({ documents: next }).eq('id', caseId).select(SELECT_WITH_JOINS).single()
+  if (error) throw error
+  return data as unknown as StopMarkingRow
+}
+
+export async function removeStopMarkingDocument(caseId: string, current: StopMarkingDocument[], documentId: string): Promise<StopMarkingRow> {
+  const doc = current.find((d) => d.id === documentId)
+  if (doc?.path) await supabase.storage.from(BUCKET).remove([doc.path])
+  const { data, error } = await supabase.from('bis_stop_marking_cases').update({ documents: current.filter((d) => d.id !== documentId) }).eq('id', caseId).select(SELECT_WITH_JOINS).single()
+  if (error) throw error
+  return data as unknown as StopMarkingRow
 }
