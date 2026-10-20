@@ -498,6 +498,7 @@
         plan.push({
           kind: "report-row",
           key: `Test report ${i + 1}`,
+          index: i,
           qr: r.qrCode,
           cells: [
             { key: "Variety", value: r.variety, id: "productVarirtyDescription" },
@@ -685,6 +686,18 @@
           continue;
         }
         let ok = true;
+        // Every selected QR code gets a row. A QR with no variety of its own (a raw material sample, say) reuses
+        // Manak's varieties in turn, so the same variety is repeated when there are fewer varieties than QR codes.
+        const varietySelect = document.getElementById("productVarirtyDescription");
+        const manakVarieties = varietySelect && varietySelect.tagName === "SELECT"
+          ? Array.from(varietySelect.options).filter((o) => o.value && o.value !== "0" && !/^\s*-*\s*select/i.test(o.text))
+          : [];
+        const cycled = () => (manakVarieties.length ? manakVarieties[(item.index || 0) % manakVarieties.length] : null);
+        const varietyCell = item.cells.find((c) => c.id === "productVarirtyDescription");
+        if (varietyCell && !norm(varietyCell.value) && cycled()) {
+          varietyCell.value = norm(cycled().text);
+          report.filled.push(`${prefix}Variety repeated from Manak's list (no variety on this sample)`);
+        }
         for (const cell of item.cells) {
           const el = document.getElementById(cell.id);
           if (!norm(cell.value)) {
@@ -716,6 +729,15 @@
                 res = "filled";
                 report.filled.push(`${prefix}Variety matched to "${norm(fuzzy.text)}"`);
               }
+            }
+            // Still no match: keep going with Manak's varieties in turn, so the QR code is not left out (the report says so).
+            if (res === "no-option" && cell.id === "productVarirtyDescription" && cycled()) {
+              const pick = cycled();
+              el.value = pick.value;
+              el.dispatchEvent(new Event("change", { bubbles: true }));
+              nudgePage(el);
+              res = "filled";
+              report.filled.push(`${prefix}Variety "${cell.value}" not in Manak's list — used "${norm(pick.text)}" (check it)`);
             }
             // One real option (e.g. the single variety from step 1) — that is the one.
             const real = el.tagName === "SELECT" ? Array.from(el.options).filter((o) => o.value && o.value !== "0" && !/^\s*-*\s*select/i.test(o.text)) : [];
