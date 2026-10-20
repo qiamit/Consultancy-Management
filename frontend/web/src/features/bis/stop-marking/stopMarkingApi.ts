@@ -151,6 +151,8 @@ export async function saveStopMarkingCase(id: string, form: StopMarkingCaseForm)
       bis_deadline: form.bisDeadline || null,
       review_notes: form.reviewNotes.trim(),
       report_review: form.reportReview.trim(),
+      report_observations: form.reportObservations.trim(),
+      report_details: form.reportDetails,
       reply_draft: form.replyDraft,
       reply_date: form.replyDate || null,
       status: form.status === 'closed' ? 'reviewed' : form.status || 'open',

@@ -72,6 +72,10 @@ export const STOP_MARKING_STATUS_STYLES: Record<string, string> = {
 /** A supporting document uploaded for the submission (corrective action evidence, test reports, calibration …). */
 export type StopMarkingDocument = { id: string; label: string; name: string; path: string }
 
+/** Details read from the test report (step 2). Sample code and QR code live in their own columns. */
+export type StopMarkingReportDetails = { reportNumber: string; batchNumber: string; manufactureDate: string; description: string; declaredValue: string }
+export const EMPTY_REPORT_DETAILS: StopMarkingReportDetails = { reportNumber: '', batchNumber: '', manufactureDate: '', description: '', declaredValue: '' }
+
 export type StopMarkingRow = {
   id: string
   client_id: string
@@ -87,6 +91,8 @@ export type StopMarkingRow = {
   test_report_name: string | null
   test_reports: StopMarkingDocument[] | null
   report_review: string
+  report_details: Partial<StopMarkingReportDetails> | null
+  report_observations: string
   documents: StopMarkingDocument[] | null
   case_type: string
   sample_code: string
@@ -129,6 +135,8 @@ export type StopMarkingCaseForm = {
   bisDeadline: string
   reviewNotes: string
   reportReview: string
+  reportObservations: string
+  reportDetails: StopMarkingReportDetails
   replyDraft: string
   replyDate: string
   status: string
@@ -165,6 +173,8 @@ export function rowToCaseForm(row: StopMarkingRow): StopMarkingCaseForm {
     bisDeadline: row.bis_deadline?.slice(0, 10) ?? '',
     reviewNotes: row.review_notes ?? '',
     reportReview: row.report_review ?? '',
+    reportObservations: row.report_observations ?? '',
+    reportDetails: { ...EMPTY_REPORT_DETAILS, ...(row.report_details ?? {}) },
     replyDraft: row.reply_draft ?? '',
     replyDate: row.reply_date?.slice(0, 10) ?? '',
     status: row.status || 'open',

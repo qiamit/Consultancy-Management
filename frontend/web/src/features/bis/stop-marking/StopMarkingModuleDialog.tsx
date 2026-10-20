@@ -118,9 +118,28 @@ export function StopMarkingModuleDialog({
     setBusy('treport-read')
     setError(null)
     try {
-      const findings = await readStopMarkingTestReport(current, files)
-      setForm((f) => f && { ...f, reportReview: findings })
-      toast.success('Test Reports Read — Check the Findings.')
+      const r = await readStopMarkingTestReport(current, files)
+      setForm((f) => f && {
+        ...f,
+        reportReview: r.findings,
+        reportObservations: r.observations,
+        sampleCode: r.sampleCode || f.sampleCode,
+        sampleQrCode: r.qrCode || f.sampleQrCode,
+        reportDetails: {
+          reportNumber: r.reportNumber || f.reportDetails.reportNumber,
+          batchNumber: r.batchNumber || f.reportDetails.batchNumber,
+          manufactureDate: r.manufactureDate || f.reportDetails.manufactureDate,
+          description: r.description || f.reportDetails.description,
+          declaredValue: r.declaredValue || f.reportDetails.declaredValue,
+        },
+      })
+      setDraftSample((d) => ({
+        gradeTypeVariety: d.gradeTypeVariety || r.description,
+        batchNumber: d.batchNumber || r.batchNumber,
+        dateOfManufacturing: d.dateOfManufacturing || r.manufactureDate,
+        declaredValue: d.declaredValue || r.declaredValue,
+      }))
+      toast.success(r.standardsUsed.length ? 'Test Reports Read and Checked Against the Standard — Review the Details.' : 'Test Reports Read — No Standard Attached to Check Against.')
     } catch (err) {
       setError(formatBisApiError(err))
     } finally {
@@ -136,17 +155,9 @@ export function StopMarkingModuleDialog({
       setError(formatBisApiError(err))
     }
   }
-  // A PDF test report with no findings yet is read automatically, once per case, when step 2 is opened.
-  const autoReadReport = useRef<string | null>(null)
-  useEffect(() => {
-    if (!row || !form || step !== 1 || autoReadReport.current === row.id) return
-    if (row.status === 'closed' || !(row.test_reports ?? []).some((d) => /\.pdf$/i.test(d.name)) || form.reportReview) return
-    autoReadReport.current = row.id
-    void readStoredTestReports()
-  }, [row?.id, step, form !== null]) // eslint-disable-line react-hooks/exhaustive-deps
-
   if (!row || !form) return null
   const closed = row.status === 'closed'
+  const setDetail = (key: keyof StopMarkingCaseForm['reportDetails'], value: string) => setForm({ ...form, reportDetails: { ...form.reportDetails, [key]: value } })
   const set = <K extends keyof StopMarkingCaseForm>(key: K, value: StopMarkingCaseForm[K]) => setForm({ ...form, [key]: value })
   const run = async (key: string, fn: () => Promise<void>) => {
     setBusy(key)
@@ -348,7 +359,7 @@ export function StopMarkingModuleDialog({
                           disabled={busy !== null || closed}
                           onClick={() =>
                             void run('draft', async () => {
-                              set('replyDraft', await draftStopMarkingReply(row, { reference: form.bisReference, reason: form.bisReason, deadline: form.bisDeadline, reviewNotes: form.reviewNotes, reportFindings: form.reportReview, currentDraft: form.replyDraft }))
+                              set('replyDraft', await draftStopMarkingReply(row, { reference: form.bisReference, reason: form.bisReason, deadline: form.bisDeadline, reviewNotes: form.reviewNotes, reportFindings: [form.reportReview, form.reportObservations && `Observations as per the Standard:\n${form.reportObservations}`].filter(Boolean).join('\n\n'), currentDraft: form.replyDraft }))
                               toast.success('Reply drafted — edit it, then save.')
                             })
                           }
@@ -444,9 +455,35 @@ export function StopMarkingModuleDialog({
                           </ul>
                         ) : null}
                       </div>
+                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        {([
+                          ['Report Number', form.reportDetails.reportNumber, (v: string) => setDetail('reportNumber', v)],
+                          ['Sample Code', form.sampleCode, (v: string) => set('sampleCode', v)],
+                          ['QR Code', form.sampleQrCode, (v: string) => set('sampleQrCode', v)],
+                          ['Batch Number', form.reportDetails.batchNumber, (v: string) => setDetail('batchNumber', v)],
+                          ['Declared Value', form.reportDetails.declaredValue, (v: string) => setDetail('declaredValue', v)],
+                        ] as const).map(([name, value, onChange]) => (
+                          <div key={name} className="space-y-1">
+                            <Label className={label}>{name}</Label>
+                            <Input disabled={closed} className="h-9 rounded-none border-stone-500 bg-white" value={value} onChange={(e) => onChange(e.target.value)} />
+                          </div>
+                        ))}
+                        <div className="space-y-1">
+                          <Label className={label}>Date of Manufacturing</Label>
+                          <LimsDatePicker className="h-9 w-full" aria-label="Date of manufacturing" disabled={closed} value={form.reportDetails.manufactureDate} onChange={(v) => setDetail('manufactureDate', v)} />
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className={label} htmlFor="smk-m-desc">Sample Description</Label>
+                        <AutoGrowTextarea id="smk-m-desc" disabled={closed} className="rounded-none border-stone-500 bg-white" value={form.reportDetails.description} onChange={(e) => setDetail('description', e.target.value)} />
+                      </div>
                       <div className="space-y-2">
-                        <Label className={label} htmlFor="smk-m-findings">Test Report Findings (Failed Parameters and Results)</Label>
+                        <Label className={label} htmlFor="smk-m-findings">Test Report Findings (Pass / Fail by Parameter)</Label>
                         <AutoGrowTextarea id="smk-m-findings" disabled={closed} className="rounded-none border-stone-500 bg-white" value={form.reportReview} onChange={(e) => set('reportReview', e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className={label} htmlFor="smk-m-obs">Observations as per the Standard</Label>
+                        <AutoGrowTextarea id="smk-m-obs" disabled={closed} className="rounded-none border-stone-500 bg-white" value={form.reportObservations} onChange={(e) => set('reportObservations', e.target.value)} />
                       </div>
                     </div>
                   ) : null}
