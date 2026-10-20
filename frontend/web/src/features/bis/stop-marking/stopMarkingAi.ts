@@ -1,5 +1,6 @@
-import { sendQiAssistantMessage } from '@/components/qi-assistant/qiAssistantApi'
-import { downloadCmpf311MasterFile, extractProductManualText, loadCmpf311MasterData } from '../projects/cmpf311Model'
+import { extractProductManualText } from '../projects/cmpf311Model'
+import { askJson, text } from '../shared/aiJson'
+import { loadStandardTexts, relevantExcerpts } from '../shared/isCodeStandards'
 import { noticeTypeLabel, stopMarkingClientName, stopMarkingIsCodeLabel, type StopMarkingFinding, type StopMarkingReportDetails, type StopMarkingRow } from './types'
 
 /** What the reply letter should aim for, by the kind of notice. */
@@ -15,33 +16,6 @@ const REPLY_AIM: Record<string, string> = {
 }
 
 const MAX_REPORT_CHARS = 120_000
-
-function parseJson(reply: string): Record<string, unknown> {
-  if (!reply.includes('{')) throw new Error(`AI gave no answer (${reply.trim() || 'empty reply'}). Please try again.`)
-  const fenced = reply.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1] ?? reply
-  const start = fenced.indexOf('{')
-  const end = fenced.lastIndexOf('}')
-  try {
-    return JSON.parse(start >= 0 && end > start ? fenced.slice(start, end + 1) : fenced) as Record<string, unknown>
-  } catch {
-    throw new Error('AI returned an unreadable answer. Please try again.')
-  }
-}
-
-const text = (v: unknown) => (typeof v === 'string' ? v.trim() : '')
-
-async function askJson(page: string, message: string, context: string, image?: File): Promise<Record<string, unknown>> {
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      const { reply } = await sendQiAssistantMessage({ page, responseFormat: 'json_object', history: [], context, message, ...(image ? { attachedImage: image } : {}) })
-      if (reply.includes('{')) return parseJson(reply)
-    } catch (err) {
-      if (attempt === 2) throw err
-    }
-    await new Promise((r) => setTimeout(r, 800 * (attempt + 1)))
-  }
-  throw new Error('AI gave no answer. Please try again.')
-}
 
 function licenceFacts(row: StopMarkingRow): string {
   return [
@@ -81,48 +55,6 @@ function groupByIdentifiers(items: Array<{ name: string; ids: string[] }>): stri
   const groups = new Map<number, string[]>()
   items.forEach((it, i) => groups.set(find(i), [...(groups.get(find(i)) ?? []), it.name]))
   return [...groups.values()]
-}
-
-/** The Indian Standard and product manual PDFs attached to the IS Code master, as text. */
-async function loadStandardTexts(isCodeId: string): Promise<Array<{ name: string; kind: string; text: string }>> {
-  const master = await loadCmpf311MasterData(isCodeId).catch(() => null)
-  const files = (master?.availableFiles ?? []).filter((f) => f.fileName.toLowerCase().endsWith('.pdf'))
-  const out = await Promise.all(
-    files.map(async (option) => {
-      try {
-        const text = (await extractProductManualText(await downloadCmpf311MasterFile(option))).trim()
-        return text.length > 40 ? { name: option.fileName, kind: option.documentKind, text } : null
-      } catch {
-        return null // A file that cannot be read must not stop the review.
-      }
-    }),
-  )
-  return out.filter((x): x is { name: string; kind: string; text: string } => x !== null)
-}
-
-const WORD = /[a-z0-9.]{3,}/g
-
-/** The passages of the standards that talk about the given parameters, so the AI gets a short, relevant prompt. */
-function relevantExcerpts(standards: Array<{ name: string; kind: string; text: string }>, queries: string[], budget: number): string {
-  const queryWords = new Set(queries.flatMap((q) => q.toLowerCase().match(WORD) ?? []))
-  const chunks: Array<{ label: string; text: string; score: number }> = []
-  for (const s of standards) {
-    const lines = s.text.split('\n')
-    for (let i = 0; i < lines.length; i += 14) {
-      const text = lines.slice(i, i + 18).join('\n')
-      const words = text.toLowerCase().match(WORD) ?? []
-      const score = words.reduce((n, w) => n + (queryWords.has(w) ? 1 : 0), 0) / Math.sqrt(words.length + 20)
-      chunks.push({ label: `${s.kind}: ${s.name}`, text, score })
-    }
-  }
-  const picked: string[] = []
-  let used = 0
-  for (const c of chunks.sort((a, b) => b.score - a.score)) {
-    if (c.score <= 0 || used + c.text.length > budget) continue
-    picked.push(`[${c.label}]\n${c.text}`)
-    used += c.text.length
-  }
-  return picked.join('\n\n')
 }
 
 /**

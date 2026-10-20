@@ -7,7 +7,7 @@ import {
   limsPanelClass,
   limsDarkBarGlowStyle,
 } from '@/lib/limsThemeUi'
-import { Omega, Search } from 'lucide-react'
+import { ListPlus, Omega, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -22,6 +22,7 @@ export function TestParameterHeaderBar({
   onAssistantDataChanged,
   isCodeOptions = [],
   onAddSymbol,
+  onAiAdd,
   canEdit = true,
   reserveCloseButtonSpace = false,
 }: {
@@ -33,6 +34,8 @@ export function TestParameterHeaderBar({
   onAssistantDataChanged?: () => void
   isCodeOptions?: QiAssistantIsCodeOption[]
   onAddSymbol?: () => void
+  /** Opens Add Test Parameters with AI. */
+  onAiAdd?: () => void
   canEdit?: boolean
   /** Inside a dialog: keep clear of the dialog's top-right close button. */
   reserveCloseButtonSpace?: boolean
@@ -101,6 +104,20 @@ export function TestParameterHeaderBar({
             >
               <Omega className="size-3.5 shrink-0" aria-hidden />
               <span className="hidden sm:inline">Add Symbol</span>
+            </Button>
+          ) : null}
+
+          {canEdit && onAiAdd ? (
+            <Button
+              type="button"
+              variant="outline"
+              className={cn(limsDarkBarBtnClass, 'h-8 shrink-0 gap-1 px-2 text-[11px] font-semibold sm:px-2.5 sm:text-xs')}
+              onClick={onAiAdd}
+              aria-label="Add Test Parameters with AI"
+              title="Read the IS Code and Add Its Test Parameters with AI"
+            >
+              <ListPlus className="size-3.5 shrink-0" aria-hidden />
+              <span className="hidden sm:inline">AI Add</span>
             </Button>
           ) : null}
 
