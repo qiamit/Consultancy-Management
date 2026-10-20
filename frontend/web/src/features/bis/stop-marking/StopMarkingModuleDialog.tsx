@@ -13,6 +13,8 @@ import { factoryTestReportHasContent, parseFactoryTestReportPayload } from '../p
 import { oslSampleRowHasContent, parseOslSampleRequirementsPayload } from '../projects/oslSampleRequirementsModel'
 import { formatCmL, type BisProjectRow } from '../projects/types'
 import { readStopMarkingReport, readStopMarkingTestReport } from './stopMarkingAi'
+import { BisDocumentPrintPreviewDialog } from '../projects/BisDocumentPrintPreviewDialog'
+import { StopMarkingDocumentsTable } from './StopMarkingDocumentsTable'
 import { StopMarkingReplyEditor } from './StopMarkingReplyEditor'
 import {
   addStopMarkingDocument,
@@ -539,6 +541,7 @@ export function StopMarkingModuleDialog({
                           </ul>
                         ) : null}
                       </div>
+                      <StopMarkingDocumentsTable row={live()} bisRow={bisRow} />
                       <div className="flex flex-wrap items-center gap-2">
                         <Button type="button" variant="outline" className={tbtn} disabled={!hasReply || busy !== null} onClick={() => void run('print', async () => { const m = await printStopMarkingReply(live()); if (m) setError(m) })}>
                           <Printer size={14} /> Print Reply
@@ -610,19 +613,15 @@ export function StopMarkingModuleDialog({
           </div>
         </DialogContent>
       </Dialog>
-      <Dialog open={previewHtml !== null} onOpenChange={(open) => { if (!open) setPreviewHtml(null) }}>
-        <DialogContent className="flex h-[92vh] w-[min(64rem,calc(100vw-1.5rem))] max-w-none flex-col gap-2 overflow-hidden rounded-none border-2 border-stone-500 bg-[#e7e0d4] p-3">
-          <DialogHeader className="flex-row items-center justify-between gap-2 space-y-0">
-            <DialogTitle className="font-jakarta text-base">Reply Letter Preview</DialogTitle>
-            <Button type="button" variant="outline" className={tbtn} disabled={busy !== null} onClick={() => void run('print', async () => { const m = await printStopMarkingReply(live()); if (m) setError(m) })}>
-              <Printer size={14} /> Print / PDF
-            </Button>
-          </DialogHeader>
-          <div className="min-h-0 flex-1 overflow-hidden border border-stone-400 bg-stone-300 p-2">
-            {previewHtml ? <iframe title="Reply letter preview" srcDoc={previewHtml} sandbox="allow-same-origin" className="mx-auto h-full w-full max-w-[210mm] border-0 bg-white shadow-md" /> : null}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <BisDocumentPrintPreviewDialog
+        open={previewHtml !== null}
+        onOpenChange={(open) => { if (!open) setPreviewHtml(null) }}
+        row={bisRow}
+        kind="osl-sample-requirements"
+        title="Reply Letter to BIS"
+        generatedHtml={previewHtml}
+        editable={{ format: 'word', onDownload: () => void run('word', () => downloadStopMarkingReplyWord(live())) }}
+      />
     </>
   )
 }

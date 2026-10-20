@@ -1,4 +1,7 @@
 import { fetchBisProjectById } from '../projects/bisProjectsApi'
+import { loadBisProjectPrintPageSettings } from '../projects/bisPrintPageSettingsApi'
+import { applyBisDocumentPrintPageSettings, DEFAULT_BIS_DOCUMENT_PRINT_PAGE_SETTINGS } from '../print/bisDocumentPrintPageSettings'
+import { paginateHtmlForDownload } from '../print/bisPreviewPagination'
 import { formatDisplayDate } from '../projects/types'
 import { oslSampleRowHasContent, parseOslSampleRequirementsPayload } from '../projects/oslSampleRequirementsModel'
 import { loadBisPrintData, printSignatoryDefaults } from '../print/loadBisPrintData'
@@ -56,7 +59,13 @@ export function defaultReplyRef(row: Pick<StopMarkingRow, 'cm_l_digits' | 'reply
   return `${row.cm_l_digits ? `CM/L-${row.cm_l_digits}` : 'BIS'}/NC/${d.slice(8, 10)}${d.slice(5, 7)}${d.slice(0, 4)}`
 }
 
-const para = (text: string) => esc(text.trim()).replace(/\n/g, '<br/>')
+/** One block per line, so the letter breaks across pages like the other documents (a block never splits). */
+const para = (text: string) =>
+  text
+    .trim()
+    .split('\n')
+    .map((l) => (l.trim() ? `<div class="rl-line">${esc(l)}</div>` : '<div class="rl-gap"></div>'))
+    .join('')
 
 /**
  * The reply letter to BIS as a formal letter: letterhead, BIS branch office address, our reference and date,
@@ -66,7 +75,8 @@ export async function buildStopMarkingReplyHtml(row: StopMarkingRow): Promise<st
   const sections: StopMarkingReplySections = { ...EMPTY_REPLY_SECTIONS, ...(row.reply_sections ?? {}) }
   const hasSections = REPLY_BODY_SECTIONS.some(({ key }) => sections[key].trim())
   const project = row.bis_project_id ? await fetchBisProjectById(row.bis_project_id).catch(() => null) : null
-  if (!hasSections || !project) return buildPlainReplyHtml(row)
+  const draftOnly = !hasSections && (row.reply_draft ?? '').trim().length > 0
+  if ((!hasSections && !draftOnly) || !project) return buildPlainReplyHtml(row)
 
   const printData = await loadBisPrintData(project)
   const ctx = applicantContextFromPrintData(printData)
@@ -90,7 +100,7 @@ export async function buildStopMarkingReplyHtml(row: StopMarkingRow): Promise<st
     : ''
   const headed = REPLY_BODY_SECTIONS.filter(({ key }) => !['subject', 'general'].includes(key) && (sections[key].trim() || (key === 'newSamples' && sampleTable)))
   const bodyHtml = headed
-    .map(({ key, title }, i) => `<div class="rl-sec"><div class="rl-h">${i + 1}. ${esc(title)}</div>${sections[key].trim() ? `<div class="rl-p">${para(sections[key])}</div>` : ''}${key === 'newSamples' ? sampleTable : ''}</div>`)
+    .map(({ key, title }, i) => `<div class="rl-h rl-sec">${i + 1}. ${esc(title)}</div>${sections[key].trim() ? para(sections[key]) : ''}${key === 'newSamples' ? sampleTable : ''}`)
     .join('')
   const styles = `
     .rl-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 10px; }
@@ -98,6 +108,8 @@ export async function buildStopMarkingReplyHtml(row: StopMarkingRow): Promise<st
     .rl-ref td { padding: 1px 8px 1px 0; vertical-align: top; }
     .rl-subject { font-weight: 700; margin: 10px 0; }
     .rl-p { text-align: justify; margin: 3px 0 0; }
+    .rl-line { text-align: justify; margin: 1px 0; }
+    .rl-gap { height: 6px; }
     .rl-sec { margin-top: 9px; }
     .rl-h { font-weight: 700; }
     .rl-table { width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 12px; }
@@ -112,11 +124,11 @@ export async function buildStopMarkingReplyHtml(row: StopMarkingRow): Promise<st
       <div>${toBlockHtml(ctx.bisBranchName, ctx.bisBranchState)}</div>
       <div class="rl-ref"><table><tbody>${refRows.filter(([, v]) => v).map(([k, v]) => `<tr><td>${esc(k)}</td><td>: ${esc(v)}</td></tr>`).join('')}<tr><td>Date</td><td>: ${esc(date)}</td></tr></tbody></table></div>
     </div>
-    ${otherRefs ? `<div class="rl-p"><strong>Other references:</strong><br/>${para(otherRefs)}</div>` : ''}
+    ${otherRefs ? `<div class="rl-h">Other references:</div>${para(otherRefs)}` : ''}
     ${sections.subject.trim() ? `<div class="rl-subject">Subject: ${esc(sections.subject.replace(/^subject\s*:\s*/i, '').trim())}</div>` : ''}
     <div class="rl-p">Sir / Madam,</div>
-    ${sections.general.trim() ? `<div class="rl-p">${para(sections.general)}</div>` : ''}
-    ${bodyHtml}
+    ${sections.general.trim() ? para(sections.general) : ''}
+    ${draftOnly ? para(row.reply_draft ?? '') : bodyHtml}
     <div class="rl-close">Yours faithfully,</div>
     <div class="rl-seal"><span>(Seal)</span></div>
     ${signatoryHtml({ firmName: ctx.applicantName, name: sections.signatoryName.trim() || sig.signatoryName, designation: sections.signatoryDesignation.trim() || sig.signatoryDesignation, signatureImageUrl: sig.signatureImageUrl })}
@@ -124,11 +136,18 @@ export async function buildStopMarkingReplyHtml(row: StopMarkingRow): Promise<st
   return buildPrintPage({ title: `Reply to BIS — ${ctx.applicantName}`, styles, body })
 }
 
+/** The letter with the licence's Page & Print settings applied and paginated (every page gets its border and letterhead). */
+export async function buildStopMarkingReplyPrintHtml(row: StopMarkingRow): Promise<string> {
+  const project = row.bis_project_id ? await fetchBisProjectById(row.bis_project_id).catch(() => null) : null
+  const settings = project ? await loadBisProjectPrintPageSettings(project.id).catch(() => DEFAULT_BIS_DOCUMENT_PRINT_PAGE_SETTINGS) : DEFAULT_BIS_DOCUMENT_PRINT_PAGE_SETTINGS
+  return paginateHtmlForDownload(applyBisDocumentPrintPageSettings(await buildStopMarkingReplyHtml(row), settings))
+}
+
 export async function printStopMarkingReply(row: StopMarkingRow): Promise<string | null> {
   const target = openPendingPrintWindow('Preparing reply…')
   if (!target) return 'Popup blocked. Allow popups to print.'
   try {
-    return openPrintHtml(await buildStopMarkingReplyHtml(row), { target })
+    return openPrintHtml(await buildStopMarkingReplyPrintHtml(row), { target })
   } catch (err) {
     try { target.close() } catch { /* ignore */ }
     return err instanceof Error ? err.message : 'Unable to prepare the reply.'
@@ -137,7 +156,7 @@ export async function printStopMarkingReply(row: StopMarkingRow): Promise<string
 
 /** Word opens an HTML .doc, so the same letter becomes an editable Word file. */
 export async function downloadStopMarkingReplyWord(row: StopMarkingRow): Promise<void> {
-  const html = await buildStopMarkingReplyHtml(row)
+  const html = await buildStopMarkingReplyPrintHtml(row)
   const url = URL.createObjectURL(new Blob(['﻿', html], { type: 'application/msword' }))
   const a = document.createElement('a')
   a.href = url
@@ -150,7 +169,7 @@ export async function downloadStopMarkingReplyWord(row: StopMarkingRow): Promise
 
 /** Emails the reply letter to the client's master email. */
 export async function emailStopMarkingReplyToClient(row: StopMarkingRow): Promise<string> {
-  const html = await buildStopMarkingReplyHtml(row)
+  const html = await buildStopMarkingReplyPrintHtml(row)
   const title = `Reply to BIS — ${noticeTypeLabel(row.case_type)}`
   return emailHtmlDocumentToClient({
     clientId: row.client_id,
