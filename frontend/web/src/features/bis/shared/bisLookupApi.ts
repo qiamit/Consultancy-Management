@@ -58,15 +58,16 @@ export async function searchClientIsCodeOptions(
 export async function fetchLicenseOptions(
   clientId: string,
   isCodeId: string,
+  options?: { qeManagedOnly?: boolean },
 ): Promise<BisLicenseOption[]> {
   if (!clientId || !isCodeId) return []
-  const { data, error } = await supabase
+  let query = supabase
     .from('bis_projects')
     .select('id, cm_l_digits, project_kind, title')
     .eq('client_id', clientId)
     .eq('is_code_id', isCodeId)
-    .order('created_at', { ascending: false })
-    .limit(100)
+  if (options?.qeManagedOnly) query = query.eq('is_qe_managed', true)
+  const { data, error } = await query.order('created_at', { ascending: false }).limit(100)
   if (error) throw error
 
   return (data ?? [])

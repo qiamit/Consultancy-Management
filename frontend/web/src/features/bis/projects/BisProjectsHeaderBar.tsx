@@ -1,4 +1,5 @@
 import { Plus, Search } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import {
   limsDarkBarFieldClass,
@@ -41,6 +42,7 @@ export function BisProjectsHeaderBar({
   licenseStatusFilter = 'all',
   onLicenseStatusFilterChange,
   showListFilters = true,
+  extraFilters,
 }: {
   title: string
   search: string
@@ -59,8 +61,10 @@ export function BisProjectsHeaderBar({
   onLicenseStatusFilterChange?: (value: BisLicenseStatusFilter) => void
   /** Hide QE / Type filters on dedicated Applications / Inclusion pages. */
   showListFilters?: boolean
+  /** Extra filter controls shown with the other filters (for example a case-status dropdown). */
+  extraFilters?: ReactNode
 }) {
-  const filterSelects =
+  const baseFilterSelects =
     showListFilters &&
     onQeManagedFilterChange &&
     onProjectKindFilterChange &&
@@ -130,6 +134,13 @@ export function BisProjectsHeaderBar({
             <SelectItem value="expired">Expired</SelectItem>
           </SelectContent>
         </Select>
+      </>
+    ) : null
+  const filterSelects =
+    baseFilterSelects || extraFilters ? (
+      <>
+        {baseFilterSelects}
+        {extraFilters}
       </>
     ) : null
 

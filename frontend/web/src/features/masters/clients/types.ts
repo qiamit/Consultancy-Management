@@ -375,6 +375,8 @@ const TITLE_FORCE_UPPER = new Set([
 
 function capitalizeCore(core: string): string {
   if (!core) return core
+  // A word the user typed with a capital letter (A, AA, SY, A1, McD …) is kept exactly as typed.
+  if (/[A-Z]/.test(core)) return core
   if (/^\d+[a-z]?$/i.test(core)) return core
   // Keep intentional ALL CAPS (e.g. user typed "LLP", "ISO").
   if (core.length >= 2 && core === core.toUpperCase() && /[A-Z]/.test(core)) {
@@ -390,6 +392,7 @@ function formatTitleSegment(segment: string, capitalize: boolean): string {
   if (!match) return capitalize ? capitalizeCore(segment) : segment.toLowerCase()
   const [, lead, core, trail] = match
   if (!core) return segment
+  if (/[A-Z]/.test(core)) return `${lead}${core}${trail}`
   // Always preserve ALL CAPS / known acronyms even mid-phrase.
   if (
     (core.length >= 2 && core === core.toUpperCase() && /[A-Z]/.test(core)) ||

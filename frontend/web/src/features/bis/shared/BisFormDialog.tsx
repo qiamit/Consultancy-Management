@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
   limsDarkBarGlowStyle,
+  limsDialogClass,
   limsPrimaryBtnClass,
   limsRegistryFormClass,
 } from '@/lib/limsThemeUi'
@@ -18,6 +19,8 @@ export function BisFormDialog({
   saving,
   errorMessage,
   onSave,
+  footerExtra,
+  compact = false,
   children,
 }: {
   open: boolean
@@ -28,6 +31,10 @@ export function BisFormDialog({
   saving: boolean
   errorMessage: string | null
   onSave: () => void
+  /** Extra buttons at the left of the footer (for example "Close case"). */
+  footerExtra?: ReactNode
+  /** A centered dialog sized to its content (in the main area, beside the sidebar) instead of a full-height sheet. */
+  compact?: boolean
   children: ReactNode
 }) {
   return (
@@ -35,14 +42,22 @@ export function BisFormDialog({
       <DialogContent
         persistOnFocusLoss
         aria-describedby={undefined}
-        overlayClassName="lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto"
-        className={cn(
-          '!flex z-50 h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 bg-white p-0 shadow-none sm:rounded-none',
-          'left-0 top-0',
-          'lg:left-[268px] lg:w-[calc(100vw-268px)] lg:max-w-[calc(100vw-268px)]',
-          'border-stone-600 ring-1 ring-amber-700/20',
-          '[&>button]:!rounded-none [&>button]:text-white [&>button]:opacity-100 [&>button]:hover:bg-white/10',
-        )}
+        overlayClassName={compact ? undefined : 'lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto'}
+        className={
+          compact
+            ? cn(
+                limsDialogClass,
+                '!flex w-[min(40rem,calc(100vw-1.5rem))] max-w-none bg-white',
+                '[&>button]:!rounded-none [&>button]:text-white [&>button]:opacity-100 [&>button]:hover:bg-white/10',
+              )
+            : cn(
+                '!flex z-50 h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 bg-white p-0 shadow-none sm:rounded-none',
+                'left-0 top-0',
+                'lg:left-[268px] lg:w-[calc(100vw-268px)] lg:max-w-[calc(100vw-268px)]',
+                'border-stone-600 ring-1 ring-amber-700/20',
+                '[&>button]:!rounded-none [&>button]:text-white [&>button]:opacity-100 [&>button]:hover:bg-white/10',
+              )
+        }
       >
         <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white sm:px-5 sm:py-3">
           <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={limsDarkBarGlowStyle} />
@@ -65,7 +80,8 @@ export function BisFormDialog({
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center justify-end gap-2 border-t-2 border-stone-500 bg-stone-100 px-4 py-3 sm:px-6">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t-2 border-stone-500 bg-stone-100 px-4 py-3 sm:px-6">
+          {footerExtra ? <div className="mr-auto flex flex-wrap items-center gap-2">{footerExtra}</div> : null}
           <Button
             type="button"
             variant="outline"
