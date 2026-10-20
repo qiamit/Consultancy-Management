@@ -24,6 +24,7 @@ import {
   normalizeIsCodeLabel,
 } from '@/features/masters/is-codes/formatIsCodeLabel'
 import { AddSymbolDialog } from './AddSymbolDialog'
+import { TestParameterAiDialog } from './TestParameterAiDialog'
 import {
   TEST_PARAMETER_SYNC_CHANNEL,
   type TestParameterSyncAddedMessage,
@@ -206,6 +207,7 @@ export default function TestParameterMasterPage() {
   const [inlineForm, setInlineForm] = useState<TestParameterFormType>(() => emptyTestParameterForm())
   const [inlineAddLoading, setInlineAddLoading] = useState(false)
   const [symbolDialogOpen, setSymbolDialogOpen] = useState(false)
+  const [aiDialogOpen, setAiDialogOpen] = useState(false)
   const symbolTargetRef = useRef<SymbolCaretTarget>({
     field: 'itemName',
     scope: 'inline',
@@ -1350,9 +1352,41 @@ export default function TestParameterMasterPage() {
           onAssistantDataChanged={() => void loadRows()}
           isCodeOptions={isCodeOptions}
           onAddSymbol={() => setSymbolDialogOpen(true)}
+          onAiAdd={() => setAiDialogOpen(true)}
           canEdit={canEdit}
         />
       </div>
+
+      <TestParameterAiDialog
+        open={aiDialogOpen}
+        onOpenChange={setAiDialogOpen}
+        isCodes={isCodes}
+        existing={rows}
+        initialIsCodeId={lockedIsCodeId ?? ''}
+        onAdd={async (isCodeId, items) => {
+          const isRow = isCodes.find((x) => x.id === isCodeId)
+          const payloads = items.map((it) =>
+            buildInsertPayload({
+              ...emptyTestParameterForm(),
+              isCodeId,
+              isCodeLabel: isRow?.displayCode ?? '',
+              clauseNo: it.clauseNo,
+              unitValue: it.unitValue,
+              testMethod: it.testMethod,
+              itemName: it.itemName,
+              specificRequirement: it.specificRequirement,
+            }),
+          )
+          const { data, error } = await supabase.from('test_parameters').insert(payloads).select('id')
+          if (error) throw new Error(formatSupabaseError(error))
+          // Show what was added: the table is filtered to this IS Code.
+          setLockedIsCodeId(isCodeId)
+          setSearch(isRow?.displayCode ?? '')
+          setPage(1)
+          await loadRows()
+          return Array.isArray(data) ? data.length : payloads.length
+        }}
+      />
 
       <AddSymbolDialog
         open={symbolDialogOpen}
