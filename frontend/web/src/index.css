@@ -517,9 +517,12 @@ th * {
   .manak-kv th { white-space: normal !important; font-size: 0.75rem !important; padding: 0.375rem 0.5rem !important; }
   .manak-kv th:empty,
   .manak-kv td:empty { display: none; }
+  .manak-kv td { white-space: normal !important; overflow-wrap: anywhere; }
+  .manak-kv td[colspan] { grid-column: span 3; }
 }
 @media (max-width: 639px) {
   .manak-kv tr { grid-template-columns: minmax(0, 1fr); }
+  .manak-kv td[colspan] { grid-column: auto; }
   .manak-kv th { border-bottom-width: 0 !important; padding-bottom: 0.125rem !important; }
   .manak-kv td { padding-top: 0.25rem; }
 }
@@ -584,19 +587,24 @@ th * {
   .comp-table,
   .comp-table tbody { display: block; width: 100%; }
   .comp-table tr {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    align-items: center;
-    gap: 0.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.375rem 0.5rem;
     margin-bottom: 0.5rem;
     padding: 0.625rem;
     border: 1px solid #d6d3d1;
   }
   .comp-table td { display: block; padding: 0 !important; border: 0 !important; text-align: left !important; }
-  .comp-table td:nth-child(3) { grid-column: 1 / -1; display: flex; align-items: center; gap: 0.5rem; border-top: 1px solid #e7e5e4 !important; padding-top: 0.5rem !important; }
-  .comp-table td:nth-child(3)::before { content: 'Applicable *'; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #78716c; }
+  /* Checkbox and name on the first line; Applicable and the buttons share the second line and the buttons
+     drop below only when they do not fit. */
+  .comp-table td:nth-child(1) { flex: 0 0 auto; align-self: flex-start; }
+  .comp-table td:nth-child(2) { flex: 1 1 calc(100% - 2rem); min-width: 0; align-self: flex-start; padding-bottom: 0.5rem !important; border-bottom: 1px solid #e7e5e4 !important; }
+  .comp-table td:nth-child(3) { display: flex; flex-direction: column; align-items: flex-start; gap: 0.125rem; }
+  .comp-table td:nth-child(3)::before { content: 'Applicable *'; font-size: 0.625rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #78716c; }
   .comp-table td:nth-child(3) .mx-auto { margin: 0; }
-  .comp-table td:nth-child(4) { grid-column: 1 / -1; white-space: normal !important; text-align: right !important; }
+  .comp-table td:nth-child(4) { margin-left: auto; white-space: normal !important; }
+  .comp-table td:nth-child(4) > div { flex-wrap: wrap; justify-content: flex-end; }
 }
 
 /* Declaration → Weekly Offs: label and Yes/No on one line, the off-days picker or note below on phones. */
@@ -670,6 +678,7 @@ th * {
   .list-cards:not(.auto-cards) td.lc-check { position: absolute; top: 0.75rem; left: 0.75rem; }
   .list-cards:not(.auto-cards) td.lc-title { order: -1; font-weight: 600; color: #1c1917; grid-column: 1 / -1; padding-bottom: 0.5rem !important; border-bottom: 1px solid #e7e5e4 !important; }
   .list-cards:not(.auto-cards) tr:has(> td.lc-check) td.lc-title { padding-left: 1.75rem !important; }
+  .list-cards:not(.auto-cards) tr:has(> td.lc-check):not(:has(> td.lc-title)) > td:nth-child(2) { padding-left: 1.75rem !important; }
   .list-cards:not(.auto-cards) td.lc-wide { grid-column: 1 / -1; }
   .list-cards:not(.auto-cards) td.lc-title p { white-space: normal; }
   .list-cards:not(.auto-cards) td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 0.125rem; font-size: 0.625rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #78716c; }
@@ -722,4 +731,14 @@ th * {
   .am-table tbody td:nth-child(3) { display: none; }
   .am-table tbody td:nth-child(4) { grid-column: 2; }
   .am-table tbody td button[role='switch'] { width: 100%; min-width: 0; }
+}
+
+/* Two-column label | value forms inside editors: on phones the label sits above its value. */
+@media (max-width: 639px) {
+  .kv-stack,
+  .kv-stack tbody,
+  .kv-stack tr { display: block; width: 100%; }
+  .kv-stack th,
+  .kv-stack td { display: block; width: auto !important; white-space: normal !important; }
+  .kv-stack th { border-bottom-width: 0 !important; padding-bottom: 0.125rem !important; font-size: 0.75rem; }
 }

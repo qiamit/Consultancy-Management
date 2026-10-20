@@ -30,8 +30,8 @@ const aiBtn = 'h-8 w-8 shrink-0 rounded-none border border-stone-400 bg-white/70
 
 function FieldRow({ label, htmlFor, children, onAi, aiBusy }: { label: string; htmlFor: string; children: React.ReactNode; onAi?: () => void; aiBusy?: boolean }) {
   return (
-    <div className="flex items-stretch border border-stone-300 bg-white">
-      <label htmlFor={htmlFor} className="flex w-48 shrink-0 items-center border-r border-stone-300 bg-[#f3eee6] px-3 text-sm font-semibold text-stone-800">
+    <div className="flex flex-col items-stretch border border-stone-300 bg-white sm:flex-row">
+      <label htmlFor={htmlFor} className="flex w-full shrink-0 items-center border-b border-stone-300 bg-[#f3eee6] px-3 py-1.5 text-sm font-semibold text-stone-800 sm:w-48 sm:border-b-0 sm:border-r sm:py-0">
         {label}
       </label>
       <div className="flex min-w-0 flex-1 items-start gap-1.5 p-1.5">

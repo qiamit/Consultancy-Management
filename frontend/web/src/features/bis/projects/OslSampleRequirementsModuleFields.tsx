@@ -2266,7 +2266,7 @@ export function OslSampleRequirementsModuleFields({
               <DialogTitle className="text-base font-semibold tracking-tight text-white">
                 BIS Sample Test Request
               </DialogTitle>
-              <p className="mt-0.5 truncate text-xs text-stone-300">
+              <p className="mt-0.5 line-clamp-2 break-words text-xs text-stone-300">
                 {courierDraft?.sampleCode.trim() || courierDraft?.qrCode.trim() || 'Read-only preview'}
               </p>
             </DialogHeader>

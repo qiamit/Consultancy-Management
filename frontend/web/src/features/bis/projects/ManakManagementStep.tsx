@@ -844,17 +844,17 @@ export function ManakManagementStep({
               <Input className={inputCls} value={corr[key]} onChange={(e) => setCorr({ ...corr, [key]: e.target.value })} />
             )
             const emailErr = corrEmailFocused ? null : corrEmailError
-            const thC = 'whitespace-nowrap border border-[#e7e0d4] bg-[#f7f3eb] px-3 py-1.5 text-left align-middle font-bold text-stone-800'
+            const thC = 'break-words border border-[#e7e0d4] bg-[#f7f3eb] px-3 py-1.5 text-left align-middle font-bold text-stone-800'
             const tdC = 'border border-[#e7e0d4] px-2 py-1 align-middle text-stone-700'
             return (
               <div className="manak-kv overflow-x-auto">
                 <table className="w-full table-fixed border-collapse text-sm">
                   <colgroup>
                     <col style={{ width: '20%' }} />
-                    <col style={{ width: '15%' }} />
-                    <col style={{ width: '10%' }} />
-                    <col style={{ width: '15%' }} />
-                    <col style={{ width: '12%' }} />
+                    <col style={{ width: '14%' }} />
+                    <col style={{ width: '13%' }} />
+                    <col style={{ width: '14%' }} />
+                    <col style={{ width: '11%' }} />
                     <col style={{ width: '28%' }} />
                   </colgroup>
                   <tbody>

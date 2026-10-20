@@ -157,12 +157,12 @@ export function ManakFields({
     'whitespace-nowrap border border-[#e7e0d4] bg-[#f7f3eb] px-3 py-1.5 text-left align-top text-sm font-bold text-stone-800',
   )
   const valueCls = cn(
-    singleLine || lines ? 'whitespace-nowrap' : 'break-words',
+    singleLine ? 'whitespace-nowrap' : 'break-words',
     lines ? 'w-auto' : 'w-[32%]',
     'border border-[#e7e0d4] px-3 py-1.5 align-top text-sm text-stone-700',
   )
   return (
-    <div className="overflow-x-auto">
+    <div className="manak-kv overflow-x-auto">
       <table className={cn('w-full border-collapse', lines ? 'table-fixed' : 'table-auto')}>
         {lines ? (
           // The first pair takes two thirds of the row, the second pair one third.
@@ -499,7 +499,7 @@ export function ManakStepPage({
           }
         >
           {/* Label and value columns size to their content, so no label is wider than its cell. */}
-          <div className="overflow-x-auto">
+          <div className="manak-kv overflow-x-auto">
             <table className="w-full table-auto border-collapse text-sm">
               <tbody>
                 {markingFeeRows.map((cells, rowIndex) => (

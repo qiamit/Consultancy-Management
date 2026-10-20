@@ -879,7 +879,7 @@ export function BisLicenseDocumentsDialog({
                   </DialogHeader>
                   <span className="hidden w-[82px] shrink-0 sm:block" aria-hidden />
                   <p
-                    className="min-w-0 flex-1 truncate px-1 text-center text-sm font-semibold text-stone-100 sm:text-base md:text-lg"
+                    className="line-clamp-2 min-w-0 flex-1 break-words px-1 text-center text-sm font-semibold leading-snug text-stone-100 sm:text-base md:text-lg"
                     title={subtitle ? `${processTitle} of ${subtitle}` : undefined}
                   >
                     {subtitle ? `${processTitle} of ${subtitle}` : processTitle}
@@ -907,7 +907,7 @@ export function BisLicenseDocumentsDialog({
                 const done = i < step
                 const current = i === step
                 return (
-                  <li key={label} className="relative flex min-w-[2.5rem] flex-1 flex-col items-center">
+                  <li key={label} className="relative flex min-w-[2.25rem] flex-1 flex-col items-center sm:min-w-[2.5rem]">
                     {i > 0 ? (
                       <span
                         aria-hidden
