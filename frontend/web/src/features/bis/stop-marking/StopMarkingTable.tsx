@@ -12,7 +12,7 @@ import {
   type StopMarkingRow,
 } from './types'
 
-const GRID_TABLE = 'w-full border-collapse [&_th]:border [&_td]:border [&_th]:border-border [&_td]:border-border list-cards min-w-[900px]'
+const GRID_TABLE = 'w-full border-collapse [&_th]:border [&_td]:border [&_th]:border-border [&_td]:border-border sm-cards'
 const checkboxClass = 'h-4 w-4 rounded border-muted-foreground/30 text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 const actionBtn = 'h-8 w-8 p-0 text-amber-800 hover:bg-amber-50'
 const headClass = 'text-center text-[11px] font-bold uppercase tracking-[0.14em] text-amber-200'
@@ -71,7 +71,7 @@ export function StopMarkingTable({
           </p>
         </div>
       ) : (
-        <div className={cn('overflow-x-auto', loading && 'opacity-60 transition-opacity')}>
+        <div className={cn('sm-container overflow-x-auto', loading && 'opacity-60 transition-opacity')}>
           <Table className={GRID_TABLE}>
             <TableHeader>
               <TableRow className="bg-stone-800 hover:bg-stone-800">
