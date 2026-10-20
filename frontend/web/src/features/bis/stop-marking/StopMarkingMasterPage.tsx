@@ -8,7 +8,8 @@ import { useFormDialogOpenChange } from '@/lib/formDialogOpenChange'
 import { useMasterUiSearchState } from '@/lib/useMasterUiSearchState'
 import { BisProjectsHeaderBar } from '../projects/BisProjectsHeaderBar'
 import { BisProjectsFooterBar } from '../projects/BisProjectsFooterBar'
-import { formatCmL } from '../projects/types'
+import { fetchBisProjectById } from '../projects/bisProjectsApi'
+import { formatCmL, isCodeDisplayLabel } from '../projects/types'
 import { downloadCsv } from '../shared/downloadCsv'
 import { StopMarkingAddDialog } from './StopMarkingAddDialog'
 import { StopMarkingEditDialog } from './StopMarkingEditDialog'
@@ -34,7 +35,8 @@ const SEARCH_DEBOUNCE_MS = 350
 /** License Non-Conformity: every BIS notice to a licensee — add the licence, review the letter, reply with AI help, submit, close. */
 export default function StopMarkingMasterPage() {
   const { editId, viewId, setEdit, setView } = useMasterUiSearchState()
-  const [, setSearchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const licenceParam = (searchParams.get('licence') ?? '').trim()
   const [rows, setRows] = useState<StopMarkingRow[]>([])
   const [total, setTotal] = useState(0)
   const [listLoading, setListLoading] = useState(false)
@@ -109,6 +111,38 @@ export default function StopMarkingMasterPage() {
   }, [search, page, pageSize, statusFilter, noticeFilter, reloadKey])
 
   const reload = useCallback(() => setReloadKey((k) => k + 1), [])
+
+  // "Add Non-Conformity" from All BIS Licenses: open the Add dialog with that licence already chosen.
+  useEffect(() => {
+    if (!licenceParam || editId !== 'new') return
+    let cancelled = false
+    void fetchBisProjectById(licenceParam)
+      .then((project) => {
+        if (cancelled || !project) return
+        setAddForm({
+          ...emptyStopMarkingAddForm(),
+          clientId: project.client_id ?? '',
+          clientLabel: project.client?.company_name ?? '',
+          isCodeId: project.is_code_id ?? '',
+          isCodeLabel: isCodeDisplayLabel(project),
+          bisProjectId: project.id,
+          cmLDigits: String(project.cm_l_digits ?? '').replace(/\D/g, ''),
+          projectKind: project.project_kind ?? '',
+        })
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (cancelled) return
+        setSearchParams((prev) => {
+          const next = new URLSearchParams(prev)
+          next.delete('licence')
+          return next
+        }, { replace: true })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [licenceParam, editId, setSearchParams])
 
   // A case id in the address that is not on this page (closed, deleted) is dropped once the list has loaded.
   useEffect(() => {

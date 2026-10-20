@@ -1,3 +1,4 @@
+import { fetchProjectIdsWithOpenNotices } from './bisOpenNotices'
 import { searchClients } from '@/lib/clientsApi'
 import { supabase } from '@/lib/supabaseClient'
 import { formatIsCodeLabel } from '@/features/masters/is-codes/formatIsCodeLabel'
@@ -121,6 +122,8 @@ export type FetchBisProjectsParams = {
   qeManagedFilter?: BisQeManagedFilter
   projectKindFilter?: BisProjectKindFilter
   licenseStatusFilter?: BisLicenseStatusFilter
+  /** 'open' = only licences with an open BIS notice (License Non-Conformity case). */
+  openNoticeFilter?: 'all' | 'open'
   /** Default: validity ascending (least days remaining first). */
   sortKey?: BisProjectSortKey
   sortDir?: BisProjectSortDir
@@ -139,6 +142,7 @@ export async function fetchBisProjectsPage(
     qeManagedFilter = 'all',
     projectKindFilter = 'all',
     licenseStatusFilter = 'all',
+    openNoticeFilter = 'all',
     sortKey = 'validity',
     sortDir = 'asc',
   } = params
@@ -164,6 +168,11 @@ export async function fetchBisProjectsPage(
   }
 
   let query = supabase.from('bis_projects').select(selectColumns, { count: 'exact' })
+  if (openNoticeFilter === 'open') {
+    const noticeIds = await fetchProjectIdsWithOpenNotices()
+    if (noticeIds.length === 0) return { rows: [], total: 0 }
+    query = query.in('id', noticeIds)
+  }
 
   const today = todayIsoDate()
   if (listMode === 'our' || listMode === 'due_soon') query = query.eq('is_qe_managed', true)

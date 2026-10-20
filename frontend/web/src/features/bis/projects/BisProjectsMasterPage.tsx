@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { limsPageShellClass } from '@/lib/limsThemeUi'
+import { Select, SelectContent, selectFitTriggerClass, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { limsDarkBarFieldClass, limsPageShellClass } from '@/lib/limsThemeUi'
+import { fetchOpenNoticeCounts } from './bisOpenNotices'
 import { cn } from '@/lib/utils'
 import { useFormDialogOpenChange } from '@/lib/formDialogOpenChange'
 import { useMasterUiSearchState } from '@/lib/useMasterUiSearchState'
@@ -85,6 +87,8 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [qeManagedFilter, setQeManagedFilter] = useState<BisQeManagedFilter>('managed')
+  const [openNoticeFilter, setOpenNoticeFilter] = useState<'all' | 'open'>('all')
+  const [noticeCounts, setNoticeCounts] = useState<Record<string, number>>({})
   const [projectKindFilter, setProjectKindFilter] = useState<BisProjectKindFilter>('all')
   const [licenseStatusFilter, setLicenseStatusFilter] =
     useState<BisLicenseStatusFilter>('all')
@@ -155,6 +159,7 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
           qeManagedFilter: listMode === 'due_soon' ? 'managed' : showListFilters ? qeManagedFilter : 'all',
           projectKindFilter: showListFilters ? projectKindFilter : 'all',
           licenseStatusFilter: showListFilters ? licenseStatusFilter : 'all',
+          openNoticeFilter: showListFilters ? openNoticeFilter : 'all',
           sortKey,
           sortDir,
         })
@@ -184,10 +189,26 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
     qeManagedFilter,
     projectKindFilter,
     licenseStatusFilter,
+    openNoticeFilter,
     showListFilters,
     sortKey,
     sortDir,
   ])
+
+  // Open BIS notices per licence on this page (badge on the row).
+  useEffect(() => {
+    let cancelled = false
+    void fetchOpenNoticeCounts(rows.map((r) => r.id))
+      .then((counts) => {
+        if (!cancelled) setNoticeCounts(counts)
+      })
+      .catch(() => {
+        if (!cancelled) setNoticeCounts({})
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [rows])
 
   // Restore Add/Edit form from URL (refresh-safe).
   useEffect(() => {
@@ -537,6 +558,25 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
             setLicenseStatusFilter(value)
             setPage(1)
           }}
+          extraFilters={
+            showListFilters ? (
+              <Select
+                value={openNoticeFilter}
+                onValueChange={(v) => {
+                  setOpenNoticeFilter(v as 'all' | 'open')
+                  setPage(1)
+                }}
+              >
+                <SelectTrigger className={cn(limsDarkBarFieldClass, 'bis-projects-filter-trigger h-8 w-[min(100%,10.5rem)] shrink-0 px-2 text-[11px] sm:w-[11.5rem] sm:text-xs')} aria-label="Filter by open BIS notice" title="All Licences / Licences with an Open BIS Notice">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent align="end" className={selectFitTriggerClass}>
+                  <SelectItem value="all">All Notice Status</SelectItem>
+                  <SelectItem value="open">With Open Notice</SelectItem>
+                </SelectContent>
+              </Select>
+            ) : null
+          }
         />
       </div>
 
@@ -553,6 +593,7 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
           onViewDocuments={openDocuments}
           renewalMode={listMode === 'due_soon'}
           inclusionMode={listMode === 'inclusion'}
+          noticeCounts={noticeCounts}
           onStartRenewal={startRenewalForRow}
           onRenewalReminder={prepareRenewalReminder}
           onEmailDocument={
