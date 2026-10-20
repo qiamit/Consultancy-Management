@@ -108,7 +108,7 @@ export function AuthorizationLetterDialog({ open, onOpenChange, projectRow, lega
       const declaration = await fetchBisModulePayload(projectRow.id, APPLICATION_DECLARATION_KIND)
       await saveBisModulePayload(projectRow.id, APPLICATION_DECLARATION_KIND, { ...declaration, authorizationLetter: 'Yes', submitterName: person.name, submitterDesignation: person.designation })
       onSaved(person)
-      toast.success('Authorization Letter saved.')
+      toast.success('Authorization Letter Saved.')
       onOpenChange(false)
     } catch (err) { toast.error(err instanceof Error ? err.message : 'Could not save the Authorization Letter.') }
     finally { setBusy(false) }

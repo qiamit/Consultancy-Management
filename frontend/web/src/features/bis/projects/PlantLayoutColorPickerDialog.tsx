@@ -265,7 +265,7 @@ export function PlantLayoutColorPickerDialog({
                   className={cn(limsFieldClass, 'text-sm')}
                   value={draft.name}
                   onChange={(e) => setDraft((p) => ({ ...p, name: e.target.value }))}
-                  placeholder="Colour name"
+                  placeholder="Colour Name"
                 />
               </div>
               <div className="space-y-1">

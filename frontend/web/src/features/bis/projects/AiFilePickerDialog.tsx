@@ -99,7 +99,7 @@ Choose at most 10 files, best match first. Return { "picks": [] } when nothing m
         const c = candidates.find((x) => x.index === p.index)
         return c ? [{ ...c, fileName: p.fileName || c.file_name.replace(/\.[^.]+$/, ''), checked: true }] : []
       })
-      if (found.length === 0) toast.message('No matching file found', { description: 'Try describing the document differently, or upload it.' })
+      if (found.length === 0) toast.message('No Matching File Found', { description: 'Try describing the document differently, or upload it.' })
       setResults(found)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'AI search failed')
@@ -145,8 +145,8 @@ Choose at most 10 files, best match first. Return { "picks": [] } when nothing m
           <div className="flex gap-2">
             <Input
               autoFocus
-              aria-label="Describe the document"
-              placeholder="Describe the document, e.g. GST certificate, pollution NOC, test report"
+              aria-label="Describe the Document"
+              placeholder="Describe the Document, e.g. GST Certificate, Pollution NOC, Test Report"
               className="h-9 rounded-none border-stone-400 bg-white"
               value={request}
               disabled={busy}
@@ -165,7 +165,7 @@ Choose at most 10 files, best match first. Return { "picks": [] } when nothing m
               <thead>
                 <tr>
                   <th className={cn(thCls, 'w-8 px-1 text-center')} aria-label="Select" />
-                  <th className={thCls}>File Name (as it will appear)</th>
+                  <th className={thCls}>File Name (as It Will Appear)</th>
                   <th className={thCls}>Found In</th>
                 </tr>
               </thead>

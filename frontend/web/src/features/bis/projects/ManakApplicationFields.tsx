@@ -94,8 +94,8 @@ export function ManakApplicationFields({
         <button
           type="button"
           className={limsFieldAddBtnClass}
-          aria-label="Open calendar"
-          title="Pick date"
+          aria-label="Open Calendar"
+          title="Pick Date"
           disabled={disabled}
           onClick={() => openDatePicker(ref.current)}
         >
@@ -289,7 +289,7 @@ export function ManakApplicationFields({
     ],
     [
       'Branch State',
-      <Input key="bs" id="app-branch-state" className={cn(plainInput, 'bg-stone-100')} value={form.branchState} readOnly disabled={disabled} placeholder="Auto-selected from branch" />,
+      <Input key="bs" id="app-branch-state" className={cn(plainInput, 'bg-stone-100')} value={form.branchState} readOnly disabled={disabled} placeholder="Auto-Selected from Branch" />,
     ],
     ['Branch Head Name', master('bis_officer_name', 'Branch Head Name', 'app-branch-head', form.branchHeadName, (v) => set('branchHeadName', v), 'Officer Name')],
     ['Branch Head Designation', master('designation', 'Branch Head Designation', 'app-branch-head-desig', form.branchHeadDesignation, (v) => set('branchHeadDesignation', v), 'Designation')],

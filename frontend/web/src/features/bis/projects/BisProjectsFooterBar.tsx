@@ -117,7 +117,7 @@ export function BisProjectsFooterBar({
               )}
               onClick={onDeleteSelected}
               disabled={loading || selectedCount === 0}
-              title="Delete selected"
+              title="Delete Selected"
             >
               <Trash2 className="size-3.5 shrink-0 sm:size-4" />
               <span className="hidden lg:inline">Delete</span>
@@ -131,7 +131,7 @@ export function BisProjectsFooterBar({
               className={actionBtnClass}
               onClick={onExport}
               disabled={loading || totalCount === 0}
-              title="Export CSV (selected rows, or current page)"
+              title="Export CSV (Selected Rows, or Current Page)"
             >
               <Download className="size-3.5 shrink-0 sm:size-4" />
               <span className="hidden lg:inline">Export</span>
@@ -173,7 +173,7 @@ export function BisProjectsFooterBar({
                   }
                 >
                   <Mail className="size-3.5 shrink-0 sm:size-4" />
-                  <span className="hidden lg:inline">Email docs</span>
+                  <span className="hidden lg:inline">Email Docs</span>
                   <ChevronDown className="size-3 shrink-0" aria-hidden />
                 </Button>
               </DropdownMenuTrigger>
@@ -288,7 +288,7 @@ export function BisProjectsFooterBar({
                   }
                 >
                   <Printer className="size-3.5 shrink-0 sm:size-4" />
-                  <span className="hidden lg:inline">More prints</span>
+                  <span className="hidden lg:inline">More Prints</span>
                   <ChevronDown className="size-3 shrink-0" aria-hidden />
                 </Button>
               </DropdownMenuTrigger>
@@ -324,7 +324,7 @@ export function BisProjectsFooterBar({
 
         <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5">
           <Input
-            aria-label="Jump to page"
+            aria-label="Jump to Page"
             placeholder="Page"
             value={jumpTo}
             onChange={(e) => onJumpToChange(e.target.value.replace(/[^0-9]/g, ''))}
@@ -353,7 +353,7 @@ export function BisProjectsFooterBar({
             disabled={loading || page <= 1}
           >
             <ChevronLeft className="size-3.5 sm:size-4" />
-            <span className="sr-only">Previous page</span>
+            <span className="sr-only">Previous Page</span>
           </Button>
           <span className="shrink-0 whitespace-nowrap text-center text-xs font-medium text-stone-300 sm:min-w-[5rem] md:min-w-[6.5rem]">
             <span className="hidden sm:inline">Page </span>
@@ -368,7 +368,7 @@ export function BisProjectsFooterBar({
             disabled={loading || page >= pageCount}
           >
             <ChevronRight className="size-3.5 sm:size-4" />
-            <span className="sr-only">Next page</span>
+            <span className="sr-only">Next Page</span>
           </Button>
         </div>
         </div>

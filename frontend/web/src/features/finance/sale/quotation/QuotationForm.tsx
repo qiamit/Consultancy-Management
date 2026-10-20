@@ -990,10 +990,10 @@ export function QuotationFormView({
             </div>
             {form.paymentMethod === 'Bank' ? (
               <div className="flex min-w-0 flex-col space-y-2">
-                <Label htmlFor="payment-bank-account">Bank account</Label>
+                <Label htmlFor="payment-bank-account">Bank Account</Label>
                 <Select value={form.bankAccountId || 'none'} onValueChange={(value) => set('bankAccountId', value === 'none' ? '' : value)}>
                   <SelectTrigger id="payment-bank-account" className={cn(fieldClass, 'w-full')}>
-                    <SelectValue placeholder="Select bank account" />
+                    <SelectValue placeholder="Select Bank Account" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Unassigned</SelectItem>
@@ -1092,7 +1092,7 @@ export function QuotationFormView({
                 />
               </LimsFieldWithAdd>
               {isVendorParty ? (
-                <p className="text-xs text-stone-600">Only clients marked Vendor or Both are listed.</p>
+                <p className="text-xs text-stone-600">Only Clients Marked Vendor or Both Are Listed.</p>
               ) : null}
             </div>
             {(form.clientId ||
@@ -1125,18 +1125,18 @@ export function QuotationFormView({
 
       {linksInvoice ? (
         <section className="space-y-3 rounded-none border border-stone-500 bg-stone-50/60 p-3">
-          <h3 className={sectionTitleClass}>Against invoice</h3>
+          <h3 className={sectionTitleClass}>Against Invoice</h3>
           <div className="flex min-w-0 max-w-xl flex-col space-y-2">
-            <Label htmlFor="against-invoice">Tax invoice</Label>
+            <Label htmlFor="against-invoice">Tax Invoice</Label>
             <Select
               value={form.referenceNo.trim() || 'none'}
               onValueChange={(value) => set('referenceNo', value === 'none' ? '' : value)}
             >
               <SelectTrigger id="against-invoice" className={cn(fieldClass, 'w-full min-h-10')}>
-                <SelectValue placeholder="Not linked to an invoice" />
+                <SelectValue placeholder="Not Linked to an Invoice" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">Not linked to an invoice</SelectItem>
+                <SelectItem value="none">Not Linked to an Invoice</SelectItem>
                 {form.referenceNo.trim() &&
                 !visibleInvoiceBalances.some((row) => row.invoice_number === form.referenceNo.trim()) ? (
                   <SelectItem value={form.referenceNo.trim()}>{form.referenceNo.trim()}</SelectItem>
@@ -1163,18 +1163,18 @@ export function QuotationFormView({
 
       {linksPurchase ? (
         <section className="space-y-3 rounded-none border border-stone-500 bg-stone-50/60 p-3">
-          <h3 className={sectionTitleClass}>Against purchase bill</h3>
+          <h3 className={sectionTitleClass}>Against Purchase Bill</h3>
           <div className="flex min-w-0 max-w-xl flex-col space-y-2">
-            <Label htmlFor="against-bill">Purchase bill</Label>
+            <Label htmlFor="against-bill">Purchase Bill</Label>
             <Select
               value={form.referenceNo.trim() || 'none'}
               onValueChange={(value) => set('referenceNo', value === 'none' ? '' : value)}
             >
               <SelectTrigger id="against-bill" className={cn(fieldClass, 'w-full min-h-10')}>
-                <SelectValue placeholder="Not linked to a purchase bill" />
+                <SelectValue placeholder="Not Linked to a Purchase Bill" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">Not linked to a purchase bill</SelectItem>
+                <SelectItem value="none">Not Linked to a Purchase Bill</SelectItem>
                 {form.referenceNo.trim() &&
                 !purchaseBills.some((row) => row.bill_number === form.referenceNo.trim()) ? (
                   <SelectItem value={form.referenceNo.trim()}>{form.referenceNo.trim()}</SelectItem>
@@ -1197,18 +1197,18 @@ export function QuotationFormView({
 
       {linksReceipt ? (
         <section className="space-y-3 rounded-none border border-stone-500 bg-stone-50/60 p-3">
-          <h3 className={sectionTitleClass}>Against receipt</h3>
+          <h3 className={sectionTitleClass}>Against Receipt</h3>
           <div className="flex min-w-0 max-w-xl flex-col space-y-2">
-            <Label htmlFor="against-receipt">Payment receipt</Label>
+            <Label htmlFor="against-receipt">Payment Receipt</Label>
             <Select
               value={form.referenceNo.trim() || 'none'}
               onValueChange={(value) => set('referenceNo', value === 'none' ? '' : value)}
             >
               <SelectTrigger id="against-receipt" className={cn(fieldClass, 'w-full min-h-10')}>
-                <SelectValue placeholder="Not linked to a receipt" />
+                <SelectValue placeholder="Not Linked to a Receipt" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">Not linked to a receipt</SelectItem>
+                <SelectItem value="none">Not Linked to a Receipt</SelectItem>
                 {form.referenceNo.trim() &&
                 !clientReceipts.some((row) => row.receipt_number === form.referenceNo.trim()) ? (
                   <SelectItem value={form.referenceNo.trim()}>{form.referenceNo.trim()}</SelectItem>
@@ -1248,7 +1248,7 @@ export function QuotationFormView({
                 onValueChange={(v) => set('paymentMethod', v as PaymentMethod)}
               >
                 <SelectTrigger id="payment-method" className={cn(fieldClass, 'w-full')}>
-                  <SelectValue placeholder="Select payment mode" />
+                  <SelectValue placeholder="Select Payment Mode" />
                 </SelectTrigger>
                 <SelectContent>
                   {PAYMENT_METHOD_OPTIONS.map((mode) => (
@@ -1261,7 +1261,7 @@ export function QuotationFormView({
             </div>
             <CurrencyInrField
               id="payment-amount"
-              label="Gross amount"
+              label="Gross Amount"
               value={form.paymentAmount}
               onChange={(v) => set('paymentAmount', v)}
             />
@@ -1276,12 +1276,12 @@ export function QuotationFormView({
                   <SelectItem value="0">No TDS</SelectItem>
                   <SelectItem value="2">2%</SelectItem>
                   <SelectItem value="10">10%</SelectItem>
-                  <SelectItem value="custom">Custom rate</SelectItem>
+                  <SelectItem value="custom">Custom Rate</SelectItem>
                 </SelectContent>
               </Select>
               {form.tdsPercent && form.tdsPercent !== '2' && form.tdsPercent !== '10' ? (
                 <Input
-                  aria-label="Custom TDS rate percent"
+                  aria-label="Custom TDS Rate Percent"
                   className={cn(fieldClass, 'w-full')}
                   type="number"
                   min="0.01"
@@ -1295,17 +1295,17 @@ export function QuotationFormView({
               {form.tdsPercent ? (
                 <CurrencyInrField
                   id="payment-tds-taxable-base"
-                  label="TDS taxable amount"
+                  label="TDS Taxable Amount"
                   value={form.tdsTaxableAmount}
                   onChange={(v) => set('tdsTaxableAmount', v)}
                 />
               ) : null}
               {form.tdsPercent ? (
                 <Input
-                  aria-label="TDS section"
+                  aria-label="TDS Section"
                   className={cn(fieldClass, 'w-full')}
                   maxLength={32}
-                  placeholder="TDS section (e.g. 194C)"
+                  placeholder="TDS Section (e.g. 194C)"
                   value={form.tdsSection}
                   onChange={(event) => set('tdsSection', event.target.value)}
                 />
@@ -1335,7 +1335,7 @@ export function QuotationFormView({
             variant="outline"
             size="sm"
             className="h-7 gap-1 rounded-none border-stone-500 px-2 text-[11px] font-semibold uppercase tracking-wide text-stone-700"
-            aria-label="Select table columns"
+            aria-label="Select Table Columns"
             onClick={openColumnsDialog}
           >
             <Columns3 size={14} aria-hidden />
@@ -1402,7 +1402,7 @@ export function QuotationFormView({
                           className="h-7 w-7 rounded-none text-red-300 hover:bg-red-500/20 hover:text-red-100"
                           onClick={() => removeLine(line.key)}
                           disabled={form.lines.length <= 1}
-                          aria-label="Remove line"
+                          aria-label="Remove Line"
                         >
                           <Trash2 size={14} />
                         </Button>
@@ -1688,7 +1688,7 @@ export function QuotationFormView({
                                 onChange={(e) =>
                                   patchLine(line.key, { deliveryPeriod: e.target.value })
                                 }
-                                placeholder="e.g. 7 days"
+                                placeholder="e.g. 7 Days"
                               />
                             ) : (
                               <p className="text-sm font-medium text-[#292524]">
@@ -1868,7 +1868,7 @@ export function QuotationFormView({
                           type="button"
                           className="inline-flex h-6 w-4 items-center justify-center text-stone-500 hover:bg-stone-200 hover:text-stone-800 disabled:pointer-events-none disabled:opacity-30"
                           aria-label={`Move line ${index + 1} up`}
-                          title="Move up"
+                          title="Move Up"
                           disabled={index === 0}
                           onClick={() => moveLine(line.key, -1)}
                         >
@@ -1881,7 +1881,7 @@ export function QuotationFormView({
                           type="button"
                           className="inline-flex h-6 w-4 items-center justify-center text-stone-500 hover:bg-stone-200 hover:text-stone-800 disabled:pointer-events-none disabled:opacity-30"
                           aria-label={`Move line ${index + 1} down`}
-                          title="Move down"
+                          title="Move Down"
                           disabled={index >= form.lines.length - 1}
                           onClick={() => moveLine(line.key, 1)}
                         >
@@ -1976,7 +1976,7 @@ export function QuotationFormView({
                               className={cn(lineFieldClass, 'text-center')}
                               value={line.itemCode}
                               onChange={(e) => patchLine(line.key, { itemCode: e.target.value })}
-                              aria-label="Item code"
+                              aria-label="Item Code"
                               placeholder="Code"
                             />
                           </td>
@@ -2054,7 +2054,7 @@ export function QuotationFormView({
                               onChange={(e) =>
                                 patchLine(line.key, { discountPercent: e.target.value })
                               }
-                              aria-label="Discount percent"
+                              aria-label="Discount Percent"
                             />
                           </td>
                         ) : null}
@@ -2078,7 +2078,7 @@ export function QuotationFormView({
                               step="0.01"
                               value={line.gstPercent}
                               onChange={(e) => patchLine(line.key, { gstPercent: e.target.value })}
-                              aria-label="GST percent"
+                              aria-label="GST Percent"
                             />
                           </td>
                         ) : null}
@@ -2114,7 +2114,7 @@ export function QuotationFormView({
                               onChange={(e) =>
                                 patchLine(line.key, { lineRemarks: e.target.value })
                               }
-                              aria-label="Line remarks"
+                              aria-label="Line Remarks"
                               placeholder="Remarks"
                             />
                           </td>
@@ -2127,8 +2127,8 @@ export function QuotationFormView({
                               onChange={(e) =>
                                 patchLine(line.key, { deliveryPeriod: e.target.value })
                               }
-                              aria-label="Delivery period"
-                              placeholder="e.g. 7 days"
+                              aria-label="Delivery Period"
+                              placeholder="e.g. 7 Days"
                             />
                           </td>
                         ) : null}
@@ -2140,8 +2140,8 @@ export function QuotationFormView({
                             className="h-7 w-7 rounded-none text-amber-800 hover:bg-amber-500/15 hover:text-amber-950"
                             onClick={addLine}
                             disabled={!line.description.trim()}
-                            aria-label="Add line"
-                            title="Add line"
+                            aria-label="Add Line"
+                            title="Add Line"
                           >
                             <Plus size={16} strokeWidth={2.25} />
                           </Button>
@@ -2236,7 +2236,7 @@ export function QuotationFormView({
                             className="h-7 w-7 rounded-none text-destructive hover:bg-destructive/10"
                             onClick={() => removeLine(line.key)}
                             disabled={form.lines.length <= 1}
-                            aria-label="Remove line"
+                            aria-label="Remove Line"
                           >
                             <Trash2 size={14} />
                           </Button>
@@ -2386,12 +2386,12 @@ export function QuotationFormView({
                     set('discountAmount', sanitizeMoneyInput(e.target.value))
                   }
                   className="!h-7 w-24 rounded-none border-stone-500 bg-white px-2 text-right tabular-nums"
-                  aria-label="Discount amount"
+                  aria-label="Discount Amount"
                 />
                 <button
                   type="button"
                   className="inline-flex h-7 w-7 items-center justify-center text-stone-500 hover:text-red-700"
-                  aria-label="Remove discount"
+                  aria-label="Remove Discount"
                   title="Remove"
                   onClick={() => {
                     setShowDiscountRow(false)
@@ -2418,12 +2418,12 @@ export function QuotationFormView({
                     set('transportationCharges', sanitizeMoneyInput(e.target.value))
                   }
                   className="!h-7 w-24 rounded-none border-stone-500 bg-white px-2 text-right tabular-nums"
-                  aria-label="Transportation charges"
+                  aria-label="Transportation Charges"
                 />
                 <button
                   type="button"
                   className="inline-flex h-7 w-7 items-center justify-center text-stone-500 hover:text-red-700"
-                  aria-label="Remove transportation charges"
+                  aria-label="Remove Transportation Charges"
                   title="Remove"
                   onClick={() => {
                     setShowTransportRow(false)
@@ -2449,12 +2449,12 @@ export function QuotationFormView({
                     set('packagingCharges', sanitizeMoneyInput(e.target.value))
                   }
                   className="!h-7 w-24 rounded-none border-stone-500 bg-white px-2 text-right tabular-nums"
-                  aria-label="Packaging charge"
+                  aria-label="Packaging Charge"
                 />
                 <button
                   type="button"
                   className="inline-flex h-7 w-7 items-center justify-center text-stone-500 hover:text-red-700"
-                  aria-label="Remove packaging charge"
+                  aria-label="Remove Packaging Charge"
                   title="Remove"
                   onClick={() => {
                     setShowPackagingRow(false)
@@ -2554,7 +2554,7 @@ export function QuotationFormView({
             <div className="space-y-1 border-t border-stone-300 pt-2 text-sm">
               <p className="text-stone-600">Settlements</p>
               {visiblePurchaseSettlements.length === 0 ? (
-                <p className="text-xs text-stone-500">No payment or debit note is linked.</p>
+                <p className="text-xs text-stone-500">No Payment or Debit Note Is Linked.</p>
               ) : (
                 <ul className="max-h-40 space-y-1 overflow-y-auto">
                   {visiblePurchaseSettlements.map((row) => (
@@ -2576,7 +2576,7 @@ export function QuotationFormView({
             <div className="space-y-1 border-t border-stone-300 pt-2 text-sm">
               <p className="text-stone-600">Settlements</p>
               {visibleSettlements.length === 0 ? (
-                <p className="text-xs text-stone-500">No receipt or credit note is linked.</p>
+                <p className="text-xs text-stone-500">No Receipt or Credit Note Is Linked.</p>
               ) : (
                 <ul className="max-h-40 space-y-1 overflow-y-auto">
                   {visibleSettlements.map((row) => (
@@ -2613,7 +2613,7 @@ export function QuotationFormView({
             <LimsFieldWithAdd
               addButton={
                 <LimsFieldAddButton
-                  aria-label="Manage terms and conditions"
+                  aria-label="Manage Terms and Conditions"
                   title="Manage Terms & Conditions"
                   onClick={() => setManageTermsOpen(true)}
                 />
@@ -2678,7 +2678,7 @@ export function QuotationFormView({
             <LimsFieldWithAdd
               addButton={
                 <LimsFieldAddButton
-                  aria-label="Manage notes"
+                  aria-label="Manage Notes"
                   title="Manage Notes"
                   onClick={() => setManageNotesOpen(true)}
                 />
@@ -2827,7 +2827,7 @@ export function QuotationFormView({
               </table>
             </div>
             {!LINE_COLUMN_OPTIONS.some((c) => draftLineColumns[c.key]) ? (
-              <p className="pt-2 text-xs text-destructive">Select at least one column.</p>
+              <p className="pt-2 text-xs text-destructive">Select at Least One Column.</p>
             ) : null}
           </div>
 

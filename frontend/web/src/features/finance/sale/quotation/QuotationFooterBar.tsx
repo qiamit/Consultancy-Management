@@ -77,7 +77,7 @@ export function QuotationFooterBar({
                 className={actionBtnClass}
                 onClick={onExport}
                 disabled={loading}
-                title="Export CSV (selected rows, or current page)"
+                title="Export CSV (Selected Rows, or Current Page)"
               >
                 <Download size={14} />
                 <span className="hidden md:inline">Export</span>
@@ -91,7 +91,7 @@ export function QuotationFooterBar({
                 className={actionBtnClass}
                 onClick={onPrintSelected}
                 disabled={loading || selectionDisabled}
-                title="Print selected"
+                title="Print Selected"
               >
                 <Printer size={14} />
                 <span className="hidden md:inline">Print</span>
@@ -103,7 +103,7 @@ export function QuotationFooterBar({
                 className={cn(limsDeleteBtnClass, 'h-8 shrink-0 gap-1 px-2 text-xs sm:px-2.5')}
                 onClick={onDeleteSelected}
                 disabled={loading || selectionDisabled}
-                title="Delete selected"
+                title="Delete Selected"
               >
                 <Trash2 size={14} />
                 <span className="hidden md:inline">Delete</span>
@@ -134,7 +134,7 @@ export function QuotationFooterBar({
 
           <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5">
             <Input
-              aria-label="Jump to page"
+              aria-label="Jump to Page"
               placeholder="Page"
               value={jumpTo}
               onChange={(e) => onJumpToChange(e.target.value.replace(/[^0-9]/g, ''))}
@@ -163,7 +163,7 @@ export function QuotationFooterBar({
               disabled={loading || page <= 1}
             >
               <ChevronLeft size={16} />
-              <span className="sr-only">Previous page</span>
+              <span className="sr-only">Previous Page</span>
             </Button>
             <span className="shrink-0 whitespace-nowrap text-center text-xs font-medium text-stone-300 sm:min-w-[5rem]">
               <span className="hidden sm:inline">Page </span>
@@ -178,7 +178,7 @@ export function QuotationFooterBar({
               disabled={loading || page >= pageCount}
             >
               <ChevronRight size={16} />
-              <span className="sr-only">Next page</span>
+              <span className="sr-only">Next Page</span>
             </Button>
           </div>
         </div>

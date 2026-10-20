@@ -89,7 +89,7 @@ export default function ClaudeConnectorPage() {
     try {
       const { error: rpcError } = await supabase.rpc('mcp_revoke_connection', { p_id: id })
       if (rpcError) throw rpcError
-      toast.success('Disconnected. Claude must sign in again to use this account.')
+      toast.success('Disconnected. Claude Must Sign in Again to Use This Account.')
       reload()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not disconnect')
@@ -100,7 +100,7 @@ export default function ClaudeConnectorPage() {
 
   const copyUrl = () => {
     void navigator.clipboard.writeText(MCP_CONNECTOR_URL).then(
-      () => toast.success('Connector URL copied'),
+      () => toast.success('Connector URL Copied'),
       () => toast.error('Copy failed — select the URL and copy it by hand'),
     )
   }
@@ -139,7 +139,7 @@ export default function ClaudeConnectorPage() {
             Connect. On a Team or Enterprise plan an owner adds it first.
           </li>
           <li>
-            <strong>Claude Code:</strong> run <code className="font-mono">claude mcp add --transport http qe {MCP_CONNECTOR_URL}</code>,
+            <strong>Claude Code:</strong> Run <code className="font-mono">claude mcp add --transport http qe {MCP_CONNECTOR_URL}</code>,
             then <code className="font-mono">/mcp</code> to sign in.
           </li>
           <li>Sign in with your Consultancy Pro email and password on the Q Engineering page that opens.</li>
@@ -153,9 +153,9 @@ export default function ClaudeConnectorPage() {
           <TableHeader>
             <TableRow>
               {isAdmin ? <TableHead className={limsTableHeadClass}>User</TableHead> : null}
-              <TableHead className={limsTableHeadClass}>Connected app</TableHead>
+              <TableHead className={limsTableHeadClass}>Connected App</TableHead>
               <TableHead className={limsTableHeadClass}>Connected</TableHead>
-              <TableHead className={limsTableHeadClass}>Last used</TableHead>
+              <TableHead className={limsTableHeadClass}>Last Used</TableHead>
               <TableHead className={limsTableHeadClass}>Action</TableHead>
             </TableRow>
           </TableHeader>
@@ -176,7 +176,7 @@ export default function ClaudeConnectorPage() {
                   ) : null}
                   <TableCell className="lc-title text-sm">{row.client_name}</TableCell>
                   <TableCell data-label="Connected" className="whitespace-nowrap text-xs">{when(row.created_at)}</TableCell>
-                  <TableCell data-label="Last used" className="whitespace-nowrap text-xs">{when(row.last_used_at)}</TableCell>
+                  <TableCell data-label="Last Used" className="whitespace-nowrap text-xs">{when(row.last_used_at)}</TableCell>
                   <TableCell className="lc-actions text-center">
                     <Button
                       type="button"

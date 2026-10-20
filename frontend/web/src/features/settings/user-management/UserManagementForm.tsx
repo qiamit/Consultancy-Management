@@ -643,7 +643,7 @@ export function UserManagementForm(props: UserManagementFormProps) {
                 <FieldLabel htmlFor="user-mobile">Mobile Number</FieldLabel>
                 <div className="grid grid-cols-3 gap-3">
                   <Select value={selectedCountryCode} onValueChange={setSelectedCountryCode}>
-                    <SelectTrigger id="country-code" aria-label="Country code" className={limsFieldClass}>
+                    <SelectTrigger id="country-code" aria-label="Country Code" className={limsFieldClass}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -686,7 +686,7 @@ export function UserManagementForm(props: UserManagementFormProps) {
                     value={formData.password}
                     onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
                   />
-                  <p className="text-xs text-stone-600">The user must choose their own password at first login.</p>
+                  <p className="text-xs text-stone-600">The User Must Choose Their Own Password at First Login.</p>
                 </Field>
               ) : null}
             </div>
@@ -830,7 +830,7 @@ export function UserManagementForm(props: UserManagementFormProps) {
               </Field>
 
               <Field>
-                <FieldLabel htmlFor="user-access-role">Access role</FieldLabel>
+                <FieldLabel htmlFor="user-access-role">Access Role</FieldLabel>
                 <Select
                   value={accessRole}
                   onValueChange={(value) => setAccessRole(value as AccessRole)}

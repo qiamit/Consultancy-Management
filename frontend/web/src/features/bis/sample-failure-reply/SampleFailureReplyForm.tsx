@@ -86,7 +86,7 @@ export function SampleFailureReplyForm({
           Sample Failure Type <span className="text-destructive">*</span>
         </Label>
         <Select value={form.sampleFailureType} onValueChange={(v) => set('sampleFailureType', v)}>
-          <SelectTrigger aria-label="Sample failure type">
+          <SelectTrigger aria-label="Sample Failure Type">
             <SelectValue />
           </SelectTrigger>
           <SelectContent className="rounded-none border-stone-500">

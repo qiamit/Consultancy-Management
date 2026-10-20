@@ -85,7 +85,7 @@ export function SignatoriesEditor({
       </p>
 
       {usersLoading ? (
-        <p className="text-xs text-stone-500">Loading users from User Management…</p>
+        <p className="text-xs text-stone-500">Loading Users from User Management…</p>
       ) : null}
       {usersError ? (
         <p className="border-l-2 border-destructive bg-destructive/5 px-3 py-2 text-xs text-destructive">
@@ -107,7 +107,7 @@ export function SignatoriesEditor({
               <th className="border-b border-stone-600 px-2 py-2">Person Name</th>
               <th className="border-b border-stone-600 px-2 py-2 text-center">Designation</th>
               <th className="border-b border-stone-600 px-2 py-2 text-center">Department</th>
-              <th className="border-b border-stone-600 px-2 py-2 text-center">Show after</th>
+              <th className="border-b border-stone-600 px-2 py-2 text-center">Show After</th>
               <th className="w-24 border-b border-stone-600 px-2 py-2 text-center">Required</th>
               <th className="w-14 border-b border-stone-600 px-2 py-2 text-center">Action</th>
             </tr>
@@ -137,7 +137,7 @@ export function SignatoriesEditor({
                       disabled={disabled}
                       onChange={(e) => onChange(index, { enabled: e.target.checked })}
                       aria-label={`Include signature ${index + 1} on print`}
-                      title="Include on print"
+                      title="Include on Print"
                     />
                   </td>
                   <td className="px-2 py-2">
@@ -147,7 +147,7 @@ export function SignatoriesEditor({
                       disabled={disabled}
                     >
                       <SelectTrigger id={`${idPrefix}-role-${index}`} className="h-8 min-w-[8rem]">
-                        <SelectValue placeholder="Select role" />
+                        <SelectValue placeholder="Select Role" />
                       </SelectTrigger>
                       <SelectContent>
                         {TEST_REPORT_SIGNATURE_ROLE_OPTIONS.map((role) => (
@@ -251,7 +251,7 @@ export function SignatoriesEditor({
                       disabled={disabled}
                       onChange={(e) => onChange(index, { required: e.target.checked })}
                       aria-label={`Required on signature line ${index + 1}`}
-                      title="Show on signature line (Required)"
+                      title="Show on Signature Line (Required)"
                     />
                   </td>
                   <td className="px-2 py-2 text-center">
@@ -284,7 +284,7 @@ export function SignatoriesEditor({
                   className={cn('size-8 rounded-none p-0', limsOutlineBtnClass)}
                   disabled={disabled || !canAdd}
                   onClick={onAdd}
-                  aria-label="Add signature"
+                  aria-label="Add Signature"
                   title={
                     canAdd
                       ? 'Add signature'

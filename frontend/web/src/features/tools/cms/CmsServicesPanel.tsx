@@ -74,7 +74,7 @@ export default function CmsServicesPanel() {
 
   const save = async () => {
     if (!form.title.trim()) {
-      toast.error('Title is required')
+      toast.error('Title Is Required')
       return
     }
     setSaving(true)
@@ -104,7 +104,7 @@ export default function CmsServicesPanel() {
       toast.error(err.message)
       return
     }
-    toast.success('Service deleted')
+    toast.success('Service Deleted')
     void load()
   }
 
@@ -170,7 +170,7 @@ export default function CmsServicesPanel() {
                         variant="outline"
                         className={cn(limsOutlineBtnClass, 'h-7 w-7 p-0')}
                         onClick={() => openEdit(row)}
-                        aria-label="Edit service"
+                        aria-label="Edit Service"
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
@@ -180,7 +180,7 @@ export default function CmsServicesPanel() {
                         variant="outline"
                         className={cn(limsOutlineBtnClass, 'h-7 w-7 p-0 text-red-700')}
                         onClick={() => void remove(row)}
-                        aria-label="Delete service"
+                        aria-label="Delete Service"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
@@ -197,7 +197,7 @@ export default function CmsServicesPanel() {
         <DialogContent className={cn(limsDialogClass, 'max-w-lg')}>
           <DialogHeader className="border-b border-stone-300 bg-stone-100 px-5 py-3">
             <DialogTitle>{editingId ? 'Edit Service' : 'Add Service'}</DialogTitle>
-            <DialogDescription>Shown in the Services section of the public website.</DialogDescription>
+            <DialogDescription>Shown in the Services Section of the Public Website.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3 p-5">
             <div className="space-y-1">
@@ -220,11 +220,11 @@ export default function CmsServicesPanel() {
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="svc-icon">Icon name (optional)</Label>
+              <Label htmlFor="svc-icon">Icon Name (Optional)</Label>
               <Input
                 id="svc-icon"
                 className={limsFieldClass}
-                placeholder="e.g. shield-check"
+                placeholder="e.g. Shield-Check"
                 value={form.icon_name}
                 onChange={(e) => setForm({ ...form, icon_name: e.target.value })}
               />

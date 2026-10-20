@@ -60,7 +60,7 @@ export function UserManagementHeaderBar({
             <Select value={String(pageSize)} onValueChange={(v) => onPageSizeChange(Number(v))}>
               <SelectTrigger
                 className={cn(limsDarkBarFieldClass, 'h-9 w-[7.5rem] shrink-0')}
-                aria-label="Rows per page"
+                aria-label="Rows per Page"
               >
                 <SelectValue />
               </SelectTrigger>

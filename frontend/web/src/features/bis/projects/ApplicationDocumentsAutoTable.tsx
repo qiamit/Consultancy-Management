@@ -90,7 +90,7 @@ export function ApplicationDocumentsAutoTable({
           <thead>
             <tr>
               <th className={`${thCls} w-10 text-center`}>#</th>
-              <th className={thCls}>File Name (automatic)</th>
+              <th className={thCls}>File Name (Automatic)</th>
               <th className={`${thCls} w-28 text-center`}>
                 Upload
               </th>

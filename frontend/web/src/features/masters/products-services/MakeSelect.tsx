@@ -209,7 +209,7 @@ export function MakeSelect({
                 className="inline-flex h-full w-8 shrink-0 items-center justify-center border-l border-stone-500 bg-stone-100 text-amber-800 transition-colors hover:bg-amber-500/15 hover:text-amber-950 disabled:pointer-events-none"
                 onClick={() => openManageDialog()}
                 onMouseDown={(e) => e.preventDefault()}
-                aria-label="Add make"
+                aria-label="Add Make"
                 title="Add New"
                 disabled={disabled}
               >
@@ -356,7 +356,7 @@ export function MakeSelect({
                     </div>
                   ))
                 ) : (
-                  <p className="text-xs text-stone-500">No makes added yet.</p>
+                  <p className="text-xs text-stone-500">No Makes Added Yet.</p>
                 )}
               </div>
             </div>

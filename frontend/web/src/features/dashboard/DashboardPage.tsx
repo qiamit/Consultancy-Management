@@ -303,7 +303,7 @@ export default function DashboardPage() {
       </div>
 
       <div className={cn(limsPanelClass, 'p-5')}>
-        <h2 className="font-jakarta text-lg font-bold text-foreground">Quick actions</h2>
+        <h2 className="font-jakarta text-lg font-bold text-foreground">Quick Actions</h2>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           {shortcuts.map((item) => {
             const Icon = item.icon

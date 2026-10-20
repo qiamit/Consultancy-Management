@@ -256,7 +256,7 @@ export function TestReportReferbackToReviewDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Refer back section</DialogTitle>
+          <DialogTitle>Refer Back Section</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground -mt-2">
           SRF <span className="font-medium text-foreground">{srfLabel}</span> — choose section, destination stage,
@@ -265,15 +265,15 @@ export function TestReportReferbackToReviewDialog({
         </p>
         <form className="space-y-4 py-2" onSubmit={(e) => void handleSubmit(e)}>
           <div className="space-y-2">
-            <Label htmlFor="prep-referback-section">Section code</Label>
+            <Label htmlFor="prep-referback-section">Section Code</Label>
             {sectionsLoading ? (
-              <p className="text-sm text-muted-foreground">Loading section codes…</p>
+              <p className="text-sm text-muted-foreground">Loading Section Codes…</p>
             ) : sectionOptions.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No section codes found on this SRF.</p>
+              <p className="text-sm text-muted-foreground">No Section Codes Found on This SRF.</p>
             ) : (
               <Select value={sampleAllocationId || undefined} onValueChange={setSampleAllocationId}>
-                <SelectTrigger id="prep-referback-section" aria-label="Section code">
-                  <SelectValue placeholder="Select section code" />
+                <SelectTrigger id="prep-referback-section" aria-label="Section Code">
+                  <SelectValue placeholder="Select Section Code" />
                 </SelectTrigger>
                 <SelectContent>
                   {sectionOptions.length >= 2 ? (
@@ -292,13 +292,13 @@ export function TestReportReferbackToReviewDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="prep-referback-target">Refer back to</Label>
+            <Label htmlFor="prep-referback-target">Refer Back to</Label>
             <Select
               value={targetStage}
               onValueChange={(v) => setTargetStage(v as ReportPrepReferbackTarget)}
               disabled={!sampleAllocationId}
             >
-              <SelectTrigger id="prep-referback-target" aria-label="Refer back to">
+              <SelectTrigger id="prep-referback-target" aria-label="Refer Back to">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -323,7 +323,7 @@ export function TestReportReferbackToReviewDialog({
               id="prep-referback-remark"
               value={remark}
               onChange={(e) => setRemark(e.target.value)}
-              placeholder="Why are you referring back this section?"
+              placeholder="Why Are You Referring Back This Section?"
               rows={3}
               className="resize-y min-h-[80px]"
             />
@@ -360,7 +360,7 @@ export function TestReportReferbackToReviewDialog({
                   disabled={!department}
                 >
                   <SelectTrigger aria-label="Designation">
-                    <SelectValue placeholder="Select designation" />
+                    <SelectValue placeholder="Select Designation" />
                   </SelectTrigger>
                   <SelectContent>
                     {designationOptions.map((d) => (
@@ -372,13 +372,13 @@ export function TestReportReferbackToReviewDialog({
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Name of employee</Label>
+                <Label>Name of Employee</Label>
                 <Select
                   value={employeeId}
                   onValueChange={setEmployeeId}
                   disabled={!designation || usersLoading || employeeOptions.length === 0}
                 >
-                  <SelectTrigger aria-label="Select employee">
+                  <SelectTrigger aria-label="Select Employee">
                     <SelectValue
                       placeholder={
                         usersLoading

@@ -100,7 +100,7 @@ export default function CmsSettingsPanel() {
       toast.error(err.message)
       return
     }
-    toast.success('Site settings saved')
+    toast.success('Site Settings Saved')
   }
 
   const field = (key: keyof FormState, label: string, type = 'text') => (
@@ -150,7 +150,7 @@ export default function CmsSettingsPanel() {
       </div>
 
       <div className="space-y-1">
-        <Label htmlFor="cms-about">About us text</Label>
+        <Label htmlFor="cms-about">About Us Text</Label>
         <Textarea
           id="cms-about"
           rows={8}

@@ -93,7 +93,7 @@ export function TestReportPreparationFooterBar({
               placeholder="Page"
               value={jumpTo}
               onChange={(e) => onJumpToChange(e.target.value.replace(/[^0-9]/g, ''))}
-              aria-label="Jump to page"
+              aria-label="Jump to Page"
             />
             <Button
               type="button"
@@ -112,7 +112,7 @@ export function TestReportPreparationFooterBar({
               className={cn('h-8 w-8', limsDarkBarBtnClass)}
               onClick={onPrevPage}
               disabled={loading || page <= 1}
-              aria-label="Previous page"
+              aria-label="Previous Page"
             >
               <ChevronLeft size={16} />
             </Button>
@@ -126,7 +126,7 @@ export function TestReportPreparationFooterBar({
               className={cn('h-8 w-8', limsDarkBarBtnClass)}
               onClick={onNextPage}
               disabled={loading || page >= pageCount}
-              aria-label="Next page"
+              aria-label="Next Page"
             >
               <ChevronRight size={16} />
             </Button>

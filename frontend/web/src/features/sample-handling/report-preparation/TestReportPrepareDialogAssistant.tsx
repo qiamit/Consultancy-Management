@@ -172,7 +172,7 @@ export function TestReportPrepareDialogAssistant({
                 staticActiveRecordId={row?.id}
                 staticActiveRecordTable="samples"
                 resetKey={generalAskSession}
-                placeholder="Ask about IS code, clauses, test methods, or report wording…"
+                placeholder="Ask About IS Code, Clauses, Test Methods, or Report Wording…"
               />
             </TabsContent>
           </Tabs>

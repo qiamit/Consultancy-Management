@@ -361,7 +361,7 @@ export function LetterheadTab(props: LetterheadTabProps) {
                       id={`terms-${template.id}`}
                       rows={4}
                       className="!h-auto !min-h-[88px] resize-y rounded-md border border-slate-300 bg-white focus-visible:ring-teal-600/30"
-                      placeholder="Enter terms and conditions"
+                      placeholder="Enter Terms and Conditions"
                       value={template.text}
                       onChange={(e) =>
                         props.setTermsTemplates((prev) =>
@@ -502,7 +502,7 @@ export function LetterheadTab(props: LetterheadTabProps) {
                         id={`watermark-${wm.id}`}
                         rows={4}
                         className="!h-auto !min-h-[88px] resize-y rounded-md border border-slate-300 bg-white focus-visible:ring-teal-600/30"
-                        placeholder="Enter watermark text"
+                        placeholder="Enter Watermark Text"
                         value={wm.text ?? ''}
                         onChange={(e) =>
                           props.setWatermarkTemplates((prev) =>

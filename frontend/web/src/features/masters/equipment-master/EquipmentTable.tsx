@@ -169,7 +169,7 @@ export function EquipmentTable({
                   <input
                     type="checkbox"
                     className={checkboxClass}
-                    aria-label="Select all"
+                    aria-label="Select All"
                     checked={allChecked}
                     disabled={rows.length === 0}
                     ref={(el) => {
@@ -196,7 +196,7 @@ export function EquipmentTable({
                     colSpan={8}
                     className="border border-[#e7e0d4] bg-[#fffcf7] px-4 py-10 text-center"
                   >
-                    <p className="text-sm text-stone-600">No equipment added yet.</p>
+                    <p className="text-sm text-stone-600">No Equipment Added Yet.</p>
                     <p className="mt-1 text-xs text-stone-500">
                       Use “Add New” to register lab equipment.
                     </p>
@@ -232,7 +232,7 @@ export function EquipmentTable({
                           className="line-clamp-2 max-w-full break-words text-left text-[13px] font-bold leading-snug text-amber-800 underline-offset-2 hover:text-amber-950 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40"
                           onClick={() => onEdit(r, 'details')}
                           aria-label={`View details for ${r.equipment_name || r.asset_code || 'equipment'}`}
-                          title="View equipment details"
+                          title="View Equipment Details"
                         >
                           {r.equipment_name || '—'}
                         </button>

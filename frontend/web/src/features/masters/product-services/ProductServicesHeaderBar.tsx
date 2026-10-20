@@ -65,7 +65,7 @@ export function ProductServicesHeaderBar({
               limsDarkBarFieldClass,
               'h-8 w-[3.5rem] shrink-0 px-1 text-[11px] tabular-nums sm:w-[4.25rem] sm:px-2 sm:text-xs',
             )}
-            aria-label="Rows per page"
+            aria-label="Rows per Page"
             title={`${pageSize} per page`}
           >
             <SelectValue />

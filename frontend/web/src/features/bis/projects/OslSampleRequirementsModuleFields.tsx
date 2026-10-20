@@ -259,7 +259,7 @@ function SampleConformitySelect({
         <SelectValue />
       </SelectTrigger>
       <SelectContent className="z-[80]">
-        <SelectItem value={SAMPLE_CONFORMITY_UNSET}>Not decided</SelectItem>
+        <SelectItem value={SAMPLE_CONFORMITY_UNSET}>Not Decided</SelectItem>
         <SelectItem value="Yes">Yes</SelectItem>
         <SelectItem value="No">No</SelectItem>
       </SelectContent>
@@ -393,7 +393,7 @@ export function OslSampleRequirementsModuleFields({
   const attachManakPdfToSample = async (result: ManakTrResult, returnToken?: string) => {
     const pid = (projectId ?? '').trim()
     if (!pid) {
-      toast.error('Save the BIS project first, then run Extension again.')
+      toast.error('Save the BIS Project First, Then Run Extension Again.')
       return
     }
     const current = valueRef.current
@@ -407,7 +407,7 @@ export function OslSampleRequirementsModuleFields({
       : -1
     const index = byId >= 0 ? byId : byCode
     if (index < 0) {
-      toast.error('Could not match Manak PDF to a sample row.')
+      toast.error('Could Not Match Manak PDF to a Sample Row.')
       return
     }
     const row = current.rows[index]!
@@ -590,13 +590,13 @@ export function OslSampleRequirementsModuleFields({
 
   const openCopyChooser = () => {
     if (selectedIds.size !== 1) {
-      toast.error('Select exactly one sample row to copy.')
+      toast.error('Select Exactly One Sample Row to Copy.')
       return
     }
     const id = [...selectedIds][0]
     const sourceIndex = rows.findIndex((r) => r.id === id)
     if (sourceIndex < 0) {
-      toast.error('Selected sample not found.')
+      toast.error('Selected Sample Not Found.')
       return
     }
     setChooserPurpose('copy')
@@ -627,7 +627,7 @@ export function OslSampleRequirementsModuleFields({
     nextRows.splice(insertAt, 0, next)
     setRows(nextRows)
     setAddChooserOpen(false)
-    if (chooserPurpose === 'copy') toast.success('Sample row copied')
+    if (chooserPurpose === 'copy') toast.success('Sample Row Copied')
   }
 
   const confirmAddSample = () => {
@@ -659,7 +659,7 @@ export function OslSampleRequirementsModuleFields({
   const handleRemoveImportedQrCode = async (code: string) => {
     const pid = (projectId ?? '').trim()
     if (!pid) {
-      toast.error('Save this BIS project before removing an imported QR code.')
+      toast.error('Save This BIS Project Before Removing an Imported QR Code.')
       return
     }
     setQrRemoveBusyCode(code)
@@ -674,7 +674,7 @@ export function OslSampleRequirementsModuleFields({
         importedQrCodes: next.importedQrCodes,
       })
       setSelectedQr((selected) => (selected.replace(/\D/g, '') === code ? '' : selected))
-      toast.success('QR code removed from the unused import pool.')
+      toast.success('QR Code Removed from the Unused Import Pool.')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not remove the QR code.')
     } finally {
@@ -740,11 +740,11 @@ export function OslSampleRequirementsModuleFields({
     const sourceId = selectedSourceId.trim()
     const cid = (clientId ?? '').trim()
     if (!sourceId) {
-      toast.error('Select an application.')
+      toast.error('Select an Application.')
       return
     }
     if (!cid) {
-      toast.error('This project has no client — cannot transfer QR codes.')
+      toast.error('This Project Has No Client — Cannot Transfer QR Codes.')
       return
     }
     setTransferBusy(true)
@@ -796,11 +796,11 @@ export function OslSampleRequirementsModuleFields({
   const handleExtension = (row: OslSampleRequirementRow) => {
     const isSearch = (isCodeSearch ?? '').trim()
     if (!isSearch) {
-      toast.error('IS Number missing on this BIS project.')
+      toast.error('IS Number Missing on This BIS Project.')
       return
     }
     if (!row.qrCode.trim() && !row.sampleCode.trim()) {
-      toast.error('Add a QR code (or Sample Code) before running Extension.')
+      toast.error('Add a QR Code (or Sample Code) Before Running Extension.')
       return
     }
     const userId = String(portalUserId ?? '').trim()
@@ -936,7 +936,7 @@ export function OslSampleRequirementsModuleFields({
 
   const viewTestRequest = (row: OslSampleRequirementRow) => {
     if (!row.testRequestStoragePath.trim()) {
-      toast.error('No Test Request PDF attached yet.')
+      toast.error('No Test Request PDF Attached Yet.')
       return
     }
     void createBisProjectFileUrls(
@@ -946,7 +946,7 @@ export function OslSampleRequirementsModuleFields({
       .then(({ viewUrl, downloadUrl }) => {
         const href = viewUrl || downloadUrl
         if (!href) {
-          toast.error('Could not open Test Request PDF.')
+          toast.error('Could Not Open Test Request PDF.')
           return
         }
         window.open(href, '_blank', 'noopener,noreferrer')
@@ -959,7 +959,7 @@ export function OslSampleRequirementsModuleFields({
 
   const deleteTestRequest = (row: OslSampleRequirementRow) => {
     if (!row.testRequestStoragePath.trim() && !row.testRequestFileId.trim()) {
-      toast.error('No Test Request PDF attached yet.')
+      toast.error('No Test Request PDF Attached Yet.')
       return
     }
     const fileId = row.testRequestFileId.trim()
@@ -1041,7 +1041,7 @@ export function OslSampleRequirementsModuleFields({
               : r,
           ),
         })
-        toast.success('Test Request PDF attached.')
+        toast.success('Test Request PDF Attached.')
       })
       .catch((err) => {
         toast.error(err instanceof Error ? err.message : 'Test Request upload failed.')
@@ -1149,7 +1149,7 @@ export function OslSampleRequirementsModuleFields({
         const pending = openPendingPrintWindow('Preparing Courier Slip…')
         const err = openPrintHtml(html, { target: pending })
         if (err) toast.error(err)
-        else toast.success('Courier Slip ready to print.')
+        else toast.success('Courier Slip Ready to Print.')
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Could not print Courier Slip.')
       } finally {
@@ -1169,7 +1169,7 @@ export function OslSampleRequirementsModuleFields({
           html,
           filename: courierSlipFilename(courierDraft),
         })
-        toast.success('Courier Slip PDF downloaded — send it to your client.')
+        toast.success('Courier Slip PDF Downloaded — Send It to Your Client.')
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Could not download Courier Slip.')
       } finally {
@@ -1190,7 +1190,7 @@ export function OslSampleRequirementsModuleFields({
     if (!file || !rowId) return
     const pid = (projectId ?? '').trim()
     if (!pid) {
-      toast.error('Save the BIS project first, then attach a Courier Slip.')
+      toast.error('Save the BIS Project First, Then Attach a Courier Slip.')
       return
     }
     void uploadBisProjectFile(pid, file, 'osl-sample-courier-slip', {
@@ -1211,7 +1211,7 @@ export function OslSampleRequirementsModuleFields({
               : r,
           ),
         })
-        toast.success('Courier Slip attached.')
+        toast.success('Courier Slip Attached.')
       })
       .catch((err) => {
         toast.error(err instanceof Error ? err.message : 'Courier Slip upload failed.')
@@ -1221,7 +1221,7 @@ export function OslSampleRequirementsModuleFields({
   const handleDownloadSelectedTestRequests = () => {
     const selected = rows.filter((r) => selectedIds.has(r.id))
     if (selected.length === 0) {
-      toast.error('Select one or more samples first.')
+      toast.error('Select One or More Samples First.')
       return
     }
     const isLabel = (isCodeSearch ?? '').trim()
@@ -1244,12 +1244,12 @@ export function OslSampleRequirementsModuleFields({
   const handleDownloadSelectedCourierSlips = () => {
     const selected = rows.filter((r) => selectedIds.has(r.id))
     if (selected.length === 0) {
-      toast.error('Select one or more samples first.')
+      toast.error('Select One or More Samples First.')
       return
     }
     const pid = (projectId ?? '').trim()
     if (!pid) {
-      toast.error('Save the BIS project first, then download Courier Slips.')
+      toast.error('Save the BIS Project First, Then Download Courier Slips.')
       return
     }
     const isLabel = (isCodeSearch ?? '').trim()
@@ -1322,12 +1322,12 @@ export function OslSampleRequirementsModuleFields({
   const handleDownloadSelectedFactoryTestReports = () => {
     const selected = rows.filter((r) => selectedIds.has(r.id))
     if (selected.length === 0) {
-      toast.error('Select one or more samples first.')
+      toast.error('Select One or More Samples First.')
       return
     }
     const pid = (projectId ?? '').trim()
     if (!pid) {
-      toast.error('Save the BIS project first, then download Factory Test Reports.')
+      toast.error('Save the BIS Project First, Then Download Factory Test Reports.')
       return
     }
     const isLabel = (isCodeSearch ?? '').trim()
@@ -1425,7 +1425,7 @@ export function OslSampleRequirementsModuleFields({
 
   const viewTestReport = (row: OslSampleRequirementRow) => {
     if (!row.testReportStoragePath.trim()) {
-      toast.error('No Test Report PDF attached yet.')
+      toast.error('No Test Report PDF Attached Yet.')
       return
     }
     void createBisProjectFileUrls(
@@ -1435,7 +1435,7 @@ export function OslSampleRequirementsModuleFields({
       .then(({ viewUrl, downloadUrl }) => {
         const href = viewUrl || downloadUrl
         if (!href) {
-          toast.error('Could not open Test Report PDF.')
+          toast.error('Could Not Open Test Report PDF.')
           return
         }
         window.open(href, '_blank', 'noopener,noreferrer')
@@ -1448,7 +1448,7 @@ export function OslSampleRequirementsModuleFields({
 
   const deleteTestReport = (row: OslSampleRequirementRow) => {
     if (!row.testReportStoragePath.trim() && !row.testReportFileId.trim()) {
-      toast.error('No Test Report PDF attached yet.')
+      toast.error('No Test Report PDF Attached Yet.')
       return
     }
     const fileId = row.testReportFileId.trim()
@@ -1463,7 +1463,7 @@ export function OslSampleRequirementsModuleFields({
           })
         }
         clearTestReportOnRow(row.id)
-        toast.success('Test Report PDF removed.')
+        toast.success('Test Report PDF Removed.')
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Could not delete Test Report PDF.')
       }
@@ -1499,7 +1499,7 @@ export function OslSampleRequirementsModuleFields({
               : r,
           ),
         })
-        toast.success('Test Report PDF attached.')
+        toast.success('Test Report PDF Attached.')
       })
       .catch((err) => {
         toast.error(err instanceof Error ? err.message : 'Test Report upload failed.')
@@ -1547,12 +1547,12 @@ export function OslSampleRequirementsModuleFields({
     const row = draft
     if (!file || !row) return
     if (!file.name.toLowerCase().endsWith('.pdf')) {
-      toast.error('Attach a PDF file.')
+      toast.error('Attach a PDF File.')
       return
     }
     const pid = (projectId ?? '').trim()
     if (!pid) {
-      toast.error('Save the BIS project before attaching a PDF.')
+      toast.error('Save the BIS Project Before Attaching a PDF.')
       return
     }
     setDeclaredValueUploadBusy(true)
@@ -1566,7 +1566,7 @@ export function OslSampleRequirementsModuleFields({
             storage_path: row.declaredValueStoragePath,
           }).catch(() => undefined)
         }
-        toast.success('PDF attached to Declared Value.')
+        toast.success('PDF Attached to Declared Value.')
       })
       .catch((err) => {
         toast.error(err instanceof Error ? err.message : 'PDF upload failed.')
@@ -1583,7 +1583,7 @@ export function OslSampleRequirementsModuleFields({
       .then(({ viewUrl, downloadUrl }) => {
         const url = viewUrl || downloadUrl
         if (url) window.open(url, '_blank', 'noopener,noreferrer')
-        else toast.error('Could not open the attached PDF.')
+        else toast.error('Could Not Open the Attached PDF.')
       })
       .catch((err) => toast.error(err instanceof Error ? err.message : 'Could not open the PDF.'))
   }
@@ -1597,7 +1597,7 @@ export function OslSampleRequirementsModuleFields({
     })
       .then(() => {
         updateDeclaredValueAttachment(row.id, null)
-        toast.success('Attached PDF removed.')
+        toast.success('Attached PDF Removed.')
       })
       .catch((err) => toast.error(err instanceof Error ? err.message : 'Could not delete the PDF.'))
   }
@@ -1624,7 +1624,7 @@ export function OslSampleRequirementsModuleFields({
         className={cn(limsOutlineBtnClass, actionBtnClass)}
         disabled={disabled}
         title="Edit"
-        aria-label="Edit sample"
+        aria-label="Edit Sample"
         onClick={() => openEdit(index)}
       >
         <Pencil size={14} aria-hidden />
@@ -1635,8 +1635,8 @@ export function OslSampleRequirementsModuleFields({
         variant="outline"
         className={cn(limsOutlineBtnClass, actionBtnClass)}
         disabled={disabled || extensionBusyId === row.id}
-        title="Extension (Manak eBIS) — fill Test Request & attach PDF"
-        aria-label="Open Manak extension"
+        title="Extension (Manak eBIS) — Fill Test Request & Attach PDF"
+        aria-label="Open Manak Extension"
         onClick={() => handleExtension(row)}
       >
         <ExternalLink size={14} aria-hidden />
@@ -1652,7 +1652,7 @@ export function OslSampleRequirementsModuleFields({
         )}
         disabled={disabled}
         title="Delete"
-        aria-label="Delete sample"
+        aria-label="Delete Sample"
         onClick={() => removeRow(index)}
       >
         <Trash2 size={14} aria-hidden />
@@ -1751,7 +1751,7 @@ export function OslSampleRequirementsModuleFields({
         )}
         disabled={disabled}
         title="Courier Slip — preview Test Request, then Print / Download PDF"
-        aria-label="Courier slip"
+        aria-label="Courier Slip"
         onClick={() => openCourierSlipPicker(row)}
       >
         <Package size={14} aria-hidden />
@@ -1787,7 +1787,7 @@ export function OslSampleRequirementsModuleFields({
             )}
             disabled={disabled}
             title="Courier Slip — preview Test Request, then Print / Download PDF"
-            aria-label="Courier slip"
+            aria-label="Courier Slip"
             onClick={() => openCourierSlipPicker(row)}
           >
             <Package size={14} aria-hidden />
@@ -1852,7 +1852,7 @@ export function OslSampleRequirementsModuleFields({
             className={cn(limsOutlineBtnClass, actionBtnClass)}
             disabled={disabled}
             title="Add Sample"
-            aria-label="Add sample"
+            aria-label="Add Sample"
             onClick={() => openAddChooser()}
           >
             <Plus size={14} aria-hidden />
@@ -1868,7 +1868,7 @@ export function OslSampleRequirementsModuleFields({
                 ? 'Copy selected sample'
                 : 'Select exactly one sample to copy'
             }
-            aria-label="Copy sample"
+            aria-label="Copy Sample"
             onClick={openCopyChooser}
           >
             <Copy size={14} aria-hidden />
@@ -1880,7 +1880,7 @@ export function OslSampleRequirementsModuleFields({
             className={cn(limsOutlineBtnClass, actionBtnClass)}
             disabled={disabled || importBusy}
             title="Import QR Code"
-            aria-label="Import QR code"
+            aria-label="Import QR Code"
             onClick={handleImportCodes}
           >
             <Download size={14} aria-hidden />
@@ -1891,8 +1891,8 @@ export function OslSampleRequirementsModuleFields({
             variant="outline"
             className={cn(limsOutlineBtnClass, actionBtnClass)}
             disabled={disabled || mergeBusy || selectedCount === 0}
-            title="Download selected Test Request PDFs (merged into one file)"
-            aria-label="Download selected test request PDFs"
+            title="Download Selected Test Request PDFs (Merged into One File)"
+            aria-label="Download Selected Test Request PDFs"
             onClick={handleDownloadSelectedTestRequests}
           >
             <FileDown size={14} aria-hidden />
@@ -1903,8 +1903,8 @@ export function OslSampleRequirementsModuleFields({
             variant="outline"
             className={cn(limsOutlineBtnClass, actionBtnClass)}
             disabled={disabled || mergeBusy || selectedCount === 0}
-            title="Download selected Courier Slips (merged into one PDF)"
-            aria-label="Download selected courier slips"
+            title="Download Selected Courier Slips (Merged into One PDF)"
+            aria-label="Download Selected Courier Slips"
             onClick={handleDownloadSelectedCourierSlips}
           >
             <Package size={14} aria-hidden />
@@ -1915,8 +1915,8 @@ export function OslSampleRequirementsModuleFields({
             variant="outline"
             className={cn(limsOutlineBtnClass, actionBtnClass)}
             disabled={disabled || mergeBusy || selectedCount === 0}
-            title="Download selected Factory Test Reports (merged into one PDF)"
-            aria-label="Download selected factory test reports"
+            title="Download Selected Factory Test Reports (Merged into One PDF)"
+            aria-label="Download Selected Factory Test Reports"
             onClick={handleDownloadSelectedFactoryTestReports}
           >
             <FileText size={14} aria-hidden />
@@ -1931,7 +1931,7 @@ export function OslSampleRequirementsModuleFields({
             <input
               type="checkbox"
               className={checkboxClass}
-              aria-label="Select all samples"
+              aria-label="Select All Samples"
               checked={allChecked}
               ref={(el) => {
                 if (el) el.indeterminate = !allChecked && someChecked
@@ -2018,7 +2018,7 @@ export function OslSampleRequirementsModuleFields({
                           type="button"
                           className="truncate text-left text-sm font-semibold text-amber-900 underline decoration-amber-700/50 underline-offset-2 hover:text-amber-950 disabled:pointer-events-none disabled:opacity-50"
                           disabled={disabled}
-                          title="Open sample details"
+                          title="Open Sample Details"
                           onClick={() => openEdit(index)}
                         >
                           {row.batchNumber.trim()}
@@ -2028,7 +2028,7 @@ export function OslSampleRequirementsModuleFields({
                           type="button"
                           className="text-sm text-stone-500 underline decoration-stone-400/60 underline-offset-2 hover:text-amber-900 disabled:pointer-events-none disabled:opacity-50"
                           disabled={disabled}
-                          title="Open sample details"
+                          title="Open Sample Details"
                           onClick={() => openEdit(index)}
                         >
                           —
@@ -2072,7 +2072,7 @@ export function OslSampleRequirementsModuleFields({
                   <input
                     type="checkbox"
                     className={checkboxClass}
-                    aria-label="Select all samples"
+                    aria-label="Select All Samples"
                     checked={allChecked}
                     ref={(el) => {
                       if (el) el.indeterminate = !allChecked && someChecked
@@ -2087,7 +2087,7 @@ export function OslSampleRequirementsModuleFields({
                 <TableHead className={cn(thClass, 'w-[20%]')}>Sample Details</TableHead>
                 <TableHead className={cn(thClass, 'w-[5.5rem]')}>Priority</TableHead>
                 <TableHead className={cn(thClass, 'w-[5.5rem]')}>In Offer Letter</TableHead>
-                <TableHead className={cn(thClass, 'w-[7rem]')} title="Conformity of sample as per IS (from the lab report)">
+                <TableHead className={cn(thClass, 'w-[7rem]')} title="Conformity of Sample as per IS (from the Lab Report)">
                   Conformity
                 </TableHead>
                 <TableHead className={cn(thClass, 'w-14')}>Test Request</TableHead>
@@ -2146,7 +2146,7 @@ export function OslSampleRequirementsModuleFields({
                             type="button"
                             className="truncate font-semibold text-amber-900 underline decoration-amber-700/50 underline-offset-2 hover:text-amber-950 hover:decoration-amber-800 disabled:pointer-events-none disabled:opacity-50"
                             disabled={disabled}
-                            title="Open sample details"
+                            title="Open Sample Details"
                             onClick={() => openEdit(index)}
                           >
                             {row.batchNumber.trim()}
@@ -2156,7 +2156,7 @@ export function OslSampleRequirementsModuleFields({
                             type="button"
                             className="text-stone-500 underline decoration-stone-400/60 underline-offset-2 hover:text-amber-900 disabled:pointer-events-none disabled:opacity-50"
                             disabled={disabled}
-                            title="Open sample details"
+                            title="Open Sample Details"
                             onClick={() => openEdit(index)}
                           >
                             —
@@ -2211,7 +2211,7 @@ export function OslSampleRequirementsModuleFields({
                           )}
                           disabled={disabled}
                           title="Courier Slip — preview Test Request, then Print / Download PDF"
-                          aria-label="Courier slip"
+                          aria-label="Courier Slip"
                           onClick={() => openCourierSlipPicker(row)}
                         >
                           <Package size={14} aria-hidden />
@@ -2498,7 +2498,7 @@ export function OslSampleRequirementsModuleFields({
                       {courierFrom.address}
                     </p>
                   ) : (
-                    <p className="mt-0.5 text-sm text-stone-400">Client address will load from project</p>
+                    <p className="mt-0.5 text-sm text-stone-400">Client Address Will Load from Project</p>
                   )}
                 </section>
                     </div>
@@ -2550,7 +2550,7 @@ export function OslSampleRequirementsModuleFields({
                         limsFieldClass,
                         'h-9 w-full rounded-none border-stone-400 bg-white px-2 text-xs font-semibold',
                       )}
-                      aria-label="Test Request per page"
+                      aria-label="Test Request per Page"
                     >
                       <SelectValue />
                     </SelectTrigger>
@@ -2691,7 +2691,7 @@ export function OslSampleRequirementsModuleFields({
           ) : (
             <div className="space-y-3 px-4 py-4">
               {qrSourcesLoading ? (
-                <p className="py-4 text-center text-sm text-stone-500">Loading applications…</p>
+                <p className="py-4 text-center text-sm text-stone-500">Loading Applications…</p>
               ) : qrSources.length === 0 ? (
                 <div className="space-y-3 rounded-none border border-stone-400 bg-[#fffcf7] p-3">
                   <p className="text-sm text-stone-700">
@@ -2716,7 +2716,7 @@ export function OslSampleRequirementsModuleFields({
                     </Label>
                     <Select value={selectedSourceId} onValueChange={setSelectedSourceId}>
                       <SelectTrigger className="h-9 rounded-none">
-                        <SelectValue placeholder="Select application" />
+                        <SelectValue placeholder="Select Application" />
                       </SelectTrigger>
                       <SelectContent>
                         {qrSources.map((src) => (
@@ -2833,7 +2833,7 @@ export function OslSampleRequirementsModuleFields({
                   <Label className="text-[11px] font-semibold text-stone-700">QR Code</Label>
                   <Select value={selectedQr} onValueChange={setSelectedQr}>
                     <SelectTrigger className="h-9 rounded-none">
-                      <SelectValue placeholder="Select QR code" />
+                      <SelectValue placeholder="Select QR Code" />
                     </SelectTrigger>
                     <SelectContent>
                       {availableQrCodes.map((code) => (
@@ -3008,7 +3008,7 @@ export function OslSampleRequirementsModuleFields({
                       className={cn(limsFieldClass, 'h-9 tabular-nums')}
                       value={draft.qrCode}
                       onChange={(e) => patchDraft('qrCode', e.target.value)}
-                      placeholder="12-digit Manak QR (optional)"
+                      placeholder="12-Digit Manak QR (Optional)"
                     />
                   </Field>
                   <MasterOptionFieldWithAdd
@@ -3075,7 +3075,7 @@ export function OslSampleRequirementsModuleFields({
                           type="button"
                           className="absolute bottom-1 right-1 inline-flex h-7 w-7 items-center justify-center rounded-none border border-green-800 bg-green-600 p-0 text-white shadow-sm transition-colors hover:bg-green-700 disabled:opacity-60"
                           title={`${draft.declaredValueFileName || 'Declared Value PDF'} — click to view, double-click to delete`}
-                          aria-label="View Declared Value PDF (double-click to delete)"
+                          aria-label="View Declared Value PDF (Double-Click to Delete)"
                           disabled={declaredValueUploadBusy}
                           onClick={() => {
                             if (declaredValueClickTimer.current) window.clearTimeout(declaredValueClickTimer.current)
@@ -3119,8 +3119,8 @@ export function OslSampleRequirementsModuleFields({
                         <button
                           type="button"
                           className={cn(limsFieldAddBtnClass, 'w-9')}
-                          aria-label="Open calendar"
-                          title="Pick date"
+                          aria-label="Open Calendar"
+                          title="Pick Date"
                           onClick={() => openDatePicker(manufacturingDateRef.current)}
                         >
                           <Calendar size={14} strokeWidth={2.25} aria-hidden />
@@ -3261,8 +3261,8 @@ export function OslSampleRequirementsModuleFields({
                         <button
                           type="button"
                           className={cn(limsFieldAddBtnClass, 'w-9')}
-                          aria-label="Open calendar"
-                          title="Pick date"
+                          aria-label="Open Calendar"
+                          title="Pick Date"
                           onClick={() => openDatePicker(paymentDateRef.current)}
                         >
                           <Calendar size={14} strokeWidth={2.25} aria-hidden />

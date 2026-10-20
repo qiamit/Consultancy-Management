@@ -106,7 +106,7 @@ function Section({ title, children, className }: { title: string; children: Reac
 
 function IsCodeFilesList({ files }: { files: SampleSrfViewDetails['isCodeFiles'] }) {
   if (files.length === 0) {
-    return <p className="text-sm text-stone-500">No files uploaded for this IS Code.</p>
+    return <p className="text-sm text-stone-500">No Files Uploaded for This IS Code.</p>
   }
   return (
     <ul className="space-y-1.5">
@@ -262,7 +262,7 @@ export function SampleSrfViewDialog({
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto bg-gradient-to-b from-stone-100/90 to-stone-50 px-4 py-4 sm:px-6 sm:py-5">
-            {loading && <p className="text-sm text-stone-600">Loading sample details…</p>}
+            {loading && <p className="text-sm text-stone-600">Loading Sample Details…</p>}
             {error && (
               <p className="border-l-2 border-destructive bg-destructive/5 px-3 py-2 text-sm text-destructive">
                 {error}

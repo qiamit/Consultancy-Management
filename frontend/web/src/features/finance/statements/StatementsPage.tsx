@@ -44,7 +44,7 @@ export default function StatementsPage() {
           </div>
         </div>
         {message ? <p className="text-sm text-red-700">{message}</p> : null}
-        {rows.length === 0 ? <p className="text-sm text-stone-600">No figures for this range.</p> : (
+        {rows.length === 0 ? <p className="text-sm text-stone-600">No Figures for This Range.</p> : (
           <div className="overflow-x-auto">
             <table className="auto-cards list-cards w-full min-w-[480px] text-sm">
               <tbody>

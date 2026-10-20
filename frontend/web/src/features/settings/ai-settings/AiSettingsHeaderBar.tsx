@@ -42,7 +42,7 @@ export function AiSettingsHeaderBar({
                 onChange={(e) => onSearchChange(e.target.value)}
                 placeholder=""
                 className={cn(limsDarkBarSearchClass, 'pl-9')}
-                aria-label="Search AI settings"
+                aria-label="Search AI Settings"
               />
             </div>
           ) : null}

@@ -225,7 +225,7 @@ export default function PublicHomePage() {
             <div className="space-y-2">
               <div className="overflow-hidden border border-amber-500/35 bg-stone-900/50">
                 <iframe
-                  title="Laboratory location map"
+                  title="Laboratory Location Map"
                   src={LOCATION_MAP_EMBED}
                   className="h-64 w-full border-0 bg-stone-200"
                   loading="lazy"

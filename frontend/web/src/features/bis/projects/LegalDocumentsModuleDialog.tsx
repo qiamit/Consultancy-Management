@@ -1026,7 +1026,7 @@ export function LegalDocumentsModuleDialog({
   const openFilePicker = (target: { type: 'draft' | 'file'; id: string }) => {
     const documentName = resolveRowDocumentName(target)
     if (!documentName) {
-      toast.error('Enter Documents Name in this row before uploading.')
+      toast.error('Enter Documents Name in This Row Before Uploading.')
       return
     }
     uploadTargetRef.current = target
@@ -1042,7 +1042,7 @@ export function LegalDocumentsModuleDialog({
     // Capture this row's name synchronously so async refresh cannot mix other rows.
     const displayName = resolveRowDocumentName(target)
     if (!displayName) {
-      toast.error('Enter Documents Name in this row before uploading.')
+      toast.error('Enter Documents Name in This Row Before Uploading.')
       return
     }
 
@@ -1065,7 +1065,7 @@ export function LegalDocumentsModuleDialog({
           return next
         })
         await reloadFiles(row.id, { showLoading: false })
-        toast.success('Document replaced')
+        toast.success('Document Replaced')
       } else {
         await uploadBisProjectFiles(row.id, picked.slice(0, 1), docKind, { displayName })
         // Drop only the uploaded draft row; leave every other draft name untouched.
@@ -1076,7 +1076,7 @@ export function LegalDocumentsModuleDialog({
           return next
         })
         await reloadFiles(row.id, { showLoading: false })
-        toast.success('Document uploaded')
+        toast.success('Document Uploaded')
       }
       setStatus(null)
     } catch (err) {
@@ -1107,7 +1107,7 @@ export function LegalDocumentsModuleDialog({
       // Optimistic remove so UI updates even if list reload is slow.
       setFiles((prev) => prev.filter((f) => f.id !== file.id))
       await reloadFiles(row.id, { showLoading: false })
-      toast.success('Document deleted')
+      toast.success('Document Deleted')
     } catch (err) {
       const msg = formatBisProjectFilesError(err)
       setStatus(msg)
@@ -1153,7 +1153,7 @@ export function LegalDocumentsModuleDialog({
       appDetails.licenseNumberDigits.length > 0 &&
       appDetails.licenseNumberDigits.length !== 10
     ) {
-      toast.error('License Number must be exactly 10 digits (CM/L-).')
+      toast.error('License Number Must Be Exactly 10 Digits (CM/L-).')
       return
     }
 
@@ -1173,14 +1173,14 @@ export function LegalDocumentsModuleDialog({
         ])
         setUndertakingPreviewOptionsTouched(false)
         onProjectSaved?.()
-        toast.success('Undertaking documents and preview settings saved.')
+        toast.success('Undertaking Documents and Preview Settings Saved.')
         return
       }
 
       if (showSelfEvaluationFields) {
         await saveBisModulePayload(row.id, 'self-evaluation-form', selfEvaluation)
         onProjectSaved?.()
-        toast.success('Self Evaluation Form saved.')
+        toast.success('Self Evaluation Form Saved.')
         return
       }
 
@@ -1353,12 +1353,12 @@ export function LegalDocumentsModuleDialog({
         const completedBrandRows = cmpf307.rows.filter(cmpf307RowHasContent)
         const missingAgreement = completedBrandRows.some((brand) => brand.ownedBy === 'Others' && !brand.agreementFileId)
         if (missingAgreement) {
-          toast.error('Upload the agreement copy for each brand owned by Others.')
+          toast.error('Upload the Agreement Copy for Each Brand Owned by Others.')
           return
         }
         const missingTrademarkCertificate = completedBrandRows.some((brand) => brand.registeredStatus === 'Registered' && !brand.trademarkFileId)
         if (missingTrademarkCertificate) {
-          toast.error('Upload the trademark license certificate for each Registered brand.')
+          toast.error('Upload the Trademark License Certificate for Each Registered Brand.')
           return
         }
         await saveBisModulePayload(row.id, printKind, {
@@ -1579,7 +1579,7 @@ export function LegalDocumentsModuleDialog({
             disabled={!row || busy}
             onClick={() => openFilePicker({ type: 'draft', id: entry.draft.id })}
             title="Upload"
-            aria-label="Upload document"
+            aria-label="Upload Document"
           >
             <Upload size={15} aria-hidden />
           </Button>
@@ -1589,8 +1589,8 @@ export function LegalDocumentsModuleDialog({
             variant="outline"
             className={cn(limsOutlineBtnClass, actionBtnClass)}
             disabled
-            title="View (upload a file first)"
-            aria-label="View document"
+            title="View (Upload a File First)"
+            aria-label="View Document"
           >
             <Eye size={15} aria-hidden />
           </Button>
@@ -1600,8 +1600,8 @@ export function LegalDocumentsModuleDialog({
             variant="outline"
             className={cn(limsOutlineBtnClass, actionBtnClass)}
             disabled
-            title="Download (upload a file first)"
-            aria-label="Download document"
+            title="Download (Upload a File First)"
+            aria-label="Download Document"
           >
             <Download size={15} aria-hidden />
           </Button>
@@ -1643,7 +1643,7 @@ export function LegalDocumentsModuleDialog({
             className={cn(limsOutlineBtnClass, actionBtnClass)}
             disabled
             title={file.error || 'View unavailable'}
-            aria-label="View unavailable"
+            aria-label="View Unavailable"
           >
             <Eye size={15} aria-hidden />
           </Button>
@@ -1665,8 +1665,8 @@ export function LegalDocumentsModuleDialog({
             variant="outline"
             className={cn(limsOutlineBtnClass, actionBtnClass)}
             disabled
-            title="Download unavailable"
-            aria-label="Download unavailable"
+            title="Download Unavailable"
+            aria-label="Download Unavailable"
           >
             <Download size={15} aria-hidden />
           </Button>
@@ -1690,8 +1690,8 @@ export function LegalDocumentsModuleDialog({
             e.stopPropagation()
             addNewRow()
           }}
-          title="Add new row"
-          aria-label="Add new row"
+          title="Add New Row"
+          aria-label="Add New Row"
         >
           <Plus size={15} aria-hidden />
         </Button>
@@ -1710,8 +1710,8 @@ export function LegalDocumentsModuleDialog({
             e.stopPropagation()
             deleteRow(entry)
           }}
-          title="Delete row"
-          aria-label="Delete row"
+          title="Delete Row"
+          aria-label="Delete Row"
         >
           <Trash2 size={15} aria-hidden />
         </Button>
@@ -1749,7 +1749,7 @@ export function LegalDocumentsModuleDialog({
         ),
       )
       setEditingClientDocument(null)
-      toast.success('Client document updated.')
+      toast.success('Client Document Updated.')
     } catch (err) {
       toast.error(formatBisApiError(err))
     }
@@ -1765,7 +1765,7 @@ export function LegalDocumentsModuleDialog({
         next.delete(document.id)
         return next
       })
-      toast.success('Client document deleted.')
+      toast.success('Client Document Deleted.')
     } catch (err) {
       toast.error(formatBisApiError(err))
     }
@@ -1822,8 +1822,8 @@ export function LegalDocumentsModuleDialog({
               size="sm"
               disabled={busy || saving}
               className="absolute right-12 top-1/2 h-8 w-8 -translate-y-1/2 rounded-none border border-amber-500/60 bg-stone-800 p-0 text-amber-200 shadow-sm transition-colors hover:border-amber-400 hover:bg-amber-600 hover:text-white"
-              title="Import from another Application"
-              aria-label="Import from another Application"
+              title="Import from Another Application"
+              aria-label="Import from Another Application"
               onClick={() => setBrandImportOpen(true)}
             >
               <Import size={15} aria-hidden />
@@ -1850,7 +1850,7 @@ export function LegalDocumentsModuleDialog({
           {showAllUndertakingsFields ? (
             <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
               {mmfOnly ? null : (
-              <nav aria-label="Undertaking types" className="grid shrink-0 grid-cols-5 gap-1 border-b border-stone-400 bg-stone-800 p-1">
+              <nav aria-label="Undertaking Types" className="grid shrink-0 grid-cols-5 gap-1 border-b border-stone-400 bg-stone-800 p-1">
                 {UNDERTAKING_OPTIONS.map((option) => (
                   <Button
                     key={option.kind}
@@ -1902,9 +1902,9 @@ export function LegalDocumentsModuleDialog({
                           <thead className="bg-stone-100"><tr><th className="w-10 border-b border-stone-300 p-2 text-center">Select</th><th className="border-b border-stone-300 p-2 text-left">Type of Test</th><th className="border-b border-stone-300 p-2 text-left">Duration of Test</th><th className="border-b border-stone-300 p-2 text-left">Date of Completion</th><th className="w-16 border-b border-stone-300 p-2 text-center">Action</th></tr></thead>
                           <tbody><tr className="bg-white">
                             <td className="border-b border-stone-200 p-2 text-center">—</td>
-                            <td className="border-b border-stone-200 p-1"><Input aria-label="New type of test" value={longDurationDraft.typeOfTest} disabled={loading || printingUndertaking} onChange={(e) => setLongDurationDraft((v) => ({ ...v, typeOfTest: e.target.value }))} /></td>
-                            <td className="border-b border-stone-200 p-1"><Input aria-label="New duration of test" value={longDurationDraft.durationOfTest} disabled={loading || printingUndertaking} onChange={(e) => setLongDurationDraft((v) => ({ ...v, durationOfTest: e.target.value }))} /></td>
-                            <td className="border-b border-stone-200 p-1"><Input aria-label="New date of completion" type="date" value={longDurationDraft.dateOfCompletion} disabled={loading || printingUndertaking} onChange={(e) => setLongDurationDraft((v) => ({ ...v, dateOfCompletion: e.target.value }))} /></td>
+                            <td className="border-b border-stone-200 p-1"><Input aria-label="New Type of Test" value={longDurationDraft.typeOfTest} disabled={loading || printingUndertaking} onChange={(e) => setLongDurationDraft((v) => ({ ...v, typeOfTest: e.target.value }))} /></td>
+                            <td className="border-b border-stone-200 p-1"><Input aria-label="New Duration of Test" value={longDurationDraft.durationOfTest} disabled={loading || printingUndertaking} onChange={(e) => setLongDurationDraft((v) => ({ ...v, durationOfTest: e.target.value }))} /></td>
+                            <td className="border-b border-stone-200 p-1"><Input aria-label="New Date of Completion" type="date" value={longDurationDraft.dateOfCompletion} disabled={loading || printingUndertaking} onChange={(e) => setLongDurationDraft((v) => ({ ...v, dateOfCompletion: e.target.value }))} /></td>
                             <td className="border-b border-stone-200 p-1 text-center"><Button type="button" variant="outline" size="icon" aria-label={editingLongDurationIndex === null ? 'Add test schedule row' : 'Update test schedule row'} disabled={loading || printingUndertaking} onClick={addLongDurationRow}><Plus size={16} /></Button></td>
                           </tr></tbody>
                         </table>
@@ -1916,7 +1916,7 @@ export function LegalDocumentsModuleDialog({
                             <td className="p-2 text-center"><input type="checkbox" aria-label={`Select test row ${index + 1}`} checked={selectedLongDurationRows.has(index)} onChange={(e) => setSelectedLongDurationRows((current) => { const next = new Set(current); if (e.target.checked) next.add(index); else next.delete(index); return next })} /></td>
                             <td className="p-2">{test.typeOfTest}</td><td className="p-2">{test.durationOfTest}</td><td className="p-2">{test.dateOfCompletion}</td>
                             <td className="p-1 text-center"><div className="flex justify-center gap-1"><Button type="button" variant="outline" size="icon" aria-label={`Edit test row ${index + 1}`} onClick={() => { setLongDurationDraft(test); setEditingLongDurationIndex(index) }}><Pencil size={14} /></Button><Button type="button" variant="outline" size="icon" aria-label={`Delete test row ${index + 1}`} onClick={() => { setUndertakingLongDuration((current) => ({ ...current, testRows: current.testRows.filter((_, i) => i !== index) })); setSelectedLongDurationRows((current) => new Set([...current].filter((i) => i !== index).map((i) => i > index ? i - 1 : i))); if (editingLongDurationIndex === index) { setLongDurationDraft(emptyUndertakingLongDurationRow()); setEditingLongDurationIndex(null) } }}><Trash2 size={14} /></Button></div></td>
-                          </tr>) : <tr><td colSpan={5} className="p-3 text-center text-stone-500">No test schedule rows added yet.</td></tr>}</tbody>
+                          </tr>) : <tr><td colSpan={5} className="p-3 text-center text-stone-500">No Test Schedule Rows Added Yet.</td></tr>}</tbody>
                         </table>
                       </div>
                     </div>
@@ -1929,14 +1929,14 @@ export function LegalDocumentsModuleDialog({
                     const selCls = 'h-8 w-full rounded-none border border-stone-300 bg-white px-2 text-sm focus:border-amber-600 focus:outline-none'
                     const cur = (label: string, value: string, key: keyof typeof u) => <UndertakingCurrencyField bare label={label} value={value} disabled={off} onChange={(value) => set({ [key]: value } as Partial<typeof u>)} />
                     const cells: Array<[string, ReactNode]> = [
-                      ['Firm Status', <Input key="fs" className={fieldCls} value={companyFirmStatus === 'LS' ? 'Large Scale' : companyFirmStatus} placeholder="Set company scale in Company Master" readOnly disabled={off} />],
+                      ['Firm Status', <Input key="fs" className={fieldCls} value={companyFirmStatus === 'LS' ? 'Large Scale' : companyFirmStatus} placeholder="Set Company Scale in Company Master" readOnly disabled={off} />],
                       ['Annual Production Capacity', <Input key="apc" className={fieldCls} value={u.annualProductionCapacity} disabled={off} onChange={(event) => set({ annualProductionCapacity: event.target.value })} />],
                       ['Value of Production per Unit', cur('Value of Production per Unit', u.valueOfProductionPerUnit, 'valueOfProductionPerUnit')],
                       ['Cost of Production per Unit', cur('Cost of Production per Unit', u.costOfProductionPerUnit, 'costOfProductionPerUnit')],
                       ['Market Surveillance Plan', <Textarea key="msp" value={u.marketSurveillancePlan} disabled={off} onChange={(event) => set({ marketSurveillancePlan: event.target.value })} className="min-h-8 h-8 rounded-none border-stone-300 bg-white py-1" />],
                     ]
                     if (u.factoryTestingBasis !== 'Yes') {
-                      cells.push(['Testing Charge Basis', <select key="tcb" className={selCls} value={u.testingChargeBasis} disabled={off} onChange={(event) => set({ testingChargeBasis: event.target.value })}><option value="">Select charge basis</option><option value="BIS Lab">BIS laboratory charges</option><option value="OSL Complete Testing">OSL average (complete testing)</option><option value="OSL Maximum Parameters">OSL average (maximum available parameters)</option></select>])
+                      cells.push(['Testing Charge Basis', <select key="tcb" className={selCls} value={u.testingChargeBasis} disabled={off} onChange={(event) => set({ testingChargeBasis: event.target.value })}><option value="">Select Charge Basis</option><option value="BIS Lab">BIS Laboratory Charges</option><option value="OSL Complete Testing">OSL Average (Complete Testing)</option><option value="OSL Maximum Parameters">OSL Average (Maximum Available Parameters)</option></select>])
                       if (u.testingChargeBasis === 'BIS Lab') cells.push(['BIS Laboratory Testing Charge per Sample', cur('BIS Laboratory Testing Charge per Sample', u.bisLabTestingCharges, 'bisLabTestingCharges')])
                       if (u.testingChargeBasis.startsWith('OSL')) cells.push(['Average OSL Testing Charge per Sample', cur('Average OSL Testing Charge per Sample', u.oslAvgTestingCharges, 'oslAvgTestingCharges')])
                     }
@@ -2004,7 +2004,7 @@ export function LegalDocumentsModuleDialog({
 
           {showSelfEvaluationFields ? (
             <section className="m-3 flex min-h-0 flex-1 flex-col border border-stone-300 bg-white p-5 sm:m-5 sm:p-8">
-              <h2 className="text-xl font-semibold text-stone-900">Self Evaluation cum Verification Form</h2>
+              <h2 className="text-xl font-semibold text-stone-900">Self Evaluation Cum Verification Form</h2>
               <p className="mt-2 max-w-4xl text-sm leading-6 text-stone-600">
                 The form follows the attached BIS format and compiles raw material supplier details, packaging and marking, quality control staff, and brand information saved in this project’s related modules.
               </p>
@@ -2041,7 +2041,7 @@ export function LegalDocumentsModuleDialog({
                   <h2 className="text-sm font-semibold text-stone-800">Client Master Legal Documents</h2>
                 </div>
                 {applicationReferenceLoading ? (
-                  <p className="text-sm text-stone-500">Loading client documents…</p>
+                  <p className="text-sm text-stone-500">Loading Client Documents…</p>
                 ) : clientLegalDocuments.length ? (
                   <div className="overflow-hidden border border-stone-300 max-[640px]:overflow-visible max-[640px]:border-0">
                     <Table className="table-fixed max-[640px]:block max-[640px]:w-full">
@@ -2051,7 +2051,7 @@ export function LegalDocumentsModuleDialog({
                             <input
                               type="checkbox"
                               className="h-4 w-4"
-                              aria-label="Select all client documents"
+                              aria-label="Select All Client Documents"
                               checked={clientLegalDocuments.length > 0 && selectedClientDocumentIds.size === clientLegalDocuments.length}
                               onChange={(event) => setSelectedClientDocumentIds(event.target.checked ? new Set(clientLegalDocuments.map((document) => document.id)) : new Set())}
                             />
@@ -2068,7 +2068,7 @@ export function LegalDocumentsModuleDialog({
                           return (
                             <TableRow key={document.id} className="even:bg-[#f7f3eb] max-[640px]:mb-2 max-[640px]:grid max-[640px]:grid-cols-1 max-[640px]:overflow-hidden max-[640px]:border max-[640px]:border-stone-400">
                               <TableCell className="border border-stone-300 px-1 text-center max-[640px]:flex max-[640px]:items-center max-[640px]:justify-between max-[640px]:gap-3 max-[640px]:text-left">
-                                <span className="text-xs font-semibold text-stone-600 sm:hidden">Select document</span>
+                                <span className="text-xs font-semibold text-stone-600 sm:hidden">Select Document</span>
                                 <input
                                   type="checkbox"
                                   className="h-4 w-4"
@@ -2099,14 +2099,14 @@ export function LegalDocumentsModuleDialog({
                                 <div className="flex flex-wrap items-center justify-center gap-1">
                                   {isEditing ? (
                                     <>
-                                      <Button type="button" variant="outline" size="icon" className="h-8 w-8" title="Save changes" aria-label="Save changes" onClick={() => void saveClientDocumentEdit()}><Check size={14} /></Button>
-                                      <Button type="button" variant="outline" size="icon" className="h-8 w-8" title="Cancel edit" aria-label="Cancel edit" onClick={() => setEditingClientDocument(null)}><X size={14} /></Button>
+                                      <Button type="button" variant="outline" size="icon" className="h-8 w-8" title="Save Changes" aria-label="Save Changes" onClick={() => void saveClientDocumentEdit()}><Check size={14} /></Button>
+                                      <Button type="button" variant="outline" size="icon" className="h-8 w-8" title="Cancel Edit" aria-label="Cancel Edit" onClick={() => setEditingClientDocument(null)}><X size={14} /></Button>
                                     </>
                                   ) : (
                                     <>
-                                      <Button type="button" variant="outline" size="icon" className="h-8 w-8" title="View document" aria-label={`View ${document.cert_name}`} onClick={() => void openClientCertificate(document).catch((err: unknown) => toast.error(err instanceof Error ? err.message : 'Unable to open client document.'))}><Eye size={14} /></Button>
-                                      <Button type="button" variant="outline" size="icon" className="h-8 w-8" title="Edit document details" aria-label={`Edit ${document.cert_name}`} onClick={() => beginClientDocumentEdit(document)}><Pencil size={14} /></Button>
-                                      <Button type="button" variant="outline" size="icon" className="h-8 w-8 text-red-700" title="Delete document" aria-label={`Delete ${document.cert_name}`} onClick={() => void removeClientDocument(document)}><Trash2 size={14} /></Button>
+                                      <Button type="button" variant="outline" size="icon" className="h-8 w-8" title="View Document" aria-label={`View ${document.cert_name}`} onClick={() => void openClientCertificate(document).catch((err: unknown) => toast.error(err instanceof Error ? err.message : 'Unable to open client document.'))}><Eye size={14} /></Button>
+                                      <Button type="button" variant="outline" size="icon" className="h-8 w-8" title="Edit Document Details" aria-label={`Edit ${document.cert_name}`} onClick={() => beginClientDocumentEdit(document)}><Pencil size={14} /></Button>
+                                      <Button type="button" variant="outline" size="icon" className="h-8 w-8 text-red-700" title="Delete Document" aria-label={`Delete ${document.cert_name}`} onClick={() => void removeClientDocument(document)}><Trash2 size={14} /></Button>
                                     </>
                                   )}
                                 </div>
@@ -2118,7 +2118,7 @@ export function LegalDocumentsModuleDialog({
                     </Table>
                   </div>
                 ) : (
-                  <p className="border border-dashed border-stone-300 p-3 text-sm text-stone-500">No legal documents are saved for this client.</p>
+                  <p className="border border-dashed border-stone-300 p-3 text-sm text-stone-500">No Legal Documents Are Saved for This Client.</p>
                 )}
               </section>
               <section className="mx-3 mb-[2mm] mt-[2mm] space-y-2 border border-stone-300 bg-white p-3 sm:mx-4">
@@ -2149,10 +2149,10 @@ export function LegalDocumentsModuleDialog({
                         <TableCell className="border border-stone-300 px-1 py-2 align-middle max-[640px]:flex max-[640px]:items-center max-[640px]:justify-between max-[640px]:gap-3">
                           <span className="pl-2 text-xs font-bold uppercase tracking-wide text-stone-600 sm:hidden">Actions</span>
                           <div className="flex flex-wrap items-center justify-center gap-1">
-                            <Button type="button" variant="outline" size="icon" className="h-8 w-8" title="Preview location map" aria-label="Preview location map" disabled={!onLocationMapPreview} onClick={onLocationMapPreview}><Eye size={14} /></Button>
-                            <Button type="button" variant="outline" size="icon" className="h-8 w-8" title="Download location map as Word" aria-label="Download location map as Word" disabled={!onLocationMapWord} onClick={onLocationMapWord}><FileType size={14} /></Button>
-                            <Button type="button" variant="outline" size="icon" className="h-8 w-8" title="Download location map as PDF" aria-label="Download location map as PDF" disabled={!onLocationMapPdf} onClick={onLocationMapPdf}><FileDown size={14} /></Button>
-                            <Button type="button" variant="outline" size="icon" className="h-8 w-8" title="Print location map" aria-label="Print location map" disabled={!onLocationMapPrint} onClick={onLocationMapPrint}><Printer size={14} /></Button>
+                            <Button type="button" variant="outline" size="icon" className="h-8 w-8" title="Preview Location Map" aria-label="Preview Location Map" disabled={!onLocationMapPreview} onClick={onLocationMapPreview}><Eye size={14} /></Button>
+                            <Button type="button" variant="outline" size="icon" className="h-8 w-8" title="Download Location Map as Word" aria-label="Download Location Map as Word" disabled={!onLocationMapWord} onClick={onLocationMapWord}><FileType size={14} /></Button>
+                            <Button type="button" variant="outline" size="icon" className="h-8 w-8" title="Download Location Map as PDF" aria-label="Download Location Map as PDF" disabled={!onLocationMapPdf} onClick={onLocationMapPdf}><FileDown size={14} /></Button>
+                            <Button type="button" variant="outline" size="icon" className="h-8 w-8" title="Print Location Map" aria-label="Print Location Map" disabled={!onLocationMapPrint} onClick={onLocationMapPrint}><Printer size={14} /></Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -2307,7 +2307,7 @@ export function LegalDocumentsModuleDialog({
                   <section className="mb-4 space-y-2 border border-stone-300 bg-white p-3">
                     <div>
                       <h2 className="text-sm font-semibold text-stone-800">Client Master Legal Documents</h2>
-                      <p className="text-xs text-stone-500">Documents are linked from Client Master and are not copied.</p>
+                      <p className="text-xs text-stone-500">Documents Are Linked from Client Master and Are Not Copied.</p>
                     </div>
                     {clientLegalDocuments.length ? (
                       <ul className="divide-y divide-stone-200 border border-stone-200">
@@ -2327,7 +2327,7 @@ export function LegalDocumentsModuleDialog({
                         ))}
                       </ul>
                     ) : (
-                      <p className="border border-dashed border-stone-300 p-3 text-sm text-stone-500">No legal documents are saved for this client.</p>
+                      <p className="border border-dashed border-stone-300 p-3 text-sm text-stone-500">No Legal Documents Are Saved for This Client.</p>
                     )}
                   </section>
                   <LocationMapModuleFields
@@ -2519,7 +2519,7 @@ export function LegalDocumentsModuleDialog({
                               <input
                                 type="checkbox"
                                 className={checkboxClass}
-                                aria-label="Select all rows"
+                                aria-label="Select All Rows"
                                 checked={allChecked}
                                 ref={(el) => {
                                   if (el) el.indeterminate = !allChecked && someChecked
@@ -2593,7 +2593,7 @@ export function LegalDocumentsModuleDialog({
                   type="button"
                         className={cn(limsPrimaryBtnClass, 'h-9 gap-1.5 px-4 text-sm')}
                   disabled={!row?.id || busy || saving || loading}
-                  title="Save and preview the SIT acceptance document"
+                  title="Save and Preview the SIT Acceptance Document"
                   onClick={() => void handleSave().then(() => onPreviewDocument(mmfOnly ? 'marking-fee-acceptance' : printKind))}
                 >
                   <Eye className="h-4 w-4" aria-hidden /> Preview
@@ -2604,7 +2604,7 @@ export function LegalDocumentsModuleDialog({
                   type="button"
                         className={cn(limsPrimaryBtnClass, 'h-9 gap-1.5 px-4 text-sm')}
                   disabled={!row?.id || busy || saving || loading}
-                  title="Save and download the SIT acceptance document as PDF"
+                  title="Save and Download the SIT Acceptance Document as PDF"
                   onClick={() => void handleSave().then(() => onPdfDocument(mmfOnly ? 'marking-fee-acceptance' : printKind))}
                 >
                   <Download className="h-4 w-4" aria-hidden /> PDF
@@ -2659,7 +2659,7 @@ export function LegalDocumentsModuleDialog({
             .filter((r) => !known.has(r.brandName.trim().toLowerCase()))
             .map((r) => ({ ...emptyCmpf307BrandRow(), brandName: r.brandName, ownedBy: r.ownedBy, registeredStatus: r.registeredStatus, registrationDate: r.registrationDate }))
           if (fresh.length === 0) {
-            toast.message('Nothing new to import', { description: 'These brand names are already here.' })
+            toast.message('Nothing New to Import', { description: 'These brand names are already here.' })
             return
           }
           setCmpf307({ ...cmpf307, rows: [...existing, ...fresh] })

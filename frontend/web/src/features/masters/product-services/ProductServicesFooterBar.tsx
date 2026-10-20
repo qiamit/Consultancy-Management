@@ -121,7 +121,7 @@ export function ProductServicesTableFooterBar({
 
         <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5">
           <Input
-            aria-label="Jump to page"
+            aria-label="Jump to Page"
             placeholder="Page"
             value={jumpTo}
             onChange={(e) => onJumpToChange(e.target.value.replace(/[^0-9]/g, ''))}
@@ -150,7 +150,7 @@ export function ProductServicesTableFooterBar({
             disabled={loading || page <= 1}
           >
             <ChevronLeft size={16} />
-            <span className="sr-only">Previous page</span>
+            <span className="sr-only">Previous Page</span>
           </Button>
           <span className="shrink-0 whitespace-nowrap text-center text-xs font-medium text-stone-300 sm:min-w-[5rem]">
             <span className="hidden sm:inline">Page </span>
@@ -165,7 +165,7 @@ export function ProductServicesTableFooterBar({
             disabled={loading || page >= pageCount}
           >
             <ChevronRight size={16} />
-            <span className="sr-only">Next page</span>
+            <span className="sr-only">Next Page</span>
           </Button>
         </div>
       </div>

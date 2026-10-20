@@ -81,7 +81,7 @@ export function SurveillanceForm({
           id="surv-employee"
           list="surv-employee-list"
           autoComplete="off"
-          placeholder="Select or type employee name"
+          placeholder="Select or Type Employee Name"
           value={form.allottedEmployeeName}
           onChange={(e) => onChange({ ...form, allottedEmployeeName: e.target.value })}
         />

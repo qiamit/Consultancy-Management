@@ -252,7 +252,7 @@ export function ManakPreviewStep({
         </div>
       </div>
 
-      {loading ? <p className="text-xs text-stone-500">Loading application documents…</p> : null}
+      {loading ? <p className="text-xs text-stone-500">Loading Application Documents…</p> : null}
 
       <div className="overflow-x-auto border border-stone-400 bg-[#fffcf7]">
         <table className="pv-table w-full border-collapse text-sm">

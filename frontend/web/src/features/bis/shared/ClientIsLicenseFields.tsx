@@ -108,7 +108,7 @@ export function ClientIsLicenseFields({
         <RemoteLookupCombobox
           inputId={`${idPrefix}-client`}
           listId={`${idPrefix}-client-list`}
-          placeholder="Search client name…"
+          placeholder="Search Client Name…"
           label={value.clientLabel}
           selectedId={value.clientId}
           search={searchClientOptions}
@@ -173,7 +173,7 @@ export function ClientIsLicenseFields({
             }}
           >
             <SelectTrigger id={`${idPrefix}-cml`} aria-label="CM/L Number">
-              <SelectValue placeholder="Select license" />
+              <SelectValue placeholder="Select License" />
             </SelectTrigger>
             <SelectContent className="rounded-none border-stone-500">
               {licenses.map((o) => (

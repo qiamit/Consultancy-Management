@@ -181,7 +181,7 @@ export function QuotationSignatureField({
             <span className="inline-flex h-full w-10 shrink-0 items-center justify-center border-r border-stone-500 bg-white">
               <img
                 src={previewUrl}
-                alt="Signature preview"
+                alt="Signature Preview"
                 className="max-h-8 max-w-9 object-contain"
               />
             </span>
@@ -190,7 +190,7 @@ export function QuotationSignatureField({
             id="quotation-signature"
             value={text}
             onChange={(e) => onTextChange(e.target.value)}
-            placeholder="Type signature name"
+            placeholder="Type Signature Name"
             className={cn(
               'h-full min-w-0 flex-1 rounded-none border-0 bg-transparent px-3 shadow-none',
               'italic focus-visible:border-transparent focus-visible:bg-transparent focus-visible:ring-0',
@@ -198,7 +198,7 @@ export function QuotationSignatureField({
             style={{
               fontFamily: '"Segoe Script", "Brush Script MT", "Lucida Handwriting", cursive',
             }}
-            aria-label="Typed signature"
+            aria-label="Typed Signature"
           />
         </div>
         <input
@@ -233,8 +233,8 @@ export function QuotationSignatureField({
             className="inline-flex h-full min-w-0 flex-1 items-center justify-center border-r border-stone-500 bg-stone-100 px-2 text-amber-800 transition-colors hover:bg-amber-500/15 hover:text-amber-950 disabled:opacity-40 sm:w-9 sm:flex-none sm:px-0"
             onClick={() => fileRef.current?.click()}
             disabled={busy}
-            aria-label="Upload signature image"
-            title="Upload signature image"
+            aria-label="Upload Signature Image"
+            title="Upload Signature Image"
           >
             <ImagePlus size={14} strokeWidth={2.25} aria-hidden />
           </button>
@@ -243,7 +243,7 @@ export function QuotationSignatureField({
             className="inline-flex h-full min-w-0 flex-1 items-center justify-center bg-stone-100 px-2 text-amber-800 transition-colors hover:bg-amber-500/15 hover:text-amber-950 disabled:opacity-40 sm:w-9 sm:flex-none sm:border-r sm:border-stone-500 sm:px-0"
             onClick={() => void handleDownload()}
             disabled={busy || !canDownload}
-            aria-label="Download signature image"
+            aria-label="Download Signature Image"
             title={
               imagePath.trim()
                 ? 'Download signature image'
@@ -258,8 +258,8 @@ export function QuotationSignatureField({
               className="inline-flex h-full min-w-0 flex-1 items-center justify-center border-l border-stone-500 bg-stone-100 px-2 text-red-700 transition-colors hover:bg-red-500/10 disabled:opacity-40 sm:w-9 sm:flex-none sm:px-0"
               onClick={() => void handleClearImage()}
               disabled={busy}
-              aria-label="Remove signature image"
-              title="Remove signature image"
+              aria-label="Remove Signature Image"
+              title="Remove Signature Image"
             >
               <Trash2 size={14} strokeWidth={2.25} aria-hidden />
             </button>

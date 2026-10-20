@@ -252,11 +252,11 @@ export default function LaboratoriesMasterPage() {
                   onChange={(e) => { setSearch(e.target.value); setPage(1) }}
                   placeholder="Search Laboratory | OSL | Address | Email | Mobile | Type"
                   className={cn(clientDarkBarSearchClass, 'h-10 min-h-10 w-full min-w-0 pl-7 text-xs sm:pl-9 sm:text-sm')}
-                  aria-label="Search laboratories"
+                  aria-label="Search Laboratories"
                 />
               </div>
               <Select value={String(pageSize)} onValueChange={(value) => { setPageSize(Number(value)); setPage(1) }}>
-                <SelectTrigger className={cn(clientDarkBarFieldClass, 'h-10 min-h-10 w-[3.5rem] shrink-0 px-1 text-[11px] sm:w-[4.25rem] sm:text-xs')} aria-label="Rows per page">
+                <SelectTrigger className={cn(clientDarkBarFieldClass, 'h-10 min-h-10 w-[3.5rem] shrink-0 px-1 text-[11px] sm:w-[4.25rem] sm:text-xs')} aria-label="Rows per Page">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -351,7 +351,7 @@ export default function LaboratoriesMasterPage() {
                   <TableHeader>
                     <TableRow className="border-stone-700 bg-stone-800 hover:bg-stone-800">
                       <TableHead className={cn('w-11', thBase)}>
-                        <input type="checkbox" className={checkboxClass} aria-label="Select all" checked={paged.length > 0 && paged.every((row) => selectedIds.has(row.id))} onChange={(e) => setSelectedIds((prev) => { const next = new Set(prev); for (const row of paged) { if (e.target.checked) next.add(row.id); else next.delete(row.id) } return next })} />
+                        <input type="checkbox" className={checkboxClass} aria-label="Select All" checked={paged.length > 0 && paged.every((row) => selectedIds.has(row.id))} onChange={(e) => setSelectedIds((prev) => { const next = new Set(prev); for (const row of paged) { if (e.target.checked) next.add(row.id); else next.delete(row.id) } return next })} />
                       </TableHead>
                       <TableHead className={cn('text-left', thBase)}>Laboratory</TableHead>
                       <TableHead className={thBase}>Type</TableHead>

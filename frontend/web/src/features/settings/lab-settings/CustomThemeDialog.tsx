@@ -123,7 +123,7 @@ export function CustomThemeDialog({
               value={normalizeHexColor(accent)}
               onChange={(e) => setAccent(e.target.value)}
               className="!h-8 w-14 cursor-pointer p-1"
-              aria-label="Pick accent color"
+              aria-label="Pick Accent Color"
             />
           </div>
         </div>

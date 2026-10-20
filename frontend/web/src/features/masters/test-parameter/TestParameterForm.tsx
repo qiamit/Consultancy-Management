@@ -461,7 +461,7 @@ export function TestParameterForm({
                 }}
               >
                 <SelectTrigger id="department">
-                  <SelectValue placeholder="Select department" />
+                  <SelectValue placeholder="Select Department" />
                 </SelectTrigger>
                 <SelectContent>
                   {Array.from(new Set([form.department, ...departmentOptions].filter((d) => d && d.trim().length > 0))).map((label) => (
@@ -506,11 +506,11 @@ export function TestParameterForm({
                 id="designation"
                 value={form.designation}
                 readOnly
-                placeholder="Add designations in User Management"
+                placeholder="Add Designations in User Management"
               />
             )}
             {form.department.trim() && designationOptions.length === 0 && (
-              <p className="text-xs text-muted-foreground">No designations in User Management for this department.</p>
+              <p className="text-xs text-muted-foreground">No Designations in User Management for This Department.</p>
             )}
           </div>
         </div>

@@ -341,7 +341,7 @@ export function TechnicalStaffModuleFields({
 
   const openFilePicker = (index: number, slot: FileSlot) => {
     if (!projectId || disabled) {
-      toast.warning('Save the license first, then attach files.')
+      toast.warning('Save the License First, Then Attach Files.')
       return
     }
     pendingUpload.current = { index, slot }
@@ -459,13 +459,13 @@ export function TechnicalStaffModuleFields({
   const openCreateAppointment = (index: number) => {
     if (disabled) return
     if (!projectRow) {
-      toast.warning('Save the license first, then create Appointment Letter.')
+      toast.warning('Save the License First, Then Create Appointment Letter.')
       return
     }
     const row = rows[index]
     if (!row) return
     if (!str(row.personName)) {
-      toast.warning('Enter the person name before creating Appointment Letter.')
+      toast.warning('Enter the Person Name Before Creating Appointment Letter.')
       return
     }
     setCreateIndex(index)
@@ -481,7 +481,7 @@ export function TechnicalStaffModuleFields({
     const appointmentDate = createDate.trim()
     const appointmentReferenceNo = createReferenceNo.trim()
     if (!appointmentDate) {
-      toast.warning('Date of Joining is required.')
+      toast.warning('Date of Joining Is Required.')
       return
     }
 
@@ -609,7 +609,7 @@ export function TechnicalStaffModuleFields({
               'cursor-pointer',
               disabled && 'pointer-events-none opacity-50',
             )}
-            title="Apply this signature on Factory Test Report (right side)"
+            title="Apply This Signature on Factory Test Report (Right Side)"
           >
             <input
               type="checkbox"
@@ -639,8 +639,8 @@ export function TechnicalStaffModuleFields({
           variant="ghost"
           className={actionBtnClass}
           disabled={disabled || !filled}
-          title="Add person"
-          aria-label="Add person"
+          title="Add Person"
+          aria-label="Add Person"
           onClick={addRow}
         >
           <Plus size={14} />
@@ -667,7 +667,7 @@ export function TechnicalStaffModuleFields({
         variant="ghost"
         className={deleteBtnClass}
         disabled={disabled || rows.length <= 1}
-        title="Delete person"
+        title="Delete Person"
         aria-label={`Delete person ${index + 1}`}
         onClick={() => removeRow(index)}
       >
@@ -734,7 +734,7 @@ export function TechnicalStaffModuleFields({
               if (e.target.checked) setSelected(new Set(rows.map((_, i) => i)))
               else setSelected(new Set())
             }}
-            aria-label="Select all persons"
+            aria-label="Select All Persons"
           />
           <span className="text-[11px] font-bold uppercase tracking-[0.14em]">
             {selected.size > 0
@@ -874,7 +874,7 @@ export function TechnicalStaffModuleFields({
                     if (e.target.checked) setSelected(new Set(rows.map((_, i) => i)))
                     else setSelected(new Set())
                   }}
-                  aria-label="Select all persons"
+                  aria-label="Select All Persons"
                 />
               </TableHead>
               <TableHead className={cn(thBase, 'w-[28%]')}>Name of the Person</TableHead>
@@ -1078,8 +1078,8 @@ export function TechnicalStaffModuleFields({
                     <button
                       type="button"
                       className={limsFieldAddBtnClass}
-                      aria-label="Open calendar"
-                      title="Pick date"
+                      aria-label="Open Calendar"
+                      title="Pick Date"
                       disabled={createBusy}
                       onClick={() => openDatePicker(createDateRef.current)}
                     >

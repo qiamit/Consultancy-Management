@@ -297,7 +297,7 @@ export function LaboratoryDetailsTab(props: LaboratoryDetailsTabProps) {
             </div>
             <Select value={props.selectedLabType} onValueChange={props.setSelectedLabType}>
               <SelectTrigger id="lab-type" className="w-full">
-                <SelectValue placeholder="Select laboratory type" />
+                <SelectValue placeholder="Select Laboratory Type" />
               </SelectTrigger>
               <SelectContent>
                 {props.labTypes.map((type) => (
@@ -376,7 +376,7 @@ export function LaboratoryDetailsTab(props: LaboratoryDetailsTabProps) {
             </div>
             <Select value={props.selectedLabScale} onValueChange={props.setSelectedLabScale}>
               <SelectTrigger id="lab-scale" className="w-full">
-                <SelectValue placeholder="Select laboratory scale" />
+                <SelectValue placeholder="Select Laboratory Scale" />
               </SelectTrigger>
               <SelectContent>
                 {props.labScales.map((scale) => (
@@ -471,7 +471,7 @@ export function LaboratoryDetailsTab(props: LaboratoryDetailsTabProps) {
               </div>
               <Select value={props.selectedDesignation} onValueChange={props.setSelectedDesignation}>
                 <SelectTrigger id="contact-designation" className="w-full">
-                  <SelectValue placeholder="Select designation" />
+                  <SelectValue placeholder="Select Designation" />
                 </SelectTrigger>
                 <SelectContent>
                   {props.designations.map((designation) => (
@@ -574,7 +574,7 @@ export function LaboratoryDetailsTab(props: LaboratoryDetailsTabProps) {
                   minLength={10}
                   pattern="\d{10}"
                   inputMode="numeric"
-                  title="Enter a 10-digit mobile number"
+                  title="Enter a 10-Digit Mobile Number"
                 />
               </div>
             </div>
@@ -591,7 +591,7 @@ export function LaboratoryDetailsTab(props: LaboratoryDetailsTabProps) {
                 pattern={EMAIL_INPUT_PATTERN}
                 value={props.email}
                 onChange={(e) => props.setEmail(e.target.value)}
-                title="Enter a valid email address"
+                title="Enter a Valid Email Address"
               />
             </div>
           </div>
@@ -605,7 +605,7 @@ export function LaboratoryDetailsTab(props: LaboratoryDetailsTabProps) {
             placeholder="Enter Website URL"
             value={props.website}
             onChange={(e) => props.setWebsite(e.target.value)}
-            title="Enter company website"
+            title="Enter Company Website"
           />
         </div>
 
@@ -631,7 +631,7 @@ export function LaboratoryDetailsTab(props: LaboratoryDetailsTabProps) {
               className="w-full"
               type="text"
               maxLength={6}
-              placeholder="Enter 6-digit PIN code"
+              placeholder="Enter 6-Digit PIN Code"
               value={props.pinCode}
               onChange={(e) => props.setPinCode(e.target.value)}
             />
@@ -644,7 +644,7 @@ export function LaboratoryDetailsTab(props: LaboratoryDetailsTabProps) {
             <Input
               id="district"
               className="w-full"
-              placeholder="Enter district"
+              placeholder="Enter District"
               value={props.district}
               onChange={(e) => props.setDistrict(e.target.value)}
             />

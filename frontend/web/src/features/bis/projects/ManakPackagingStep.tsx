@@ -109,13 +109,13 @@ function PackagingMarkingDialog({
       return
     }
     if (form.methodOfMarking === 'Any Other' && !form.methodOfMarkingOther.trim()) {
-      toast.error('Describe the method of marking.')
+      toast.error('Describe the Method of Marking.')
       return
     }
     setBusy(true)
     try {
       await saveBisModulePayload(projectRow.id, 'packaging-marking', { ...form })
-      toast.success('Packaging and Marking saved')
+      toast.success('Packaging and Marking Saved')
       onSaved()
       onOpenChange(false)
     } catch (err) {
@@ -130,7 +130,7 @@ function PackagingMarkingDialog({
     try {
       const uploaded = await uploadBisProjectFile(projectRow.id, file, 'packaging-label')
       setForm((f) => ({ ...f, labelFileId: uploaded.id, labelFileName: uploaded.file_name, labelStoragePath: uploaded.storage_path }))
-      toast.success('Label attached — click Save to keep it.')
+      toast.success('Label Attached — Click Save to Keep It.')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Upload failed')
     } finally {
@@ -169,8 +169,8 @@ function PackagingMarkingDialog({
               variant="ghost"
               size="sm"
               className={headerBtn}
-              title="Import from another Application"
-              aria-label="Import from another Application"
+              title="Import from Another Application"
+              aria-label="Import from Another Application"
               onClick={() => setImportOpen(true)}
             >
               <Import size={15} aria-hidden />
@@ -241,21 +241,21 @@ function PackagingMarkingDialog({
                           <span className="max-w-[12rem] truncate text-xs text-stone-700" title={form.labelFileName}>
                             {form.labelFileName}
                           </span>
-                          <Button type="button" variant="ghost" className="h-8 w-8 rounded-none border border-stone-400 p-0 text-amber-800" title="View label" onClick={() => void viewLabel()}>
+                          <Button type="button" variant="ghost" className="h-8 w-8 rounded-none border border-stone-400 p-0 text-amber-800" title="View Label" onClick={() => void viewLabel()}>
                             <Eye size={14} />
                           </Button>
                           <Button
                             type="button"
                             variant="ghost"
                             className="h-8 w-8 rounded-none border border-stone-400 p-0 text-red-700"
-                            title="Remove label"
+                            title="Remove Label"
                             onClick={() => setForm((f) => ({ ...f, labelFileId: '', labelFileName: '', labelStoragePath: '' }))}
                           >
                             <X size={14} />
                           </Button>
                         </>
                       ) : (
-                        <span className="text-xs text-stone-400">No file chosen</span>
+                        <span className="text-xs text-stone-400">No File Chosen</span>
                       )}
                     </div>
                   </td>
@@ -296,7 +296,7 @@ function PackagingMarkingDialog({
           const fields = formFrom(source)
           // The label file belongs to the other application; keep this one's.
           setForm((f) => ({ ...fields, labelFileId: f.labelFileId, labelFileName: f.labelFileName, labelStoragePath: f.labelStoragePath }))
-          toast.success('Packaging and Marking imported', { description: 'Click Save to keep it.' })
+          toast.success('Packaging and Marking Imported', { description: 'Click Save to keep it.' })
         }}
       />
     </>
@@ -400,7 +400,7 @@ export function ManakPackagingStep({
                       </Select>
                     </td>
                     <td className={cn(tdCls, 'whitespace-nowrap text-center')}>
-                      {yes ? renderDocActions?.(c.printKind, editComponent(c)) : <span className="text-xs text-stone-400">Not applicable</span>}
+                      {yes ? renderDocActions?.(c.printKind, editComponent(c)) : <span className="text-xs text-stone-400">Not Applicable</span>}
                     </td>
                   </tr>
                 )

@@ -84,7 +84,7 @@ export function ProductServicesForm({
             value={form.permanentTesting}
             onValueChange={(v) => onChange({ ...form, permanentTesting: v })}
           >
-            <SelectTrigger aria-label="Permanent testing">
+            <SelectTrigger aria-label="Permanent Testing">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -151,8 +151,8 @@ export function ProductServicesForm({
               onChange({ ...form, typeOfTest: v === '__none__' ? '' : v })
             }
           >
-            <SelectTrigger aria-label="Type of test">
-              <SelectValue placeholder="Select type" />
+            <SelectTrigger aria-label="Type of Test">
+              <SelectValue placeholder="Select Type" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="__none__">—</SelectItem>
@@ -207,7 +207,7 @@ export function ProductServicesForm({
             })
           }}
           showManageButton
-          placeholder="Select unit"
+          placeholder="Select Unit"
         />
       </div>
 
@@ -227,7 +227,7 @@ export function ProductServicesForm({
               onChange={(e) =>
                 patchUncertainty({ muValue: e.target.value.replace(/[^0-9.]/g, '') })
               }
-              aria-label="MU value"
+              aria-label="MU Value"
             />
           </div>
           <div className="min-w-0">
@@ -254,7 +254,7 @@ export function ProductServicesForm({
               onChange={(e) =>
                 patchUncertainty({ testValue: e.target.value.replace(/[^0-9.]/g, '') })
               }
-              aria-label="Test value"
+              aria-label="Test Value"
             />
           </div>
           <div className="min-w-0">

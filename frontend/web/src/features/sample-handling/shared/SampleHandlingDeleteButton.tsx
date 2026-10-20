@@ -21,7 +21,7 @@ export function SampleHandlingDeleteButton({
       size="sm"
       disabled={disabled}
       onClick={onClick}
-      aria-label="Delete selected"
+      aria-label="Delete Selected"
       className={cn(limsDeleteBtnClass)}
     >
       <Trash2 size={14} /> Delete

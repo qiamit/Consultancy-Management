@@ -1401,13 +1401,13 @@ export default function LabSettingsPage() {
                     <LimsFieldWithAdd
                       addButton={
                         <DialogTrigger asChild>
-                          <LimsFieldAddButton aria-label="Manage laboratory types" />
+                          <LimsFieldAddButton aria-label="Manage Laboratory Types" />
                         </DialogTrigger>
                       }
                     >
                       <Select value={selectedLabType} onValueChange={setSelectedLabType}>
                         <SelectTrigger id="lab-type" className="w-full">
-                          <SelectValue placeholder="Select laboratory type" />
+                          <SelectValue placeholder="Select Laboratory Type" />
                         </SelectTrigger>
                         <SelectContent>
                           {labTypes.map((type) => (
@@ -1442,13 +1442,13 @@ export default function LabSettingsPage() {
                     <LimsFieldWithAdd
                       addButton={
                         <DialogTrigger asChild>
-                          <LimsFieldAddButton aria-label="Manage laboratory scales" />
+                          <LimsFieldAddButton aria-label="Manage Laboratory Scales" />
                         </DialogTrigger>
                       }
                     >
                       <Select value={selectedLabScale} onValueChange={setSelectedLabScale}>
                         <SelectTrigger id="lab-scale" className="w-full">
-                          <SelectValue placeholder="Select laboratory scale" />
+                          <SelectValue placeholder="Select Laboratory Scale" />
                         </SelectTrigger>
                         <SelectContent>
                           {labScales.map((scale) => (
@@ -1496,13 +1496,13 @@ export default function LabSettingsPage() {
                     <LimsFieldWithAdd
                       addButton={
                         <DialogTrigger asChild>
-                          <LimsFieldAddButton aria-label="Manage designations" />
+                          <LimsFieldAddButton aria-label="Manage Designations" />
                         </DialogTrigger>
                       }
                     >
                       <Select value={selectedDesignation} onValueChange={setSelectedDesignation}>
                         <SelectTrigger id="contact-designation" className="w-full">
-                          <SelectValue placeholder="Select designation" />
+                          <SelectValue placeholder="Select Designation" />
                         </SelectTrigger>
                         <SelectContent>
                           {designations.map((designation) => (
@@ -1539,7 +1539,7 @@ export default function LabSettingsPage() {
                       <LimsFieldWithAdd
                         addButton={
                           <DialogTrigger asChild>
-                            <LimsFieldAddButton aria-label="Manage country codes" />
+                            <LimsFieldAddButton aria-label="Manage Country Codes" />
                           </DialogTrigger>
                         }
                       >
@@ -1569,7 +1569,7 @@ export default function LabSettingsPage() {
                             minLength={10}
                             pattern="\d{10}"
                             inputMode="numeric"
-                            title="Enter a 10-digit mobile number"
+                            title="Enter a 10-Digit Mobile Number"
                           />
                         </div>
                       </LimsFieldWithAdd>
@@ -1603,7 +1603,7 @@ export default function LabSettingsPage() {
                       pattern={EMAIL_INPUT_PATTERN}
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      title="Enter a valid email address"
+                      title="Enter a Valid Email Address"
                     />
                   </div>
 
@@ -1618,7 +1618,7 @@ export default function LabSettingsPage() {
                       placeholder="Enter Website URL"
                       value={website}
                       onChange={(e) => setWebsite(e.target.value)}
-                      title="Enter company website"
+                      title="Enter Company Website"
                     />
                   </div>
                 </div>
@@ -1645,7 +1645,7 @@ export default function LabSettingsPage() {
                     className="w-full"
                     type="text"
                     maxLength={6}
-                    placeholder="Enter 6-digit PIN code"
+                    placeholder="Enter 6-Digit PIN Code"
                     value={pinCode}
                     onChange={(e) => setPinCode(e.target.value)}
                   />
@@ -1658,7 +1658,7 @@ export default function LabSettingsPage() {
                   <Input
                     id="district"
                     className="w-full"
-                    placeholder="Enter district"
+                    placeholder="Enter District"
                     value={district}
                     onChange={(e) => setDistrict(e.target.value)}
                   />
@@ -1670,7 +1670,7 @@ export default function LabSettingsPage() {
                     <LimsFieldWithAdd
                       addButton={
                         <DialogTrigger asChild>
-                          <LimsFieldAddButton aria-label="Manage states" />
+                          <LimsFieldAddButton aria-label="Manage States" />
                         </DialogTrigger>
                       }
                     >
@@ -1711,7 +1711,7 @@ export default function LabSettingsPage() {
                     <LimsFieldWithAdd
                       addButton={
                         <DialogTrigger asChild>
-                          <LimsFieldAddButton aria-label="Manage countries" />
+                          <LimsFieldAddButton aria-label="Manage Countries" />
                         </DialogTrigger>
                       }
                     >
@@ -1967,7 +1967,7 @@ export default function LabSettingsPage() {
                     <LimsFieldWithAdd
                       addButton={
                         <DialogTrigger asChild>
-                          <LimsFieldAddButton aria-label="Manage currencies" />
+                          <LimsFieldAddButton aria-label="Manage Currencies" />
                         </DialogTrigger>
                       }
                     >
@@ -1979,7 +1979,7 @@ export default function LabSettingsPage() {
                         }}
                       >
                         <SelectTrigger id="currency" className="w-full !border-0 !bg-transparent shadow-none focus:!bg-transparent focus:ring-0">
-                          <SelectValue placeholder="Select currency" />
+                          <SelectValue placeholder="Select Currency" />
                         </SelectTrigger>
                         <SelectContent>
                           {currencyOptions.map((currency) => (
@@ -2014,13 +2014,13 @@ export default function LabSettingsPage() {
                     <LimsFieldWithAdd
                       addButton={
                         <DialogTrigger asChild>
-                          <LimsFieldAddButton aria-label="Manage date formats" />
+                          <LimsFieldAddButton aria-label="Manage Date Formats" />
                         </DialogTrigger>
                       }
                     >
                       <Select value={selectedDateFormat} onValueChange={setSelectedDateFormat}>
                         <SelectTrigger id="date-format" className="w-full !border-0 !bg-transparent shadow-none focus:!bg-transparent focus:ring-0">
-                          <SelectValue placeholder="Select date format" />
+                          <SelectValue placeholder="Select Date Format" />
                         </SelectTrigger>
                         <SelectContent>
                           {dateFormats.map((format) => (
@@ -2055,7 +2055,7 @@ export default function LabSettingsPage() {
                     <LimsFieldWithAdd
                       addButton={
                         <DialogTrigger asChild>
-                          <LimsFieldAddButton aria-label="Manage time formats" />
+                          <LimsFieldAddButton aria-label="Manage Time Formats" />
                         </DialogTrigger>
                       }
                     >
@@ -2068,7 +2068,7 @@ export default function LabSettingsPage() {
                         onValueChange={setSelectedTimeFormat}
                       >
                         <SelectTrigger id="time-format" className="w-full !border-0 !bg-transparent shadow-none focus:!bg-transparent focus:ring-0">
-                          <SelectValue placeholder="Select time format" />
+                          <SelectValue placeholder="Select Time Format" />
                         </SelectTrigger>
                         <SelectContent>
                           {timeFormats.map((format) => (
@@ -2106,7 +2106,7 @@ export default function LabSettingsPage() {
                       addButton={
                         <DialogTrigger asChild>
                           <LimsFieldAddButton
-                            aria-label="Create custom theme"
+                            aria-label="Create Custom Theme"
                             title="Create Custom Theme"
                           />
                         </DialogTrigger>
@@ -2120,7 +2120,7 @@ export default function LabSettingsPage() {
                           id="theme"
                           className="w-full !border-0 !bg-transparent shadow-none focus:!bg-transparent focus:ring-0"
                         >
-                          <SelectValue placeholder="Select theme" />
+                          <SelectValue placeholder="Select Theme" />
                         </SelectTrigger>
                         <SelectContent>
                           {getThemeSelectOptions(customThemes).map((opt) => (

@@ -148,12 +148,12 @@ export function IsCodeDetailsDialog({
             <DialogTitle className="truncate text-base font-semibold tracking-tight text-white sm:text-lg">
               {title}
             </DialogTitle>
-            <p className="mt-0.5 text-xs text-stone-300">IS Code details · View only</p>
+            <p className="mt-0.5 text-xs text-stone-300">IS Code Details · View Only</p>
           </DialogHeader>
         </div>
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overflow-x-hidden bg-gradient-to-b from-stone-100/80 to-white px-4 py-4 sm:px-6 sm:py-5">
-          {loading ? <p className="text-sm text-stone-600">Loading IS Code details…</p> : null}
+          {loading ? <p className="text-sm text-stone-600">Loading IS Code Details…</p> : null}
           {error ? (
             <p className="border-l-2 border-destructive bg-destructive/5 px-3 py-2 text-sm text-destructive">
               {error}
@@ -209,7 +209,7 @@ export function IsCodeDetailsDialog({
                   IS Code files
                 </h3>
                 {filesLoading ? (
-                  <p className="text-sm text-stone-600">Loading files…</p>
+                  <p className="text-sm text-stone-600">Loading Files…</p>
                 ) : files.length === 0 ? (
                   <div className="border border-dashed border-stone-400 bg-[#fffcf7] px-3 py-6 text-center text-sm text-stone-500">
                     No files attached to this IS Code.

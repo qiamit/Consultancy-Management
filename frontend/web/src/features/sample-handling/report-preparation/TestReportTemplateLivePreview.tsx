@@ -213,7 +213,7 @@ export function TestReportTemplateLivePreview({
           >
             <iframe
               ref={iframeRef}
-              title="Report template preview"
+              title="Report Template Preview"
               className="block border-0 bg-white"
               srcDoc={html}
               sandbox="allow-same-origin"

@@ -328,7 +328,7 @@ export function MaintenanceHistoryDialog({
                   >
                     <SelectTrigger
                       className={cn(limsDarkBarFieldClass, 'h-9 w-[7.5rem] shrink-0')}
-                      aria-label="Rows per page"
+                      aria-label="Rows per Page"
                     >
                       <SelectValue />
                     </SelectTrigger>
@@ -369,7 +369,7 @@ export function MaintenanceHistoryDialog({
                       <input
                         type="checkbox"
                         className={checkboxClass}
-                        aria-label="Select all"
+                        aria-label="Select All"
                         checked={allChecked}
                         ref={(el) => {
                           if (el) el.indeterminate = !allChecked && someChecked
@@ -484,7 +484,7 @@ export function MaintenanceHistoryDialog({
                 </div>
                 <div className="flex min-w-0 flex-nowrap items-center justify-end gap-1 overflow-x-auto sm:gap-1.5">
                   <Input
-                    aria-label="Jump to page"
+                    aria-label="Jump to Page"
                     placeholder="Page"
                     value={jumpTo}
                     onChange={(e) => setJumpTo(e.target.value.replace(/[^0-9]/g, ''))}
@@ -513,7 +513,7 @@ export function MaintenanceHistoryDialog({
                     className={cn('h-7 w-7 shrink-0 sm:h-8 sm:w-8', limsDarkBarBtnClass)}
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
                     disabled={safePage <= 1}
-                    aria-label="Previous page"
+                    aria-label="Previous Page"
                   >
                     <ChevronLeft size={16} />
                   </Button>
@@ -528,7 +528,7 @@ export function MaintenanceHistoryDialog({
                     className={cn('h-7 w-7 shrink-0 sm:h-8 sm:w-8', limsDarkBarBtnClass)}
                     onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
                     disabled={safePage >= pageCount}
-                    aria-label="Next page"
+                    aria-label="Next Page"
                   >
                     <ChevronRight size={16} />
                   </Button>

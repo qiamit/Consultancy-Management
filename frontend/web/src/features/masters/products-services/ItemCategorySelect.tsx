@@ -213,7 +213,7 @@ export function ItemCategorySelect({
                 className="inline-flex h-full w-8 shrink-0 items-center justify-center border-l border-stone-500 bg-stone-100 text-amber-800 transition-colors hover:bg-amber-500/15 hover:text-amber-950 disabled:pointer-events-none"
                 onClick={() => openManageDialog()}
                 onMouseDown={(e) => e.preventDefault()}
-                aria-label="Add item category"
+                aria-label="Add Item Category"
                 title="Add New"
                 disabled={disabled}
               >
@@ -360,7 +360,7 @@ export function ItemCategorySelect({
                     </div>
                   ))
                 ) : (
-                  <p className="text-xs text-stone-500">No categories added yet.</p>
+                  <p className="text-xs text-stone-500">No Categories Added Yet.</p>
                 )}
               </div>
             </div>

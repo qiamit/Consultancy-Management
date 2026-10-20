@@ -51,7 +51,7 @@ export function ConductMaintenanceAssistant({
       className={cn('h-8 gap-1.5', limsOutlineBtnClass)}
       disabled={disabled || loading}
       onClick={() => void handleGenerate()}
-      aria-label="Generate maintenance checklist with AI"
+      aria-label="Generate Maintenance Checklist with AI"
     >
       {loading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} className="text-primary" />}
       {loading ? 'Generating…' : 'AI Assistant'}

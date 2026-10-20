@@ -157,7 +157,7 @@ export function LocationMapModuleFields({
                 value={value.firmLatitude}
                 disabled={disabled}
                 placeholder="28.6139"
-                title="Paste Google Maps coordinates (lat, lng) to fill both fields"
+                title="Paste Google Maps Coordinates (Lat, Lng) to Fill Both Fields"
                 onChange={(e) => setFirmCoord('lat', e.target.value)}
                 onPaste={pastePair('firm')}
               />
@@ -169,7 +169,7 @@ export function LocationMapModuleFields({
                 value={value.firmLongitude}
                 disabled={disabled}
                 placeholder="77.2090"
-                title="Paste Google Maps coordinates (lat, lng) to fill both fields"
+                title="Paste Google Maps Coordinates (Lat, Lng) to Fill Both Fields"
                 onChange={(e) => setFirmCoord('lng', e.target.value)}
                 onPaste={pastePair('firm')}
               />
@@ -203,7 +203,7 @@ export function LocationMapModuleFields({
                 value={value.bisLatitude}
                 disabled={disabled}
                 placeholder="28.6139"
-                title="Paste Google Maps coordinates (lat, lng) to fill both fields"
+                title="Paste Google Maps Coordinates (Lat, Lng) to Fill Both Fields"
                 onChange={(e) => setBisCoord('lat', e.target.value)}
                 onPaste={pastePair('bis')}
               />
@@ -215,7 +215,7 @@ export function LocationMapModuleFields({
                 value={value.bisLongitude}
                 disabled={disabled}
                 placeholder="77.2090"
-                title="Paste Google Maps coordinates (lat, lng) to fill both fields"
+                title="Paste Google Maps Coordinates (Lat, Lng) to Fill Both Fields"
                 onChange={(e) => setBisCoord('lng', e.target.value)}
                 onPaste={pastePair('bis')}
               />
@@ -265,7 +265,7 @@ export function LocationMapModuleFields({
                 type="button"
                 className="absolute inset-0 z-[500] flex cursor-pointer items-center justify-center bg-stone-900/20 text-center"
                 onClick={() => setMapInteractive(true)}
-                aria-label="Enable map interaction"
+                aria-label="Enable Map Interaction"
               >
                 <span className="rounded-none border border-amber-700 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-950 shadow-sm">
                   Click to pan / zoom map

@@ -144,7 +144,7 @@ export function InclusionLetterDialog({ row, open, onOpenChange, onSaved }: { ro
     if (str(source.letterClosing)) setClosing(str(source.letterClosing))
     const imported = parseUndertakingLines(source.letterLines)
     if (imported?.length) setLines(imported.map((line) => ({ ...line, id: crypto.randomUUID() })))
-    toast.success('Letter wording imported — review, then Save.')
+    toast.success('Letter Wording Imported — Review, Then Save.')
   }
 
   const rewrite = async (field: 'intro' | 'closing', value: string, set: (v: string) => void) => {
@@ -169,11 +169,11 @@ export function InclusionLetterDialog({ row, open, onOpenChange, onSaved }: { ro
           </DialogHeader>
           <div className="min-h-0 flex-1 space-y-3 overflow-auto bg-[#fffcf7] p-4">
             {loading || !defaults ? (
-              <p className="text-sm text-stone-500">Loading letter…</p>
+              <p className="text-sm text-stone-500">Loading Letter…</p>
             ) : (
               <>
                 <FieldRow label="Letter Date" htmlFor="inc-letter-date">
-                  <Input id="inc-letter-date" className="h-8 w-56 rounded-none border-stone-400 bg-white text-sm" placeholder="DD/MM/YYYY (blank = today)" value={date} disabled={busy} onChange={(e) => setDate(e.target.value)} />
+                  <Input id="inc-letter-date" className="h-8 w-56 rounded-none border-stone-400 bg-white text-sm" placeholder="DD/MM/YYYY (Blank = Today)" value={date} disabled={busy} onChange={(e) => setDate(e.target.value)} />
                 </FieldRow>
                 <FieldRow label="Subject" htmlFor="inc-letter-subject">
                   <textarea id="inc-letter-subject" className={areaCls} rows={2} value={subject} disabled={busy} onChange={(e) => setSubject(e.target.value)} />

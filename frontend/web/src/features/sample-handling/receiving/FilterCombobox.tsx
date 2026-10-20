@@ -450,8 +450,8 @@ export function FilterCombobox({
           </>
         ) : (
           <li className="px-3 py-4 text-center">
-            <p className="text-[12px] font-semibold text-stone-700">No results found</p>
-            <p className="mt-0.5 text-[11px] text-stone-500">Try another spelling, or add a new value.</p>
+            <p className="text-[12px] font-semibold text-stone-700">No Results Found</p>
+            <p className="mt-0.5 text-[11px] text-stone-500">Try Another Spelling, or Add a New Value.</p>
           </li>
         )}
       </ul>

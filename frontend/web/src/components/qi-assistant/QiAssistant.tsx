@@ -790,7 +790,7 @@ export function QiAssistant({
 
         {messages.length <= 1 && prompts.length > 0 && (
           <div className="space-y-2 border-t border-stone-400 bg-[#fffcf7] px-4 py-3 sm:px-5">
-            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-amber-800/80">Try asking</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-amber-800/80">Try Asking</p>
             <div className="flex flex-col gap-1.5">
               {prompts.map((q) => (
                 <button
@@ -816,7 +816,7 @@ export function QiAssistant({
             <div
               className="absolute bottom-full left-3 right-3 z-10 mb-1 max-h-48 overflow-y-auto border-2 border-stone-600 bg-white shadow-xl ring-1 ring-amber-700/25"
               role="listbox"
-              aria-label="Select AI skill"
+              aria-label="Select AI Skill"
             >
               <div className="border-b border-stone-500 bg-stone-900 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-amber-200">
                 Skills · type / to filter
@@ -861,13 +861,13 @@ export function QiAssistant({
             <div
               className="absolute bottom-full left-3 right-3 z-10 mb-1 max-h-48 overflow-y-auto border-2 border-stone-600 bg-white shadow-xl ring-1 ring-amber-700/25"
               role="listbox"
-              aria-label="Attach a file"
+              aria-label="Attach a File"
             >
               <div className="border-b border-stone-500 bg-stone-900 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-amber-200">
                 Attach · type @ to pick from computer
               </div>
               {filteredAttachOptions.length === 0 ? (
-                <p className="px-3 py-2 text-xs text-stone-500">No attach options match.</p>
+                <p className="px-3 py-2 text-xs text-stone-500">No Attach Options Match.</p>
               ) : (
                 filteredAttachOptions.map((option, idx) => (
                   <button
@@ -926,7 +926,7 @@ export function QiAssistant({
                   <button
                     type="button"
                     className="shrink-0 p-0.5 hover:bg-stone-100"
-                    aria-label="Clear selected IS code"
+                    aria-label="Clear Selected IS Code"
                     onClick={() => setSelectedIsCodeId('')}
                   >
                     <X size={12} />
@@ -939,7 +939,7 @@ export function QiAssistant({
                   <button
                     type="button"
                     className="p-0.5 hover:bg-amber-200/60"
-                    aria-label="Clear selected skill"
+                    aria-label="Clear Selected Skill"
                     onClick={() => setSelectedSkill(null)}
                   >
                     <X size={12} />
@@ -952,7 +952,7 @@ export function QiAssistant({
                   <button
                     type="button"
                     className="p-0.5 hover:bg-stone-100"
-                    aria-label="Remove attached PDF"
+                    aria-label="Remove Attached PDF"
                     onClick={() => setAttachedPdf(null)}
                   >
                     <X size={12} />
@@ -975,7 +975,7 @@ export function QiAssistant({
                   <button
                     type="button"
                     className="p-0.5 hover:bg-amber-100"
-                    aria-label="Remove attached image"
+                    aria-label="Remove Attached Image"
                     onClick={() => setAttachedImage(null)}
                   >
                     <X size={12} />
@@ -1046,9 +1046,9 @@ export function QiAssistant({
                   'h-10 w-10 shrink-0 rounded-none border-stone-500 font-bold text-amber-800 hover:bg-amber-50',
                   skillPickerOpen && 'border-amber-600 bg-amber-50',
                 )}
-                aria-label="Pick AI skill"
+                aria-label="Pick AI Skill"
                 disabled={loading}
-                title="Type / for skills"
+                title="Type / for Skills"
                 onClick={() => insertComposerToken('/')}
               >
                 /
@@ -1062,7 +1062,7 @@ export function QiAssistant({
                     'h-10 w-10 shrink-0 rounded-none border-stone-500 font-bold text-amber-800 hover:bg-amber-50',
                     attachPickerOpen && 'border-amber-600 bg-amber-50',
                   )}
-                  aria-label="Attach file from computer"
+                  aria-label="Attach File from Computer"
                   disabled={loading}
                   title="Type @ to attach a file from your computer"
                   onClick={() => insertComposerToken('@')}
@@ -1127,7 +1127,7 @@ export function QiAssistant({
                 type="button"
                 size="icon"
                 className="h-10 w-10 shrink-0 rounded-none bg-amber-700 text-white hover:bg-amber-800"
-                aria-label="Send message"
+                aria-label="Send Message"
                 disabled={loading || !canSend}
                 onClick={() => void sendMessage(input)}
               >

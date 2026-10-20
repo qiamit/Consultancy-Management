@@ -254,7 +254,7 @@ export function LocationRouteMapPreview({
             </span>
           ) : null}
           {routeStatus === 'loading' ? (
-            <span className="text-stone-500">Loading road route…</span>
+            <span className="text-stone-500">Loading Road Route…</span>
           ) : null}
           {routeMeta ? (
             <span className="font-semibold text-amber-900">
@@ -262,7 +262,7 @@ export function LocationRouteMapPreview({
             </span>
           ) : null}
           {routeStatus === 'error' ? (
-            <span className="text-stone-500">Route line fallback (routing unavailable)</span>
+            <span className="text-stone-500">Route Line Fallback (Routing Unavailable)</span>
           ) : null}
         </div>
       )}

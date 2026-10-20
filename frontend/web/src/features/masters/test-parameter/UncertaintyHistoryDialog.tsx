@@ -94,7 +94,7 @@ function printHistoryRecords(
 
 function CalculationSnapshot({ data }: { data: UncertaintyCalculationData | null }) {
   if (!data) {
-    return <p className="text-sm text-stone-500">No calculation data stored for this history entry.</p>
+    return <p className="text-sm text-stone-500">No Calculation Data Stored for This History Entry.</p>
   }
   return (
     <div className="space-y-3 text-sm">
@@ -347,7 +347,7 @@ export function UncertaintyHistoryDialog({
                           if (el) el.indeterminate = !allChecked && someChecked
                         }}
                         onChange={(e) => toggleAll(e.target.checked)}
-                        aria-label="Select all history rows"
+                        aria-label="Select All History Rows"
                       />
                     </TableHead>
                     <TableHead className="border-stone-700 bg-stone-800 p-2 text-center text-[11px] font-bold uppercase tracking-[0.14em] text-amber-200">

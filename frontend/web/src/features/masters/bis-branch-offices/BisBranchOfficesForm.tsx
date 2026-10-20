@@ -282,7 +282,7 @@ export function BisBranchOfficesForm({
               inputId="bis-office-pin"
               category="pin_code"
               value={form.pinCode}
-              placeholder="Type or select PIN"
+              placeholder="Type or Select PIN"
               items={of('pin_code')}
               canEdit={canEdit}
               normalize={(raw) => raw.replace(/[^0-9]/g, '').slice(0, 6)}
@@ -297,7 +297,7 @@ export function BisBranchOfficesForm({
               inputId="bis-office-city"
               category="city"
               value={form.city}
-              placeholder="Type or select City"
+              placeholder="Type or Select City"
               items={of('city')}
               canEdit={canEdit}
               normalize={toProperTitleCase}
@@ -311,7 +311,7 @@ export function BisBranchOfficesForm({
               inputId="bis-office-state"
               category="state"
               value={form.state}
-              placeholder="Type or select State"
+              placeholder="Type or Select State"
               items={of('state')}
               canEdit={canEdit}
               normalize={toProperTitleCase}
@@ -391,7 +391,7 @@ export function BisBranchOfficesForm({
               <Label htmlFor="bis-office-gst" className="text-xs">GST Number</Label>
               <Input
                 id="bis-office-gst"
-                placeholder="15-character GSTIN"
+                placeholder="15-Character GSTIN"
                 value={form.gstNumber}
                 maxLength={15}
                 onChange={(e) => onChange({ ...form, gstNumber: e.target.value.toUpperCase().replace(/[^0-9A-Z]/g, '').slice(0, 15) })}
