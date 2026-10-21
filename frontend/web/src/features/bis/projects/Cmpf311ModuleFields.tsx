@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Calendar, FileText, Laptop, Plus, Sparkles, Trash2 } from 'lucide-react'
+import { Calendar, FileText, Laptop, Plus, Replace, Sparkles, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -148,6 +148,28 @@ export function Cmpf311ModuleFields({
   const [contentTab, setContentTab] = useState<ContentTab>('annexure-c')
   const [newAnnexure, setNewAnnexure] = useState({ title: '', content: '' })
   const [newNote, setNewNote] = useState({ title: '', description: '' })
+  const [findText, setFindText] = useState('')
+  const [replaceText, setReplaceText] = useState('')
+  const replaceAll = (tab: ContentTab) => {
+    if (!findText) { toast.error('Type the value to find first.'); return }
+    const re = new RegExp(findText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')
+    let hits = 0
+    const fix = (text: string) => text.replace(re, () => { hits += 1; return replaceText })
+    if (tab === 'annexure-c') patch('annexureSections', value.annexureSections.map((r) => ({ ...r, title: fix(r.title), content: fix(r.content) })))
+    else if (tab === 'notes') patch('notes', value.notes.map((r) => ({ ...r, title: fix(r.title), description: fix(r.description) })))
+    else patch('testRows', value.testRows.map((r) => ({ ...r, clause: fix(r.clause), requirement: fix(r.requirement), testMethod: fix(r.testMethod), testMethodClause: fix(r.testMethodClause), testEquipmentRequirement: fix(r.testEquipmentRequirement), frequency: fix(r.frequency), remarks: fix(r.remarks) })))
+    if (hits) toast.success(`${hits} Value${hits > 1 ? 's' : ''} Replaced. Save to Keep the Change.`)
+    else toast.info('That value was not found in this table.')
+  }
+  const replaceBar = (tab: ContentTab) => (
+    <div className="flex flex-wrap items-center gap-1.5 border border-stone-300 bg-[#fffcf7] p-1.5">
+      <Input aria-label="Find Value" placeholder="Find Value" className={cn(limsFieldClass, 'h-8 w-48 min-w-0')} value={findText} disabled={disabled} onChange={(event) => setFindText(event.target.value)} />
+      <Input aria-label="Replace With" placeholder="Replace With" className={cn(limsFieldClass, 'h-8 w-48 min-w-0')} value={replaceText} disabled={disabled} onChange={(event) => setReplaceText(event.target.value)} />
+      <Button type="button" variant="outline" size="sm" className={cn(limsOutlineBtnClass, 'h-8')} disabled={disabled || !findText} title="Replace Every Match in This Table" onClick={() => replaceAll(tab)}>
+        <Replace className="mr-1.5 h-4 w-4" aria-hidden /> Replace All
+      </Button>
+    </div>
+  )
   // The one cell being edited: double-click a cell to edit it; every other cell stays read-only.
   const [editCell, setEditCell] = useState<string | null>(null)
   const cellEdit = (key: string) => ({
@@ -451,14 +473,15 @@ export function Cmpf311ModuleFields({
 
           {contentTab === 'annexure-c' ? <section className="space-y-2">
             <h3 className="text-xs font-bold uppercase tracking-wide text-stone-600">Annexure C — Laboratory, Marking &amp; Disposal</h3>
+            {replaceBar('annexure-c')}
             <div className="overflow-x-auto border border-stone-300"><table className="w-full table-fixed border-collapse text-xs">
-              <colgroup><col style={{ width: '15%' }} /><col style={{ width: '75%' }} /><col style={{ width: '10%' }} /></colgroup>
-              <thead className="bg-stone-800 text-amber-200"><tr>{['Title', 'Description', 'Action'].map((label) => <th key={label} className="border border-stone-600 px-2 py-2 text-center">{label}</th>)}</tr></thead>
+              <colgroup><col style={{ width: '15%' }} /><col /><col style={{ width: '48px' }} /></colgroup>
+              <thead className="bg-stone-800 text-amber-200"><tr>{['Title', 'Description', 'Action'].map((label) => <th key={label} className="border border-stone-600 px-1 py-2 text-center">{label}</th>)}</tr></thead>
               <tbody>
                 <tr className="bg-[#fffcf7]">
                   <td className="border border-stone-300 p-1 align-top"><Cell label="New Annexure C Title" editing value={newAnnexure.title} disabled={disabled} onChange={(v) => setNewAnnexure({ ...newAnnexure, title: v })} /></td>
                   <td className="border border-stone-300 p-1 align-top"><Cell label="New Annexure C Description" editing value={newAnnexure.content} disabled={disabled} onChange={(v) => setNewAnnexure({ ...newAnnexure, content: v })} /></td>
-                  <td className="border border-stone-300 p-1 text-center"><div className="flex justify-center gap-1"><Button type="button" variant="outline" size="icon" className="h-8 w-8" aria-label="Add Annexure C Row" disabled={disabled} onClick={addAnnexureRow}><Plus className="h-4 w-4" aria-hidden /></Button><Button type="button" variant="outline" size="icon" className="h-8 w-8 text-red-700" aria-label="Clear New Annexure C Row" disabled={disabled} onClick={() => setNewAnnexure({ title: '', content: '' })}><Trash2 className="h-4 w-4" aria-hidden /></Button></div></td>
+                  <td className="border border-stone-300 p-1 text-center"><div className="flex justify-center gap-1"><Button type="button" variant="outline" size="icon" className="h-8 w-8" aria-label="Add Annexure C Row" disabled={disabled} onClick={addAnnexureRow}><Plus className="h-4 w-4" aria-hidden /></Button></div></td>
                 </tr>
                 {value.annexureSections.map((section, index) => <tr key={`annexure-${index}`} className="bg-white">
                   <td className="border border-stone-300 p-1 align-top"><Cell label={`Annexure C title ${index + 1}`} value={section.title} disabled={disabled} {...cellEdit(`a-${index}-t`)} onChange={(v) => patch('annexureSections', value.annexureSections.map((item, i) => i === index ? { ...item, title: v } : item))} /></td>
@@ -471,6 +494,7 @@ export function Cmpf311ModuleFields({
 
           {contentTab === 'test-table' ? <section className="space-y-2">
             <h3 className="text-xs font-bold uppercase tracking-wide text-stone-600">Test Requirements</h3>
+            {replaceBar('test-table')}
             <div className="overflow-x-auto border border-stone-300">
               <table className="w-full table-fixed border-collapse text-center text-xs [&_input]:text-center">
                 <colgroup>
@@ -480,8 +504,8 @@ export function Cmpf311ModuleFields({
                   <col style={{ width: '8.1%' }} />
                   <col style={{ width: '9.0667%' }} />
                   <col style={{ width: '11.3333%' }} />
-                  <col style={{ width: '28%' }} />
-                  <col style={{ width: '6.3333%' }} />
+                  <col />
+                  <col style={{ width: '48px' }} />
                 </colgroup>
                 <thead className="bg-stone-800 text-amber-200">
                   <tr>
@@ -501,7 +525,7 @@ export function Cmpf311ModuleFields({
                     <td className="border border-stone-300 p-1 align-top"><Cell label="New Number of Samples" editing numeric value={newTestRow.noOfSample} disabled={disabled} onChange={(v) => setNewTestRow({ ...newTestRow, noOfSample: v.replace(/\D/g, '') })} /></td>
                     <td className="border border-stone-300 p-1 align-top"><Cell label="New Frequency" editing value={newTestRow.frequency} disabled={disabled} onChange={(v) => setNewTestRow({ ...newTestRow, frequency: v })} /></td>
                     <td className="border border-stone-300 p-1 align-top"><Cell label="New Remarks" editing value={newTestRow.remarks} disabled={disabled} onChange={(v) => setNewTestRow({ ...newTestRow, remarks: v })} /></td>
-                    <td className="border border-stone-300 p-1 text-center align-top"><div className="flex justify-center gap-1"><Button type="button" variant="outline" size="icon" className="h-8 w-8" aria-label="Add Test Requirement Row" disabled={disabled || generating} onClick={addTestRow}><Plus className="h-4 w-4" aria-hidden /></Button><Button type="button" variant="outline" size="icon" className="h-8 w-8 text-red-700" aria-label="Clear New Test Requirement Row" disabled={disabled || generating} onClick={() => setNewTestRow(emptyCmpf311TestRow())}><Trash2 className="h-4 w-4" aria-hidden /></Button></div></td>
+                    <td className="border border-stone-300 p-1 text-center align-top"><div className="flex justify-center gap-1"><Button type="button" variant="outline" size="icon" className="h-8 w-8" aria-label="Add Test Requirement Row" disabled={disabled || generating} onClick={addTestRow}><Plus className="h-4 w-4" aria-hidden /></Button></div></td>
                   </tr>
                   {value.testRows.map((row, index) => <tr key={`test-${index}`} className="bg-white">
                     <td className="border border-stone-300 p-1 align-top"><Cell label={`Clause row ${index + 1}`} value={row.clause} disabled={disabled} {...cellEdit(`t-${index}-c`)} onChange={(v) => patchTestRow(index, 'clause', v)} /></td>
@@ -520,14 +544,15 @@ export function Cmpf311ModuleFields({
 
           {contentTab === 'notes' ? <section className="space-y-2">
             <h3 className="text-xs font-bold uppercase tracking-wide text-stone-600">Notes — Subcontracted Laboratory &amp; Process</h3>
+            {replaceBar('notes')}
             <div className="overflow-x-auto border border-stone-300"><table className="w-full table-fixed border-collapse text-xs">
-              <colgroup><col style={{ width: '15%' }} /><col style={{ width: '75%' }} /><col style={{ width: '10%' }} /></colgroup>
-              <thead className="bg-stone-800 text-amber-200"><tr>{['Title', 'Description', 'Action'].map((label) => <th key={label} className="border border-stone-600 px-2 py-2 text-center">{label}</th>)}</tr></thead>
+              <colgroup><col style={{ width: '15%' }} /><col /><col style={{ width: '48px' }} /></colgroup>
+              <thead className="bg-stone-800 text-amber-200"><tr>{['Title', 'Description', 'Action'].map((label) => <th key={label} className="border border-stone-600 px-1 py-2 text-center">{label}</th>)}</tr></thead>
               <tbody>
                 <tr className="bg-[#fffcf7]">
                   <td className="border border-stone-300 p-1 align-top"><Cell label="New Note Title" editing value={newNote.title} disabled={disabled} onChange={(v) => setNewNote({ ...newNote, title: v })} /></td>
                   <td className="border border-stone-300 p-1 align-top"><Cell label="New Note Description" editing value={newNote.description} disabled={disabled} onChange={(v) => setNewNote({ ...newNote, description: v })} /></td>
-                  <td className="border border-stone-300 p-1 text-center align-top"><div className="flex justify-center gap-1"><Button type="button" variant="outline" size="icon" className="h-8 w-8" aria-label="Add Note Row" disabled={disabled} onClick={addNoteRow}><Plus className="h-4 w-4" aria-hidden /></Button><Button type="button" variant="outline" size="icon" className="h-8 w-8 text-red-700" aria-label="Clear New Note Row" disabled={disabled} onClick={() => setNewNote({ title: '', description: '' })}><Trash2 className="h-4 w-4" aria-hidden /></Button></div></td>
+                  <td className="border border-stone-300 p-1 text-center align-top"><div className="flex justify-center gap-1"><Button type="button" variant="outline" size="icon" className="h-8 w-8" aria-label="Add Note Row" disabled={disabled} onClick={addNoteRow}><Plus className="h-4 w-4" aria-hidden /></Button></div></td>
                 </tr>
                 {value.notes.map((note, index) => <tr key={`note-${index}`} className="bg-white">
                   <td className="border border-stone-300 p-1 align-top"><Cell label={`Note title ${index + 1}`} value={note.title} disabled={disabled} {...cellEdit(`n-${index}-t`)} onChange={(v) => patch('notes', value.notes.map((item, i) => i === index ? { ...item, title: v } : item))} /></td>
