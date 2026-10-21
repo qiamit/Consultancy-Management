@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { Calendar, Check, FileText, Laptop, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Calendar, FileText, Laptop, Plus, Sparkles, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -39,6 +39,72 @@ function openCmpf311DatePicker() {
     // Fall back to focusing the native date input if showPicker is unavailable.
   }
   input.focus()
+}
+
+/**
+ * A table cell that shows its whole text (the box grows or shrinks with the content and the column width) and is read-only
+ * until it is double-clicked; it stops editing on blur, Enter or Escape.
+ */
+function Cell({ label, value, onChange, editing, onEdit, onDone, onCommit, disabled, left, numeric, placeholder }: {
+  label: string
+  value: string
+  onChange: (next: string) => void
+  editing?: boolean
+  onEdit?: () => void
+  onDone?: () => void
+  onCommit?: (value: string) => void
+  disabled?: boolean
+  left?: boolean
+  numeric?: boolean
+  placeholder?: string
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null)
+  const fit = () => {
+    const el = ref.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight + 2}px`
+  }
+  useLayoutEffect(fit, [value])
+  useEffect(() => {
+    const el = ref.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    let width = el.clientWidth
+    const observer = new ResizeObserver(() => {
+      if (el.clientWidth !== width) { width = el.clientWidth; fit() }
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+  useEffect(() => {
+    const el = ref.current
+    if (editing && onEdit && el && document.activeElement !== el) {
+      el.focus()
+      el.setSelectionRange(el.value.length, el.value.length)
+    }
+  }, [editing])
+  const finish = () => { onCommit?.(value); onDone?.() }
+  return (
+    <textarea
+      ref={ref}
+      rows={1}
+      aria-label={label}
+      placeholder={placeholder}
+      inputMode={numeric ? 'numeric' : undefined}
+      value={value}
+      readOnly={disabled || !editing}
+      title={editing || disabled ? undefined : 'Double-Click to Edit'}
+      onDoubleClick={onEdit}
+      onChange={(event) => onChange(event.target.value.replace(/\n/g, ' '))}
+      onBlur={() => { if (editing) finish() }}
+      onKeyDown={(event) => { if (event.key === 'Enter' || event.key === 'Escape') { event.preventDefault(); event.currentTarget.blur() } }}
+      className={cn(
+        'block w-full min-w-0 resize-none overflow-hidden whitespace-pre-wrap break-words rounded-none border px-1.5 py-1 text-xs leading-5 text-foreground shadow-none outline-none',
+        left ? 'text-left' : 'text-center',
+        editing ? 'border-amber-600 bg-card ring-2 ring-amber-500/20' : 'cursor-default border-stone-400 bg-stone-50 text-stone-700',
+      )}
+    />
+  )
 }
 
 const TARGET_LABELS: Record<GenerateTarget, string> = {
@@ -82,9 +148,13 @@ export function Cmpf311ModuleFields({
   const [contentTab, setContentTab] = useState<ContentTab>('annexure-c')
   const [newAnnexure, setNewAnnexure] = useState({ title: '', content: '' })
   const [newNote, setNewNote] = useState({ title: '', description: '' })
-  const [editingAnnexureIndex, setEditingAnnexureIndex] = useState<number | null>(null)
-  const [editingTestIndex, setEditingTestIndex] = useState<number | null>(null)
-  const [editingNoteIndex, setEditingNoteIndex] = useState<number | null>(null)
+  // The one cell being edited: double-click a cell to edit it; every other cell stays read-only.
+  const [editCell, setEditCell] = useState<string | null>(null)
+  const cellEdit = (key: string) => ({
+    editing: editCell === key,
+    onEdit: () => { if (!disabled) setEditCell(key) },
+    onDone: () => setEditCell((cur) => (cur === key ? null : cur)),
+  })
   const currentMasterData = masterData?.isCodeId === isCodeId ? masterData : null
   const masterManualNumber = currentMasterData?.productManualNumber ?? ''
   const defaultMasterFile = currentMasterData?.file
@@ -220,19 +290,16 @@ export function Cmpf311ModuleFields({
   const addTestRow = () => {
     patch('testRows', [...value.testRows, { ...newTestRow, requirement: formatCmpf311Requirement(newTestRow.requirement) }])
     setNewTestRow(emptyCmpf311TestRow())
-    setEditingTestIndex(null)
   }
 
   const addAnnexureRow = () => {
     patch('annexureSections', [...value.annexureSections, newAnnexure])
     setNewAnnexure({ title: '', content: '' })
-    setEditingAnnexureIndex(null)
   }
 
   const addNoteRow = () => {
     patch('notes', [...value.notes, newNote])
     setNewNote({ title: '', description: '' })
-    setEditingNoteIndex(null)
   }
 
   return (
@@ -389,14 +456,14 @@ export function Cmpf311ModuleFields({
               <thead className="bg-stone-800 text-amber-200"><tr>{['Title', 'Description', 'Action'].map((label) => <th key={label} className="border border-stone-600 px-2 py-2 text-center">{label}</th>)}</tr></thead>
               <tbody>
                 <tr className="bg-[#fffcf7]">
-                  <td className="border border-stone-300 p-1"><Input aria-label="New Annexure C Title" className={cn(limsFieldClass, 'h-8 w-full min-w-0')} value={newAnnexure.title} disabled={disabled} onChange={(event) => setNewAnnexure({ ...newAnnexure, title: event.target.value })} /></td>
-                  <td className="border border-stone-300 p-1"><Input type="text" aria-label="New Annexure C Description" className={cn(limsFieldClass, 'h-8 w-full min-w-0 px-2')} value={newAnnexure.content} disabled={disabled} onChange={(event) => setNewAnnexure({ ...newAnnexure, content: event.target.value })} /></td>
+                  <td className="border border-stone-300 p-1 align-top"><Cell label="New Annexure C Title" editing value={newAnnexure.title} disabled={disabled} onChange={(v) => setNewAnnexure({ ...newAnnexure, title: v })} /></td>
+                  <td className="border border-stone-300 p-1 align-top"><Cell label="New Annexure C Description" editing value={newAnnexure.content} disabled={disabled} onChange={(v) => setNewAnnexure({ ...newAnnexure, content: v })} /></td>
                   <td className="border border-stone-300 p-1 text-center"><div className="flex justify-center gap-1"><Button type="button" variant="outline" size="icon" className="h-8 w-8" aria-label="Add Annexure C Row" disabled={disabled} onClick={addAnnexureRow}><Plus className="h-4 w-4" aria-hidden /></Button><Button type="button" variant="outline" size="icon" className="h-8 w-8 text-red-700" aria-label="Clear New Annexure C Row" disabled={disabled} onClick={() => setNewAnnexure({ title: '', content: '' })}><Trash2 className="h-4 w-4" aria-hidden /></Button></div></td>
                 </tr>
                 {value.annexureSections.map((section, index) => <tr key={`annexure-${index}`} className="bg-white">
-                  <td className="border border-stone-300 p-1"><Input aria-label={`Annexure C title ${index + 1}`} className={cn(limsFieldClass, 'h-8 w-full min-w-0')} value={section.title} disabled={disabled || editingAnnexureIndex !== index} onChange={(event) => patch('annexureSections', value.annexureSections.map((item, i) => i === index ? { ...item, title: event.target.value } : item))} /></td>
-                  <td className="border border-stone-300 p-1"><Input type="text" aria-label={`Annexure C description ${index + 1}`} className={cn(limsFieldClass, 'h-8 w-full min-w-0 px-2')} value={section.content} disabled={disabled || editingAnnexureIndex !== index} onChange={(event) => patch('annexureSections', value.annexureSections.map((item, i) => i === index ? { ...item, content: event.target.value } : item))} /></td>
-                  <td className="border border-stone-300 p-1 text-center"><div className="flex justify-center gap-1"><Button type="button" variant="outline" size="icon" className="h-8 w-8" aria-label={`${editingAnnexureIndex === index ? 'Save' : 'Edit'} Annexure C row ${index + 1}`} disabled={disabled} onClick={() => setEditingAnnexureIndex(editingAnnexureIndex === index ? null : index)}>{editingAnnexureIndex === index ? <Check className="h-4 w-4" aria-hidden /> : <Pencil className="h-4 w-4" aria-hidden />}</Button><Button type="button" variant="outline" size="icon" className="h-8 w-8 text-red-700" aria-label={`Remove Annexure C row ${index + 1}`} disabled={disabled} onClick={() => { patch('annexureSections', value.annexureSections.filter((_, i) => i !== index)); setEditingAnnexureIndex(null) }}><Trash2 className="h-4 w-4" aria-hidden /></Button></div></td>
+                  <td className="border border-stone-300 p-1 align-top"><Cell label={`Annexure C title ${index + 1}`} value={section.title} disabled={disabled} {...cellEdit(`a-${index}-t`)} onChange={(v) => patch('annexureSections', value.annexureSections.map((item, i) => i === index ? { ...item, title: v } : item))} /></td>
+                  <td className="border border-stone-300 p-1 align-top"><Cell label={`Annexure C description ${index + 1}`} value={section.content} disabled={disabled} {...cellEdit(`a-${index}-d`)} onChange={(v) => patch('annexureSections', value.annexureSections.map((item, i) => i === index ? { ...item, content: v } : item))} /></td>
+                  <td className="border border-stone-300 p-1 text-center align-top"><div className="flex justify-center gap-1"><Button type="button" variant="outline" size="icon" className="h-8 w-8 text-red-700" aria-label={`Remove Annexure C row ${index + 1}`} disabled={disabled} onClick={() => patch('annexureSections', value.annexureSections.filter((_, i) => i !== index))}><Trash2 className="h-4 w-4" aria-hidden /></Button></div></td>
                 </tr>)}
               </tbody>
             </table></div>
@@ -427,24 +494,24 @@ export function Cmpf311ModuleFields({
                 </thead>
                 <tbody>
                   <tr className="bg-[#fffcf7]">
-                    <td className="border border-stone-300 p-1"><Input aria-label="New Clause" className={cn(limsFieldClass, 'h-8 w-full min-w-0 px-1')} value={newTestRow.clause} disabled={disabled} onChange={(event) => setNewTestRow({ ...newTestRow, clause: event.target.value })} /></td>
-                    <td className="border border-stone-300 p-1"><Input aria-label="New Requirement" className={cn(limsFieldClass, 'h-8 w-full min-w-0 px-1 text-left')} value={newTestRow.requirement} disabled={disabled} onChange={(event) => setNewTestRow({ ...newTestRow, requirement: event.target.value })} onBlur={(event) => setNewTestRow((row) => ({ ...row, requirement: formatCmpf311Requirement(event.target.value) }))} /></td>
-                    <td className="border border-stone-300 p-1"><Input aria-label="New Test Method and Clause Number" className={cn(limsFieldClass, 'h-8 w-full min-w-0 px-1')} value={[newTestRow.testMethod, newTestRow.testMethodClause].filter(Boolean).join(' — ')} disabled={disabled} onChange={(event) => setNewTestRow({ ...newTestRow, testMethod: event.target.value, testMethodClause: '' })} /></td>
-                    <td className="border border-stone-300 p-1"><Input aria-label="New Equipment Requirement R or S" placeholder="R / S" className={cn(limsFieldClass, 'h-8 w-full min-w-0 px-1')} value={newTestRow.testEquipmentRequirement} disabled={disabled} onChange={(event) => setNewTestRow({ ...newTestRow, testEquipmentRequirement: event.target.value })} /></td>
-                    <td className="border border-stone-300 p-1"><Input aria-label="New Number of Samples" inputMode="numeric" pattern="[0-9]*" className={cn(limsFieldClass, 'h-8 w-full min-w-0 px-1')} value={newTestRow.noOfSample} disabled={disabled} onChange={(event) => setNewTestRow({ ...newTestRow, noOfSample: event.target.value.replace(/\D/g, '') })} /></td>
-                    <td className="border border-stone-300 p-1"><Input aria-label="New Frequency" className={cn(limsFieldClass, 'h-8 w-full min-w-0 px-1')} value={newTestRow.frequency} disabled={disabled} onChange={(event) => setNewTestRow({ ...newTestRow, frequency: event.target.value })} /></td>
-                    <td className="border border-stone-300 p-1"><Input aria-label="New Remarks" className={cn(limsFieldClass, 'h-8 w-full min-w-0 px-1')} value={newTestRow.remarks} disabled={disabled} onChange={(event) => setNewTestRow({ ...newTestRow, remarks: event.target.value })} /></td>
-                    <td className="border border-stone-300 p-1 text-center"><div className="flex justify-center gap-1"><Button type="button" variant="outline" size="icon" className="h-8 w-8" aria-label="Add Test Requirement Row" disabled={disabled || generating} onClick={addTestRow}><Plus className="h-4 w-4" aria-hidden /></Button><Button type="button" variant="outline" size="icon" className="h-8 w-8 text-red-700" aria-label="Clear New Test Requirement Row" disabled={disabled || generating} onClick={() => setNewTestRow(emptyCmpf311TestRow())}><Trash2 className="h-4 w-4" aria-hidden /></Button></div></td>
+                    <td className="border border-stone-300 p-1 align-top"><Cell label="New Clause" editing value={newTestRow.clause} disabled={disabled} onChange={(v) => setNewTestRow({ ...newTestRow, clause: v })} /></td>
+                    <td className="border border-stone-300 p-1 align-top"><Cell label="New Requirement" editing left value={newTestRow.requirement} disabled={disabled} onCommit={(v) => setNewTestRow((r) => ({ ...r, requirement: formatCmpf311Requirement(v) }))} onChange={(v) => setNewTestRow({ ...newTestRow, requirement: v })} /></td>
+                    <td className="border border-stone-300 p-1 align-top"><Cell label="New Test Method and Clause Number" editing value={[newTestRow.testMethod, newTestRow.testMethodClause].filter(Boolean).join(' — ')} disabled={disabled} onChange={(v) => setNewTestRow({ ...newTestRow, testMethod: v, testMethodClause: '' })} /></td>
+                    <td className="border border-stone-300 p-1 align-top"><Cell label="New Equipment Requirement R or S" editing placeholder="R / S" value={newTestRow.testEquipmentRequirement} disabled={disabled} onChange={(v) => setNewTestRow({ ...newTestRow, testEquipmentRequirement: v })} /></td>
+                    <td className="border border-stone-300 p-1 align-top"><Cell label="New Number of Samples" editing numeric value={newTestRow.noOfSample} disabled={disabled} onChange={(v) => setNewTestRow({ ...newTestRow, noOfSample: v.replace(/\D/g, '') })} /></td>
+                    <td className="border border-stone-300 p-1 align-top"><Cell label="New Frequency" editing value={newTestRow.frequency} disabled={disabled} onChange={(v) => setNewTestRow({ ...newTestRow, frequency: v })} /></td>
+                    <td className="border border-stone-300 p-1 align-top"><Cell label="New Remarks" editing value={newTestRow.remarks} disabled={disabled} onChange={(v) => setNewTestRow({ ...newTestRow, remarks: v })} /></td>
+                    <td className="border border-stone-300 p-1 text-center align-top"><div className="flex justify-center gap-1"><Button type="button" variant="outline" size="icon" className="h-8 w-8" aria-label="Add Test Requirement Row" disabled={disabled || generating} onClick={addTestRow}><Plus className="h-4 w-4" aria-hidden /></Button><Button type="button" variant="outline" size="icon" className="h-8 w-8 text-red-700" aria-label="Clear New Test Requirement Row" disabled={disabled || generating} onClick={() => setNewTestRow(emptyCmpf311TestRow())}><Trash2 className="h-4 w-4" aria-hidden /></Button></div></td>
                   </tr>
                   {value.testRows.map((row, index) => <tr key={`test-${index}`} className="bg-white">
-                    <td className="border border-stone-300 p-1"><Input aria-label={`Clause row ${index + 1}`} className={cn(limsFieldClass, 'h-8 w-full min-w-0 px-1')} value={row.clause} disabled={disabled || editingTestIndex !== index} onChange={(event) => patchTestRow(index, 'clause', event.target.value)} /></td>
-                    <td className="border border-stone-300 p-1"><Input aria-label={`Requirements row ${index + 1}`} className={cn(limsFieldClass, 'h-8 w-full min-w-0 px-1 text-left')} value={row.requirement} disabled={disabled || editingTestIndex !== index} onChange={(event) => patchTestRow(index, 'requirement', event.target.value)} onBlur={(event) => patchTestRow(index, 'requirement', formatCmpf311Requirement(event.target.value))} /></td>
-                    <td className="border border-stone-300 p-1"><Input aria-label={`Test method and clause number row ${index + 1}`} className={cn(limsFieldClass, 'h-8 w-full min-w-0 px-1')} value={[row.testMethod, row.testMethodClause].filter(Boolean).join(' — ')} disabled={disabled || editingTestIndex !== index} onChange={(event) => patch('testRows', value.testRows.map((item, i) => i === index ? { ...item, testMethod: event.target.value, testMethodClause: '' } : item))} /></td>
-                    <td className="border border-stone-300 p-1"><Input aria-label={`Test equipments R or S row ${index + 1}`} placeholder="R / S" className={cn(limsFieldClass, 'h-8 w-full min-w-0 px-1')} value={row.testEquipmentRequirement} disabled={disabled || editingTestIndex !== index} onChange={(event) => patchTestRow(index, 'testEquipmentRequirement', event.target.value)} /></td>
-                    <td className="border border-stone-300 p-1"><Input aria-label={`Number of samples row ${index + 1}`} inputMode="numeric" pattern="[0-9]*" className={cn(limsFieldClass, 'h-8 w-full min-w-0 px-1')} value={row.noOfSample} disabled={disabled || editingTestIndex !== index} onChange={(event) => patchTestRow(index, 'noOfSample', event.target.value.replace(/\D/g, ''))} /></td>
-                    <td className="border border-stone-300 p-1"><Input aria-label={`Frequency row ${index + 1}`} className={cn(limsFieldClass, 'h-8 w-full min-w-0 px-1')} value={row.frequency} disabled={disabled || editingTestIndex !== index} onChange={(event) => patchTestRow(index, 'frequency', event.target.value)} /></td>
-                    <td className="border border-stone-300 p-1"><Input aria-label={`Remarks row ${index + 1}`} className={cn(limsFieldClass, 'h-8 w-full min-w-0 px-1')} value={row.remarks} disabled={disabled || editingTestIndex !== index} onChange={(event) => patchTestRow(index, 'remarks', event.target.value)} /></td>
-                    <td className="border border-stone-300 p-1 text-center"><div className="flex justify-center gap-0.5"><Button type="button" variant="outline" size="icon" className="h-7 w-7" aria-label={`${editingTestIndex === index ? 'Save' : 'Edit'} test requirement row ${index + 1}`} disabled={disabled} onClick={() => setEditingTestIndex(editingTestIndex === index ? null : index)}>{editingTestIndex === index ? <Check className="h-3.5 w-3.5" aria-hidden /> : <Pencil className="h-3.5 w-3.5" aria-hidden />}</Button><Button type="button" variant="outline" size="icon" className="h-7 w-7 text-red-700" aria-label={`Remove test requirement row ${index + 1}`} disabled={disabled} onClick={() => { patch('testRows', value.testRows.filter((_, i) => i !== index)); setEditingTestIndex(null) }}><Trash2 className="h-3.5 w-3.5" aria-hidden /></Button></div></td>
+                    <td className="border border-stone-300 p-1 align-top"><Cell label={`Clause row ${index + 1}`} value={row.clause} disabled={disabled} {...cellEdit(`t-${index}-c`)} onChange={(v) => patchTestRow(index, 'clause', v)} /></td>
+                    <td className="border border-stone-300 p-1 align-top"><Cell label={`Requirements row ${index + 1}`} left value={row.requirement} disabled={disabled} {...cellEdit(`t-${index}-r`)} onCommit={(v) => patchTestRow(index, 'requirement', formatCmpf311Requirement(v))} onChange={(v) => patchTestRow(index, 'requirement', v)} /></td>
+                    <td className="border border-stone-300 p-1 align-top"><Cell label={`Test method and clause number row ${index + 1}`} value={[row.testMethod, row.testMethodClause].filter(Boolean).join(' — ')} disabled={disabled} {...cellEdit(`t-${index}-m`)} onChange={(v) => patch('testRows', value.testRows.map((item, i) => i === index ? { ...item, testMethod: v, testMethodClause: '' } : item))} /></td>
+                    <td className="border border-stone-300 p-1 align-top"><Cell label={`Test equipments R or S row ${index + 1}`} value={row.testEquipmentRequirement} disabled={disabled} {...cellEdit(`t-${index}-e`)} placeholder="R / S" onChange={(v) => patchTestRow(index, 'testEquipmentRequirement', v)} /></td>
+                    <td className="border border-stone-300 p-1 align-top"><Cell label={`Number of samples row ${index + 1}`} numeric value={row.noOfSample} disabled={disabled} {...cellEdit(`t-${index}-n`)} onChange={(v) => patchTestRow(index, 'noOfSample', v.replace(/\D/g, ''))} /></td>
+                    <td className="border border-stone-300 p-1 align-top"><Cell label={`Frequency row ${index + 1}`} value={row.frequency} disabled={disabled} {...cellEdit(`t-${index}-f`)} onChange={(v) => patchTestRow(index, 'frequency', v)} /></td>
+                    <td className="border border-stone-300 p-1 align-top"><Cell label={`Remarks row ${index + 1}`} value={row.remarks} disabled={disabled} {...cellEdit(`t-${index}-k`)} onChange={(v) => patchTestRow(index, 'remarks', v)} /></td>
+                    <td className="border border-stone-300 p-1 text-center align-top"><div className="flex justify-center gap-0.5"><Button type="button" variant="outline" size="icon" className="h-7 w-7 text-red-700" aria-label={`Remove test requirement row ${index + 1}`} disabled={disabled} onClick={() => patch('testRows', value.testRows.filter((_, i) => i !== index))}><Trash2 className="h-3.5 w-3.5" aria-hidden /></Button></div></td>
                   </tr>)}
                 </tbody>
               </table>
@@ -458,14 +525,14 @@ export function Cmpf311ModuleFields({
               <thead className="bg-stone-800 text-amber-200"><tr>{['Title', 'Description', 'Action'].map((label) => <th key={label} className="border border-stone-600 px-2 py-2 text-center">{label}</th>)}</tr></thead>
               <tbody>
                 <tr className="bg-[#fffcf7]">
-                  <td className="border border-stone-300 p-1"><Input aria-label="New Note Title" className={cn(limsFieldClass, 'h-8 w-full min-w-0')} value={newNote.title} disabled={disabled} onChange={(event) => setNewNote({ ...newNote, title: event.target.value })} /></td>
-                  <td className="border border-stone-300 p-1"><Input type="text" aria-label="New Note Description" className={cn(limsFieldClass, 'h-8 w-full min-w-0 px-2')} value={newNote.description} disabled={disabled} onChange={(event) => setNewNote({ ...newNote, description: event.target.value })} /></td>
-                  <td className="border border-stone-300 p-1 text-center"><div className="flex justify-center gap-1"><Button type="button" variant="outline" size="icon" className="h-8 w-8" aria-label="Add Note Row" disabled={disabled} onClick={addNoteRow}><Plus className="h-4 w-4" aria-hidden /></Button><Button type="button" variant="outline" size="icon" className="h-8 w-8 text-red-700" aria-label="Clear New Note Row" disabled={disabled} onClick={() => setNewNote({ title: '', description: '' })}><Trash2 className="h-4 w-4" aria-hidden /></Button></div></td>
+                  <td className="border border-stone-300 p-1 align-top"><Cell label="New Note Title" editing value={newNote.title} disabled={disabled} onChange={(v) => setNewNote({ ...newNote, title: v })} /></td>
+                  <td className="border border-stone-300 p-1 align-top"><Cell label="New Note Description" editing value={newNote.description} disabled={disabled} onChange={(v) => setNewNote({ ...newNote, description: v })} /></td>
+                  <td className="border border-stone-300 p-1 text-center align-top"><div className="flex justify-center gap-1"><Button type="button" variant="outline" size="icon" className="h-8 w-8" aria-label="Add Note Row" disabled={disabled} onClick={addNoteRow}><Plus className="h-4 w-4" aria-hidden /></Button><Button type="button" variant="outline" size="icon" className="h-8 w-8 text-red-700" aria-label="Clear New Note Row" disabled={disabled} onClick={() => setNewNote({ title: '', description: '' })}><Trash2 className="h-4 w-4" aria-hidden /></Button></div></td>
                 </tr>
                 {value.notes.map((note, index) => <tr key={`note-${index}`} className="bg-white">
-                  <td className="border border-stone-300 p-1"><Input aria-label={`Note title ${index + 1}`} className={cn(limsFieldClass, 'h-8 w-full min-w-0')} value={note.title} disabled={disabled || editingNoteIndex !== index} onChange={(event) => patch('notes', value.notes.map((item, i) => i === index ? { ...item, title: event.target.value } : item))} /></td>
-                  <td className="border border-stone-300 p-1"><Input type="text" aria-label={`Note description ${index + 1}`} className={cn(limsFieldClass, 'h-8 w-full min-w-0 px-2')} value={note.description} disabled={disabled || editingNoteIndex !== index} onChange={(event) => patch('notes', value.notes.map((item, i) => i === index ? { ...item, description: event.target.value } : item))} /></td>
-                  <td className="border border-stone-300 p-1 text-center"><div className="flex justify-center gap-1"><Button type="button" variant="outline" size="icon" className="h-8 w-8" aria-label={`${editingNoteIndex === index ? 'Save' : 'Edit'} note row ${index + 1}`} disabled={disabled} onClick={() => setEditingNoteIndex(editingNoteIndex === index ? null : index)}>{editingNoteIndex === index ? <Check className="h-4 w-4" aria-hidden /> : <Pencil className="h-4 w-4" aria-hidden />}</Button><Button type="button" variant="outline" size="icon" className="h-8 w-8 text-red-700" aria-label={`Remove note row ${index + 1}`} disabled={disabled} onClick={() => { patch('notes', value.notes.filter((_, i) => i !== index)); setEditingNoteIndex(null) }}><Trash2 className="h-4 w-4" aria-hidden /></Button></div></td>
+                  <td className="border border-stone-300 p-1 align-top"><Cell label={`Note title ${index + 1}`} value={note.title} disabled={disabled} {...cellEdit(`n-${index}-t`)} onChange={(v) => patch('notes', value.notes.map((item, i) => i === index ? { ...item, title: v } : item))} /></td>
+                  <td className="border border-stone-300 p-1 align-top"><Cell label={`Note description ${index + 1}`} value={note.description} disabled={disabled} {...cellEdit(`n-${index}-d`)} onChange={(v) => patch('notes', value.notes.map((item, i) => i === index ? { ...item, description: v } : item))} /></td>
+                  <td className="border border-stone-300 p-1 text-center align-top"><div className="flex justify-center gap-1"><Button type="button" variant="outline" size="icon" className="h-8 w-8 text-red-700" aria-label={`Remove note row ${index + 1}`} disabled={disabled} onClick={() => patch('notes', value.notes.filter((_, i) => i !== index))}><Trash2 className="h-4 w-4" aria-hidden /></Button></div></td>
                 </tr>)}
               </tbody>
             </table></div>
