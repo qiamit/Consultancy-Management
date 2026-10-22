@@ -39,6 +39,7 @@ import {
   formatDisplayDate,
   formatInr,
   isCodeDisplayLabel,
+  isFmcsProject,
   licenseValidityState,
   manakLoginFromProject,
   todayIsoDate,
@@ -169,7 +170,7 @@ function RowActions({
               void buildManakRenewalPayload(row)
                 .then((renewal) => {
                   if (!renewal.returns.length) toast.info('No saved Renewal Sheet yet — Manak opens, but the production returns are not filled.')
-                  return openManakEbisAssist({ portalUserId: manakLoginFromProject(row).userId, projectId: row.id, renewal })
+                  return openManakEbisAssist({ portalUserId: manakLoginFromProject(row).userId, projectId: row.id, renewal, fmcs: isFmcsProject(row) })
                 })
                 .then(({ extensionUsed }) => {
                   if (extensionUsed) toast.success('Manak Assist: Renewal ON — Sign in with the Captcha')
@@ -225,7 +226,7 @@ function RowActions({
         variant="ghost"
         className={actionGhostBtnClass}
         aria-label={`Manak Assist for ${client}`}
-        title="Manak Assist — login and fill the New Application on Manak"
+        title={isFmcsProject(row) ? 'Manak Assist — Sign In to the FMCS Portal' : 'Manak Assist — login and fill the New Application on Manak'}
         onClick={() => {
           if (inclusionMode || (row.project_kind ?? '').trim().toLowerCase() === 'inclusion') {
             // Inclusion has its own Manak flow (Change in Scope); never the New Application fill.
@@ -238,6 +239,16 @@ function RowActions({
                 else toast.warning('Extension not detected — opened Manak eBIS in a new tab', { description: EXTENSION_MISSING_MSG })
               })
               .catch((err: unknown) => toast.error(err instanceof Error ? err.message : 'Could not prepare the inclusion for Manak'))
+            return
+          }
+          if (isFmcsProject(row)) {
+            // FMCS applicants use the FMCS portal; the extension does not fill FMCS forms yet, so only sign in.
+            void openManakEbisAssist({ portalUserId: manakLoginFromProject(row).userId, projectId: row.id, fmcs: true })
+              .then(({ extensionUsed }) => {
+                if (extensionUsed) toast.success('Opening the Manak FMCS Login — Type the Captcha to Sign In')
+                else toast.warning('Extension not detected — opened the Manak FMCS login in a new tab', { description: EXTENSION_MISSING_MSG })
+              })
+              .catch((err: unknown) => toast.error(err instanceof Error ? err.message : 'Could not open Manak'))
             return
           }
           const preparing = toast.loading('Preparing application data and all documents for Manak — this can take a minute or two…')
@@ -563,6 +574,7 @@ export function BisProjectsTable({
                               kind="Client"
                               className="break-words text-[14px] font-bold leading-snug tracking-tight text-stone-900"
                             />
+                            {isFmcsProject(r) ? <span className="ml-1.5 inline-flex items-center border border-sky-700 bg-sky-50 px-1.5 py-px align-middle text-[10px] font-bold uppercase tracking-wide text-sky-800" title="Foreign Manufacturers Certification Scheme">FMCS</span> : null}
                             <OpenNoticeBadge count={noticeCounts[r.id] ?? 0} />
                             <div className="mt-0.5 text-xs font-semibold text-amber-800">
                               <TableTextLink
@@ -749,6 +761,7 @@ export function BisProjectsTable({
                           kind="Client"
                           className="break-words text-sm font-semibold leading-snug [hyphens:auto]"
                         />
+                        {isFmcsProject(r) ? <span className="ml-1.5 inline-flex items-center border border-sky-700 bg-sky-50 px-1.5 py-px align-middle text-[10px] font-bold uppercase tracking-wide text-sky-800" title="Foreign Manufacturers Certification Scheme">FMCS</span> : null}
                         <OpenNoticeBadge count={noticeCounts[r.id] ?? 0} />
                       </TableCell>
                       <TableCell className="px-2 py-2 text-center align-middle text-sm">

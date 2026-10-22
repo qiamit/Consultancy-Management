@@ -143,6 +143,16 @@ export type BisProjectRow = {
   updated_at?: string | null
   client: BisProjectClientJoin | null
   is_code: BisProjectIsCodeJoin | null
+  /** Certification scheme joined from `certification_schemes` (code 'fmcs' = Foreign Manufacturers Certification Scheme). */
+  scheme?: { code: string | null; name?: string | null } | null
+}
+
+export const FMCS_SCHEME_CODE = 'fmcs'
+export const DOMESTIC_SCHEME_CODE = 'scheme-i'
+
+/** True when the application / licence is under FMCS (foreign manufacturer). */
+export function isFmcsProject(row: { scheme?: { code: string | null } | null } | null | undefined): boolean {
+  return String(row?.scheme?.code ?? '').trim().toLowerCase() === FMCS_SCHEME_CODE
 }
 
 export type BisApplicationProcess = 'simplified' | 'normal'

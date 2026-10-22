@@ -6,6 +6,8 @@ import type { ManakRenewalPayload } from '../renewals/renewalPayload'
 import type { ManakNewAppPayload } from './manakNewAppPayload'
 
 export const MANAK_EBIS_LOGIN_URL = 'https://www.manakonline.in/MANAK/eBISLogin'
+/** FMCS (foreign manufacturer) applicants sign in on their own Manak portal. */
+export const MANAK_FMCS_LOGIN_URL = 'https://www.manakonline.in/FMCS/login'
 export const MANAK_HOME_URL = 'https://www.manakonline.in/MANAK/login'
 export const MANAK_LICENCE_RELATED_RPT_URL =
   'https://www.manakonline.in/MANAK/ApplicationLicenceRelatedrpt'
@@ -160,9 +162,11 @@ export async function openManakEbisAssist(options: {
   inclusion?: ManakInclusionPayload | null
   /** Licence renewal: login with Test Request OFF; the extension's Renewal section takes over. */
   renewal?: ManakRenewalPayload | null
+  /** FMCS licence / application: open the FMCS portal login instead of eBIS. */
+  fmcs?: boolean
 }): Promise<OpenManakEbisResult> {
   const portalUserId = String(options.portalUserId ?? '').trim()
-  const loginUrl = manakEbisLoginHref(portalUserId)
+  const loginUrl = options.fmcs ? MANAK_FMCS_LOGIN_URL : manakEbisLoginHref(portalUserId)
   const present = await pingExtension()
   if (!present) {
     openManakUrl(loginUrl)

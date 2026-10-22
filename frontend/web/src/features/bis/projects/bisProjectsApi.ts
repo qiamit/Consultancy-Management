@@ -21,9 +21,9 @@ import {
 } from './types'
 
 const SELECT_WITH_JOINS =
-  '*, client:clients(company_name, email, manak_user_id, manak_password_set), is_code:is_codes(is_number, title, revision_year, part_no, section_no, standard_prefix, unit_of_is)'
+  '*, client:clients(company_name, email, manak_user_id, manak_password_set), is_code:is_codes(is_number, title, revision_year, part_no, section_no, standard_prefix, unit_of_is), scheme:certification_schemes(code, name)'
 const SELECT_WITH_JOINS_LEGACY =
-  '*, client:clients(company_name, email), is_code:is_codes(is_number, title, revision_year, part_no, section_no, standard_prefix, unit_of_is)'
+  '*, client:clients(company_name, email), is_code:is_codes(is_number, title, revision_year, part_no, section_no, standard_prefix, unit_of_is), scheme:certification_schemes(code, name)'
 
 function missingManakColumn(error: { code?: string; message?: string } | null) {
   if (!error) return false
@@ -101,6 +101,23 @@ async function matchingIsCodeIds(term: string): Promise<string[]> {
 }
 
 export type BisQeManagedFilter = 'all' | 'managed' | 'not_managed'
+/** Domestic (Scheme-I and older rows without a scheme) or FMCS (foreign manufacturers). */
+export type BisSchemeFilter = 'all' | 'domestic' | 'fmcs'
+
+let fmcsSchemeIdCache: Promise<string | null> | null = null
+/** Id of the FMCS row in `certification_schemes` (cached for the session). */
+export function fetchFmcsSchemeId(): Promise<string | null> {
+  fmcsSchemeIdCache ??= Promise.resolve(
+    supabase.from('certification_schemes').select('id').eq('code', 'fmcs').maybeSingle(),
+  ).then(({ data, error }) => {
+    if (error) {
+      fmcsSchemeIdCache = null
+      return null
+    }
+    return (data as { id?: string } | null)?.id ?? null
+  })
+  return fmcsSchemeIdCache
+}
 export type BisProjectKindFilter = 'all' | 'Application' | 'Licence'
 /** License validity bucket filter (header). Deferred = no validity date. */
 export type BisLicenseStatusFilter =
@@ -120,6 +137,7 @@ export type FetchBisProjectsParams = {
   page: number
   pageSize: number
   qeManagedFilter?: BisQeManagedFilter
+  schemeFilter?: BisSchemeFilter
   projectKindFilter?: BisProjectKindFilter
   licenseStatusFilter?: BisLicenseStatusFilter
   /** 'open' = only licences with an open BIS notice (License Non-Conformity case). */
@@ -140,6 +158,7 @@ export async function fetchBisProjectsPage(
     page,
     pageSize,
     qeManagedFilter = 'all',
+    schemeFilter = 'all',
     projectKindFilter = 'all',
     licenseStatusFilter = 'all',
     openNoticeFilter = 'all',
@@ -178,6 +197,16 @@ export async function fetchBisProjectsPage(
   if (listMode === 'our' || listMode === 'due_soon') query = query.eq('is_qe_managed', true)
   else if (qeManagedFilter === 'managed') query = query.eq('is_qe_managed', true)
   else if (qeManagedFilter === 'not_managed') query = query.eq('is_qe_managed', false)
+
+  if (schemeFilter !== 'all') {
+    const fmcsId = await fetchFmcsSchemeId()
+    if (schemeFilter === 'fmcs') {
+      if (!fmcsId) return { rows: [], total: 0 }
+      query = query.eq('certification_scheme_id', fmcsId)
+    } else if (fmcsId) {
+      query = query.or(`certification_scheme_id.is.null,certification_scheme_id.neq.${fmcsId}`)
+    }
+  }
 
   // Header license-status filter overrides dedicated expired / due-soon list modes when set.
   const effectiveLicenseStatus: BisLicenseStatusFilter =
