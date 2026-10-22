@@ -18,7 +18,7 @@ import { cleanDescriptionPoints, saveDescriptionPoints } from './descriptionPoin
 import { ProcessDescriptionAiDialog } from './ProcessDescriptionAiDialog'
 import { generateHygieneConditions } from './generateHygieneConditions'
 import { useShowAiButtons } from '@/hooks/useShowAiAssistant'
-import { clientDisplayName, isCodeDisplayLabel, sanitizeBisLicenseScopeNotes } from './types'
+import { clientDisplayName, isCodeDisplayLabel, isFmcsProject, sanitizeBisLicenseScopeNotes } from './types'
 import { importCmpfSpreadsheetRows } from './cmpfSpreadsheetImport'
 import { MANUFACTURING_COMPONENTS_KIND } from './manakModuleKinds'
 import { ManakPanel, ManakWarnings } from './ManakStepPages'
@@ -280,11 +280,13 @@ export function ManakManufacturingStep({
         fields={[
           { key: 'rawMaterial', label: 'Raw Material / Grade', alignLeft: true, placeholder: 'Raw Material' },
           { key: 'supplierName', label: 'Name of Supplier', placeholder: 'Supplier', width: '13rem' },
+          // FMCS: Manak asks the supplier's country for every raw material.
+          ...(isFmcsProject(projectRow) ? [{ key: 'supplierCountry', label: 'Supplier Country', placeholder: 'Country', width: '9rem' }] : []),
           { key: 'bisCertificationMark', label: 'Conformity of Material', options: RAW_MATERIAL_CONFORMITY_OPTIONS, width: '13rem' },
           { key: 'testCertificate', label: 'Record Maintained', options: ['Yes', 'No'], width: '9rem' },
           { key: 'batchesPackaging', label: 'Batches / Lots & Packaging', options: ['Batch', 'Lot', 'Heat', 'Loose'], width: '9rem' },
         ]}
-        blank={() => ({ rawMaterial: '', supplierName: '', bisCertificationMark: 'ISI Marked', testCertificate: 'Yes', batchesPackaging: 'Batch' })}
+        blank={() => ({ rawMaterial: '', supplierName: '', supplierCountry: '', bisCertificationMark: 'ISI Marked', testCertificate: 'Yes', batchesPackaging: 'Batch' })}
         // Stored values as they are, so an old "With" is flagged instead of looking like ISI Marked (the fill sends what is stored).
         saved={rawMaterials}
         onChanged={onChanged}

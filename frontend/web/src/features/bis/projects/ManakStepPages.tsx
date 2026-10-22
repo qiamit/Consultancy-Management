@@ -19,6 +19,7 @@ import { toast } from 'sonner'
 import { ManakManagementStep, type ImportDataBundle } from './ManakManagementStep'
 import { ManakManufacturingStep } from './ManakManufacturingStep'
 import {
+  AIR_KIND,
   APPLICATION_DECLARATION_KIND,
   CORRESPONDENCE_KIND,
   LONG_DURATION_TESTS_KIND,
@@ -267,6 +268,7 @@ const STEP_MODULES: BisPrintDocumentKind[] = [
   'manufacturing-subcontracting',
   'hygiene-conditions',
   CORRESPONDENCE_KIND,
+  AIR_KIND,
   MANUFACTURING_COMPONENTS_KIND,
   'packaging-marking',
   PACKAGING_COMPONENTS_KIND,
@@ -559,6 +561,7 @@ export function ManakStepPage({
         topManagement={payloads['top-management']}
         technicalStaff={payloads['technical-staff']}
         correspondence={payloads[CORRESPONDENCE_KIND]}
+        air={payloads[AIR_KIND]}
         onChanged={() => setReloadTick((t) => t + 1)}
         onOpenModule={onEdit}
         onTopManagement={onTopManagement}

@@ -8,7 +8,7 @@ import { ManakComponentsTable, type StepComponent, type YesNo } from './ManakCom
 import { LONG_DURATION_TESTS_KIND, TEST_REPORT_COMPONENTS_KIND } from './manakModuleKinds'
 import { fileColumn } from './rowFileColumn'
 import { searchLaboratoryMasterOptions } from '@/features/masters/laboratories/laboratoriesApi'
-import { formatDisplayDate, isCodeDisplayLabel, type BisProjectRow } from './types'
+import { formatDisplayDate, isCodeDisplayLabel, isFmcsProject, type BisProjectRow } from './types'
 import { ScrollText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -194,17 +194,20 @@ export function ManakTestReportsStep({
     noConformity.length > 0 &&
       `${noConformity.length} sample${noConformity.length === 1 ? '' : 's'} with a QR code (${noConformity.map((r) => r.qrCode.trim()).join(', ')}) ${noConformity.length === 1 ? 'has' : 'have'} no "Conformity of sample as per IS". Set it from the lab report in Sample Offer Letter & Test Request.`,
   ]
+  // FMCS applies under Option 1: BIS draws the samples at the factory visit, Manak asks for the in-house test report
+  // (Form IV) and, when the IS needs it, the raw-material test certificates.
+  const fmcs = isFmcsProject(projectRow)
   const components: StepComponent[] = [
     {
       key: 'sample-offer',
       label: 'Sample Offer Letter & Test Request',
       printKind: 'osl-offer-and-test-request',
       editKind: 'osl-sample-requirements',
-      defaultApplicable: 'Yes',
+      defaultApplicable: fmcs ? 'No' : 'Yes',
     },
     {
       key: 'factory-test-report',
-      label: 'Factory Test Report',
+      label: fmcs ? 'In-House Test Report (Form IV)' : 'Factory Test Report',
       printKind: 'factory-test-report',
       defaultApplicable: 'Yes',
       // Same generator as Sample Offer Letter → Test Report → Generate Report.
@@ -229,7 +232,7 @@ export function ManakTestReportsStep({
       key: 'raw-material-test-reports',
       label: 'Raw Material Test Reports',
       printKind: 'raw-material-test-reports',
-      defaultApplicable: 'No',
+      defaultApplicable: fmcs ? 'Yes' : 'No',
       importTable: { kind: 'raw-material-test-reports', rowsKey: 'rows', idKeys: ['description'] },
       popup: () => (
         <div className="space-y-3">
