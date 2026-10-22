@@ -100,13 +100,13 @@ function buildBody(data: ManufacturingScopeData): string {
 
 const STYLES = `
   .ms-scope-box { margin: 10px 0 14px; padding: 8px 10px; border: 1px solid #cbd5e1; background: #f8fafc; min-height: 28mm; }
-  .ms-scope-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #64748b; margin-bottom: 4px; }
-  .ms-scope-body { font-size: 11px; line-height: 1.45; white-space: pre-wrap; }
-  .ms-scope-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .ms-scope-label { font-size: .8em; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #64748b; margin-bottom: 4px; }
+  .ms-scope-body { font-size: 1em; line-height: 1.45; white-space: pre-wrap; }
+  .ms-scope-table { width: 100%; border-collapse: collapse; font-size: 1em; }
   .ms-scope-table th, .ms-scope-table td { border: 1px solid #111; padding: 4px 6px; text-align: left; vertical-align: top; }
-  .ms-scope-table th { background: #f1f5f9; font-weight: 700; text-transform: uppercase; font-size: 10px; letter-spacing: .04em; }
+  .ms-scope-table th { background: #f1f5f9; font-weight: 700; text-transform: uppercase; font-size: .9em; letter-spacing: .04em; }
   .cmpf-sign-right { margin-top: 14px; text-align: right; }
-  .cmpf-sign-right .pd-signatory { text-align: left; }
+  .cmpf-sign-right .pd-signatory { text-align: right; margin-left: auto; }
 `
 
 export function buildManufacturingScopeHtml(data: ManufacturingScopeData): string {

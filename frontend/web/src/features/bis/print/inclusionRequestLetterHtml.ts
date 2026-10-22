@@ -210,7 +210,7 @@ const STYLES = `
   .inc-enclosures .pd-body { margin: 0 0 3px; }
   .inc-enclosures { margin: 4px 0 6px; }
   .cmpf-sign-right { margin-top: 12px; text-align: right; }
-  .cmpf-sign-right .pd-signatory { text-align: left; display: inline-block; }
+  .cmpf-sign-right .pd-signatory { text-align: right; margin-left: auto; display: inline-block; }
 `
 
 export function buildInclusionRequestLetterHtml(data: InclusionRequestLetterData): string {

@@ -136,7 +136,7 @@ function continuationPage(
       <div>For <strong>${esc(data.applicantName || 'Applicant Firm')}</strong></div>
       ${signArea}
       <div class="c306-cont-sign-line"></div>
-      <div><strong>${esc(data.firmRepName || data.contactPerson || '—')}</strong>${designation ? ` (${esc(designation)})` : ''}</div>
+      <div><strong>${esc(data.firmRepName || data.contactPerson || '—')}</strong></div>${designation ? `<div>${esc(designation)}</div>` : ''}
     </div>
   </div>`
 }
@@ -181,7 +181,7 @@ const CMPF306_STYLES = `${CMPF_FORM_STYLES}
   .c306-continuation .pd-firm { font-size: 17px; }
   .c306-continuation .c306-table { margin-bottom: 1mm; }
   .c306-continuation .c306-table td { height: 6mm; }
-  .c306-cont-signature { width: 78mm; max-width: 78mm; margin: 1mm 0 0 auto; text-align: right; font-size: 8pt !important; line-height: 1.2 !important; break-inside: avoid; page-break-inside: avoid; }
+  .c306-cont-signature { width: 78mm; max-width: 78mm; margin: 1mm 0 0 auto; text-align: right; font-size: 10pt !important; line-height: 1.3 !important; break-inside: avoid; page-break-inside: avoid; }
   .c306-cont-sign-image { display: block; max-width: 40mm; max-height: 16mm; object-fit: contain; margin: 0 0 1mm auto; }
   .c306-cont-sign-gap { height: 8mm; }
   .c306-cont-sign-line { width: 50mm; border-top: 1px solid #111; margin: 0 0 2px auto; }

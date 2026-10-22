@@ -103,7 +103,9 @@ const STYLES = `
   .ug-intro { margin: 0 0 8px; }
   .ug-points p { margin: 5px 0; font-size: 11.5px; line-height: 1.5; text-align: justify; break-inside: avoid; page-break-inside: avoid; }
   .ug-sign { margin-top: 14px; text-align: right; }
-  .ug-sign .pd-signatory { text-align: left; }
+  .ug-sign .pd-signatory { text-align: right; margin-left: auto; }
+  .ug-sign .pd-sign-space { justify-content: flex-end; }
+  .ug-sign .pd-sign-line { margin-left: auto; }
 `
 
 export function buildUndertakingGeneralHtml(data: UndertakingGeneralData): string {

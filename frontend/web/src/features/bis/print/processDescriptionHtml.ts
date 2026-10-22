@@ -91,7 +91,7 @@ export const PROCESS_DESCRIPTION_PRINT_STYLES = `
   }
   .proc-points strong { color: #000; -webkit-text-fill-color: #000; font-weight: 700; }
   .cmpf-sign-right { margin-top: 14px; text-align: right; }
-  .cmpf-sign-right .pd-signatory { text-align: left; }
+  .cmpf-sign-right .pd-signatory { text-align: right; margin-left: auto; }
   @media print {
     .proc-points p {
       font-size: 12.5pt !important;

@@ -144,7 +144,7 @@ const STYLES = `
   .sef-blank th:first-child, .sef-blank td:first-child { width: 6%; }
   .sef-points p { margin: 4px 0; font-size: 10px; line-height: 1.45; text-align: justify; }
   .cmpf-sign-right { margin-top: 14px; text-align: right; }
-  .cmpf-sign-right .pd-signatory { text-align: left; }
+  .cmpf-sign-right .pd-signatory { text-align: right; margin-left: auto; }
 `
 
 export function buildSelfEvaluationFormHtml(data: SelfEvaluationFormData): string {

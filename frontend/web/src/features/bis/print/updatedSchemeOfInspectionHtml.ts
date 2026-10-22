@@ -130,7 +130,9 @@ const STYLES = `
   .usit-table th, .usit-table td { font-size: 9.5px; }
   .usit-table td { height: 8mm; }
   .usit-sign { margin-top: 14px; text-align: right; }
-  .usit-sign .pd-signatory { text-align: left; }
+  .usit-sign .pd-signatory { text-align: right; margin-left: auto; }
+  .usit-sign .pd-sign-space { justify-content: flex-end; }
+  .usit-sign .pd-sign-line { margin-left: auto; }
   .usit-auth { margin-top: 4px; font-weight: 700; }
 `
 

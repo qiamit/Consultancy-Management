@@ -241,7 +241,7 @@ const STYLES = `
   .mmf-table td { height: 7mm; font-size: 9.5px; }
   .mmf-note { font-size: 9px; margin: 4px 0 0; font-style: italic; }
   .cmpf-sign-right { margin-top: 14px; text-align: right; }
-  .cmpf-sign-right .pd-signatory { text-align: left; }
+  .cmpf-sign-right .pd-signatory { text-align: right; margin-left: auto; }
 `
 
 export function buildUndertakingMinimumMarkingFeeHtml(data: UndertakingMinimumMarkingFeeData): string {

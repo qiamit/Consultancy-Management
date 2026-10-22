@@ -118,7 +118,7 @@ function sheetHtml(
 const STYLES = `
   .mfg-table td { height: 7.5mm; font-size: 9.5px; }
   .cmpf-sign-right { margin-top: 14px; text-align: right; }
-  .cmpf-sign-right .pd-signatory { text-align: left; }
+  .cmpf-sign-right .pd-signatory { text-align: right; margin-left: auto; }
 `
 
 function firmIntro(data: PrintApplicantContext): string {

@@ -122,7 +122,7 @@ const STYLES = `
   .al-duties { margin: 0 0 12px; padding-left: 22px; line-height: 1.7; }
   .al-duties li { margin-bottom: 4px; }
   .cmpf-sign-right { margin-top: 14px; text-align: right; }
-  .cmpf-sign-right .pd-signatory { text-align: left; }
+  .cmpf-sign-right .pd-signatory { text-align: right; margin-left: auto; }
 `
 
 export function buildAppointmentLetterHtml(data: AppointmentLetterData): string {

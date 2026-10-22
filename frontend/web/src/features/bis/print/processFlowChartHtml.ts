@@ -230,7 +230,7 @@ const STYLES = `
     margin-bottom: 2px;
   }
   .cmpf-sign-right { margin-top: 14px; text-align: right; }
-  .cmpf-sign-right .pd-signatory { text-align: left; }
+  .cmpf-sign-right .pd-signatory { text-align: right; margin-left: auto; }
   ${PROCESS_DESCRIPTION_PRINT_STYLES}
   @media print {
     .pfc-drawing-wrap, .pfc-svg, .pfc-fit {

@@ -123,7 +123,7 @@ const STYLES = `
   .ld-list { margin: 0; padding-left: 18px; font-size: 11px; line-height: 1.55; }
   .ld-list li { margin: 2px 0; }
   .cmpf-sign-right { margin-top: 14px; text-align: right; }
-  .cmpf-sign-right .pd-signatory { text-align: left; }
+  .cmpf-sign-right .pd-signatory { text-align: right; margin-left: auto; }
 `
 
 export function buildFirmPackDocumentsHtml(

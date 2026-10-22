@@ -77,7 +77,7 @@ const STYLES = `
   .u2-salutation { margin: 0 0 8px; }
   .u2-conditions p { margin: 5px 0; font-size: 11px; line-height: 1.5; text-align: justify; break-inside: avoid; page-break-inside: avoid; }
   .cmpf-sign-right { margin-top: 14px; text-align: right; }
-  .cmpf-sign-right .pd-signatory { text-align: left; }
+  .cmpf-sign-right .pd-signatory { text-align: right; margin-left: auto; }
 `
 
 export function buildUndertakingOption2Html(data: UndertakingOption2Data): string {

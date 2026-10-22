@@ -75,13 +75,14 @@ function buildBody(data: AuthorizationLetterData): string {
   const appNo = data.applicationNumber.trim() || 'CM/A - N/A'
   const personName = (data.authorizedName || '—').trim() || '—'
   const personDesig = data.authorizedDesignation.trim()
+  // Designation on its own line under the name.
   const personLine = personDesig
-    ? `<strong>${esc(personName)}</strong> (${esc(personDesig)})`
+    ? `<strong>${esc(personName)}</strong></div><div>${esc(personDesig)}`
     : `<strong>${esc(personName)}</strong>`
   const byName = (data.signatoryName || '—').trim() || '—'
   const byDesig = data.signatoryDesignation.trim()
   const byLine = byDesig
-    ? `<strong>${esc(byName)}</strong> (${esc(byDesig)})`
+    ? `<strong>${esc(byName)}</strong></div><div>${esc(byDesig)}`
     : `<strong>${esc(byName)}</strong>`
 
   return `

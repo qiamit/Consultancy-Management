@@ -33,12 +33,12 @@ export type Cmpf305Data = PrintApplicantContext & {
 
 /*
  * Continuation pages are filled by estimated row height (not a fixed row count) so the seal / signature at the
- * bottom of each page always fits. Measured on A4 at 11pt: a one-line row is ~25px, each extra wrapped line
- * ~18px, and ~738px is free for rows between the table header and the signature; the budget keeps a margin
- * because print pages have slightly less room than the screen preview.
+ * bottom of each page always fits. Measured on A4 at 11pt: a one-line row is ~24px, each extra wrapped line
+ * ~18px, and ~717px is free for rows between the table header and the 10pt signature. Each page is filled
+ * as far as it goes before the next one starts.
  */
-const CONTINUATION_ROWS_BUDGET_PX = 700
-const ROW_BASE_PX = 25
+const CONTINUATION_ROWS_BUDGET_PX = 712
+const ROW_BASE_PX = 24
 const ROW_EXTRA_LINE_PX = 18
 /** Characters that fit on one line in each column (Sr. No. excluded). */
 const COLUMN_CHARS = { machineryName: 25, make: 19, capacityPerDay: 19, number: 9, remarks: 16 } as const
@@ -157,7 +157,7 @@ function pageSignature(data: Cmpf305Data): string {
     <div>For <strong>${esc(data.applicantName || 'Applicant Firm')}</strong></div>
     ${signatureImage ? `<img class="c305-sign-image" src="${esc(signatureImage)}" alt="Authorized signatory stamp and signature" />` : '<div class="c305-sign-gap"></div>'}
     <div class="c305-sign-line"></div>
-    <div><strong>${esc(name)}</strong>${designation ? ` (${esc(designation)})` : ''}</div>
+    <div><strong>${esc(name)}</strong></div>${designation ? `<div>${esc(designation)}</div>` : ''}
   </div>`
 }
 
@@ -221,7 +221,7 @@ const STYLES = `
   .c305-continuation .c305-table { margin-bottom: 1mm; }
   .c305-continuation .c305-table td { height: 6mm; }
   .c305-continuation .pd-table th, .c305-continuation .pd-table td { padding: 3px 4px !important; font-size: 10pt !important; }
-  .c305-page-signature { width: 78mm; max-width: 78mm; margin: 1mm 0 0 auto; text-align: right; font-size: 8pt !important; line-height: 1.2 !important; page-break-inside: avoid; break-inside: avoid; }
+  .c305-page-signature { width: 78mm; max-width: 78mm; margin: 1mm 0 0 auto; text-align: right; font-size: 10pt !important; line-height: 1.3 !important; page-break-inside: avoid; break-inside: avoid; }
   .c305-sign-gap { height: 8mm; }
   .c305-sign-image { display: block; max-width: 40mm; max-height: 16mm; object-fit: contain; margin: 0 0 1mm auto; }
   .c305-sign-line { width: 50mm; border-top: 1px solid #111; margin: 0 0 2px auto; }

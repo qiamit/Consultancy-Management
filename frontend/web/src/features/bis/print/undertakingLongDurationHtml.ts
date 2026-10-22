@@ -113,7 +113,7 @@ const STYLES = `
   .ldt-salutation { margin: 0 0 8px; }
   .ldt-table td { height: 8mm; }
   .cmpf-sign-right { margin-top: 14px; text-align: right; }
-  .cmpf-sign-right .pd-signatory { text-align: left; }
+  .cmpf-sign-right .pd-signatory { text-align: right; margin-left: auto; }
 `
 
 export function buildUndertakingLongDurationHtml(data: UndertakingLongDurationData): string {
