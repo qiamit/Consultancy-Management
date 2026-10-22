@@ -64,9 +64,10 @@ function contentType(file: File): string {
 async function signedUrl(
   storagePath: string,
   opts?: { download?: string | boolean },
+  bucket: string = BIS_PROJECT_FILES_BUCKET,
 ): Promise<string | undefined> {
   const { data, error } = await supabase.storage
-    .from(BIS_PROJECT_FILES_BUCKET)
+    .from(bucket)
     .createSignedUrl(
       storagePath,
       60 * 10,
@@ -125,12 +126,14 @@ export async function listBisProjectFiles(
 export async function createBisProjectFileUrls(
   storagePath: string,
   fileName: string,
+  /** Another bucket for a file kept outside the project (e.g. Client Master legal documents). */
+  bucket?: string,
 ): Promise<{ viewUrl?: string; downloadUrl?: string }> {
   const path = storagePath.trim()
   if (!path) return {}
   const [viewUrl, downloadUrl] = await Promise.all([
-    signedUrl(path),
-    signedUrl(path, { download: fileName.trim() || true }),
+    signedUrl(path, undefined, bucket),
+    signedUrl(path, { download: fileName.trim() || true }, bucket),
   ])
   return { viewUrl, downloadUrl }
 }

@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { BIS_PRINT_DOCUMENT_LABEL, type BisPrintDocumentKind } from '../print/printBisDocument'
 import { fetchBisModulePayload } from './bisModuleDataApi'
 import type { BisProjectViewFile } from './bisProjectFilesApi'
+import { CERT_BUCKET, listClientCertificates } from '../../masters/clients/clientsApi'
 import {
   APPLICATION_DECLARATION_KIND,
   MANUFACTURING_COMPONENTS_KIND,
@@ -18,7 +19,8 @@ import { isFmcsProject, rowToBisApplicationDetailsForm, type BisProjectRow } fro
 
 type Rec = Record<string, unknown>
 type YesNo = 'Yes' | 'No'
-export type PreviewFile = BisProjectViewFile & { doc_kind: string }
+/** `bucket`: a file kept outside the project's own storage (Client Master legal documents); `title`: its display name. */
+export type PreviewFile = BisProjectViewFile & { doc_kind: string; bucket?: string; title?: string }
 
 export type PreviewSelection = {
   previewKinds: BisPrintDocumentKind[]
@@ -73,6 +75,8 @@ const ENTRIES: Entry[] = [
 /** Where each uploaded file kind belongs, and how it is named. Signatures, seals and other photos are images used inside documents. */
 export const FILE_KINDS: Record<string, { step: number; label: string; fixed?: boolean; after?: BisPrintDocumentKind }> = {
   legal: { step: 0, label: 'Legal Document' },
+  // GST / MSME / Factory Licence … attached to the client in Client Master.
+  'client-legal': { step: 0, label: 'Legal Document' },
   application: { step: 0, label: 'Application Document' },
   license: { step: 0, label: 'Licence Document' },
   branch: { step: 0, label: 'Branch Document' },
@@ -144,14 +148,19 @@ export function buildApplicationDocumentRows(
         const batch = String(samples.find((sr) => String(sr[key] ?? '') === file.storage_path)?.batchNumber ?? '').trim()
         return batch ? `${meta.label} - ${batch}` : meta.label
       }
-      return meta.fixed ? meta.label : `${meta.label} — ${file.file_name}`
+      return meta.fixed ? meta.label : `${meta.label} — ${file.title?.trim() || file.file_name}`
     }
+    // Step 7 attachments count only while a Step 7 row (Other Information / Other Request / Statutory
+    // Permissions) still points at the file: removing the row there removes it here.
+    const declarationLoaded = Object.prototype.hasOwnProperty.call(payloads, APPLICATION_DECLARATION_KIND)
+    const declarationText = JSON.stringify(payloads[APPLICATION_DECLARATION_KIND] ?? {})
     // The same file uploaded twice for the same document (e.g. the consent letter on Step 1 and Step 5) shows once.
     const seenFiles = new Set<string>()
     files.forEach((file) => {
       // Test Request / Test Report uploads count only while a current sample row points at them (old uploads stay hidden).
       const sampleKey = SAMPLE_FILE_KEYS[file.doc_kind]
       if (sampleKey && !samples.some((sr) => String(sr[sampleKey] ?? '').trim() === file.storage_path)) return
+      if (file.doc_kind === 'application-declaration' && declarationLoaded && !declarationText.includes(JSON.stringify(file.storage_path))) return
       const dupKey = `${file.doc_kind}|${file.file_name.trim().toLowerCase()}`
       if (seenFiles.has(dupKey)) return
       seenFiles.add(dupKey)
@@ -181,6 +190,22 @@ export async function loadApplicationDocumentRows(row: BisProjectRow): Promise<R
   const payloads = Object.fromEntries(kinds.map((k, i) => [k, loaded[i] as Rec | null]))
   const files = ((filesRes.data ?? []) as PreviewFile[]).filter((f) => f.storage_path && !isImageAsset(f.doc_kind))
   return buildApplicationDocumentRows(row, payloads, files)
+}
+
+/** The client's legal documents from Client Master (PDF / images), listed with Step 1 of the application. */
+export async function clientLegalPreviewFiles(clientId: string | null | undefined): Promise<PreviewFile[]> {
+  if (!clientId) return []
+  const certificates = await listClientCertificates(clientId).catch(() => [])
+  return certificates
+    .filter((c) => c.storage_path && /\.(pdf|png|jpe?g|webp)$/i.test(c.file_name || c.storage_path))
+    .map((c) => ({
+      id: `client-${c.id}`,
+      file_name: c.file_name,
+      storage_path: c.storage_path,
+      doc_kind: 'client-legal',
+      bucket: CERT_BUCKET,
+      title: c.doc_title?.trim() || c.cert_name?.trim() || c.file_name,
+    }))
 }
 
 /**
