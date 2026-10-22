@@ -8,7 +8,7 @@ import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMe
 import { cn } from '@/lib/utils'
 import type { BisPrintClient } from '../print/loadBisPrintData'
 import type { BisPrintDocumentKind } from '../print/printBisDocument'
-import { formatDisplayDate, type BisProjectRow } from './types'
+import { formatDisplayDate, isFmcsProject, type BisProjectRow } from './types'
 import {
   emptyTechnicalStaffRow,
   fetchBisModulePayload,
@@ -18,7 +18,8 @@ import { StaffDocumentsCell } from './StaffDocumentsCell'
 import { MasterOptionFieldWithAdd } from './MasterOptionFieldWithAdd'
 import type { BisMasterOptionCategory } from './bisMasterOptions'
 import { ManakPanel, ManakSubPanel } from './ManakStepPages'
-import { CORRESPONDENCE_KIND } from './manakModuleKinds'
+import { AIR_KIND, AIR_NOMINATION_DOC_KIND, AIR_RESIDENCY_OPTIONS, CORRESPONDENCE_KIND } from './manakModuleKinds'
+import { SharedProjectFileButton } from './RowFileAttachment'
 import { manakEmailError } from './manakChecks'
 import { RemoteLookupCombobox } from '@/features/bis/shared/RemoteLookupCombobox'
 import { LimsDatePicker } from '@/components/lims/LimsDatePicker'
@@ -712,6 +713,7 @@ export function ManakManagementStep({
   topManagement,
   technicalStaff,
   correspondence,
+  air,
   onChanged,
   onTopManagement,
   onTechnicalStaff,
@@ -723,6 +725,8 @@ export function ManakManagementStep({
   topManagement: Rec | null | undefined
   technicalStaff: Rec | null | undefined
   correspondence: Rec | null | undefined
+  /** FMCS only: the Authorised Indian Representative payload. */
+  air?: Rec | null
   onChanged: () => void
   onOpenModule?: (kind: BisPrintDocumentKind) => void
   onTopManagement?: { preview: () => void; pdf: () => void; word: () => void; print?: () => void }
@@ -764,6 +768,45 @@ export function ManakManagementStep({
       toast.error(err instanceof Error ? err.message : 'Could not save')
     } finally {
       setCorrBusy(false)
+    }
+  }
+
+  const fmcs = isFmcsProject(projectRow)
+  const airInitial = useMemo(
+    () => ({
+      name: str(air?.name),
+      designation: str(air?.designation) || 'Authorised Indian Representative',
+      mobile: str(air?.mobile),
+      email: str(air?.email),
+      din: str(air?.din),
+      address: str(air?.address),
+      residency: str(air?.residency) || AIR_RESIDENCY_OPTIONS[0],
+    }),
+    [air],
+  )
+  const [airForm, setAirForm] = useState(airInitial)
+  const [airBusy, setAirBusy] = useState(false)
+  useEffect(() => setAirForm(airInitial), [airInitial])
+  const airEmailError = manakEmailError(airForm.email)
+
+  const saveAir = async () => {
+    if (!airForm.name.trim()) {
+      toast.error('Enter the Name of the Authorised Indian Representative')
+      return
+    }
+    if (airEmailError) {
+      toast.error(`AIR E-Mail Id: ${airEmailError}`)
+      return
+    }
+    setAirBusy(true)
+    try {
+      await saveBisModulePayload(projectId, AIR_KIND, { ...airForm })
+      toast.success('AIR Details Saved')
+      onChanged()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not save')
+    } finally {
+      setAirBusy(false)
     }
   }
 
@@ -903,6 +946,91 @@ export function ManakManagementStep({
           })()}
         </ManakSubPanel>
       </ManakPanel>
+
+      {fmcs ? (
+        <ManakPanel
+          title="AIR Details (Authorised Indian Representative)"
+          headerExtra={
+            <Button
+              type="button"
+              size="sm"
+              disabled={airBusy}
+              className="h-7 rounded-none border border-amber-500/40 bg-amber-700 px-3 text-xs font-medium normal-case tracking-normal text-white hover:bg-amber-800"
+              onClick={() => void saveAir()}
+            >
+              Save
+            </Button>
+          }
+        >
+          {(() => {
+            const thC = 'break-words border border-[#e7e0d4] bg-[#f7f3eb] px-3 py-1.5 text-left align-middle font-bold text-stone-800'
+            const tdC = 'border border-[#e7e0d4] px-2 py-1 align-middle text-stone-700'
+            const field = (key: 'name' | 'designation' | 'mobile' | 'email' | 'din' | 'address', placeholder?: string) => (
+              <Input
+                className={cn(inputCls, key === 'email' && airEmailError && invalidInputCls)}
+                value={airForm[key]}
+                placeholder={placeholder}
+                aria-label={`AIR ${key}`}
+                onChange={(e) => setAirForm({ ...airForm, [key]: e.target.value })}
+              />
+            )
+            return (
+              <div className="manak-kv overflow-x-auto">
+                <table className="w-full table-fixed border-collapse text-sm">
+                  <colgroup>
+                    <col style={{ width: '16%' }} />
+                    <col style={{ width: '24%' }} />
+                    <col style={{ width: '14%' }} />
+                    <col style={{ width: '18%' }} />
+                    <col style={{ width: '12%' }} />
+                    <col style={{ width: '16%' }} />
+                  </colgroup>
+                  <tbody>
+                    <tr>
+                      <th scope="row" className={thC}>Name*:</th>
+                      <td className={tdC}>{field('name')}</td>
+                      <th scope="row" className={thC}>Designation*:</th>
+                      <td className={tdC}>{field('designation')}</td>
+                      <th scope="row" className={thC}>Contact No.*:</th>
+                      <td className={tdC}>{field('mobile', '+91 ...')}</td>
+                    </tr>
+                    <tr>
+                      <th scope="row" className={thC}>Email ID*:</th>
+                      <td className={tdC}>
+                        {field('email')}
+                        <InlineError message={airEmailError} />
+                      </td>
+                      <th scope="row" className={thC}>DIN (If Applicable):</th>
+                      <td className={tdC}>{field('din')}</td>
+                      <th scope="row" className={thC}>Nomination Letter*:</th>
+                      <td className={tdC}>
+                        <SharedProjectFileButton projectId={projectId} docKind={AIR_NOMINATION_DOC_KIND} label="AIR Nomination Letter" />
+                      </td>
+                    </tr>
+                    <tr>
+                      <th scope="row" className={thC}>Address in India:</th>
+                      <td className={tdC} colSpan={3}>{field('address')}</td>
+                      <th scope="row" className={thC}>Residency Status*:</th>
+                      <td className={tdC}>
+                        <select
+                          className={cn(inputCls, 'w-full border px-2')}
+                          aria-label="AIR Residency Status"
+                          value={airForm.residency}
+                          onChange={(e) => setAirForm({ ...airForm, residency: e.target.value })}
+                        >
+                          {AIR_RESIDENCY_OPTIONS.map((option) => (
+                            <option key={option} value={option}>{option}</option>
+                          ))}
+                        </select>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            )
+          })()}
+        </ManakPanel>
+      ) : null}
 
       <ManakPanel
         title="Technical Management / Quality Assurance / Control Personnel Details"

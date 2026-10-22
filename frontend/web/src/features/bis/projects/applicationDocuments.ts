@@ -14,7 +14,7 @@ import {
   TEST_REPORT_COMPONENTS_KIND,
   TESTING_COMPONENTS_KIND,
 } from './manakModuleKinds'
-import { rowToBisApplicationDetailsForm, type BisProjectRow } from './types'
+import { isFmcsProject, rowToBisApplicationDetailsForm, type BisProjectRow } from './types'
 
 type Rec = Record<string, unknown>
 type YesNo = 'Yes' | 'No'
@@ -37,7 +37,7 @@ export type Row = DocRow | FileRow
 
 /** Generated documents per step; `when` decides if the row applies (Applicable choices on the step). */
 type Entry = { step: number; kind: BisPrintDocumentKind; label?: string; when?: (ctx: Ctx) => boolean }
-type Ctx = { applicable: (componentsKind: BisPrintDocumentKind, key: string, fallback: YesNo) => boolean; payloads: Partial<Record<string, Rec | null>>; option2: boolean }
+type Ctx = { applicable: (componentsKind: BisPrintDocumentKind, key: string, fallback: YesNo) => boolean; payloads: Partial<Record<string, Rec | null>>; option2: boolean; /** FMCS (Option 1, samples drawn at the factory). */ fmcs: boolean }
 
 const ENTRIES: Entry[] = [
   { step: 0, kind: 'application-copy', label: 'Application Copy' },
@@ -59,15 +59,15 @@ const ENTRIES: Entry[] = [
   { step: 3, kind: 'cmpf-307', when: (c) => c.applicable(PACKAGING_COMPONENTS_KIND, 'brand', 'Yes') },
   { step: 4, kind: 'cmpf-306', when: (c) => c.applicable(TESTING_COMPONENTS_KIND, 'equipment', 'Yes') },
   { step: 4, kind: 'subcontracted-tests', label: 'Tests Intended to be Sub-Contracted', when: (c) => c.payloads[TESTING_COMPONENTS_KIND]?.inHouseTesting === 'No' },
-  { step: 5, kind: 'osl-offer-and-test-request', label: 'Sample Offer Letter', when: (c) => c.applicable(TEST_REPORT_COMPONENTS_KIND, 'sample-offer', 'Yes') },
+  { step: 5, kind: 'osl-offer-and-test-request', label: 'Sample Offer Letter', when: (c) => c.applicable(TEST_REPORT_COMPONENTS_KIND, 'sample-offer', c.fmcs ? 'No' : 'Yes') },
   { step: 5, kind: 'factory-test-report', when: (c) => c.applicable(TEST_REPORT_COMPONENTS_KIND, 'factory-test-report', 'Yes') },
   { step: 5, kind: 'undertaking-long-duration', when: (c) => c.applicable(TEST_REPORT_COMPONENTS_KIND, 'long-duration', 'No') },
-  { step: 5, kind: 'raw-material-test-reports', when: (c) => c.applicable(TEST_REPORT_COMPONENTS_KIND, 'raw-material-test-reports', 'No') },
+  { step: 5, kind: 'raw-material-test-reports', when: (c) => c.applicable(TEST_REPORT_COMPONENTS_KIND, 'raw-material-test-reports', c.fmcs ? 'Yes' : 'No') },
   { step: 6, kind: 'authorization-letter', when: (c) => c.applicable(APPLICATION_DECLARATION_KIND, 'authorizationLetter', 'Yes') },
   { step: 6, kind: 'undertaking-option-2', when: (c) => c.applicable(APPLICATION_DECLARATION_KIND, 'undertakingOption2', c.option2 ? 'Yes' : 'No') },
   { step: 6, kind: 'undertaking-general', when: (c) => c.applicable(APPLICATION_DECLARATION_KIND, 'undertakingGeneral', 'Yes') },
   { step: 6, kind: 'undertaking-indian-standards', when: (c) => c.applicable(APPLICATION_DECLARATION_KIND, 'undertakingIndianStandards', 'No') },
-  { step: 6, kind: 'undertaking-other', when: (c) => c.applicable(APPLICATION_DECLARATION_KIND, 'undertakingOther', 'No') },
+  { step: 6, kind: 'undertaking-other', when: (c) => c.applicable(APPLICATION_DECLARATION_KIND, 'undertakingOther', c.fmcs ? 'Yes' : 'No') },
 ]
 
 /** Where each uploaded file kind belongs, and how it is named. Signatures, seals and other photos are images used inside documents. */
@@ -117,6 +117,7 @@ export function buildApplicationDocumentRows(
     const ctx: Ctx = {
       payloads,
       option2: rowToBisApplicationDetailsForm(row).applicationProcess === 'simplified',
+      fmcs: isFmcsProject(row),
       applicable: (componentsKind, key, fallback) => {
         const p = payloads[componentsKind]
         const map = p?.applicable && typeof p.applicable === 'object' ? (p.applicable as Rec) : {}

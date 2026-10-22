@@ -23,3 +23,9 @@ export const LONG_DURATION_TESTS_KIND = 'long-duration-tests' as BisPrintDocumen
 
 /** Step 7: Manak Online declaration answers, supporting uploads and weekly off days. */
 export const APPLICATION_DECLARATION_KIND = 'application-declaration' as BisPrintDocumentKind
+
+/** FMCS: the Authorised Indian Representative (AIR) of a foreign manufacturer (Manak step 2, single person). */
+export const AIR_KIND = 'application-air' as BisPrintDocumentKind
+/** bis_project_files doc_kind of the signed AIR Nomination Letter. */
+export const AIR_NOMINATION_DOC_KIND = 'air-nomination-letter'
+export const AIR_RESIDENCY_OPTIONS = ['Resident Indian', "Resident Indian Working in Applicant's Organisation or Group Company"] as const

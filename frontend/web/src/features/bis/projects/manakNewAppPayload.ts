@@ -67,7 +67,7 @@ export type ManakNewAppPayload = {
     technicalStaff: Array<{ name: string; designation: string; qualification: string; experienceYears: string }>
   }
   manufacturing: {
-    rawMaterials: Array<{ rawMaterial: string; supplierName: string; conformity: string; recordsMaintained: string; batches: string }>
+    rawMaterials: Array<{ rawMaterial: string; supplierName: string; supplierCountry: string; conformity: string; recordsMaintained: string; batches: string }>
     outsourcing: YesNo
     hygiene: YesNo
     productionUnit: string
@@ -274,6 +274,7 @@ export async function buildManakNewAppPayload(row: BisProjectRow): Promise<Manak
     .map((r) => ({
       rawMaterial: str(r.rawMaterial),
       supplierName: str(r.supplierName),
+      supplierCountry: str(r.supplierCountry),
       // Older rows stored "With"; Manak only accepts its five options.
       conformity: rawMaterialConformity(str(r.bisCertificationMark)),
       recordsMaintained: str(r.testCertificate),

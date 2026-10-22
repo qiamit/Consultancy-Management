@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { CalendarCheck, Check, ChevronDown, FileDown, Pencil, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -11,7 +11,7 @@ import { undertakingGeneralDefaultPoints } from '../print/undertakingGeneralHtml
 import { parseUndertakingGeneralPayload } from './undertakingPayloadModels'
 import type { BisPrintDocumentKind } from '../print/printBisDocument'
 import { fetchBisModulePayload, saveBisModulePayload } from './bisModuleDataApi'
-import { rowToBisApplicationDetailsForm, type BisProjectRow } from './types'
+import { isFmcsProject, rowToBisApplicationDetailsForm, type BisProjectRow } from './types'
 import { AuthorizationLetterDialog } from './AuthorizationLetterDialog'
 import { APPLICATION_DECLARATION_KIND } from './manakModuleKinds'
 import { ManakComponentsTable, type StepComponent, type YesNo } from './ManakComponentsTable'
@@ -80,6 +80,18 @@ async function patchDeclaration(projectId: string, patch: Rec) {
   await saveBisModulePayload(projectId, APPLICATION_DECLARATION_KIND, { ...current, ...patch })
 }
 
+/** FMCS undertakings on Manak's Declaration step (foreign manufacturers), used as the "Undertaking Other" text. */
+export const FMCS_UNDERTAKING_LINES = [
+  'We undertake to inform BIS of the consignee details to whom products bearing the Standard Mark are supplied, as advised by BIS.',
+  'We shall extend all possible co-operation to the BIS Certification Officer (or agent appointed by BIS) during inspection for infrastructure verification and drawl of samples at our manufacturing premises.',
+  'We undertake to bear the inspection charges for all inspections carried out by BIS at our premises.',
+  'We undertake to arrange, if required, the services of a translator (for translation into English) during the visits of BIS officers to our factory.',
+  'We agree to sign a legally binding Agreement with BIS in the prescribed format after grant of licence.',
+  'We agree to submit an Indemnity Bond to BIS in the prescribed format after grant of licence.',
+  'We agree to furnish a Performance Bank Guarantee of US $10,000 (or INR equivalent of US $10,000), from a bank having its branch in India, in the prescribed format after grant of licence.',
+  'We have nominated an Authorised Indian Representative (AIR), who shall act on our behalf for compliance with the BIS conformity assessment scheme.',
+]
+
 export function ManakDeclarationStep({
   projectRow,
   payload,
@@ -103,6 +115,23 @@ export function ManakDeclarationStep({
   onManagementChanged?: () => void
 }) {
   const projectId = projectRow.id
+  const fmcs = isFmcsProject(projectRow)
+  // FMCS: start "Undertaking Other" with the FMCS undertakings once, so it is ready to edit and print.
+  useEffect(() => {
+    if (!fmcs) return
+    let active = true
+    void fetchBisModulePayload(projectId, 'undertaking-other')
+      .then(async (saved) => {
+        if (!active || (Array.isArray(saved?.lines) && saved.lines.length > 0)) return
+        await saveBisModulePayload(projectId, 'undertaking-other', {
+          ...(saved ?? {}),
+          documentTitle: 'Undertaking (FMCS)',
+          lines: FMCS_UNDERTAKING_LINES.map((text, index) => ({ id: `fmcs-${index}`, text, source: '', clause: '', agreementRequired: false })),
+        })
+      })
+      .catch(() => undefined)
+    return () => { active = false }
+  }, [fmcs, projectId])
   const [name, setName] = useState<string | null>(null)
   const [designation, setDesignation] = useState<string | null>(null)
   const shownName = name ?? (text(payload?.submitterName) || defaultName)
@@ -305,9 +334,9 @@ export function ManakDeclarationStep({
     },
     {
       key: 'undertakingOther',
-      label: 'Undertaking Other if Required',
+      label: fmcs ? 'Undertaking (FMCS)' : 'Undertaking Other if Required',
       printKind: 'undertaking-other',
-      defaultApplicable: 'No',
+      defaultApplicable: fmcs ? 'Yes' : 'No',
       onEdit: () => setUndertaking('undertaking-other'),
     },
   ]
