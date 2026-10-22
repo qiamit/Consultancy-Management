@@ -37,12 +37,12 @@ export function TestParameterHeaderBar({
   /** Opens Add Test Parameters with AI. */
   onAiAdd?: () => void
   canEdit?: boolean
-  /** Inside a dialog: keep clear of the dialog's top-right close button. */
+  /** Inside a dialog: keep clear of the dialog's top-right close button, buttons on its line. */
   reserveCloseButtonSpace?: boolean
 }) {
   return (
     <div className={cn(limsPanelClass)}>
-      <div className={cn('relative overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-2 py-2 text-white sm:px-4 sm:py-2.5 md:px-5', reserveCloseButtonSpace && '!pr-12')}>
+      <div className={cn('relative overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-2 py-2 text-white sm:px-4 sm:py-2.5 md:px-5', reserveCloseButtonSpace && '!pb-2 !pt-1 !pr-12')}>
         <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={limsDarkBarGlowStyle} />
         <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
 
@@ -99,6 +99,7 @@ export function TestParameterHeaderBar({
                 'h-8 shrink-0 gap-1 px-2 text-[11px] font-semibold sm:px-2.5 sm:text-xs',
               )}
               onClick={onAddSymbol}
+              data-keep-inline-edit=""
               aria-label="Add Symbol"
               title="Add Symbol into Test Parameter, Unit, or Requirements"
             >

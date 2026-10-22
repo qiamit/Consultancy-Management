@@ -3,13 +3,15 @@ import {
   useMemo,
   useRef,
   useState,
+  type DragEvent,
   type FocusEvent,
+  type KeyboardEvent,
   type ReactNode,
   type RefObject,
   type SyntheticEvent,
 } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowDown, ArrowUp, ArrowUpDown, Check, FlaskConical, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, ArrowUpDown, Check, FlaskConical, GripVertical, Plus, Trash2, X } from 'lucide-react'
 import { useIsLaboratoryDirector } from '@/components/lims/LaboratoryDirectorOnly'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -785,86 +787,92 @@ function InlineEntryCard({
   )
 }
 
-function InlineEditSaveCancelButtons({
+function InlineEditSaveButton({
   canSave,
   busy,
   onSave,
-  onCancel,
   itemName,
 }: {
   canSave: boolean
   busy: boolean
   onSave: () => void
-  onCancel: () => void
   itemName: string
 }) {
+  return (
+    <Button
+      type="button"
+      size="sm"
+      className={cn('h-8 w-8 shrink-0 rounded-none p-0', limsPrimaryBtnClass)}
+      disabled={!canSave}
+      aria-label={`Save ${itemName}`}
+      title="Save (also saves when you leave the row)"
+      onClick={onSave}
+    >
+      <Check size={16} className={busy ? 'animate-pulse' : undefined} />
+    </Button>
+  )
+}
+
+/** Escape cancels the edit without closing the surrounding dialog. */
+function cancelOnEscape(onCancel: () => void) {
+  return (e: KeyboardEvent<HTMLElement>) => {
+    if (e.key !== 'Escape') return
+    e.preventDefault()
+    e.stopPropagation()
+    onCancel()
+  }
+}
+
+function RowActions({
+  row,
+  onDelete,
+  allowDelete = true,
+}: {
+  row: TestParameterRow
+  onDelete: (row: TestParameterRow) => void
+  allowDelete?: boolean
+}) {
+  const canDelete = useIsLaboratoryDirector()
+  if (!allowDelete || !canDelete) return null
   return (
     <div className="flex shrink-0 items-center gap-0.5">
       <Button
         type="button"
         size="sm"
-        className={cn('h-8 w-8 rounded-none p-0', limsPrimaryBtnClass)}
-        disabled={!canSave}
-        aria-label={`Save ${itemName}`}
-        title="Save"
-        onClick={onSave}
-      >
-        <Check size={16} className={busy ? 'animate-pulse' : undefined} />
-      </Button>
-      <Button
-        type="button"
-        size="sm"
         variant="ghost"
-        className="h-8 w-8 rounded-none p-0 text-stone-600 hover:bg-stone-100 hover:text-stone-800"
-        disabled={busy}
-        aria-label={`Cancel editing ${itemName}`}
-        title="Cancel"
-        onClick={onCancel}
+        className="h-8 w-8 rounded-none p-0 text-red-700 hover:bg-red-50 hover:text-red-800"
+        aria-label={`Delete ${row.item_name}`}
+        title="Delete"
+        onClick={() => onDelete(row)}
       >
-        <X size={16} />
+        <Trash2 size={16} />
       </Button>
     </div>
   )
 }
 
-function RowActions({
-  row,
-  onEdit,
-  onDelete,
-}: {
-  row: TestParameterRow
-  onEdit: (row: TestParameterRow) => void
-  onDelete: (row: TestParameterRow) => void
-}) {
-  const canDelete = useIsLaboratoryDirector()
-  return (
-    <div className="flex shrink-0 items-center gap-0.5">
-      <Button
-        type="button"
-        size="sm"
-        variant="ghost"
-        className="h-8 w-8 rounded-none p-0 text-[#92400e] hover:bg-[#f3e9d8] hover:text-[#78350f]"
-        aria-label={`Edit ${row.item_name}`}
-        title="Edit"
-        onClick={() => onEdit(row)}
-      >
-        <Pencil size={16} />
-      </Button>
-      {canDelete ? (
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          className="h-8 w-8 rounded-none p-0 text-red-700 hover:bg-red-50 hover:text-red-800"
-          aria-label={`Delete ${row.item_name}`}
-          title="Delete"
-          onClick={() => onDelete(row)}
-        >
-          <Trash2 size={16} />
-        </Button>
-      ) : null}
-    </div>
-  )
+/** Column a double-click started the edit from; its input gets the focus. */
+type EditFocusField = 'isCode' | 'itemName' | 'testMethod' | 'clause' | 'unit' | 'requirement'
+
+/** Double-clicks on checkboxes and buttons keep their own meaning. */
+function isDoubleClickEditTarget(target: EventTarget | null) {
+  return !(target instanceof Element && target.closest('input, button, a, label'))
+}
+
+function useFocusEditField<T extends HTMLElement>(focusField: EditFocusField | null) {
+  const rootRef = useRef<T | null>(null)
+  useEffect(() => {
+    if (!focusField) return
+    const el = rootRef.current?.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+      `[data-edit-col="${focusField}"] input, [data-edit-col="${focusField}"] textarea`,
+    )
+    if (!el) return
+    el.focus({ preventScroll: true })
+    const end = el.value.length
+    el.setSelectionRange?.(end, end)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- focus once, when the edit starts
+  }, [])
+  return rootRef
 }
 
 function InlineEditTableRow({
@@ -876,6 +884,7 @@ function InlineEditTableRow({
   onSave,
   onCancel,
   onTrackSymbolTarget,
+  focusField = null,
 }: {
   form: TestParameterForm
   isCodes: IsCodeOption[]
@@ -885,15 +894,22 @@ function InlineEditTableRow({
   onSave: () => void
   onCancel: () => void
   onTrackSymbolTarget?: (target: SymbolCaretTarget) => void
+  focusField?: EditFocusField | null
 }) {
   const canSave = normalizeText(form.itemName).length > 0 && !editBusy
   const reqHandlers = symbolFieldHandlers('specificRequirement', 'edit', onTrackSymbolTarget)
   const unitBind = unitSymbolBind('edit', onTrackSymbolTarget)
+  const rowRef = useFocusEditField<HTMLTableRowElement>(focusField)
 
   return (
-    <TableRow className={cn(inlineEditTone, 'border-l-2 border-l-sky-500')}>
+    <TableRow
+      ref={rowRef}
+      data-editing-row=""
+      onKeyDown={cancelOnEscape(onCancel)}
+      className={cn(inlineEditTone, 'border-l-2 border-l-sky-500')}
+    >
       <TableCell className={tdClass} />
-      <TableCell className={cn(tdClass, 'text-left')}>
+      <TableCell data-edit-col="isCode" className={cn(tdClass, 'text-left')}>
         <InlineIsCodePicker
           value={form.isCodeLabel}
           isCodeId={form.isCodeId}
@@ -901,7 +917,7 @@ function InlineEditTableRow({
           onChange={(patch) => onFormChange({ ...form, ...patch })}
         />
       </TableCell>
-      <TableCell className={cn(tdClass, 'text-left')}>
+      <TableCell data-edit-col="itemName" className={cn(tdClass, 'text-left')}>
         <InlineSuggestPicker
           value={form.itemName}
           options={parameterNameOptions}
@@ -912,14 +928,14 @@ function InlineEditTableRow({
           onTrackSymbolTarget={onTrackSymbolTarget}
         />
       </TableCell>
-      <TableCell className={tdClass}>
+      <TableCell data-edit-col="testMethod" className={tdClass}>
         <InlineTestMethodPicker
           value={form.testMethod}
           isCodes={isCodes}
           onChange={(testMethod) => onFormChange({ ...form, testMethod })}
         />
       </TableCell>
-      <TableCell className={tdClass}>
+      <TableCell data-edit-col="clause" className={tdClass}>
         <Input
           value={form.clauseNo}
           onChange={(e) => onFormChange({ ...form, clauseNo: e.target.value })}
@@ -928,7 +944,7 @@ function InlineEditTableRow({
           aria-label="Clause"
         />
       </TableCell>
-      <TableCell className={tdClass}>
+      <TableCell data-edit-col="unit" className={tdClass}>
         <MeasurementUnitSelect
           value={form.unitValue}
           onChange={(unitValue) => onFormChange({ ...form, unitValue })}
@@ -941,7 +957,7 @@ function InlineEditTableRow({
           {...unitBind}
         />
       </TableCell>
-      <TableCell className={tdClass}>
+      <TableCell data-edit-col="requirement" className={tdClass}>
         <Input
           value={form.specificRequirement}
           onChange={(e) => onFormChange({ ...form, specificRequirement: e.target.value })}
@@ -953,11 +969,10 @@ function InlineEditTableRow({
       </TableCell>
       <TableCell className={tdClass}>
         <div className="flex justify-center">
-          <InlineEditSaveCancelButtons
+          <InlineEditSaveButton
             canSave={canSave}
             busy={editBusy}
             onSave={onSave}
-            onCancel={onCancel}
             itemName={form.itemName}
           />
         </div>
@@ -975,6 +990,7 @@ function InlineEditCard({
   onSave,
   onCancel,
   onTrackSymbolTarget,
+  focusField = null,
 }: {
   form: TestParameterForm
   isCodes: IsCodeOption[]
@@ -984,13 +1000,18 @@ function InlineEditCard({
   onSave: () => void
   onCancel: () => void
   onTrackSymbolTarget?: (target: SymbolCaretTarget) => void
+  focusField?: EditFocusField | null
 }) {
   const canSave = normalizeText(form.itemName).length > 0 && !editBusy
   const reqHandlers = symbolFieldHandlers('specificRequirement', 'edit', onTrackSymbolTarget)
   const unitBind = unitSymbolBind('edit', onTrackSymbolTarget)
+  const cardRef = useFocusEditField<HTMLElement>(focusField)
 
   return (
     <article
+      ref={cardRef}
+      data-editing-row=""
+      onKeyDown={cancelOnEscape(onCancel)}
       className={cn(
         'overflow-hidden border-2 border-sky-600/50 font-jakarta shadow-sm ring-1 ring-sky-700/20',
         inlineEditTone,
@@ -1047,11 +1068,10 @@ function InlineEditCard({
             {...reqHandlers}
           />
           <div className="flex justify-end pt-0.5">
-            <InlineEditSaveCancelButtons
+            <InlineEditSaveButton
               canSave={canSave}
               busy={editBusy}
               onSave={onSave}
-              onCancel={onCancel}
               itemName={form.itemName}
             />
           </div>
@@ -1087,6 +1107,8 @@ export function TestParameterTable({
   onEditCancel,
   editBusy,
   onTrackSymbolTarget,
+  allowDelete = true,
+  onReorder,
 }: {
   rows: TestParameterRow[]
   loading: boolean
@@ -1113,7 +1135,97 @@ export function TestParameterTable({
   onEditCancel: () => void
   editBusy: boolean
   onTrackSymbolTarget?: (target: SymbolCaretTarget) => void
+  /** false hides Delete. */
+  allowDelete?: boolean
+  /** Set when rows may be dragged into a new order (dragged row lands before/after the target). */
+  onReorder?: (draggedId: string, targetId: string, place: 'before' | 'after') => void
 }) {
+  // Leaving the row saves it: a click anywhere else on the page / dialog commits the edit.
+  // A click on another row waits a moment, so a double-click there can switch rows first
+  // (the parent saves the old row while switching) without the rows jumping under the mouse.
+  const tableRootRef = useRef<HTMLDivElement | null>(null)
+  const onEditSaveRef = useRef(onEditSave)
+  onEditSaveRef.current = onEditSave
+  const editingIdRef = useRef(editingRowId)
+  editingIdRef.current = editingRowId
+  useEffect(() => {
+    if (!editingRowId) return
+    const id = editingRowId
+    const onDown = (e: MouseEvent) => {
+      const t = e.target
+      if (!(t instanceof Element)) return
+      if (t.closest('[data-editing-row], [data-keep-inline-edit]')) return
+      const root = tableRootRef.current
+      // Another dialog on top (Add Symbol, confirm…) is not leaving the row.
+      if (t.closest('[role=dialog]') !== (root?.closest('[role=dialog]') ?? null)) return
+      if (root?.contains(t) && t.closest('[data-row-id]')) {
+        window.setTimeout(() => {
+          if (editingIdRef.current === id) onEditSaveRef.current()
+        }, 350)
+        return
+      }
+      onEditSaveRef.current()
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [editingRowId])
+
+  const [dragId, setDragId] = useState<string | null>(null)
+  const [dropTarget, setDropTarget] = useState<{ id: string; place: 'before' | 'after' } | null>(null)
+  // Refs: dragover/drop can fire before React re-renders with the new state.
+  const dragIdRef = useRef<string | null>(null)
+  const dropTargetRef = useRef<{ id: string; place: 'before' | 'after' } | null>(null)
+  const dragEnabled = Boolean(onReorder) && !editingRowId
+  const endDrag = () => {
+    dragIdRef.current = null
+    dropTargetRef.current = null
+    setDragId(null)
+    setDropTarget(null)
+  }
+  const dragRowProps = (row: TestParameterRow) =>
+    dragEnabled
+      ? {
+          draggable: true,
+          onDragStart: (e: DragEvent<HTMLTableRowElement>) => {
+            dragIdRef.current = row.id
+            setDragId(row.id)
+            e.dataTransfer.effectAllowed = 'move'
+            e.dataTransfer.setData('text/plain', row.id)
+          },
+          onDragOver: (e: DragEvent<HTMLTableRowElement>) => {
+            const dragging = dragIdRef.current
+            if (!dragging || dragging === row.id) return
+            e.preventDefault()
+            e.dataTransfer.dropEffect = 'move'
+            const rect = e.currentTarget.getBoundingClientRect()
+            const place = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after'
+            dropTargetRef.current = { id: row.id, place }
+            setDropTarget((prev) =>
+              prev?.id === row.id && prev.place === place ? prev : { id: row.id, place },
+            )
+          },
+          onDrop: (e: DragEvent<HTMLTableRowElement>) => {
+            e.preventDefault()
+            const dragging = dragIdRef.current
+            const target = dropTargetRef.current
+            if (dragging && target && dragging !== target.id) {
+              onReorder?.(dragging, target.id, target.place)
+            }
+            endDrag()
+          },
+          onDragEnd: endDrag,
+        }
+      : {}
+  const [editFocus, setEditFocus] = useState<EditFocusField | null>(null)
+  const startEdit = (row: TestParameterRow, target: EventTarget | null) => {
+    if (!isDoubleClickEditTarget(target)) return
+    const col =
+      target instanceof Element
+        ? target.closest<HTMLElement>('[data-edit-col]')?.dataset.editCol
+        : undefined
+    setEditFocus((col as EditFocusField | undefined) ?? 'itemName')
+    onEdit(row)
+  }
   const allChecked = rows.length > 0 && rows.every((r) => selectedIds.has(r.id))
   const someChecked = rows.some((r) => selectedIds.has(r.id))
 
@@ -1123,7 +1235,7 @@ export function TestParameterTable({
   }
 
   return (
-    <div className={cn(limsPanelClass, 'flex h-full min-h-0 flex-col bg-[#f7f3eb]')}>
+    <div ref={tableRootRef} className={cn(limsPanelClass, 'flex h-full min-h-0 flex-col bg-[#f7f3eb]')}>
       {error ? (
         <p className="shrink-0 px-3 pt-3 text-sm text-red-600 sm:px-5 sm:pt-4">{error}</p>
       ) : null}
@@ -1192,6 +1304,7 @@ export function TestParameterTable({
                     onSave={onEditSave}
                     onCancel={onEditCancel}
                     onTrackSymbolTarget={onTrackSymbolTarget}
+                    focusField={editFocus}
                   />
                 )
               }
@@ -1199,8 +1312,11 @@ export function TestParameterTable({
               return (
                 <article
                   key={r.id}
+                  data-row-id={r.id}
+                  title="Double-Click to Edit"
+                  onDoubleClick={(e) => startEdit(r, e.target)}
                   className={cn(
-                    'overflow-hidden border-2 border-stone-500 font-jakarta shadow-sm ring-1 ring-amber-700/20',
+                    'cursor-pointer select-none overflow-hidden border-2 border-stone-500 font-jakarta shadow-sm ring-1 ring-amber-700/20',
                     tone,
                     selected && 'ring-2 ring-amber-500/40',
                   )}
@@ -1219,7 +1335,7 @@ export function TestParameterTable({
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5">
                             <FlaskConical className="h-3.5 w-3.5 shrink-0 text-amber-700" aria-hidden />
-                            <p className="truncate text-[14px] font-bold tracking-tight text-[#1c1917]">
+                            <p data-edit-col="itemName" className="truncate text-[14px] font-bold tracking-tight text-[#1c1917]">
                               {r.item_name || '—'}
                               {r.archived_at ? (
                                 <span className="ml-1 bg-stone-200 px-1 text-[9px] font-semibold uppercase text-stone-600">
@@ -1228,14 +1344,14 @@ export function TestParameterTable({
                               ) : null}
                             </p>
                           </div>
-                          <p className="mt-1 font-mono text-[11px] font-medium text-[#b45309]">
+                          <p data-edit-col="isCode" className="mt-1 font-mono text-[11px] font-medium text-[#b45309]">
                             {r.is_code_label || '—'}
                           </p>
                         </div>
                       </div>
 
                       <div className="grid grid-cols-3 gap-px border-b border-[#e7e0d4] bg-[#e7e0d4]">
-                        <div className="bg-[#fffcf7] px-2.5 py-2">
+                        <div data-edit-col="testMethod" className="bg-[#fffcf7] px-2.5 py-2">
                           <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
                             Test Method
                           </p>
@@ -1243,7 +1359,7 @@ export function TestParameterTable({
                             {r.test_method?.trim() || '—'}
                           </p>
                         </div>
-                        <div className="bg-[#fffcf7] px-2.5 py-2">
+                        <div data-edit-col="clause" className="bg-[#fffcf7] px-2.5 py-2">
                           <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
                             Clause
                           </p>
@@ -1251,7 +1367,7 @@ export function TestParameterTable({
                             {r.clause_no?.trim() || '—'}
                           </p>
                         </div>
-                        <div className="bg-[#fffcf7] px-2.5 py-2">
+                        <div data-edit-col="unit" className="bg-[#fffcf7] px-2.5 py-2">
                           <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
                             Unit
                           </p>
@@ -1259,7 +1375,7 @@ export function TestParameterTable({
                             {r.unit_value?.trim() || '—'}
                           </p>
                         </div>
-                        <div className="col-span-3 bg-[#fffcf7] px-2.5 py-2">
+                        <div data-edit-col="requirement" className="col-span-3 bg-[#fffcf7] px-2.5 py-2">
                           <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
                             Requirements
                           </p>
@@ -1273,7 +1389,7 @@ export function TestParameterTable({
                         <span className="text-[10px] font-medium uppercase tracking-[0.1em] text-stone-500">
                           Actions
                         </span>
-                        <RowActions row={r} onEdit={onEdit} onDelete={onDelete} />
+                        <RowActions row={r} onDelete={onDelete} allowDelete={allowDelete} />
                       </div>
                     </div>
                   </div>
@@ -1285,14 +1401,14 @@ export function TestParameterTable({
           <div className={TABLE_MQ_SHOW}>
             <Table className={GRID_TABLE}>
               <colgroup>
-                <col style={{ width: '4%' }} />
-                <col style={{ width: '10%' }} />
-                <col style={{ width: '20%' }} />
-                <col style={{ width: '10%' }} />
-                <col style={{ width: '7.5%' }} />
-                <col style={{ width: '7.5%' }} />
-                <col style={{ width: '34%' }} />
-                <col style={{ width: '7%' }} />
+                <col style={{ width: '2.75rem' }} />
+                <col style={{ width: '11%' }} />
+                <col style={{ width: '21%' }} />
+                <col style={{ width: '11%' }} />
+                <col style={{ width: '8%' }} />
+                <col style={{ width: '8%' }} />
+                <col style={{ width: '41%' }} />
+                <col style={{ width: '3rem' }} />
               </colgroup>
               <TableHeader>
                 <TableRow className="border-stone-700 bg-stone-800 hover:bg-stone-800">
@@ -1358,7 +1474,7 @@ export function TestParameterTable({
                     onSort={onSort}
                     className={thBase}
                   />
-                  <TableHead className={thBase}>Action</TableHead>
+                  <TableHead className={cn(thBase, '!px-0 text-[10px] tracking-normal')}>Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1387,6 +1503,7 @@ export function TestParameterTable({
                         onSave={onEditSave}
                         onCancel={onEditCancel}
                         onTrackSymbolTarget={onTrackSymbolTarget}
+                        focusField={editFocus}
                       />
                     )
                   }
@@ -1394,25 +1511,43 @@ export function TestParameterTable({
                   return (
                     <TableRow
                       key={r.id}
+                      data-row-id={r.id}
+                      title={dragEnabled ? 'Double-Click to Edit · Drag to Move' : 'Double-Click to Edit'}
+                      onDoubleClick={(e) => startEdit(r, e.target)}
+                      {...dragRowProps(r)}
                       className={cn(
+                        'cursor-pointer select-none',
                         selected ? rowSelectedClass : index % 2 === 0 ? rowEvenClass : rowOddClass,
+                        dragId === r.id && 'opacity-40',
+                        dropTarget?.id === r.id &&
+                          (dropTarget.place === 'before'
+                            ? '[&>td]:border-t-2 [&>td]:border-t-amber-600'
+                            : '[&>td]:border-b-2 [&>td]:border-b-amber-600'),
                       )}
                     >
                       <TableCell className={tdClass}>
-                        <input
-                          type="checkbox"
-                          className={checkboxClass}
-                          aria-label={`Select ${r.item_name}`}
-                          checked={selected}
-                          onChange={() => onToggle(r.id)}
-                        />
+                        <div className="flex items-center justify-center gap-0.5">
+                          {dragEnabled ? (
+                            <GripVertical
+                              className="h-3.5 w-3.5 shrink-0 cursor-grab text-stone-400"
+                              aria-hidden
+                            />
+                          ) : null}
+                          <input
+                            type="checkbox"
+                            className={checkboxClass}
+                            aria-label={`Select ${r.item_name}`}
+                            checked={selected}
+                            onChange={() => onToggle(r.id)}
+                          />
+                        </div>
                       </TableCell>
-                      <TableCell className={cn(tdClass, 'text-left')}>
+                      <TableCell data-edit-col="isCode" className={cn(tdClass, 'text-left')}>
                         <div className="font-mono text-[12px] font-semibold text-[#b45309]">
                           {r.is_code_label || '—'}
                         </div>
                       </TableCell>
-                      <TableCell className={cn(tdClass, 'text-left')}>
+                      <TableCell data-edit-col="itemName" className={cn(tdClass, 'text-left')}>
                         <div className="text-[13px] font-bold tracking-tight text-[#1c1917]">
                           {r.item_name || '—'}
                           {r.archived_at ? (
@@ -1422,17 +1557,17 @@ export function TestParameterTable({
                           ) : null}
                         </div>
                       </TableCell>
-                      <TableCell className={cn(tdClass, 'font-semibold')}>
+                      <TableCell data-edit-col="testMethod" className={cn(tdClass, 'font-semibold')}>
                         {r.test_method?.trim() || '—'}
                       </TableCell>
-                      <TableCell className={tdClass}>{r.clause_no?.trim() || '—'}</TableCell>
-                      <TableCell className={tdClass}>{r.unit_value?.trim() || '—'}</TableCell>
-                      <TableCell className={tdClass}>
+                      <TableCell data-edit-col="clause" className={tdClass}>{r.clause_no?.trim() || '—'}</TableCell>
+                      <TableCell data-edit-col="unit" className={tdClass}>{r.unit_value?.trim() || '—'}</TableCell>
+                      <TableCell data-edit-col="requirement" className={tdClass}>
                         {renderRequirement(r.specific_requirement)}
                       </TableCell>
                       <TableCell className={tdClass}>
                         <div className="flex justify-center">
-                          <RowActions row={r} onEdit={onEdit} onDelete={onDelete} />
+                          <RowActions row={r} onDelete={onDelete} allowDelete={allowDelete} />
                         </div>
                       </TableCell>
                     </TableRow>

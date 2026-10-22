@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { FileSpreadsheet, Pencil, Plus, Trash2 } from 'lucide-react'
+import { FileSpreadsheet, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -290,6 +290,8 @@ export function Cmpf305ModuleFields({
               <TableBody>
                 {savedRows.map((row, index) => (
                   <TableRow
+                    title={disabled ? undefined : 'Double-Click to Edit'}
+                    onDoubleClick={() => { if (!disabled) startEdit(index) }}
                     key={`c305-saved-${index}-${row.machineryName}`}
                     className={cn(
                       'border-stone-400',
@@ -320,18 +322,6 @@ export function Cmpf305ModuleFields({
                     </TableCell>
                     <TableCell className="px-1 text-center">
                       <div className="inline-flex items-center justify-center gap-0.5">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className={cn(limsOutlineBtnClass, actionBtnClass)}
-                          disabled={disabled}
-                          onClick={() => startEdit(index)}
-                          title="Edit Row"
-                          aria-label="Edit Row"
-                        >
-                          <Pencil size={14} aria-hidden />
-                        </Button>
                         <Button
                           type="button"
                           size="sm"

@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useRef, useState, type ReactNode } from 'react'
 import { FileText, LayoutTemplate, PenLine, Plus, Printer, Settings2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -198,11 +198,25 @@ export function FactoryTestReportModuleFields({
     [activeReport.parameters],
   )
 
+  /** Master order of the IS (clause + drags in the picker); the report follows it. */
+  const masterOrderRef = useRef<string[]>([])
+  const inMasterOrder = (params: FactoryTestReportParamRow[]) => {
+    const pos = new Map(masterOrderRef.current.map((id, i) => [id, i]))
+    const at = (p: FactoryTestReportParamRow) => pos.get(p.testParameterId) ?? Number.MAX_SAFE_INTEGER
+    return [...params].sort((a, b) => at(a) - at(b))
+  }
+  const applyMasterOrder = (orderedIds: string[]) => {
+    masterOrderRef.current = orderedIds
+    if (activeIndex < 0) return
+    const sorted = inMasterOrder(activeReport.parameters)
+    if (sorted.some((p, i) => p !== activeReport.parameters[i])) patchActiveReport({ parameters: sorted })
+  }
+
   const toggleParam = (param: MasterParam, checked: boolean) => {
     if (checked) {
       if (selectedParamIds.has(param.id)) return
       patchActiveReport({
-        parameters: [...activeReport.parameters, paramFromMaster(param, isCodeLabel)],
+        parameters: inMasterOrder([...activeReport.parameters, paramFromMaster(param, isCodeLabel)]),
       })
       return
     }
@@ -211,11 +225,31 @@ export function FactoryTestReportModuleFields({
     })
   }
 
+  /** A master row edited in the picker: refresh its copy on the report, keep the observed values. */
+  const refreshParamFromMaster = (param: MasterParam) => {
+    if (!selectedParamIds.has(param.id)) return
+    const fresh = paramFromMaster(param, isCodeLabel)
+    patchActiveReport({
+      parameters: activeReport.parameters.map((p) =>
+        p.testParameterId === param.id
+          ? {
+              ...p,
+              testName: fresh.testName,
+              clauseNo: fresh.clauseNo,
+              isReference: fresh.isReference,
+              unit: fresh.unit,
+              specifiedRequirement: fresh.specifiedRequirement,
+            }
+          : p,
+      ),
+    })
+  }
+
   /** Select All / clear for many parameters at once (one update, so none is lost). */
   const toggleParams = (params: MasterParam[], checked: boolean) => {
     if (checked) {
       const added = params.filter((param) => !selectedParamIds.has(param.id)).map((param) => paramFromMaster(param, isCodeLabel))
-      if (added.length) patchActiveReport({ parameters: [...activeReport.parameters, ...added] })
+      if (added.length) patchActiveReport({ parameters: inMasterOrder([...activeReport.parameters, ...added]) })
       return
     }
     const removing = new Set(params.map((param) => param.id))
@@ -807,6 +841,8 @@ export function FactoryTestReportModuleFields({
         onParamCreated={() => {
           /* list refresh handled inside dialog; selection via onToggleParam */
         }}
+        onParamUpdated={refreshParamFromMaster}
+        onOrderChange={applyMasterOrder}
         disabled={disabled}
       />
     </div>

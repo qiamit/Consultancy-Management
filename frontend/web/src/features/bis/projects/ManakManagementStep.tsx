@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Check, ChevronDown, Download, Eye, FileType, Import, Pencil, Plus, Printer, Trash2, X } from 'lucide-react'
+import { Check, ChevronDown, Download, Eye, FileType, Import, Plus, Printer, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -331,8 +331,9 @@ function InlineError({ message }: { message: string | null }) {
 const invalidInputCls = 'border-red-500 bg-red-50/60 focus-visible:ring-red-500/30'
 
 /**
- * Manak-style editable table: an input row on top with "+", then saved rows
- * with Edit / Delete in the same row. A narrow checkbox column replaces S.No.
+ * Manak-style editable table: an input row on top with "+", then saved rows. Double-click any cell of a saved row
+ * to edit that row (Enter or ✓ saves, Escape or ✗ cancels); the row keeps only a Delete button. A narrow checkbox
+ * column replaces S.No.
  */
 export function EditableRows({
   projectId,
@@ -366,6 +367,14 @@ export function EditableRows({
   const [draft, setDraft] = useState<Rec>(() => blank())
   const [editIndex, setEditIndex] = useState<number | null>(null)
   const [editDraft, setEditDraft] = useState<Rec>({})
+  /** Field whose cell was double-clicked; its input gets the focus. */
+  const [editFocus, setEditFocus] = useState<string | null>(null)
+  const startEdit = (index: number, row: Rec, key: string) => {
+    if (busy || editIndex === index) return
+    setEditIndex(index)
+    setEditDraft({ ...row })
+    setEditFocus(key)
+  }
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [busy, setBusy] = useState(false)
   // Inline errors wait until the user leaves the cell, so a half-typed value is not flagged.
@@ -603,7 +612,17 @@ export function EditableRows({
                       />
                     </td>
                     {fields.map((f) => (
-                      <td key={f.key} data-label={f.label.replace(/\n/g, ' ')} className={cn(tdCls, f.alignLeft ? 'text-left' : 'text-center')}>
+                      <td
+                        key={f.key}
+                        data-label={f.label.replace(/\n/g, ' ')}
+                        className={cn(tdCls, f.alignLeft ? 'text-left' : 'text-center', !editing && 'cursor-default select-none')}
+                        title={editing ? undefined : 'Double-Click to Edit'}
+                        onDoubleClick={() => startEdit(index, r, f.key)}
+                        onKeyDown={editing ? (e) => {
+                          if (e.key === 'Escape') setEditIndex(null)
+                          if (e.key === 'Enter' && (e.target as HTMLElement).tagName === 'INPUT') saveEdit()
+                        } : undefined}
+                      >
                         {editing && f.options && f.multiple ? (
                           <MultiOptionSelect field={f} value={str(editDraft[f.key])} onChange={(v) => setEditDraft((d) => ({ ...d, [f.key]: v }))} />
                         ) : editing && f.options ? (
@@ -638,6 +657,7 @@ export function EditableRows({
                                 <Input
                                   className={cn(inputCls, err && invalidInputCls)}
                                   type={f.type ?? (f.email ? 'email' : undefined)}
+                                  autoFocus={editFocus === f.key}
                                   value={str(editDraft[f.key])}
                                   onChange={(e) => setEditDraft({ ...editDraft, [f.key]: cleanField(f, e.target.value) })}
                                   inputMode={f.digits ? 'numeric' : f.email ? 'email' : undefined}
@@ -676,23 +696,9 @@ export function EditableRows({
                             </Button>
                           </>
                         ) : (
-                          <>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              className={iconBtn}
-                              title="Edit Row"
-                              onClick={() => {
-                                setEditIndex(index)
-                                setEditDraft({ ...r })
-                              }}
-                            >
-                              <Pencil size={13} />
-                            </Button>
-                            <Button type="button" variant="ghost" className={iconBtn} disabled={busy} title="Delete Row" onClick={() => remove([index])}>
-                              <Trash2 size={13} />
-                            </Button>
-                          </>
+                          <Button type="button" variant="ghost" className={iconBtn} disabled={busy} title="Delete Row" onClick={() => remove([index])}>
+                            <Trash2 size={13} />
+                          </Button>
                         )}
                       </span>
                     </td>

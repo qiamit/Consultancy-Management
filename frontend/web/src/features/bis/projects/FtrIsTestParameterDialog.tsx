@@ -39,6 +39,39 @@ export type FtrMasterParam = {
   specific_requirement: string | null
   test_method: string | null
   is_code_label: string | null
+  /** Manual order from dragging; null = placed by clause number. */
+  display_order?: number | null
+}
+
+const PARAM_COLUMNS =
+  'id, item_name, clause_no, unit_value, specific_requirement, test_method, is_code_label, display_order'
+
+function compareClause(a: string | null | undefined, b: string | null | undefined) {
+  const x = (a ?? '').trim()
+  const y = (b ?? '').trim()
+  if (!x || !y) return x ? -1 : y ? 1 : 0
+  return x.localeCompare(y, undefined, { sensitivity: 'base', numeric: true })
+}
+
+/**
+ * Clause order with the user's drags kept: rows with a manual order stay in that order;
+ * every other row goes right after the last row whose clause is not higher.
+ */
+export function orderFtrParams(rows: FtrMasterParam[]): FtrMasterParam[] {
+  const byClause = (a: FtrMasterParam, b: FtrMasterParam) =>
+    compareClause(a.clause_no, b.clause_no) || a.item_name.localeCompare(b.item_name)
+  const out = rows
+    .filter((r) => r.display_order != null)
+    .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0) || byClause(a, b))
+  const rest = rows.filter((r) => r.display_order == null).sort(byClause)
+  for (const r of rest) {
+    let at = -1
+    out.forEach((x, i) => {
+      if (compareClause(x.clause_no, r.clause_no) <= 0) at = i
+    })
+    out.splice(at + 1, 0, r)
+  }
+  return out
 }
 
 function lockedIsOption(isCodeId: string, isCodeLabel: string) {
@@ -95,6 +128,8 @@ export function FtrIsTestParameterDialog({
   onToggleParam,
   onToggleParams,
   onParamCreated,
+  onParamUpdated,
+  onOrderChange,
   disabled = false,
 }: {
   open: boolean
@@ -107,6 +142,10 @@ export function FtrIsTestParameterDialog({
   onToggleParams?: (params: FtrMasterParam[], checked: boolean) => void
   /** Called after a new master row is inserted (also selected onto FTR by parent). */
   onParamCreated: (param: FtrMasterParam) => void
+  /** Called after a master row is edited here (parent refreshes its copy on the report). */
+  onParamUpdated?: (param: FtrMasterParam) => void
+  /** Master order of this IS (clause + drags), so the report lists parameters the same way. */
+  onOrderChange?: (orderedIds: string[]) => void
   disabled?: boolean
 }) {
   const lockedId = (isCodeId ?? '').trim()
@@ -120,7 +159,10 @@ export function FtrIsTestParameterDialog({
     withLockedIs(emptyTestParameterForm(), lockedId, lockedLabel),
   )
   const [inlineAddBusy, setInlineAddBusy] = useState(false)
-  const [sortKey, setSortKey] = useState<TestParameterSortKey>('itemName')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState<TestParameterForm>(() => emptyTestParameterForm())
+  const [editBusy, setEditBusy] = useState(false)
+  const [sortKey, setSortKey] = useState<TestParameterSortKey>('clause')
   const [sortDir, setSortDir] = useState<TestParameterSortDir>('asc')
   const [search, setSearch] = useState('')
   const [pageSize, setPageSize] = useState(20)
@@ -182,7 +224,7 @@ export function FtrIsTestParameterDialog({
       const { data, error: qErr } = await supabase
         .from('test_parameters')
         .select(
-          'id, item_name, clause_no, unit_value, specific_requirement, test_method, is_code_label',
+          PARAM_COLUMNS,
         )
         .eq('is_code_id', lockedId)
         .order('item_name', { ascending: true })
@@ -203,6 +245,7 @@ export function FtrIsTestParameterDialog({
     setPage(1)
     setJumpTo('')
     setInlineForm(withLockedIs(emptyTestParameterForm(), lockedId, lockedLabel))
+    setEditingId(null)
     void loadRows()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when dialog opens / IS changes
   }, [open, lockedId, lockedLabel])
@@ -234,7 +277,20 @@ export function FtrIsTestParameterDialog({
     })
   }, [tableRows, search])
 
+  const orderedParams = useMemo(() => orderFtrParams(rows), [rows])
+
+  useEffect(() => {
+    if (!open || orderedParams.length === 0) return
+    onOrderChange?.(orderedParams.map((r) => r.id))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- report only when the order changes
+  }, [open, orderedParams])
+
   const sortedRows = useMemo(() => {
+    if (sortKey === 'clause') {
+      const pos = new Map(orderedParams.map((r, i) => [r.id, i]))
+      const sorted = [...filteredRows].sort((a, b) => (pos.get(a.id) ?? 0) - (pos.get(b.id) ?? 0))
+      return sortDir === 'asc' ? sorted : sorted.reverse()
+    }
     const dir = sortDir === 'asc' ? 1 : -1
     const valueOf = (r: TestParameterRow) => {
       switch (sortKey) {
@@ -242,8 +298,6 @@ export function FtrIsTestParameterDialog({
           return (r.is_code_label ?? '').toLowerCase()
         case 'testMethod':
           return (r.test_method ?? '').toLowerCase()
-        case 'clause':
-          return (r.clause_no ?? '').toLowerCase()
         case 'unit':
           return (r.unit_value ?? '').toLowerCase()
         case 'requirement':
@@ -260,7 +314,7 @@ export function FtrIsTestParameterDialog({
       })
       return cmp * dir
     })
-  }, [filteredRows, sortKey, sortDir])
+  }, [filteredRows, sortKey, sortDir, orderedParams])
 
   const pageCount = Math.max(1, Math.ceil(sortedRows.length / pageSize))
 
@@ -306,6 +360,161 @@ export function FtrIsTestParameterDialog({
     })
   }
 
+  const buildFieldsPayload = (form: TestParameterForm) => ({
+    is_code_id: lockedId,
+    is_code_label: lockedLabel || null,
+    clause_no: normalizeText(form.clauseNo) || null,
+    unit_value: normalizeText(form.unitValue) || null,
+    test_method:
+      formatTestMethodWithYear(normalizeText(form.testMethod) || lockedLabel, lockedLabel) || null,
+    item_name: toProperTitleCase(normalizeText(form.itemName)),
+    specific_requirement: toProperTitleCase(normalizeText(form.specificRequirement)) || null,
+  })
+
+  /** The form as it was when the row opened (or was last saved) — only real changes are written. */
+  const editOriginalRef = useRef('')
+
+  const saveEdit = async (id: string, form: TestParameterForm): Promise<boolean> => {
+    try {
+      const before = rows.find((r) => r.id === id)
+      const clauseChanged = normalizeText(before?.clause_no ?? '') !== normalizeText(form.clauseNo)
+      const { data, error: upErr } = await supabase
+        .from('test_parameters')
+        // A new clause number moves the row to that clause's place.
+        .update({ ...buildFieldsPayload(form), ...(clauseChanged ? { display_order: null } : {}) })
+        .eq('id', id)
+        .select(PARAM_COLUMNS)
+      if (upErr) throw upErr
+      const updated = (Array.isArray(data) ? data[0] : null) as FtrMasterParam | null
+      if (!updated) throw new Error('You do not have edit access for this record (view-only).')
+      setRows((prev) => prev.map((r) => (r.id === updated.id ? updated : r)))
+      onParamUpdated?.(updated)
+      setSaveMessage('Saved to Test Parameter master.')
+      return true
+    } catch (err) {
+      setSaveMessage(err instanceof Error ? err.message : 'Unable to save test parameter.')
+      return false
+    }
+  }
+
+  /** Saves the open row if it changed; `close` also ends editing (unless another row opened meanwhile). */
+  const commitEdit = (close: boolean) => {
+    const id = editingId
+    const form = editForm
+    if (!id) return
+    const closeIfCurrent = () => {
+      if (close) setEditingId((cur) => (cur === id ? null : cur))
+    }
+    if (JSON.stringify(form) === editOriginalRef.current) {
+      closeIfCurrent()
+      return
+    }
+    if (normalizeText(form.itemName).length === 0) {
+      setSaveMessage('Test Parameter name is required.')
+      return
+    }
+    editOriginalRef.current = JSON.stringify(form)
+    setEditBusy(true)
+    setSaveMessage(null)
+    void saveEdit(id, form).then((ok) => {
+      setEditBusy(false)
+      if (ok) closeIfCurrent()
+    })
+  }
+
+  const handleEdit = (row: TestParameterRow) => {
+    if (disabled) return
+    // Double-click on another row: the row being edited is saved first.
+    if (editingId && editingId !== row.id) commitEdit(false)
+    setSaveMessage(null)
+    const form = withLockedIs(
+      {
+        ...emptyTestParameterForm(),
+        clauseNo: row.clause_no ?? '',
+        unitValue: row.unit_value ?? '',
+        testMethod: row.test_method ?? '',
+        itemName: row.item_name ?? '',
+        specificRequirement: row.specific_requirement ?? '',
+      },
+      lockedId,
+      lockedLabel,
+    )
+    editOriginalRef.current = JSON.stringify(form)
+    setEditForm(form)
+    setEditingId(row.id)
+  }
+
+  const handleEditSave = () => commitEdit(true)
+
+  /** Drag-and-drop: save the whole IS order (1, 2, 3 …) so later rows keep their places. */
+  const handleReorder = (draggedId: string, targetId: string, place: 'before' | 'after') => {
+    if (disabled) return
+    const order = orderedParams.filter((r) => r.id !== draggedId)
+    const dragged = orderedParams.find((r) => r.id === draggedId)
+    const at = order.findIndex((r) => r.id === targetId)
+    if (!dragged || at < 0) return
+    order.splice(place === 'before' ? at : at + 1, 0, dragged)
+    const changed = order
+      .map((r, i) => ({ ...r, display_order: i + 1 }))
+      .filter((r) => rows.find((x) => x.id === r.id)?.display_order !== r.display_order)
+    if (changed.length === 0) return
+    const previous = rows
+    setRows((prev) =>
+      prev.map((r) => {
+        const c = changed.find((x) => x.id === r.id)
+        return c ? { ...r, display_order: c.display_order } : r
+      }),
+    )
+    setSaveMessage(null)
+    void (async () => {
+      const results = await Promise.all(
+        changed.map((r) =>
+          supabase
+            .from('test_parameters')
+            .update({ display_order: r.display_order })
+            .eq('id', r.id)
+            .select('id'),
+        ),
+      )
+      const failed = results.find((r) => r.error || !r.data || r.data.length === 0)
+      if (failed) {
+        setRows(previous)
+        setSaveMessage(failed.error?.message ?? 'You do not have edit access for this record (view-only).')
+      }
+    })()
+  }
+
+  const handleDelete = (row: TestParameterRow) => {
+    void (async () => {
+      if (disabled) return
+      const label = row.item_name?.trim() || 'this record'
+      const ok = window.confirm(
+        `Permanently delete "${label}" from the Test Parameter master? Records still used elsewhere will be skipped. This cannot be undone.`,
+      )
+      if (!ok) return
+      setSaveMessage(null)
+      try {
+        const { data, error: delErr } = await supabase.rpc('delete_master_rows', {
+          p_table: 'test_parameters',
+          p_ids: [row.id],
+        })
+        if (delErr) throw delErr
+        const deleted = (data as { deleted?: string[] | null } | null)?.deleted ?? []
+        if (!deleted.includes(row.id)) {
+          setSaveMessage(`"${label}" is still used elsewhere, so it was not deleted.`)
+          return
+        }
+        const param = rows.find((r) => r.id === row.id)
+        if (param && selectedParamIds.has(row.id)) onToggleParam(param, false)
+        if (editingId === row.id) setEditingId(null)
+        setRows((prev) => prev.filter((r) => r.id !== row.id))
+        setSaveMessage(`Deleted "${label}" from Test Parameter master.`)
+      } catch (err) {
+        setSaveMessage(err instanceof Error ? err.message : 'Unable to delete test parameter.')
+      }
+    })()
+  }
+
   const handleInlineAdd = () => {
     void (async () => {
       if (disabled || inlineAddBusy) return
@@ -318,18 +527,7 @@ export function FtrIsTestParameterDialog({
       setSaveMessage(null)
       try {
         const payload = {
-          is_code_id: lockedId,
-          is_code_label: lockedLabel || null,
-          clause_no: normalizeText(inlineForm.clauseNo) || null,
-          unit_value: normalizeText(inlineForm.unitValue) || null,
-          test_method:
-            formatTestMethodWithYear(
-              normalizeText(inlineForm.testMethod) || lockedLabel,
-              lockedLabel,
-            ) || null,
-          item_name: toProperTitleCase(normalizeText(inlineForm.itemName)),
-          specific_requirement:
-            toProperTitleCase(normalizeText(inlineForm.specificRequirement)) || null,
+          ...buildFieldsPayload(inlineForm),
           under_accreditation_ids: [] as string[],
           uncertainty_mu: null,
           department: normalizeText(inlineForm.department) || null,
@@ -339,16 +537,12 @@ export function FtrIsTestParameterDialog({
           .from('test_parameters')
           .insert(payload)
           .select(
-            'id, item_name, clause_no, unit_value, specific_requirement, test_method, is_code_label',
+            PARAM_COLUMNS,
           )
           .single()
         if (insErr) throw insErr
         const created = data as FtrMasterParam
-        setRows((prev) =>
-          [...prev.filter((r) => r.id !== created.id), created].sort((a, b) =>
-            a.item_name.localeCompare(b.item_name),
-          ),
-        )
+        setRows((prev) => [...prev.filter((r) => r.id !== created.id), created])
         onParamCreated(created)
         onToggleParam(created, true)
         setInlineForm(
@@ -454,7 +648,7 @@ export function FtrIsTestParameterDialog({
             <p
               className={cn(
                 'mb-2 shrink-0 text-xs',
-                saveMessage.startsWith('Saved') ? 'text-emerald-800' : 'text-red-700',
+                /^(Saved|Deleted)/.test(saveMessage) ? 'text-emerald-800' : 'text-red-700',
               )}
             >
               {saveMessage}
@@ -469,12 +663,13 @@ export function FtrIsTestParameterDialog({
               selectedIds={selectedParamIds}
               onToggle={handleToggle}
               onToggleAll={handleToggleAll}
-              onEdit={() => {
-                /* IS-locked FTR view: add via blank row; edit in master if needed */
-              }}
-              onDelete={() => {
-                /* keep master rows intact from FTR picker */
-              }}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              onReorder={
+                !disabled && sortKey === 'clause' && sortDir === 'asc' && !search.trim()
+                  ? handleReorder
+                  : undefined
+              }
               sortKey={sortKey}
               sortDir={sortDir}
               onSort={handleSort}
@@ -484,12 +679,12 @@ export function FtrIsTestParameterDialog({
               inlineAddBusy={inlineAddBusy || disabled}
               isCodes={isCodes}
               parameterNameOptions={parameterNameOptions}
-              editingRowId={null}
-              editForm={inlineForm}
-              onEditFormChange={handleInlineFormChange}
-              onEditSave={() => {}}
-              onEditCancel={() => {}}
-              editBusy={false}
+              editingRowId={editingId}
+              editForm={editForm}
+              onEditFormChange={(next) => setEditForm(withLockedIs(next, lockedId, lockedLabel))}
+              onEditSave={handleEditSave}
+              onEditCancel={() => setEditingId(null)}
+              editBusy={editBusy}
               onTrackSymbolTarget={handleTrackSymbolTarget}
             />
           </div>

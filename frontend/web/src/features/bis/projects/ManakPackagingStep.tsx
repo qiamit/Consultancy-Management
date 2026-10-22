@@ -162,7 +162,7 @@ function PackagingMarkingDialog({
           aria-describedby={undefined}
           className={cn(limsDialogClass, 'flex max-h-[90vh] w-[min(64rem,calc(100vw_-_var(--app-dialog-overlay-left,0px)_-_1.5rem))] max-w-5xl flex-col p-0')}
         >
-          <DialogHeader className="flex-row items-center justify-between gap-2 space-y-0 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 py-2.5 pl-4 pr-12 text-left">
+          <DialogHeader className="flex-row items-center justify-between gap-2 space-y-0 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 py-1.5 pl-4 pr-12 text-left">
             <DialogTitle className="text-base font-semibold tracking-tight text-white">Packaging and Marking</DialogTitle>
             <Button
               type="button"

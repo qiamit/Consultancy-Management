@@ -501,6 +501,7 @@ export function LegalDocumentsModuleDialog({
   const [cmpf311, setCmpf311] = useState<Cmpf311ModulePayload>(() => emptyCmpf311Payload())
   const [cmpf307, setCmpf307] = useState<Cmpf307ModulePayload>(() => emptyCmpf307Payload())
   const [brandImportOpen, setBrandImportOpen] = useState(false)
+  const [flowImportOpen, setFlowImportOpen] = useState(false)
   const [cmpf310, setCmpf310] = useState<Cmpf310ModulePayload>(() => emptyCmpf310Payload())
   const [rawMaterialReference, setRawMaterialReference] = useState<RawMaterialReferencePayload>(() => emptyRawMaterialReferencePayload())
   const [processFlow, setProcessFlow] = useState<ProcessFlowModulePayload>(() =>
@@ -1821,10 +1822,24 @@ export function LegalDocumentsModuleDialog({
               variant="ghost"
               size="sm"
               disabled={busy || saving}
-              className="absolute right-12 top-1/2 h-8 w-8 -translate-y-1/2 rounded-none border border-amber-500/60 bg-stone-800 p-0 text-amber-200 shadow-sm transition-colors hover:border-amber-400 hover:bg-amber-600 hover:text-white"
+              className="absolute right-11 top-2 z-10 h-7 w-7 rounded-none border border-amber-500/60 bg-stone-800 p-0 text-amber-200 shadow-sm transition-colors hover:border-amber-400 hover:bg-amber-600 hover:text-white"
               title="Import from Another Application"
               aria-label="Import from Another Application"
               onClick={() => setBrandImportOpen(true)}
+            >
+              <Import size={15} aria-hidden />
+            </Button>
+          ) : null}
+          {showProcessFlowFields && row?.id ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={busy || saving}
+              className="absolute right-11 top-2 z-10 h-7 w-7 rounded-none border border-amber-500/60 bg-stone-800 p-0 text-amber-200 shadow-sm transition-colors hover:border-amber-400 hover:bg-amber-600 hover:text-white"
+              title="Import from Another Application"
+              aria-label="Import from Another Application"
+              onClick={() => setFlowImportOpen(true)}
             >
               <Import size={15} aria-hidden />
             </Button>
@@ -2642,6 +2657,24 @@ export function LegalDocumentsModuleDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    {showProcessFlowFields ? (
+      <BisModuleImportDialog
+        open={flowImportOpen}
+        onOpenChange={setFlowImportOpen}
+        targetRow={row}
+        kind="process-flow-chart"
+        onPickSource={async (sourceProjectId) => {
+          const source = parseProcessFlowPayload(await fetchBisModulePayload(sourceProjectId, 'process-flow-chart'))
+          if (source.nodes.length === 0 && source.descriptionPoints.length === 0) {
+            throw new Error('The selected application has no process flow chart.')
+          }
+          const hasCurrent = processFlow.nodes.length > 0 || processFlow.descriptionPoints.some((point) => point.trim())
+          if (hasCurrent && !window.confirm('Replace the process flow chart and description here with the imported one?')) return
+          setProcessFlow(source)
+          toast.success('Process Flow Chart Imported', { description: 'Check the boxes and description, then click Save.' })
+        }}
+      />
+    ) : null}
     {showCmpf307Fields ? (
       <BisModuleImportDialog
         open={brandImportOpen}
