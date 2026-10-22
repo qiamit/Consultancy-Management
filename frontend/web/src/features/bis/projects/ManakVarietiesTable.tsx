@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
-import { BookOpen, Check, Columns3, Download, Eye, ExternalLink, FileText, FileType, Globe, LogIn, Paperclip, Pencil, Plus, Trash2, Upload, X, Printer } from 'lucide-react'
+import { BookOpen, Check, Columns3, Download, Eye, ExternalLink, FileText, FileType, Globe, LogIn, Paperclip, Plus, Trash2, Upload, X, Printer } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -666,7 +666,16 @@ export function ManakVarietiesTable({
                 scopeRows.map((row, index) => {
                   const editing = editingIndex === index
                   return (
-                    <tr key={index} className={index % 2 ? 'bg-[#f7f3eb]' : 'bg-[#fffcf7]'}>
+                    <tr
+                      key={index}
+                      className={index % 2 ? 'bg-[#f7f3eb]' : 'bg-[#fffcf7]'}
+                      title={editing || !projectId ? undefined : 'Double-Click to Edit'}
+                      onDoubleClick={() => {
+                        if (editing || !projectId) return
+                        setEditingIndex(index)
+                        setEditDraft(headers.map((_, i) => row[i] ?? ''))
+                      }}
+                    >
                       <td className={cn(td, 'px-1 text-center')}>{index + 1}</td>
                       {headers.map((_, i) => (
                         <td key={i} data-label={headers.length > 1 ? headers[i] : undefined} className={cn(td, editing && 'p-1')}>
@@ -695,21 +704,7 @@ export function ManakVarietiesTable({
                             <button type="button" className={cn(iconBtn, 'border-emerald-600 text-emerald-800')} title="Save Row" aria-label={`Save scope row ${index + 1}`} onClick={saveEdit}>
                               <Check size={15} aria-hidden />
                             </button>
-                          ) : (
-                            <button
-                              type="button"
-                              className={cn(iconBtn, 'border-stone-400 text-amber-800')}
-                              disabled={!projectId}
-                              title="Edit Row"
-                              aria-label={`Edit scope row ${index + 1}`}
-                              onClick={() => {
-                                setEditingIndex(index)
-                                setEditDraft(headers.map((_, i) => row[i] ?? ''))
-                              }}
-                            >
-                              <Pencil size={14} aria-hidden />
-                            </button>
-                          )}
+                          ) : null}
                           <button type="button" className={cn(iconBtn, 'border-red-300 text-red-700')} disabled={!projectId} title="Delete Row" aria-label={`Delete scope row ${index + 1}`} onClick={() => void deleteRow(index)}>
                             {editing ? <X size={14} aria-hidden /> : <Trash2 size={14} aria-hidden />}
                           </button>

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { Check, Plus, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -129,7 +129,16 @@ export function DescriptionPointsRows({
               points.map((point, index) => {
                 const editing = editIndex === index
                 return (
-                  <tr key={index} className={index % 2 ? 'bg-[#f7f3eb]' : 'bg-[#fffcf7]'}>
+                  <tr
+                    key={index}
+                    className={index % 2 ? 'bg-[#f7f3eb]' : 'bg-[#fffcf7]'}
+                    title={editing ? undefined : 'Double-Click to Edit'}
+                    onDoubleClick={() => {
+                      if (editing) return
+                      setEditIndex(index)
+                      setEditDraft(point)
+                    }}
+                  >
                     <td className={cn(tdCls, 'text-center text-xs font-semibold')}>{index + 1}</td>
                     <td className={cn(tdCls, 'leading-relaxed')}>
                       {editing ? (
@@ -150,23 +159,9 @@ export function DescriptionPointsRows({
                             </Button>
                           </>
                         ) : (
-                          <>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              className={iconBtn}
-                              title="Edit Row"
-                              onClick={() => {
-                                setEditIndex(index)
-                                setEditDraft(point)
-                              }}
-                            >
-                              <Pencil size={13} />
-                            </Button>
-                            <Button type="button" variant="ghost" className={iconBtn} disabled={busy} title="Delete Row" onClick={() => remove([index])}>
-                              <Trash2 size={13} />
-                            </Button>
-                          </>
+                          <Button type="button" variant="ghost" className={iconBtn} disabled={busy} title="Delete Row" onClick={() => remove([index])}>
+                            <Trash2 size={13} />
+                          </Button>
                         )}
                       </span>
                     </td>
