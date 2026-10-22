@@ -28,7 +28,7 @@
   @preflight method OPTIONS
   handle @preflight {
     header Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-    header Access-Control-Allow-Headers "Authorization, apikey, Content-Type, Accept, Accept-Profile, Content-Profile, Prefer, Range, X-Client-Info, X-Supabase-Api-Version, X-Requested-With, Profile, X-User-Jwt, x-upsert, cache-control, content-disposition"
+    header Access-Control-Allow-Headers "Authorization, apikey, Content-Type, Accept, Accept-Profile, Content-Profile, Prefer, Range, X-Client-Info, X-Supabase-Api-Version, X-Requested-With, Profile, X-User-Jwt, x-upsert, cache-control, content-disposition, X-Retry-Count"
     header Access-Control-Max-Age "86400"
     respond "" 204
   }
