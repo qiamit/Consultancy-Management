@@ -1,8 +1,8 @@
 import { supabase } from '@/lib/supabaseClient'
 
+// The only IS Code bucket on Railway. (The old fallbacks is_code_documents / documents do not exist, and trying
+// them made six failing requests for every file missing from storage.)
 const PRIMARY_BUCKET = 'is-code-files'
-/** Legacy / alternate bucket ids seen on Railway DBs. */
-const FALLBACK_BUCKETS = ['is_code_documents', 'documents'] as const
 
 export type IsCodeFileLink = {
   file_name: string
@@ -22,23 +22,14 @@ async function resolveFromBucket(
   if (!signErr && signed?.signedUrl) {
     return { url: signed.signedUrl }
   }
-
-  const { data: blob, error: dlErr } = await supabase.storage
-    .from(bucket)
-    .download(storagePath)
-  if (!dlErr && blob) {
-    return { url: URL.createObjectURL(blob) }
-  }
-
-  return {
-    error: signErr?.message || dlErr?.message || 'Could not open file',
-  }
+  // Signing fails only when the file is not in storage; a download would fail the same way.
+  return { error: /not found/i.test(signErr?.message ?? '') ? 'File missing in storage — upload it again' : signErr?.message || 'Could not open file' }
 }
 
 async function resolveFileUrl(
   storagePath: string,
 ): Promise<{ url?: string; bucket?: string; error?: string }> {
-  const buckets = [PRIMARY_BUCKET, ...FALLBACK_BUCKETS]
+  const buckets = [PRIMARY_BUCKET]
   let lastError = ''
   for (const bucket of buckets) {
     try {
@@ -74,7 +65,7 @@ export async function loadIsCodeFileLinks(isCodeId: string): Promise<IsCodeFileL
         storage_path: String((r as { storage_path?: string }).storage_path ?? ''),
       }))
     } else {
-      for (const bucket of [PRIMARY_BUCKET, ...FALLBACK_BUCKETS]) {
+      for (const bucket of [PRIMARY_BUCKET]) {
         const { data: objects, error: listErr } = await supabase.storage
           .from(bucket)
           .list(id, { limit: 50 })
