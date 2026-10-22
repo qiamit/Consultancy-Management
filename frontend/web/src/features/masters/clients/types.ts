@@ -28,6 +28,8 @@ export type ClientSiteForm = {
   pinCode: string
   gstNumber: string
   isPrimary: boolean
+  /** Empty = same country as the client. Set for a foreign factory in another country (FMCS). */
+  country?: string
 }
 
 export type ClientContactForm = {
@@ -232,6 +234,20 @@ export const isValidIndianPin = (value: string) => {
   const v = value.trim()
   if (!v) return true
   return /^[1-9][0-9]{5}$/.test(v)
+}
+
+/** True for any country other than India (an empty country counts as India). */
+export const isForeignCountry = (country: string | null | undefined) => {
+  const v = String(country ?? '').trim().toLowerCase()
+  return v !== '' && v !== 'india'
+}
+
+/** Indian PIN (6 digits) for India; a foreign postal code (letters, digits, space, dash) for other countries. */
+export const isValidPostalCode = (value: string, country: string | null | undefined) => {
+  if (!isForeignCountry(country)) return isValidIndianPin(value)
+  const v = value.trim()
+  if (!v) return true
+  return /^[A-Za-z0-9][A-Za-z0-9 -]{1,11}$/.test(v)
 }
 
 export const isValidMobile = (value: string) => {

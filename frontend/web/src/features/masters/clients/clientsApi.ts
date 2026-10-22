@@ -153,7 +153,7 @@ export async function findSimilarClients(name: string, gstin: string): Promise<S
 export async function listClientSites(clientId: string): Promise<ClientSiteForm[]> {
   const { data, error } = await supabase
     .from('client_sites')
-    .select('id, site_role, address, district, state, pin_code, gst_number, is_primary')
+    .select('*')
     .eq('client_id', clientId)
     .order('is_primary', { ascending: false })
   if (error) {
@@ -171,6 +171,7 @@ export async function listClientSites(clientId: string): Promise<ClientSiteForm[
       pinCode: String(row.pin_code ?? ''),
       gstNumber: String(row.gst_number ?? ''),
       isPrimary: Boolean(row.is_primary),
+      country: String(row.country ?? ''),
     }
   })
 }
@@ -215,6 +216,7 @@ export async function saveClientSites(clientId: string, sites: ClientSiteForm[])
       pin_code: site.pinCode.trim() || null,
       gst_number: site.gstNumber.trim().toUpperCase() || null,
       is_primary: site.isPrimary,
+      country: site.country?.trim() || null,
     }
     if (site.id) {
       const { error } = await supabase.from('client_sites').update(payload).eq('id', site.id)

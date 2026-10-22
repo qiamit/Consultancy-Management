@@ -28,6 +28,7 @@ import {
 } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { fetchEmployeeNames } from '../shared/bisLookupApi'
+import { listCertificationSchemes, type BisReferenceRow } from './bisReferenceApi'
 import {
   findClientCmLForIsCode,
   searchClientLicensedIsCodeOptions,
@@ -40,6 +41,8 @@ import {
   BIS_BILLING_FREQUENCIES,
   BIS_PROJECT_KIND_OPTIONS,
   DEFAULT_CASE_HANDLED_BY,
+  DOMESTIC_SCHEME_CODE,
+  FMCS_SCHEME_CODE,
   sanitizeCurrencyInput,
   type BisProjectForm,
   type BisProjectRow,
@@ -185,6 +188,35 @@ export function BisProjectsForm({
   const [handledByOptions, setHandledByOptions] = useState<string[]>([DEFAULT_CASE_HANDLED_BY])
   const [addClientOpen, setAddClientOpen] = useState(false)
   const [addClientInitialName, setAddClientInitialName] = useState('')
+  const [schemes, setSchemes] = useState<BisReferenceRow[]>([])
+  const fmcsSchemeId = schemes.find((scheme) => scheme.code === FMCS_SCHEME_CODE)?.id ?? ''
+  const domesticSchemeId = schemes.find((scheme) => scheme.code === DOMESTIC_SCHEME_CODE)?.id ?? ''
+  const schemeValue = fmcsSchemeId && form.certificationSchemeId === fmcsSchemeId ? 'fmcs' : 'domestic'
+
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    void listCertificationSchemes()
+      .then((list) => { if (!cancelled) setSchemes(list) })
+      .catch(() => { if (!cancelled) setSchemes([]) })
+    return () => { cancelled = true }
+  }, [open])
+
+  /** A foreign client (country other than India, or type Foreign Manufacturer) starts as FMCS. */
+  const applySchemeFromClient = (clientId: string) => {
+    if (!clientId || !fmcsSchemeId || editing) return
+    void Promise.resolve(
+      supabase.from('clients').select('country, company_type').eq('id', clientId).maybeSingle(),
+    ).then(({ data }) => {
+      const row = data as { country?: string | null; company_type?: string | null } | null
+      const country = String(row?.country ?? '').trim().toLowerCase()
+      const foreign = /foreign/i.test(String(row?.company_type ?? '')) || (country !== '' && country !== 'india')
+      onChange((previous) => (previous.clientId !== clientId ? previous : {
+        ...previous,
+        certificationSchemeId: foreign ? fmcsSchemeId : domesticSchemeId || previous.certificationSchemeId,
+      }))
+    })
+  }
 
   const openAddClient = (typedName?: string) => {
     setAddClientInitialName((typedName ?? form.clientLabel).trim())
@@ -225,6 +257,7 @@ export function BisProjectsForm({
       }))
     } finally {
       setAddClientInitialName('')
+      applySchemeFromClient(clientId)
     }
   }
 
@@ -364,7 +397,7 @@ export function BisProjectsForm({
             <div className="space-y-4">
               {!inclusionMode ? (
                 <div className="grid grid-cols-12 gap-4">
-                  <div className="col-span-12 space-y-2 md:col-span-6">
+                  <div className="col-span-12 space-y-2 md:col-span-4">
                     <Label>QE Management</Label>
                     <Select
                       value={form.isQeManaged ? 'yes' : 'no'}
@@ -380,7 +413,7 @@ export function BisProjectsForm({
                     </Select>
                   </div>
 
-                  <div className="col-span-12 space-y-2 md:col-span-6">
+                  <div className="col-span-12 space-y-2 md:col-span-4">
                     <Label htmlFor="bis-project-kind">Type of Project</Label>
                     <Select
                       value={
@@ -404,6 +437,23 @@ export function BisProjectsForm({
                         {form.projectKind === 'Inclusion' ? (
                           <SelectItem value="Inclusion">Inclusion</SelectItem>
                         ) : null}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="col-span-12 space-y-2 md:col-span-4">
+                    <Label htmlFor="bis-scheme">Scheme</Label>
+                    <Select
+                      value={schemeValue}
+                      disabled={!fmcsSchemeId}
+                      onValueChange={(v) => set('certificationSchemeId', v === 'fmcs' ? fmcsSchemeId : domesticSchemeId)}
+                    >
+                      <SelectTrigger id="bis-scheme" aria-label="Scheme">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-none border-stone-500">
+                        <SelectItem value="domestic">Domestic (Scheme-I)</SelectItem>
+                        <SelectItem value="fmcs">FMCS (Foreign Manufacturer)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -447,6 +497,7 @@ export function BisProjectsForm({
                           isCodeLabel: '',
                           cmLDigits: '',
                         }))
+                        if (id) applySchemeFromClient(id)
                       }}
                     />
                   </LimsFieldWithAdd>

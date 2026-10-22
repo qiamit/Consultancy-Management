@@ -52,7 +52,7 @@ import {
   formatClientAddress,
   isValidEmail,
   isValidGst,
-  isValidIndianPin,
+  isValidPostalCode,
   isValidLatitude,
   isValidLongitude,
   PAYMENT_TERMS,
@@ -465,7 +465,7 @@ export default function ClientsMasterPage() {
   )
   const panError = useMemo(() => (isValidPan(form.pan) ? null : 'Invalid PAN'), [form.pan])
   const emailError = useMemo(() => (isValidEmail(form.email) ? null : 'Invalid email address'), [form.email])
-  const pinError = useMemo(() => (isValidIndianPin(form.pinCode) ? null : 'Invalid PIN code'), [form.pinCode])
+  const pinError = useMemo(() => (isValidPostalCode(form.pinCode, form.country) ? null : 'Invalid PIN / postal code'), [form.pinCode, form.country])
   const longitudeError = useMemo(() => (isValidLongitude(form.longitude) ? null : 'Invalid longitude'), [form.longitude])
   const latitudeError = useMemo(() => (isValidLatitude(form.latitude) ? null : 'Invalid latitude'), [form.latitude])
 
@@ -1685,7 +1685,7 @@ export default function ClientsMasterPage() {
           const code = String(payload.country_code ?? '+91')
           if (gst && !isValidGstin(gst)) problems.push('Invalid GSTIN')
           if (mobile && !isValidIndianMobile(mobile, code)) problems.push('Invalid mobile')
-          if (pin && !isValidIndianPin(pin)) problems.push('Invalid PIN')
+          if (pin && !isValidPostalCode(pin, String(payload.country ?? ''))) problems.push('Invalid PIN')
           if (problems.length > 0) {
             invalid.push([...cells, problems.join('; ')])
             continue

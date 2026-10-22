@@ -26,6 +26,7 @@ import {
   type BisProjectSortDir,
   type BisProjectSortKey,
   type BisQeManagedFilter,
+  type BisSchemeFilter,
 } from './bisProjectsApi'
 import { downloadCsv } from '../shared/downloadCsv'
 import { printBisProjectsList } from './printBisProjectsList'
@@ -87,6 +88,7 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [qeManagedFilter, setQeManagedFilter] = useState<BisQeManagedFilter>('managed')
+  const [schemeFilter, setSchemeFilter] = useState<BisSchemeFilter>('all')
   const [openNoticeFilter, setOpenNoticeFilter] = useState<'all' | 'open'>('all')
   const [noticeCounts, setNoticeCounts] = useState<Record<string, number>>({})
   const [projectKindFilter, setProjectKindFilter] = useState<BisProjectKindFilter>('all')
@@ -157,6 +159,7 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
           page,
           pageSize,
           qeManagedFilter: listMode === 'due_soon' ? 'managed' : showListFilters ? qeManagedFilter : 'all',
+          schemeFilter,
           projectKindFilter: showListFilters ? projectKindFilter : 'all',
           licenseStatusFilter: showListFilters ? licenseStatusFilter : 'all',
           openNoticeFilter: showListFilters ? openNoticeFilter : 'all',
@@ -187,6 +190,7 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
     pageSize,
     reloadKey,
     qeManagedFilter,
+    schemeFilter,
     projectKindFilter,
     licenseStatusFilter,
     openNoticeFilter,
@@ -559,7 +563,24 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
             setPage(1)
           }}
           extraFilters={
-            showListFilters ? (
+            <>
+            <Select
+              value={schemeFilter}
+              onValueChange={(v) => {
+                setSchemeFilter(v as BisSchemeFilter)
+                setPage(1)
+              }}
+            >
+              <SelectTrigger className={cn(limsDarkBarFieldClass, 'bis-projects-filter-trigger h-8 w-[min(100%,8.5rem)] shrink-0 px-2 text-[11px] sm:w-[9.5rem] sm:text-xs')} aria-label="Filter by Scheme" title="Domestic / FMCS (Foreign Manufacturers)">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="end" className={selectFitTriggerClass}>
+                <SelectItem value="all">All Schemes</SelectItem>
+                <SelectItem value="domestic">Domestic</SelectItem>
+                <SelectItem value="fmcs">FMCS</SelectItem>
+              </SelectContent>
+            </Select>
+            {showListFilters ? (
               <Select
                 value={openNoticeFilter}
                 onValueChange={(v) => {
@@ -575,7 +596,8 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
                   <SelectItem value="open">With Open Notice</SelectItem>
                 </SelectContent>
               </Select>
-            ) : null
+            ) : null}
+            </>
           }
         />
       </div>

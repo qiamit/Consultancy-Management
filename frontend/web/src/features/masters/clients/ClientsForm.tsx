@@ -25,7 +25,9 @@ import {
   CLIENT_SECTORS,
   isValidEmail,
   isValidGst,
-  isValidIndianPin,
+  DEFAULT_STATE,
+  isForeignCountry,
+  isValidPostalCode,
   isValidLatitude,
   isValidLongitude,
   emptyClientSites,
@@ -399,9 +401,10 @@ export function ClientsForm({
     })
   }
   const panError = isValidPan(form.pan) ? null : 'Invalid PAN'
-  const mobileError = isValidMobile(form.mobile) ? null : 'Mobile number must be 10 digits'
+  const foreign = isForeignCountry(form.country)
+  const mobileError = foreign || form.countryCode.trim() !== '+91' || isValidMobile(form.mobile) ? null : 'Mobile number must be 10 digits'
   const emailError = isValidEmail(form.email) ? null : 'Invalid email address'
-  const pinError = isValidIndianPin(form.pinCode) ? null : 'Invalid PIN code'
+  const pinError = isValidPostalCode(form.pinCode, form.country) ? null : foreign ? 'Invalid postal code' : 'Invalid PIN code'
   const longitudeError = isValidLongitude(form.longitude) ? null : 'Longitude must be between -180 and 180'
   const latitudeError = isValidLatitude(form.latitude) ? null : 'Latitude must be between -90 and 90'
   const isAdmin = useIsLaboratoryDirector()
@@ -890,11 +893,34 @@ export function ClientsForm({
               }}
               className="!h-16 !min-h-16 resize-none rounded-none border border-stone-500 bg-stone-50 px-3 py-1.5 shadow-none focus-visible:border-amber-600 focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-amber-500/20 focus-visible:ring-offset-0"
             />
+            {form.factorySameAsOffice === false && foreign ? (
+              <div className="flex items-center gap-2">
+                <Label htmlFor="factory-country" className="shrink-0 text-xs">Factory Country</Label>
+                <Select
+                  value={form.sites.find((site) => site.siteRole === 'Factory')?.country || form.country}
+                  onValueChange={(v) => onChange({
+                    ...form,
+                    sites: form.sites.map((site) => (site.siteRole === 'Factory' ? { ...site, country: v === form.country ? '' : v } : site)),
+                  })}
+                >
+                  <SelectTrigger id="factory-country" className="h-8">
+                    <SelectValue placeholder="Same as Office" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {countryChoices.map((label) => (
+                      <SelectItem key={label} value={label}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
           </div>
 
           <div className={cn('col-span-12 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5', compact ? 'gap-2' : 'gap-x-4 gap-y-3')}>
           <div className={cn('min-w-0', compact ? 'space-y-1' : 'space-y-2')}>
-            <Label htmlFor="pin" className="text-xs">PIN Code</Label>
+            <Label htmlFor="pin" className="text-xs">{foreign ? 'Postal Code' : 'PIN Code'}</Label>
             <Dialog open={pinCodeDialogOpen} onOpenChange={setPinCodeDialogOpen}>
               <LimsFieldWithAdd
                 addButton={
@@ -906,6 +932,10 @@ export function ClientsForm({
                 <FilterCombobox
                   value={form.pinCode}
                   onValueChange={(v) => {
+                    if (foreign) {
+                      onChange({ ...form, pinCode: v.replace(/[^A-Za-z0-9 -]/g, '').slice(0, 12).toUpperCase() })
+                      return
+                    }
                     const pin = v.replace(/[^0-9]/g, '').slice(0, 6)
                     if (pin.length === 6) {
                       applyPinAutoFill(pin)
@@ -917,7 +947,7 @@ export function ClientsForm({
                   onSelectOption={(opt) => applyPinAutoFill(opt.label)}
                   open={pinOpen}
                   onOpenChange={setPinOpen}
-                  placeholder="PIN Code"
+                  placeholder={foreign ? 'Postal Code' : 'PIN Code'}
                   listId="client-pin-combobox"
                   inputClassName="h-10"
                 />
@@ -1092,7 +1122,16 @@ export function ClientsForm({
                   </DialogTrigger>
                 }
               >
-                <Select value={form.country} onValueChange={(v) => onChange({ ...form, country: v })}>
+                <Select
+                  value={form.country}
+                  onValueChange={(v) => onChange({
+                    ...form,
+                    country: v,
+                    // A foreign firm has no Indian state / district; clear the Indian defaults.
+                    ...(isForeignCountry(v) && form.state === DEFAULT_STATE ? { state: '' } : {}),
+                    ...(isForeignCountry(v) && form.district === 'Raipur' ? { district: '' } : {}),
+                  })}
+                >
                   <SelectTrigger id="country">
                     <SelectValue placeholder="Select Country" />
                   </SelectTrigger>
