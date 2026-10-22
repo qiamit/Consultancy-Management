@@ -33,8 +33,6 @@ export type Cmpf306Data = PrintApplicantContext & {
   rows: Cmpf306EquipmentRow[]
 }
 
-const ROWS_PER_CONTINUATION_PAGE = 25
-
 function equipmentRows(rows: Cmpf306EquipmentRow[], startIndex: number): string {
   const out: string[] = []
   for (let i = 0; i < rows.length; i += 1) {
@@ -118,6 +116,7 @@ function continuationPage(
   data: Cmpf306Data,
   rows: Cmpf306EquipmentRow[],
   startIndex: number,
+  dateApp: string,
   dateInsp: string,
 ): string {
   const signature = data.signatureImageUrl?.trim()
@@ -125,11 +124,12 @@ function continuationPage(
     ? `<img class="c306-cont-sign-image" src="${esc(signature)}" alt="Authorized signatory stamp and signature" />`
     : '<div class="c306-cont-sign-gap"></div>'
   const designation = data.firmRepDesignation.trim()
+  // pd-repeat-head: when the rows run onto another page, this block opens that page too.
   return `<div class="pd-sheet c306-continuation">
     ${letterheadHtml(data)}
-    <div class="pd-to-row c306-recipient">
+    <div class="pd-to-row c306-recipient pd-repeat-head">
       <div class="pd-to-block">${toBlockHtml(data.bisBranchName, data.bisBranchState)}</div>
-      <div class="pd-date-block"><div>Date of Inspection: <strong>${esc(dateInsp)}</strong></div><div>Application No.: <strong>${esc(applicationNoDisplay(data.applicationNumber))}</strong></div></div>
+      <div class="pd-date-block"><div>Application No.: <strong>${esc(applicationNoDisplay(data.applicationNumber))}</strong></div><div>Date of Application: <strong>${esc(dateApp)}</strong></div><div>Date of Inspection: <strong>${esc(dateInsp)}</strong></div></div>
     </div>
     ${equipmentTable(equipmentRows(rows, startIndex))}
     <div class="c306-cont-signature">
@@ -145,17 +145,10 @@ function buildBody(data: Cmpf306Data): string {
   const dateApp = dateOrNa(data.dateOfApplication)
   const dateInsp = inspectionDateOrToday(data.dateOfInspection)
   const rows = data.rows.filter((row) => Object.values(row).some((value) => value.trim()))
-  const pages = Math.ceil(rows.length / ROWS_PER_CONTINUATION_PAGE)
   const parts = [firstPage(data, dateApp, dateInsp)]
-  for (let index = 0; index < pages; index += 1) {
-    const startIndex = index * ROWS_PER_CONTINUATION_PAGE
-    parts.push(continuationPage(
-      data,
-      rows.slice(startIndex, startIndex + ROWS_PER_CONTINUATION_PAGE),
-      startIndex,
-      dateInsp,
-    ))
-  }
+  // All rows go on one sheet; the A4 paginator (bisPreviewPagination) fills each page as far as it
+  // goes and opens the next one with the letterhead, recipient block and table header repeated.
+  if (rows.length > 0) parts.push(continuationPage(data, rows, 0, dateApp, dateInsp))
   return parts.join('')
 }
 

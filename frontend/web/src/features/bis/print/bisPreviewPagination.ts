@@ -177,16 +177,16 @@ export function paginateSheetsIn(doc: Document): void {
     // Every page of a split sheet gets its own page number.
     if (pageNum) created.forEach(function (s) { s.appendChild(pageNum!.cloneNode(true)) })
   })
-  // A full page must not scroll: when only the last block's bottom margin (blank space) spills past the sheet,
-  // drop that margin.
+  // A full page must not scroll: the last block's bottom margin (blank space) can spill past the sheet, so
+  // drop that margin. Done for every sheet: the preview zooms the page afterwards, and rounding there can
+  // turn a margin that fitted into a 1-2px overflow.
   ;(Array.prototype.slice.call(doc.querySelectorAll(SHEETS)) as HTMLElement[]).forEach(function (sheet) {
-    if (sheet.scrollHeight <= sheet.clientHeight) return
     const kids = flowChildren(sheet)
     const last = kids[kids.length - 1]
-    if (!last) return
-    const view = doc.defaultView
-    const mb = view ? parseFloat(view.getComputedStyle(last).marginBottom || '0') : 0
-    if (mb > 0 && sheet.scrollHeight - sheet.clientHeight <= mb + 1) last.style.marginBottom = '0px'
+    if (last) last.style.marginBottom = '0px'
+    // The split allows a couple of pixels of rounding; that sliver must not give the page a scrollbar.
+    const over = sheet.scrollHeight - sheet.clientHeight
+    if (over > 0 && over <= 3) sheet.style.setProperty('overflow', 'hidden', 'important')
   })
   // Renumber "Page X of Y" by position among all sheets (a cover page without a number still counts).
   const allSheets = Array.prototype.slice.call(doc.querySelectorAll(SHEETS)) as HTMLElement[]
