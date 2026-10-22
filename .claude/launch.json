@@ -1,8 +1,54 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "web", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev"], "port": 5173 },
-    { "name": "pdf", "runtimeExecutable": "npm", "runtimeArgs": ["run", "pdf:dev"], "port": 3847 },
-    { "name": "functions", "runtimeExecutable": "node", "runtimeArgs": ["--watch", "backend/services/functions/server.mjs"], "port": 8080 }
+    {
+      "name": "web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "frontend/web",
+        "--",
+        "--port",
+        "5176",
+        "--strictPort"
+      ],
+      "port": 5176
+    },
+    {
+      "name": "web-5174",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "frontend/web",
+        "--",
+        "--port",
+        "5174",
+        "--strictPort"
+      ],
+      "port": 5174
+    },
+    {
+      "name": "pdf",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "pdf:dev"
+      ],
+      "port": 3847,
+      "autoPort": true
+    },
+    {
+      "name": "functions",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "--watch",
+        "backend/services/functions/server.mjs"
+      ],
+      "port": 8080
+    }
   ]
 }
