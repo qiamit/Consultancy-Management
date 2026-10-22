@@ -872,7 +872,8 @@ export function ClientsForm({
                   checked={form.factorySameAsOffice !== false}
                   onChange={(e) => {
                     if (e.target.checked) onChange(withSiteAddress({ ...form, factorySameAsOffice: true }, 'Factory', form.address))
-                    else onChange({ ...form, factorySameAsOffice: false })
+                    // A separate factory starts empty instead of keeping the office text.
+                    else onChange(withSiteAddress({ ...form, factorySameAsOffice: false }, 'Factory', ''))
                   }}
                 />
                 Same as Office Address
@@ -1165,7 +1166,7 @@ export function ClientsForm({
           </div>
           </div>
 
-          <div className={cn('col-span-12 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4', compact ? 'gap-2' : 'gap-x-4 gap-y-3 sm:gap-y-4')}>
+          <div className={cn('col-span-12 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5', compact ? 'gap-2' : 'gap-x-4 gap-y-3 sm:gap-y-4')}>
             <div className={cn('flex min-w-0 flex-col', compact ? 'space-y-1' : 'space-y-2')}>
               <Label htmlFor="client-landline">Landline</Label>
               <Input
@@ -1173,6 +1174,16 @@ export function ClientsForm({
                 inputMode="tel"
                 value={form.landline}
                 onChange={(e) => onChange({ ...form, landline: e.target.value })}
+              />
+            </div>
+            <div className={cn('flex min-w-0 flex-col', compact ? 'space-y-1' : 'space-y-2')}>
+              <Label htmlFor="client-ceo">CEO / MD Name</Label>
+              <Input
+                id="client-ceo"
+                placeholder="CEO or Managing Director"
+                value={form.ceoName}
+                onChange={(e) => onChange({ ...form, ceoName: e.target.value })}
+                className="h-10"
               />
             </div>
             <div className={cn('flex min-w-0 flex-col', compact ? 'space-y-1' : 'space-y-2')}>

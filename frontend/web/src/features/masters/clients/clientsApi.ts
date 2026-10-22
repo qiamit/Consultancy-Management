@@ -172,6 +172,7 @@ export async function listClientSites(clientId: string): Promise<ClientSiteForm[
       gstNumber: String(row.gst_number ?? ''),
       isPrimary: Boolean(row.is_primary),
       country: String(row.country ?? ''),
+      city: String(row.city ?? ''),
     }
   })
 }
@@ -217,6 +218,7 @@ export async function saveClientSites(clientId: string, sites: ClientSiteForm[])
       gst_number: site.gstNumber.trim().toUpperCase() || null,
       is_primary: site.isPrimary,
       country: site.country?.trim() || null,
+      city: site.city?.trim() || null,
     }
     if (site.id) {
       const { error } = await supabase.from('client_sites').update(payload).eq('id', site.id)

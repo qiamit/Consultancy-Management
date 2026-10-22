@@ -364,7 +364,7 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
       setEdit(null)
       setMessage(isInclusionMode
         ? 'Inclusion saved on the existing license.'
-        : editingId ? 'Saved changes.' : 'Saved new license.')
+        : editingId ? 'Saved changes.' : form.projectKind.trim().toLowerCase() === 'application' ? 'Saved new application.' : 'Saved new license.')
       reload()
     } catch (err) {
       setFormError(formatBisApiError(err))

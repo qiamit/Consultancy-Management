@@ -52,6 +52,7 @@ import {
   formatClientAddress,
   isValidEmail,
   isValidGst,
+  isForeignCountry,
   isValidPostalCode,
   isValidLatitude,
   isValidLongitude,
@@ -253,7 +254,7 @@ async function loadClientForForm(id: string): Promise<ClientRow> {
   // Manak registration fields — tolerate databases where the migration is not applied yet.
   const manakExtras = await supabase
     .from('clients')
-    .select('city, landline')
+    .select('city, landline, ceo_name')
     .eq('id', id)
     .maybeSingle()
   if (!manakExtras.error && manakExtras.data) row = { ...row, ...(manakExtras.data as object) } as ClientRow
@@ -319,6 +320,7 @@ function rowToClientForm(row: ClientRow): ClientFormType {
     companyScale: row.company_scale,
     companyName: row.company_name ?? '',
     contactPersonName: row.contact_person_name ?? '',
+    ceoName: String((row as { ceo_name?: string | null }).ceo_name ?? ''),
     countryCode: row.country_code ?? '+91',
     mobile: row.mobile ?? '',
     email: row.email ?? '',
@@ -671,7 +673,13 @@ export default function ClientsMasterPage() {
           const uniq = new Map(merged.map((x) => [x.label.toLowerCase(), x]))
           return Array.from(uniq.values()).sort((a, b) => a.label.localeCompare(b.label))
         })
-        setForm((prev) => ({ ...prev, country: name }))
+        setForm((prev) => ({
+          ...prev,
+          country: name,
+          // A foreign firm has no Indian state / district; clear the Indian defaults.
+          ...(isForeignCountry(name) && prev.state === DEFAULT_STATE ? { state: '' } : {}),
+          ...(isForeignCountry(name) && prev.district === 'Raipur' ? { district: '' } : {}),
+        }))
       } catch (err) {
         setSaveMessage(err instanceof Error ? err.message : 'Unable to add country')
       } finally {
@@ -1115,6 +1123,7 @@ export default function ClientsMasterPage() {
           udyam_date: form.udyamDate || null,
           constitution: form.constitution.trim() || null,
           landline: form.landline.trim() || null,
+          ceo_name: form.ceoName.trim() || null,
           sector: form.sector || null,
           is_startup: form.startupStatus.trim().toLowerCase() === 'yes',
           startup_status: form.startupStatus.trim() || 'No',
@@ -1152,6 +1161,7 @@ export default function ClientsMasterPage() {
           'manak_user_id',
           'city',
           'landline',
+          'ceo_name',
         ]
         const row: Record<string, unknown> = { ...payload }
         for (let attempt = 0; attempt < optionalColumns.length + 1; attempt += 1) {
@@ -1169,10 +1179,17 @@ export default function ClientsMasterPage() {
           const sites = (form.sites.length > 0 ? form.sites : emptyClientSites()).map((site, index) => {
             const primaryOffice = site.siteRole === 'Registered Office' && (site.isPrimary || index === 0)
             if (!primaryOffice) {
+              if (site.siteRole !== 'Factory') return { ...site, isPrimary: false }
+              // A factory that follows the office, or a new factory site, takes the office district / state / PIN.
+              const followOffice = form.factorySameAsOffice !== false || !site.id
               return {
                 ...site,
                 isPrimary: false,
-                address: site.siteRole === 'Factory' && form.factorySameAsOffice ? form.address : site.address,
+                address: form.factorySameAsOffice !== false ? form.address : site.address,
+                district: followOffice ? form.district : site.district,
+                state: followOffice ? form.state : site.state,
+                pinCode: form.factorySameAsOffice !== false ? form.pinCode : site.pinCode,
+                country: form.factorySameAsOffice !== false ? '' : site.country,
               }
             }
             return {
@@ -1774,6 +1791,10 @@ export default function ClientsMasterPage() {
         <DialogContent
           persistOnFocusLoss
           aria-describedby={undefined}
+          onEscapeKeyDown={(event) => {
+            // Esc used to close the form and lose everything typed; ask first.
+            if (form.companyName.trim() && !window.confirm('Close this client form? Changes not saved will be lost.')) event.preventDefault()
+          }}
           className={cn(
             '!flex z-50 h-[100dvh] max-h-[100dvh] translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 bg-white p-0 shadow-none sm:rounded-none',
             'left-[var(--app-dialog-overlay-left,0px)] top-0 right-0 bottom-0',

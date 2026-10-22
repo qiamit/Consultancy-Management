@@ -30,6 +30,8 @@ export type ClientSiteForm = {
   isPrimary: boolean
   /** Empty = same country as the client. Set for a foreign factory in another country (FMCS). */
   country?: string
+  /** Empty = same city as the client. */
+  city?: string
 }
 
 export type ClientContactForm = {
@@ -81,6 +83,8 @@ export type ClientForm = {
   companyScale: CompanyScale
   companyName: string
   contactPersonName: string
+  /** CEO / Managing Director (Manak "CEO Name"); not the contact person. */
+  ceoName: string
   countryCode: string
   mobile: string
   email: string
@@ -276,7 +280,7 @@ export const isValidEmail = (value: string) => {
 export function emptyClientSites(): ClientSiteForm[] {
   return [
     { siteRole: 'Registered Office', address: '', district: '', state: DEFAULT_STATE, pinCode: '', gstNumber: '', isPrimary: true },
-    { siteRole: 'Factory', address: '', district: '', state: DEFAULT_STATE, pinCode: '', gstNumber: '', isPrimary: false },
+    { siteRole: 'Factory', address: '', district: '', state: '', pinCode: '', gstNumber: '', isPrimary: false },
   ]
 }
 
@@ -290,6 +294,7 @@ export const emptyClientForm = (): ClientForm => ({
   companyScale: 'Medium',
   companyName: '',
   contactPersonName: '',
+  ceoName: '',
   countryCode: '+91',
   mobile: '',
   email: '',

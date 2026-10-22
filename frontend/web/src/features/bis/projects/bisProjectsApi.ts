@@ -699,7 +699,10 @@ export async function saveBisProject(
     if (error) throw error
     id = editingId
   } else {
-    const { data, error } = await supabase.from('bis_projects').insert(payload).select('id').single()
+    // FMCS (foreign manufacturers) applies under Option 1 (normal procedure), not Option 2.
+    const fmcsId = payload.certification_scheme_id ? await fetchFmcsSchemeId() : null
+    const insertRow = fmcsId && payload.certification_scheme_id === fmcsId ? { ...payload, application_process: 'normal' } : payload
+    const { data, error } = await supabase.from('bis_projects').insert(insertRow).select('id').single()
     if (error) throw error
     id = String((data as { id?: string } | null)?.id ?? '')
   }
