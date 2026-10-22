@@ -33,12 +33,12 @@ export type Cmpf305Data = PrintApplicantContext & {
 
 /*
  * Continuation pages are filled by estimated row height (not a fixed row count) so the seal / signature at the
- * bottom of each page always fits. Measured on A4 at 11pt: a one-line row is ~25px, each extra wrapped line
+ * bottom of each page always fits. Measured on A4 at 11pt: a one-line row is ~24px, each extra wrapped line
  * ~18px, and ~738px is free for rows between the table header and the signature; the budget keeps a margin
  * because print pages have slightly less room than the screen preview.
  */
 const CONTINUATION_ROWS_BUDGET_PX = 700
-const ROW_BASE_PX = 25
+const ROW_BASE_PX = 24
 const ROW_EXTRA_LINE_PX = 18
 /** Characters that fit on one line in each column (Sr. No. excluded). */
 const COLUMN_CHARS = { machineryName: 25, make: 19, capacityPerDay: 19, number: 9, remarks: 16 } as const
@@ -68,7 +68,30 @@ function chunkRowsForPages(rows: Cmpf305MachineryRow[]): Cmpf305MachineryRow[][]
     used += h
   }
   if (current.length > 0) chunks.push(current)
-  return chunks
+  if (chunks.length < 2) return chunks
+  // Same number of pages, but rows shared evenly so the last page is not left with one or two rows.
+  const total = rows.reduce((sum, row) => sum + estimatedRowHeight(row), 0)
+  const target = total / chunks.length
+  const balanced: Cmpf305MachineryRow[][] = []
+  current = []
+  used = 0
+  rows.forEach((row, index) => {
+    const h = estimatedRowHeight(row)
+    const pagesLeft = chunks.length - balanced.length
+    const rowsLeft = rows.length - index
+    const full = used + h > CONTINUATION_ROWS_BUDGET_PX || (used >= target && pagesLeft > 1)
+    if (current.length > 0 && full && rowsLeft >= pagesLeft - 1) {
+      balanced.push(current)
+      current = []
+      used = 0
+    }
+    current.push(row)
+    used += h
+  })
+  if (current.length > 0) balanced.push(current)
+  return balanced.every((chunk) => chunk.reduce((sum, row) => sum + estimatedRowHeight(row), 0) <= CONTINUATION_ROWS_BUDGET_PX)
+    ? balanced
+    : chunks
 }
 
 function dateOrNa(raw: string): string {
@@ -221,7 +244,7 @@ const STYLES = `
   .c305-continuation .c305-table { margin-bottom: 1mm; }
   .c305-continuation .c305-table td { height: 6mm; }
   .c305-continuation .pd-table th, .c305-continuation .pd-table td { padding: 3px 4px !important; font-size: 10pt !important; }
-  .c305-page-signature { width: 78mm; max-width: 78mm; margin: 1mm 0 0 auto; text-align: right; font-size: 8pt !important; line-height: 1.2 !important; page-break-inside: avoid; break-inside: avoid; }
+  .c305-page-signature { width: 78mm; max-width: 78mm; margin: 1mm 0 0 auto; text-align: right; font-size: 10pt !important; line-height: 1.3 !important; page-break-inside: avoid; break-inside: avoid; }
   .c305-sign-gap { height: 8mm; }
   .c305-sign-image { display: block; max-width: 40mm; max-height: 16mm; object-fit: contain; margin: 0 0 1mm auto; }
   .c305-sign-line { width: 50mm; border-top: 1px solid #111; margin: 0 0 2px auto; }
