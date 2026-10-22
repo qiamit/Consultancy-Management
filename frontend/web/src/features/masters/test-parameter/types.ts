@@ -92,9 +92,15 @@ const TITLE_SMALL_WORDS = new Set([
   'units',
 ])
 
-/** Keep scientific / unit tokens as typed (N/mm², MPa, H₂O, 10kg, …). */
+/** Lowercase unit symbols that must never be capitalised (5.10 mm, not 5.10 Mm). */
+const LOWERCASE_UNIT_TOKENS = new Set([
+  'mm', 'cm', 'km', 'nm', 'm', 'mg', 'kg', 'g', 'ml', 'kn', 'hz', 'khz', 'kw', 'kv', 'mv', 'ppm', 'rpm',
+])
+
+/** Keep scientific / unit tokens as typed (N/mm², MPa, H₂O, 10kg, mm, …). */
 function shouldPreserveToken(core: string): boolean {
   if (!core) return false
+  if (LOWERCASE_UNIT_TOKENS.has(core)) return true
   if (/[⁰¹²³⁴⁵⁶⁷⁸⁹₀₁₂₃₄₅₆₇₈₉µμΩ℃℉‰]/.test(core)) return true
   if (core.includes('/')) return true
   if (core.includes('%')) return true

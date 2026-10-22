@@ -211,6 +211,26 @@ export function FactoryTestReportModuleFields({
     })
   }
 
+  /** A master row edited in the picker: refresh its copy on the report, keep the observed values. */
+  const refreshParamFromMaster = (param: MasterParam) => {
+    if (!selectedParamIds.has(param.id)) return
+    const fresh = paramFromMaster(param, isCodeLabel)
+    patchActiveReport({
+      parameters: activeReport.parameters.map((p) =>
+        p.testParameterId === param.id
+          ? {
+              ...p,
+              testName: fresh.testName,
+              clauseNo: fresh.clauseNo,
+              isReference: fresh.isReference,
+              unit: fresh.unit,
+              specifiedRequirement: fresh.specifiedRequirement,
+            }
+          : p,
+      ),
+    })
+  }
+
   /** Select All / clear for many parameters at once (one update, so none is lost). */
   const toggleParams = (params: MasterParam[], checked: boolean) => {
     if (checked) {
@@ -807,6 +827,7 @@ export function FactoryTestReportModuleFields({
         onParamCreated={() => {
           /* list refresh handled inside dialog; selection via onToggleParam */
         }}
+        onParamUpdated={refreshParamFromMaster}
         disabled={disabled}
       />
     </div>

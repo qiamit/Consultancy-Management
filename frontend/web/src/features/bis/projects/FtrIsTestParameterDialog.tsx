@@ -95,6 +95,7 @@ export function FtrIsTestParameterDialog({
   onToggleParam,
   onToggleParams,
   onParamCreated,
+  onParamUpdated,
   disabled = false,
 }: {
   open: boolean
@@ -107,6 +108,8 @@ export function FtrIsTestParameterDialog({
   onToggleParams?: (params: FtrMasterParam[], checked: boolean) => void
   /** Called after a new master row is inserted (also selected onto FTR by parent). */
   onParamCreated: (param: FtrMasterParam) => void
+  /** Called after a master row is edited here (parent refreshes its copy on the report). */
+  onParamUpdated?: (param: FtrMasterParam) => void
   disabled?: boolean
 }) {
   const lockedId = (isCodeId ?? '').trim()
@@ -120,6 +123,9 @@ export function FtrIsTestParameterDialog({
     withLockedIs(emptyTestParameterForm(), lockedId, lockedLabel),
   )
   const [inlineAddBusy, setInlineAddBusy] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState<TestParameterForm>(() => emptyTestParameterForm())
+  const [editBusy, setEditBusy] = useState(false)
   const [sortKey, setSortKey] = useState<TestParameterSortKey>('itemName')
   const [sortDir, setSortDir] = useState<TestParameterSortDir>('asc')
   const [search, setSearch] = useState('')
@@ -203,6 +209,7 @@ export function FtrIsTestParameterDialog({
     setPage(1)
     setJumpTo('')
     setInlineForm(withLockedIs(emptyTestParameterForm(), lockedId, lockedLabel))
+    setEditingId(null)
     void loadRows()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when dialog opens / IS changes
   }, [open, lockedId, lockedLabel])
@@ -306,6 +313,69 @@ export function FtrIsTestParameterDialog({
     })
   }
 
+  const buildFieldsPayload = (form: TestParameterForm) => ({
+    is_code_id: lockedId,
+    is_code_label: lockedLabel || null,
+    clause_no: normalizeText(form.clauseNo) || null,
+    unit_value: normalizeText(form.unitValue) || null,
+    test_method:
+      formatTestMethodWithYear(normalizeText(form.testMethod) || lockedLabel, lockedLabel) || null,
+    item_name: toProperTitleCase(normalizeText(form.itemName)),
+    specific_requirement: toProperTitleCase(normalizeText(form.specificRequirement)) || null,
+  })
+
+  const handleEdit = (row: TestParameterRow) => {
+    if (disabled || editBusy) return
+    setSaveMessage(null)
+    setEditForm(
+      withLockedIs(
+        {
+          ...emptyTestParameterForm(),
+          clauseNo: row.clause_no ?? '',
+          unitValue: row.unit_value ?? '',
+          testMethod: row.test_method ?? '',
+          itemName: row.item_name ?? '',
+          specificRequirement: row.specific_requirement ?? '',
+        },
+        lockedId,
+        lockedLabel,
+      ),
+    )
+    setEditingId(row.id)
+  }
+
+  const handleEditSave = () => {
+    void (async () => {
+      if (!editingId || editBusy || normalizeText(editForm.itemName).length === 0) return
+      setEditBusy(true)
+      setSaveMessage(null)
+      try {
+        const { data, error: upErr } = await supabase
+          .from('test_parameters')
+          .update(buildFieldsPayload(editForm))
+          .eq('id', editingId)
+          .select(
+            'id, item_name, clause_no, unit_value, specific_requirement, test_method, is_code_label',
+          )
+        if (upErr) throw upErr
+        const updated = (Array.isArray(data) ? data[0] : null) as FtrMasterParam | null
+        if (!updated) throw new Error('You do not have edit access for this record (view-only).')
+        setRows((prev) =>
+          prev
+            .map((r) => (r.id === updated.id ? updated : r))
+            .sort((a, b) => a.item_name.localeCompare(b.item_name)),
+        )
+        onParamUpdated?.(updated)
+        setEditingId(null)
+        setSaveMessage('Saved to Test Parameter master.')
+      } catch (err) {
+        setSaveMessage(err instanceof Error ? err.message : 'Unable to save test parameter.')
+      } finally {
+        setEditBusy(false)
+      }
+    })()
+  }
+
   const handleInlineAdd = () => {
     void (async () => {
       if (disabled || inlineAddBusy) return
@@ -318,18 +388,7 @@ export function FtrIsTestParameterDialog({
       setSaveMessage(null)
       try {
         const payload = {
-          is_code_id: lockedId,
-          is_code_label: lockedLabel || null,
-          clause_no: normalizeText(inlineForm.clauseNo) || null,
-          unit_value: normalizeText(inlineForm.unitValue) || null,
-          test_method:
-            formatTestMethodWithYear(
-              normalizeText(inlineForm.testMethod) || lockedLabel,
-              lockedLabel,
-            ) || null,
-          item_name: toProperTitleCase(normalizeText(inlineForm.itemName)),
-          specific_requirement:
-            toProperTitleCase(normalizeText(inlineForm.specificRequirement)) || null,
+          ...buildFieldsPayload(inlineForm),
           under_accreditation_ids: [] as string[],
           uncertainty_mu: null,
           department: normalizeText(inlineForm.department) || null,
@@ -469,12 +528,11 @@ export function FtrIsTestParameterDialog({
               selectedIds={selectedParamIds}
               onToggle={handleToggle}
               onToggleAll={handleToggleAll}
-              onEdit={() => {
-                /* IS-locked FTR view: add via blank row; edit in master if needed */
-              }}
+              onEdit={handleEdit}
               onDelete={() => {
                 /* keep master rows intact from FTR picker */
               }}
+              allowDelete={false}
               sortKey={sortKey}
               sortDir={sortDir}
               onSort={handleSort}
@@ -484,12 +542,12 @@ export function FtrIsTestParameterDialog({
               inlineAddBusy={inlineAddBusy || disabled}
               isCodes={isCodes}
               parameterNameOptions={parameterNameOptions}
-              editingRowId={null}
-              editForm={inlineForm}
-              onEditFormChange={handleInlineFormChange}
-              onEditSave={() => {}}
-              onEditCancel={() => {}}
-              editBusy={false}
+              editingRowId={editingId}
+              editForm={editForm}
+              onEditFormChange={(next) => setEditForm(withLockedIs(next, lockedId, lockedLabel))}
+              onEditSave={handleEditSave}
+              onEditCancel={() => setEditingId(null)}
+              editBusy={editBusy}
               onTrackSymbolTarget={handleTrackSymbolTarget}
             />
           </div>

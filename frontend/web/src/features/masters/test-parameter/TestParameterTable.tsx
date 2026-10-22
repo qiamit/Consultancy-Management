@@ -9,7 +9,7 @@ import {
   type SyntheticEvent,
 } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowDown, ArrowUp, ArrowUpDown, Check, FlaskConical, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, ArrowUpDown, Check, FlaskConical, Plus, Trash2, X } from 'lucide-react'
 import { useIsLaboratoryDirector } from '@/components/lims/LaboratoryDirectorOnly'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -829,42 +829,54 @@ function InlineEditSaveCancelButtons({
 
 function RowActions({
   row,
-  onEdit,
   onDelete,
+  allowDelete = true,
 }: {
   row: TestParameterRow
-  onEdit: (row: TestParameterRow) => void
   onDelete: (row: TestParameterRow) => void
+  allowDelete?: boolean
 }) {
   const canDelete = useIsLaboratoryDirector()
+  if (!allowDelete || !canDelete) return null
   return (
     <div className="flex shrink-0 items-center gap-0.5">
       <Button
         type="button"
         size="sm"
         variant="ghost"
-        className="h-8 w-8 rounded-none p-0 text-[#92400e] hover:bg-[#f3e9d8] hover:text-[#78350f]"
-        aria-label={`Edit ${row.item_name}`}
-        title="Edit"
-        onClick={() => onEdit(row)}
+        className="h-8 w-8 rounded-none p-0 text-red-700 hover:bg-red-50 hover:text-red-800"
+        aria-label={`Delete ${row.item_name}`}
+        title="Delete"
+        onClick={() => onDelete(row)}
       >
-        <Pencil size={16} />
+        <Trash2 size={16} />
       </Button>
-      {canDelete ? (
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          className="h-8 w-8 rounded-none p-0 text-red-700 hover:bg-red-50 hover:text-red-800"
-          aria-label={`Delete ${row.item_name}`}
-          title="Delete"
-          onClick={() => onDelete(row)}
-        >
-          <Trash2 size={16} />
-        </Button>
-      ) : null}
     </div>
   )
+}
+
+/** Column a double-click started the edit from; its input gets the focus. */
+type EditFocusField = 'isCode' | 'itemName' | 'testMethod' | 'clause' | 'unit' | 'requirement'
+
+/** Double-clicks on checkboxes and buttons keep their own meaning. */
+function isDoubleClickEditTarget(target: EventTarget | null) {
+  return !(target instanceof Element && target.closest('input, button, a, label'))
+}
+
+function useFocusEditField<T extends HTMLElement>(focusField: EditFocusField | null) {
+  const rootRef = useRef<T | null>(null)
+  useEffect(() => {
+    if (!focusField) return
+    const el = rootRef.current?.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+      `[data-edit-col="${focusField}"] input, [data-edit-col="${focusField}"] textarea`,
+    )
+    if (!el) return
+    el.focus({ preventScroll: true })
+    const end = el.value.length
+    el.setSelectionRange?.(end, end)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- focus once, when the edit starts
+  }, [])
+  return rootRef
 }
 
 function InlineEditTableRow({
@@ -876,6 +888,7 @@ function InlineEditTableRow({
   onSave,
   onCancel,
   onTrackSymbolTarget,
+  focusField = null,
 }: {
   form: TestParameterForm
   isCodes: IsCodeOption[]
@@ -885,15 +898,20 @@ function InlineEditTableRow({
   onSave: () => void
   onCancel: () => void
   onTrackSymbolTarget?: (target: SymbolCaretTarget) => void
+  focusField?: EditFocusField | null
 }) {
   const canSave = normalizeText(form.itemName).length > 0 && !editBusy
   const reqHandlers = symbolFieldHandlers('specificRequirement', 'edit', onTrackSymbolTarget)
   const unitBind = unitSymbolBind('edit', onTrackSymbolTarget)
+  const rowRef = useFocusEditField<HTMLTableRowElement>(focusField)
 
   return (
-    <TableRow className={cn(inlineEditTone, 'border-l-2 border-l-sky-500')}>
+    <TableRow
+      ref={rowRef}
+      className={cn(inlineEditTone, 'border-l-2 border-l-sky-500')}
+    >
       <TableCell className={tdClass} />
-      <TableCell className={cn(tdClass, 'text-left')}>
+      <TableCell data-edit-col="isCode" className={cn(tdClass, 'text-left')}>
         <InlineIsCodePicker
           value={form.isCodeLabel}
           isCodeId={form.isCodeId}
@@ -901,7 +919,7 @@ function InlineEditTableRow({
           onChange={(patch) => onFormChange({ ...form, ...patch })}
         />
       </TableCell>
-      <TableCell className={cn(tdClass, 'text-left')}>
+      <TableCell data-edit-col="itemName" className={cn(tdClass, 'text-left')}>
         <InlineSuggestPicker
           value={form.itemName}
           options={parameterNameOptions}
@@ -912,14 +930,14 @@ function InlineEditTableRow({
           onTrackSymbolTarget={onTrackSymbolTarget}
         />
       </TableCell>
-      <TableCell className={tdClass}>
+      <TableCell data-edit-col="testMethod" className={tdClass}>
         <InlineTestMethodPicker
           value={form.testMethod}
           isCodes={isCodes}
           onChange={(testMethod) => onFormChange({ ...form, testMethod })}
         />
       </TableCell>
-      <TableCell className={tdClass}>
+      <TableCell data-edit-col="clause" className={tdClass}>
         <Input
           value={form.clauseNo}
           onChange={(e) => onFormChange({ ...form, clauseNo: e.target.value })}
@@ -928,7 +946,7 @@ function InlineEditTableRow({
           aria-label="Clause"
         />
       </TableCell>
-      <TableCell className={tdClass}>
+      <TableCell data-edit-col="unit" className={tdClass}>
         <MeasurementUnitSelect
           value={form.unitValue}
           onChange={(unitValue) => onFormChange({ ...form, unitValue })}
@@ -941,7 +959,7 @@ function InlineEditTableRow({
           {...unitBind}
         />
       </TableCell>
-      <TableCell className={tdClass}>
+      <TableCell data-edit-col="requirement" className={tdClass}>
         <Input
           value={form.specificRequirement}
           onChange={(e) => onFormChange({ ...form, specificRequirement: e.target.value })}
@@ -975,6 +993,7 @@ function InlineEditCard({
   onSave,
   onCancel,
   onTrackSymbolTarget,
+  focusField = null,
 }: {
   form: TestParameterForm
   isCodes: IsCodeOption[]
@@ -984,13 +1003,16 @@ function InlineEditCard({
   onSave: () => void
   onCancel: () => void
   onTrackSymbolTarget?: (target: SymbolCaretTarget) => void
+  focusField?: EditFocusField | null
 }) {
   const canSave = normalizeText(form.itemName).length > 0 && !editBusy
   const reqHandlers = symbolFieldHandlers('specificRequirement', 'edit', onTrackSymbolTarget)
   const unitBind = unitSymbolBind('edit', onTrackSymbolTarget)
+  const cardRef = useFocusEditField<HTMLElement>(focusField)
 
   return (
     <article
+      ref={cardRef}
       className={cn(
         'overflow-hidden border-2 border-sky-600/50 font-jakarta shadow-sm ring-1 ring-sky-700/20',
         inlineEditTone,
@@ -1087,6 +1109,7 @@ export function TestParameterTable({
   onEditCancel,
   editBusy,
   onTrackSymbolTarget,
+  allowDelete = true,
 }: {
   rows: TestParameterRow[]
   loading: boolean
@@ -1113,7 +1136,19 @@ export function TestParameterTable({
   onEditCancel: () => void
   editBusy: boolean
   onTrackSymbolTarget?: (target: SymbolCaretTarget) => void
+  /** false hides Delete (e.g. the FTR picker keeps master rows intact). */
+  allowDelete?: boolean
 }) {
+  const [editFocus, setEditFocus] = useState<EditFocusField | null>(null)
+  const startEdit = (row: TestParameterRow, target: EventTarget | null) => {
+    if (!isDoubleClickEditTarget(target)) return
+    const col =
+      target instanceof Element
+        ? target.closest<HTMLElement>('[data-edit-col]')?.dataset.editCol
+        : undefined
+    setEditFocus((col as EditFocusField | undefined) ?? 'itemName')
+    onEdit(row)
+  }
   const allChecked = rows.length > 0 && rows.every((r) => selectedIds.has(r.id))
   const someChecked = rows.some((r) => selectedIds.has(r.id))
 
@@ -1192,6 +1227,7 @@ export function TestParameterTable({
                     onSave={onEditSave}
                     onCancel={onEditCancel}
                     onTrackSymbolTarget={onTrackSymbolTarget}
+                    focusField={editFocus}
                   />
                 )
               }
@@ -1199,8 +1235,10 @@ export function TestParameterTable({
               return (
                 <article
                   key={r.id}
+                  title="Double-Click to Edit"
+                  onDoubleClick={(e) => startEdit(r, e.target)}
                   className={cn(
-                    'overflow-hidden border-2 border-stone-500 font-jakarta shadow-sm ring-1 ring-amber-700/20',
+                    'cursor-pointer select-none overflow-hidden border-2 border-stone-500 font-jakarta shadow-sm ring-1 ring-amber-700/20',
                     tone,
                     selected && 'ring-2 ring-amber-500/40',
                   )}
@@ -1219,7 +1257,7 @@ export function TestParameterTable({
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5">
                             <FlaskConical className="h-3.5 w-3.5 shrink-0 text-amber-700" aria-hidden />
-                            <p className="truncate text-[14px] font-bold tracking-tight text-[#1c1917]">
+                            <p data-edit-col="itemName" className="truncate text-[14px] font-bold tracking-tight text-[#1c1917]">
                               {r.item_name || '—'}
                               {r.archived_at ? (
                                 <span className="ml-1 bg-stone-200 px-1 text-[9px] font-semibold uppercase text-stone-600">
@@ -1228,14 +1266,14 @@ export function TestParameterTable({
                               ) : null}
                             </p>
                           </div>
-                          <p className="mt-1 font-mono text-[11px] font-medium text-[#b45309]">
+                          <p data-edit-col="isCode" className="mt-1 font-mono text-[11px] font-medium text-[#b45309]">
                             {r.is_code_label || '—'}
                           </p>
                         </div>
                       </div>
 
                       <div className="grid grid-cols-3 gap-px border-b border-[#e7e0d4] bg-[#e7e0d4]">
-                        <div className="bg-[#fffcf7] px-2.5 py-2">
+                        <div data-edit-col="testMethod" className="bg-[#fffcf7] px-2.5 py-2">
                           <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
                             Test Method
                           </p>
@@ -1243,7 +1281,7 @@ export function TestParameterTable({
                             {r.test_method?.trim() || '—'}
                           </p>
                         </div>
-                        <div className="bg-[#fffcf7] px-2.5 py-2">
+                        <div data-edit-col="clause" className="bg-[#fffcf7] px-2.5 py-2">
                           <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
                             Clause
                           </p>
@@ -1251,7 +1289,7 @@ export function TestParameterTable({
                             {r.clause_no?.trim() || '—'}
                           </p>
                         </div>
-                        <div className="bg-[#fffcf7] px-2.5 py-2">
+                        <div data-edit-col="unit" className="bg-[#fffcf7] px-2.5 py-2">
                           <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
                             Unit
                           </p>
@@ -1259,7 +1297,7 @@ export function TestParameterTable({
                             {r.unit_value?.trim() || '—'}
                           </p>
                         </div>
-                        <div className="col-span-3 bg-[#fffcf7] px-2.5 py-2">
+                        <div data-edit-col="requirement" className="col-span-3 bg-[#fffcf7] px-2.5 py-2">
                           <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
                             Requirements
                           </p>
@@ -1273,7 +1311,7 @@ export function TestParameterTable({
                         <span className="text-[10px] font-medium uppercase tracking-[0.1em] text-stone-500">
                           Actions
                         </span>
-                        <RowActions row={r} onEdit={onEdit} onDelete={onDelete} />
+                        <RowActions row={r} onDelete={onDelete} allowDelete={allowDelete} />
                       </div>
                     </div>
                   </div>
@@ -1387,6 +1425,7 @@ export function TestParameterTable({
                         onSave={onEditSave}
                         onCancel={onEditCancel}
                         onTrackSymbolTarget={onTrackSymbolTarget}
+                        focusField={editFocus}
                       />
                     )
                   }
@@ -1394,7 +1433,10 @@ export function TestParameterTable({
                   return (
                     <TableRow
                       key={r.id}
+                      title="Double-Click to Edit"
+                      onDoubleClick={(e) => startEdit(r, e.target)}
                       className={cn(
+                        'cursor-pointer select-none',
                         selected ? rowSelectedClass : index % 2 === 0 ? rowEvenClass : rowOddClass,
                       )}
                     >
@@ -1407,12 +1449,12 @@ export function TestParameterTable({
                           onChange={() => onToggle(r.id)}
                         />
                       </TableCell>
-                      <TableCell className={cn(tdClass, 'text-left')}>
+                      <TableCell data-edit-col="isCode" className={cn(tdClass, 'text-left')}>
                         <div className="font-mono text-[12px] font-semibold text-[#b45309]">
                           {r.is_code_label || '—'}
                         </div>
                       </TableCell>
-                      <TableCell className={cn(tdClass, 'text-left')}>
+                      <TableCell data-edit-col="itemName" className={cn(tdClass, 'text-left')}>
                         <div className="text-[13px] font-bold tracking-tight text-[#1c1917]">
                           {r.item_name || '—'}
                           {r.archived_at ? (
@@ -1422,17 +1464,17 @@ export function TestParameterTable({
                           ) : null}
                         </div>
                       </TableCell>
-                      <TableCell className={cn(tdClass, 'font-semibold')}>
+                      <TableCell data-edit-col="testMethod" className={cn(tdClass, 'font-semibold')}>
                         {r.test_method?.trim() || '—'}
                       </TableCell>
-                      <TableCell className={tdClass}>{r.clause_no?.trim() || '—'}</TableCell>
-                      <TableCell className={tdClass}>{r.unit_value?.trim() || '—'}</TableCell>
-                      <TableCell className={tdClass}>
+                      <TableCell data-edit-col="clause" className={tdClass}>{r.clause_no?.trim() || '—'}</TableCell>
+                      <TableCell data-edit-col="unit" className={tdClass}>{r.unit_value?.trim() || '—'}</TableCell>
+                      <TableCell data-edit-col="requirement" className={tdClass}>
                         {renderRequirement(r.specific_requirement)}
                       </TableCell>
                       <TableCell className={tdClass}>
                         <div className="flex justify-center">
-                          <RowActions row={r} onEdit={onEdit} onDelete={onDelete} />
+                          <RowActions row={r} onDelete={onDelete} allowDelete={allowDelete} />
                         </div>
                       </TableCell>
                     </TableRow>
