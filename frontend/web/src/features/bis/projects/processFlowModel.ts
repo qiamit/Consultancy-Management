@@ -1030,12 +1030,32 @@ export function buildProcessFlowHtmlMarkup(
     var canvas=document.querySelector(".pfc-canvas");
     var wrap=document.querySelector(".pfc-drawing-wrap");
     if(!fit||!scaleEl||!canvas) return;
+    // Undo an earlier horizontal stretch before measuring again.
+    if(canvas.dataset.natW){
+      canvas.style.width=canvas.dataset.natW+"px";
+      Array.prototype.forEach.call(canvas.children,function(el){ if(el.dataset.left){ el.style.left=el.dataset.left; el.style.width=el.dataset.width; } });
+    }
     var natW=Math.max(canvas.scrollWidth,canvas.offsetWidth,1);
     var natH=Math.max(canvas.scrollHeight,canvas.offsetHeight,1);
-    var maxW=Math.min(640,(wrap?wrap.clientWidth:640)-16);
+    var maxW=(wrap?wrap.clientWidth:640)-16;
     if(!(maxW>40)) maxW=640;
     var maxH=470;
     var s=Math.min(1,maxW/natW,maxH/natH);
+    // A tall chart is limited by height and leaves empty space at the sides: spread the boxes and lines
+    // horizontally (wider boxes, same text size) so the chart fills the frame width.
+    var k=Math.min(1.8,maxW/(natW*s));
+    if(k>1.04){
+      canvas.dataset.natW=String(natW);
+      Array.prototype.forEach.call(canvas.children,function(el){
+        var left=parseFloat(el.style.left), width=parseFloat(el.style.width);
+        if(isNaN(left)||isNaN(width)) return;
+        el.dataset.left=el.style.left; el.dataset.width=el.style.width;
+        if(el.classList.contains("pfc-down")){ el.style.left=((left+width/2)*k-width/2)+"px"; }
+        else { el.style.left=(left*k)+"px"; el.style.width=(width*k)+"px"; }
+      });
+      natW=natW*k;
+      canvas.style.width=natW+"px";
+    }
     scaleEl.style.width=natW+"px";
     scaleEl.style.height=natH+"px";
     scaleEl.style.transform="scale("+s+")";

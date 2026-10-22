@@ -629,6 +629,36 @@ function escSvg(raw: string): string {
     .replace(/"/g, '&quot;')
 }
 
+/**
+ * Break a label into lines that fit `width` (SVG text does not wrap by itself), shrinking the font when the lines
+ * would not fit `height`. Character width is estimated for bold Arial.
+ */
+function wrapSvgLabel(text: string, width: number, height: number, startSize: number): { lines: string[]; size: number } {
+  const words = text.split(/\s+/).filter(Boolean)
+  const layout = (size: number) => {
+    const perLine = Math.max(1, Math.floor((width - 10) / (size * 0.6)))
+    const lines: string[] = []
+    let line = ''
+    for (const word of words) {
+      const next = line ? `${line} ${word}` : word
+      if (next.length <= perLine || !line) line = next
+      else {
+        lines.push(line)
+        line = word
+      }
+    }
+    if (line) lines.push(line)
+    return lines
+  }
+  let size = startSize
+  let lines = layout(size)
+  while (size > 8 && (lines.length * size * 1.15 > height - 6 || lines.some((l) => l.length * size * 0.6 > width - 6))) {
+    size -= 0.5
+    lines = layout(size)
+  }
+  return { lines, size }
+}
+
 /** SVG markup for print (viewBox 0 0 1000 700). */
 export function buildPlantLayoutSvgMarkup(boxes: PlantLayoutBox[]): string {
   const rects = boxes
@@ -640,8 +670,19 @@ export function buildPlantLayoutSvgMarkup(boxes: PlantLayoutBox[]): string {
       const h = (box.h / 100) * LAYOUT_VIEW_H
       const cx = x + w / 2
       const cy = y + h / 2
-      const label = escSvg(plantLayoutBoxDisplayLabel(box))
-      const fontSize = Math.max(11, Math.min(16, Math.min(w, h) / 8))
+      // Turned labels (90° / 270°) run along the box height.
+      const turned = Math.abs(Math.round(box.labelDegrees ?? 0)) % 180 === 90
+      const wrapped = wrapSvgLabel(
+        plantLayoutBoxDisplayLabel(box),
+        turned ? h : w,
+        turned ? w : h,
+        Math.max(11, Math.min(16, Math.min(w, h) / 8)),
+      )
+      const fontSize = wrapped.size
+      const lineH = fontSize * 1.15
+      const label = wrapped.lines
+        .map((line, i) => `<tspan x="${cx.toFixed(1)}" dy="${(i === 0 ? -((wrapped.lines.length - 1) * lineH) / 2 : lineH).toFixed(1)}">${escSvg(line)}</tspan>`)
+        .join('')
       const pathD = plantLayoutBoxPathD(box)
       const rounded =
         box.shape === 'rectangle' || box.shape === 'square'

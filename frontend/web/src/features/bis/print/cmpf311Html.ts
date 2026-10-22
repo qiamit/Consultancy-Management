@@ -139,7 +139,7 @@ ${tablePageHtml}${notesPageHtml}`
   <p class="pd-body">This has reference to your letter No. <strong>${esc(data.referenceLetterNo.trim() || BLANK)}</strong> dated <strong>${esc(refDate)}</strong>.</p>
   <p class="pd-body cmpf311-declaration">With reference to the Scheme of Inspection and Testing prescribed by BIS for <strong>${esc(licenceFor)}</strong>, <strong>${esc(data.applicantName || 'the applicant firm')}</strong> accepts and undertakes to comply with the applicable inspection, sampling, testing, control-unit, frequency, equipment, record-keeping and reporting requirements stated in SIT No. <strong>${esc(productManualNo)}</strong>. Following grant of a licence, the firm shall implement the prescribed controls at its manufacturing premises, ensure tests are performed using suitable facilities and calibrated equipment or permitted subcontracted laboratories, maintain complete and traceable production, inspection and test records, and make the premises, records and samples available to BIS officers during assessment and surveillance. The firm shall investigate non-conformities, prevent dispatch of non-conforming product and take corrective action in accordance with the applicable Indian Standard and BIS requirements. Any change affecting product conformity, process controls or licensed scope shall be reported to BIS, and prior approval shall be obtained wherever required. This undertaking applies to the licensed product and remains subject to the prevailing BIS licence conditions.</p>
 
-  <div class="cmpf-sign-right"><div>${signature}<div class="cmpf311-seal-label">Company Seal &amp; Authorized Signature</div></div></div>
+  <div class="cmpf-sign-right">${signature}</div>
   ${preparedByHtml(data.preparedBy)}
 </div>`
 }
@@ -156,7 +156,6 @@ export function buildCmpf311Html(data: Cmpf311Data): string {
       .cmpf311-cover-sign .pd-sign-space { justify-content: flex-end; }
       .cmpf311-cover-sign .pd-sign-line { margin-left: auto; }
       .cmpf311-annex-sign { margin-top: 10mm; }
-      .cmpf311-seal-label { font-size: 9pt; font-weight: 700; margin-top: 2px; }
       .cmpf311-notes-title { margin-top: 14px; }
       .cmpf311-note { display: block; margin: 0 0 5px; text-align: justify; line-height: 1.45; }
       .cmpf311-notes-title { margin: 8px 0 3px; font-size: 12pt; }
