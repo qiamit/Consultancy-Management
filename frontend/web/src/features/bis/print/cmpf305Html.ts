@@ -34,10 +34,10 @@ export type Cmpf305Data = PrintApplicantContext & {
 /*
  * Continuation pages are filled by estimated row height (not a fixed row count) so the seal / signature at the
  * bottom of each page always fits. Measured on A4 at 11pt: a one-line row is ~24px, each extra wrapped line
- * ~18px, and ~738px is free for rows between the table header and the signature; the budget keeps a margin
- * because print pages have slightly less room than the screen preview.
+ * ~18px, and ~717px is free for rows between the table header and the 10pt signature. Each page is filled
+ * as far as it goes before the next one starts.
  */
-const CONTINUATION_ROWS_BUDGET_PX = 700
+const CONTINUATION_ROWS_BUDGET_PX = 712
 const ROW_BASE_PX = 24
 const ROW_EXTRA_LINE_PX = 18
 /** Characters that fit on one line in each column (Sr. No. excluded). */
@@ -68,30 +68,7 @@ function chunkRowsForPages(rows: Cmpf305MachineryRow[]): Cmpf305MachineryRow[][]
     used += h
   }
   if (current.length > 0) chunks.push(current)
-  if (chunks.length < 2) return chunks
-  // Same number of pages, but rows shared evenly so the last page is not left with one or two rows.
-  const total = rows.reduce((sum, row) => sum + estimatedRowHeight(row), 0)
-  const target = total / chunks.length
-  const balanced: Cmpf305MachineryRow[][] = []
-  current = []
-  used = 0
-  rows.forEach((row, index) => {
-    const h = estimatedRowHeight(row)
-    const pagesLeft = chunks.length - balanced.length
-    const rowsLeft = rows.length - index
-    const full = used + h > CONTINUATION_ROWS_BUDGET_PX || (used >= target && pagesLeft > 1)
-    if (current.length > 0 && full && rowsLeft >= pagesLeft - 1) {
-      balanced.push(current)
-      current = []
-      used = 0
-    }
-    current.push(row)
-    used += h
-  })
-  if (current.length > 0) balanced.push(current)
-  return balanced.every((chunk) => chunk.reduce((sum, row) => sum + estimatedRowHeight(row), 0) <= CONTINUATION_ROWS_BUDGET_PX)
-    ? balanced
-    : chunks
+  return chunks
 }
 
 function dateOrNa(raw: string): string {
