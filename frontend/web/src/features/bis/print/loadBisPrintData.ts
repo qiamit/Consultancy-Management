@@ -6,6 +6,10 @@ import { loadCompanyPrintContext, type CompanyPrintContext } from './loadCompany
 export type BisPrintClient = {
   companyName: string
   contactPerson: string
+  /** CEO / Managing Director (Manak "CEO Name"); falls back to the contact person. */
+  ceoName: string
+  /** Office city (district is a separate field). */
+  city: string
   mobile: string
   email: string
   address: string
@@ -21,6 +25,8 @@ export type BisPrintClient = {
   factoryDistrict: string
   factoryState: string
   factoryPin: string
+  factoryCity: string
+  factoryCountry: string
   latitude: string
   longitude: string
   topManagement: { name: string; designation: string }[]
@@ -92,6 +98,8 @@ async function loadClient(row: BisProjectRow): Promise<BisPrintClient> {
   const empty: BisPrintClient = {
     companyName: fallbackName,
     contactPerson: '',
+    ceoName: '',
+    city: '',
     mobile: '',
     email: '',
     address: '',
@@ -107,6 +115,8 @@ async function loadClient(row: BisProjectRow): Promise<BisPrintClient> {
     factoryDistrict: '',
     factoryState: '',
     factoryPin: '',
+    factoryCity: '',
+    factoryCountry: '',
     latitude: '',
     longitude: '',
     topManagement: [],
@@ -121,6 +131,8 @@ async function loadClient(row: BisProjectRow): Promise<BisPrintClient> {
   const loaded: BisPrintClient = {
     companyName: text(c.company_name) || fallbackName,
     contactPerson: text(c.contact_person_name),
+    ceoName: text(c.ceo_name) || text(c.contact_person_name),
+    city: text(c.city),
     mobile: mobile && code && !mobile.startsWith('+') ? `${code} ${mobile}` : mobile,
     email: text(c.email),
     address: text(c.address),
@@ -136,6 +148,8 @@ async function loadClient(row: BisProjectRow): Promise<BisPrintClient> {
     factoryDistrict: text(c.district),
     factoryState: text(c.state),
     factoryPin: text(c.pin_code),
+    factoryCity: text(c.city),
+    factoryCountry: text(c.country) || 'India',
     latitude: text(c.latitude),
     longitude: text(c.longitude),
     topManagement: [],
@@ -143,7 +157,7 @@ async function loadClient(row: BisProjectRow): Promise<BisPrintClient> {
   const clientId = text(c.id) || row.client_id
   if (!clientId) return loaded
   const [sitesRes, contactsRes] = await Promise.all([
-    supabase.from('client_sites').select('id, site_role, address, district, state, pin_code, is_primary').eq('client_id', clientId),
+    supabase.from('client_sites').select('*').eq('client_id', clientId),
     supabase.from('client_contacts').select('name, designation, contact_role, is_primary').eq('client_id', clientId),
   ])
   if (!sitesRes.error && Array.isArray(sitesRes.data)) {
@@ -156,6 +170,8 @@ async function loadClient(row: BisProjectRow): Promise<BisPrintClient> {
       loaded.factoryDistrict = text(factory.district)
       loaded.factoryState = text(factory.state)
       loaded.factoryPin = text(factory.pin_code)
+      loaded.factoryCity = text(factory.city) || loaded.factoryCity
+      loaded.factoryCountry = text(factory.country) || loaded.factoryCountry
     }
   }
   if (!contactsRes.error && Array.isArray(contactsRes.data)) {

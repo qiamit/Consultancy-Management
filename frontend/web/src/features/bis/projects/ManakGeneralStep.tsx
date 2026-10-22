@@ -17,7 +17,7 @@ import {
   uploadClientCertificate,
   type ClientCertificateFile,
 } from '@/features/masters/clients/clientsApi'
-import { CLIENT_SECTORS, COMPANY_SCALES } from '@/features/masters/clients/types'
+import { CLIENT_SECTORS, COMPANY_SCALES, isForeignCountry, isValidPostalCode } from '@/features/masters/clients/types'
 import { type BisBranchOfficeRow } from '@/features/masters/bis-branch-offices/bisBranchOfficesApi'
 import type { BisPrintClient } from '../print/loadBisPrintData'
 import { ManakApplicationPanel } from './ManakApplicationPanel'
@@ -51,8 +51,8 @@ const str = (v: unknown) => (typeof v === 'string' ? v.trim() : v == null ? '' :
 
 /** Legal-document names that serve as Manak's Proof of Establishment / Address Proof. */
 export const ESTABLISHMENT_DOC =
-  /incorporation|partnership|llp|registration of firm|establishment|shop\s*&?\s*establishment/i
-export const ADDRESS_DOC = /gst|address|electricity|light bill|rent|lease|property tax/i
+  /incorporation|partnership|llp|registration of firm|establishment|shop\s*&?\s*establishment|business licen|visura|chamber of commerce|company registration|trade regist|commercial regist/i
+export const ADDRESS_DOC = /gst|address|electricity|light bill|rent|lease|property tax|business licen|visura|chamber of commerce/i
 
 type EditableProps = {
   value: string
@@ -666,7 +666,7 @@ export function ManakGeneralStep({
     if (sameAsOffice) await patchSite(clientId, 'Factory', patch, siteId)
   }
   const factorySite = sites.find((s) => (siteId && s.id === siteId) || s.site_role === 'Factory')
-  const factory = (patch: Partial<Pick<ClientSiteRow, 'address' | 'district' | 'state' | 'pin_code'>>) => async () => {
+  const factory = (patch: Partial<Pick<ClientSiteRow, 'address' | 'district' | 'state' | 'pin_code' | 'city' | 'country'>>) => async () => {
     if (!clientId) return
     await patchSite(clientId, 'Factory', patch, siteId)
   }
@@ -699,6 +699,8 @@ export function ManakGeneralStep({
         district: officeDistrict || null,
         state: officeState || null,
         pin_code: officePin || null,
+        city: null,
+        country: null,
       }, siteId)
       toast.success('Factory Address Now Follows the Office Address')
       onChanged()
@@ -711,6 +713,18 @@ export function ManakGeneralStep({
   const sectorOptions = [...CLIENT_SECTORS]
   const mobile = str(raw.mobile)
   const countryCode = str(raw.country_code)
+  /** FMCS: a foreign firm has no Indian PIN, GST or PAN, and a 10-digit mobile is not required. */
+  const foreign = isForeignCountry(str(client?.country))
+  const factoryCountry = str(factorySite?.country) || str(client?.country)
+  const pinRules = (country: string): Partial<EditableProps> => isForeignCountry(country)
+    ? {
+        normalize: (x) => x.replace(/[^A-Za-z0-9 -]/g, '').slice(0, 12).toUpperCase(),
+        validate: (x) => (isValidPostalCode(x, country) ? null : 'Enter a valid postal code'),
+      }
+    : {
+        normalize: (x) => x.replace(/[^0-9]/g, '').slice(0, 6),
+        validate: (x) => (x && x.length !== 6 ? 'Enter a 6 digit PIN code' : null),
+      }
 
   const v = (
     value: string,
@@ -719,10 +733,11 @@ export function ManakGeneralStep({
   ) => <EditableValue value={value} onSave={onSave} disabled={locked} {...extra} />
 
   const landlineCell = v(str(raw.landline), col('landline'), { placeholder: '-' })
+  const indianMobile = !countryCode || countryCode === '+91' || countryCode === '91'
   const mobileCell = v(mobile, col('mobile'), {
     prefix: countryCode,
-    normalize: (x) => x.replace(/[^0-9]/g, '').slice(0, 10),
-    validate: (x) => (x && x.length !== 10 ? 'Enter a 10 digit mobile number' : null),
+    normalize: (x) => x.replace(/[^0-9]/g, '').slice(0, indianMobile ? 10 : 15),
+    validate: (x) => (indianMobile && x && x.length !== 10 ? 'Enter a 10 digit mobile number' : null),
   })
 
   const yesNoFlag = (
@@ -824,6 +839,7 @@ export function ManakGeneralStep({
                 title: proofDoc ? undefined : noDoc,
               }),
             ],
+            ...(foreign ? [] : ([
             [
               'GST Number',
               withProof(
@@ -880,6 +896,7 @@ export function ManakGeneralStep({
               panValue,
               ),
             ],
+            ] as Array<[string, ReactNode]>)),
             [
               'Women Entrepreneur',
               yesNoFlag('women_entrepreneur', 'is_women_entrepreneur', str(raw.women_entrepreneur) || (raw.is_women_entrepreneur ? 'Yes' : 'No'), {
@@ -918,7 +935,7 @@ export function ManakGeneralStep({
             ],
           ]}
           items={[
-            ['CEO Name', v(str(client?.contactPerson), col('contact_person_name'))],
+            ['CEO Name', v(str(raw.ceo_name) || str(client?.contactPerson), col('ceo_name'))],
             ['City', v(str(raw.city), col('city'))],
             [
               'District',
@@ -931,10 +948,7 @@ export function ManakGeneralStep({
             ['Country', v(str(client?.country), col('country'))],
             [
               'PinCode',
-              v(str(client?.pinCode), async (next) => done(office({ pin_code: next || null }, { pin_code: next || null })), {
-                normalize: (x) => x.replace(/[^0-9]/g, '').slice(0, 6),
-                validate: (x) => (x && x.length !== 6 ? 'Enter a 6 digit PIN code' : null),
-              }),
+              v(str(client?.pinCode), async (next) => done(office({ pin_code: next || null }, { pin_code: next || null })), pinRules(str(client?.country))),
             ],
             ['E-MailId', v(str(client?.email), col('email'))],
             ['Landline', landlineCell],
@@ -983,16 +997,16 @@ export function ManakGeneralStep({
             ],
           ]}
           items={[
-            ['City', v(str(raw.city), col('city'))],
+            // The factory keeps its own city / country (an FMCS factory can be in another town or country).
+            ['City', v(str(factorySite?.city) || str(raw.city), async (next) => done(factory({ city: next || null })), { disabled: factoryLocked })],
             ['District', v(str(client?.factoryDistrict), async (next) => done(factory({ district: next || null })), { disabled: factoryLocked })],
             ['State', v(str(client?.factoryState), async (next) => done(factory({ state: next || null })), { disabled: factoryLocked })],
-            ['Country', v(str(client?.country), col('country'))],
+            ['Country', v(factoryCountry, async (next) => done(factory({ country: next || null })), { disabled: factoryLocked })],
             [
               'PinCode',
               v(str(client?.factoryPin), async (next) => done(factory({ pin_code: next || null })), {
                 disabled: factoryLocked,
-                normalize: (x) => x.replace(/[^0-9]/g, '').slice(0, 6),
-                validate: (x) => (x && x.length !== 6 ? 'Enter a 6 digit PIN code' : null),
+                ...pinRules(factoryCountry),
               }),
             ],
             ['E-MailId', v(str(client?.email), col('email'))],

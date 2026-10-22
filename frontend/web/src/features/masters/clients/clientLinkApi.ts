@@ -14,6 +14,8 @@ export type ClientSiteRow = {
   state: string | null
   pin_code: string | null
   is_primary: boolean
+  city?: string | null
+  country?: string | null
 }
 
 function errMessage(err: unknown): string {
@@ -50,7 +52,7 @@ export async function patchClient(clientId: string, patch: Record<string, unknow
 export async function listSites(clientId: string): Promise<ClientSiteRow[]> {
   const { data, error } = await supabase
     .from('client_sites')
-    .select('id, site_role, address, district, state, pin_code, is_primary')
+    .select('*')
     .eq('client_id', clientId)
   if (error) return []
   return (Array.isArray(data) ? data : []) as ClientSiteRow[]
@@ -60,7 +62,7 @@ export async function listSites(clientId: string): Promise<ClientSiteRow[]> {
 export async function patchSite(
   clientId: string,
   role: 'Registered Office' | 'Factory',
-  patch: Partial<Pick<ClientSiteRow, 'address' | 'district' | 'state' | 'pin_code'>>,
+  patch: Partial<Pick<ClientSiteRow, 'address' | 'district' | 'state' | 'pin_code' | 'city' | 'country'>>,
   preferSiteId?: string | null,
 ): Promise<void> {
   const sites = await listSites(clientId)

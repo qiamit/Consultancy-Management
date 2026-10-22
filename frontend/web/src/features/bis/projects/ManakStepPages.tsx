@@ -639,8 +639,9 @@ export function ManakStepPage({
   }
 
   return (
-    <div className="font-jakarta">
-      {loading ? <p className="mb-2 text-xs text-stone-500">Loading Application Data…</p> : null}
+    <div className="relative font-jakarta">
+      {/* Overlaid, so the reload after a save does not push the fields down while someone is clicking them. */}
+      {loading ? <p className="pointer-events-none absolute right-0 top-0 z-10 bg-white/90 px-2 py-0.5 text-xs text-stone-500">Loading Application Data…</p> : null}
       {error ? <p className="mb-2 text-xs text-red-700">{error}</p> : null}
       <div className={cn(loading && 'opacity-60')}>{body}</div>
     </div>

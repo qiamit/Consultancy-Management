@@ -6,7 +6,12 @@ import { getCurrencySymbol } from '@/lib/appCurrency'
 
 export type BisForm1Person = { name: string; designation: string }
 
+export type BisForm1Geo = { city: string; district: string; state: string; country: string; pin: string }
+
 export type BisForm1Data = {
+  /** Office and factory place details; the flat city/district/state/pin below are the older single set. */
+  office?: BisForm1Geo
+  factory?: BisForm1Geo
   applicationNumber: string
   companyName: string
   officeAddress: string
@@ -177,6 +182,9 @@ function buildFormBody(data: BisForm1Data): string {
   const correspondence = properCapitalize(dash(data.correspondenceAddress, 'Factory'))
   const scale = properCapitalize(dash(data.scale, ''))
   const sector = properCapitalize(dash(data.sector, ''))
+  const geo = (g: BisForm1Geo | undefined) => (g
+    ? { city: properCapitalize(g.city), district: properCapitalize(g.district), state: properCapitalize(g.state), country: properCapitalize(g.country || 'India'), pin: g.pin }
+    : { city, district, state, country, pin: data.pinCode })
   const topManagementWidths = managementColumnWidths(data.topManagement)
   const technicalManagementWidths = managementColumnWidths(data.technicalManagement)
   const topNameColumn = 42.5 * topManagementWidths.name / 100
@@ -202,11 +210,7 @@ function buildFormBody(data: BisForm1Data): string {
     ${addressBlock({
       kind: 'Office',
       address: data.officeAddress,
-      city,
-      district,
-      state,
-      country,
-      pin: data.pinCode,
+      ...geo(data.office),
       tel: data.officeTel,
       email: data.officeEmail,
     })}
@@ -214,11 +218,7 @@ function buildFormBody(data: BisForm1Data): string {
     ${addressBlock({
       kind: 'Factory',
       address: data.factoryAddress,
-      city,
-      district,
-      state,
-      country,
-      pin: data.pinCode,
+      ...geo(data.factory),
       tel: data.factoryTel,
       email: data.factoryEmail,
     })}
@@ -459,6 +459,14 @@ export function bisForm1DataFromPrintData(printData: BisPrintData): BisForm1Data
     companyName: client.companyName,
     officeAddress: client.officeAddress || client.address,
     factoryAddress: client.factoryAddress || client.address,
+    office: { city: client.city || client.district, district: client.district, state: client.state, country: client.country, pin: client.pinCode },
+    factory: {
+      city: client.factoryCity || client.city || client.factoryDistrict || client.district,
+      district: client.factoryDistrict || client.district,
+      state: client.factoryState || client.state,
+      country: client.factoryCountry || client.country,
+      pin: client.factoryPin || client.pinCode,
+    },
     city: client.factoryDistrict || client.district,
     district: client.factoryDistrict || client.district,
     state: client.factoryState || client.state,
