@@ -208,8 +208,12 @@ export function cmpf306DataFromPrintData(printData: BisPrintData): Cmpf306Data {
     firmRepName: parsed.firmRepName || sig.signatoryName || printData.client.contactPerson,
     firmRepDesignation: parsed.firmRepDesignation || sig.signatoryDesignation,
     signatureImageUrl: sig.signatureImageUrl,
-    inspectionOfficerName: parsed.inspectionOfficerName,
-    inspectionOfficerDesignation: parsed.inspectionOfficerDesignation,
+    // The officer assigned on the project wins; the module only keeps a copy from its first save.
+    inspectionOfficerName:
+      (printData.row.inspection_officer_name ?? '').trim() || parsed.inspectionOfficerName,
+    inspectionOfficerDesignation:
+      (printData.row.inspection_officer_designation ?? '').trim() ||
+      parsed.inspectionOfficerDesignation,
     rows: parsed.rows,
   }
 }

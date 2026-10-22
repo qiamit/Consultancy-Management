@@ -249,8 +249,12 @@ export function cmpf305DataFromPrintData(printData: BisPrintData): Cmpf305Data {
     firmRepName: parsed.firmRepName || sig.signatoryName || printData.client.contactPerson,
     firmRepDesignation: parsed.firmRepDesignation || sig.signatoryDesignation,
     signatureImageUrl: sig.signatureImageUrl,
-    inspectionOfficerName: parsed.inspectionOfficerName || (printData.row.inspection_officer_name ?? '').trim(),
-    inspectionOfficerDesignation: parsed.inspectionOfficerDesignation || (printData.row.inspection_officer_designation ?? '').trim(),
+    // The officer assigned on the project wins; the module only keeps a copy from its first save.
+    inspectionOfficerName:
+      (printData.row.inspection_officer_name ?? '').trim() || parsed.inspectionOfficerName,
+    inspectionOfficerDesignation:
+      (printData.row.inspection_officer_designation ?? '').trim() ||
+      parsed.inspectionOfficerDesignation,
     rows: parsed.rows.filter((row) => Object.values(row).some((value) => value.trim())),
   }
 }

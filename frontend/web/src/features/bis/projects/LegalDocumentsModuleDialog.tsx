@@ -857,7 +857,14 @@ export function LegalDocumentsModuleDialog({
               parsed.inspectionOfficerDesignation
             setCmpf305(
               hasSaved
-                ? parsed
+                ? {
+                    ...parsed,
+                    inspectionOfficerName:
+                      (row.inspection_officer_name ?? '').trim() || parsed.inspectionOfficerName,
+                    inspectionOfficerDesignation:
+                      (row.inspection_officer_designation ?? '').trim() ||
+                      parsed.inspectionOfficerDesignation,
+                  }
                 : {
                     ...emptyCmpf305Payload(),
                     firmRepName: '',
@@ -879,7 +886,14 @@ export function LegalDocumentsModuleDialog({
               parsed.inspectionOfficerDesignation
             setCmpf306(
               hasSaved
-                ? parsed
+                ? {
+                    ...parsed,
+                    inspectionOfficerName:
+                      (row.inspection_officer_name ?? '').trim() || parsed.inspectionOfficerName,
+                    inspectionOfficerDesignation:
+                      (row.inspection_officer_designation ?? '').trim() ||
+                      parsed.inspectionOfficerDesignation,
+                  }
                 : {
                     ...emptyCmpf306Payload(),
                     firmRepName: '',
