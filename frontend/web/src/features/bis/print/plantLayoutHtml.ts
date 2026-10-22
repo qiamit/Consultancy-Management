@@ -89,7 +89,7 @@ const STYLES = `
   .pl-drawing-wrap { margin: 12px 0; text-align: center; }
   .pl-svg { width: 100%; max-height: 145mm; border: 1px solid #a8a29e; background: #fffdf8; }
   .cmpf-sign-right { margin-top: 14px; text-align: right; }
-  .cmpf-sign-right .pd-signatory { text-align: left; }
+  .cmpf-sign-right .pd-signatory { text-align: right; margin-left: auto; }
 `
 
 export function buildPlantLayoutHtml(data: PlantLayoutData): string {

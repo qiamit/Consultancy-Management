@@ -137,7 +137,7 @@ const STYLES = `
   .loc-map-wrap { margin: 10px 0 4px; text-align: center; border: 1.25px solid #000; background: #fff; }
   .loc-map-wrap svg { max-width: 100%; height: auto; display: block; margin: 0 auto; }
   .cmpf-sign-right { margin-top: 14px; text-align: right; }
-  .cmpf-sign-right .pd-signatory { text-align: left; }
+  .cmpf-sign-right .pd-signatory { text-align: right; margin-left: auto; }
 `
 
 export function buildLocationMapHtml(data: LocationMapData): string {

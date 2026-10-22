@@ -136,7 +136,7 @@ function continuationPage(
       <div>For <strong>${esc(data.applicantName || 'Applicant Firm')}</strong></div>
       ${signArea}
       <div class="c306-cont-sign-line"></div>
-      <div><strong>${esc(data.firmRepName || data.contactPerson || '—')}</strong>${designation ? ` (${esc(designation)})` : ''}</div>
+      <div><strong>${esc(data.firmRepName || data.contactPerson || '—')}</strong></div>${designation ? `<div>${esc(designation)}</div>` : ''}
     </div>
   </div>`
 }

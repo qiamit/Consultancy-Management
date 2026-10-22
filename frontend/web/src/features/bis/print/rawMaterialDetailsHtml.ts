@@ -109,7 +109,7 @@ const STYLES = `
   /* The shared table style pads cells 4px (!important); 2px here keeps a typical list on one page. */
   .pd-sheet table.rmd-table td { height: auto; padding-top: 2px !important; padding-bottom: 2px !important; line-height: 1.3; }
   .cmpf-sign-right { margin-top: 14px; text-align: right; }
-  .cmpf-sign-right .pd-signatory { text-align: left; }
+  .cmpf-sign-right .pd-signatory { text-align: right; margin-left: auto; }
 `
 
 export function buildRawMaterialDetailsHtml(data: RawMaterialDetailsData): string {

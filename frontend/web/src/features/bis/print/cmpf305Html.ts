@@ -157,7 +157,7 @@ function pageSignature(data: Cmpf305Data): string {
     <div>For <strong>${esc(data.applicantName || 'Applicant Firm')}</strong></div>
     ${signatureImage ? `<img class="c305-sign-image" src="${esc(signatureImage)}" alt="Authorized signatory stamp and signature" />` : '<div class="c305-sign-gap"></div>'}
     <div class="c305-sign-line"></div>
-    <div><strong>${esc(name)}</strong>${designation ? ` (${esc(designation)})` : ''}</div>
+    <div><strong>${esc(name)}</strong></div>${designation ? `<div>${esc(designation)}</div>` : ''}
   </div>`
 }
 

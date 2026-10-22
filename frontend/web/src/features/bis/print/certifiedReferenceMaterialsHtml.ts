@@ -109,7 +109,7 @@ function buildBody(data: CertifiedReferenceMaterialsData): string {
 const STYLES = `
   .crm-table td { height: 7.5mm; font-size: 9.5px; }
   .cmpf-sign-right { margin-top: 14px; text-align: right; }
-  .cmpf-sign-right .pd-signatory { text-align: left; }
+  .cmpf-sign-right .pd-signatory { text-align: right; margin-left: auto; }
 `
 
 export function buildCertifiedReferenceMaterialsHtml(data: CertifiedReferenceMaterialsData): string {

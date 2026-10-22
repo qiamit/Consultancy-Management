@@ -106,7 +106,7 @@ const STYLES = `
   .ms-scope-table th, .ms-scope-table td { border: 1px solid #111; padding: 4px 6px; text-align: left; vertical-align: top; }
   .ms-scope-table th { background: #f1f5f9; font-weight: 700; text-transform: uppercase; font-size: .9em; letter-spacing: .04em; }
   .cmpf-sign-right { margin-top: 14px; text-align: right; }
-  .cmpf-sign-right .pd-signatory { text-align: left; }
+  .cmpf-sign-right .pd-signatory { text-align: right; margin-left: auto; }
 `
 
 export function buildManufacturingScopeHtml(data: ManufacturingScopeData): string {

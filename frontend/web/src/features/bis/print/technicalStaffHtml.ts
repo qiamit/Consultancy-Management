@@ -1,5 +1,5 @@
 import type { BisPrintData } from './loadBisPrintData'
-import { printSignatoryDefaults } from './loadBisPrintData'
+import { designationForPerson, printSignatoryDefaults } from './loadBisPrintData'
 import { escapeHtml as esc } from './openPrintHtml'
 import {
   applicantContextFromPrintData,
@@ -274,7 +274,9 @@ export function technicalStaffDataFromPrintData(printData: BisPrintData): Techni
       ...ctx,
       rows,
       signatoryName: String(payload?.signatoryName ?? '').trim() || contact,
-      signatoryDesignation: String(payload?.signatoryDesignation ?? '').trim(),
+      signatoryDesignation:
+        String(payload?.signatoryDesignation ?? '').trim() ||
+        designationForPerson(printData, String(payload?.signatoryName ?? '').trim() || contact),
     }
   }
   return {

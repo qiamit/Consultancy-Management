@@ -79,14 +79,31 @@ export function printSignatoryDefaults(printData: BisPrintData): {
   if (overlay && (overlay.name.trim() || overlay.signatureImageUrl?.trim())) {
     return {
       signatoryName: overlay.name.trim() || printData.client.contactPerson,
-      signatoryDesignation: overlay.designation.trim(),
+      signatoryDesignation: overlay.designation.trim() || designationForPerson(printData, overlay.name.trim() || printData.client.contactPerson),
       signatureImageUrl: overlay.signatureImageUrl,
     }
   }
+  const name = printData.client.contactPerson
   return {
-    signatoryName: printData.client.contactPerson,
-    signatoryDesignation: '',
+    signatoryName: name,
+    signatoryDesignation: designationForPerson(printData, name),
   }
+}
+
+/** Designation of a person by name: Top Management rows, the Authorized Signatory, Technical Staff, then client contacts. */
+export function designationForPerson(printData: BisPrintData, personName: string): string {
+  const key = personName.trim().toLowerCase().replace(/\s+/g, ' ')
+  if (!key) return ''
+  const same = (value: unknown) => text(value).toLowerCase().replace(/\s+/g, ' ') === key
+  const tm = printData.topManagement ?? null
+  const rows = (payload: Record<string, unknown> | null | undefined) =>
+    (Array.isArray(payload?.rows) ? payload.rows : []).filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === 'object')
+  const fromTm = rows(tm).find((row) => same(row.personName))
+  if (text(fromTm?.designation)) return text(fromTm?.designation)
+  if (tm && same(tm.authorizedSignatoryName) && text(tm.authorizedSignatoryDesignation)) return text(tm.authorizedSignatoryDesignation)
+  const fromStaff = rows(printData.technicalManagement).find((row) => same(row.personName))
+  if (text(fromStaff?.designation)) return text(fromStaff?.designation)
+  return text(printData.client.topManagement.find((person) => same(person.name))?.designation)
 }
 
 function text(value: unknown): string {

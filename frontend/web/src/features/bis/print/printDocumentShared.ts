@@ -131,15 +131,14 @@ export function signatoryHtml(opts: {
     : `<div class="pd-sign-space"></div>`
   const name = (opts.name || '—').trim() || '—'
   const desig = (opts.designation || '').trim()
-  const nameLine = desig
-    ? `<strong>${esc(name)}</strong> (${esc(desig)})`
-    : `<strong>${esc(name)}</strong>`
+  // Designation sits on its own line right under the name, aligned with it.
   return `
 <div class="pd-signatory">
   <div class="pd-for">For <strong>${esc(opts.firmName)}</strong></div>
   ${signSpace}
   <div class="pd-sign-line"></div>
-  <div>${nameLine}</div>
+  <div><strong>${esc(name)}</strong></div>
+  ${desig ? `<div class="pd-sign-designation">${esc(desig)}</div>` : ''}
   ${opts.dateLine ? `<div>${opts.dateLine}</div>` : ''}
 </div>`
 }
