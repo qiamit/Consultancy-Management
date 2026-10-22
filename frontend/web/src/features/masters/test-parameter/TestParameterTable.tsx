@@ -3,13 +3,14 @@ import {
   useMemo,
   useRef,
   useState,
+  type DragEvent,
   type FocusEvent,
   type ReactNode,
   type RefObject,
   type SyntheticEvent,
 } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowDown, ArrowUp, ArrowUpDown, Check, FlaskConical, Plus, Trash2, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, ArrowUpDown, Check, FlaskConical, GripVertical, Plus, Trash2, X } from 'lucide-react'
 import { useIsLaboratoryDirector } from '@/components/lims/LaboratoryDirectorOnly'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -791,15 +792,18 @@ function InlineEditSaveCancelButtons({
   onSave,
   onCancel,
   itemName,
+  vertical = false,
 }: {
   canSave: boolean
   busy: boolean
   onSave: () => void
   onCancel: () => void
   itemName: string
+  /** Stacked, so the Action column stays one button wide. */
+  vertical?: boolean
 }) {
   return (
-    <div className="flex shrink-0 items-center gap-0.5">
+    <div className={cn('flex shrink-0 items-center gap-0.5', vertical && 'flex-col')}>
       <Button
         type="button"
         size="sm"
@@ -977,6 +981,7 @@ function InlineEditTableRow({
             onSave={onSave}
             onCancel={onCancel}
             itemName={form.itemName}
+            vertical
           />
         </div>
       </TableCell>
@@ -1110,6 +1115,7 @@ export function TestParameterTable({
   editBusy,
   onTrackSymbolTarget,
   allowDelete = true,
+  onReorder,
 }: {
   rows: TestParameterRow[]
   loading: boolean
@@ -1136,9 +1142,57 @@ export function TestParameterTable({
   onEditCancel: () => void
   editBusy: boolean
   onTrackSymbolTarget?: (target: SymbolCaretTarget) => void
-  /** false hides Delete (e.g. the FTR picker keeps master rows intact). */
+  /** false hides Delete. */
   allowDelete?: boolean
+  /** Set when rows may be dragged into a new order (dragged row lands before/after the target). */
+  onReorder?: (draggedId: string, targetId: string, place: 'before' | 'after') => void
 }) {
+  const [dragId, setDragId] = useState<string | null>(null)
+  const [dropTarget, setDropTarget] = useState<{ id: string; place: 'before' | 'after' } | null>(null)
+  // Refs: dragover/drop can fire before React re-renders with the new state.
+  const dragIdRef = useRef<string | null>(null)
+  const dropTargetRef = useRef<{ id: string; place: 'before' | 'after' } | null>(null)
+  const dragEnabled = Boolean(onReorder) && !editingRowId
+  const endDrag = () => {
+    dragIdRef.current = null
+    dropTargetRef.current = null
+    setDragId(null)
+    setDropTarget(null)
+  }
+  const dragRowProps = (row: TestParameterRow) =>
+    dragEnabled
+      ? {
+          draggable: true,
+          onDragStart: (e: DragEvent<HTMLTableRowElement>) => {
+            dragIdRef.current = row.id
+            setDragId(row.id)
+            e.dataTransfer.effectAllowed = 'move'
+            e.dataTransfer.setData('text/plain', row.id)
+          },
+          onDragOver: (e: DragEvent<HTMLTableRowElement>) => {
+            const dragging = dragIdRef.current
+            if (!dragging || dragging === row.id) return
+            e.preventDefault()
+            e.dataTransfer.dropEffect = 'move'
+            const rect = e.currentTarget.getBoundingClientRect()
+            const place = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after'
+            dropTargetRef.current = { id: row.id, place }
+            setDropTarget((prev) =>
+              prev?.id === row.id && prev.place === place ? prev : { id: row.id, place },
+            )
+          },
+          onDrop: (e: DragEvent<HTMLTableRowElement>) => {
+            e.preventDefault()
+            const dragging = dragIdRef.current
+            const target = dropTargetRef.current
+            if (dragging && target && dragging !== target.id) {
+              onReorder?.(dragging, target.id, target.place)
+            }
+            endDrag()
+          },
+          onDragEnd: endDrag,
+        }
+      : {}
   const [editFocus, setEditFocus] = useState<EditFocusField | null>(null)
   const startEdit = (row: TestParameterRow, target: EventTarget | null) => {
     if (!isDoubleClickEditTarget(target)) return
@@ -1323,14 +1377,14 @@ export function TestParameterTable({
           <div className={TABLE_MQ_SHOW}>
             <Table className={GRID_TABLE}>
               <colgroup>
-                <col style={{ width: '4%' }} />
-                <col style={{ width: '10%' }} />
-                <col style={{ width: '20%' }} />
-                <col style={{ width: '10%' }} />
-                <col style={{ width: '7.5%' }} />
-                <col style={{ width: '7.5%' }} />
-                <col style={{ width: '34%' }} />
-                <col style={{ width: '7%' }} />
+                <col style={{ width: '2.75rem' }} />
+                <col style={{ width: '11%' }} />
+                <col style={{ width: '21%' }} />
+                <col style={{ width: '11%' }} />
+                <col style={{ width: '8%' }} />
+                <col style={{ width: '8%' }} />
+                <col style={{ width: '41%' }} />
+                <col style={{ width: '3rem' }} />
               </colgroup>
               <TableHeader>
                 <TableRow className="border-stone-700 bg-stone-800 hover:bg-stone-800">
@@ -1396,7 +1450,7 @@ export function TestParameterTable({
                     onSort={onSort}
                     className={thBase}
                   />
-                  <TableHead className={thBase}>Action</TableHead>
+                  <TableHead className={cn(thBase, '!px-0 text-[10px] tracking-normal')}>Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1433,21 +1487,35 @@ export function TestParameterTable({
                   return (
                     <TableRow
                       key={r.id}
-                      title="Double-Click to Edit"
+                      title={dragEnabled ? 'Double-Click to Edit · Drag to Move' : 'Double-Click to Edit'}
                       onDoubleClick={(e) => startEdit(r, e.target)}
+                      {...dragRowProps(r)}
                       className={cn(
                         'cursor-pointer select-none',
                         selected ? rowSelectedClass : index % 2 === 0 ? rowEvenClass : rowOddClass,
+                        dragId === r.id && 'opacity-40',
+                        dropTarget?.id === r.id &&
+                          (dropTarget.place === 'before'
+                            ? '[&>td]:border-t-2 [&>td]:border-t-amber-600'
+                            : '[&>td]:border-b-2 [&>td]:border-b-amber-600'),
                       )}
                     >
                       <TableCell className={tdClass}>
-                        <input
-                          type="checkbox"
-                          className={checkboxClass}
-                          aria-label={`Select ${r.item_name}`}
-                          checked={selected}
-                          onChange={() => onToggle(r.id)}
-                        />
+                        <div className="flex items-center justify-center gap-0.5">
+                          {dragEnabled ? (
+                            <GripVertical
+                              className="h-3.5 w-3.5 shrink-0 cursor-grab text-stone-400"
+                              aria-hidden
+                            />
+                          ) : null}
+                          <input
+                            type="checkbox"
+                            className={checkboxClass}
+                            aria-label={`Select ${r.item_name}`}
+                            checked={selected}
+                            onChange={() => onToggle(r.id)}
+                          />
+                        </div>
                       </TableCell>
                       <TableCell data-edit-col="isCode" className={cn(tdClass, 'text-left')}>
                         <div className="font-mono text-[12px] font-semibold text-[#b45309]">
