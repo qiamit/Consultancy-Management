@@ -20,7 +20,7 @@ import {
 } from './certifiedReferenceMaterialsHtml'
 import { buildFactoryTestReportHtml, factoryTestReportDataFromPrintData } from './factoryTestReportHtml'
 import { factoryTestReportHasContent, parseFactoryTestReportPayload } from '../projects/factoryTestReportModel'
-import { loadBisPrintData, type BisPrintData } from './loadBisPrintData'
+import { documentSignatoryFromTopManagement, loadBisPrintData, type BisPrintData } from './loadBisPrintData'
 import {
   buildApplicationDetailsHtml,
   buildLegalDocumentsHtml,
@@ -659,33 +659,7 @@ export async function buildBisDocumentHtml(
   }
 
   if (tm) {
-    let name = ''
-    let designation = ''
-    let path = ''
-    let fileName = 'signature'
-
-    // Whichever signature checkbox is on (Authorized Signatory OR a TM person)
-    // — that signature is applied on all BIS documents.
-    if (Boolean(tm.applyAuthorizedSignatureToDocuments)) {
-      name = String(tm.authorizedSignatoryName ?? '').trim()
-      designation = String(tm.authorizedSignatoryDesignation ?? '').trim()
-      path = String(tm.authorizedSignatureStoragePath ?? '').trim()
-      fileName =
-        String(tm.authorizedSignatureFileName ?? '').trim() || 'authorized-signature'
-    } else if (Array.isArray(tm.rows)) {
-      const selected = tm.rows.find(
-        (item) =>
-          item &&
-          typeof item === 'object' &&
-          Boolean((item as Record<string, unknown>).applySignatureToDocuments),
-      ) as Record<string, unknown> | undefined
-      if (selected) {
-        name = String(selected.personName ?? '').trim()
-        designation = String(selected.designation ?? '').trim()
-        path = String(selected.signatureStoragePath ?? '').trim()
-        fileName = String(selected.signatureFileName ?? '').trim() || 'signature'
-      }
-    }
+    const { name, designation, path, fileName, authorized } = documentSignatoryFromTopManagement(tm)
 
     let signatureImageUrl: string | undefined
     if (path) {
@@ -699,7 +673,7 @@ export async function buildBisDocumentHtml(
     if (name || designation || signatureImageUrl) {
       data = {
         ...data,
-        client: name ? { ...data.client, contactPerson: name } : data.client,
+        client: name && !authorized ? { ...data.client, contactPerson: name } : data.client,
         documentSignatory: {
           name: name || data.client.contactPerson,
           designation,
@@ -995,30 +969,7 @@ export async function buildAppointmentLetterHtmlForTechnicalStaff(
 
   let data: BisPrintData = { ...printData, topManagement: tm }
   if (tm) {
-    let name = ''
-    let designation = ''
-    let path = ''
-    let fileName = 'signature'
-    if (Boolean(tm.applyAuthorizedSignatureToDocuments)) {
-      name = String(tm.authorizedSignatoryName ?? '').trim()
-      designation = String(tm.authorizedSignatoryDesignation ?? '').trim()
-      path = String(tm.authorizedSignatureStoragePath ?? '').trim()
-      fileName =
-        String(tm.authorizedSignatureFileName ?? '').trim() || 'authorized-signature'
-    } else if (Array.isArray(tm.rows)) {
-      const selected = tm.rows.find(
-        (item) =>
-          item &&
-          typeof item === 'object' &&
-          Boolean((item as Record<string, unknown>).applySignatureToDocuments),
-      ) as Record<string, unknown> | undefined
-      if (selected) {
-        name = String(selected.personName ?? '').trim()
-        designation = String(selected.designation ?? '').trim()
-        path = String(selected.signatureStoragePath ?? '').trim()
-        fileName = String(selected.signatureFileName ?? '').trim() || 'signature'
-      }
-    }
+    const { name, designation, path, fileName } = documentSignatoryFromTopManagement(tm)
     let signatureImageUrl: string | undefined
     if (path) {
       try {

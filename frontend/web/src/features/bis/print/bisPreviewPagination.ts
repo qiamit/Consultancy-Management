@@ -74,9 +74,16 @@ export function paginateSheetsIn(doc: Document): void {
   }
   /** Moves what does not fit into a new sheet right after this one; returns it (or null when nothing moved). */
   function split(sheet: HTMLElement): HTMLElement | null {
+    // A signature block marked pd-repeat-foot closes every page: it is kept out of the split and its height is
+    // reserved at the foot of this page (a copy stays here, the block itself goes with the moved part).
+    const allKids = flowChildren(sheet)
+    const lastKid = allKids[allKids.length - 1]
+    const foot = lastKid && lastKid.classList.contains('pd-repeat-foot') ? lastKid : null
+    const kids = foot ? allKids.slice(0, -1) : allKids
+    const view0 = doc.defaultView
+    const footSpace = foot ? foot.offsetHeight + (view0 ? parseFloat(view0.getComputedStyle(foot).marginTop || '0') : 0) : 0
     // A couple of pixels of tolerance: borders and rounding must not push a whole block to the next page.
-    const max = limitOf(sheet) + 2
-    const kids = flowChildren(sheet)
+    const max = limitOf(sheet) + 2 - footSpace
     let idx = -1
     for (let i = 0; i < kids.length; i++) { if (contentBottom(kids[i], sheet) > max) { idx = i; break } }
     if (idx < 0) return null
@@ -157,6 +164,10 @@ export function paginateSheetsIn(doc: Document): void {
     sheet.parentNode!.insertBefore(next, sheet.nextSibling)
     const leadIns = next.children.length
     kids.slice(moveFrom).forEach(function (k) { next.appendChild(k) })
+    if (foot) {
+      next.appendChild(foot)
+      sheet.appendChild(foot.cloneNode(true))
+    }
     // A carried caption goes above the carried table rows, in document order. Not for a closing block's
     // paragraph: that already follows the carried rows (e.g. a declaration below a table, then the signature).
     if (captionsMoved && moveFrom < idx && leadIns > (letterhead ? 1 : 0)) {

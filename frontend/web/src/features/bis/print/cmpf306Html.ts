@@ -131,7 +131,7 @@ function continuationPage(
       <div class="pd-date-block"><div>Date of Inspection: <strong>${esc(dateInsp)}</strong></div><div>Application No.: <strong>${esc(applicationNoDisplay(data.applicationNumber))}</strong></div></div>
     </div>
     ${equipmentTable(equipmentRows(rows, startIndex))}
-    <div class="c306-cont-signature">
+    <div class="c306-cont-signature pd-repeat-foot">
       <div>For <strong>${esc(data.applicantName || 'Applicant Firm')}</strong></div>
       ${signArea}
       <div class="c306-cont-sign-line"></div>

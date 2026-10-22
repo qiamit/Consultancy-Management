@@ -83,12 +83,75 @@ export function printSignatoryDefaults(printData: BisPrintData): {
       signatureImageUrl: overlay.signatureImageUrl,
     }
   }
+  // No signature applied: the Authorized Signatory chosen on Step 2 signs, else the client's contact person.
+  const authorized = printData.topManagement ? documentSignatoryFromTopManagement(printData.topManagement) : null
+  if (authorized?.authorized && authorized.name) {
+    return {
+      signatoryName: authorized.name,
+      signatoryDesignation: authorized.designation || designationForPerson(printData, authorized.name),
+    }
+  }
   const name = printData.client.contactPerson
   return {
     signatoryName: name,
     signatoryDesignation: designationForPerson(printData, name),
   }
 }
+
+/**
+ * Who signs the documents. The Authorized Signatory chosen on Step 2 (Top Management) signs every document;
+ * a signature image is used only when it is that person's own (its "apply on documents" box ticked).
+ * Without an authorized signatory, the person whose signature is applied signs (earlier behaviour).
+ */
+export function documentSignatoryFromTopManagement(tm: Record<string, unknown>): {
+  name: string
+  designation: string
+  path: string
+  fileName: string
+  /** True when the step 2 Authorized Signatory signs (the client's contact person stays as it is). */
+  authorized: boolean
+} {
+  const str = (v: unknown) => (typeof v === 'string' ? v.trim() : v == null ? '' : String(v).trim())
+  const norm = (v: string) => v.toLowerCase().replace(/\s+/g, ' ')
+  const rows = (Array.isArray(tm.rows) ? tm.rows : []).filter(
+    (item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object',
+  )
+  // The person whose signature image is applied on all documents.
+  const appliedRow = rows.find((item) => Boolean(item.applySignatureToDocuments))
+  const applied = Boolean(tm.applyAuthorizedSignatureToDocuments)
+    ? {
+        name: str(tm.authorizedSignatoryName),
+        designation: str(tm.authorizedSignatoryDesignation),
+        path: str(tm.authorizedSignatureStoragePath),
+        fileName: str(tm.authorizedSignatureFileName) || 'authorized-signature',
+      }
+    : appliedRow
+      ? {
+          name: str(appliedRow.personName),
+          designation: str(appliedRow.designation),
+          path: str(appliedRow.signatureStoragePath),
+          fileName: str(appliedRow.signatureFileName) || 'signature',
+        }
+      : { name: '', designation: '', path: '', fileName: 'signature' }
+  const appliedResult = { ...applied, authorized: false }
+  // The Authorized Signatory: a ticked Top Management row, else the separate authorized signatory fields.
+  const authorizedRow = rows.find((item) => Boolean(item.isAuthorizedSignatory))
+  const authorized = authorizedRow
+    ? { name: str(authorizedRow.personName), designation: str(authorizedRow.designation) }
+    : tm.includeAuthorizedSignatory !== false && str(tm.authorizedSignatoryName)
+      ? { name: str(tm.authorizedSignatoryName), designation: str(tm.authorizedSignatoryDesignation) }
+      : null
+  if (!authorized?.name) return appliedResult
+  const own = Boolean(applied.name) && norm(applied.name) === norm(authorized.name)
+  return {
+    name: authorized.name,
+    designation: authorized.designation || (own ? applied.designation : ''),
+    path: own ? applied.path : '',
+    fileName: own ? applied.fileName : 'signature',
+    authorized: true,
+  }
+}
+
 
 /** Designation of a person by name: Top Management rows, the Authorized Signatory, Technical Staff, then client contacts. */
 export function designationForPerson(printData: BisPrintData, personName: string): string {
@@ -103,7 +166,32 @@ export function designationForPerson(printData: BisPrintData, personName: string
   if (tm && same(tm.authorizedSignatoryName) && text(tm.authorizedSignatoryDesignation)) return text(tm.authorizedSignatoryDesignation)
   const fromStaff = rows(printData.technicalManagement).find((row) => same(row.personName))
   if (text(fromStaff?.designation)) return text(fromStaff?.designation)
-  return text(printData.client.topManagement.find((person) => same(person.name))?.designation)
+  const fromClient = text(printData.client.topManagement.find((person) => same(person.name))?.designation)
+  if (fromClient) return fromClient
+  // A spelling difference between the client record and Top Management ("Bhalotia" / "Bhalota") still matches.
+  const near = (value: unknown) => {
+    const other = text(value).toLowerCase().replace(/\s+/g, ' ')
+    return key.length >= 6 && other.length >= 6 && editDistance(key, other) <= 2
+  }
+  const nearPerson =
+    rows(tm).find((row) => near(row.personName) && text(row.designation)) ??
+    rows(printData.technicalManagement).find((row) => near(row.personName) && text(row.designation))
+  if (nearPerson) return text(nearPerson.designation)
+  return text(printData.client.topManagement.find((person) => near(person.name))?.designation)
+}
+
+/** Levenshtein distance (small names only). */
+function editDistance(a: string, b: string): number {
+  if (Math.abs(a.length - b.length) > 2) return 3
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j)
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i]
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(prev[j]! + 1, cur[j - 1]! + 1, prev[j - 1]! + (a[i - 1] === b[j - 1] ? 0 : 1))
+    }
+    prev = cur
+  }
+  return prev[b.length]!
 }
 
 function text(value: unknown): string {
@@ -269,10 +357,21 @@ async function loadIsCode(row: BisProjectRow): Promise<BisPrintIsCode> {
 
 /** Loads everything the Form-I / Authorization Letter builders need for one project row. */
 export async function loadBisPrintData(row: BisProjectRow): Promise<BisPrintData> {
-  const [client, isCode, company] = await Promise.all([
+  const [client, isCode, company, topManagement] = await Promise.all([
     loadClient(row),
     loadIsCode(row),
     loadCompanyPrintContext(),
+    // Step 2 Top Management: who the Authorized Signatory is (signs every document).
+    supabase
+      .from('bis_project_module_data')
+      .select('payload')
+      .eq('bis_project_id', row.id)
+      .eq('module_kind', 'top-management')
+      .maybeSingle()
+      .then(({ data }) => {
+        const payload = (data as { payload?: unknown } | null)?.payload
+        return payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : null
+      }, () => null),
   ])
-  return { row, client, isCode, company }
+  return { row, client, isCode, company, topManagement }
 }

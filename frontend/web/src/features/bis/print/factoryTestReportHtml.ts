@@ -366,8 +366,11 @@ export function factoryTestReportDataFromPrintData(printData: BisPrintData): Fac
     ...applicantContextFromPrintData(printData),
     productTitle: printData.isCode.title,
     reports: parsed.reports,
-    authorisedName: parsed.authorisedName || sig.signatoryName || printData.client.contactPerson,
-    authorisedDesignation: parsed.authorisedDesignation || sig.signatoryDesignation,
+    // The current signatory (step 2 Authorized Signatory) wins; the report only keeps a copy from when it was made.
+    authorisedName: sig.signatoryName || parsed.authorisedName || printData.client.contactPerson,
+    authorisedDesignation: sig.signatoryName
+      ? sig.signatoryDesignation
+      : parsed.authorisedDesignation || sig.signatoryDesignation,
     // Witnessed By — always from BIS Application Details when present.
     inspectionOfficerName:
       (printData.row.inspection_officer_name ?? '').trim() || parsed.inspectionOfficerName,

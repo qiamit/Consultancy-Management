@@ -31,46 +31,6 @@ export type Cmpf305Data = PrintApplicantContext & {
   rows: Cmpf305MachineryRow[]
 }
 
-/*
- * Continuation pages are filled by estimated row height (not a fixed row count) so the seal / signature at the
- * bottom of each page always fits. Measured on A4 at 11pt: a one-line row is ~24px, each extra wrapped line
- * ~18px, and ~717px is free for rows between the table header and the 10pt signature. Each page is filled
- * as far as it goes before the next one starts.
- */
-const CONTINUATION_ROWS_BUDGET_PX = 712
-const ROW_BASE_PX = 24
-const ROW_EXTRA_LINE_PX = 18
-/** Characters that fit on one line in each column (Sr. No. excluded). */
-const COLUMN_CHARS = { machineryName: 25, make: 19, capacityPerDay: 19, number: 9, remarks: 16 } as const
-
-function estimatedRowHeight(row: Cmpf305MachineryRow): number {
-  const lines = Math.max(
-    1,
-    ...(Object.keys(COLUMN_CHARS) as Array<keyof typeof COLUMN_CHARS>).map((key) =>
-      Math.ceil((row[key] ?? '').trim().length / COLUMN_CHARS[key]) || 1,
-    ),
-  )
-  return ROW_BASE_PX + (lines - 1) * ROW_EXTRA_LINE_PX
-}
-
-function chunkRowsForPages(rows: Cmpf305MachineryRow[]): Cmpf305MachineryRow[][] {
-  const chunks: Cmpf305MachineryRow[][] = []
-  let current: Cmpf305MachineryRow[] = []
-  let used = 0
-  for (const row of rows) {
-    const h = estimatedRowHeight(row)
-    if (current.length > 0 && used + h > CONTINUATION_ROWS_BUDGET_PX) {
-      chunks.push(current)
-      current = []
-      used = 0
-    }
-    current.push(row)
-    used += h
-  }
-  if (current.length > 0) chunks.push(current)
-  return chunks
-}
-
 function dateOrNa(raw: string): string {
   const value = (raw ?? '').trim()
   return value ? formatDisplayDate(value) : 'N/A'
@@ -153,7 +113,8 @@ function pageSignature(data: Cmpf305Data): string {
   const name = data.firmRepName.trim() || data.contactPerson.trim() || '—'
   const designation = data.firmRepDesignation.trim()
   const signatureImage = data.signatureImageUrl?.trim()
-  return `<div class="c305-page-signature">
+  // pd-repeat-foot: the signature closes every page the machinery list runs onto.
+  return `<div class="c305-page-signature pd-repeat-foot">
     <div>For <strong>${esc(data.applicantName || 'Applicant Firm')}</strong></div>
     ${signatureImage ? `<img class="c305-sign-image" src="${esc(signatureImage)}" alt="Authorized signatory stamp and signature" />` : '<div class="c305-sign-gap"></div>'}
     <div class="c305-sign-line"></div>
@@ -168,9 +129,10 @@ function continuationPage(
   rows: Cmpf305MachineryRow[],
   startIndex: number,
 ): string {
+  // pd-repeat-head: when the rows run onto another page, this block opens that page too.
   return `<div class="pd-sheet c305-continuation">
     ${letterheadHtml(data)}
-    <div class="pd-to-row c305-recipient">
+    <div class="pd-to-row c305-recipient pd-repeat-head">
       <div class="pd-to-block">${toBlockHtml(data.bisBranchName, data.bisBranchState)}</div>
       <div class="pd-date-block"><div>Date of Inspection: <strong>${esc(dateInsp)}</strong></div><div>Application No.: <strong>${esc(appNo)}</strong></div></div>
     </div>
@@ -184,13 +146,9 @@ function buildBody(data: Cmpf305Data): string {
   const dateApp = dateOrNa(data.dateOfApplication)
   const dateInsp = inspectionDateOrToday(data.dateOfInspection)
   const rows = data.rows.filter((row) => Object.values(row).some((value) => value.trim()))
-  const chunks = chunkRowsForPages(rows)
-  let start = 0
-  return firstPage(data, appNo, dateApp, dateInsp) + chunks.map((chunk) => {
-    const page = continuationPage(data, appNo, dateInsp, chunk, start)
-    start += chunk.length
-    return page
-  }).join('')
+  // All rows go on one sheet; the A4 paginator (bisPreviewPagination) measures the real row heights, fills each
+  // page as far as it goes and repeats the letterhead, recipient block, table header and signature on every page.
+  return firstPage(data, appNo, dateApp, dateInsp) + (rows.length ? continuationPage(data, appNo, dateInsp, rows, 0) : '')
 }
 
 const STYLES = `

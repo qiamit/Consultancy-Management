@@ -233,7 +233,7 @@ export async function loadCmpf311MasterData(isCodeId: string): Promise<{
 
 export async function downloadCmpf311MasterFile(option: Cmpf311MasterFileOption): Promise<File> {
   let lastError: unknown
-  for (const bucket of ['is-code-files', 'is_code_documents', 'documents']) {
+  for (const bucket of ['is-code-files']) {
     const result = await supabase.storage.from(bucket).download(option.storagePath)
     if (!result.error && result.data) {
       return new File([result.data], option.fileName, { type: option.fileName.toLowerCase().endsWith('.pdf') ? 'application/pdf' : result.data.type })

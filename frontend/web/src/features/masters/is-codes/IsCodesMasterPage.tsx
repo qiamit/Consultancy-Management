@@ -1052,28 +1052,18 @@ export default function IsCodesMasterPage() {
     storagePath: string,
     opts?: { download?: string | boolean },
   ): Promise<string | undefined> => {
-    const buckets = [BUCKET, 'is_code_documents', 'documents'] as const
-    for (const bucket of buckets) {
-      try {
-        const { data, error } = await supabase.storage
-          .from(bucket)
-          .createSignedUrl(
-            storagePath,
-            60 * 10,
-            opts?.download != null ? { download: opts.download } : undefined,
-          )
-        if (!error && data?.signedUrl) return data.signedUrl
-      } catch {
-        // try next bucket
-      }
-      try {
-        const { data: blob, error: dlErr } = await supabase.storage
-          .from(bucket)
-          .download(storagePath)
-        if (!dlErr && blob) return URL.createObjectURL(blob)
-      } catch {
-        // try next bucket
-      }
+    // One request: signing fails only when the file is missing from storage (a download would fail too).
+    try {
+      const { data, error } = await supabase.storage
+        .from(BUCKET)
+        .createSignedUrl(
+          storagePath,
+          60 * 10,
+          opts?.download != null ? { download: opts.download } : undefined,
+        )
+      if (!error && data?.signedUrl) return data.signedUrl
+    } catch {
+      // missing file
     }
     return undefined
   }
