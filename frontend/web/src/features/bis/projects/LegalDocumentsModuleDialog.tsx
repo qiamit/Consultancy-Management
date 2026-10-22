@@ -1822,7 +1822,7 @@ export function LegalDocumentsModuleDialog({
               variant="ghost"
               size="sm"
               disabled={busy || saving}
-              className="absolute right-12 top-1/2 h-8 w-8 -translate-y-1/2 rounded-none border border-amber-500/60 bg-stone-800 p-0 text-amber-200 shadow-sm transition-colors hover:border-amber-400 hover:bg-amber-600 hover:text-white"
+              className="absolute right-11 top-2 z-10 h-7 w-7 rounded-none border border-amber-500/60 bg-stone-800 p-0 text-amber-200 shadow-sm transition-colors hover:border-amber-400 hover:bg-amber-600 hover:text-white"
               title="Import from Another Application"
               aria-label="Import from Another Application"
               onClick={() => setBrandImportOpen(true)}
@@ -1836,7 +1836,7 @@ export function LegalDocumentsModuleDialog({
               variant="ghost"
               size="sm"
               disabled={busy || saving}
-              className="absolute right-12 top-1/2 h-8 w-8 -translate-y-1/2 rounded-none border border-amber-500/60 bg-stone-800 p-0 text-amber-200 shadow-sm transition-colors hover:border-amber-400 hover:bg-amber-600 hover:text-white"
+              className="absolute right-11 top-2 z-10 h-7 w-7 rounded-none border border-amber-500/60 bg-stone-800 p-0 text-amber-200 shadow-sm transition-colors hover:border-amber-400 hover:bg-amber-600 hover:text-white"
               title="Import from Another Application"
               aria-label="Import from Another Application"
               onClick={() => setFlowImportOpen(true)}
