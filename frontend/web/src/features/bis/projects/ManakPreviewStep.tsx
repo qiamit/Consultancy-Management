@@ -14,6 +14,7 @@ import type { BisProjectRow } from './types'
 import {
   APPLICATION_DOCUMENT_COMPONENT_KINDS,
   buildApplicationDocumentRows,
+  clientLegalPreviewFiles,
   isImageAsset,
   type PreviewFile,
   type PreviewSelection,
@@ -96,12 +97,14 @@ export function ManakPreviewStep({
     void Promise.all([
       Promise.all(kinds.map((k) => fetchBisModulePayload(row.id, k).catch(() => null))),
       supabase.from('bis_project_files').select('id, file_name, storage_path, doc_kind').eq('bis_project_id', row.id).order('created_at', { ascending: true }),
+      // The application (no other source) also prints the client's legal documents from Client Master.
+      source ? Promise.resolve([] as PreviewFile[]) : clientLegalPreviewFiles(row.client_id),
     ])
-      .then(([loaded, filesRes]) => {
+      .then(([loaded, filesRes, clientFiles]) => {
         if (!active) return
         setPayloads(Object.fromEntries(kinds.map((k, i) => [k, loaded[i] as Rec | null])))
         const list = ((filesRes.data ?? []) as PreviewFile[]).filter((f) => f.storage_path && !isImageAsset(f.doc_kind))
-        setFiles(list)
+        setFiles([...clientFiles, ...list])
       })
       .catch((err: unknown) => toast.error(err instanceof Error ? err.message : 'Could not load the application documents.'))
       .finally(() => {
@@ -180,7 +183,7 @@ export function ManakPreviewStep({
   const viewFile = async (file: PreviewFile) => {
     const target = openPendingPrintWindow(`Opening ${file.file_name}…`)
     try {
-      const urls = await createBisProjectFileUrls(file.storage_path, file.file_name)
+      const urls = await createBisProjectFileUrls(file.storage_path, file.file_name, file.bucket)
       if (!urls.viewUrl) throw new Error('Unable to open this file.')
       // Re-type the bytes so the browser shows the file in the tab instead of downloading it.
       const res = await fetch(urls.viewUrl)

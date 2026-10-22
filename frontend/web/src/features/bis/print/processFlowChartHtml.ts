@@ -238,6 +238,9 @@ const STYLES = `
       background: #fff !important;
       border-color: #000 !important;
     }
+    /* .pfc-fit is exactly the scaled chart's size; the unscaled layout box inside it (transform does not
+       shrink layout) must stay clipped, or Chrome sees a page wider than A4 and shrinks the whole PDF. */
+    .pfc-fit { overflow: hidden !important; }
     .pfc-box {
       background: #fff !important;
       border-color: #000 !important;

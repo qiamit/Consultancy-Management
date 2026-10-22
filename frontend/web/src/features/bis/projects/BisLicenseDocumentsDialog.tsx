@@ -683,9 +683,14 @@ export function BisLicenseDocumentsDialog({
   /** Uploaded project files merged into one PDF (images become pages). */
   const uploadedFilesPdf = async (files: PreviewFile[]): Promise<Blob | null> => {
     if (!row || files.length === 0) return null
-    const bytes = await buildMergedBisProjectFilesPdf(row.id, [...new Set(files.map((f) => f.doc_kind))], {
+    const own = files.filter((f) => !f.bucket)
+    const bytes = await buildMergedBisProjectFilesPdf(row.id, [...new Set(own.map((f) => f.doc_kind))], {
       ignoreUnsupported: true,
-      storagePaths: files.map((f) => f.storage_path),
+      storagePaths: own.map((f) => f.storage_path),
+      // Client Master legal documents live in their own bucket.
+      extraFiles: files
+        .filter((f) => f.bucket)
+        .map((f) => ({ file_name: f.file_name, storage_path: f.storage_path, mime_type: null, bucket: f.bucket })),
     })
     return bytes ? pdfBlob(bytes) : null
   }

@@ -12,6 +12,8 @@ type StoredFile = {
   file_name: string
   storage_path: string
   mime_type: string | null
+  /** Set for a file kept outside the project's bucket (e.g. Client Master legal documents). */
+  bucket?: string
 }
 
 function formatApiError(err: unknown): string {
@@ -76,9 +78,9 @@ async function listStoredFiles(
   return (Array.isArray(data) ? data : []) as StoredFile[]
 }
 
-async function downloadBytes(storagePath: string): Promise<Uint8Array> {
+async function downloadBytes(storagePath: string, bucket: string = BIS_PROJECT_FILES_BUCKET): Promise<Uint8Array> {
   const { data, error } = await supabase.storage
-    .from(BIS_PROJECT_FILES_BUCKET)
+    .from(bucket)
     .download(storagePath)
   if (error) throw error
   return new Uint8Array(await data.arrayBuffer())
@@ -94,12 +96,15 @@ export async function buildMergedBisProjectFilesPdf(
     /** Restrict a shared category to the files referenced by the selected document rows. */
     storagePaths?: readonly string[]
     shouldIncludeFile?: (file: StoredFile, bytes: Uint8Array) => boolean | Promise<boolean>
+    /** Files from other buckets, merged first (the client's legal documents belong to Step 1). */
+    extraFiles?: readonly StoredFile[]
   } = {},
 ): Promise<Uint8Array | null> {
-  const stored = await listStoredFiles(projectId, docKinds)
+  const stored = docKinds.length ? await listStoredFiles(projectId, docKinds) : []
   const requested = options.storagePaths ? new Set(options.storagePaths) : null
-  const files = requested ? stored.filter((file) => requested.has(file.storage_path)) : stored
-  if (options.strict && requested && requested.size !== new Set(files.map((file) => file.storage_path)).size) {
+  const matched = requested ? stored.filter((file) => requested.has(file.storage_path)) : stored
+  const files = [...(options.extraFiles ?? []), ...matched]
+  if (options.strict && requested && requested.size !== new Set(matched.map((file) => file.storage_path)).size) {
     throw new Error('One or more selected attachments are no longer available. Reopen the document editor and upload them again.')
   }
   if (files.length === 0) return null
@@ -110,7 +115,7 @@ export async function buildMergedBisProjectFilesPdf(
   const skipped: string[] = []
 
   for (const file of files) {
-    const bytes = await downloadBytes(file.storage_path)
+    const bytes = await downloadBytes(file.storage_path, file.bucket)
     if (options.shouldIncludeFile && !(await options.shouldIncludeFile(file, bytes))) continue
     included += 1
     const assetKind = detectBisPdfAssetKind(file, bytes)
