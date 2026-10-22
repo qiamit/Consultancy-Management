@@ -99,6 +99,7 @@ export function TestParameterHeaderBar({
                 'h-8 shrink-0 gap-1 px-2 text-[11px] font-semibold sm:px-2.5 sm:text-xs',
               )}
               onClick={onAddSymbol}
+              data-keep-inline-edit=""
               aria-label="Add Symbol"
               title="Add Symbol into Test Parameter, Unit, or Requirements"
             >

@@ -185,6 +185,10 @@ export default function TestParameterMasterPage() {
   const editingId = editId && editId !== 'new' ? editId : null
   const hydratedEditRef = useRef<string | null>(null)
   const [editForm, setEditForm] = useState<TestParameterFormType>(() => emptyTestParameterForm())
+  /** The form as it was when the row opened (or was last saved) — only real changes are written. */
+  const editOriginalRef = useRef('')
+  const editingIdRef = useRef<string | null>(null)
+  editingIdRef.current = editingId
 
   const importInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -627,7 +631,7 @@ export default function TestParameterMasterPage() {
       resolveTestMethodDisplay(row.test_method, row.is_code_id, row.is_code_label) ||
       row.test_method ||
       ''
-    setEditForm({
+    const form: TestParameterFormType = {
       isCodeId: row.is_code_id ?? '',
       isCodeLabel: row.is_code_label ?? '',
       clauseNo: row.clause_no ?? '',
@@ -637,7 +641,9 @@ export default function TestParameterMasterPage() {
       specificRequirement: row.specific_requirement ?? '',
       department: row.department ?? '',
       designation: row.designation ?? '',
-    })
+    }
+    editOriginalRef.current = JSON.stringify(form)
+    setEditForm(form)
   }
 
   useEffect(() => {
@@ -660,6 +666,8 @@ export default function TestParameterMasterPage() {
   }, [editId, rows, listLoading, isCodes, setEdit])
 
   const handleEdit = (row: TestParameterRow) => {
+    // Double-click on another row: the row being edited is saved first.
+    if (editingId && editingId !== row.id) commitInlineEdit(false)
     setSaveMessage(null)
     hydrateEditForm(row)
     hydratedEditRef.current = row.id
@@ -672,30 +680,43 @@ export default function TestParameterMasterPage() {
     setEditForm(emptyTestParameterForm())
   }
 
-  const handleInlineEditSave = () => {
+  /** Saves the open row if it changed; `close` also ends editing (unless another row opened meanwhile). */
+  const commitInlineEdit = (close: boolean) => {
+    const id = editingId
+    const form = editForm
+    if (!id) return
+    const closeIfCurrent = () => {
+      if (close && editingIdRef.current === id) handleInlineEditCancel()
+    }
+    if (JSON.stringify(form) === editOriginalRef.current) {
+      closeIfCurrent()
+      return
+    }
     if (!canEdit) {
       setSaveMessage(VIEW_ONLY_MSG)
       return
     }
+    if (normalizeText(form.itemName).length === 0) {
+      setSaveMessage('Test Parameter name is required.')
+      return
+    }
+    editOriginalRef.current = JSON.stringify(form)
     void (async () => {
-      if (!editingId || saveLoading || normalizeText(editForm.itemName).length === 0) return
       setSaveMessage(null)
       setSaveLoading(true)
       try {
-        const payload = buildInsertPayload(editForm)
+        const payload = buildInsertPayload(form)
         const { data, error } = await supabase
           .from('test_parameters')
           .update(payload)
-          .eq('id', editingId)
+          .eq('id', id)
           .select('id')
         if (error) throw error
         if (!data || data.length === 0) {
           throw new Error('You do not have edit access for this record (view-only).')
         }
         setSaveMessage('Saved successfully.')
-        hydratedEditRef.current = null
-        setEdit(null)
-        setEditForm(emptyTestParameterForm())
+        closeIfCurrent()
         await loadRows()
       } catch (err) {
         setSaveMessage(formatSupabaseError(err))
@@ -704,6 +725,8 @@ export default function TestParameterMasterPage() {
       }
     })()
   }
+
+  const handleInlineEditSave = () => commitInlineEdit(true)
 
   const buildInsertPayload = (source: TestParameterFormType) => {
     const isRow = isCodes.find((x) => x.id === source.isCodeId)

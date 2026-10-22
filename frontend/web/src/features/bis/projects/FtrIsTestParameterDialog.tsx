@@ -371,57 +371,80 @@ export function FtrIsTestParameterDialog({
     specific_requirement: toProperTitleCase(normalizeText(form.specificRequirement)) || null,
   })
 
-  const handleEdit = (row: TestParameterRow) => {
-    if (disabled || editBusy) return
+  /** The form as it was when the row opened (or was last saved) — only real changes are written. */
+  const editOriginalRef = useRef('')
+
+  const saveEdit = async (id: string, form: TestParameterForm): Promise<boolean> => {
+    try {
+      const before = rows.find((r) => r.id === id)
+      const clauseChanged = normalizeText(before?.clause_no ?? '') !== normalizeText(form.clauseNo)
+      const { data, error: upErr } = await supabase
+        .from('test_parameters')
+        // A new clause number moves the row to that clause's place.
+        .update({ ...buildFieldsPayload(form), ...(clauseChanged ? { display_order: null } : {}) })
+        .eq('id', id)
+        .select(PARAM_COLUMNS)
+      if (upErr) throw upErr
+      const updated = (Array.isArray(data) ? data[0] : null) as FtrMasterParam | null
+      if (!updated) throw new Error('You do not have edit access for this record (view-only).')
+      setRows((prev) => prev.map((r) => (r.id === updated.id ? updated : r)))
+      onParamUpdated?.(updated)
+      setSaveMessage('Saved to Test Parameter master.')
+      return true
+    } catch (err) {
+      setSaveMessage(err instanceof Error ? err.message : 'Unable to save test parameter.')
+      return false
+    }
+  }
+
+  /** Saves the open row if it changed; `close` also ends editing (unless another row opened meanwhile). */
+  const commitEdit = (close: boolean) => {
+    const id = editingId
+    const form = editForm
+    if (!id) return
+    const closeIfCurrent = () => {
+      if (close) setEditingId((cur) => (cur === id ? null : cur))
+    }
+    if (JSON.stringify(form) === editOriginalRef.current) {
+      closeIfCurrent()
+      return
+    }
+    if (normalizeText(form.itemName).length === 0) {
+      setSaveMessage('Test Parameter name is required.')
+      return
+    }
+    editOriginalRef.current = JSON.stringify(form)
+    setEditBusy(true)
     setSaveMessage(null)
-    setEditForm(
-      withLockedIs(
-        {
-          ...emptyTestParameterForm(),
-          clauseNo: row.clause_no ?? '',
-          unitValue: row.unit_value ?? '',
-          testMethod: row.test_method ?? '',
-          itemName: row.item_name ?? '',
-          specificRequirement: row.specific_requirement ?? '',
-        },
-        lockedId,
-        lockedLabel,
-      ),
+    void saveEdit(id, form).then((ok) => {
+      setEditBusy(false)
+      if (ok) closeIfCurrent()
+    })
+  }
+
+  const handleEdit = (row: TestParameterRow) => {
+    if (disabled) return
+    // Double-click on another row: the row being edited is saved first.
+    if (editingId && editingId !== row.id) commitEdit(false)
+    setSaveMessage(null)
+    const form = withLockedIs(
+      {
+        ...emptyTestParameterForm(),
+        clauseNo: row.clause_no ?? '',
+        unitValue: row.unit_value ?? '',
+        testMethod: row.test_method ?? '',
+        itemName: row.item_name ?? '',
+        specificRequirement: row.specific_requirement ?? '',
+      },
+      lockedId,
+      lockedLabel,
     )
+    editOriginalRef.current = JSON.stringify(form)
+    setEditForm(form)
     setEditingId(row.id)
   }
 
-  const handleEditSave = () => {
-    void (async () => {
-      if (!editingId || editBusy || normalizeText(editForm.itemName).length === 0) return
-      setEditBusy(true)
-      setSaveMessage(null)
-      try {
-        const before = rows.find((r) => r.id === editingId)
-        const clauseChanged =
-          normalizeText(before?.clause_no ?? '') !== normalizeText(editForm.clauseNo)
-        const { data, error: upErr } = await supabase
-          .from('test_parameters')
-          // A new clause number moves the row to that clause's place.
-          .update({ ...buildFieldsPayload(editForm), ...(clauseChanged ? { display_order: null } : {}) })
-          .eq('id', editingId)
-          .select(
-            PARAM_COLUMNS,
-          )
-        if (upErr) throw upErr
-        const updated = (Array.isArray(data) ? data[0] : null) as FtrMasterParam | null
-        if (!updated) throw new Error('You do not have edit access for this record (view-only).')
-        setRows((prev) => prev.map((r) => (r.id === updated.id ? updated : r)))
-        onParamUpdated?.(updated)
-        setEditingId(null)
-        setSaveMessage('Saved to Test Parameter master.')
-      } catch (err) {
-        setSaveMessage(err instanceof Error ? err.message : 'Unable to save test parameter.')
-      } finally {
-        setEditBusy(false)
-      }
-    })()
-  }
+  const handleEditSave = () => commitEdit(true)
 
   /** Drag-and-drop: save the whole IS order (1, 2, 3 …) so later rows keep their places. */
   const handleReorder = (draggedId: string, targetId: string, place: 'before' | 'after') => {

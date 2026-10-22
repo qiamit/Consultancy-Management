@@ -5,6 +5,7 @@ import {
   useState,
   type DragEvent,
   type FocusEvent,
+  type KeyboardEvent,
   type ReactNode,
   type RefObject,
   type SyntheticEvent,
@@ -786,49 +787,40 @@ function InlineEntryCard({
   )
 }
 
-function InlineEditSaveCancelButtons({
+function InlineEditSaveButton({
   canSave,
   busy,
   onSave,
-  onCancel,
   itemName,
-  vertical = false,
 }: {
   canSave: boolean
   busy: boolean
   onSave: () => void
-  onCancel: () => void
   itemName: string
-  /** Stacked, so the Action column stays one button wide. */
-  vertical?: boolean
 }) {
   return (
-    <div className={cn('flex shrink-0 items-center gap-0.5', vertical && 'flex-col')}>
-      <Button
-        type="button"
-        size="sm"
-        className={cn('h-8 w-8 rounded-none p-0', limsPrimaryBtnClass)}
-        disabled={!canSave}
-        aria-label={`Save ${itemName}`}
-        title="Save"
-        onClick={onSave}
-      >
-        <Check size={16} className={busy ? 'animate-pulse' : undefined} />
-      </Button>
-      <Button
-        type="button"
-        size="sm"
-        variant="ghost"
-        className="h-8 w-8 rounded-none p-0 text-stone-600 hover:bg-stone-100 hover:text-stone-800"
-        disabled={busy}
-        aria-label={`Cancel editing ${itemName}`}
-        title="Cancel"
-        onClick={onCancel}
-      >
-        <X size={16} />
-      </Button>
-    </div>
+    <Button
+      type="button"
+      size="sm"
+      className={cn('h-8 w-8 shrink-0 rounded-none p-0', limsPrimaryBtnClass)}
+      disabled={!canSave}
+      aria-label={`Save ${itemName}`}
+      title="Save (also saves when you leave the row)"
+      onClick={onSave}
+    >
+      <Check size={16} className={busy ? 'animate-pulse' : undefined} />
+    </Button>
   )
+}
+
+/** Escape cancels the edit without closing the surrounding dialog. */
+function cancelOnEscape(onCancel: () => void) {
+  return (e: KeyboardEvent<HTMLElement>) => {
+    if (e.key !== 'Escape') return
+    e.preventDefault()
+    e.stopPropagation()
+    onCancel()
+  }
 }
 
 function RowActions({
@@ -912,6 +904,8 @@ function InlineEditTableRow({
   return (
     <TableRow
       ref={rowRef}
+      data-editing-row=""
+      onKeyDown={cancelOnEscape(onCancel)}
       className={cn(inlineEditTone, 'border-l-2 border-l-sky-500')}
     >
       <TableCell className={tdClass} />
@@ -975,13 +969,11 @@ function InlineEditTableRow({
       </TableCell>
       <TableCell className={tdClass}>
         <div className="flex justify-center">
-          <InlineEditSaveCancelButtons
+          <InlineEditSaveButton
             canSave={canSave}
             busy={editBusy}
             onSave={onSave}
-            onCancel={onCancel}
             itemName={form.itemName}
-            vertical
           />
         </div>
       </TableCell>
@@ -1018,6 +1010,8 @@ function InlineEditCard({
   return (
     <article
       ref={cardRef}
+      data-editing-row=""
+      onKeyDown={cancelOnEscape(onCancel)}
       className={cn(
         'overflow-hidden border-2 border-sky-600/50 font-jakarta shadow-sm ring-1 ring-sky-700/20',
         inlineEditTone,
@@ -1074,11 +1068,10 @@ function InlineEditCard({
             {...reqHandlers}
           />
           <div className="flex justify-end pt-0.5">
-            <InlineEditSaveCancelButtons
+            <InlineEditSaveButton
               canSave={canSave}
               busy={editBusy}
               onSave={onSave}
-              onCancel={onCancel}
               itemName={form.itemName}
             />
           </div>
@@ -1147,6 +1140,36 @@ export function TestParameterTable({
   /** Set when rows may be dragged into a new order (dragged row lands before/after the target). */
   onReorder?: (draggedId: string, targetId: string, place: 'before' | 'after') => void
 }) {
+  // Leaving the row saves it: a click anywhere else on the page / dialog commits the edit.
+  // A click on another row waits a moment, so a double-click there can switch rows first
+  // (the parent saves the old row while switching) without the rows jumping under the mouse.
+  const tableRootRef = useRef<HTMLDivElement | null>(null)
+  const onEditSaveRef = useRef(onEditSave)
+  onEditSaveRef.current = onEditSave
+  const editingIdRef = useRef(editingRowId)
+  editingIdRef.current = editingRowId
+  useEffect(() => {
+    if (!editingRowId) return
+    const id = editingRowId
+    const onDown = (e: MouseEvent) => {
+      const t = e.target
+      if (!(t instanceof Element)) return
+      if (t.closest('[data-editing-row], [data-keep-inline-edit]')) return
+      const root = tableRootRef.current
+      // Another dialog on top (Add Symbol, confirm…) is not leaving the row.
+      if (t.closest('[role=dialog]') !== (root?.closest('[role=dialog]') ?? null)) return
+      if (root?.contains(t) && t.closest('[data-row-id]')) {
+        window.setTimeout(() => {
+          if (editingIdRef.current === id) onEditSaveRef.current()
+        }, 350)
+        return
+      }
+      onEditSaveRef.current()
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [editingRowId])
+
   const [dragId, setDragId] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<{ id: string; place: 'before' | 'after' } | null>(null)
   // Refs: dragover/drop can fire before React re-renders with the new state.
@@ -1212,7 +1235,7 @@ export function TestParameterTable({
   }
 
   return (
-    <div className={cn(limsPanelClass, 'flex h-full min-h-0 flex-col bg-[#f7f3eb]')}>
+    <div ref={tableRootRef} className={cn(limsPanelClass, 'flex h-full min-h-0 flex-col bg-[#f7f3eb]')}>
       {error ? (
         <p className="shrink-0 px-3 pt-3 text-sm text-red-600 sm:px-5 sm:pt-4">{error}</p>
       ) : null}
@@ -1289,6 +1312,7 @@ export function TestParameterTable({
               return (
                 <article
                   key={r.id}
+                  data-row-id={r.id}
                   title="Double-Click to Edit"
                   onDoubleClick={(e) => startEdit(r, e.target)}
                   className={cn(
@@ -1487,6 +1511,7 @@ export function TestParameterTable({
                   return (
                     <TableRow
                       key={r.id}
+                      data-row-id={r.id}
                       title={dragEnabled ? 'Double-Click to Edit · Drag to Move' : 'Double-Click to Edit'}
                       onDoubleClick={(e) => startEdit(r, e.target)}
                       {...dragRowProps(r)}
