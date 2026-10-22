@@ -1033,7 +1033,7 @@ export function buildProcessFlowHtmlMarkup(
     // Undo an earlier horizontal stretch before measuring again.
     if(canvas.dataset.natW){
       canvas.style.width=canvas.dataset.natW+"px";
-      Array.prototype.forEach.call(canvas.children,function(el){ if(el.dataset.left){ el.style.left=el.dataset.left; el.style.width=el.dataset.width; } });
+      Array.prototype.forEach.call(canvas.children,function(el){ if(el.dataset.left){ el.style.left=el.dataset.left; el.style.width=el.dataset.width; } if(el.dataset.fs){ el.style.fontSize=el.dataset.fs; el.style.lineHeight=""; } });
     }
     var natW=Math.max(canvas.scrollWidth,canvas.offsetWidth,1);
     var natH=Math.max(canvas.scrollHeight,canvas.offsetHeight,1);
@@ -1056,6 +1056,21 @@ export function buildProcessFlowHtmlMarkup(
       natW=natW*k;
       canvas.style.width=natW+"px";
     }
+    // Readable text after scaling: aim for about 10.5px on paper (never below 8px), wrapping to more lines
+    // inside the (now wider) box instead of shrinking.
+    var target=10.5/s, floor=8/s;
+    Array.prototype.forEach.call(canvas.querySelectorAll(".pfc-box"),function(box){
+      if(!box.dataset.fs) box.dataset.fs=box.style.fontSize;
+      var w=parseFloat(box.style.width)-16, h=parseFloat(box.style.height)-4, len=(box.textContent||"").trim().length||1;
+      var fs=Math.max(parseFloat(box.dataset.fs)||14,target);
+      while(fs>floor){
+        var perLine=Math.max(1,Math.floor(w/(fs*0.58)));
+        if(Math.ceil(len/perLine)*fs*1.1<=h) break;
+        fs-=0.5;
+      }
+      box.style.fontSize=fs+"px";
+      box.style.lineHeight="1.1";
+    });
     scaleEl.style.width=natW+"px";
     scaleEl.style.height=natH+"px";
     scaleEl.style.transform="scale("+s+")";
