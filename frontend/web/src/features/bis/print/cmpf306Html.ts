@@ -116,7 +116,6 @@ function continuationPage(
   data: Cmpf306Data,
   rows: Cmpf306EquipmentRow[],
   startIndex: number,
-  dateApp: string,
   dateInsp: string,
 ): string {
   const signature = data.signatureImageUrl?.trim()
@@ -129,7 +128,7 @@ function continuationPage(
     ${letterheadHtml(data)}
     <div class="pd-to-row c306-recipient pd-repeat-head">
       <div class="pd-to-block">${toBlockHtml(data.bisBranchName, data.bisBranchState)}</div>
-      <div class="pd-date-block"><div>Application No.: <strong>${esc(applicationNoDisplay(data.applicationNumber))}</strong></div><div>Date of Application: <strong>${esc(dateApp)}</strong></div><div>Date of Inspection: <strong>${esc(dateInsp)}</strong></div></div>
+      <div class="pd-date-block"><div>Date of Inspection: <strong>${esc(dateInsp)}</strong></div><div>Application No.: <strong>${esc(applicationNoDisplay(data.applicationNumber))}</strong></div></div>
     </div>
     ${equipmentTable(equipmentRows(rows, startIndex))}
     <div class="c306-cont-signature">
@@ -148,7 +147,7 @@ function buildBody(data: Cmpf306Data): string {
   const parts = [firstPage(data, dateApp, dateInsp)]
   // All rows go on one sheet; the A4 paginator (bisPreviewPagination) fills each page as far as it
   // goes and opens the next one with the letterhead, recipient block and table header repeated.
-  if (rows.length > 0) parts.push(continuationPage(data, rows, 0, dateApp, dateInsp))
+  if (rows.length > 0) parts.push(continuationPage(data, rows, 0, dateInsp))
   return parts.join('')
 }
 
