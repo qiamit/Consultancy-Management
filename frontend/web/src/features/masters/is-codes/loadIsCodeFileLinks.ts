@@ -4,6 +4,36 @@ import { supabase } from '@/lib/supabaseClient'
 // them made six failing requests for every file missing from storage.)
 const PRIMARY_BUCKET = 'is-code-files'
 
+export const IS_CODE_MISSING_FILE_MESSAGE = 'File missing in storage — upload it again'
+
+/**
+ * Which of these storage paths really exist in the IS Code bucket. Folders are listed (a list answers 200 even
+ * for a missing file), so files missing from storage are known without a failing sign request.
+ * Returns null when the listing itself fails; callers then go on as before.
+ */
+export async function existingIsCodeStoragePaths(paths: readonly string[]): Promise<Set<string> | null> {
+  const folders = new Map<string, string[]>()
+  for (const path of paths) {
+    const cut = path.lastIndexOf('/')
+    const folder = cut > 0 ? path.slice(0, cut) : ''
+    folders.set(folder, [...(folders.get(folder) ?? []), path])
+  }
+  const existing = new Set<string>()
+  try {
+    for (const folder of folders.keys()) {
+      const { data, error } = await supabase.storage.from(PRIMARY_BUCKET).list(folder, { limit: 1000 })
+      if (error) return null
+      for (const entry of data ?? []) {
+        const name = String((entry as { name?: string }).name ?? '')
+        if (name) existing.add(folder ? `${folder}/${name}` : name)
+      }
+    }
+  } catch {
+    return null
+  }
+  return existing
+}
+
 export type IsCodeFileLink = {
   file_name: string
   storage_path?: string
@@ -23,7 +53,7 @@ async function resolveFromBucket(
     return { url: signed.signedUrl }
   }
   // Signing fails only when the file is not in storage; a download would fail the same way.
-  return { error: /not found/i.test(signErr?.message ?? '') ? 'File missing in storage — upload it again' : signErr?.message || 'Could not open file' }
+  return { error: /not found/i.test(signErr?.message ?? '') ? IS_CODE_MISSING_FILE_MESSAGE : signErr?.message || 'Could not open file' }
 }
 
 async function resolveFileUrl(
@@ -81,10 +111,15 @@ export async function loadIsCodeFileLinks(isCodeId: string): Promise<IsCodeFileL
       }
     }
 
+    const existing = await existingIsCodeStoragePaths(fileList.map((f) => f.storage_path).filter(Boolean))
     const out: IsCodeFileLink[] = []
     for (const f of fileList) {
       if (!f.storage_path) {
         out.push({ file_name: f.file_name, error: 'Missing storage path' })
+        continue
+      }
+      if (existing && !existing.has(f.storage_path)) {
+        out.push({ file_name: f.file_name, storage_path: f.storage_path, error: IS_CODE_MISSING_FILE_MESSAGE })
         continue
       }
       const resolved = await resolveFileUrl(f.storage_path)

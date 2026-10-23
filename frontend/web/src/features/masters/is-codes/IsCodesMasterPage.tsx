@@ -14,6 +14,7 @@ import { IsCodesTableFooterBar } from './IsCodesFooterBar'
 import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { IsCodesFilesDialog, type IsCodeViewFile } from './IsCodesFilesDialog'
 import { buildIsCodesListAssistantContext, formatIsCodeLabel } from './buildIsCodeAssistantContext'
+import { existingIsCodeStoragePaths, IS_CODE_MISSING_FILE_MESSAGE } from './loadIsCodeFileLinks'
 import {
   isCodeFileDocumentKind,
   canonicalIsNumber,
@@ -1080,8 +1081,20 @@ export default function IsCodesMasterPage() {
 
     const dbList = (Array.isArray(data) ? (data as IsCodeFileRow[]) : [])
     if (dbList.length > 0) {
+      const existing = await existingIsCodeStoragePaths(dbList.map((f) => f.storage_path).filter(Boolean))
       const withUrls: PopupFile[] = []
       for (const f of dbList) {
+        if (existing && !existing.has(f.storage_path)) {
+          // Listed in the master but not in storage: shown as missing, no failing sign request.
+          withUrls.push({
+            id: f.id,
+            file_name: f.file_name,
+            storage_path: f.storage_path,
+            document_kind: f.document_kind ?? null,
+            error: IS_CODE_MISSING_FILE_MESSAGE,
+          })
+          continue
+        }
         const [viewUrl, downloadUrl] = await Promise.all([
           getSignedUrl(f.storage_path),
           getSignedUrl(f.storage_path, { download: f.file_name || true }),
