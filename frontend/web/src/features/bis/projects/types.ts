@@ -588,9 +588,15 @@ export function projectStatusLabel(status: string | null | undefined): string {
   )
 }
 
-export type LicenseValidityState = 'operative' | 'expiring' | 'expired' | 'unknown'
+export type LicenseValidityState = 'operative' | 'expiring' | 'deferred' | 'expired' | 'unknown'
 
+/** BIS opens licence renewal this many days before the validity date. */
 export const RENEWAL_WINDOW_DAYS = 90
+/**
+ * After the validity date BIS still renews (Deferred) with a late fee of Rs 5,000 for this many days;
+ * after that the licence is expired and can no longer be renewed.
+ */
+export const RENEWAL_DEFERRED_DAYS = 90
 
 /** Inclusive end date (YYYY-MM-DD) for the due-soon renewal window. */
 export function dueSoonEndIsoDate(today: string = todayIsoDate(), days = RENEWAL_WINDOW_DAYS): string {
@@ -611,7 +617,8 @@ export function licenseValidityState(
   const now = new Date(`${today}T00:00:00`)
   if (Number.isNaN(end.getTime())) return { state: 'unknown', daysLeft: null }
   const daysLeft = Math.round((end.getTime() - now.getTime()) / 86_400_000)
-  if (daysLeft < 0) return { state: 'expired', daysLeft }
+  if (daysLeft < -RENEWAL_DEFERRED_DAYS) return { state: 'expired', daysLeft }
+  if (daysLeft < 0) return { state: 'deferred', daysLeft }
   if (daysLeft <= RENEWAL_WINDOW_DAYS) return { state: 'expiring', daysLeft }
   return { state: 'operative', daysLeft }
 }

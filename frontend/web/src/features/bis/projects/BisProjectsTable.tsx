@@ -41,6 +41,7 @@ import {
   isCodeDisplayLabel,
   isFmcsProject,
   licenseValidityState,
+  RENEWAL_DEFERRED_DAYS,
   manakLoginFromProject,
   todayIsoDate,
   type BisProjectRow,
@@ -112,6 +113,7 @@ const rowSelectedClass = 'bg-[#fde68a]/80 hover:bg-[#fde68a]/80'
 const LICENSE_STATE_STYLES: Record<LicenseValidityState, { label: string; className: string }> = {
   operative: { label: 'Operative', className: 'text-emerald-700' },
   expiring: { label: 'Renewal Due', className: 'text-amber-700' },
+  deferred: { label: 'Deferred (Late Fee)', className: 'text-orange-700' },
   expired: { label: 'Expired', className: 'text-red-700' },
   unknown: { label: 'No Validity', className: 'text-stone-500' },
 }
@@ -612,6 +614,8 @@ export function BisProjectsTable({
                                 'border-emerald-700/20 bg-emerald-50 text-emerald-800',
                               validity.state === 'expiring' &&
                                 'border-amber-700/20 bg-amber-50 text-amber-800',
+                              validity.state === 'deferred' &&
+                                'border-orange-700/25 bg-orange-50 text-orange-800',
                               validity.state === 'expired' &&
                                 'border-red-700/20 bg-red-50 text-red-800',
                               validity.state === 'unknown' &&
@@ -633,7 +637,9 @@ export function BisProjectsTable({
                             {formatDisplayDate(r.license_validity_date)}
                             {validity.daysLeft != null && validity.state === 'expiring'
                               ? ` · ${validity.daysLeft}d left`
-                              : ''}
+                              : validity.daysLeft != null && validity.state === 'deferred'
+                                ? ` · ${RENEWAL_DEFERRED_DAYS + validity.daysLeft}d left with late fee`
+                                : ''}
                           </p>
                         </div>
                       </div>
@@ -783,6 +789,11 @@ export function BisProjectsTable({
                         </p>
                         {validity.daysLeft != null && validity.state === 'expiring' ? (
                           <p className="text-[11px] text-amber-700">{validity.daysLeft} day(s) left</p>
+                        ) : null}
+                        {validity.daysLeft != null && validity.state === 'deferred' ? (
+                          <p className="text-[11px] text-orange-700">
+                            Validity crossed {Math.abs(validity.daysLeft)} day(s) ago · {RENEWAL_DEFERRED_DAYS + validity.daysLeft} day(s) left with late fee
+                          </p>
                         ) : null}
                         {validity.state === 'expired' ? (
                           <p className="text-[11px] text-red-700">
