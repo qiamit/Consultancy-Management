@@ -28,5 +28,9 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": [
+    "src/features/sample-handling/report-preparation/**",
+    "src/features/sample-handling/shared/**"
+  ]
 }

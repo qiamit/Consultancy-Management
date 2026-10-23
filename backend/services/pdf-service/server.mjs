@@ -133,17 +133,62 @@ function readJson(req) {
 }
 
 /**
+ * Mirror the API gateway allowlist (Caddy). Never use *.
+ * Optional PDF_CORS_ORIGINS=comma-separated extra origins.
+ * @param {string | undefined} origin
+ */
+function corsOrigin(origin) {
+  const o = String(origin || '').trim()
+  if (!o) return null
+  if (
+    o === 'https://www.qengineering.in' ||
+    o === 'https://qengineering.in' ||
+    /^https?:\/\/(localhost|127\.0\.0\.1):(3000|517[3-9]|518[0-5])$/.test(o) ||
+    /^https:\/\/frontend-production-[a-z0-9]+\.up\.railway\.app$/.test(o) ||
+    /^https:\/\/consultancy-[a-z0-9-]+\.up\.railway\.app$/.test(o)
+  ) {
+    return o
+  }
+  const extra = String(process.env.PDF_CORS_ORIGINS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+  if (extra.includes(o)) return o
+  return null
+}
+
+/**
+ * @param {http.IncomingMessage} req
+ * @param {http.ServerResponse} res
+ * @param {Record<string, string | number>} [extra]
+ */
+function corsHeaders(req, extra = {}) {
+  const allowed = corsOrigin(req.headers.origin)
+  /** @type {Record<string, string | number>} */
+  const headers = {
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    Vary: 'Origin',
+    ...extra,
+  }
+  if (allowed) {
+    headers['Access-Control-Allow-Origin'] = allowed
+    headers['Access-Control-Allow-Credentials'] = 'true'
+  }
+  return headers
+}
+
+/**
+ * @param {http.IncomingMessage} req
  * @param {http.ServerResponse} res
  * @param {number} status
  * @param {unknown} payload
  */
-function sendJson(res, status, payload) {
+function sendJson(req, res, status, payload) {
   const body = JSON.stringify(payload)
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    ...corsHeaders(req),
   })
   res.end(body)
 }
@@ -152,17 +197,19 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || '/', `http://${HOST}:${PORT}`)
 
   if (req.method === 'OPTIONS') {
-    res.writeHead(204, {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    })
+    const allowed = corsOrigin(req.headers.origin)
+    if (!allowed && req.headers.origin) {
+      res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' })
+      res.end('Origin not allowed')
+      return
+    }
+    res.writeHead(204, corsHeaders(req))
     res.end()
     return
   }
 
   if (req.method === 'GET' && url.pathname === '/health') {
-    sendJson(res, 200, { ok: true, service: 'playwright-pdf' })
+    sendJson(req, res, 200, { ok: true, service: 'playwright-pdf' })
     return
   }
 
@@ -178,18 +225,18 @@ const server = http.createServer(async (req, res) => {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="${outName.replace(/"/g, '')}"`,
         'Content-Length': pdf.length,
-        'Access-Control-Allow-Origin': '*',
+        ...corsHeaders(req),
       })
       res.end(pdf)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'PDF generation failed'
       console.error('[pdf-service]', message)
-      sendJson(res, 500, { error: message })
+      sendJson(req, res, 500, { error: message })
     }
     return
   }
 
-  sendJson(res, 404, { error: 'Not found' })
+  sendJson(req, res, 404, { error: 'Not found' })
 })
 
 server.listen(PORT, HOST, () => {

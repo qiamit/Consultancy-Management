@@ -1,4 +1,4 @@
-/** window.postMessage bridge for QE Consultancy browser extension (see frontend/extensions/qe-consultancy-chrome/bridge.js). */
+/** window.postMessage bridge for QE Consultancy browser extension (see frontend/extensions/QE-Extension-Dev/bridge.js). */
 
 import { getPortalPasswordForExtension } from './bisPortalSecretApi'
 import type { ManakInclusionPayload } from './inclusionPayload'

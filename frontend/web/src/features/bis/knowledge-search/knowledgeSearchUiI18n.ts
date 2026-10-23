@@ -51,12 +51,12 @@ type UiStrings = {
 const EN: UiStrings = {
   pageTitle: 'BIS Knowledge Search — Test',
   disclaimer:
-    'Loading corpus status from the local knowledge service…',
+    'Loading corpus status from the knowledge service…',
   serviceUnavailableBanner:
-    'Local knowledge service unavailable. Corpus status will appear when the service is online.',
-  serviceOn: 'Local service: on',
-  serviceOff: 'Local service: off',
-  serviceChecking: 'Local service: checking…',
+    'Knowledge search is not available on this server. It runs only on a local developer machine (port 3851). Railway does not host the knowledge sidecar yet.',
+  serviceOn: 'Knowledge service: on',
+  serviceOff: 'Knowledge service: unavailable',
+  serviceChecking: 'Knowledge service: checking…',
   standardLabel: 'Standard',
   standardHint:
     'Choosing one IS keeps other standards out of the candidate set. “All” is a separate mode over the current corpus.',
@@ -71,7 +71,7 @@ const EN: UiStrings = {
   loading: 'Search in progress…',
   searchFailed: 'Search failed.',
   serviceDown:
-    'Local knowledge search service is offline. Please start the local API (port 3851).',
+    'Knowledge search is unavailable here. On a developer Mac, start the local API (port 3851). Production does not include this service yet.',
   stateSupportedTitle: 'Supported',
   stateUncertainTitle: 'Uncertain',
   stateNotFoundTitle: 'Not found',
@@ -95,12 +95,12 @@ const EN: UiStrings = {
 const HI: UiStrings = {
   pageTitle: 'BIS ज्ञान खोज — परीक्षण',
   disclaimer:
-    'स्थानीय ज्ञान सेवा से कॉर्पस स्थिति लोड हो रही है…',
+    'ज्ञान सेवा से कॉर्पस स्थिति लोड हो रही है…',
   serviceUnavailableBanner:
-    'स्थानीय ज्ञान सेवा उपलब्ध नहीं। सेवा चालू होने पर कॉर्पस स्थिति दिखेगी।',
-  serviceOn: 'स्थानीय सेवा: चालू',
-  serviceOff: 'स्थानीय सेवा: बंद',
-  serviceChecking: 'स्थानीय सेवा: जाँच…',
+    'इस सर्वर पर ज्ञान खोज उपलब्ध नहीं है। यह केवल डेवलपर मशीन पर स्थानीय API (पोर्ट 3851) से चलती है। Railway पर अभी knowledge sidecar नहीं है।',
+  serviceOn: 'ज्ञान सेवा: चालू',
+  serviceOff: 'ज्ञान सेवा: अनुपलब्ध',
+  serviceChecking: 'ज्ञान सेवा: जाँच…',
   standardLabel: 'Standard',
   standardHint:
     'IS चुनने पर दूसरे standards candidate set में नहीं आते। «सभी» वर्तमान कॉर्पस पर अलग mode है।',
@@ -115,7 +115,7 @@ const HI: UiStrings = {
   loading: 'खोज चल रही है…',
   searchFailed: 'खोज असफल रही।',
   serviceDown:
-    'स्थानीय ज्ञान खोज सेवा बंद है। कृपया स्थानीय API चालू करें (पोर्ट 3851)।',
+    'ज्ञान खोज यहाँ उपलब्ध नहीं है। डेवलपर Mac पर स्थानीय API (पोर्ट 3851) चालू करें। Production में यह सेवा अभी नहीं है।',
   stateSupportedTitle: 'Supported',
   stateUncertainTitle: 'Uncertain',
   stateNotFoundTitle: 'Not found',

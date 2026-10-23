@@ -16,10 +16,11 @@ import {
   resolveSignatureSignedUrl,
 } from './quotationSignatureStorage'
 import {
+  computeQuotationTotals,
   formatDate,
   formatMoney,
-  lineGstSplit,
   quotationStatusLabel,
+  type QuotationForm,
   type QuotationLineForm,
   type QuotationRow,
 } from './types'
@@ -83,6 +84,7 @@ export async function fetchQuotationBankDetails(): Promise<QuotationBankDetails>
 }
 
 function lineToForm(l: NonNullable<QuotationRow['line_items']>[number]): QuotationLineForm {
+  const storedGst = Number(l.gst_percent ?? 0)
   return {
     key: String(l.id ?? Math.random()),
     description: String(l.description ?? ''),
@@ -94,7 +96,7 @@ function lineToForm(l: NonNullable<QuotationRow['line_items']>[number]): Quotati
     unit: String(l.unit ?? ''),
     rate: String(l.rate ?? 0),
     discountPercent: String(l.discount_percent ?? 0),
-    gstPercent: String(l.gst_percent ?? 0),
+    gstPercent: String(Number.isFinite(storedGst) && storedGst > 0 ? storedGst : 18),
     lineRemarks: '',
     deliveryPeriod: '',
   }
@@ -330,18 +332,25 @@ function buildOneQuotationHtml(
   const showSgst = savedSupplyMode ? savedSupplyMode === 'intra' : tpl.showSgst
   const showIgst = savedSupplyMode ? savedSupplyMode === 'inter' : tpl.showIgst
 
-  let cgstTotal = 0
-  let sgstTotal = 0
-  let igstTotal = 0
-  for (const l of row.line_items ?? []) {
-    const split = lineGstSplit(lineToForm(l), gstMode)
-    cgstTotal += split.cgstAmount
-    sgstTotal += split.sgstAmount
-    igstTotal += split.igstAmount
-  }
-  cgstTotal = Math.round(cgstTotal * 100) / 100
-  sgstTotal = Math.round(sgstTotal * 100) / 100
-  igstTotal = Math.round(igstTotal * 100) / 100
+  const lineForms = (row.line_items ?? []).map((l) =>
+    isPaymentReceipt ? { ...lineToForm(l), gstPercent: '0' } : lineToForm(l),
+  )
+  const totals = computeQuotationTotals(
+    {
+      lines: lineForms,
+      discountAmount: String(row.discount_amount ?? 0),
+      discountPercent: String(row.discount_percent ?? 0),
+      transportationCharges: String(row.transportation_charges ?? 0),
+      packagingCharges: String(row.packaging_charges ?? 0),
+      gstPercent: '18',
+    } as QuotationForm,
+    gstMode,
+  )
+  const cgstTotal = totals.cgstAmount
+  const sgstTotal = totals.sgstAmount
+  const igstTotal = totals.igstAmount
+  const displayGstAmount = isPaymentReceipt ? 0 : totals.gstAmount
+  const displayGrandTotal = isPaymentReceipt ? Number(row.grand_total) || 0 : totals.grandTotal
 
   const colCount =
     2 +
@@ -403,47 +412,47 @@ function buildOneQuotationHtml(
   const totalRows: string[] = []
   if (tpl.showBasicAmount && !isPaymentReceipt) {
     totalRows.push(
-      `<tr><td class="k">Basic Amount</td><td class="sep">:</td><td class="v">${getCurrencySymbol()} ${esc(formatMoney(row.subtotal))}</td></tr>`,
+      `<tr><td class="k">Basic Amount</td><td class="sep">:</td><td class="v">${getCurrencySymbol()} ${esc(formatMoney(totals.subtotal))}</td></tr>`,
     )
   }
-  if (tpl.showDiscount && Number(row.discount_amount) > 0) {
+  if (tpl.showDiscount && totals.discountAmount > 0) {
     totalRows.push(
-      `<tr><td class="k">Discount</td><td class="sep">:</td><td class="v">${getCurrencySymbol()} ${esc(formatMoney(row.discount_amount))}</td></tr>`,
+      `<tr><td class="k">Discount</td><td class="sep">:</td><td class="v">${getCurrencySymbol()} ${esc(formatMoney(totals.discountAmount))}</td></tr>`,
     )
   }
-  if (tpl.showTransportationCharges && Number(row.transportation_charges ?? 0) > 0) {
+  if (tpl.showTransportationCharges && totals.transportationCharges > 0) {
     totalRows.push(
-      `<tr><td class="k">Transportation Charges</td><td class="sep">:</td><td class="v">${getCurrencySymbol()} ${esc(formatMoney(row.transportation_charges ?? 0))}</td></tr>`,
+      `<tr><td class="k">Transportation Charges</td><td class="sep">:</td><td class="v">${getCurrencySymbol()} ${esc(formatMoney(totals.transportationCharges))}</td></tr>`,
     )
   }
-  if (tpl.showPackagingCharge && Number(row.packaging_charges ?? 0) > 0) {
+  if (tpl.showPackagingCharge && totals.packagingCharges > 0) {
     totalRows.push(
-      `<tr><td class="k">Packaging Charge</td><td class="sep">:</td><td class="v">${getCurrencySymbol()} ${esc(formatMoney(row.packaging_charges ?? 0))}</td></tr>`,
+      `<tr><td class="k">Packaging Charge</td><td class="sep">:</td><td class="v">${getCurrencySymbol()} ${esc(formatMoney(totals.packagingCharges))}</td></tr>`,
     )
   }
-  if (tpl.showGstAmount) {
+  if (tpl.showGstAmount && !isPaymentReceipt) {
     totalRows.push(
-      `<tr><td class="k">GST Amount</td><td class="sep">:</td><td class="v">${getCurrencySymbol()} ${esc(formatMoney(row.gst_amount))}</td></tr>`,
+      `<tr><td class="k">GST Amount</td><td class="sep">:</td><td class="v">${getCurrencySymbol()} ${esc(formatMoney(displayGstAmount))}</td></tr>`,
     )
   }
-  if (showCgst) {
+  if (showCgst && cgstTotal > 0) {
     totalRows.push(
       `<tr><td class="k">CGST</td><td class="sep">:</td><td class="v">${getCurrencySymbol()} ${esc(formatMoney(cgstTotal))}</td></tr>`,
     )
   }
-  if (showSgst) {
+  if (showSgst && sgstTotal > 0) {
     totalRows.push(
       `<tr><td class="k">SGST</td><td class="sep">:</td><td class="v">${getCurrencySymbol()} ${esc(formatMoney(sgstTotal))}</td></tr>`,
     )
   }
-  if (showIgst) {
+  if (showIgst && igstTotal > 0) {
     totalRows.push(
       `<tr><td class="k">IGST</td><td class="sep">:</td><td class="v">${getCurrencySymbol()} ${esc(formatMoney(igstTotal))}</td></tr>`,
     )
   }
   if (tpl.showGrandTotal) {
     totalRows.push(
-      `<tr class="grand"><td class="k">${isPaymentReceipt ? 'Amount Received' : 'Grand Total'}</td><td class="sep">:</td><td class="v">${getCurrencySymbol()} ${esc(formatMoney(row.grand_total))}</td></tr>`,
+      `<tr class="grand"><td class="k">${isPaymentReceipt ? 'Amount Received' : 'Grand Total'}</td><td class="sep">:</td><td class="v">${getCurrencySymbol()} ${esc(formatMoney(displayGrandTotal))}</td></tr>`,
     )
   }
 
@@ -505,7 +514,7 @@ function buildOneQuotationHtml(
             }</td></tr>
             <tr><td class="k">${esc(metaLabels.status)}</td><td class="sep">:</td><td class="v">${
               isPaymentReceipt
-                ? `${getCurrencySymbol()} ${esc(formatMoney(row.grand_total))}`
+                ? `${getCurrencySymbol()} ${esc(formatMoney(displayGrandTotal))}`
                 : esc(quotationStatusLabel(row.status))
             }</td></tr>
           </table>
@@ -524,7 +533,7 @@ function buildOneQuotationHtml(
             ? `<div style="margin-bottom:4px;"><b>Against Invoice:</b> ${cell(row.reference_no)}</div>`
             : ''
         }
-        <div style="font-size:1.05em;font-weight:700;margin-bottom:4px;">Amount Received: ${getCurrencySymbol()} ${esc(formatMoney(row.grand_total))}</div>
+        <div style="font-size:1.05em;font-weight:700;margin-bottom:4px;">Amount Received: ${getCurrencySymbol()} ${esc(formatMoney(displayGrandTotal))}</div>
         ${
           row.subject?.trim()
             ? `<div style="font-size:0.9em;color:#333;"><b>Towards:</b> ${esc(row.subject.trim())}</div>`
@@ -559,7 +568,7 @@ function buildOneQuotationHtml(
           ${
             tpl.showAmountInWords
               ? `<tr><td style="height:5.5mm;padding:1px 8px;vertical-align:middle;border-bottom:1.5px solid #000;box-sizing:border-box;line-height:1.15;">
-              <p class="words" style="margin:0;"><span class="lbl" style="display:inline;margin:0;">Amount in Words:</span> ${esc(amountInIndianRupeesWords(Number(row.grand_total) || 0))}</p>
+              <p class="words" style="margin:0;"><span class="lbl" style="display:inline;margin:0;">Amount in Words:</span> ${esc(amountInIndianRupeesWords(displayGrandTotal))}</p>
             </td></tr>`
               : ''
           }

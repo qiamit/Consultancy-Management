@@ -1,13 +1,14 @@
-# Browser extensions (Consultancy Management)
+# Browser extension (Consultancy Management)
 
-Merged **QE Consultancy** extension (Manak Test Request, IS Code fetch, copy/paste bypass, bulk fill) for this repo:
+Single **QE Consultancy** Chromium extension (Manak Test Request, IS Code fetch, copy/paste bypass, bulk fill, Manak Assist):
 
 | Folder | Browser |
 |--------|---------|
-| [`qe-consultancy-chrome`](qe-consultancy-chrome/) | Chrome, Edge, Brave, and other Chromium browsers |
-| [`qe-consultancy-safari`](qe-consultancy-safari/) | Safari 16.4+ (Xcode wrapper in `macos/` and `macos-generated/`) |
+| [`QE-Extension-Dev`](QE-Extension-Dev/) | Chrome, Edge, Brave, and other Chromium browsers |
 
-**Version:** Chrome `2.6.8`, Safari `2.2.45` (see each folder’s `manifest.json`).
+Safari / Xcode copies were removed (2026-10-23). Use Chromium only.
+
+**Version:** `2.7.6` (see `QE-Extension-Dev/manifest.json`).
 
 ## Allowed app origins
 
@@ -33,18 +34,8 @@ Poll with `GET ?token=…` until `{ ready: true }`, then fetch the PDF from the 
 
 1. Open `chrome://extensions` (or Edge `edge://extensions`).
 2. Enable **Developer mode**.
-3. **Load unpacked** → select `frontend/extensions/qe-consultancy-chrome`.
+3. **Load unpacked** → select `frontend/extensions/QE-Extension-Dev`.
 
-The unpacked extension must be removed and loaded again from this path. Chrome gives it a new ID when the folder moves.
-4. Open Consultancy Management, use **Open Manak** / IS Code features; allow extension access if prompted.
+If an older unpacked copy pointed at `qe-consultancy-chrome` or `qe-consultancy-safari`, remove it and load this folder again. The extension ID changes when the folder moves.
 
-## Safari
-
-Safari cannot load an unpacked folder like Chrome. Build or open the wrapper from `qe-consultancy-safari/macos-generated` (see [`qe-consultancy-safari/README.md`](qe-consultancy-safari/README.md)):
-
-1. Run the **QE Consultancy Safari** helper app.
-2. Safari → **Settings → Advanced** → **Show features for web developers**.
-3. **Develop** → **Allow Unsigned Extensions**.
-4. **Settings → Extensions** → enable **QE Consultancy Safari Extension** (All Websites when asked).
-
-After editing root `manifest.json` / `background.js`, copy or rebuild into `macos-generated/.../Resources/` before testing in Safari.
+4. Open Consultancy Management, use **Open Manak** / IS Code / Manak Assist features; allow extension access if prompted.

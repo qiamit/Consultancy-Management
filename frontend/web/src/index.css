@@ -57,6 +57,14 @@
     --sidebar-ring: 32 95% 44%;
   }
 
+  /* APP-R02: below xl dock breakpoint, force full-bleed dialog vars even if JS lags */
+  @media (max-width: 1279px) {
+    :root {
+      --app-dialog-center-x: 50% !important;
+      --app-dialog-overlay-left: 0px !important;
+    }
+  }
+
   .dark {
     --background: 24 10% 8%;
     --foreground: 40 20% 96%;

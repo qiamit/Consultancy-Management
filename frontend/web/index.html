@@ -3,8 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/brand/qe-logo.png" />
+    <link rel="apple-touch-icon" href="/brand/qe-logo.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#0c416a" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Consultancy Pro" />
     <title>Consultancy Pro — Q Engineering</title>
     <script>
       (function () {
@@ -53,9 +59,7 @@
         } catch (e) {}
       })()
     </script>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <!-- APP-O05: system fonts only — no Google Fonts on the critical path -->
   </head>
   <body>
     <div id="root"></div>

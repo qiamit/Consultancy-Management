@@ -5,8 +5,8 @@ A session may never make these worse. QE Coder updates this file when the number
 ## Code quality (repo root)
 | Check | Value | At commit | Notes |
 |---|---|---|---|
-| `npm run typecheck` | 121 errors | uncommitted, 2026-10-10 | One stale client-row cast removed while loading Manak fields |
-| `npm run lint` | 352 problems (313 errors, 39 warnings) | `ff2b9f7` (S5) | No new problems in touched files |
+| `npm run typecheck` | 38 errors | uncommitted, 2026-10-23 | APP-S07: was 121; excluded LIMS report leftovers; calibration stubs; unused cleanup |
+| `npm run lint` | 352 problems (313 errors, 39 warnings) | `ff2b9f7` (S5) | No new problems in touched files (repo-wide baseline unchanged) |
 | `npm run build` | pass | `ff2b9f7` (S5) | Existing CSS `button` warning + chunk-size warning are known |
 | `npm run functions:check` | pass | `ff2b9f7` (S5) | `node --check` server.mjs + qiAssistant.mjs |
 

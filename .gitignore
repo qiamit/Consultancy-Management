@@ -158,6 +158,9 @@ backend/database/baseline_from_*.sql
 *.temp
 *.orig
 
+# Chrome extension local generated metadata (Load unpacked)
+frontend/extensions/**/_metadata/
+
 # SQLite / session junk
 :memory:.ses
 *.ses

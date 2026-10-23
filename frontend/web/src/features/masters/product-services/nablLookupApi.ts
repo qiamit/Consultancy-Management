@@ -38,7 +38,9 @@ function notify(kind: NablLookupKind) {
 export function subscribeNablLookups(kind: NablLookupKind, listener: Listener) {
   if (!listeners.has(kind)) listeners.set(kind, new Set())
   listeners.get(kind)!.add(listener)
-  return () => listeners.get(kind)?.delete(listener)
+  return () => {
+    listeners.get(kind)?.delete(listener)
+  }
 }
 
 export function getCachedNablLookups(kind: NablLookupKind): NablLookupRow[] {

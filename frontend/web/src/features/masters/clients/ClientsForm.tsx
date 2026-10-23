@@ -142,7 +142,7 @@ function OpeningBalanceField({
   const displayValue = focused ? value : formatMoneyInput(value || '0')
 
   return (
-    <div className="flex h-8 min-w-0 flex-1 overflow-hidden rounded-none border border-stone-500 bg-stone-50 focus-within:border-amber-600 focus-within:bg-white focus-within:ring-2 focus-within:ring-amber-500/20">
+    <div className="flex h-10 min-h-10 min-w-0 flex-1 overflow-hidden rounded-none border border-stone-500 bg-stone-50 focus-within:border-amber-600 focus-within:bg-white focus-within:ring-2 focus-within:ring-amber-500/20">
       <span
         className="inline-flex shrink-0 items-center border-r border-stone-500 bg-stone-100 px-2.5 text-sm font-semibold text-stone-700"
         aria-hidden

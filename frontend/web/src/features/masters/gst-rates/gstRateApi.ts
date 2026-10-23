@@ -21,7 +21,9 @@ function toRow(data: { id: string; rate: number | string; created_at?: string | 
 
 export function subscribeGstRates(listener: Listener) {
   listeners.add(listener)
-  return () => listeners.delete(listener)
+  return () => {
+    listeners.delete(listener)
+  }
 }
 
 export function getCachedGstRates(): GstRateRow[] {

@@ -42,6 +42,7 @@ import {
 } from '@/lib/appNav'
 import { QiAssistant } from '@/components/qi-assistant/QiAssistant'
 import { ChangePasswordDialog } from '@/components/auth/ChangePasswordDialog'
+import { OfflineBanner } from '@/components/OfflineBanner'
 import { toProperLabelText } from '@/lib/properLabelText'
 
 const formatNavLabel = (value: string) => toProperLabelText(value)
@@ -457,10 +458,12 @@ export default function GlobalLayout() {
   })
 
   // Dialogs portal to <body>; publish content-area center + overlay inset beside docked sidebar.
+  // APP-R02: also listen to matchMedia + visualViewport so DevTools / phone rotate update CSS vars.
   useEffect(() => {
     const root = document.documentElement
+    const mq = window.matchMedia(SIDEBAR_DOCK_QUERY)
     const syncDialogLayout = () => {
-      const desktop = window.matchMedia(SIDEBAR_DOCK_QUERY).matches
+      const desktop = mq.matches
       if (desktop && !sidebarCollapsed) {
         root.style.setProperty('--app-dialog-center-x', 'calc(268px + (100vw - 268px) / 2)')
         root.style.setProperty('--app-dialog-overlay-left', '268px')
@@ -473,8 +476,13 @@ export default function GlobalLayout() {
     }
     syncDialogLayout()
     window.addEventListener('resize', syncDialogLayout)
+    const vv = window.visualViewport
+    vv?.addEventListener('resize', syncDialogLayout)
+    mq.addEventListener('change', syncDialogLayout)
     return () => {
       window.removeEventListener('resize', syncDialogLayout)
+      vv?.removeEventListener('resize', syncDialogLayout)
+      mq.removeEventListener('change', syncDialogLayout)
       root.style.removeProperty('--app-dialog-center-x')
       root.style.removeProperty('--app-dialog-overlay-left')
       delete root.dataset.sidebarDocked
@@ -789,6 +797,7 @@ export default function GlobalLayout() {
           </div>
         </header>
 
+        <OfflineBanner />
         <main className="app-shell-main pb-[env(safe-area-inset-bottom)]">
           <RequireModuleAccess>
             <Outlet />

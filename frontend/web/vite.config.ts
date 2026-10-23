@@ -10,6 +10,15 @@ export default defineConfig({
     },
   },
   server: {
+    headers: {
+      'X-Content-Type-Options': 'nosniff',
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
+      'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+      'X-Frame-Options': 'SAMEORIGIN',
+      // Report-only until production static host can enforce; allows Google Fonts + API gateway.
+      'Content-Security-Policy-Report-Only':
+        "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; img-src 'self' data: blob: https:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' https: http://127.0.0.1:* http://localhost:* ws: wss:;",
+    },
     proxy: {
       '/api/pdf': {
         target: 'http://127.0.0.1:3847',
@@ -22,6 +31,16 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/api\/knowledge/, '') || '/',
       },
+    },
+  },
+  preview: {
+    headers: {
+      'X-Content-Type-Options': 'nosniff',
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
+      'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+      'X-Frame-Options': 'SAMEORIGIN',
+      'Content-Security-Policy-Report-Only':
+        "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; img-src 'self' data: blob: https:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https: ws: wss:;",
     },
   },
 })

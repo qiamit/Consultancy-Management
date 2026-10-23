@@ -78,7 +78,99 @@ export function BisRenewalsTable({
           ) : null}
         </div>
       ) : (
-        <div className={cn('overflow-x-auto', loading && 'opacity-60 transition-opacity')}>
+        <div className={cn(loading && 'opacity-60 transition-opacity')}>
+          {/* APP-R04: cards below lg; table at lg+ */}
+          <div className="lg:hidden">
+            <label className="flex items-center gap-2.5 bg-stone-800 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.14em] text-amber-200">
+              <input
+                type="checkbox"
+                className={checkboxClass}
+                aria-label="Select All on This Page"
+                checked={allChecked}
+                ref={(el) => {
+                  if (el) el.indeterminate = !allChecked && someChecked
+                }}
+                onChange={(e) => onToggleAll(e.target.checked)}
+              />
+              <span>
+                {rows.length} {rows.length === 1 ? 'Renewal' : 'Renewals'}
+              </span>
+            </label>
+            <div className="grid gap-2 p-2 sm:grid-cols-2">
+              {rows.map((r) => {
+                const selected = selectedIds.has(r.id)
+                const client = renewalClientName(r) || '—'
+                const isLabel = renewalIsCodeLabel(r)
+                return (
+                  <article
+                    key={r.id}
+                    className={cn(
+                      'border border-stone-300 bg-white',
+                      selected && 'border-amber-600 ring-1 ring-amber-600/30',
+                    )}
+                  >
+                    <div className="flex items-start gap-3 px-3 py-2.5">
+                      <input
+                        type="checkbox"
+                        className={cn(checkboxClass, 'mt-1 shrink-0')}
+                        aria-label={`Select renewal for ${client}`}
+                        checked={selected}
+                        onChange={() => onToggle(r.id)}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-stone-900">{client}</p>
+                        <p className="text-xs text-muted-foreground">{isLabel || '—'}</p>
+                        <p className="font-mono text-xs tabular-nums text-muted-foreground">
+                          {formatCmL(r.project?.cm_l_digits)}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="h-10 min-h-10 w-10 shrink-0"
+                        aria-label={`Edit renewal for ${client}`}
+                        title="Edit"
+                        onClick={() => onEdit(r)}
+                      >
+                        <Pencil size={16} />
+                      </Button>
+                    </div>
+                    <dl className="grid grid-cols-2 gap-2 border-t border-stone-200 bg-stone-50/70 px-3 py-2.5 text-sm">
+                      <div>
+                        <dt className="text-[10px] font-bold uppercase tracking-wide text-stone-500">Status</dt>
+                        <dd>
+                          <span
+                            className={cn(
+                              'inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset',
+                              renewalStatusClass(r.renewal_status),
+                            )}
+                          >
+                            {r.renewal_status}
+                          </span>
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-[10px] font-bold uppercase tracking-wide text-stone-500">Validity</dt>
+                        <dd className="tabular-nums">
+                          {formatDisplayDate(r.new_validity_to ?? r.project?.license_validity_date)}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-[10px] font-bold uppercase tracking-wide text-stone-500">Fee</dt>
+                        <dd className="tabular-nums">{formatInr(r.marking_fee_total)}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-[10px] font-bold uppercase tracking-wide text-stone-500">Applied</dt>
+                        <dd className="tabular-nums">{formatDisplayDate(r.application_date)}</dd>
+                      </div>
+                    </dl>
+                  </article>
+                )
+              })}
+            </div>
+          </div>
+          <div className="hidden overflow-x-auto lg:block">
           <Table className={GRID_TABLE}>
             <TableHeader>
               <TableRow className="bg-stone-800 hover:bg-stone-800">
@@ -204,6 +296,7 @@ export function BisRenewalsTable({
               })}
             </TableBody>
           </Table>
+          </div>
         </div>
       )}
     </div>

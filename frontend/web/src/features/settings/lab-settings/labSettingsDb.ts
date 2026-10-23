@@ -171,7 +171,13 @@ export function registrationDocsToRows(docs: RegistrationDocInput[]) {
     }))
 }
 
-export function registrationDocFromRow(row: { name?: unknown; remarks?: unknown; file_path?: unknown }) {
+export function registrationDocFromRow(row: {
+  name?: unknown
+  title?: unknown
+  remarks?: unknown
+  notes?: unknown
+  file_path?: unknown
+}) {
   return {
     name: String(row.name ?? row.title ?? ''),
     number: String(row.remarks ?? row.notes ?? ''),

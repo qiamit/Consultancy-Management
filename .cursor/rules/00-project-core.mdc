@@ -25,7 +25,7 @@ The app was forked from the Qirlpl LIMS stack, so some names still say "LIMS" or
 - `backend/services/functions/`: Node 22 functions service (`server.mjs`, `qiAssistant.mjs`). This is the production functions code, including Resend email.
 - `backend/services/pdf-service/`: Playwright Chromium PDF renderer. Runs locally on port 3847; Vite proxies `/api/pdf` to it.
 - `knowledge_engine/`: Python local RAG over BIS PDFs (Chroma + FastEmbed). Local API on 127.0.0.1:3851; Vite proxies `/api/knowledge` to it **in dev only**. Standalone package; talk to it over HTTP only.
-- `frontend/extensions/`: QE Consultancy extension (Chrome and Safari copies)
+- `frontend/extensions/`: QE Consultancy Chromium extension (`QE-Extension-Dev/`)
 - `backend/services/storage-minio/`: MinIO helper Dockerfile
 
 ## Deploy target

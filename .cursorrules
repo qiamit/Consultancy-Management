@@ -7,7 +7,7 @@ The detailed rules live in `.cursor/rules/*.mdc`, and Cursor loads them automati
 - `30-railway-functions.mdc` (backend/services/functions/**, backend/services/gateway/**): production QI Assistant = qiAssistant.mjs
 - `40-knowledge-engine.mdc` (knowledge_engine/**): usable/needs_review gate, protected collections, same embedding model, evals
 - `50-workflow-prompts.mdc` (always): docs/audits/*.md with VDB-xx / MST-xx / FIN-xx IDs, "continue" workflow
-- `60-extensions.mdc` (frontend/extensions/**): keep the Chrome and Safari copies in sync
+- `60-extensions.mdc` (frontend/extensions/**): single Chromium extension in `QE-Extension-Dev/`
 - `05-qe-standards.mdc` (always): Amit's standing design rules (AI/MCP-ready, responsive, futuristic), security musts, baselines, work order. One chat plans and codes. No Planner / Coder / Auditor / Tester handoff.
 - `70-plus-button.mdc` (always): when Amit says "plus button function", copy the Client Master + field (same UI, database options, Add, Edit, Delete).
 - `71-currency-field.mdc` (always): when Amit says "currency field", copy the Opening Balance amount box (symbol on the left, right-aligned amount, two decimals).
@@ -24,7 +24,7 @@ If `.cursor/rules` isn't loaded, follow this short version:
 
 ## Project structure
 - `frontend/web/`: React 19 + Vite 7 + TypeScript, shadcn/ui, LIMS stone/amber theme (`lib/limsThemeUi.ts`)
-- `frontend/extensions/`: Chrome and Safari extension
+- `frontend/extensions/`: Chromium extension (`QE-Extension-Dev/`)
 - `backend/database/migrations/`: Railway Postgres SQL (new files only, never edit applied ones, RLS on every table). Not Supabase.com.
 - `backend/services/gateway/`: Caddy API gateway. `backend/services/functions/`: Node functions (users, Resend email, QI Assistant)
 - `backend/services/pdf-service/`: Playwright PDF. `backend/services/storage-minio/`: legacy MinIO Dockerfile

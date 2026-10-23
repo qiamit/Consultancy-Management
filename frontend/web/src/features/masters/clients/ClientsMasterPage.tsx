@@ -24,6 +24,7 @@ import {
 import { invalidateClientsCache } from '@/lib/clientsCache'
 import { supabase } from '@/lib/supabaseClient'
 import { useCanEditCurrentModule } from '@/features/settings/module-access/useCanEditCurrentModule'
+import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 import { useFormDialogOpenChange } from '@/lib/formDialogOpenChange'
 import { useMasterUiSearchState } from '@/lib/useMasterUiSearchState'
 import { Button } from '@/components/ui/button'
@@ -471,7 +472,10 @@ export default function ClientsMasterPage() {
   const longitudeError = useMemo(() => (isValidLongitude(form.longitude) ? null : 'Invalid longitude'), [form.longitude])
   const latitudeError = useMemo(() => (isValidLatitude(form.latitude) ? null : 'Invalid latitude'), [form.latitude])
 
+  const online = useOnlineStatus()
+
   const canSave =
+    online &&
     !saveLoading &&
     !gstError &&
     !mobileError &&
@@ -1061,6 +1065,10 @@ export default function ClientsMasterPage() {
   const handleSave = () => {
     if (!canEdit) {
       setSaveMessage(VIEW_ONLY_MSG)
+      return
+    }
+    if (!navigator.onLine) {
+      setSaveMessage('You are offline. Reconnect, then save again.')
       return
     }
     void (async () => {

@@ -3,7 +3,6 @@ import { LimsFieldAddButton, LimsFieldWithAdd } from '@/components/lims/LimsFiel
 import { LabManageDialogContent } from '@/features/settings/lab-settings/LabManageDialogContent'
 import {
   deleteLabMasterOption,
-  ensureLabMasterOptionByLabel,
   insertLabMasterOption,
   isProtectedDepartmentLabel,
   isProtectedDesignationLabel,

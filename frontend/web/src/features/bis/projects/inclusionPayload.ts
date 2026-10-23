@@ -1,7 +1,7 @@
 /**
  * Data for the QE Consultancy extension's "Inclusion" section (Manak Assist on BIS New Inclusion).
  * The extension fills Manak "Application For Change in Scope (Inclusion)" from this
- * (frontend/extensions/qe-consultancy-chrome/inclusion-fill.js — keep the shape in sync).
+ * (frontend/extensions/QE-Extension-Dev/inclusion-fill.js — keep the shape in sync).
  */
 import { PDFDocument } from 'pdf-lib'
 import { supabase } from '@/lib/supabaseClient'

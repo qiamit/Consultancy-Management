@@ -20,7 +20,7 @@ type DraftDocument = {
 }
 
 const documentIconBtnClass =
-  'inline-flex !h-8 !w-8 shrink-0 items-center justify-center rounded-none border-stone-500 bg-stone-50 p-0 text-amber-900 hover:bg-amber-100 hover:text-amber-950'
+  'inline-flex !h-10 !min-h-10 !w-10 shrink-0 items-center justify-center rounded-none border-stone-500 bg-stone-50 p-0 text-amber-900 hover:bg-amber-100 hover:text-amber-950'
 
 const issueDateInputClass =
   'min-w-0 border-0 bg-transparent pr-1 tabular-nums shadow-none focus-visible:ring-0 [&::-webkit-calendar-picker-indicator]:pointer-events-none [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:h-0 [&::-webkit-calendar-picker-indicator]:w-0 [&::-webkit-calendar-picker-indicator]:opacity-0'
@@ -306,7 +306,7 @@ export function ClientIdentitySections({
                           showSerialNumbers={false}
                           listId={`document-name-${entry.key}`}
                           inputId={`document-name-${entry.key}`}
-                          inputClassName="h-8 border-0 bg-transparent px-3 shadow-none focus-visible:ring-0"
+                          inputClassName="h-full min-h-10 border-0 bg-transparent px-3 shadow-none focus-visible:ring-0"
                         />
                       </LimsFieldWithAdd>
                     </div>

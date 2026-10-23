@@ -13,7 +13,9 @@ function notify() {
 
 export function subscribeMeasurementUnits(listener: Listener) {
   listeners.add(listener)
-  return () => listeners.delete(listener)
+  return () => {
+    listeners.delete(listener)
+  }
 }
 
 export function getCachedMeasurementUnits(): UnitRow[] {

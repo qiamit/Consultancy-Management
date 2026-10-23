@@ -145,7 +145,7 @@ export function ClientManageDialogContent({
                         document.getElementById(inputId)?.focus()
                       })
                     }}
-                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-none border border-amber-700 bg-white p-0 text-amber-800 hover:bg-amber-50 hover:text-amber-950"
+                    className="inline-flex h-10 min-h-10 w-10 shrink-0 items-center justify-center rounded-none border border-amber-700 bg-white p-0 text-amber-800 hover:bg-amber-50 hover:text-amber-950"
                     aria-label={`Edit ${item.label}`}
                     title="Edit"
                   >
@@ -155,7 +155,7 @@ export function ClientManageDialogContent({
                     <button
                       type="button"
                       onClick={() => onDelete(item.id)}
-                      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-none border border-red-600 bg-white p-0 text-red-700 hover:bg-red-50 hover:text-red-800"
+                      className="inline-flex h-10 min-h-10 w-10 shrink-0 items-center justify-center rounded-none border border-red-600 bg-white p-0 text-red-700 hover:bg-red-50 hover:text-red-800"
                       aria-label={`Delete ${item.label}`}
                       title="Delete"
                     >

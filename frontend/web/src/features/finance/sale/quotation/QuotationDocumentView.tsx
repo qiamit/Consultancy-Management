@@ -5,12 +5,15 @@ import {
   isPaymentReceiptDocumentTitle,
 } from '@/features/settings/lab-settings/documentTemplateTypes'
 import { cn } from '@/lib/utils'
+import { DEFAULT_CONSULTANCY_GST } from '@/features/finance/sale/shared/financeRules'
 import { amountInIndianRupeesWords } from './amountInIndianRupeesWords'
 import {
+  computeQuotationTotals,
   formatDate,
   formatMoney,
-  lineGstSplit,
+  parseMoney,
   quotationStatusLabel,
+  type QuotationForm,
   type QuotationLineForm,
   type QuotationRow,
 } from './types'
@@ -78,6 +81,7 @@ function paperHeightMm(tpl: FinanceDocumentTemplate): number {
 }
 
 function lineToForm(l: NonNullable<QuotationRow['line_items']>[number]): QuotationLineForm {
+  const storedGst = parseMoney(String(l.gst_percent ?? 0))
   return {
     key: l.id,
     description: l.description ?? '',
@@ -89,7 +93,8 @@ function lineToForm(l: NonNullable<QuotationRow['line_items']>[number]): Quotati
     unit: l.unit ?? '',
     rate: String(l.rate ?? 0),
     discountPercent: String(l.discount_percent ?? 0),
-    gstPercent: String(l.gst_percent ?? 0),
+    // Older quotations forced 0% GST on save; PDF/print still shows the consultancy default when the template asks for GST.
+    gstPercent: String(storedGst > 0 ? storedGst : DEFAULT_CONSULTANCY_GST),
     lineRemarks: '',
     deliveryPeriod: '',
   }
@@ -186,6 +191,31 @@ export function QuotationDocumentView({
   const showIgst = savedSupplyMode ? savedSupplyMode === 'inter' : tpl.showIgst
   const metaLabels = documentMetaFieldLabels(tpl.documentTitle || 'Document')
   const isPaymentReceipt = isPaymentReceiptDocumentTitle(tpl.documentTitle || '')
+  const lineForms = (row.line_items ?? []).map((l) =>
+    isPaymentReceipt
+      ? { ...lineToForm(l), gstPercent: '0' }
+      : lineToForm(l),
+  )
+  const totals = computeQuotationTotals(
+    {
+      lines: lineForms,
+      discountAmount: String(row.discount_amount ?? 0),
+      discountPercent: String(row.discount_percent ?? 0),
+      transportationCharges: String(row.transportation_charges ?? 0),
+      packagingCharges: String(row.packaging_charges ?? 0),
+      gstPercent: DEFAULT_CONSULTANCY_GST,
+    } as QuotationForm,
+    gstMode,
+  )
+  const displayGstAmount = tpl.showGstAmount ? totals.gstAmount : Number(row.gst_amount) || 0
+  const displayGrandTotal = isPaymentReceipt
+    ? Number(row.grand_total) || 0
+    : tpl.showGstAmount
+      ? totals.grandTotal
+      : Number(row.grand_total) || 0
+  const cgstTotal = totals.cgstAmount
+  const sgstTotal = totals.sgstAmount
+  const igstTotal = totals.igstAmount
   const metaRows: Array<[string, string]> = isPaymentReceipt
     ? [
         [metaLabels.number, row.quotation_number || '—'],
@@ -193,7 +223,7 @@ export function QuotationDocumentView({
         [metaLabels.dueDate, (row.reference_no || '').trim() || '—'],
         [
           metaLabels.status,
-          `${getCurrencySymbol()} ${formatMoney(row.grand_total)}`,
+          `${getCurrencySymbol()} ${formatMoney(displayGrandTotal)}`,
         ],
       ]
     : [
@@ -202,57 +232,45 @@ export function QuotationDocumentView({
         [metaLabels.dueDate, formatDate(row.valid_until)],
         [metaLabels.status, quotationStatusLabel(row.status)],
       ]
-  let cgstTotal = 0
-  let sgstTotal = 0
-  let igstTotal = 0
-  for (const l of row.line_items ?? []) {
-    const split = lineGstSplit(lineToForm(l), gstMode)
-    cgstTotal += split.cgstAmount
-    sgstTotal += split.sgstAmount
-    igstTotal += split.igstAmount
-  }
-  cgstTotal = Math.round(cgstTotal * 100) / 100
-  sgstTotal = Math.round(sgstTotal * 100) / 100
-  igstTotal = Math.round(igstTotal * 100) / 100
 
   const totalRows: Array<{ key: string; label: string; value: string; bold?: boolean }> = []
   if (tpl.showBasicAmount && !isPaymentReceipt) {
     totalRows.push({
       key: 'basic',
       label: 'Basic Amount',
-      value: `${getCurrencySymbol()} ${formatMoney(row.subtotal)}`,
+      value: `${getCurrencySymbol()} ${formatMoney(totals.subtotal)}`,
       bold: true,
     })
   }
-  if (tpl.showDiscount && Number(row.discount_amount) > 0) {
+  if (tpl.showDiscount && totals.discountAmount > 0) {
     totalRows.push({
       key: 'disc',
       label: 'Discount',
-      value: `${getCurrencySymbol()} ${formatMoney(row.discount_amount)}`,
+      value: `${getCurrencySymbol()} ${formatMoney(totals.discountAmount)}`,
       bold: true,
     })
   }
-  if (tpl.showTransportationCharges && Number(row.transportation_charges ?? 0) > 0) {
+  if (tpl.showTransportationCharges && totals.transportationCharges > 0) {
     totalRows.push({
       key: 'trans',
       label: 'Transportation Charges',
-      value: `${getCurrencySymbol()} ${formatMoney(row.transportation_charges ?? 0)}`,
+      value: `${getCurrencySymbol()} ${formatMoney(totals.transportationCharges)}`,
       bold: true,
     })
   }
-  if (tpl.showPackagingCharge && Number(row.packaging_charges ?? 0) > 0) {
+  if (tpl.showPackagingCharge && totals.packagingCharges > 0) {
     totalRows.push({
       key: 'pack',
       label: 'Packaging Charge',
-      value: `${getCurrencySymbol()} ${formatMoney(row.packaging_charges ?? 0)}`,
+      value: `${getCurrencySymbol()} ${formatMoney(totals.packagingCharges)}`,
       bold: true,
     })
   }
-  if (tpl.showGstAmount) {
+  if (tpl.showGstAmount && !isPaymentReceipt) {
     totalRows.push({
       key: 'gst',
       label: 'GST Amount',
-      value: `${getCurrencySymbol()} ${formatMoney(row.gst_amount)}`,
+      value: `${getCurrencySymbol()} ${formatMoney(displayGstAmount)}`,
       bold: true,
     })
   }
@@ -566,7 +584,7 @@ export function QuotationDocumentView({
                 <div className="box-border flex h-6 shrink-0 items-center border-b border-black px-2 leading-none">
                   <div>
                     <span className="font-bold">Amount in Words:</span>{' '}
-                    <span>{amountInIndianRupeesWords(Number(row.grand_total) || 0)}</span>
+                    <span>{amountInIndianRupeesWords(displayGrandTotal)}</span>
                   </div>
                 </div>
               ) : null}
@@ -628,7 +646,7 @@ export function QuotationDocumentView({
                         :
                       </td>
                       <td className="w-[28mm] border border-l-0 border-black px-2 py-0 text-right align-middle text-sm font-bold">
-                        {getCurrencySymbol()} {formatMoney(row.grand_total)}
+                        {getCurrencySymbol()} {formatMoney(displayGrandTotal)}
                       </td>
                     </tr>
                   ) : null}

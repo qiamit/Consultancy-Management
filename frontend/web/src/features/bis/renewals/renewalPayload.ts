@@ -1,7 +1,7 @@
 /**
  * Data for the QE Consultancy extension's "Renewal" section (Manak Assist on BIS License Renewals).
  * The extension fills Manak's Production Return Details from it
- * (frontend/extensions/qe-consultancy-chrome/renewal-fill.js — keep the shape in sync).
+ * (frontend/extensions/QE-Extension-Dev/renewal-fill.js — keep the shape in sync).
  */
 import { supabase } from '@/lib/supabaseClient'
 import { BIS_PROJECT_FILES_BUCKET } from '../projects/bisProjectFilesApi'

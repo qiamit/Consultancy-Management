@@ -81,8 +81,36 @@ export type KnowledgeStandardsResponse = {
 
 const API_BASE = '/api/knowledge'
 
+/** Production has no knowledge sidecar on Railway — fail health fast (APP-O03). */
+export const KNOWLEDGE_HEALTH_TIMEOUT_MS = import.meta.env.PROD ? 1500 : 4000
+
+export function withKnowledgeTimeout(parent?: AbortSignal): AbortSignal {
+  const ctrl = new AbortController()
+  const timer = window.setTimeout(() => ctrl.abort(), KNOWLEDGE_HEALTH_TIMEOUT_MS)
+  const onAbort = () => {
+    window.clearTimeout(timer)
+    ctrl.abort()
+  }
+  if (parent) {
+    if (parent.aborted) onAbort()
+    else parent.addEventListener('abort', onAbort, { once: true })
+  }
+  ctrl.signal.addEventListener(
+    'abort',
+    () => {
+      window.clearTimeout(timer)
+      if (parent) parent.removeEventListener('abort', onAbort)
+    },
+    { once: true },
+  )
+  return ctrl.signal
+}
+
 export async function fetchKnowledgeHealth(signal?: AbortSignal): Promise<KnowledgeHealthResponse> {
-  const res = await fetch(`${API_BASE}/health`, { method: 'GET', signal })
+  const res = await fetch(`${API_BASE}/health`, {
+    method: 'GET',
+    signal: withKnowledgeTimeout(signal),
+  })
   let data: KnowledgeHealthResponse
   try {
     data = (await res.json()) as KnowledgeHealthResponse

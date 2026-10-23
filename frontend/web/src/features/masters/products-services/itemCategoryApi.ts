@@ -18,7 +18,9 @@ function notify() {
 
 export function subscribeItemCategories(listener: Listener) {
   listeners.add(listener)
-  return () => listeners.delete(listener)
+  return () => {
+    listeners.delete(listener)
+  }
 }
 
 export function getCachedItemCategories(): ItemCategoryRow[] {

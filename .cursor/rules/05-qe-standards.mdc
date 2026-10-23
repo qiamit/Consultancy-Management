@@ -60,7 +60,7 @@ Do not commit or push until Amit says "commit". Then migrate if needed, commit, 
 After S6 closes, S6b is the follow-up in decision #7, before S7. S6b is not a bug-fix round.
 
 S6b contains only these five items:
-1. Browser-extension hardening, Chrome and Safari copies together.
+1. Browser-extension hardening (`QE-Extension-Dev/` Chromium only).
 2. Client Directory server-side search and paging.
 3. Live-schema dump, generated types, and drift check.
 4. Drop the deprecated `portal_password` columns and the compatibility trigger after S6 has been live for a week.

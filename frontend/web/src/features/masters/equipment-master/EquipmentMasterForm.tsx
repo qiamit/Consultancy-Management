@@ -26,10 +26,9 @@ import {
   FilterCombobox,
   type FilterComboboxOption,
 } from '@/features/sample-handling/receiving/FilterCombobox'
-import { FileUp, Eye, X, Trash2, Plus, CheckCircle, AlertTriangle, Activity, History, Wrench, ClipboardCheck, ListChecks, Thermometer } from 'lucide-react'
+import { Trash2, Plus, CheckCircle, AlertTriangle, Activity, History, Wrench, ClipboardCheck, ListChecks, Thermometer } from 'lucide-react'
 import {
   calculateNextDueDate,
-  sanitizeDateStr,
   todayIsoDate,
   type EquipmentForm,
   type EquipmentStatus,
@@ -152,7 +151,7 @@ export function EquipmentMasterForm({
   readOnly = false,
   onClose,
   onAddNewClientClick,
-  equipments = [],
+  equipments: _equipments = [],
   iqcMasters = [],
 }: {
   form: EquipmentForm
@@ -1436,7 +1435,7 @@ export function EquipmentMasterForm({
     />
   )
 
-  const renderIntermediateCheckCalculator = () => {
+  const _renderIntermediateCheckCalculator = () => {
     return (
       <div className="space-y-3">
         <Label className="text-xs font-semibold text-slate-700">Intermediate Check Perform</Label>
@@ -1636,7 +1635,7 @@ export function EquipmentMasterForm({
                                       className="h-5 px-1.5 text-[9px] font-semibold text-primary hover:bg-slate-100"
                                       onClick={() => {
                                         const emptyIdx = parsedReadings.findIndex(
-                                          (r) => !r.checkPointValue && !r.std && !r.obs,
+                                          (r: { checkPointValue?: string; std?: string; obs?: string }) => !r.checkPointValue && !r.std && !r.obs,
                                         )
                                         let nextReadings = [...parsedReadings]
                                         if (emptyIdx >= 0) {

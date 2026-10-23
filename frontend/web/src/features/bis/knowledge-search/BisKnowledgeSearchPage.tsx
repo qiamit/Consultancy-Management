@@ -105,13 +105,15 @@ export default function BisKnowledgeSearchPage() {
     [],
   )
 
-  const checkHealth = useCallback(async () => {
+  const checkHealth = useCallback(async (signal?: AbortSignal) => {
     try {
-      const health = await fetchKnowledgeHealth()
+      const health = await fetchKnowledgeHealth(signal)
+      if (signal?.aborted) return
       setServiceOk(true)
       applyCorpusBanners(health)
       try {
-        const std = await fetchKnowledgeStandards()
+        const std = await fetchKnowledgeStandards(signal)
+        if (signal?.aborted) return
         applyCorpusBanners(std)
         const opts = (std.standards || []).filter((s) => s.id && s.label)
         if (opts.length > 0) {
@@ -125,6 +127,7 @@ export default function BisKnowledgeSearchPage() {
         /* health ok but standards failed — keep all-only */
       }
     } catch {
+      if (signal?.aborted) return
       setServiceOk(false)
       setCorpusBannerEn(null)
       setCorpusBannerHi(null)
@@ -132,7 +135,9 @@ export default function BisKnowledgeSearchPage() {
   }, [applyCorpusBanners, t.standardAll])
 
   useEffect(() => {
-    void checkHealth()
+    const ctrl = new AbortController()
+    void checkHealth(ctrl.signal)
+    return () => ctrl.abort()
   }, [checkHealth])
 
   async function onSubmit(e: FormEvent) {
@@ -295,7 +300,12 @@ export default function BisKnowledgeSearchPage() {
               </div>
 
               <div className="flex gap-2">
-                <Button type="submit" className={limsPrimaryBtnClass} disabled={status === 'loading'}>
+                <Button
+                  type="submit"
+                  className={limsPrimaryBtnClass}
+                  disabled={status === 'loading' || serviceOk === false}
+                  title={serviceOk === false ? t.serviceDown : undefined}
+                >
                   {status === 'loading' ? (
                     <>
                       <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden />

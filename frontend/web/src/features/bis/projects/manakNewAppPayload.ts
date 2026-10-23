@@ -1,7 +1,7 @@
 /**
  * Data for the QE Consultancy extension's "New Application" section (Manak Assist).
  * The extension fills Manak's Apply-for-new-licence steps from this
- * (frontend/extensions/qe-consultancy-chrome/newapp-fill.js — keep the shape in sync).
+ * (frontend/extensions/QE-Extension-Dev/newapp-fill.js — keep the shape in sync).
  */
 import { supabase } from '@/lib/supabaseClient'
 import { DEFAULT_BIS_DOCUMENT_PRINT_PAGE_SETTINGS } from '../print/bisDocumentPrintPageSettings'

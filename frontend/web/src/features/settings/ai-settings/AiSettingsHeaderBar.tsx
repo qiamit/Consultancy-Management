@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils'
-import { limsPrimaryBtnClass, limsDarkBarSearchClass, limsDarkBarFieldClass, limsDarkBarBtnClass, limsAiTriggerClass } from '@/lib/limsThemeUi'
+import { limsPrimaryBtnClass, limsDarkBarSearchClass } from '@/lib/limsThemeUi'
 import { Plus, Save, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
