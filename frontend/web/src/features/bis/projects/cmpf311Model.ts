@@ -2,6 +2,7 @@ import { sendQiAssistantMessage } from '@/components/qi-assistant/qiAssistantApi
 import { supabase } from '@/lib/supabaseClient'
 import { loadPdfjs } from '@/lib/pdfjsLoader'
 import { resolveIsCodeFileDocumentKind } from '@/features/masters/is-codes/types'
+import { existingIsCodeStoragePaths } from '@/features/masters/is-codes/loadIsCodeFileLinks'
 import { toProperTitleCase } from '@/features/masters/clients/types'
 
 export type Cmpf311Mode = 'bis-sit' | 'on-sit'
@@ -203,8 +204,11 @@ export async function loadCmpf311MasterData(isCodeId: string): Promise<{
     }
   }
 
-  const availableFiles = files
-    .filter((file): file is typeof file & { id: string; file_name: string; storage_path: string } => Boolean(file.id && file.file_name && file.storage_path))
+  const listed = files.filter((file): file is typeof file & { id: string; file_name: string; storage_path: string } => Boolean(file.id && file.file_name && file.storage_path))
+  // Records whose file is missing from storage are left out (no failing download for them).
+  const existing = await existingIsCodeStoragePaths(listed.map((file) => file.storage_path))
+  const availableFiles = listed
+    .filter((file) => !existing || existing.has(file.storage_path))
     .map((file) => ({
       id: file.id,
       fileName: file.file_name,
