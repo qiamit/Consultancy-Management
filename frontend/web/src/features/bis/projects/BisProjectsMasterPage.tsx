@@ -86,7 +86,7 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(20)
+  const [pageSize, setPageSize] = useState(100)
   const [qeManagedFilter, setQeManagedFilter] = useState<BisQeManagedFilter>('managed')
   const [schemeFilter, setSchemeFilter] = useState<BisSchemeFilter>('all')
   const [openNoticeFilter, setOpenNoticeFilter] = useState<'all' | 'open'>('all')
