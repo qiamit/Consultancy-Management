@@ -21,6 +21,8 @@ async function getBrowser() {
       : []
   browser = await chromium.launch({
     headless: true,
+    // Optional override, e.g. a pre-installed Chromium in cloud dev containers.
+    executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined,
     args: ['--disable-dev-shm-usage', '--font-render-hinting=none', ...sandboxArgs],
   })
   return browser

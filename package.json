@@ -15,6 +15,10 @@
     "db:push": "node backend/scripts/refuse-hosted-cloud.cjs",
     "db:dump-schema": "node backend/scripts/dump-schema.mjs",
     "db:drift": "node backend/scripts/check-schema-drift.mjs",
+    "local:up": "node backend/local-dev/gen-env.mjs && docker compose -f backend/local-dev/docker-compose.yml up -d && node backend/local-dev/bootstrap.mjs",
+    "local:down": "docker compose -f backend/local-dev/docker-compose.yml down",
+    "local:reset": "docker compose -f backend/local-dev/docker-compose.yml down -v && npm run local:up",
+    "local:logs": "docker compose -f backend/local-dev/docker-compose.yml logs -f --tail 50",
     "knowledge:api": "knowledge_engine/.conda/bin/python -m knowledge_engine.scripts.serve_knowledge_search_api"
   },
   "dependencies": {

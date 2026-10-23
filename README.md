@@ -23,7 +23,15 @@ Consultancy-Management/
 └── knowledge_engine/         # BIS PDF knowledge search (local, standalone)
 ```
 
-## Local Setup
+## Local Setup (fully local backend)
+
+Needs Docker. Runs Postgres, auth, REST, storage, functions and the gateway locally; see [backend/local-dev/README.md](backend/local-dev/README.md).
+
+1. `npm install && npm install --prefix frontend/web && npm install --prefix backend`
+2. `npm run local:up`
+3. `npm run dev` and open http://localhost:5173 — sign in as `admin@consultancy.local` / `Admin@12345`
+
+## Local Setup (against Railway)
 
 1. `npm install --prefix frontend/web`
 2. Copy `frontend/web/.env.example` to `frontend/web/.env`
