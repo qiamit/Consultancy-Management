@@ -207,8 +207,27 @@ export async function createRenewalClientWorkbook(form: BisRenewalForm): Promise
       excelRow.getCell(5).font = { name: 'Aptos', size: 10, italic: true, color: { argb: 'FF44403C' } }
     }
   })
-  sheet.autoFilter = { from: { row: headerRow, column: 1 }, to: { row: headerRow + form.productionRows.length, column: 5 } }
-  sheet.pageSetup.printArea = `A1:E${headerRow + form.productionRows.length}`
+  // Total row under the periods (only for the client to see the sum; Import skips it).
+  const firstDataRow = headerRow + 1
+  const lastDataRow = headerRow + form.productionRows.length
+  const totalRow = sheet.getRow(lastDataRow + 1)
+  sheet.mergeCells(`A${totalRow.number}:B${totalRow.number}`)
+  totalRow.getCell(1).value = 'Total'
+  for (const column of [3, 4, 5]) {
+    const letter = String.fromCharCode(64 + column)
+    totalRow.getCell(column).value = { formula: `SUM(${letter}${firstDataRow}:${letter}${lastDataRow})`, result: 0 }
+    totalRow.getCell(column).numFmt = '#,##0.00;[Red]-#,##0.00;0'
+  }
+  totalRow.height = 27
+  for (let column = 1; column <= 5; column += 1) {
+    const cell = totalRow.getCell(column)
+    cell.font = { name: 'Aptos', size: 11, bold: true, color: { argb: `FF${dark}` } }
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } }
+    cell.alignment = { vertical: 'middle', horizontal: column <= 2 ? 'center' : 'right' }
+    cell.border = { top: { style: 'medium', color: { argb: `FF${amber}` } }, left: border, bottom: { style: 'medium', color: { argb: `FF${amber}` } }, right: border }
+  }
+  sheet.autoFilter = { from: { row: headerRow, column: 1 }, to: { row: lastDataRow, column: 5 } }
+  sheet.pageSetup.printArea = `A1:E${totalRow.number}`
   sheet.pageSetup.printTitlesRow = '13:13'
   await sheet.protect('QE-Renewal-Client-Input', {
     selectLockedCells: false,
@@ -324,6 +343,8 @@ export async function importRenewalClientWorkbook(
 
   const existingByDates = new Map(form.productionRows.map((row) => [`${row.periodFrom}|${row.periodTo}`, row]))
   const dataRows = matrix.slice(headerIndex + 1)
+    // The Total row under the periods is only for display.
+    .filter((source) => normalize(source[indexes.start]) !== 'total')
     .map((source) => ({ source, periodFrom: dateToIso(source[indexes.start]), periodTo: dateToIso(source[indexes.end]) }))
     .filter((row) => row.periodFrom || row.periodTo)
   // Sheets downloaded before the UTC date fix show every date one day early (21/07 as 20/07). When every
