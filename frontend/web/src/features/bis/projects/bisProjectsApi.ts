@@ -12,6 +12,7 @@ import {
   DEFAULT_CASE_REFERRED_BY,
   DEFAULT_PROJECT_KIND,
   dueSoonEndIsoDate,
+  RENEWAL_DEFERRED_DAYS,
   sanitizeBisLicenseScopeNotes,
   todayIsoDate,
   type BisApplicationDetailsForm,
@@ -119,13 +120,17 @@ export function fetchFmcsSchemeId(): Promise<string | null> {
   return fmcsSchemeIdCache
 }
 export type BisProjectKindFilter = 'all' | 'Application' | 'Licence'
-/** License validity bucket filter (header). Deferred = no validity date. */
+/**
+ * License validity bucket filter (header): Renewal = 0–90 days before validity, Deferred = up to 90 days after
+ * it (renewal with late fee), Expired = later than that; No Validity = no validity date.
+ */
 export type BisLicenseStatusFilter =
   | 'all'
   | 'operative'
   | 'renewal'
   | 'deferred'
   | 'expired'
+  | 'no_validity'
 
 /** Sortable table columns (Action excluded). */
 export type BisProjectSortKey = 'client' | 'isCode' | 'cmL' | 'validity' | 'billing'
@@ -209,24 +214,32 @@ export async function fetchBisProjectsPage(
   }
 
   // Header license-status filter overrides dedicated expired / due-soon list modes when set.
-  const effectiveLicenseStatus: BisLicenseStatusFilter =
+  // The Renewals list (due_soon) holds every licence BIS still renews: Renewal and Deferred together.
+  const effectiveLicenseStatus: BisLicenseStatusFilter | 'renewal_or_deferred' =
     licenseStatusFilter !== 'all'
       ? licenseStatusFilter
       : listMode === 'expired'
         ? 'expired'
         : listMode === 'due_soon'
-          ? 'renewal'
+          ? 'renewal_or_deferred'
           : 'all'
+  const deferredFrom = dueSoonEndIsoDate(today, -RENEWAL_DEFERRED_DAYS)
 
   if (effectiveLicenseStatus === 'expired') {
-    query = query.lt('license_validity_date', today)
+    query = query.lt('license_validity_date', deferredFrom)
   } else if (effectiveLicenseStatus === 'renewal') {
     query = query
       .gte('license_validity_date', today)
       .lte('license_validity_date', dueSoonEndIsoDate(today))
+  } else if (effectiveLicenseStatus === 'deferred') {
+    query = query.gte('license_validity_date', deferredFrom).lt('license_validity_date', today)
+  } else if (effectiveLicenseStatus === 'renewal_or_deferred') {
+    query = query
+      .gte('license_validity_date', deferredFrom)
+      .lte('license_validity_date', dueSoonEndIsoDate(today))
   } else if (effectiveLicenseStatus === 'operative') {
     query = query.gt('license_validity_date', dueSoonEndIsoDate(today))
-  } else if (effectiveLicenseStatus === 'deferred') {
+  } else if (effectiveLicenseStatus === 'no_validity') {
     query = query.is('license_validity_date', null)
   }
 

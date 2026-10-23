@@ -122,7 +122,7 @@ export function BisProjectsHeaderBar({
               'bis-projects-filter-trigger h-8 w-[min(100%,9.5rem)] shrink-0 px-2 text-[11px] sm:w-[10.5rem] sm:text-xs',
             )}
             aria-label="Filter by License Status"
-            title="Operative / Renewal / Deferred / Expired"
+            title="Operative / Renewal (90 days before validity) / Deferred (90 days after, with late fee) / Expired"
           >
             <SelectValue placeholder="License Status" />
           </SelectTrigger>
@@ -132,6 +132,7 @@ export function BisProjectsHeaderBar({
             <SelectItem value="renewal">Renewal</SelectItem>
             <SelectItem value="deferred">Deferred</SelectItem>
             <SelectItem value="expired">Expired</SelectItem>
+            <SelectItem value="no_validity">No Validity</SelectItem>
           </SelectContent>
         </Select>
       </>

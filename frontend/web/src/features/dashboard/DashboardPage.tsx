@@ -20,7 +20,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { supabase } from '@/lib/supabaseClient'
 import { Skeleton } from '@/components/ui/skeleton'
 import { limsPageShellClass, limsPanelClass } from '@/lib/limsThemeUi'
-import { dueSoonEndIsoDate, todayIsoDate } from '@/features/bis/projects/types'
+import { dueSoonEndIsoDate, RENEWAL_DEFERRED_DAYS, todayIsoDate } from '@/features/bis/projects/types'
 import { cn } from '@/lib/utils'
 
 type StatCard = {
@@ -70,6 +70,8 @@ export default function DashboardPage() {
       setLoading(true)
       const today = todayIsoDate()
       const dueEnd = dueSoonEndIsoDate(today)
+      // Renewal Due includes Deferred (up to 90 days after validity, late fee); Expired is beyond that.
+      const deferredFrom = dueSoonEndIsoDate(today, -RENEWAL_DEFERRED_DAYS)
       const [
         c,
         b,
@@ -95,11 +97,11 @@ export default function DashboardPage() {
         supabase
           .from('bis_projects')
           .select('*', { count: 'exact', head: true })
-          .lt('license_validity_date', today),
+          .lt('license_validity_date', deferredFrom),
         supabase
           .from('bis_projects')
           .select('*', { count: 'exact', head: true })
-          .gte('license_validity_date', today)
+          .gte('license_validity_date', deferredFrom)
           .lte('license_validity_date', dueEnd),
         supabase.from('bis_renewal_applications').select('*', { count: 'exact', head: true }),
         supabase.from('license_surveillance').select('*', { count: 'exact', head: true }),
