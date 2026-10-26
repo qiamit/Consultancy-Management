@@ -162,12 +162,17 @@ function quotationStylesCss(tpl: FinanceDocumentTemplate): string {
   const padBpx = mmToPx(padB)
   const padLpx = mmToPx(padL)
   const rateColPx = mmToPx(28)
-  const totalsHpx = mmToPx(5.5)
   const signHpx = mmToPx(18)
-  const signWpx = mmToPx(45)
+  const signWpx = mmToPx(46)
   const termsMinPx = mmToPx(12)
   const blockMinPx = mmToPx(14)
-  const sealHpx = mmToPx(42)
+  /** Company ↔ Authorized gap ~18mm (under 1 inch). */
+  const sealHpx = mmToPx(22)
+  const hair = '1px solid #78716c'
+  const hairSoft = '1px solid #d6d3d1'
+  /** True double-line frame (even weight on all sides). */
+  const boxFrame = `border: 3px double #292524;`
+  const itemsFrame = `border: 3px double #292524;`
 
   return `
   @page { size: ${pageCssSize}; margin: 0; }
@@ -178,19 +183,16 @@ function quotationStylesCss(tpl: FinanceDocumentTemplate): string {
   body {
     font-family: ${font};
     font-size: ${size}px;
-    color: #000;
+    color: #1c1917;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
-  table { border-collapse: collapse; }
+  table { border-collapse: collapse; border-spacing: 0; }
   .page {
     width: ${pageWpx}px;
     min-height: ${pageHpx}px;
     height: ${pageHpx}px;
-    /* double-line page border (html2canvas-friendly) */
-    border: 2px solid #000;
-    outline: 2px solid #000;
-    outline-offset: -5px;
+    ${boxFrame}
     background: #fff;
     padding: ${padTpx}px ${padRpx}px ${padBpx}px ${padLpx}px;
     box-sizing: border-box;
@@ -205,7 +207,7 @@ function quotationStylesCss(tpl: FinanceDocumentTemplate): string {
   }
   .letter-header {
     width: 100%; height: ${headerHpx}px; text-align: center; vertical-align: middle;
-    border-bottom: 2px solid #000;
+    border-bottom: ${hairSoft};
   }
   .letter-header img {
     width: 100%; max-width: ${contentWpx}px; height: ${headerHpx}px;
@@ -219,87 +221,188 @@ function quotationStylesCss(tpl: FinanceDocumentTemplate): string {
     width: auto; max-width: 220px; max-height: 70px; height: auto; object-fit: contain; display: inline-block;
   }
   .title-bar {
-    width: 100%; border-bottom: 2px solid #000; text-align: center;
-    font-size: ${Math.max(size + 4, 14)}px; font-weight: 700; letter-spacing: 1px; padding: 6px 4px;
+    width: 100%; border-bottom: none; text-align: center;
+    font-size: ${Math.max(size + 8, 18)}px; font-weight: 700; letter-spacing: 1.5px;
+    padding: 8px 4px 10px; color: #1c1917;
   }
-  .meta-outer { width: 100%; border: 2px solid #000; }
-  .meta-outer > tbody > tr > td { vertical-align: top; padding: 8px 10px; }
-  .meta-client { width: 58%; border-right: 1px solid #000; }
-  .meta-info { width: 42%; padding: 0 !important; }
+  .meta-outer {
+    width: 100%; ${boxFrame}
+    border-collapse: separate; border-spacing: 0;
+  }
+  .meta-outer > tbody > tr > td {
+    vertical-align: stretch; height: 1px;
+  }
+  /* Specificity must beat the td rule above — content was flush to the double border */
+  .meta-outer > tbody > tr > td.meta-client {
+    width: 58%;
+    border-right: ${hair};
+    padding: 2mm 2mm 2mm 2mm;
+    vertical-align: top;
+    box-sizing: border-box;
+  }
+  .meta-outer > tbody > tr > td.meta-info {
+    width: 42%; padding: 0; height: 100%; vertical-align: top;
+  }
   .lbl { font-size: ${size + 1}px; font-weight: 700; margin: 0 0 6px; }
   .client-line { margin: 0 0 3px; line-height: 1.35; font-size: ${size}px; }
-  .kv { width: 100%; border-collapse: collapse; }
+  /* Plain table — flex/grid fill was collapsing rows in the preview iframe */
+  .kv {
+    width: 100%; height: 100%;
+    border-collapse: collapse; border-spacing: 0; table-layout: fixed;
+  }
+  .kv col.kv-k { width: 52%; }
+  .kv col.kv-sep { width: 12px; }
+  .kv col.kv-v { width: auto; }
   .kv td {
-    border: 1px solid #000; padding: 5px 6px; vertical-align: middle; font-size: ${size}px;
+    border-top: ${hairSoft}; border-bottom: ${hairSoft};
+    border-left: none; border-right: none;
+    padding: 5px 6px; vertical-align: middle; font-size: ${size}px;
+    line-height: 1.25;
   }
   .kv tr:first-child td { border-top: none; }
   .kv tr:last-child td { border-bottom: none; }
-  .kv td:first-child { border-left: none; }
-  .kv td:last-child { border-right: none; }
-  .kv .k { width: 52%; white-space: nowrap; }
-  .kv .sep { width: 10px; text-align: center; }
+  .kv .k { white-space: nowrap; }
+  .kv .sep {
+    text-align: center; width: 12px;
+    border-left: ${hairSoft}; border-right: ${hairSoft};
+    padding-left: 0; padding-right: 0;
+  }
   .kv .v { font-weight: 700; }
   .items-wrap {
-    width: 100%; margin-top: 8px;
-    border: 2px solid #000;
+    width: 100%; margin-top: 8px; overflow: hidden; ${itemsFrame}
   }
-  .items { width: 100%; border-collapse: collapse; border: 1px solid #000; table-layout: fixed; }
+  .items { width: 100%; border-collapse: collapse; border-spacing: 0; border: none; table-layout: fixed; }
   .items th, .items td {
-    border: 1px solid #000; padding: 4px 3px; vertical-align: top;
-    font-size: ${Math.max(size - 1, 8)}px;
+    border: ${hairSoft}; padding: 5px 4px; vertical-align: middle;
+    font-size: ${Math.max(size - 1, 8)}px; color: #1c1917;
   }
+  .items tr:first-child > * { border-top: none; }
+  .items tr:last-child > * { border-bottom: none; }
+  .items tr > *:first-child { border-left: none; }
+  .items tr > *:last-child { border-right: none; }
   .items th {
-    background: #f0f0f0; font-weight: 700; text-transform: uppercase;
-    font-size: ${Math.max(size - 2, 7)}px;
+    background: #1c1917;
+    background: linear-gradient(180deg, #44403c 0%, #1c1917 100%);
+    color: #fde68a; font-weight: 700; text-transform: uppercase;
+    font-size: ${Math.max(size - 2, 7)}px; letter-spacing: 0.08em;
+    border-bottom: 1px solid #b45309;
+    vertical-align: middle;
   }
+  .items th .sr-stack {
+    display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
+    line-height: 1.05; gap: 0;
+  }
+  .items col.col-sr { width: 7mm; }
+  .items col.col-desc { width: auto; }
+  .items col.col-make { width: 9mm; }
+  .items col.col-hsn { width: 10mm; }
+  .items col.col-qty { width: 8mm; }
+  .items col.col-unit { width: 9mm; }
+  .items col.col-rate { width: 24mm; }
+  .items col.col-amt { width: 26mm; }
+  .items tbody tr:nth-child(even) td { background: #fafaf9; }
   .c { text-align: center; }
   .r { text-align: right; }
-  .finance { width: 100%; margin-top: ${gap2}px; border: 2px solid #000; }
-  .finance > tbody > tr > td { vertical-align: top; padding: 0; }
-  .finance-left { width: 62%; border-right: 1px solid #000; }
-  .finance-left-inner { width: 100%; }
+  .finance {
+    width: 100%; margin-top: ${gap2}px; ${boxFrame}
+    border-collapse: separate; border-spacing: 0;
+  }
+  .finance > tbody > tr > td { vertical-align: stretch; padding: 0; height: 1px; }
+  .finance-left { width: 62%; border-right: ${hair}; height: 100%; }
+  .finance-left-inner { width: 100%; height: 100%; }
   .finance-left-inner td {
-    padding: 8px 10px; vertical-align: top; border-bottom: 1px solid #000;
+    padding: 6px 10px; vertical-align: top; border-bottom: none;
   }
-  .finance-left-inner tr:last-child td { border-bottom: none; }
-  .finance-right { width: 38%; }
-  .totals { width: 100%; border-collapse: collapse; table-layout: fixed; }
-  .totals td {
-    border: 1px solid #000; padding: 1px 6px; height: ${totalsHpx}px; font-size: ${size}px;
-    vertical-align: middle; line-height: 1.15;
+  .finance-right { width: 38%; height: 100%; vertical-align: top; }
+  .totals-fill {
+    display: flex; flex-direction: column; height: 100%; width: 100%; min-height: 100%;
   }
-  .totals .k { width: 55%; border-right: none !important; }
-  .totals .sep {
-    width: 10px; text-align: center;
-    border-left: none !important; border-right: none !important;
+  .totals-fill .tr {
+    flex: 1 1 0;
+    display: flex; align-items: center; width: 100%;
+    border-bottom: ${hairSoft};
+    font-size: ${size}px; line-height: 1.15; min-height: 0;
   }
-  .totals .v {
-    width: ${rateColPx}px; text-align: right; font-weight: 700; border-left: none !important;
+  .totals-fill .tr:last-child { border-bottom: none; }
+  .totals-fill .tr.grand { font-weight: 700; }
+  .totals-fill .k { flex: 1 1 auto; padding: 2px 6px; }
+  .totals-fill .sep { flex: 0 0 10px; text-align: center; }
+  .totals-fill .v {
+    flex: 0 0 ${rateColPx}px; text-align: right; font-weight: 700; padding: 2px 6px;
   }
-  .totals .grand td { font-size: ${size + 2}px; font-weight: 700; }
   .words, .bank-line { font-size: ${size}px; line-height: 1.2; margin: 0 0 1px; }
-  .bottom { width: 100%; margin-top: ${gap2}px; border: 2px solid #000; }
+  .bottom { width: 100%; margin-top: ${gap2}px; ${boxFrame} border-collapse: separate; border-spacing: 0; }
   .bottom-terms {
-    width: 100%; padding: 6px 8px; border-bottom: 1px solid #000; min-height: ${termsMinPx}px;
+    width: 100%; padding: 6px 8px; border-bottom: ${hairSoft}; min-height: ${termsMinPx}px;
   }
-  .bottom-body { width: 100%; }
-  .bottom-body > tbody > tr > td { vertical-align: top; padding: 0; }
-  .bottom .left-col { width: 50%; border-right: 1px solid #000; }
-  .bottom .block { padding: 6px 8px; border-bottom: 1px solid #000; min-height: ${blockMinPx}px; }
+  .bottom-body { width: 100%; height: 100%; }
+  .bottom-body > tbody > tr > td { vertical-align: stretch; padding: 0; height: 1px; }
+  .bottom .left-col { width: 50%; border-right: ${hair}; }
+  .bottom .block { padding: 6px 8px; border-bottom: ${hairSoft}; min-height: ${blockMinPx}px; }
   .bottom .block:last-child { border-bottom: none; }
   .bottom .br {
-    width: 50%; text-align: right; vertical-align: bottom; padding: 8px 10px; height: ${sealHpx}px;
+    width: 50%; text-align: right; vertical-align: stretch; padding: 0;
+    height: ${sealHpx}px; max-height: ${mmToPx(25)}px;
   }
   .body-text { font-size: ${size}px; line-height: 1.4; white-space: pre-wrap; margin-top: 4px; }
-  .sign-img {
-    max-height: ${signHpx}px; max-width: ${signWpx}px; object-fit: contain; display: block; margin: 0 0 4px auto;
+  .sign-block {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: flex-end;
+    text-align: right;
+    height: ${sealHpx}px;
+    min-height: ${sealHpx}px;
+    max-height: ${mmToPx(25)}px;
+    padding: 4px 8px;
+    overflow: hidden;
+  }
+  .sign-company {
+    position: relative;
+    z-index: 1;
+    font-size: ${Math.max(size + 3, 13)}px;
+    font-weight: 700;
+    line-height: 1.15;
+  }
+  .sign-stamp {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    max-height: ${signHpx}px;
+    max-width: ${signWpx}px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    z-index: 2;
+    /* Drop white seal paper so company / Authorized text shows through */
+    mix-blend-mode: multiply;
+    opacity: 1;
+    pointer-events: none;
+    background: transparent;
   }
   .sign-text {
-    font-family: "Segoe Script", "Brush Script MT", cursive; font-size: 16px; font-style: italic;
-    min-height: ${mmToPx(12)}px; margin-bottom: 4px;
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 2;
+    font-family: "Segoe Script", "Brush Script MT", cursive;
+    font-size: 15px;
+    font-style: italic;
+    white-space: nowrap;
+    opacity: 0.9;
+    pointer-events: none;
   }
-  .sign-company { font-size: ${size + 1}px; font-weight: 700; line-height: 1.2; }
-  .sign-caption { font-size: ${size}px; font-weight: 400; line-height: 1.2; }
+  .sign-caption {
+    position: relative;
+    z-index: 1;
+    font-size: ${Math.max(size + 1, 11)}px;
+    font-weight: 700;
+    line-height: 1.15;
+    color: #a16207;
+  }
   .letter-footer { width: 100%; height: ${footerHpx}px; text-align: center; vertical-align: middle; }
   .letter-footer img {
     width: 100%; max-width: ${contentWpx}px; height: ${footerHpx}px;
@@ -375,7 +478,7 @@ function buildOneQuotationHtml(
         ${tpl.lineShowHsn ? `<td class="c">${cell(l.hsn_sac)}</td>` : ''}
         ${tpl.lineShowQty ? `<td class="c">${cell(String(l.quantity))}</td>` : ''}
         ${tpl.lineShowUnit ? `<td class="c">${cell(l.unit)}</td>` : ''}
-        ${tpl.lineShowRate ? `<td class="r">${getCurrencySymbol()} ${esc(formatMoney(l.rate))}</td>` : ''}
+        ${tpl.lineShowRate ? `<td class="c">${getCurrencySymbol()} ${esc(formatMoney(l.rate))}</td>` : ''}
         ${tpl.lineShowAmount ? `<td class="r">${getCurrencySymbol()} ${esc(formatMoney(lineAmt))}</td>` : ''}
       </tr>`
     })
@@ -399,60 +502,60 @@ function buildOneQuotationHtml(
       ].join('')
     : `<p class="bank-line">—</p>`
 
-  const signatureInner = opts.signatureUrl
-    ? `<img class="sign-img" src="${esc(opts.signatureUrl)}" alt="Company seal and signature" />`
+  const signatureStamp = opts.signatureUrl
+    ? `<img class="sign-stamp" src="${esc(opts.signatureUrl)}" alt="Company seal and signature" />`
     : row.signature_text?.trim()
       ? `<div class="sign-text">${esc(row.signature_text.trim())}</div>`
-      : `<div class="sign-text">&nbsp;</div>`
+      : ''
 
   const sealSignBlock = tpl.showSealSign
-    ? `${signatureInner}<div class="sign-company">${esc(opts.companyName.trim() || 'Company Name')}</div><div class="sign-caption">Authorized Signatory</div>`
+    ? `<div class="sign-block"><div class="sign-company">${esc(opts.companyName.trim() || 'Company Name')}</div>${signatureStamp}<div class="sign-caption">Authorized Signatory</div></div>`
     : ''
 
   const totalRows: string[] = []
   if (tpl.showBasicAmount && !isPaymentReceipt) {
     totalRows.push(
-      `<tr><td class="k">Basic Amount</td><td class="sep">:</td><td class="v">${getCurrencySymbol()} ${esc(formatMoney(totals.subtotal))}</td></tr>`,
+      `<div class="tr"><span class="k">Basic Amount</span><span class="sep">:</span><span class="v">${getCurrencySymbol()} ${esc(formatMoney(totals.subtotal))}</span></div>`,
     )
   }
   if (tpl.showDiscount && totals.discountAmount > 0) {
     totalRows.push(
-      `<tr><td class="k">Discount</td><td class="sep">:</td><td class="v">${getCurrencySymbol()} ${esc(formatMoney(totals.discountAmount))}</td></tr>`,
+      `<div class="tr"><span class="k">Discount</span><span class="sep">:</span><span class="v">${getCurrencySymbol()} ${esc(formatMoney(totals.discountAmount))}</span></div>`,
     )
   }
   if (tpl.showTransportationCharges && totals.transportationCharges > 0) {
     totalRows.push(
-      `<tr><td class="k">Transportation Charges</td><td class="sep">:</td><td class="v">${getCurrencySymbol()} ${esc(formatMoney(totals.transportationCharges))}</td></tr>`,
+      `<div class="tr"><span class="k">Transportation Charges</span><span class="sep">:</span><span class="v">${getCurrencySymbol()} ${esc(formatMoney(totals.transportationCharges))}</span></div>`,
     )
   }
   if (tpl.showPackagingCharge && totals.packagingCharges > 0) {
     totalRows.push(
-      `<tr><td class="k">Packaging Charge</td><td class="sep">:</td><td class="v">${getCurrencySymbol()} ${esc(formatMoney(totals.packagingCharges))}</td></tr>`,
+      `<div class="tr"><span class="k">Packaging Charge</span><span class="sep">:</span><span class="v">${getCurrencySymbol()} ${esc(formatMoney(totals.packagingCharges))}</span></div>`,
     )
   }
   if (tpl.showGstAmount && !isPaymentReceipt) {
     totalRows.push(
-      `<tr><td class="k">GST Amount</td><td class="sep">:</td><td class="v">${getCurrencySymbol()} ${esc(formatMoney(displayGstAmount))}</td></tr>`,
+      `<div class="tr"><span class="k">GST Amount</span><span class="sep">:</span><span class="v">${getCurrencySymbol()} ${esc(formatMoney(displayGstAmount))}</span></div>`,
     )
   }
   if (showCgst && cgstTotal > 0) {
     totalRows.push(
-      `<tr><td class="k">CGST</td><td class="sep">:</td><td class="v">${getCurrencySymbol()} ${esc(formatMoney(cgstTotal))}</td></tr>`,
+      `<div class="tr"><span class="k">CGST</span><span class="sep">:</span><span class="v">${getCurrencySymbol()} ${esc(formatMoney(cgstTotal))}</span></div>`,
     )
   }
   if (showSgst && sgstTotal > 0) {
     totalRows.push(
-      `<tr><td class="k">SGST</td><td class="sep">:</td><td class="v">${getCurrencySymbol()} ${esc(formatMoney(sgstTotal))}</td></tr>`,
+      `<div class="tr"><span class="k">SGST</span><span class="sep">:</span><span class="v">${getCurrencySymbol()} ${esc(formatMoney(sgstTotal))}</span></div>`,
     )
   }
   if (showIgst && igstTotal > 0) {
     totalRows.push(
-      `<tr><td class="k">IGST</td><td class="sep">:</td><td class="v">${getCurrencySymbol()} ${esc(formatMoney(igstTotal))}</td></tr>`,
+      `<div class="tr"><span class="k">IGST</span><span class="sep">:</span><span class="v">${getCurrencySymbol()} ${esc(formatMoney(igstTotal))}</span></div>`,
     )
   }
   if (tpl.showGrandTotal) {
     totalRows.push(
-      `<tr class="grand"><td class="k">${isPaymentReceipt ? 'Amount Received' : 'Grand Total'}</td><td class="sep">:</td><td class="v">${getCurrencySymbol()} ${esc(formatMoney(displayGrandTotal))}</td></tr>`,
+      `<div class="tr grand"><span class="k">${isPaymentReceipt ? 'Amount Received' : 'Grand Total'}</span><span class="sep">:</span><span class="v">${getCurrencySymbol()} ${esc(formatMoney(displayGrandTotal))}</span></div>`,
     )
   }
 
@@ -505,6 +608,11 @@ function buildOneQuotationHtml(
           tpl.showDocumentMeta
             ? `<td class="meta-info"${tpl.showClientDetails ? '' : ' colspan="2" style="width:100%;"'}>
           <table class="kv" cellspacing="0" cellpadding="0">
+            <colgroup>
+              <col class="kv-k" />
+              <col class="kv-sep" />
+              <col class="kv-v" />
+            </colgroup>
             <tr><td class="k">${esc(metaLabels.number)}</td><td class="sep">:</td><td class="v">${cell(row.quotation_number)}</td></tr>
             <tr><td class="k">${esc(metaLabels.date)}</td><td class="sep">:</td><td class="v">${esc(formatDate(row.quotation_date))}</td></tr>
             <tr><td class="k">${esc(metaLabels.dueDate)}</td><td class="sep">:</td><td class="v">${
@@ -545,15 +653,25 @@ function buildOneQuotationHtml(
     ${
       tpl.showLineItems
         ? `<div class="items-wrap"><table class="items" cellspacing="0" cellpadding="0">
+        <colgroup>
+          <col class="col-sr" />
+          <col class="col-desc" />
+          ${tpl.lineShowMake ? '<col class="col-make" />' : ''}
+          ${tpl.lineShowHsn ? '<col class="col-hsn" />' : ''}
+          ${tpl.lineShowQty ? '<col class="col-qty" />' : ''}
+          ${tpl.lineShowUnit ? '<col class="col-unit" />' : ''}
+          ${tpl.lineShowRate ? '<col class="col-rate" />' : ''}
+          ${tpl.lineShowAmount ? '<col class="col-amt" />' : ''}
+        </colgroup>
         <thead><tr>
-          <th class="c" style="width:6%;">#</th>
+          <th class="c"><span class="sr-stack"><span>Sr.</span><span>No.</span></span></th>
           <th>Description</th>
-          ${tpl.lineShowMake ? '<th class="c" style="width:10%;">Make</th>' : ''}
-          ${tpl.lineShowHsn ? '<th class="c" style="width:8%;">HSN</th>' : ''}
-          ${tpl.lineShowQty ? '<th class="c" style="width:7%;">Qty</th>' : ''}
-          ${tpl.lineShowUnit ? '<th class="c" style="width:7%;">Unit</th>' : ''}
-          ${tpl.lineShowRate ? '<th class="r" style="width:28mm;">Rate</th>' : ''}
-          ${tpl.lineShowAmount ? '<th class="r" style="width:28mm;">Amount</th>' : ''}
+          ${tpl.lineShowMake ? '<th class="c">Make</th>' : ''}
+          ${tpl.lineShowHsn ? '<th class="c">HSN</th>' : ''}
+          ${tpl.lineShowQty ? '<th class="c">Qty</th>' : ''}
+          ${tpl.lineShowUnit ? '<th class="c">Unit</th>' : ''}
+          ${tpl.lineShowRate ? '<th class="c">Rate</th>' : ''}
+          ${tpl.lineShowAmount ? '<th class="r">Amount</th>' : ''}
         </tr></thead>
         <tbody>
           ${itemsBodyHtml}
@@ -567,21 +685,21 @@ function buildOneQuotationHtml(
         <td class="finance-left"><table class="finance-left-inner" cellspacing="0" cellpadding="0">
           ${
             tpl.showAmountInWords
-              ? `<tr><td style="height:5.5mm;padding:1px 8px;vertical-align:middle;border-bottom:1.5px solid #000;box-sizing:border-box;line-height:1.15;">
+              ? `<tr><td style="height:5.5mm;padding:4px 8px;vertical-align:middle;border-bottom:none;box-sizing:border-box;line-height:1.15;">
               <p class="words" style="margin:0;"><span class="lbl" style="display:inline;margin:0;">Amount in Words:</span> ${esc(amountInIndianRupeesWords(displayGrandTotal))}</p>
             </td></tr>`
               : ''
           }
           ${
             tpl.showBankDetails
-              ? `<tr><td style="height:auto;padding:${tpl.showAmountInWords ? `${mmToPx(2)}px` : '2px'} 8px 2px;vertical-align:top;line-height:1.2;">
+              ? `<tr><td style="height:auto;padding:2px 8px 6px;vertical-align:top;line-height:1.2;border-top:none;">
               <div class="lbl" style="margin:0 0 2px;">Bank Details</div>
               ${bankBody}
             </td></tr>`
               : ''
           }
         </table></td>
-        <td class="finance-right"><table class="totals" cellspacing="0" cellpadding="0">${totalRows.join('')}</table></td>
+        <td class="finance-right"><div class="totals-fill">${totalRows.join('')}</div></td>
       </tr></table>`
         : ''
     }
@@ -630,9 +748,10 @@ function buildOneQuotationHtml(
 export async function prepareQuotationDocumentHtml(
   rows: QuotationRow[],
   documentKind: BookDocumentKind = 'quotation',
+  templateOverride?: FinanceDocumentTemplate,
 ): Promise<PreparedQuotationDocument> {
   const docs = await fetchLabDocumentTemplates()
-  const template = templateForBook(docs, documentKind)
+  const template = templateOverride ?? templateForBook(docs, documentKind)
 
   const headerName = template.headerTemplateName || QUOTATION_LETTER_HEADER_NAME
   const footerName = template.footerTemplateName || QUOTATION_LETTER_FOOTER_NAME

@@ -17,29 +17,24 @@ import type { BisProjectRow } from './types'
 type Rec = Record<string, unknown>
 
 /** Steps mirror Manak "Application For Change in Scope (Inclusion)"; the last step is Preview (Submit / payment stays on Manak). */
+/** Steps: 1 Licence + New Scope · 2 Test Reports · 3 Machinery/Equipment · 4 Request letter · Preview.
+ * Varieties for inclusion are entered on Step 1 (New Scope) and synced into inclusion-details.rows. */
 export const BIS_INCLUSION_STEPS: BisApplicationStep[] = [
   {
     id: 'inc-licence',
     label: 'Licence & Existing Scope',
     title: 'Licence & Existing Scope',
-    manakHint: 'Licence number and the existing scope Manak shows above "Add Varieties".',
+    manakHint: 'Licence number, existing scope, and New Scope (varieties for inclusion).',
     kinds: [],
   },
   {
     // Same module as the New Application's Test Reports step: samples, QR import / generation and the
-    // test requests go through Manak (extension); the QR codes feed "Add Varieties".
+    // test requests go through Manak (extension); sample files attach to the inclusion preview.
     id: 'test-reports',
     label: 'Test Reports',
     title: 'Test Reports',
     manakHint: 'Sample offer letter and test request (QR codes from Manak), factory test report, long duration and raw material test reports.',
     kinds: ['osl-offer-and-test-request', 'factory-test-report', 'undertaking-long-duration', 'raw-material-test-reports', 'osl-sample-requirements', 'osl-sample-test-request'],
-  },
-  {
-    id: 'inc-varieties',
-    label: 'Add Varieties',
-    title: 'Add Varieties',
-    manakHint: 'Inclusion type, sample QR code(s), reason for an old test report and the variety — one row per variety.',
-    kinds: [],
   },
   {
     id: 'inc-lists',
@@ -100,7 +95,7 @@ export function buildInclusionDocumentRows(_row: BisProjectRow, payloads: Partia
   }
   if (applicable('sample-offer', 'Yes')) doc(1, 'osl-offer-and-test-request', 'Sample Offer Letter')
   if (applicable('factory-test-report', 'Yes')) doc(1, 'factory-test-report')
-  // Test requests / reports of the samples whose QR codes are picked on "Add Varieties" (all samples until one is picked).
+  // Test requests / reports of samples linked on inclusion variety rows (all samples when none picked).
   const samples = Array.isArray(payloads['osl-sample-requirements']?.rows) ? (payloads['osl-sample-requirements']!.rows as Rec[]) : []
   const picked = new Set(parseInclusionVarieties(payloads[INCLUSION_DETAILS_KIND]).flatMap((v) => inclusionQrCodes(v.qrCode)))
   for (const { file, label } of currentSampleFiles(files, samples, picked)) fileRow(1, file, label)
@@ -113,14 +108,14 @@ export function buildInclusionDocumentRows(_row: BisProjectRow, payloads: Partia
     for (const f of ofKind('raw-material-test-report')) fileRow(1, f, `Raw Material Test Report — ${f.file_name}`)
   }
 
-  /* Step 4 — the modified lists Manak asks for. */
-  if (inclusionRequired(components, 'machinery', inclusionAdditionRows(payloads['cmpf-305']).length)) doc(3, 'inclusion-cmpf-305')
-  if (inclusionRequired(components, 'equipment', inclusionAdditionRows(payloads['cmpf-306']).length)) doc(3, 'inclusion-cmpf-306')
+  /* Step 3 — the modified lists Manak asks for. */
+  if (inclusionRequired(components, 'machinery', inclusionAdditionRows(payloads['cmpf-305']).length)) doc(2, 'inclusion-cmpf-305')
+  if (inclusionRequired(components, 'equipment', inclusionAdditionRows(payloads['cmpf-306']).length)) doc(2, 'inclusion-cmpf-306')
 
-  /* Step 5 — request letter (when Applicable) and the uploaded documents, in upload order. */
+  /* Step 4 — request letter (when Applicable) and the uploaded documents, in upload order. */
   const map = components?.applicable && typeof components.applicable === 'object' ? (components.applicable as Rec) : {}
-  if (map['request-letter'] !== 'No') doc(4, 'inclusion-request-letter')
-  for (const f of ofKind(INCLUSION_OTHER_DOCS_KIND)) fileRow(4, f, f.file_name)
+  if (map['request-letter'] !== 'No') doc(3, 'inclusion-request-letter')
+  for (const f of ofKind(INCLUSION_OTHER_DOCS_KIND)) fileRow(3, f, f.file_name)
   return rows
 }
 

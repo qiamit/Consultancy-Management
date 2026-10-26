@@ -52,7 +52,8 @@ export function applicantContextFromPrintData({ row, client, isCode, company }: 
     bisBranchName: (row.branch_name ?? '').trim(),
     bisBranchState: (row.branch_state ?? '').trim() || client.state,
     applicationNumber: applicationNumberForProject(row),
-    dateOfApplication: row.start_date ?? row.created_at ?? '',
+    // Only Application Details (`application_date`). Never start_date / created_at — those are project milestones, not Manak application date.
+    dateOfApplication: (row.application_date ?? '').trim(),
     /** Application inspection date when set; otherwise empty (print helpers fall back to today). */
     dateOfInspection: (row.inspection_date ?? '').trim(),
     isNumber: isCode.label,

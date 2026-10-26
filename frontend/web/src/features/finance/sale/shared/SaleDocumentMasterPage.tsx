@@ -62,6 +62,7 @@ import {
   downloadQuotationPdfWithTemplate,
   printQuotationsWithTemplate,
 } from '../quotation/outputQuotationDocument'
+import { SaleDocumentPreviewDialog } from './SaleDocumentPreviewDialog'
 
 export type SaleDocumentModuleConfig = {
   title: string
@@ -163,6 +164,8 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
   const [jumpTo, setJumpTo] = useState('')
   const [message, setMessage] = useState<string | null>(null)
   const [showTemplates, setShowTemplates] = useState(false)
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [previewRow, setPreviewRow] = useState<QuotationRow | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
 
   const showForm = editId != null
@@ -565,13 +568,10 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
     setEdit(row.id)
   }
 
-  const openCopy = (row: QuotationRow) => {
-    void allocateNextNumber().then((next) => {
-      setForm(rowToForm(row, true, next))
-      setSaveMessage(null)
-      hydratedEditRef.current = 'new'
-      setEdit('new')
-    })
+  const openPreview = (row: QuotationRow) => {
+    setMessage(null)
+    setPreviewRow(row)
+    setPreviewOpen(true)
   }
 
   const handleSave = async () => {
@@ -876,7 +876,7 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
           onToggle={toggleRow}
           onToggleAll={toggleAllOnPage}
           onEdit={openEdit}
-          onCopy={openCopy}
+          onPreview={openPreview}
           onPrint={(row) => {
             void printQuotationsWithTemplate([row], config.documentKind).then(
               () => setMessage(null),
@@ -884,12 +884,13 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
             )
           }}
           onDownloadPdf={(row) => {
+            setMessage('Preparing PDF…')
             void downloadQuotationPdfWithTemplate(
               row,
               `${row.quotation_number || config.title}.pdf`,
               config.documentKind,
             ).then(
-              () => setMessage('Use Print → Save as PDF for a crisp document.'),
+              () => setMessage('PDF downloaded.'),
               (err) => setMessage(err instanceof Error ? err.message : 'PDF failed.'),
             )
           }}
@@ -952,6 +953,16 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
           documentKind={config.documentKind}
         />
       ) : null}
+
+      <SaleDocumentPreviewDialog
+        open={previewOpen}
+        onOpenChange={(open) => {
+          setPreviewOpen(open)
+          if (!open) setPreviewRow(null)
+        }}
+        row={previewRow}
+        documentKind={config.documentKind}
+      />
 
       <Dialog open={showForm} onOpenChange={handleFormOpenChange}>
         <DialogContent

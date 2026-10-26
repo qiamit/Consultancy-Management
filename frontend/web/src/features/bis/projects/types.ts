@@ -453,10 +453,9 @@ export function rowToBisProjectForm(row: BisProjectRow): BisProjectForm {
     portalPassword: '',
     portalPasswordSet: Boolean(row.portal_password_set),
     clearPortalPassword: false,
+    // While inclusion is open, the editable field is the new-scope draft — never the live licence notes.
     notes: sanitizeBisLicenseScopeNotes(
-      row.inclusion_in_progress && row.inclusion_scope_draft
-        ? row.inclusion_scope_draft
-        : row.notes ?? '',
+      row.inclusion_in_progress ? (row.inclusion_scope_draft ?? '') : (row.notes ?? ''),
     ),
   }
 }

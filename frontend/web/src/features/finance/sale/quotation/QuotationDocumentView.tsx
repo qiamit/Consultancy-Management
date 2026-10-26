@@ -312,7 +312,7 @@ export function QuotationDocumentView({
     <div
       data-quotation-page="1"
       className={cn(
-        'mx-auto flex w-full flex-col border-4 border-double border-black bg-white',
+        'mx-auto flex w-full flex-col border-[3px] border-double border-stone-900 bg-white',
         !forOutput && 'shadow-md',
         tpl.centreOnPageHorizontal ? 'mx-auto' : '',
       )}
@@ -375,14 +375,20 @@ export function QuotationDocumentView({
       ) : null}
 
       <div className="flex min-h-0 w-full flex-1 flex-col">
-        <div className="border-b border-black px-2 py-1.5 text-center text-sm font-bold uppercase tracking-wide">
+        <div className="px-2 pb-2.5 pt-2 text-center text-lg font-bold uppercase tracking-wide text-stone-900">
           {tpl.documentTitle || 'Document'}
         </div>
 
         {(tpl.showClientDetails || tpl.showDocumentMeta) && (
-          <div className="grid grid-cols-2 border-2 border-black">
+          <div className="grid grid-cols-2 items-stretch border-[3px] border-double border-stone-900">
             {tpl.showClientDetails ? (
-              <div className={cn('space-y-0.5 p-2', tpl.showDocumentMeta && 'border-r border-black')}>
+              <div
+                className={cn(
+                  'box-border space-y-0.5',
+                  tpl.showDocumentMeta && 'border-r border-stone-500',
+                )}
+                style={{ padding: '2mm' }}
+              >
                 <div className="font-bold">Client Details</div>
                 <div className="font-semibold">{row.client_name.trim() || '—'}</div>
                 {row.client_address?.trim() ? (
@@ -404,49 +410,52 @@ export function QuotationDocumentView({
               </div>
             ) : null}
             {tpl.showDocumentMeta ? (
-              <div className="p-0">
-                <table className="w-full border-collapse text-[0.95em]">
-                  <tbody>
-                    {metaRows.map(([label, value], i, arr) => (
-                      <tr key={label}>
-                        <td
-                          className={cn(
-                            'border border-black border-l-0 px-2 py-1',
-                            i === 0 && 'border-t-0',
-                            i === arr.length - 1 && 'border-b-0',
-                          )}
-                        >
-                          {label}
-                        </td>
-                        <td
-                          className={cn(
-                            'w-3 border border-black px-1 py-1 text-center',
-                            i === 0 && 'border-t-0',
-                            i === arr.length - 1 && 'border-b-0',
-                          )}
-                        >
-                          :
-                        </td>
-                        <td
-                          className={cn(
-                            'border border-black border-r-0 px-2 py-1 font-semibold',
-                            i === 0 && 'border-t-0',
-                            i === arr.length - 1 && 'border-b-0',
-                          )}
-                        >
-                          {value}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <table className="h-full w-full table-fixed border-collapse border-spacing-0 text-[0.95em]">
+                <colgroup>
+                  <col style={{ width: '52%' }} />
+                  <col style={{ width: '12px' }} />
+                  <col />
+                </colgroup>
+                <tbody>
+                  {metaRows.map(([label, value], i, arr) => (
+                    <tr key={label}>
+                      <td
+                        className={cn(
+                          'border-y border-stone-300 px-2 py-1.5 align-middle',
+                          i === 0 && 'border-t-0',
+                          i === arr.length - 1 && 'border-b-0',
+                        )}
+                      >
+                        {label}
+                      </td>
+                      <td
+                        className={cn(
+                          'border-x border-y border-stone-300 px-0 py-1.5 text-center align-middle',
+                          i === 0 && 'border-t-0',
+                          i === arr.length - 1 && 'border-b-0',
+                        )}
+                      >
+                        :
+                      </td>
+                      <td
+                        className={cn(
+                          'border-y border-stone-300 px-2 py-1.5 align-middle font-semibold',
+                          i === 0 && 'border-t-0',
+                          i === arr.length - 1 && 'border-b-0',
+                        )}
+                      >
+                        {value}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             ) : null}
           </div>
         )}
 
         {isPaymentReceipt && !tpl.showLineItems ? (
-          <div className="mt-2 space-y-1 border-2 border-black px-3 py-2">
+          <div className="mt-2 space-y-1 border-[3px] border-double border-stone-900 px-3 py-2">
             <div className="text-[0.95em]">
               <span className="font-bold">Payment Mode:</span>{' '}
               {(row.payment_method || '').trim() || 'Bank'}
@@ -469,39 +478,58 @@ export function QuotationDocumentView({
         ) : null}
 
         {tpl.showLineItems ? (
-          <div className="mt-2 border-2 border-black">
-            <table className="w-full table-fixed border-collapse text-[0.85em]">
+          <div className="mt-2 overflow-hidden border-[3px] border-double border-stone-900">
+            <table className="w-full table-fixed border-collapse border-spacing-0 text-[0.85em] [&_tr:first-child>*]:border-t-0 [&_tr:last-child>*]:border-b-0 [&_tr>*:first-child]:border-l-0 [&_tr>*:last-child]:border-r-0">
               <colgroup>
-                <col className="w-[6%]" />
+                <col style={{ width: '7mm' }} />
                 <col />
-                {tpl.lineShowMake ? <col className="w-[10%]" /> : null}
-                {tpl.lineShowHsn ? <col className="w-[8%]" /> : null}
-                {tpl.lineShowQty ? <col className="w-[7%]" /> : null}
-                {tpl.lineShowUnit ? <col className="w-[7%]" /> : null}
-                {tpl.lineShowRate ? <col style={{ width: '28mm' }} /> : null}
-                {tpl.lineShowAmount ? <col style={{ width: '28mm' }} /> : null}
+                {tpl.lineShowMake ? <col style={{ width: '9mm' }} /> : null}
+                {tpl.lineShowHsn ? <col style={{ width: '10mm' }} /> : null}
+                {tpl.lineShowQty ? <col style={{ width: '8mm' }} /> : null}
+                {tpl.lineShowUnit ? <col style={{ width: '9mm' }} /> : null}
+                {tpl.lineShowRate ? <col style={{ width: '24mm' }} /> : null}
+                {tpl.lineShowAmount ? <col style={{ width: '26mm' }} /> : null}
               </colgroup>
               <thead>
-                <tr className="bg-stone-100">
-                  <th className="border border-black px-1 py-1 text-center">#</th>
-                  <th className="border border-black px-1 py-1 text-left">Description</th>
+                <tr className="bg-gradient-to-b from-stone-700 to-stone-900">
+                  <th className="border border-amber-700/40 px-0.5 py-1.5 text-center text-[0.7em] font-bold tracking-wide text-amber-200">
+                    <span className="inline-flex flex-col items-center leading-none">
+                      <span>Sr.</span>
+                      <span>No.</span>
+                    </span>
+                  </th>
+                  <th className="border border-amber-700/40 px-1 py-1.5 text-left text-[0.7em] font-bold uppercase tracking-wide text-amber-200">
+                    Description
+                  </th>
                   {tpl.lineShowMake ? (
-                    <th className="border border-black px-1 py-1 text-center">Make</th>
+                    <th className="border border-amber-700/40 px-1 py-1.5 text-center text-[0.7em] font-bold uppercase tracking-wide text-amber-200">
+                      Make
+                    </th>
                   ) : null}
                   {tpl.lineShowHsn ? (
-                    <th className="border border-black px-1 py-1 text-center">HSN</th>
+                    <th className="border border-amber-700/40 px-1 py-1.5 text-center text-[0.7em] font-bold uppercase tracking-wide text-amber-200">
+                      HSN
+                    </th>
                   ) : null}
                   {tpl.lineShowQty ? (
-                    <th className="border border-black px-1 py-1 text-center">Qty</th>
+                    <th className="border border-amber-700/40 px-1 py-1.5 text-center text-[0.7em] font-bold uppercase tracking-wide text-amber-200">
+                      Qty
+                    </th>
                   ) : null}
                   {tpl.lineShowUnit ? (
-                    <th className="border border-black px-1 py-1 text-center">Unit</th>
+                    <th className="border border-amber-700/40 px-1 py-1.5 text-center text-[0.7em] font-bold uppercase tracking-wide text-amber-200">
+                      Unit
+                    </th>
                   ) : null}
                   {tpl.lineShowRate ? (
-                    <th className="border border-black px-1 py-1 text-right">Rate</th>
+                    <th className="border border-amber-700/40 px-1 py-1.5 text-center text-[0.7em] font-bold uppercase tracking-wide text-amber-200">
+                      Rate
+                    </th>
                   ) : null}
                   {tpl.lineShowAmount ? (
-                    <th className="border border-black px-1 py-1 text-right">Amount</th>
+                    <th className="border border-amber-700/40 px-1 py-1.5 text-right text-[0.7em] font-bold uppercase tracking-wide text-amber-200">
+                      Amount
+                    </th>
                   ) : null}
                 </tr>
               </thead>
@@ -509,7 +537,7 @@ export function QuotationDocumentView({
                 {(row.line_items ?? []).length === 0 ? (
                   <tr>
                     <td
-                      className="border border-black px-1 py-1 text-center"
+                      className="border border-stone-300 px-1 py-1 text-center"
                       colSpan={
                         2 +
                         Number(tpl.lineShowMake) +
@@ -530,41 +558,43 @@ export function QuotationDocumentView({
                       ? amount
                       : Number(l.quantity) * Number(l.rate)
                     return (
-                      <tr key={l.id || idx}>
-                        <td className="border border-black px-1 py-1 text-center">{idx + 1}</td>
-                        <td className="border border-black px-1 py-1">
+                      <tr key={l.id || idx} className={idx % 2 === 1 ? 'bg-stone-50' : undefined}>
+                        <td className="border border-stone-300 px-1 py-1 text-center align-middle">
+                          {idx + 1}
+                        </td>
+                        <td className="border border-stone-300 px-1 py-1 align-middle">
                           <div>{l.description || '—'}</div>
                           {l.details?.trim() ? (
                             <div className="mt-0.5 text-[8px] text-stone-600">{l.details}</div>
                           ) : null}
                         </td>
                         {tpl.lineShowMake ? (
-                          <td className="border border-black px-1 py-1 text-center">
+                          <td className="border border-stone-300 px-1 py-1 text-center align-middle">
                             {l.make?.trim() || '—'}
                           </td>
                         ) : null}
                         {tpl.lineShowHsn ? (
-                          <td className="border border-black px-1 py-1 text-center">
+                          <td className="border border-stone-300 px-1 py-1 text-center align-middle">
                             {l.hsn_sac?.trim() || '—'}
                           </td>
                         ) : null}
                         {tpl.lineShowQty ? (
-                          <td className="border border-black px-1 py-1 text-center">
+                          <td className="border border-stone-300 px-1 py-1 text-center align-middle">
                             {l.quantity}
                           </td>
                         ) : null}
                         {tpl.lineShowUnit ? (
-                          <td className="border border-black px-1 py-1 text-center">
+                          <td className="border border-stone-300 px-1 py-1 text-center align-middle">
                             {l.unit?.trim() || '—'}
                           </td>
                         ) : null}
                         {tpl.lineShowRate ? (
-                          <td className="border border-black px-1 py-1 text-right">
+                          <td className="border border-stone-300 px-1 py-1 text-center align-middle">
                             {getCurrencySymbol()} {formatMoney(l.rate)}
                           </td>
                         ) : null}
                         {tpl.lineShowAmount ? (
-                          <td className="border border-black px-1 py-1 text-right">
+                          <td className="border border-stone-300 px-1 py-1 text-right align-middle">
                             {getCurrencySymbol()} {formatMoney(lineAmt)}
                           </td>
                         ) : null}
@@ -578,10 +608,10 @@ export function QuotationDocumentView({
         ) : null}
 
         {showFinance ? (
-          <div className="mt-[2mm] grid grid-cols-[1.6fr_1fr] border-2 border-black">
-            <div className="border-r border-black">
+          <div className="mt-[2mm] grid grid-cols-[1.6fr_1fr] items-stretch border-[3px] border-double border-stone-900">
+            <div className="border-r border-stone-500">
               {tpl.showAmountInWords ? (
-                <div className="box-border flex h-6 shrink-0 items-center border-b border-black px-2 leading-none">
+                <div className="box-border flex h-6 shrink-0 items-center px-2 leading-none">
                   <div>
                     <span className="font-bold">Amount in Words:</span>{' '}
                     <span>{amountInIndianRupeesWords(displayGrandTotal)}</span>
@@ -589,12 +619,7 @@ export function QuotationDocumentView({
                 </div>
               ) : null}
               {tpl.showBankDetails ? (
-                <div
-                  className={cn(
-                    'space-y-0 px-2 py-0.5 leading-tight',
-                    tpl.showAmountInWords && 'mt-[2mm]',
-                  )}
-                >
+                <div className="space-y-0 px-2 pb-1.5 pt-0.5 leading-tight">
                   <div className="font-bold">Bank Details</div>
                   {bankHasAny ? (
                     <>
@@ -616,53 +641,44 @@ export function QuotationDocumentView({
                 </div>
               ) : null}
             </div>
-            <div>
-              <table className="w-full table-fixed border-collapse leading-none">
-                <tbody>
-                  {totalRows.map((r) => (
-                    <tr key={r.key} className="h-6">
-                      <td className="border border-r-0 border-black px-2 py-0 align-middle">
-                        {r.label}
-                      </td>
-                      <td className="w-3 border-y border-black px-1 py-0 text-center align-middle">
-                        :
-                      </td>
-                      <td
-                        className={cn(
-                          'w-[28mm] border border-l-0 border-black px-2 py-0 text-right align-middle',
-                          r.bold && 'font-semibold',
-                        )}
-                      >
-                        {r.value}
-                      </td>
-                    </tr>
-                  ))}
-                  {tpl.showGrandTotal ? (
-                    <tr className="h-6">
-                      <td className="border border-r-0 border-black px-2 py-0 align-middle font-bold">
-                        {isPaymentReceipt ? 'Amount Received' : 'Grand Total'}
-                      </td>
-                      <td className="w-3 border-y border-black px-1 py-0 text-center align-middle font-bold">
-                        :
-                      </td>
-                      <td className="w-[28mm] border border-l-0 border-black px-2 py-0 text-right align-middle text-sm font-bold">
-                        {getCurrencySymbol()} {formatMoney(displayGrandTotal)}
-                      </td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
+            <div className="flex min-h-0 flex-col">
+              {[
+                ...totalRows,
+                ...(tpl.showGrandTotal
+                  ? [
+                      {
+                        key: 'grand',
+                        label: isPaymentReceipt ? 'Amount Received' : 'Grand Total',
+                        value: `${getCurrencySymbol()} ${formatMoney(displayGrandTotal)}`,
+                        bold: true,
+                      },
+                    ]
+                  : []),
+              ].map((r, i, arr) => (
+                <div
+                  key={r.key}
+                  className={cn(
+                    'flex min-h-0 flex-1 items-center leading-none',
+                    i < arr.length - 1 && 'border-b border-stone-300',
+                    r.bold && 'font-bold',
+                  )}
+                >
+                  <span className="flex-1 px-2 py-0.5">{r.label}</span>
+                  <span className="w-3 text-center">:</span>
+                  <span className="w-[28mm] px-2 py-0.5 text-right font-semibold">{r.value}</span>
+                </div>
+              ))}
             </div>
           </div>
         ) : null}
 
         {(tpl.showTerms || tpl.showNotes || tpl.showSealSign) && (
-          <div className="mt-[2mm] border-2 border-black">
+          <div className="mt-[2mm] border-[3px] border-double border-stone-900">
             {tpl.showTerms ? (
               <div
                 className={cn(
                   'min-h-[12mm] w-full p-2',
-                  (tpl.showNotes || tpl.showSealSign) && 'border-b border-black',
+                  (tpl.showNotes || tpl.showSealSign) && 'border-b border-stone-300',
                 )}
               >
                 <div className="font-bold">Term &amp; Condition</div>
@@ -672,8 +688,8 @@ export function QuotationDocumentView({
               </div>
             ) : null}
             {(tpl.showNotes || tpl.showSealSign) ? (
-              <div className="grid grid-cols-2">
-                <div className="border-r border-black">
+              <div className="grid grid-cols-2 items-stretch">
+                <div className="border-r border-stone-500">
                   {tpl.showNotes ? (
                     <div className="min-h-[16mm] p-2">
                       <div className="font-bold">Notes</div>
@@ -683,31 +699,29 @@ export function QuotationDocumentView({
                     </div>
                   ) : null}
                 </div>
-                <div className="flex min-h-[24mm] flex-col items-end justify-end gap-0.5 p-2 text-right">
+                <div className="relative flex h-[22mm] max-h-[25mm] min-h-[20mm] flex-col items-end justify-between overflow-hidden px-2 py-1 text-right">
                   {tpl.showSealSign ? (
                     <>
+                      <div className="relative z-[1] text-[1.15em] font-bold leading-tight">
+                        {assets.companyName.trim() || 'Company Name'}
+                      </div>
                       {assets.sealSignUrl ? (
                         <img
                           src={assets.sealSignUrl}
                           alt="Company Seal and Signature"
-                          className="mb-1 max-h-[18mm] max-w-[45mm] object-contain"
+                          className="pointer-events-none absolute right-1 top-1/2 z-[2] max-h-[18mm] max-w-[46mm] -translate-y-1/2 object-contain mix-blend-multiply"
                         />
                       ) : row.signature_text?.trim() ? (
                         <div
-                          className="mb-1 min-h-[12mm] text-base italic"
+                          className="pointer-events-none absolute right-2 top-1/2 z-[2] -translate-y-1/2 text-[15px] italic opacity-90"
                           style={{ fontFamily: '"Segoe Script", "Brush Script MT", cursive' }}
                         >
                           {row.signature_text.trim()}
                         </div>
-                      ) : (
-                        <div className="mb-1 flex h-[18mm] w-[45mm] items-center justify-center border border-dashed border-stone-300 text-[10px] text-stone-400">
-                          Seal image
-                        </div>
-                      )}
-                      <div className="font-semibold leading-tight">
-                        {assets.companyName.trim() || 'Company Name'}
+                      ) : null}
+                      <div className="relative z-[1] text-[1.05em] font-bold leading-tight text-amber-700">
+                        Authorized Signatory
                       </div>
-                      <div className="leading-tight">Authorized Signatory</div>
                     </>
                   ) : null}
                 </div>

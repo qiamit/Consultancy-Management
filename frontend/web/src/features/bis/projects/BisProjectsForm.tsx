@@ -728,6 +728,7 @@ export function BisProjectsForm({
                     value={form.notes}
                     onChange={(next) => set('notes', next)}
                     disabled={saving}
+                    label={inclusionMode ? 'New Scope (Varieties for Inclusion)' : 'Notes / License Scope'}
                     inputId="bis-notes"
                     isCodeId={form.isCodeId || null}
                     isNumber={form.isCodeLabel || ''}

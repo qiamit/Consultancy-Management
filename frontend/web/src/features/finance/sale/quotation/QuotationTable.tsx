@@ -1,4 +1,4 @@
-import { Building2, Copy, Download, Mail, Pencil, Printer } from 'lucide-react'
+import { Building2, Download, Eye, Mail, Pencil, Printer } from 'lucide-react'
 import { getCurrencySymbol } from '@/lib/appCurrency'
 import { Button } from '@/components/ui/button'
 import {
@@ -85,7 +85,7 @@ function RowActions({
   loading,
   emailBusyId,
   onEdit,
-  onCopy,
+  onPreview,
   onPrint,
   onDownloadPdf,
   onEmailClient,
@@ -95,7 +95,7 @@ function RowActions({
   loading: boolean
   emailBusyId: string | null
   onEdit: (row: QuotationRow) => void
-  onCopy: (row: QuotationRow) => void
+  onPreview: (row: QuotationRow) => void
   onPrint: (row: QuotationRow) => void
   onDownloadPdf: (row: QuotationRow) => void
   onEmailClient?: (row: QuotationRow) => void
@@ -118,11 +118,11 @@ function RowActions({
         size="sm"
         variant="ghost"
         className={ghostBtnClass}
-        aria-label={`Copy ${row.quotation_number}`}
-        title="Copy"
-        onClick={() => onCopy(row)}
+        aria-label={`Preview ${row.quotation_number}`}
+        title="Preview"
+        onClick={() => onPreview(row)}
       >
-        <Copy size={16} />
+        <Eye size={16} />
       </Button>
       <Button
         type="button"
@@ -140,8 +140,8 @@ function RowActions({
         size="sm"
         variant="ghost"
         className={ghostBtnClass}
-        aria-label={`Save PDF ${row.quotation_number}`}
-        title="Save as PDF"
+        aria-label={`Download PDF ${row.quotation_number}`}
+        title="Download PDF"
         onClick={() => onDownloadPdf(row)}
       >
         <Download size={16} />
@@ -250,7 +250,7 @@ export function QuotationTable({
   onToggle,
   onToggleAll,
   onEdit,
-  onCopy,
+  onPreview,
   onPrint,
   onDownloadPdf,
   onEmailClient,
@@ -274,7 +274,7 @@ export function QuotationTable({
   onToggle: (id: string) => void
   onToggleAll: (checked: boolean) => void
   onEdit: (row: QuotationRow) => void
-  onCopy: (row: QuotationRow) => void
+  onPreview: (row: QuotationRow) => void
   onPrint: (row: QuotationRow) => void
   onDownloadPdf: (row: QuotationRow) => void
   onEmailClient?: (row: QuotationRow) => void
@@ -511,7 +511,7 @@ export function QuotationTable({
                           loading={loading}
                           emailBusyId={emailBusyId}
                           onEdit={onEdit}
-                          onCopy={onCopy}
+                          onPreview={onPreview}
                           onPrint={onPrint}
                           onDownloadPdf={onDownloadPdf}
                           onEmailClient={onEmailClient}
@@ -679,7 +679,7 @@ export function QuotationTable({
                             loading={loading}
                             emailBusyId={emailBusyId}
                             onEdit={onEdit}
-                            onCopy={onCopy}
+                            onPreview={onPreview}
                             onPrint={onPrint}
                             onDownloadPdf={onDownloadPdf}
                             onEmailClient={onEmailClient}

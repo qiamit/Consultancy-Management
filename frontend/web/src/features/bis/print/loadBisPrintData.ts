@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabaseClient'
 import { formatIsCodeLabel } from '@/features/masters/is-codes/formatIsCodeLabel'
+import { fetchBisProjectById } from '../projects/bisProjectsApi'
 import { clientDisplayName, type BisProjectRow } from '../projects/types'
 import { loadCompanyPrintContext, type CompanyPrintContext } from './loadCompanyPrintContext'
 
@@ -357,15 +358,17 @@ async function loadIsCode(row: BisProjectRow): Promise<BisPrintIsCode> {
 
 /** Loads everything the Form-I / Authorization Letter builders need for one project row. */
 export async function loadBisPrintData(row: BisProjectRow): Promise<BisPrintData> {
+  // Re-fetch so Application Date / inspection fields match Application Details (list row can be stale).
+  const freshRow = (await fetchBisProjectById(row.id).catch(() => null)) ?? row
   const [client, isCode, company, topManagement] = await Promise.all([
-    loadClient(row),
-    loadIsCode(row),
+    loadClient(freshRow),
+    loadIsCode(freshRow),
     loadCompanyPrintContext(),
     // Step 2 Top Management: who the Authorized Signatory is (signs every document).
     supabase
       .from('bis_project_module_data')
       .select('payload')
-      .eq('bis_project_id', row.id)
+      .eq('bis_project_id', freshRow.id)
       .eq('module_kind', 'top-management')
       .maybeSingle()
       .then(({ data }) => {
@@ -373,5 +376,5 @@ export async function loadBisPrintData(row: BisProjectRow): Promise<BisPrintData
         return payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : null
       }, () => null),
   ])
-  return { row, client, isCode, company, topManagement }
+  return { row: freshRow, client, isCode, company, topManagement }
 }

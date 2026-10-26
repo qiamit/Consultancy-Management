@@ -96,15 +96,17 @@ export async function buildManakInclusionPayload(row: BisProjectRow): Promise<Ma
     fetchBisModulePayload(row.id, 'cmpf-306').catch(() => null),
   ])
   const varieties = parseInclusionVarieties(details)
-  if (!varieties.length) throw new Error('Add at least one variety on "Add Varieties" before Manak Assist.')
+  if (!varieties.length) {
+    throw new Error('Add at least one variety under New Scope (Licence step) before Manak Assist.')
+  }
   const machineryRequired = inclusionRequired(components, 'machinery', inclusionAdditionRows(machinery).length)
   const equipmentRequired = inclusionRequired(components, 'equipment', inclusionAdditionRows(equipment).length)
   // "Required" uploads the added rows only; with none marked the list Manak gets would be empty.
   if (machineryRequired && !inclusionAdditionRows(machinery).length) {
-    throw new Error('Additional machinery is set to Yes, but no CMPF-305 row is marked "Added for Inclusion" (Step 4).')
+    throw new Error('Additional machinery is set to Yes, but no CMPF-305 row is marked "Added for Inclusion" (Machinery step).')
   }
   if (equipmentRequired && !inclusionAdditionRows(equipment).length) {
-    throw new Error('Additional testing equipment is set to Yes, but no CMPF-306 row is marked "Added for Inclusion" (Step 4).')
+    throw new Error('Additional testing equipment is set to Yes, but no CMPF-306 row is marked "Added for Inclusion" (Machinery step).')
   }
 
   const base = `${row.id}/manak-assist`

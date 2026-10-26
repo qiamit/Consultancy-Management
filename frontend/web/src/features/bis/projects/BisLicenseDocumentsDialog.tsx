@@ -971,7 +971,6 @@ export function BisLicenseDocumentsDialog({
                   row={row}
                   refreshKey={refreshKey}
                   onEdit={handleModuleEdit}
-                  onGoToStep={setStep}
                   onProjectSaved={onProjectSaved}
                   onScopeDocument={{
                     preview: () => handlePreview('inclusion-request-letter'),

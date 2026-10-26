@@ -19,7 +19,11 @@ import {
   certifiedReferenceMaterialsDataFromPrintData,
 } from './certifiedReferenceMaterialsHtml'
 import { buildFactoryTestReportHtml, factoryTestReportDataFromPrintData } from './factoryTestReportHtml'
-import { factoryTestReportHasContent, parseFactoryTestReportPayload } from '../projects/factoryTestReportModel'
+import {
+  factoryTestReportHasContent,
+  factoryTestReportsForLiveSamples,
+  parseFactoryTestReportPayload,
+} from '../projects/factoryTestReportModel'
 import { documentSignatoryFromTopManagement, loadBisPrintData, type BisPrintData } from './loadBisPrintData'
 import {
   buildApplicationDetailsHtml,
@@ -630,6 +634,28 @@ export async function buildBisDocumentHtml(
   }
 
   if (kind === 'factory-test-report') {
+    // Drop snapshots for samples removed from Sample Offer / Requirements.
+    const oslPayload = await fetchBisModulePayload(row.id, 'osl-sample-requirements').catch(() => null)
+    const liveSamples = parseOslSampleRequirementsPayload(
+      oslPayload && typeof oslPayload === 'object' ? oslPayload : null,
+    ).rows
+    const parsedFtr = parseFactoryTestReportPayload(
+      data.modulePayload && typeof data.modulePayload === 'object'
+        ? (data.modulePayload as Record<string, unknown>)
+        : null,
+    )
+    const liveReports = factoryTestReportsForLiveSamples(parsedFtr.reports, liveSamples).filter(
+      factoryTestReportHasContent,
+    )
+    data = {
+      ...data,
+      modulePayload: {
+        ...(data.modulePayload ?? {}),
+        ...parsedFtr,
+        reports: liveReports,
+      },
+    }
+
     const techRaw = await fetchBisModulePayload(row.id, 'technical-staff').catch(() => null)
     const { resolveTechnicalStaffForTestedBy } = await import('../projects/bisModuleDataApi')
     const techPerson = resolveTechnicalStaffForTestedBy(techRaw)

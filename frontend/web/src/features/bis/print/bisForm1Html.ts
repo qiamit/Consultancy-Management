@@ -502,7 +502,7 @@ export function bisForm1DataFromPrintData(printData: BisPrintData): BisForm1Data
     bisLicensesHeld: '',
     signatoryName: sig.signatoryName,
     signatoryDesignation: sig.signatoryDesignation,
-    dateOfApplication: row.application_date ?? row.start_date ?? row.created_at ?? '',
+    dateOfApplication: (row.application_date ?? '').trim(),
     preparedBy: company.companyName,
     sealSignImageUrl: printData.documentSignatory?.signatureImageUrl?.trim() ?? '',
   }

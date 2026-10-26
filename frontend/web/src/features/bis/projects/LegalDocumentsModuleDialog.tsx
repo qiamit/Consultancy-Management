@@ -66,6 +66,7 @@ import { FactoryTestReportModuleFields } from './FactoryTestReportModuleFields'
 import {
   emptyFactoryTestReportPayload,
   factoryTestReportHasContent,
+  factoryTestReportsForLiveSamples,
   parseFactoryTestReportPayload,
   type FactoryTestReportModulePayload,
 } from './factoryTestReportModel'
@@ -795,8 +796,18 @@ export function LegalDocumentsModuleDialog({
               () => null,
             )
             const techPerson = resolveTechnicalStaffForTestedBy(techRaw)
+            const samplePayload = await fetchBisModulePayload(
+              row.id,
+              'osl-sample-requirements',
+            ).catch(() => null)
+            const liveSamples = parseOslSampleRequirementsPayload(samplePayload).rows.filter(
+              oslSampleRowHasContent,
+            )
+            setFactorySampleOptions(liveSamples)
             setFactoryTestReports({
               ...parsed,
+              // Hide entries for samples already removed from Sample Offer / Requirements.
+              reports: factoryTestReportsForLiveSamples(parsed.reports, liveSamples),
               inspectionOfficerName:
                 (row.inspection_officer_name ?? '').trim() || parsed.inspectionOfficerName,
               inspectionOfficerDesignation:
@@ -810,13 +821,6 @@ export function LegalDocumentsModuleDialog({
                   ? ''
                   : parsed.testedByDesignation),
             })
-            const samplePayload = await fetchBisModulePayload(
-              row.id,
-              'osl-sample-requirements',
-            ).catch(() => null)
-            setFactorySampleOptions(
-              parseOslSampleRequirementsPayload(samplePayload).rows.filter(oslSampleRowHasContent),
-            )
           }
           if (showLocationMapFields) {
             const [certificates, clientGeoResult, branchOffices] = await Promise.all([
@@ -1267,13 +1271,28 @@ export function LegalDocumentsModuleDialog({
           signatoryName: oslSamples.signatoryName.trim(),
           signatoryDesignation: oslSamples.signatoryDesignation.trim(),
         })
+        // Prune Factory Test Report snapshots for samples removed from the offer letter.
+        const ftrRaw = await fetchBisModulePayload(row.id, 'factory-test-report').catch(() => null)
+        const ftr = parseFactoryTestReportPayload(ftrRaw)
+        const liveReports = factoryTestReportsForLiveSamples(ftr.reports, rows).filter(
+          factoryTestReportHasContent,
+        )
+        if (liveReports.length !== ftr.reports.length) {
+          await saveBisModulePayload(row.id, 'factory-test-report', {
+            ...ftr,
+            reports: liveReports,
+          })
+        }
         onProjectSaved?.()
         toast.success(`${title} saved.`)
         return
       }
 
       if (showFactoryTestFields && printKind) {
-        const reports = factoryTestReports.reports.filter(factoryTestReportHasContent)
+        const reports = factoryTestReportsForLiveSamples(
+          factoryTestReports.reports,
+          factorySampleOptions,
+        ).filter(factoryTestReportHasContent)
         await saveBisModulePayload(row.id, printKind, {
           reports,
           inspectionOfficerName: factoryTestReports.inspectionOfficerName.trim(),

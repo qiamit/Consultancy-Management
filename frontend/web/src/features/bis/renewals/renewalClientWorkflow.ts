@@ -116,7 +116,8 @@ export async function createRenewalClientWorkbook(form: BisRenewalForm): Promise
   sheet.mergeCells('A10:B10')
   sheet.mergeCells('C10:E10')
   sheet.getCell('A10').value = 'Basic Unit Rate Approx (₹ per unit)'
-  sheet.getCell('C10').value = entered(form.basicUnitRate) ?? ''
+  // Always blank for the manufacturer — production value rate, not IS Code marking-fee slab rate.
+  sheet.getCell('C10').value = ''
   for (let row = 4; row <= 10; row += 1) {
     const label = sheet.getCell(`A${row}`)
     const value = sheet.getCell(`C${row}`)
@@ -140,7 +141,7 @@ export async function createRenewalClientWorkbook(form: BisRenewalForm): Promise
   }
 
   sheet.mergeCells('A11:E11')
-  sheet.getCell('A11').value = 'Enter Total Production and Rejection in the highlighted cells. Covered Production is calculated automatically; keep period dates and reference fields unchanged.'
+  sheet.getCell('A11').value = 'Enter Basic Unit Rate Approx (your selling / production rate per unit — not the BIS marking fee rate), Total Production and Rejection in the highlighted cells. Covered Production is calculated automatically; keep period dates and reference fields unchanged.'
   sheet.getCell('A11').font = { name: 'Aptos', size: 9, italic: true, color: { argb: 'FF57534E' } }
   sheet.getCell('A11').alignment = { vertical: 'middle', wrapText: true }
   sheet.getCell('A11').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFAFAF9' } }

@@ -45,6 +45,7 @@ import {
   formatCmL,
   isCodeDisplayLabel,
   rowToBisProjectForm,
+  sanitizeBisLicenseScopeNotes,
   type BisProjectForm,
   type BisProjectRow,
   type BisProjectsListMode,
@@ -52,10 +53,21 @@ import {
 
 const SEARCH_DEBOUNCE_MS = 350
 
-function formForListMode(form: BisProjectForm, listMode: BisProjectsListMode): BisProjectForm {
-  return listMode === 'inclusion'
-    ? { ...form, projectKind: 'Inclusion', isQeManaged: true }
-    : form
+/** Inclusion form: editable notes = new scope to set (`inclusion_scope_draft`), not the live licence scope. */
+function formForListMode(
+  form: BisProjectForm,
+  listMode: BisProjectsListMode,
+  sourceRow?: BisProjectRow | null,
+): BisProjectForm {
+  if (listMode !== 'inclusion') return form
+  return {
+    ...form,
+    projectKind: 'Inclusion',
+    isQeManaged: true,
+    ...(sourceRow
+      ? { notes: sanitizeBisLicenseScopeNotes(sourceRow.inclusion_scope_draft ?? '') }
+      : {}),
+  }
 }
 
 export default function BisProjectsMasterPage({ listMode }: { listMode: BisProjectsListMode }) {
@@ -231,7 +243,7 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
 
     const fromPage = rows.find((r) => r.id === editId)
     if (fromPage) {
-      setForm(formForListMode(rowToBisProjectForm(fromPage), listMode))
+      setForm(formForListMode(rowToBisProjectForm(fromPage), listMode, fromPage))
       setFormError(null)
       hydratedEditRef.current = editId
       return
@@ -246,7 +258,7 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
           setEdit(null)
           return
         }
-        setForm(formForListMode(rowToBisProjectForm(row), listMode))
+        setForm(formForListMode(rowToBisProjectForm(row), listMode, row))
         setFormError(null)
         hydratedEditRef.current = editId
       } catch (err) {
@@ -335,7 +347,7 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
   }
 
   const openEdit = (row: BisProjectRow) => {
-    setForm(formForListMode(rowToBisProjectForm(row), listMode))
+    setForm(formForListMode(rowToBisProjectForm(row), listMode, row))
     setFormError(null)
     hydratedEditRef.current = row.id
     setEdit(row.id)
@@ -392,7 +404,8 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
 
   const handleSelectExistingLicenseForInclusion = (row: BisProjectRow) => {
     const nextId = row.id
-    setForm(formForListMode(rowToBisProjectForm(row), listMode))
+    // Existing scope stays in ExistingLicenseScope; this field is only the new scope to set.
+    setForm(formForListMode(rowToBisProjectForm(row), listMode, row))
     setFormError(null)
     hydratedEditRef.current = nextId
     setEdit(nextId)

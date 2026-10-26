@@ -34,11 +34,15 @@ import { allocateDocumentNumber } from '../shared/documentSeriesApi'
 import { linesForDocumentKind } from '../shared/financeRules'
 import { fetchDefaultQuotationTerm } from './quotationTermsApi'
 import { fetchDefaultQuotationNote } from './quotationNotesApi'
-import { downloadQuotationPdfWithTemplate, printQuotationsWithTemplate } from './outputQuotationDocument'
+import {
+  downloadQuotationPdfWithTemplate,
+  printQuotationsWithTemplate,
+} from './outputQuotationDocument'
 import { fetchDefaultSignatureForKind } from './quotationSignatureStorage'
 import { convertQuotationIfNeeded } from '../shared/convertQuotationToSaleDocument'
 import { emailSaleDocumentToClient } from '../shared/emailSaleDocument'
 import { exportSaleDocumentsCsv } from '../shared/exportSaleDocumentsCsv'
+import { SaleDocumentPreviewDialog } from '../shared/SaleDocumentPreviewDialog'
 
 function isAbortOrLockError(err: unknown): boolean {
   const message =
@@ -124,6 +128,8 @@ export default function QuotationMasterPage() {
   const showForm = editId != null
   const editingId = editId && editId !== 'new' ? editId : null
   const [showTemplates, setShowTemplates] = useState(false)
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [previewRow, setPreviewRow] = useState<QuotationRow | null>(null)
   const handleFormOpenChange = useFormDialogOpenChange((open) => {
     if (!open) {
       hydratedEditRef.current = null
@@ -463,14 +469,10 @@ export default function QuotationMasterPage() {
     setEdit(row.id)
   }
 
-  const openCopy = (row: QuotationRow) => {
-    void (async () => {
-      const next = await allocateNextQuotationNumber()
-      setForm(rowToForm(row, true, next))
-      setSaveMessage(null)
-      hydratedEditRef.current = 'new'
-      setEdit('new')
-    })()
+  const openPreview = (row: QuotationRow) => {
+    setSaveMessage(null)
+    setPreviewRow(row)
+    setPreviewOpen(true)
   }
 
   const handleSave = async () => {
@@ -708,10 +710,9 @@ export default function QuotationMasterPage() {
   const handleDownloadPdfRow = (row: QuotationRow) => {
     void (async () => {
       try {
-        setSaveMessage(
-          'Print dialog open hoga — Destination me "Save as PDF" choose karein for sharp PDF.',
-        )
+        setSaveMessage('Preparing PDF…')
         await downloadQuotationPdfWithTemplate(row, safePdfFilename(row.quotation_number))
+        setSaveMessage('PDF downloaded.')
       } catch (err) {
         setSaveMessage(err instanceof Error ? err.message : 'Failed to download PDF')
       }
@@ -767,7 +768,7 @@ export default function QuotationMasterPage() {
           onToggleAll={toggleAllOnPage}
           statusUpdatingId={statusUpdatingId}
           onEdit={openEdit}
-          onCopy={openCopy}
+          onPreview={openPreview}
           onPrint={handlePrintRow}
           onDownloadPdf={handleDownloadPdfRow}
           onEmailClient={handleEmailClient}
@@ -806,6 +807,16 @@ export default function QuotationMasterPage() {
       </div>
 
       <QuotationTemplatesDialog open={showTemplates} onOpenChange={setShowTemplates} />
+
+      <SaleDocumentPreviewDialog
+        open={previewOpen}
+        onOpenChange={(open) => {
+          setPreviewOpen(open)
+          if (!open) setPreviewRow(null)
+        }}
+        row={previewRow}
+        documentKind="quotation"
+      />
 
       <Dialog open={showForm} onOpenChange={handleFormOpenChange}>
         <DialogContent

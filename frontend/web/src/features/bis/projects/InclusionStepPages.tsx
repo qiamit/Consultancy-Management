@@ -24,11 +24,10 @@ import {
   INCLUSION_COMPONENTS_KIND,
   INCLUSION_DETAILS_KIND,
   INCLUSION_OTHER_DOCS_KIND,
-  INCLUSION_TYPES,
   inclusionRequired,
   INCLUSION_SCOPE_FILES_KIND,
   isInclusionAddition,
-  newScopeVarieties,
+  syncInclusionVarietyRowsFromNewScope,
 } from './inclusionModel'
 import { buildInclusionOtherDocumentPdf } from './inclusionPayload'
 import { buildBisDocumentPdfBlob } from './bisDocumentPdf'
@@ -42,8 +41,8 @@ import { InclusionLetterDialog } from './InclusionLetterDialog'
 import { formatCmL, manakLoginFromProject, parseBisNotesScope, sanitizeBisLicenseScopeNotes, type BisProjectRow } from './types'
 
 /* BIS New Inclusion — Manak "Application For Change in Scope (Inclusion)", kept apart from the New Application steps.
-   Step 1 Licence, existing & new scope · 2 Test Reports (the New Application module) · 3 Add Varieties
-   · 4 Declaration (additional machinery / testing equipment) · 5 Request letter & other documents · 6 Preview. */
+   Step 1 Licence + New Scope · 2 Test Reports · 3 Declaration (machinery / testing equipment)
+   · 4 Request letter & other documents · Preview. Varieties for inclusion are entered on Step 1. */
 
 type Rec = Record<string, unknown>
 type Payload = Rec | null | undefined
@@ -59,10 +58,29 @@ function useInclusionData(row: BisProjectRow | null, refreshKey: number) {
   useEffect(() => {
     if (!row?.id) return
     let active = true
-    setLoading(true)
+    // Avoid cascading setState-in-effect lint: loading starts true; only clear after fetch.
     void Promise.all(LOAD_KINDS.map((k) => fetchBisModulePayload(row.id, k).catch(() => null)))
-      .then((loaded) => {
-        if (active) setPayloads(Object.fromEntries(LOAD_KINDS.map((k, i) => [k, loaded[i]])))
+      .then(async (loaded) => {
+        const next = Object.fromEntries(LOAD_KINDS.map((k, i) => [k, loaded[i]])) as Partial<
+          Record<BisPrintDocumentKind, Payload>
+        >
+        // Older inclusions: New Scope filled but Manak `rows` never linked — sync once on load.
+        const details = (next[INCLUSION_DETAILS_KIND] ?? {}) as Rec
+        const synced = syncInclusionVarietyRowsFromNewScope(details)
+        const currentRows = Array.isArray(details.rows) ? (details.rows as Rec[]) : []
+        const same =
+          synced.length === currentRows.length &&
+          synced.every((r, i) => str(r.variety) === str(currentRows[i]?.variety))
+        if (synced.length && !same) {
+          const patched = { ...details, rows: synced }
+          try {
+            await saveBisModulePayload(row.id, INCLUSION_DETAILS_KIND, patched)
+            next[INCLUSION_DETAILS_KIND] = patched
+          } catch {
+            /* keep loaded payload; sync retries on next New Scope save */
+          }
+        }
+        if (active) setPayloads(next)
       })
       .finally(() => {
         if (active) setLoading(false)
@@ -83,7 +101,6 @@ export function InclusionStepPage({
   row,
   refreshKey,
   onEdit,
-  onGoToStep,
   renderDocActions,
   docSelection,
   onProjectSaved,
@@ -93,7 +110,8 @@ export function InclusionStepPage({
   row: BisProjectRow | null
   refreshKey: number
   onEdit: (kind: BisPrintDocumentKind) => void
-  onGoToStep: (index: number) => void
+  /** @deprecated Step “Add Varieties” removed; varieties live on Step 1 New Scope. Kept optional for call-site compat. */
+  onGoToStep?: (index: number) => void
   renderDocActions?: (kind: BisPrintDocumentKind, onModuleEdit: () => void) => ReactNode
   docSelection?: { has: (kind: BisPrintDocumentKind) => boolean; set: (kind: BisPrintDocumentKind, selected: boolean) => void }
   /** The licence row itself changed (BIS branch) — the dialog reloads it. */
@@ -108,19 +126,45 @@ export function InclusionStepPage({
   if (loading && !Object.keys(payloads).length) {
     return <p className="flex items-center justify-center gap-2 py-10 text-sm text-stone-500"><Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Loading…</p>
   }
-  if (stepId === 'inc-licence') return <LicenceStep row={row} payloads={payloads} onChanged={changed} onProjectSaved={onProjectSaved} onScopeDocument={onScopeDocument} />
-  if (stepId === 'inc-varieties') return <VarietiesStep row={row} payloads={payloads} onChanged={changed} onGoToStep={onGoToStep} />
+  if (stepId === 'inc-licence') {
+    return (
+      <LicenceStep
+        row={row}
+        payloads={payloads}
+        onChanged={changed}
+        onProjectSaved={onProjectSaved}
+        onScopeDocument={onScopeDocument}
+      />
+    )
+  }
   if (stepId === 'inc-lists') {
     return <ListsStep row={row} payloads={payloads} onChanged={changed} onEdit={onEdit} renderDocActions={renderDocActions} selection={docSelection} />
   }
-  return <DocumentsStep row={row} payloads={payloads} onChanged={changed} onEdit={onEdit} renderDocActions={renderDocActions} selection={docSelection} />
+  if (stepId === 'inc-documents') {
+    return <DocumentsStep row={row} payloads={payloads} onChanged={changed} onEdit={onEdit} renderDocActions={renderDocActions} selection={docSelection} />
+  }
+  // Unknown / removed step ids (e.g. old "inc-varieties") → licence step content.
+  return (
+    <LicenceStep
+      row={row}
+      payloads={payloads}
+      onChanged={changed}
+      onProjectSaved={onProjectSaved}
+      onScopeDocument={onScopeDocument}
+    />
+  )
 }
 
 /* ───────── Step 1 — Licence, existing scope (read only) and the New Scope ───────── */
 
 async function patchDetails(projectId: string, patch: Rec) {
   const current = (await fetchBisModulePayload(projectId, INCLUSION_DETAILS_KIND)) ?? {}
-  await saveBisModulePayload(projectId, INCLUSION_DETAILS_KIND, { ...current, ...patch })
+  const next = { ...current, ...patch }
+  // New Scope rows drive Manak inclusion varieties — keep `rows` linked on every scope save.
+  if ('newScope' in patch) {
+    next.rows = syncInclusionVarietyRowsFromNewScope(next)
+  }
+  await saveBisModulePayload(projectId, INCLUSION_DETAILS_KIND, next)
 }
 
 /** The licence's scope exactly as saved on the licence — shown, never edited here. */
@@ -303,57 +347,7 @@ function LicenceStep({
   )
 }
 
-/* ───────── Step 3 — Add Varieties (one Manak row per New Scope variety) ───────── */
-
-function VarietiesStep({
-  row,
-  payloads,
-  onChanged,
-  onGoToStep,
-}: {
-  row: BisProjectRow
-  payloads: Partial<Record<BisPrintDocumentKind, Payload>>
-  onChanged: () => void
-  onGoToStep: (index: number) => void
-}) {
-  const details = payloads[INCLUSION_DETAILS_KIND] ?? {}
-  // The Variety drop-down offers the New Scope rows (Step 1); one Manak "Add Variety" row per row added here.
-  const varieties = newScopeVarieties(details)
-  const samples = rowsOf(payloads['osl-sample-requirements']).filter((s) => str(s.qrCode) || str(s.batchNumber))
-  const qrOptions = Array.from(new Set(samples.map((s) => str(s.qrCode).replace(/\D/g, '')).filter(Boolean)))
-  const qrOnly = (v: string) => (v.match(/\d{6,}/g) ?? []).join(', ')
-
-  return (
-    <ManakPanel title="Add Varieties">
-      {varieties.length ? (
-        <EditableRows
-          projectId={row.id}
-          kind={INCLUSION_DETAILS_KIND}
-          fields={[
-            { key: 'variety', label: 'Variety (New Scope)', alignLeft: true, options: varieties },
-            { key: 'inclusionType', label: 'Inclusion Type', options: [...INCLUSION_TYPES], width: '11rem' },
-            { key: 'qrCode', label: 'Sample QR Code', optional: true, width: '14rem', options: qrOptions, multiple: true, normalize: qrOnly },
-            { key: 'delayReason', label: 'Reason for Delay', optional: true, alignLeft: true, width: '13rem', placeholder: 'Not Applicable', normalize: (v) => v.trim() || 'Not Applicable' },
-          ]}
-          blank={() => ({ variety: '', inclusionType: 'With Test Report', qrCode: '', delayReason: 'Not Applicable' })}
-          saved={rowsOf(details).map((r) => ({ ...r, qrCode: qrOnly(str(r.qrCode)) }))}
-          onChanged={onChanged}
-          addLabel="Add variety"
-        />
-      ) : (
-        <div className="border border-dashed border-stone-300 bg-white px-3 py-6 text-center text-sm text-stone-500">
-          No New Scope yet.{' '}
-          <button type="button" className="font-semibold text-amber-800 underline" onClick={() => onGoToStep(0)}>
-            Add the varieties for inclusion on Step 1
-          </button>
-          .
-        </div>
-      )}
-    </ManakPanel>
-  )
-}
-
-/* ───────── Step 4 — Declaration by the Licensee (additional machinery / testing equipment) ───────── */
+/* ───────── Step 3 — Declaration by the Licensee (additional machinery / testing equipment) ───────── */
 
 /** Existing licence rows show "No"; rows added here default to "Yes" (only those go in the Manak list). */
 const additionField = {

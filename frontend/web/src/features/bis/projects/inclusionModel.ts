@@ -41,17 +41,65 @@ export function newScopeVarieties(details: Rec | null | undefined): string[] {
   return licenceScopeText(str(details?.newScope)).split('\n').map((v) => v.trim()).filter(Boolean)
 }
 
-/** Varieties for Manak: the rows added on "Add Varieties" (variety picked from the New Scope). */
+/**
+ * Keep Manak inclusion `rows` in sync with New Scope (Step 1).
+ * Preserves inclusionType / QR / delay when the variety name still exists; drops removed names; adds new ones.
+ */
+export function syncInclusionVarietyRowsFromNewScope(details: Rec | null | undefined): Rec[] {
+  const names = newScopeVarieties(details)
+  const existing = Array.isArray(details?.rows) ? (details?.rows as Rec[]) : []
+  const byName = new Map<string, Rec>()
+  for (const r of existing) {
+    const name = str(r?.variety)
+    if (name && !byName.has(name)) byName.set(name, r)
+  }
+  return names.map((variety) => {
+    const prev = byName.get(variety)
+    if (prev && typeof prev === 'object') {
+      return {
+        ...prev,
+        variety,
+        inclusionType:
+          str(prev.inclusionType) === 'Without Test Report' ? 'Without Test Report' : 'With Test Report',
+        qrCode: str(prev.qrCode),
+        delayReason: str(prev.delayReason) || 'Not Applicable',
+      }
+    }
+    return {
+      variety,
+      inclusionType: 'With Test Report',
+      qrCode: '',
+      delayReason: 'Not Applicable',
+    }
+  })
+}
+
+/** Varieties for Manak / letter: New Scope rows (synced into `rows`), with a plain-newScope fallback. */
 export function parseInclusionVarieties(payload: Rec | null | undefined): InclusionVariety[] {
-  const rows = Array.isArray(payload?.rows) ? (payload?.rows as Rec[]) : []
-  return rows
+  const synced = syncInclusionVarietyRowsFromNewScope(payload)
+  const source = synced.length
+    ? synced
+    : Array.isArray(payload?.rows)
+      ? (payload?.rows as Rec[])
+      : []
+  const fromRows: InclusionVariety[] = source
     .filter((r) => r && typeof r === 'object' && str(r.variety))
     .map((r) => ({
       variety: str(r.variety),
-      inclusionType: str(r.inclusionType) === 'Without Test Report' ? 'Without Test Report' : 'With Test Report',
+      inclusionType: (str(r.inclusionType) === 'Without Test Report'
+        ? 'Without Test Report'
+        : 'With Test Report') as InclusionType,
       qrCode: str(r.qrCode),
-      delayReason: str(r.delayReason),
+      delayReason: str(r.delayReason) || 'Not Applicable',
     }))
+  if (fromRows.length) return fromRows
+  // Legacy: New Scope filled but rows never synced.
+  return newScopeVarieties(payload).map((variety) => ({
+    variety,
+    inclusionType: 'With Test Report' as const,
+    qrCode: '',
+    delayReason: 'Not Applicable',
+  }))
 }
 
 /** QR codes as digits, one per entry ("100000784850, 100000784877"). */
@@ -68,15 +116,12 @@ export function inclusionRequired(components: Rec | null | undefined, key: 'mach
   return v === 'Yes' || v === 'No' ? v === 'Yes' : additions > 0
 }
 
-/** Licence scope as Manak shows it ("Existing Scope of License"): the scope values, without the table headings. */
+/** Licence scope as Manak shows it ("Existing Scope of License"): each row as "Component - Value …", no headings. */
 export function licenceScopeText(notes: string | null | undefined): string {
   const scope = parseBisNotesScope(sanitizeBisLicenseScopeNotes(String(notes ?? '')))
   if (scope.mode === 'plain') return scope.text.trim()
   return scope.rows
-    .map((cells) => {
-      const rest = cells.slice(1).map((c) => c.trim()).filter(Boolean)
-      return (rest.length ? rest.join(' - ') : str(cells[0])).trim()
-    })
+    .map((cells) => cells.map((c) => c.trim()).filter(Boolean).join(' - '))
     .filter(Boolean)
     .join('\n')
 }

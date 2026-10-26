@@ -1,6 +1,7 @@
 /** Factory Test Report — sample + test-parameter selection payload. */
 
 import {
+  oslSampleRowHasContent,
   parseSampleFor,
   sampleForLabel,
   todayYmdLocal,
@@ -120,6 +121,20 @@ export function factoryTestReportHasContent(entry: FactoryTestReportEntry): bool
       entry.batchNumber.trim() ||
       entry.parameters.length > 0,
   )
+}
+
+/** Keep only FTR rows whose sample still exists on Sample Offer / Requirements (removed samples drop out). */
+export function factoryTestReportsForLiveSamples(
+  reports: FactoryTestReportEntry[],
+  samples: OslSampleRequirementRow[],
+): FactoryTestReportEntry[] {
+  const liveIds = new Set(
+    samples.filter(oslSampleRowHasContent).map((sample) => sample.id).filter(Boolean),
+  )
+  return reports.filter((report) => {
+    const sampleId = report.sampleRowId.trim()
+    return sampleId ? liveIds.has(sampleId) : false
+  })
 }
 
 /** Label for sample dropdown / table: Sample For · Batch · DOM. */

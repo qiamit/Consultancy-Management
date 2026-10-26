@@ -9,7 +9,12 @@ import {
   type FinanceDocumentTemplate,
 } from '@/features/settings/lab-settings/documentTemplateTypes'
 import {
+  downloadPdfViaPlaywright,
+  mapPageSizeToPlaywrightFormat,
+} from '@/lib/playwrightPdfClient'
+import {
   fetchQuotationBankDetails,
+  prepareQuotationDocumentHtml,
   QUOTATION_LETTER_FOOTER_NAME,
   QUOTATION_LETTER_HEADER_NAME,
 } from './buildQuotationDocumentHtml'
@@ -211,16 +216,41 @@ export async function printQuotationsWithTemplate(
   await openTemplatePrintDialog(rows, { documentKind })
 }
 
+/** Read-only HTML for the in-app Preview dialog (not the edit form). */
+export async function previewQuotationsWithTemplate(
+  rows: QuotationRow[],
+  documentKind: BookDocumentKind = 'quotation',
+  templateOverride?: FinanceDocumentTemplate,
+): Promise<{ html: string; title: string }> {
+  if (rows.length === 0) throw new Error('No document selected to preview.')
+  const prepared = await prepareQuotationDocumentHtml(rows, documentKind, templateOverride)
+  const title =
+    rows.length === 1
+      ? `${prepared.template.documentTitle || 'Document'} ${rows[0]?.quotation_number ?? ''}`.trim()
+      : prepared.template.documentTitle || 'Documents'
+  return { html: prepared.html, title: title || 'Preview' }
+}
+
 /**
- * Save PDF via browser print engine (Destination → Save as PDF).
- * This keeps text crisp — unlike html2pdf/html2canvas which rasterizes the page.
+ * Download a real PDF via the Playwright PDF service (does not open the print dialog).
+ * HTML uses the same Lab Templates layout as print / email.
  */
 export async function downloadQuotationPdfWithTemplate(
   row: QuotationRow,
   filename?: string,
   documentKind: BookDocumentKind = 'quotation',
 ): Promise<void> {
-  const title =
-    (filename ?? '').replace(/\.pdf$/i, '') || row.quotation_number || documentKind
-  await openTemplatePrintDialog([row], { documentTitle: title, documentKind })
+  const prepared = await prepareQuotationDocumentHtml([row], documentKind)
+  const base =
+    (filename ?? '').replace(/\.pdf$/i, '').trim() ||
+    row.quotation_number.trim() ||
+    prepared.template.documentTitle.trim() ||
+    documentKind
+  await downloadPdfViaPlaywright({
+    html: prepared.html,
+    filename: `${base}.pdf`,
+    format: mapPageSizeToPlaywrightFormat(prepared.template.paperSize),
+    landscape: prepared.template.pageOrientation === 'landscape',
+    margin: { top: '0mm', right: '0mm', bottom: '0mm', left: '0mm' },
+  })
 }
