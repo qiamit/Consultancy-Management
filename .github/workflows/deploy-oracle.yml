@@ -1,0 +1,38 @@
+# Deploy Consultancy Pro to the Oracle server (deploy/oracle). It SSHes to the server and runs
+# deploy/oracle/scripts/deploy.sh, which pulls main, builds the web app, restarts the containers and applies
+# database migrations.
+#
+# Needs two repository secrets: ORACLE_HOST (server IP or hostname) and ORACLE_SSH_KEY (a private key whose
+# public half is in the server's ~/.ssh/authorized_keys for the "ubuntu" user).
+# Until cutover it runs only by hand (Actions → Deploy to Oracle → Run workflow). At cutover, uncomment
+# "push" so every merge to main goes live on Oracle, the way merges go live on Railway today.
+name: Deploy to Oracle
+
+on:
+  workflow_dispatch:
+  # push:
+  #   branches: [main]
+
+concurrency:
+  group: oracle-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Deploy over SSH
+        env:
+          ORACLE_HOST: ${{ secrets.ORACLE_HOST }}
+          ORACLE_SSH_KEY: ${{ secrets.ORACLE_SSH_KEY }}
+        run: |
+          if [ -z "$ORACLE_HOST" ] || [ -z "$ORACLE_SSH_KEY" ]; then
+            echo "ORACLE_HOST / ORACLE_SSH_KEY secrets are not set."
+            exit 1
+          fi
+          mkdir -p ~/.ssh
+          printf '%s\n' "$ORACLE_SSH_KEY" > ~/.ssh/oracle
+          chmod 600 ~/.ssh/oracle
+          ssh -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 -i ~/.ssh/oracle "ubuntu@$ORACLE_HOST" \
+            'bash /opt/qe/app/deploy/oracle/scripts/deploy.sh'

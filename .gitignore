@@ -171,3 +171,4 @@ frontend/extensions/**/_metadata/
 # symlinked/real node_modules in any workspace (the trailing-slash rules above skip symlinks)
 node_modules
 frontend/web/node_modules
+frontend/web/dist-oracle/

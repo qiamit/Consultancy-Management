@@ -1,0 +1,195 @@
+# Consultancy Pro (QE Consultancy) on one Oracle Cloud server (Ampere A1, ARM64).
+# Same services as Railway — Postgres, GoTrue (auth), PostgREST (rest), storage-api, functions, MCP and the
+# PDF service — behind one Caddy that serves the web app and gets HTTPS certificates itself.
+# Settings come from deploy/oracle/.env (never committed; see env.template and README.md).
+name: qe
+
+x-service: &service
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  db:
+    <<: *service
+    # Same version as Railway (Postgres 17.6, Supabase build) so the dump restores as is.
+    image: supabase/postgres:17.6.1.136
+    command:
+      - postgres
+      - -c
+      - config_file=/etc/postgresql/postgresql.conf
+      - -c
+      - shared_buffers=1GB
+      - -c
+      - effective_cache_size=3GB
+    environment:
+      POSTGRES_HOST: /var/run/postgresql
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: postgres
+      POSTGRES_DB: postgres
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXP: ${JWT_EXPIRY:-3600}
+    volumes:
+      - ./db/roles.sql:/docker-entrypoint-initdb.d/init-scripts/99-roles.sql:ro
+      - ${DATA_DIR:-/opt/qe/data}/db:/var/lib/postgresql/data
+    # Reachable from the server itself only (backups, migrations, admin) — never from the internet.
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    shm_size: 256mb
+
+  auth:
+    <<: *service
+    image: supabase/gotrue:v2.174.0
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      API_EXTERNAL_URL: https://${API_DOMAIN}/auth/v1
+      GOTRUE_API_EXTERNAL_URL: https://${API_DOMAIN}/auth/v1
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@db:5432/postgres
+      GOTRUE_DB_NAMESPACE: auth
+      GOTRUE_DB_AUTOMIGRATE: "true"
+      GOTRUE_SITE_URL: https://${APP_DOMAIN}
+      GOTRUE_URI_ALLOW_LIST: ${GOTRUE_URI_ALLOW_LIST:-}
+      GOTRUE_DISABLE_SIGNUP: ${GOTRUE_DISABLE_SIGNUP:-true}
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_EXP: ${JWT_EXPIRY:-3600}
+      GOTRUE_JWT_SECRET: ${JWT_SECRET}
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      GOTRUE_EXTERNAL_PHONE_ENABLED: "false"
+      GOTRUE_MAILER_AUTOCONFIRM: ${GOTRUE_MAILER_AUTOCONFIRM:-true}
+      GOTRUE_MAILER_SUBJECTS_RECOVERY: ${GOTRUE_MAILER_SUBJECTS_RECOVERY:-Reset Your Password}
+      GOTRUE_PASSWORD_MIN_LENGTH: ${GOTRUE_PASSWORD_MIN_LENGTH:-8}
+      GOTRUE_SMTP_ADMIN_EMAIL: ${GOTRUE_SMTP_ADMIN_EMAIL:-}
+      GOTRUE_SMTP_HOST: ${GOTRUE_SMTP_HOST:-}
+      GOTRUE_SMTP_PORT: ${GOTRUE_SMTP_PORT:-587}
+      GOTRUE_SMTP_USER: ${GOTRUE_SMTP_USER:-}
+      GOTRUE_SMTP_PASS: ${GOTRUE_SMTP_PASS:-}
+      GOTRUE_SMTP_SENDER_NAME: ${GOTRUE_SMTP_SENDER_NAME:-}
+
+  rest:
+    <<: *service
+    image: postgrest/postgrest:v12.2.12
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD}@db:5432/postgres
+      PGRST_DB_SCHEMAS: ${PGRST_DB_SCHEMAS:-public,storage,graphql_public}
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_DB_MAX_ROWS: ${PGRST_DB_MAX_ROWS:-}
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+      PGRST_APP_SETTINGS_JWT_SECRET: ${JWT_SECRET}
+      PGRST_APP_SETTINGS_JWT_EXP: ${JWT_EXPIRY:-3600}
+      PGRST_OPENAPI_SERVER_PROXY_URI: https://${API_DOMAIN}/rest/v1
+      PGRST_SERVER_PORT: 3000
+
+  storage:
+    <<: *service
+    image: supabase/storage-api:v1.24.7
+    depends_on:
+      db:
+        condition: service_healthy
+      rest:
+        condition: service_started
+    environment:
+      ANON_KEY: ${ANON_KEY}
+      SERVICE_KEY: ${SERVICE_ROLE_KEY}
+      POSTGREST_URL: http://rest:3000
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      AUTH_JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: postgres://supabase_storage_admin:${POSTGRES_PASSWORD}@db:5432/postgres
+      FILE_SIZE_LIMIT: ${FILE_SIZE_LIMIT:-52428800}
+      # Files on the server's own disk instead of an S3 bucket.
+      STORAGE_BACKEND: file
+      FILE_STORAGE_BACKEND_PATH: /var/lib/storage
+      TENANT_ID: stub
+      REGION: local
+      # Folder under /var/lib/storage that holds the files (scripts/migrate-storage.mjs copies Railway's files there).
+      GLOBAL_S3_BUCKET: ${STORAGE_BUCKET_DIR:-qe-files}
+      IS_MULTITENANT: "false"
+      REQUEST_ALLOW_X_FORWARDED_PATH: "true"
+      ENABLE_IMAGE_TRANSFORMATION: "false"
+      SERVER_PORT: 5000
+    volumes:
+      - ${DATA_DIR:-/opt/qe/data}/storage:/var/lib/storage
+
+  functions:
+    <<: *service
+    build: ../../backend/services/functions
+    depends_on: [rest, auth]
+    environment:
+      PORT: 8080
+      REST_URL: http://rest:3000
+      AUTH_URL: http://auth:9999
+      SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-}
+      # Off until cutover, so Railway and Oracle never both send renewal reminders.
+      RENEWAL_REMINDERS_DISABLED: ${RENEWAL_REMINDERS_DISABLED:-1}
+
+  mcp:
+    <<: *service
+    build: ../../backend/services/mcp
+    depends_on: [rest, auth, storage]
+    environment:
+      PORT: 8090
+      MCP_ENABLED: ${MCP_ENABLED:-true}
+      MCP_WRITE_ENABLED: ${MCP_WRITE_ENABLED:-false}
+      MCP_TOKEN_KEY: ${MCP_TOKEN_KEY:-}
+      MCP_PUBLIC_URL: https://${MCP_DOMAIN}
+      PUBLIC_API_URL: https://${API_DOMAIN}
+      APP_URL: https://${APP_DOMAIN}
+      REST_URL: http://rest:3000
+      AUTH_URL: http://auth:9999
+      STORAGE_URL: http://storage:5000
+      ANON_KEY: ${ANON_KEY}
+      SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+
+  pdf:
+    <<: *service
+    build: ../../backend/services/pdf-service
+    depends_on: [auth]
+    environment:
+      PDF_SERVICE_HOST: 0.0.0.0
+      PDF_SERVICE_PORT: 3847
+      PLAYWRIGHT_NO_SANDBOX: "1"
+      AUTH_URL: http://auth:9999
+      AUTH_ANON_KEY: ${ANON_KEY}
+      PDF_CORS_ORIGINS: https://${APP_DOMAIN},https://www.${APP_DOMAIN}
+    shm_size: 1gb
+
+  caddy:
+    <<: *service
+    image: caddy:2.10-alpine
+    depends_on: [auth, rest, storage, functions, mcp, pdf]
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN}
+      API_DOMAIN: ${API_DOMAIN}
+      MCP_DOMAIN: ${MCP_DOMAIN}
+      PDF_DOMAIN: ${PDF_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${DATA_DIR:-/opt/qe/data}/web:/srv/app:ro
+      - ${DATA_DIR:-/opt/qe/data}/caddy:/data

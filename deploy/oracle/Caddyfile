@@ -1,0 +1,127 @@
+# Oracle server: one Caddy for the web app, the API gateway, MCP and the PDF service.
+# Domains come from deploy/oracle/.env (APP_DOMAIN, API_DOMAIN, MCP_DOMAIN, PDF_DOMAIN); Caddy gets and renews
+# the HTTPS certificates itself. API routes and CORS mirror backend/services/gateway/Caddyfile (Railway).
+{
+	email {$ACME_EMAIL}
+}
+
+(strip_upstream_cors) {
+	header_down -Access-Control-Allow-Origin
+	header_down -Access-Control-Allow-Credentials
+	header_down -Access-Control-Allow-Headers
+	header_down -Access-Control-Allow-Methods
+	header_down -Access-Control-Expose-Headers
+}
+
+# Web app (Vite build in /srv/app, single-page app).
+{$APP_DOMAIN}, www.{$APP_DOMAIN} {
+	encode zstd gzip
+	root * /srv/app
+
+	@assets path /assets/*
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+	@pages not path /assets/*
+	header @pages Cache-Control "no-cache"
+
+	header {
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	try_files {path} /index.html
+	file_server
+}
+
+# API gateway: auth / rest / storage / functions.
+{$API_DOMAIN} {
+	@localDev header_regexp Origin ^https?://(localhost|127\.0\.0\.1):(3000|517[3-9]|518[0-5])$
+	header @localDev Access-Control-Allow-Origin "{http.request.header.Origin}"
+
+	@app header Origin https://{$APP_DOMAIN}
+	header @app Access-Control-Allow-Origin "https://{$APP_DOMAIN}"
+
+	@appWww header Origin https://www.{$APP_DOMAIN}
+	header @appWww Access-Control-Allow-Origin "https://www.{$APP_DOMAIN}"
+
+	header {
+		Access-Control-Allow-Credentials "true"
+		Access-Control-Expose-Headers "Content-Range, Range, Content-Location, Content-Profile, Preference-Applied, X-Request-Id"
+		Vary "Origin"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		X-Frame-Options "DENY"
+		Content-Security-Policy "frame-ancestors 'none'"
+		-Server
+	}
+
+	@preflight method OPTIONS
+	handle @preflight {
+		header Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+		header Access-Control-Allow-Headers "Authorization, apikey, Content-Type, Accept, Accept-Profile, Content-Profile, Prefer, Range, X-Client-Info, X-Supabase-Api-Version, X-Requested-With, Profile, X-User-Jwt, x-upsert, cache-control, content-disposition, X-Retry-Count"
+		header Access-Control-Max-Age "86400"
+		respond "" 204
+	}
+
+	@health path /health
+	handle @health {
+		respond "ok" 200
+	}
+
+	@auth path /auth/v1 /auth/v1/*
+	handle @auth {
+		uri strip_prefix /auth/v1
+		reverse_proxy auth:9999 {
+			import strip_upstream_cors
+		}
+	}
+
+	@rest path /rest/v1 /rest/v1/*
+	handle @rest {
+		encode zstd gzip
+		uri strip_prefix /rest/v1
+		reverse_proxy rest:3000 {
+			import strip_upstream_cors
+		}
+	}
+
+	@storage path /storage/v1 /storage/v1/*
+	handle @storage {
+		uri strip_prefix /storage/v1
+		reverse_proxy storage:5000 {
+			import strip_upstream_cors
+		}
+	}
+
+	@functions path /functions/v1 /functions/v1/*
+	handle @functions {
+		uri strip_prefix /functions/v1
+		reverse_proxy functions:8080 {
+			import strip_upstream_cors
+		}
+	}
+
+	# Extension Manak PDF inbox (same path as on Railway).
+	@manakPdf path /api/osl/manak-pdf /api/osl/manak-pdf/*
+	handle @manakPdf {
+		reverse_proxy functions:8080 {
+			import strip_upstream_cors
+		}
+	}
+
+	handle {
+		respond "Not Found" 404
+	}
+}
+
+# MCP server (it answers CORS / OAuth itself).
+{$MCP_DOMAIN} {
+	reverse_proxy mcp:8090
+}
+
+# PDF service (it answers CORS itself; large HTML bodies allowed).
+{$PDF_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy pdf:3847
+}
