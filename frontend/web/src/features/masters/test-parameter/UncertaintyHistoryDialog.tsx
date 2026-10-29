@@ -85,7 +85,8 @@ function printHistoryRecords(
 </body>
 </html>`
 
-  const win = window.open('', '_blank', 'noopener,noreferrer,width=900,height=700')
+  // No 'noopener': with it window.open returns null and nothing could be printed (the HTML is escaped).
+  const win = window.open('', '_blank', 'width=900,height=700')
   if (!win) return
   win.document.open()
   win.document.write(html)

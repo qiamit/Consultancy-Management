@@ -9,6 +9,8 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useCanEditCurrentModule } from '@/features/settings/module-access/useCanEditCurrentModule'
+import { printHtmlInFrame } from '@/lib/printHtmlInFrame'
+import { escapeHtml } from '@/lib/sendAppEmail'
 import { ClientsTableFooterBar } from '@/features/masters/clients/ClientsFooterBar'
 import {
   clientAiTriggerClass,
@@ -459,11 +461,10 @@ export default function BisBranchOfficesMasterPage() {
               setMessage('Select an office to print.')
               return
             }
-            const popup = window.open('', '_blank', 'noopener,noreferrer')
-            if (!popup) return
-            popup.document.write(`<title>BIS Branch Offices</title><pre>${selected.map((row) => `${row.code} · ${row.name} · ${row.officeType}`).join('\n')}</pre>`)
-            popup.document.close()
-            popup.print()
+            const lines = selected.map((row) => escapeHtml(`${row.code} · ${row.name} · ${row.officeType}`))
+            if (!printHtmlInFrame(`<!doctype html><html><head><meta charset="utf-8"/><title>BIS Branch Offices</title></head><body><pre>${lines.join('\n')}</pre></body></html>`)) {
+              setMessage('Print Could Not Start. Try Again.')
+            }
           }}
           onDeleteSelected={async () => {
             if (!(await confirm(`Delete ${selectedIds.size} BIS Branch Office Record(s)?`, { title: 'Delete BIS Branch Offices', confirmLabel: 'Delete', destructive: true }))) return
