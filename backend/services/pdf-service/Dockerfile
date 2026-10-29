@@ -22,6 +22,13 @@ COPY server.mjs ./
 
 ENV NODE_ENV=production
 ENV PDF_SERVICE_HOST=0.0.0.0
+# Chromium's own sandbox needs user namespaces, which Docker's default seccomp profile (and Ubuntu's AppArmor
+# restriction on unprivileged user namespaces) block unless the container gets SYS_ADMIN or a custom seccomp
+# profile. We keep --no-sandbox instead and contain the renderer another way: it runs as the unprivileged
+# pwuser (below), and server.mjs lets the page load only data:/blob: URLs and the API's storage objects.
 ENV PLAYWRIGHT_NO_SANDBOX=1
+
+# Never run Chromium as root: the Playwright image ships the unprivileged pwuser account.
+USER pwuser
 
 CMD ["node", "server.mjs"]

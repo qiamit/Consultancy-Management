@@ -23,7 +23,7 @@ Nothing here talks to Railway. Data lives in Docker volumes and is thrown away b
 ```bash
 npm run local:up     # generate secrets, start containers, migrate, create admin
 npm run dev          # web app on http://localhost:5173
-npm run pdf:dev      # optional: PDF export (needs `npm run pdf:install` once)
+PDF_AUTH_DISABLED=1 npm run pdf:dev   # optional: PDF export (needs `npm run pdf:install` once; local only)
 ```
 
 Sign in as **admin@consultancy.local** / **Admin@12345**. Override them with `LOCAL_ADMIN_EMAIL` and `LOCAL_ADMIN_PASSWORD` before the first `local:up`.

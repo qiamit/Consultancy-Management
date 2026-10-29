@@ -166,13 +166,19 @@ services:
     <<: *service
     build: ../../backend/services/pdf-service
     depends_on: [auth]
+    # Reaps Chromium's child processes (Playwright's recommendation for containers).
+    init: true
     environment:
       PDF_SERVICE_HOST: 0.0.0.0
       PDF_SERVICE_PORT: 3847
       PLAYWRIGHT_NO_SANDBOX: "1"
+      # Every /pdf request needs a signed-in user's token, checked against GoTrue.
       AUTH_URL: http://auth:9999
       AUTH_ANON_KEY: ${ANON_KEY}
       PDF_CORS_ORIGINS: https://${APP_DOMAIN},https://www.${APP_DOMAIN}
+      ALLOW_LOCALHOST_ORIGINS: ${ALLOW_LOCALHOST_ORIGINS:-1}
+      # The only URLs a rendered page may load (besides data: / blob:): stored files on the API.
+      PDF_ALLOWED_URL_PREFIXES: https://${API_DOMAIN}/storage/v1/object/
     shm_size: 1gb
 
   caddy:
