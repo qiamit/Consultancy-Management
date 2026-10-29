@@ -10,7 +10,52 @@ function resolveApiBase(provider, apiBaseUrl) {
   if (provider === 'openrouter') return 'https://openrouter.ai/api/v1'
   if (provider === 'google') return 'https://generativelanguage.googleapis.com/v1beta/openai'
   if (provider === 'deepseek') return 'https://api.deepseek.com/v1'
+  // Anthropic's OpenAI-compatible endpoint (used only for picture requests; see below).
+  if (provider === 'anthropic') return 'https://api.anthropic.com/v1'
   return 'https://api.openai.com/v1'
+}
+
+/** Pictures sent for vision models: count, size of each, and total (the server body limit is 25 MB). */
+const MAX_IMAGES = 8
+const MAX_IMAGE_CHARS = 6 * 1024 * 1024
+const MAX_IMAGES_TOTAL_CHARS = 20 * 1024 * 1024
+const IMAGE_DATA_URL = /^data:image\/(?:jpeg|png|webp|gif);base64,[A-Za-z0-9+/=]+$/
+
+const VISION_MISSING_ERROR =
+  'Reading Photos Needs a Vision AI Model. Add Google Gemini or OpenAI GPT-4o in Settings → AI Settings → AI Models.'
+
+/** OpenRouter / Custom model ids known to read pictures. */
+const VISION_MODEL_HINT =
+  /gpt-4o|gpt-4\.1|gpt-4-turbo|gpt-4-vision|gpt-5|chatgpt-4o|\bo[34]\b|gemini|gemma-?3|claude|vision|[-_/]vl\b|-vl-|qwen.*vl|pixtral|llava|llama-?4|grok-(?:2-vision|4)/i
+
+/** True when the model can take image_url parts (by provider, and by model id where a provider mixes both kinds). */
+function modelSupportsVision(model) {
+  const provider = String(model?.provider ?? 'openai')
+  const id = String(model?.model_id ?? '').toLowerCase()
+  if (provider === 'google' || provider === 'anthropic') return true
+  if (provider === 'openai') return !/gpt-3\.5|davinci|babbage|o1-mini|o3-mini|embedding|whisper|tts|audio/.test(id)
+  if (provider === 'deepseek') return /vl/.test(id)
+  return VISION_MODEL_HINT.test(id)
+}
+
+function modelHasKey(model) {
+  return Boolean(String(model?.api_key || '').trim() || model?.api_key_set)
+}
+
+/** Validated picture data URLs from the request body (empty when none were sent). */
+function readImages(raw) {
+  if (raw === undefined || raw === null) return []
+  if (!Array.isArray(raw)) throw new Error('images must be a list of picture data URLs')
+  if (raw.length > MAX_IMAGES) throw new Error(`Send at most ${MAX_IMAGES} pictures at a time`)
+  let total = 0
+  return raw.map((url) => {
+    const text = String(url ?? '')
+    if (text.length > MAX_IMAGE_CHARS) throw new Error('A picture is too large (6 MB at most)')
+    if (!IMAGE_DATA_URL.test(text)) throw new Error('Pictures must be JPG, PNG, WEBP or GIF data URLs')
+    total += text.length
+    if (total > MAX_IMAGES_TOTAL_CHARS) throw new Error('The pictures are too large together (20 MB at most)')
+    return text
+  })
 }
 
 function normalizeModelId(provider, modelId) {
@@ -90,6 +135,15 @@ export function createQiAssistantHandler(deps) {
       return
     }
 
+    /** @type {string[]} */
+    let images = []
+    try {
+      images = readImages(body.images)
+    } catch (err) {
+      corsJson(res, 400, { error: err instanceof Error ? err.message : 'Invalid pictures' })
+      return
+    }
+
     /** @type {Record<string, unknown> | null} */
     let settings = null
     try {
@@ -119,6 +173,20 @@ export function createQiAssistantHandler(deps) {
           `/ai_models?is_active=eq.true&select=*&order=created_at.asc&limit=1`,
         )
         model = Array.isArray(rows) && rows[0] ? rows[0] : null
+      }
+      // Pictures need a model that can see: keep the default when it can, else the first active vision model.
+      if (images.length > 0 && !(model && modelSupportsVision(model) && modelHasKey(model))) {
+        const rows = await rest(
+          `/ai_models?is_active=eq.true&select=*&order=is_default.desc,created_at.asc`,
+        )
+        const vision = (Array.isArray(rows) ? rows : []).find(
+          (row) => modelSupportsVision(row) && modelHasKey(row),
+        )
+        if (!vision) {
+          corsJson(res, 400, { error: VISION_MISSING_ERROR })
+          return
+        }
+        model = vision
       }
     } catch (err) {
       corsJson(res, 500, {
@@ -152,7 +220,8 @@ export function createQiAssistantHandler(deps) {
     }
 
     const provider = String(model.provider ?? 'openai')
-    if (provider === 'anthropic') {
+    // Text chat stays on the providers it always used; picture requests may use Anthropic's OpenAI-compatible endpoint.
+    if (provider === 'anthropic' && images.length === 0) {
       corsJson(res, 400, {
         error:
           'Provider "anthropic" is not yet supported in QE Assistant. Use Google Gemini, OpenAI, DeepSeek, OpenRouter, or Custom with an OpenAI-compatible base URL.',
@@ -243,10 +312,17 @@ export function createQiAssistantHandler(deps) {
           !(idx === arr.length - 1 && m.role === 'user' && m.content === userText),
       )
 
+    // With pictures the user turn is OpenAI-style multimodal content: the text, then one image_url part per picture.
+    const userContent = images.length
+      ? [
+          { type: 'text', text: userText },
+          ...images.map((url) => ({ type: 'image_url', image_url: { url } })),
+        ]
+      : userText
     const chatMessages = [
       { role: 'system', content: systemParts.join('\n\n') },
       ...history,
-      { role: 'user', content: userText },
+      { role: 'user', content: userContent },
     ]
 
     const apiBase = resolveApiBase(provider, model.api_base_url ? String(model.api_base_url) : null)
@@ -255,8 +331,15 @@ export function createQiAssistantHandler(deps) {
     const maxTokens = Number(model.max_tokens)
     const isCmpf311Request = body.page === 'bis/cmpf-311-on-sit'
     // Long source-PDF extractions: full output budget and no hidden reasoning, which can otherwise use up the tokens.
-    const isLongExtraction = isCmpf311Request || body.page === 'bis/undertaking-indian-standards' || body.page === 'bis/undertaking-other' || String(body.page || '').startsWith('bis/non-conformity') || body.page === 'masters/test-parameters-ai' || body.page === 'bis/process-flow-chart'
+    const isLongExtraction = isCmpf311Request || body.page === 'bis/undertaking-indian-standards' || body.page === 'bis/undertaking-other' || String(body.page || '').startsWith('bis/non-conformity') || body.page === 'masters/test-parameters-ai' || body.page === 'bis/process-flow-chart' || body.page === 'bis/plant-layout'
     const chatMaxTokens = isLongExtraction ? 8192 : Number.isFinite(maxTokens) ? Math.min(maxTokens, 8192) : 4096
+    // Drawing a layout from a sketch wants faithful positions, not creative variety.
+    const chatTemperature = body.page === 'bis/plant-layout'
+      ? 0.2
+      : Number.isFinite(temperature) ? temperature : 0.7
+    // OpenAI reasoning models (o-series, GPT-5) take max_completion_tokens and only their default temperature
+    // (applied to picture requests, which may pick such a model as the vision fallback; text chat is unchanged).
+    const openAiReasoning = images.length > 0 && provider === 'openai' && /^(?:o\d|gpt-5)/i.test(modelId)
 
     const requestChatCompletion = (jsonMode) => fetch(`${apiBase}/chat/completions`, {
       method: 'POST',
@@ -267,8 +350,9 @@ export function createQiAssistantHandler(deps) {
       body: JSON.stringify({
         model: modelId,
         messages: chatMessages,
-        temperature: Number.isFinite(temperature) ? temperature : 0.7,
-        max_tokens: chatMaxTokens,
+        ...(openAiReasoning
+          ? { max_completion_tokens: chatMaxTokens }
+          : { temperature: chatTemperature, max_tokens: chatMaxTokens }),
         ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
         ...(provider === 'deepseek' && isLongExtraction ? { thinking: { type: 'disabled' } } : {}),
       }),

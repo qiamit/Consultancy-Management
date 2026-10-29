@@ -390,6 +390,8 @@ export function LegalDocumentsModuleDialog({
   const showAiButtons = useShowAiButtons()
   /** Chart mode only: the AI button sits next to Import in the header (Description has its own AI button). */
   const showFlowChartAi = printKind === 'process-flow-chart' && showAiButtons && Boolean(row?.id)
+  /** Plant Layout: AI button in the header draws the canvas from a photo / sketch / PDF of the factory. */
+  const showPlantLayoutAi = showPlantLayoutFields && showAiButtons && Boolean(row?.id)
   /** Compact modules: dialog height follows content (no forced tall empty body). */
   const compactFormModule =
     showTopManagementFields ||
@@ -510,6 +512,7 @@ export function LegalDocumentsModuleDialog({
   const [brandImportOpen, setBrandImportOpen] = useState(false)
   const [flowImportOpen, setFlowImportOpen] = useState(false)
   const [flowAiOpen, setFlowAiOpen] = useState(false)
+  const [plantLayoutAiOpen, setPlantLayoutAiOpen] = useState(false)
   const [cmpf310, setCmpf310] = useState<Cmpf310ModulePayload>(() => emptyCmpf310Payload())
   const [rawMaterialReference, setRawMaterialReference] = useState<RawMaterialReferencePayload>(() => emptyRawMaterialReferencePayload())
   const [processFlow, setProcessFlow] = useState<ProcessFlowModulePayload>(() =>
@@ -635,6 +638,7 @@ export function LegalDocumentsModuleDialog({
       setUndertakingPreviewOptionsTouched(false)
       setLicenseScopeNotes('')
       setFlowAiOpen(false)
+      setPlantLayoutAiOpen(false)
       return
     }
     setDrafts([newDraft()])
@@ -1860,7 +1864,7 @@ export function LegalDocumentsModuleDialog({
             style={limsDarkBarGlowStyle}
           />
           <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
-          <DialogHeader className={cn('relative text-left', showFlowChartAi ? 'pr-24' : 'pr-10')}>
+          <DialogHeader className={cn('relative text-left', showFlowChartAi ? 'pr-24' : showPlantLayoutAi ? 'pr-20' : 'pr-10')}>
             <DialogTitle className="text-base font-semibold tracking-tight text-white">
               {title}
             </DialogTitle>
@@ -1906,6 +1910,21 @@ export function LegalDocumentsModuleDialog({
               title="Generate Process Flow Chart with AI"
               aria-label="Generate Process Flow Chart with AI"
               onClick={() => setFlowAiOpen(true)}
+            >
+              <Sparkles size={15} aria-hidden />
+            </Button>
+          ) : null}
+          {showPlantLayoutAi ? (
+            // No Import button on this module, so the AI button takes the slot next to Close.
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={busy || saving || loading}
+              className="absolute right-11 top-2 z-10 h-7 w-7 rounded-none border border-amber-500/60 bg-stone-800 p-0 text-amber-200 shadow-sm transition-colors hover:border-amber-400 hover:bg-amber-600 hover:text-white"
+              title="Draw Plant Layout with AI from a Photo or PDF"
+              aria-label="Draw Plant Layout with AI from a Photo or PDF"
+              onClick={() => setPlantLayoutAiOpen(true)}
             >
               <Sparkles size={15} aria-hidden />
             </Button>
@@ -2437,6 +2456,10 @@ export function LegalDocumentsModuleDialog({
                   value={plantLayout}
                   onChange={setPlantLayout}
                   disabled={busy || saving}
+                  aiOpen={plantLayoutAiOpen}
+                  onAiOpenChange={showPlantLayoutAi ? setPlantLayoutAiOpen : undefined}
+                  applicantName={row ? clientDisplayName(row) : ''}
+                  productName={(row?.is_code?.title ?? '').trim()}
                 />
               )}
             </div>
