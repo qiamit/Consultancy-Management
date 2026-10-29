@@ -84,7 +84,7 @@ function buildBody(data: UndertakingLongDurationData): string {
       <div><strong>Application Number:</strong> ${esc(applicationNoDisplay(data.applicationNumber))}</div>
     </div>
   </div>
-  <p class="ldt-salutation">Respected / Sir,</p>
+  <p class="ldt-salutation">Respected Sir,</p>
   <p class="pd-body">
     I, <strong>${esc(declarant)}</strong> have applied for a license under Option 2 to you for use of BIS standard mark on
     <strong>${esc(product)}</strong> according to <strong>${esc(standard)}</strong> being manufactured at our factory at

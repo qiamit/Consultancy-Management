@@ -12,6 +12,9 @@ import {
   toBlockHtml,
 } from './printDocumentShared'
 
+/** The "upload a file" hint is for the screen only; it never goes onto paper or into a PDF. */
+const ANNEX_STYLES = `@media print { .bis-annex-placeholder { display: none !important; } }`
+
 function buildFileAnnexBody(opts: {
   title: string
   bodyLine: string
@@ -30,9 +33,9 @@ function buildFileAnnexBody(opts: {
       <div><strong>Application No.:</strong> ${esc(applicationNoDisplay(ctx.applicationNumber))}</div>
     </div>
   </div>
-  <p class="pd-body">Respected / Sir,</p>
+  <p class="pd-body">Respected Sir,</p>
   <p class="pd-body">${esc(opts.bodyLine)}</p>
-  <div class="pfc-drawing-placeholder" style="margin:12px 0;min-height:60mm;border:1.5px dashed #a8a29e;display:flex;align-items:center;justify-content:center;text-align:center;padding:16px;font-size:12px;color:#57534e;background:#fafaf9;">
+  <div class="pfc-drawing-placeholder bis-annex-placeholder" style="margin:12px 0;min-height:60mm;border:1.5px dashed #a8a29e;display:flex;align-items:center;justify-content:center;text-align:center;padding:16px;font-size:12px;color:#57534e;background:#fafaf9;">
     No file uploaded yet.<br/>Open Module Edit to upload, then View / Download.
   </div>
   ${preparedByHtml(ctx.preparedBy)}
@@ -43,7 +46,7 @@ export function buildCalibrationCertificatesHtml(printData: BisPrintData): strin
   const ctx = applicantContextFromPrintData(printData)
   return buildPrintPage({
     title: `Calibration Certificates — ${ctx.applicantName || 'Applicant'}`,
-    styles: '',
+    styles: ANNEX_STYLES,
     body: buildFileAnnexBody({
       title: 'Calibration Certificates',
       bodyLine:
@@ -57,7 +60,7 @@ export function buildConsentLetterHtml(printData: BisPrintData): string {
   const ctx = applicantContextFromPrintData(printData)
   return buildPrintPage({
     title: `Consent Letter — ${ctx.applicantName || 'Applicant'}`,
-    styles: '',
+    styles: ANNEX_STYLES,
     body: buildFileAnnexBody({
       title: 'Consent Letter',
       bodyLine:

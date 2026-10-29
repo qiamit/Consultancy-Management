@@ -58,7 +58,7 @@ export function buildProcessDescriptionSheetHtml(data: ProcessDescriptionData): 
     </div>
   </div>
 
-  <p class="pd-body">Respected / Sir,</p>
+  <p class="pd-body">Respected Sir,</p>
   <p class="pd-body">
     We hereby submit the following description of the manufacturing process adopted at our unit for
     ${isCode} for your kind reference in connection with our BIS licence application.
