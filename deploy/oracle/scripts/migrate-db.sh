@@ -4,11 +4,13 @@
 #   bash /opt/qe/app/deploy/oracle/scripts/migrate-db.sh           # full copy (replaces the Oracle data)
 #   bash /opt/qe/app/deploy/oracle/scripts/migrate-db.sh --verify  # only compare row counts
 #
-# Both sides run the same versions (Postgres 17.6.1.136, GoTrue v2.174.0, storage-api v1.24.7), so:
-#   1. GoTrue and storage-api create their own auth / storage tables on Oracle (same structure as Railway);
-#   2. the structure of public and private is copied from Railway;
-#   3. the data of public, private, auth and storage is copied (triggers and FK checks off while loading);
-#   4. every table's row count is compared with Railway.
+# Both sides run the same images, but Railway's auth / storage tables were created by newer GoTrue and storage-api
+# releases than the ones running now (extra tables such as auth.oauth_clients, no storage.prefixes). So nothing is
+# rebuilt on Oracle; Railway's database is reproduced as it is:
+#   1. the structure of public, private, auth and storage is copied from Railway;
+#   2. their data is copied (triggers and FK checks off while loading);
+#   3. every table's row count is compared with Railway.
+# GoTrue and storage-api then find every migration already applied, exactly as on Railway.
 set -euo pipefail
 
 APP=/opt/qe/app
@@ -22,6 +24,7 @@ psql_local() { compose exec -T db psql -v ON_ERROR_STOP=1 -U supabase_admin -d p
 psql_source() { compose exec -T db psql -v ON_ERROR_STOP=1 "$SOURCE_DATABASE_URL" "$@"; }
 
 DATA_SCHEMAS=(public private auth storage)
+SCHEMA_ARGS=$(printf -- '-n %s ' "${DATA_SCHEMAS[@]}")
 WORK="$BACKUP_DIR/migration"
 mkdir -p "$WORK"
 
@@ -55,36 +58,30 @@ if [ "${1:-}" = "--verify" ]; then
   exit $?
 fi
 
-echo "== 1. Database and auth / storage tables on Oracle"
+echo "== 1. Database only (nothing else may write while the data is loaded)"
+compose stop auth storage rest functions mcp pdf caddy >/dev/null 2>&1 || true
 compose up -d db
 until compose exec -T db pg_isready -U postgres -h localhost >/dev/null 2>&1; do sleep 2; done
-compose up -d auth storage
-echo "Waiting for GoTrue and storage-api to create their tables…"
-for _ in $(seq 1 60); do
-  ready=$(psql_local -tAc "select (to_regclass('auth.users') is not null and to_regclass('storage.objects') is not null)::int" || echo 0)
-  [ "$ready" = "1" ] && break
-  sleep 3
-done
-sleep 5
-# Nothing else may write while the data is loaded.
-compose stop auth storage rest functions mcp pdf caddy >/dev/null 2>&1 || true
 
 echo "== 2. Extensions (same as Railway)"
 psql_source -tAc "select format('create extension if not exists %I with schema %I;', e.extname, n.nspname) from pg_extension e join pg_namespace n on n.oid = e.extnamespace where e.extname not in ('plpgsql')" \
   | psql_local -q
 
 echo "== 3. Dump from Railway (read only)"
-compose exec -T db pg_dump "$SOURCE_DATABASE_URL" --schema-only -n public -n private -Fc > "$WORK/schema.dump"
-compose exec -T db pg_dump "$SOURCE_DATABASE_URL" --data-only \
-  $(printf -- '-n %s ' "${DATA_SCHEMAS[@]}") -Fc > "$WORK/data.dump"
+# shellcheck disable=SC2086
+compose exec -T db pg_dump "$SOURCE_DATABASE_URL" --schema-only $SCHEMA_ARGS -Fc > "$WORK/schema.dump"
+# shellcheck disable=SC2086
+compose exec -T db pg_dump "$SOURCE_DATABASE_URL" --data-only $SCHEMA_ARGS -Fc > "$WORK/data.dump"
 ls -lh "$WORK"/schema.dump "$WORK"/data.dump
 
-echo "== 4. Replace public / private on Oracle with Railway's structure"
-# Start from an empty public schema (safe to re-run). Extensions living in public (citext) come back first.
+echo "== 4. Replace public / private / auth / storage on Oracle with Railway's structure"
+# Start from empty schemas (safe to re-run). Extensions living in public (citext) come back first.
 PUBLIC_OWNER=$(psql_source -tAc "select nspowner::regrole from pg_namespace where nspname = 'public'")
 psql_local -q <<SQL
 DROP SCHEMA IF EXISTS private CASCADE;
 DROP SCHEMA IF EXISTS public CASCADE;
+DROP SCHEMA IF EXISTS auth CASCADE;
+DROP SCHEMA IF EXISTS storage CASCADE;
 CREATE SCHEMA public;
 ALTER SCHEMA public OWNER TO ${PUBLIC_OWNER:-pg_database_owner};
 SQL
@@ -97,16 +94,7 @@ compose cp "$WORK/schema.dump" db:/tmp/schema.dump
 compose exec -T db pg_restore -U supabase_admin -d postgres --exit-on-error -L /tmp/schema.list /tmp/schema.dump \
   || { echo "Structure restore failed"; exit 1; }
 
-echo "== 5. Empty Oracle's auth / storage tables, then load all data"
-psql_local -q <<'SQL'
-DO $$
-DECLARE r record;
-BEGIN
-  FOR r IN SELECT schemaname, tablename FROM pg_tables WHERE schemaname IN ('auth','storage') LOOP
-    EXECUTE format('TRUNCATE %I.%I CASCADE', r.schemaname, r.tablename);
-  END LOOP;
-END $$;
-SQL
+echo "== 5. Load all data"
 compose cp "$WORK/data.dump" db:/tmp/data.dump
 compose exec -T db pg_restore -U supabase_admin -d postgres --data-only --disable-triggers --single-transaction \
   --exit-on-error /tmp/data.dump || { echo "Data restore failed"; exit 1; }
