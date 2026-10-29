@@ -1620,7 +1620,7 @@ export function ProcessFlowModuleFields({
                   <div className="flex w-full max-w-md flex-col items-center gap-3 border-2 border-dashed border-stone-300 bg-white/70 px-6 py-8 text-center">
                     <p className="text-sm font-semibold text-stone-700">No Steps Yet</p>
                     <p className="text-xs text-stone-500">
-                      Add the First Step of the Manufacturing Process{showAiButtons ? ', or Let AI Draft the Chart from the IS Standard and Product Manual' : ''}.
+                      Add the First Step of the Manufacturing Process{showAiButtons ? ', or Use the AI Button at the Top to Draft the Chart' : ''}.
                     </p>
                     <div className="flex flex-wrap justify-center gap-2">
                       <Button
@@ -1631,18 +1631,6 @@ export function ProcessFlowModuleFields({
                       >
                         <Plus className="mr-1 h-4 w-4" aria-hidden /> Add First Step
                       </Button>
-                      {showAiButtons ? (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className={cn(limsOutlineBtnClass, 'h-9 px-3 text-sm')}
-                          disabled={disabled}
-                          title="Generate Process Flow Chart with AI"
-                          onClick={() => setChartAiOpen(true)}
-                        >
-                          <Sparkles className="mr-1 h-4 w-4" aria-hidden /> Generate with AI
-                        </Button>
-                      ) : null}
                     </div>
                   </div>
                 ) : null}
