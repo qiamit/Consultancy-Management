@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, CheckCircle2, Loader2, Send, Sparkles, X } from 'lucide-react'
+import { Check, ChevronDown, Loader2, Send, Sparkles, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Textarea } from '@/components/ui/textarea'
 import {
   limsDialogSidebarOverlayClass,
@@ -21,6 +22,10 @@ import {
 import { flattenProcessFlowTree, processFlowNodeHasContent, type ProcessFlowNode } from './processFlowModel'
 
 const STEP_COUNTS = [8, 10, 12, 14, 16, 18, 20, 24] as const
+
+type SourceKey = 'standard' | 'manual' | 'scope'
+const SOURCE_LABELS: Record<SourceKey, string> = { standard: 'IS Standard', manual: 'Product Manual', scope: 'Licence Scope' }
+const TURNED_OFF = { fileName: '', text: '', problem: 'Turned Off' }
 
 /**
  * AI draft of the Process Flow Chart: reads the IS standard and Product Manual PDFs of the project's IS code plus the
@@ -60,6 +65,8 @@ export function ProcessFlowChartAiDialog({
   const [notes, setNotes] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [sources, setSources] = useState<ProcessFlowAiSources | null>(null)
+  /** Select Source: which inputs the AI reads (all on by default). */
+  const [use, setUse] = useState<Record<SourceKey, boolean>>({ standard: true, manual: true, scope: true })
   /** PDFs are read once per IS code while the dialog stays mounted (Regenerate does not download them again). */
   const sourcesCacheRef = useRef<{ isCodeId: string; sources: ProcessFlowAiSources } | null>(null)
 
@@ -86,15 +93,19 @@ export function ProcessFlowChartAiDialog({
     try {
       const id = (isCodeId ?? '').trim()
       let loaded = sourcesCacheRef.current?.isCodeId === id ? sourcesCacheRef.current.sources : null
-      if (!loaded) {
+      if (!loaded && (use.standard || use.manual)) {
         setPhase('Reading IS Standard and Product Manual…')
         loaded = await loadProcessFlowAiSources(id)
         // A failed download is tried again next time; a missing or scanned PDF is not.
         const transient = [loaded.standard, loaded.manual].some((d) => /could not be/i.test(d.problem))
         sourcesCacheRef.current = transient ? null : { isCodeId: id, sources: loaded }
       }
-      setSources(loaded)
-      if (!loaded.standard.text && !loaded.manual.text) {
+      const picked: ProcessFlowAiSources = {
+        standard: use.standard && loaded ? loaded.standard : TURNED_OFF,
+        manual: use.manual && loaded ? loaded.manual : TURNED_OFF,
+      }
+      setSources(picked)
+      if ((use.standard || use.manual) && !picked.standard.text && !picked.manual.text) {
         toast.warning('IS PDFs Not Available', {
           description: 'Steps Are Based on the IS Title and Licence Scope Only — Please Check Them.',
         })
@@ -105,9 +116,9 @@ export function ProcessFlowChartAiDialog({
         isNumber,
         isTitle,
         productName,
-        licenseScope,
+        licenseScope: use.scope ? licenseScope : '',
         isCodeId,
-        sources: loaded,
+        sources: picked,
         stepCount,
         existingSteps: append ? existingSteps : [],
         instructions,
@@ -146,25 +157,6 @@ export function ProcessFlowChartAiDialog({
     )
   }
 
-  const sourceRow = (label: string, doc: { fileName: string; text: string; problem: string } | null, fallback: string) => {
-    const ok = Boolean(doc?.text)
-    return (
-      <li className="flex items-start gap-1.5">
-        {doc == null ? (
-          <span className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded-full border border-stone-400" aria-hidden />
-        ) : ok ? (
-          <CheckCircle2 size={14} className="mt-0.5 shrink-0 text-emerald-700" aria-hidden />
-        ) : (
-          <AlertTriangle size={14} className="mt-0.5 shrink-0 text-amber-700" aria-hidden />
-        )}
-        <span className="min-w-0">
-          <span className="font-semibold">{label}:</span>{' '}
-          {doc == null ? fallback : ok ? doc.fileName : doc.problem}
-        </span>
-      </li>
-    )
-  }
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -198,7 +190,8 @@ export function ProcessFlowChartAiDialog({
         </div>
 
         <div className="shrink-0 space-y-2.5 border-b border-stone-400 bg-[#fffcf7] px-4 py-3">
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {/* Number of Steps · Insert Mode · Select Source on one line. */}
+          <div className="grid grid-cols-1 items-end gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
             <label className="flex flex-col gap-1 text-xs text-stone-700">
               <span className="font-semibold">Number of Steps</span>
               <select
@@ -227,22 +220,60 @@ export function ProcessFlowChartAiDialog({
                 <option value="append">Append to Chart</option>
               </select>
             </label>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className={cn(limsOutlineBtnClass, 'h-10 shrink-0 gap-1.5 px-3 text-sm')}
+                  disabled={disabled || busy}
+                  title="Choose What the AI Reads"
+                >
+                  Select Source
+                  <span className="text-xs text-stone-500">({(Object.keys(use) as SourceKey[]).filter((k) => use[k]).length}/3)</span>
+                  <ChevronDown className="h-4 w-4 opacity-60" aria-hidden />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="z-[110] w-80 rounded-none p-1">
+                {(Object.keys(SOURCE_LABELS) as SourceKey[]).map((key) => {
+                  const doc = key === 'standard' ? sources?.standard : key === 'manual' ? sources?.manual : null
+                  const detail =
+                    key === 'scope'
+                      ? scopeGiven
+                        ? 'From the Application Notes'
+                        : 'Not Entered — the AI Uses the IS Title Only'
+                      : doc && doc.problem !== TURNED_OFF.problem
+                        ? doc.text
+                          ? doc.fileName
+                          : doc.problem
+                        : 'Read When You Click Generate'
+                  return (
+                    <DropdownMenuCheckboxItem
+                      key={key}
+                      className="items-start gap-2 rounded-none py-2 pl-2 [&>span:first-child]:hidden"
+                      checked={use[key]}
+                      onCheckedChange={(on) => setUse((prev) => ({ ...prev, [key]: on === true }))}
+                      onSelect={(e) => e.preventDefault()}
+                    >
+                      <span
+                        aria-hidden
+                        className={cn(
+                          'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center border',
+                          use[key] ? 'border-amber-700 bg-amber-700 text-white' : 'border-stone-400 bg-white',
+                        )}
+                      >
+                        {use[key] ? <Check className="h-3 w-3" /> : null}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-sm font-semibold text-stone-800">{SOURCE_LABELS[key]}</span>
+                        <span className="block text-[11px] text-stone-500">{use[key] ? detail : 'Turned Off'}</span>
+                      </span>
+                    </DropdownMenuCheckboxItem>
+                  )
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
-          <ul className="space-y-1 text-[11px] text-stone-600">
-            {sourceRow('IS Standard', sources?.standard ?? null, 'Read When You Click Generate')}
-            {sourceRow('Product Manual', sources?.manual ?? null, 'Read When You Click Generate')}
-            <li className="flex items-start gap-1.5">
-              {scopeGiven ? (
-                <CheckCircle2 size={14} className="mt-0.5 shrink-0 text-emerald-700" aria-hidden />
-              ) : (
-                <AlertTriangle size={14} className="mt-0.5 shrink-0 text-amber-700" aria-hidden />
-              )}
-              <span>
-                <span className="font-semibold">Licence Scope:</span>{' '}
-                {scopeGiven ? 'From the Application Notes' : 'Not Entered — the AI Uses the IS Title Only'}
-              </span>
-            </li>
-          </ul>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto bg-white px-4 py-3">
@@ -256,9 +287,9 @@ export function ProcessFlowChartAiDialog({
               <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-amber-800/80">
                 Preview — {cleanSteps.length} Step{cleanSteps.length === 1 ? '' : 's'} (Edit or Remove Before Applying)
               </p>
-              {sources && (!sources.standard.text || !sources.manual.text) ? (
+              {sources && ((use.standard && !sources.standard.text) || (use.manual && !sources.manual.text)) ? (
                 <p className="border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900">
-                  {!sources.standard.text && !sources.manual.text
+                  {(!use.standard || !sources.standard.text) && (!use.manual || !sources.manual.text)
                     ? 'No IS PDF Could Be Read: These Steps Come from the IS Title and Licence Scope. Check Them Carefully.'
                     : 'One IS PDF Could Not Be Read: Check the Steps Against the Standard.'}
                 </p>
