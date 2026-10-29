@@ -111,9 +111,10 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
   const [projectKindFilter, setProjectKindFilter] = useState<BisProjectKindFilter>('all')
   const [licenseStatusFilter, setLicenseStatusFilter] =
     useState<BisLicenseStatusFilter>('all')
-  /** Least days remaining on License Validity first. */
-  const [sortKey, setSortKey] = useState<BisProjectSortKey>('validity')
-  const [sortDir, setSortDir] = useState<BisProjectSortDir>('asc')
+  /** Applications and inclusions in progress: last edited first. Licence lists: least days remaining on validity first. */
+  const lastEditedFirst = listMode === 'applications' || listMode === 'inclusion'
+  const [sortKey, setSortKey] = useState<BisProjectSortKey>(lastEditedFirst ? 'updated' : 'validity')
+  const [sortDir, setSortDir] = useState<BisProjectSortDir>(lastEditedFirst ? 'desc' : 'asc')
   const [jumpTo, setJumpTo] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())

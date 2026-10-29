@@ -147,7 +147,7 @@ export type BisLicenseStatusFilter =
   | 'no_validity'
 
 /** Sortable table columns (Action excluded). */
-export type BisProjectSortKey = 'client' | 'isCode' | 'cmL' | 'validity' | 'billing'
+export type BisProjectSortKey = 'client' | 'isCode' | 'cmL' | 'validity' | 'billing' | 'updated'
 export type BisProjectSortDir = 'asc' | 'desc'
 
 export type FetchBisProjectsParams = {
@@ -295,6 +295,9 @@ export async function fetchBisProjectsPage(
     query = query.order('cm_l_digits', { ascending, nullsFirst }).order('id', { ascending: true })
   } else if (sortKey === 'billing') {
     query = query.order('billing_amount', { ascending, nullsFirst }).order('id', { ascending: true })
+  } else if (sortKey === 'updated') {
+    // Last edited first (module data and file changes also bump updated_at).
+    query = query.order('updated_at', { ascending, nullsFirst }).order('id', { ascending: true })
   } else {
     // validity — least days remaining first when ascending
     query = query
