@@ -4,14 +4,14 @@
 #
 # Needs two repository secrets: ORACLE_HOST (server IP or hostname) and ORACLE_SSH_KEY (a private key whose
 # public half is in the server's ~/.ssh/authorized_keys for the "ubuntu" user).
-# Until cutover it runs only by hand (Actions → Deploy to Oracle → Run workflow). At cutover, uncomment
-# "push" so every merge to main goes live on Oracle, the way merges go live on Railway today.
+# The server key is limited to running deploy.sh (forced command in authorized_keys). Every merge to main goes
+# live on Oracle; it can also be run by hand (Actions → Deploy to Oracle → Run workflow).
 name: Deploy to Oracle
 
 on:
   workflow_dispatch:
-  # push:
-  #   branches: [main]
+  push:
+    branches: [main]
 
 concurrency:
   group: oracle-deploy
