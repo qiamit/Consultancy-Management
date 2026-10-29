@@ -320,8 +320,8 @@ function rowToClientForm(row: ClientRow): ClientFormType {
     companyType: row.company_type,
     companyScale: row.company_scale,
     companyName: row.company_name ?? '',
-    contactPersonName: row.contact_person_name ?? '',
-    ceoName: String((row as { ceo_name?: string | null }).ceo_name ?? ''),
+    contactPersonName: row.contact_person_name || String((row as { ceo_name?: string | null }).ceo_name ?? ''),
+    ceoName: String((row as { ceo_name?: string | null }).ceo_name || row.contact_person_name || ''),
     countryCode: row.country_code ?? '+91',
     mobile: row.mobile ?? '',
     email: row.email ?? '',
@@ -1099,6 +1099,8 @@ export default function ClientsMasterPage() {
         setDuplicates([])
         setAllowDuplicateSave(false)
         allowDuplicateRef.current = false
+        // Contact Person and CEO / MD are one field: both columns carry the same name.
+        const personName = (form.contactPersonName || form.ceoName).trim() || null
         const payload = {
           // Production DB still has legacy NOT NULL `name` alongside `company_name`.
           name: companyName,
@@ -1106,7 +1108,7 @@ export default function ClientsMasterPage() {
           company_type: form.companyType,
           company_scale: form.companyScale,
           company_name: companyName,
-          contact_person_name: form.contactPersonName.trim() || null,
+          contact_person_name: personName,
           country_code: form.countryCode || null,
           mobile: form.mobile.trim() || null,
           email: form.email.trim() || null,
@@ -1131,7 +1133,7 @@ export default function ClientsMasterPage() {
           udyam_date: form.udyamDate || null,
           constitution: form.constitution.trim() || null,
           landline: form.landline.trim() || null,
-          ceo_name: form.ceoName.trim() || null,
+          ceo_name: personName,
           sector: form.sector || null,
           is_startup: form.startupStatus.trim().toLowerCase() === 'yes',
           startup_status: form.startupStatus.trim() || 'No',
@@ -1216,7 +1218,7 @@ export default function ClientsMasterPage() {
               ...contact,
               isPrimary: true,
               contactRole: contact.contactRole === 'Other' ? 'Primary' as const : contact.contactRole,
-              name: form.contactPersonName,
+              name: form.contactPersonName || form.ceoName,
               mobile: form.mobile,
               email: form.email,
             }

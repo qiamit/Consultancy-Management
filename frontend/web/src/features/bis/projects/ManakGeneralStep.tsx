@@ -636,6 +636,11 @@ export function ManakGeneralStep({
     if (!clientId) return
     await done(() => patchClient(clientId, { [column]: v || null }))
   }
+  // Client Master keeps one person for CEO / MD and Contact Person; the application's CEO Name writes both.
+  const personCol = async (v: string) => {
+    if (!clientId) return
+    await done(() => patchClient(clientId, { ceo_name: v || null, contact_person_name: v || null }))
+  }
 
   const proofDoc = certificates.find((d) => ESTABLISHMENT_DOC.test(d.cert_name))
   const addressDoc = certificates.find((d) => ADDRESS_DOC.test(d.cert_name))
@@ -935,7 +940,7 @@ export function ManakGeneralStep({
             ],
           ]}
           items={[
-            ['CEO Name', v(str(raw.ceo_name) || str(client?.contactPerson), col('ceo_name'))],
+            ['CEO Name', v(str(client?.contactPerson) || str(raw.ceo_name), personCol)],
             ['City', v(str(raw.city), col('city'))],
             [
               'District',

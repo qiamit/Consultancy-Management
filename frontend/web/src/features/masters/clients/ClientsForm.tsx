@@ -568,9 +568,8 @@ export function ClientsForm({
     <div className={clientRegistryFormClass}>
       <div className={cn(compact ? 'space-y-2' : 'space-y-5')}>
         <div className={cn('grid grid-cols-12', compact ? 'gap-2' : 'gap-x-4 gap-y-3 sm:gap-y-4')}>
-          <div className={cn('col-span-12 grid grid-cols-1 sm:grid-cols-2', hasDocTable ? 'xl:grid-cols-4' : 'xl:grid-cols-6', compact ? 'gap-2' : 'gap-x-4 gap-y-3')}>
-          {!hasDocTable ? (
-            <>
+          <div className={cn('col-span-12 grid grid-cols-1 sm:grid-cols-2', hasDocTable ? 'xl:grid-cols-5' : 'xl:grid-cols-6', compact ? 'gap-2' : 'gap-x-4 gap-y-3')}>
+          {/* Same value as the GST Certificate row of Legal Documents (editing either updates both). */}
           <div className={cn('min-w-0', compact ? 'space-y-1' : 'space-y-2')}>
             <Label htmlFor="gst">GST Number</Label>
             <LimsFieldWithAdd
@@ -603,6 +602,7 @@ export function ClientsForm({
               </LimsFieldWithAdd>
           </div>
 
+          {!hasDocTable ? (
           <div className={cn('min-w-0', compact ? 'space-y-1' : 'space-y-2')}>
             <Label htmlFor="client-pan">PAN</Label>
             <Input
@@ -615,7 +615,6 @@ export function ClientsForm({
             />
             {panError ? <p className="text-xs text-destructive">{panError}</p> : null}
           </div>
-            </>
           ) : null}
 
           <div className={cn('min-w-0', compact ? 'space-y-1' : 'space-y-2')}>
@@ -1166,7 +1165,7 @@ export function ClientsForm({
           </div>
           </div>
 
-          <div className={cn('col-span-12 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5', compact ? 'gap-2' : 'gap-x-4 gap-y-3 sm:gap-y-4')}>
+          <div className={cn('col-span-12 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4', compact ? 'gap-2' : 'gap-x-4 gap-y-3 sm:gap-y-4')}>
             <div className={cn('flex min-w-0 flex-col', compact ? 'space-y-1' : 'space-y-2')}>
               <Label htmlFor="client-landline">Landline</Label>
               <Input
@@ -1176,23 +1175,14 @@ export function ClientsForm({
                 onChange={(e) => onChange({ ...form, landline: e.target.value })}
               />
             </div>
+            {/* One person: saved as both contact_person_name and ceo_name (BIS application "CEO Name", Manak, prints). */}
             <div className={cn('flex min-w-0 flex-col', compact ? 'space-y-1' : 'space-y-2')}>
-              <Label htmlFor="client-ceo">CEO / MD Name</Label>
-              <Input
-                id="client-ceo"
-                placeholder="CEO or Managing Director"
-                value={form.ceoName}
-                onChange={(e) => onChange({ ...form, ceoName: e.target.value })}
-                className="h-10"
-              />
-            </div>
-            <div className={cn('flex min-w-0 flex-col', compact ? 'space-y-1' : 'space-y-2')}>
-              <Label htmlFor="contact-person">Name of the Contact Person</Label>
+              <Label htmlFor="contact-person">Contact Person (CEO / MD)</Label>
               <Input
                 id="contact-person"
-                placeholder="Enter Contact Person Name"
-                value={form.contactPersonName}
-                onChange={(e) => onChange({ ...form, contactPersonName: e.target.value })}
+                placeholder="CEO, MD or Contact Person Name"
+                value={form.contactPersonName || form.ceoName}
+                onChange={(e) => onChange({ ...form, contactPersonName: e.target.value, ceoName: e.target.value })}
                 className="h-10"
               />
             </div>
