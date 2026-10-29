@@ -16,11 +16,12 @@ const buttonVariants = cva(
         ghost: 'hover:bg-accent hover:text-accent-foreground',
         link: 'text-primary underline-offset-4 hover:underline',
       },
+      /* Touch screens (coarse pointer) get ≥40px targets; mouse/trackpad keep the compact sizes. */
       size: {
-        default: 'h-8 px-4 py-1.5',
-        sm: 'h-8 rounded-none px-3',
+        default: 'h-8 px-4 py-1.5 [@media(pointer:coarse)]:h-10',
+        sm: 'h-8 rounded-none px-3 [@media(pointer:coarse)]:h-10',
         lg: 'h-9 rounded-none px-6',
-        icon: 'h-8 w-8',
+        icon: 'h-8 w-8 [@media(pointer:coarse)]:h-10 [@media(pointer:coarse)]:w-10',
       },
     },
     defaultVariants: {
