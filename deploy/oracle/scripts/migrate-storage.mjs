@@ -90,6 +90,11 @@ async function checkLayout() {
 }
 
 async function copyAll() {
+  // storage-api (root in its container) owns the folder once anything was uploaded; take it for the copy,
+  // fixOwner() hands it back at the end.
+  const storageDir = join(env.DATA_DIR || '/opt/qe/data', 'storage')
+  mkdirSync(storageRoot, { recursive: true })
+  execFileSync('sudo', ['chown', '-R', `${process.getuid()}:${process.getgid()}`, storageDir])
   const objects = await listAll()
   const totalBytes = objects.reduce((s, o) => s + o.size, 0)
   console.log(`Railway bucket: ${objects.length} files, ${(totalBytes / 1e9).toFixed(2)} GB → ${storageRoot}`)
