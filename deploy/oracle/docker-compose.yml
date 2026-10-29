@@ -196,6 +196,7 @@ services:
       MCP_DOMAIN: ${MCP_DOMAIN}
       PDF_DOMAIN: ${PDF_DOMAIN}
       ACME_EMAIL: ${ACME_EMAIL}
+      ALLOW_LOCALHOST_ORIGINS: ${ALLOW_LOCALHOST_ORIGINS:-1}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ${DATA_DIR:-/opt/qe/data}/web:/srv/app:ro
