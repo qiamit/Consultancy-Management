@@ -1,4 +1,4 @@
-import { PDFDocument } from 'pdf-lib'
+import { PDFDocument, type PDFImage } from 'pdf-lib'
 import { supabase } from '@/lib/supabaseClient'
 import { triggerPdfDownload } from '@/lib/playwrightPdfClient'
 import { openPendingPrintWindow } from '../print/openPrintHtml'
@@ -26,6 +26,30 @@ function formatApiError(err: unknown): string {
 }
 
 type SupportedAssetKind = 'pdf' | 'png' | 'jpeg' | null
+
+/** A4 in PDF points (1 pt = 1/72 in). */
+const A4_SHORT_PT = 595.28
+const A4_LONG_PT = 841.89
+const IMAGE_PAGE_MARGIN_PT = 20
+
+/**
+ * Adds an uploaded photo / scan as one A4 page: portrait or landscape to match the image, centred inside a 20 pt margin
+ * and never enlarged (scale ≤ 1), instead of a page the size of the image in pixels.
+ */
+export function addImageAsA4Page(doc: PDFDocument, img: PDFImage): void {
+  const landscape = img.width > img.height
+  const pageW = landscape ? A4_LONG_PT : A4_SHORT_PT
+  const pageH = landscape ? A4_SHORT_PT : A4_LONG_PT
+  const scale = Math.min(
+    (pageW - IMAGE_PAGE_MARGIN_PT * 2) / img.width,
+    (pageH - IMAGE_PAGE_MARGIN_PT * 2) / img.height,
+    1,
+  )
+  const width = img.width * scale
+  const height = img.height * scale
+  const page = doc.addPage([pageW, pageH])
+  page.drawImage(img, { x: (pageW - width) / 2, y: (pageH - height) / 2, width, height })
+}
 
 /** Prefer stored metadata, but inspect file signatures when storage metadata is missing or wrong. */
 export function detectBisPdfAssetKind(
@@ -133,16 +157,12 @@ export async function buildMergedBisProjectFilesPdf(
         continue
       }
       if (assetKind === 'png') {
-        const img = await merged.embedPng(bytes)
-        const page = merged.addPage([img.width, img.height])
-        page.drawImage(img, { x: 0, y: 0, width: img.width, height: img.height })
+        addImageAsA4Page(merged, await merged.embedPng(bytes))
         added += 1
         continue
       }
       if (assetKind === 'jpeg') {
-        const img = await merged.embedJpg(bytes)
-        const page = merged.addPage([img.width, img.height])
-        page.drawImage(img, { x: 0, y: 0, width: img.width, height: img.height })
+        addImageAsA4Page(merged, await merged.embedJpg(bytes))
         added += 1
         continue
       }
