@@ -1187,10 +1187,10 @@ export function ClientsForm({
             </div>
             {/* One person: saved as both contact_person_name and ceo_name (BIS application "CEO Name", Manak, prints). */}
             <div className={cn('flex min-w-0 flex-col', compact ? 'space-y-1' : 'space-y-2')}>
-              <Label htmlFor="contact-person">Contact Person (CEO / MD)</Label>
+              <Label htmlFor="contact-person">Contact Person</Label>
               <Input
                 id="contact-person"
-                placeholder="CEO, MD or Contact Person Name"
+                placeholder="Contact Person Name"
                 value={form.contactPersonName || form.ceoName}
                 onChange={(e) => onChange({ ...form, contactPersonName: e.target.value, ceoName: e.target.value })}
                 className="h-10"
