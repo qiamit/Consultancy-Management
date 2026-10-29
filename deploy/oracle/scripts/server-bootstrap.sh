@@ -90,7 +90,8 @@ fi
 
 echo "== Nightly backup at 02:30 IST"
 CRON_LINE="30 2 * * * bash $QE_ROOT/app/deploy/oracle/scripts/backup.sh >> $QE_ROOT/backups/backup.log 2>&1"
-( crontab -l 2>/dev/null | grep -v 'deploy/oracle/scripts/backup.sh' ; echo "$CRON_LINE" ) | crontab -
+# No crontab yet makes "crontab -l" fail, and grep -v finds nothing on empty input: neither must stop the script.
+{ { crontab -l 2>/dev/null || true; } | { grep -v 'deploy/oracle/scripts/backup.sh' || true; }; echo "$CRON_LINE"; } | crontab -
 
 echo
 echo "Done. Log out and back in once (docker group), then copy deploy/oracle/.env to $QE_ROOT/app/deploy/oracle/.env"
