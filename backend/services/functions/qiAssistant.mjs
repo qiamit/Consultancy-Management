@@ -3,7 +3,96 @@
  * Full Deno CRUD/PDF tooling is not ported yet — chat + generate (process description) work.
  */
 
+import dns from 'node:dns/promises'
+import net from 'node:net'
+
 const AI_SETTINGS_ID = '00000000-0000-0000-0000-000000000002'
+
+/** Per-user QE Assistant limits (in memory, per functions instance). */
+const QI_LIMIT_HOUR = Number(process.env.QI_ASSISTANT_LIMIT_HOUR || 60)
+const QI_IMAGE_LIMIT_HOUR = Number(process.env.QI_ASSISTANT_IMAGE_LIMIT_HOUR || 20)
+const HOUR_MS = 60 * 60 * 1000
+/** @type {Map<string, { all: number[]; images: number[] }>} */
+const usage = new Map()
+
+/** Records one request; returns an error message when the user is over a limit (nothing is recorded then). */
+function takeQuota(userId, withImages) {
+  const now = Date.now()
+  const cutoff = now - HOUR_MS
+  const entry = usage.get(userId) ?? { all: [], images: [] }
+  entry.all = entry.all.filter((t) => t > cutoff)
+  entry.images = entry.images.filter((t) => t > cutoff)
+  usage.set(userId, entry)
+  if (entry.all.length >= QI_LIMIT_HOUR) {
+    return `QE Assistant limit reached: ${QI_LIMIT_HOUR} requests per hour. Try again later.`
+  }
+  if (withImages && entry.images.length >= QI_IMAGE_LIMIT_HOUR) {
+    return `QE Assistant limit reached: ${QI_IMAGE_LIMIT_HOUR} picture requests per hour. Try again later.`
+  }
+  entry.all.push(now)
+  if (withImages) entry.images.push(now)
+  if (usage.size > 10_000) {
+    for (const [id, e] of usage) if (!e.all.some((t) => t > cutoff)) usage.delete(id)
+  }
+  return ''
+}
+
+/** True for loopback, private, link-local, CGNAT, unique-local and other non-public addresses. */
+function isPrivateAddress(address) {
+  const ip = String(address || '').replace(/^\[|\]$/g, '').toLowerCase()
+  if (net.isIPv4(ip)) {
+    const [a, b] = ip.split('.').map(Number)
+    return (
+      a === 0 || a === 10 || a === 127 || a >= 224 ||
+      (a === 100 && b >= 64 && b <= 127) ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 192 && b === 0) ||
+      (a === 198 && (b === 18 || b === 19))
+    )
+  }
+  if (net.isIPv6(ip)) {
+    if (ip === '::' || ip === '::1') return true
+    const mapped = ip.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/)
+    if (mapped) return isPrivateAddress(mapped[1])
+    if (ip.startsWith('::ffff:')) return true
+    return /^(fc|fd|fe[89ab]|ff)/.test(ip) || ip.startsWith('64:ff9b:') || ip.startsWith('2001:db8:')
+  }
+  return true
+}
+
+const BASE_URL_ERROR =
+  "The AI model's API Base URL must be a public https:// address. Fix it in Settings → AI Settings → AI Models."
+
+/**
+ * A custom api_base_url must be https on a public host (no localhost, private, link-local or internal names,
+ * also after DNS). Throws an Error with a user-facing message otherwise.
+ */
+async function assertPublicHttpsBase(base) {
+  let u
+  try {
+    u = new URL(base)
+  } catch {
+    throw new Error(BASE_URL_ERROR)
+  }
+  if (u.protocol !== 'https:' || u.username || u.password) throw new Error(BASE_URL_ERROR)
+  const host = u.hostname.replace(/^\[|\]$/g, '').toLowerCase()
+  if (net.isIP(host)) {
+    if (isPrivateAddress(host)) throw new Error(BASE_URL_ERROR)
+    return
+  }
+  if (!host.includes('.') || host === 'localhost' || /\.(localhost|local|internal|lan|home|arpa)$/.test(host)) {
+    throw new Error(BASE_URL_ERROR)
+  }
+  let addresses = []
+  try {
+    addresses = await dns.lookup(host, { all: true, verbatim: true })
+  } catch {
+    throw new Error("The AI model's API Base URL could not be found. Check it in Settings → AI Settings → AI Models.")
+  }
+  if (!addresses.length || addresses.some((a) => isPrivateAddress(a.address))) throw new Error(BASE_URL_ERROR)
+}
 
 function resolveApiBase(provider, apiBaseUrl) {
   if (apiBaseUrl?.trim()) return apiBaseUrl.trim().replace(/\/$/, '')
@@ -64,6 +153,18 @@ function normalizeModelId(provider, modelId) {
   return id
 }
 
+/** User-facing text for a failed provider call; the provider's own message only goes to the log. */
+function providerErrorMessage(status) {
+  if (status === 401 || status === 403) {
+    return 'The AI provider rejected the API key. Check Settings → AI Settings → AI Models.'
+  }
+  if (status === 404) return 'The AI provider does not know this model. Check Settings → AI Settings → AI Models.'
+  if (status === 402) return 'The AI provider account has no credit left. Check the provider billing.'
+  if (status === 413) return 'The request is too large for the AI provider. Send less text or fewer pictures.'
+  if (status === 429) return 'The AI provider is busy or rate-limiting requests. Try again in a minute.'
+  return `The AI provider could not answer (error ${status}). Try again later.`
+}
+
 function extractAiError(payload, status) {
   if (typeof payload !== 'object' || !payload) return `AI request failed (${status})`
   const err = payload.error
@@ -104,14 +205,17 @@ export function createQiAssistantHandler(deps) {
       return
     }
 
+    let caller
     try {
-      await requireUser(req)
+      caller = await requireUser(req)
     } catch (err) {
-      corsJson(res, Number(err?.statusCode) || 401, {
-        error: err instanceof Error ? err.message : 'Unauthorized',
+      const status = Number(err?.statusCode) || 401
+      corsJson(res, status, {
+        error: status === 403 || status === 503 ? String(err?.message || 'Forbidden') : 'Unauthorized',
       })
       return
     }
+    const userId = String(caller?.id ?? '')
 
     let body = {}
     try {
@@ -141,6 +245,12 @@ export function createQiAssistantHandler(deps) {
       images = readImages(body.images)
     } catch (err) {
       corsJson(res, 400, { error: err instanceof Error ? err.message : 'Invalid pictures' })
+      return
+    }
+
+    const overLimit = takeQuota(userId, images.length > 0)
+    if (overLimit) {
+      corsJson(res, 429, { error: overLimit })
       return
     }
 
@@ -189,9 +299,8 @@ export function createQiAssistantHandler(deps) {
         model = vision
       }
     } catch (err) {
-      corsJson(res, 500, {
-        error: err instanceof Error ? err.message : 'Failed to load AI models',
-      })
+      console.error('[qi-assistant] loading AI models failed', err)
+      corsJson(res, 500, { error: 'Failed to load AI models. Try again later.' })
       return
     }
 
@@ -204,9 +313,8 @@ export function createQiAssistantHandler(deps) {
         })
         model = { ...model, api_key: typeof key === 'string' ? key : '' }
       } catch (err) {
-        corsJson(res, 500, {
-          error: err instanceof Error ? err.message : 'Failed to read the AI model API key',
-        })
+        console.error('[qi-assistant] reading the AI model key failed', model.id, err)
+        corsJson(res, 500, { error: 'Failed to read the AI model API key. Check Settings → AI Settings → AI Models.' })
         return
       }
     }
@@ -326,6 +434,15 @@ export function createQiAssistantHandler(deps) {
     ]
 
     const apiBase = resolveApiBase(provider, model.api_base_url ? String(model.api_base_url) : null)
+    if (String(model.api_base_url ?? '').trim()) {
+      try {
+        await assertPublicHttpsBase(apiBase)
+      } catch (err) {
+        console.warn('[qi-assistant] refused api_base_url for model', model.id)
+        corsJson(res, 400, { error: err instanceof Error ? err.message : BASE_URL_ERROR })
+        return
+      }
+    }
     const modelId = normalizeModelId(provider, String(model.model_id || ''))
     const temperature = Number(model.temperature)
     const maxTokens = Number(model.max_tokens)
@@ -343,6 +460,9 @@ export function createQiAssistantHandler(deps) {
 
     const requestChatCompletion = (jsonMode) => fetch(`${apiBase}/chat/completions`, {
       method: 'POST',
+      // A provider must not bounce the request (and the API key) somewhere else.
+      redirect: 'error',
+      signal: AbortSignal.timeout(180_000),
       headers: {
         Authorization: `Bearer ${String(model.api_key).trim()}`,
         'Content-Type': 'application/json',
@@ -359,21 +479,37 @@ export function createQiAssistantHandler(deps) {
     })
 
     const requestJson = body.responseFormat === 'json_object'
-    let aiRes = await requestChatCompletion(requestJson)
-    let aiPayload = await aiRes.json().catch(() => ({}))
-    const aiError = aiRes.ok ? '' : extractAiError(aiPayload, aiRes.status)
-    if (
-      requestJson &&
-      !aiRes.ok &&
-      aiRes.status === 400 &&
-      /response[_ -]?format|json[_ -]?object|json mode|structured output/i.test(aiError)
-    ) {
-      // Some OpenAI-compatible providers do not implement response_format; retry with prompt-only formatting.
-      aiRes = await requestChatCompletion(false)
+    let aiRes
+    let aiPayload
+    try {
+      aiRes = await requestChatCompletion(requestJson)
       aiPayload = await aiRes.json().catch(() => ({}))
+      const aiError = aiRes.ok ? '' : extractAiError(aiPayload, aiRes.status)
+      if (
+        requestJson &&
+        !aiRes.ok &&
+        aiRes.status === 400 &&
+        /response[_ -]?format|json[_ -]?object|json mode|structured output/i.test(aiError)
+      ) {
+        // Some OpenAI-compatible providers do not implement response_format; retry with prompt-only formatting.
+        aiRes = await requestChatCompletion(false)
+        aiPayload = await aiRes.json().catch(() => ({}))
+      }
+    } catch (err) {
+      console.error(`[qi-assistant] provider request failed (provider ${provider}, model ${modelId})`, err)
+      const timedOut = Boolean(err && typeof err === 'object' && 'name' in err && err.name === 'TimeoutError')
+      corsJson(res, 502, {
+        error: timedOut
+          ? 'The AI provider took too long to answer. Try again, or send a shorter request.'
+          : 'The AI provider could not be reached. Try again later.',
+      })
+      return
     }
     if (!aiRes.ok) {
-      corsJson(res, 400, { error: extractAiError(aiPayload, aiRes.status) })
+      console.warn(
+        `[qi-assistant] provider error ${aiRes.status} (provider ${provider}, model ${modelId}): ${extractAiError(aiPayload, aiRes.status).slice(0, 500)}`,
+      )
+      corsJson(res, 400, { error: providerErrorMessage(aiRes.status) })
       return
     }
 
