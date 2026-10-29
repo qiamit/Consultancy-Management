@@ -28,7 +28,7 @@ export default function StatementsPage() {
 
   return (
     <BookChrome title="Statements" hint="Profit and loss uses the date range. The balance sheet is as of the end date.">
-      <div className={`${limsPanelClass} space-y-3`}>
+      <div className={`${limsPanelClass} space-y-3 p-3 sm:p-4`}>
         <div className="flex flex-wrap gap-2">
           <Button type="button" className="min-h-10" variant={kind === 'profit_loss' ? 'default' : 'outline'} onClick={() => setKind('profit_loss')}>Profit and Loss</Button>
           <Button type="button" className="min-h-10" variant={kind === 'balance_sheet' ? 'default' : 'outline'} onClick={() => setKind('balance_sheet')}>Balance Sheet</Button>

@@ -30,7 +30,7 @@ export default function InventoryPage() {
 
   return (
     <BookChrome title="Inventory" hint="Items come from the Products master. Nothing is copied from another software.">
-      <div className={`${limsPanelClass} space-y-3`}>
+      <div className={`${limsPanelClass} space-y-3 p-3 sm:p-4`}>
         <div className="flex flex-wrap gap-2">
           <Button type="button" className="min-h-10" variant={tab === 'items' ? 'default' : 'outline'} onClick={() => setTab('items')}>All Items</Button>
           <Button type="button" className="min-h-10" variant={tab === 'category' ? 'default' : 'outline'} onClick={() => setTab('category')}>Category</Button>

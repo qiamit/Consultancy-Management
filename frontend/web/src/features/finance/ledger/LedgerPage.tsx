@@ -109,7 +109,7 @@ export default function LedgerPage() {
 
   return (
     <BookChrome title="Ledger" hint="Debtors follow sale outstanding. Creditors follow purchase outstanding. Other accounts stay empty until the chart of accounts is used.">
-      <div className={`${limsPanelClass} space-y-3`}>
+      <div className={`${limsPanelClass} space-y-3 p-3 sm:p-4`}>
         <div className="flex flex-wrap gap-2">
           {TABS.map((item) => (
             <Button

@@ -80,7 +80,7 @@ export default function JournalPage() {
 
   return (
     <BookChrome title="Manual Journal" hint="A journal is saved only when debit equals credit. It is for adjustments.">
-      <div className={`${limsPanelClass} space-y-3`}>
+      <div className={`${limsPanelClass} space-y-3 p-3 sm:p-4`}>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <Button type="button" className="min-h-10" onClick={start}>Add New Journal</Button>
           {message ? <p className="text-sm text-stone-700">{message}</p> : null}

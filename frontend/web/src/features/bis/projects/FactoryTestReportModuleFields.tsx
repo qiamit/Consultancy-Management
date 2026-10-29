@@ -320,7 +320,7 @@ export function FactoryTestReportModuleFields({
         : 'sm:grid-cols-1'
 
   return (
-    <div className="flex min-h-0 flex-1 overflow-hidden bg-stone-200/80">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-stone-200/80 sm:flex-row">
       <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 sm:px-6 [-webkit-overflow-scrolling:touch]">
         {usableSamples.length === 0 ? (
           <p className="mb-3 rounded-none border border-amber-400/60 bg-amber-50 px-3 py-2 text-xs text-amber-950">
@@ -665,7 +665,7 @@ export function FactoryTestReportModuleFields({
         </div>
       </div>
 
-      <aside className="flex w-[9.5rem] shrink-0 flex-col gap-2 border-l border-stone-400 bg-stone-50 px-2.5 py-4 sm:w-[11rem] sm:px-3">
+      <aside className="flex max-h-[40dvh] w-full shrink-0 flex-col gap-2 overflow-y-auto border-t border-stone-400 bg-stone-50 px-2.5 py-4 sm:max-h-none sm:w-[11rem] sm:border-l sm:border-t-0 sm:px-3">
         <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-stone-500">
           Report options
         </p>
