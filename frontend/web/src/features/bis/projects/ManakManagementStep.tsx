@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Check, ChevronDown, Download, Eye, FileType, Import, Plus, Printer, Trash2, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
+import { ArrowDown, ArrowUp, ArrowUpDown, Check, ChevronDown, Download, Eye, FileType, GripVertical, Import, Plus, Printer, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,7 +23,8 @@ import { SharedProjectFileButton } from './RowFileAttachment'
 import { manakEmailError } from './manakChecks'
 import { RemoteLookupCombobox } from '@/features/bis/shared/RemoteLookupCombobox'
 import { LimsDatePicker } from '@/components/lims/LimsDatePicker'
-import { FilterCombobox } from '@/features/sample-handling/receiving/FilterCombobox'
+import { FilterCombobox, elementFromEventTarget, isFilterComboboxDropdownTarget } from '@/features/sample-handling/receiving/FilterCombobox'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 
 type Rec = Record<string, unknown>
 
@@ -330,10 +331,34 @@ function InlineError({ message }: { message: string | null }) {
 }
 const invalidInputCls = 'border-red-500 bg-red-50/60 focus-visible:ring-red-500/30'
 
+/** Order of a saved table: sorted by one column, or the user's own (dragged) order. */
+type RowOrder = { key: string; dir: 'asc' | 'desc' } | 'manual'
+
+const parseRowOrder = (value: unknown, fields: Field[]): RowOrder | null => {
+  if (value === 'manual') return 'manual'
+  if (!value || typeof value !== 'object') return null
+  const { key, dir } = value as Rec
+  return typeof key === 'string' && fields.some((f) => f.key === key) && (dir === 'asc' || dir === 'desc') ? { key, dir } : null
+}
+
+/** Column comparison: numbers in text sort naturally, empty cells go last either way. */
+const byRowOrder = (order: { key: string; dir: 'asc' | 'desc' }) => (a: Rec, b: Rec) => {
+  const x = str(a[order.key]).trim()
+  const y = str(b[order.key]).trim()
+  if (!x || !y) return x ? -1 : y ? 1 : 0
+  return x.localeCompare(y, undefined, { sensitivity: 'base', numeric: true }) * (order.dir === 'asc' ? 1 : -1)
+}
+
+/** Portaled pickers (drop-downs, date picker, suggestions) belong to the cell that opened them. */
+const isPickerTarget = (el: Element) =>
+  isFilterComboboxDropdownTarget(el) ||
+  Boolean(el.closest('[data-radix-select-content], [data-radix-dropdown-menu-content], [data-radix-popper-content-wrapper]'))
+
 /**
  * Manak-style editable table: an input row on top with "+", then saved rows. Double-click any cell of a saved row
- * to edit that row (Enter or ✓ saves, Escape or ✗ cancels); the row keeps only a Delete button. A narrow checkbox
- * column replaces S.No.
+ * to edit it; leaving the row (a click elsewhere, Enter or ✓) saves it, Escape cancels. Headers sort the table and
+ * rows can be dragged into a custom order; either way the saved list (and so every document) follows what is shown.
+ * A narrow checkbox column (with Select All) replaces S.No.
  */
 export function EditableRows({
   projectId,
@@ -342,6 +367,8 @@ export function EditableRows({
   blank,
   extraColumns,
   saved,
+  payload,
+  defaultSort,
   onChanged,
   addLabel,
   rowsKey = 'rows',
@@ -361,6 +388,10 @@ export function EditableRows({
     renderDraft?: (draft: Rec, patchDraft: (patch: Rec) => void) => React.ReactNode
   }>
   saved: Rec[]
+  /** Stored payload, read for the saved order ("<rowsKey>Order"); without it the order chosen here lasts until reload. */
+  payload?: Rec | null
+  /** Column sorted by (ascending) until the user sorts or drags; absent → the order rows were added in. */
+  defaultSort?: string
   onChanged: () => void
   addLabel: string
 }) {
@@ -369,14 +400,16 @@ export function EditableRows({
   const [editDraft, setEditDraft] = useState<Rec>({})
   /** Field whose cell was double-clicked; its input gets the focus. */
   const [editFocus, setEditFocus] = useState<string | null>(null)
-  const startEdit = (index: number, row: Rec, key: string) => {
-    if (busy || editIndex === index) return
-    setEditIndex(index)
-    setEditDraft({ ...row })
-    setEditFocus(key)
-  }
+  /** Required cells are flagged only after a save of the row was refused. */
+  const [showRequired, setShowRequired] = useState(false)
+  // Refs: the row as stored (to find it again if the list was reordered meanwhile), the values last sent,
+  // and a token that changes whenever another row opens or editing ends.
+  const editBaseRef = useRef('')
+  const editSentRef = useRef('')
+  const editTokenRef = useRef(0)
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [busy, setBusy] = useState(false)
+  const [confirm, confirmDialog] = useConfirmDialog()
   // Inline errors wait until the user leaves the cell, so a half-typed value is not flagged.
   const [focusedCell, setFocusedCell] = useState<string | null>(null)
   const cellFocus = (cellId: string) => ({
@@ -387,23 +420,58 @@ export function EditableRows({
   const listOf = (p: Rec): Rec[] => (Array.isArray(p[rowsKey]) ? (p[rowsKey] as Rec[]) : [])
   // A row counts once its first (required) column is filled; defaulted drop-downs alone do not.
   const isFilled = (r: Rec) => Boolean(fields[0] && str(r[fields[0].key]).trim())
+  const missingRequired = (values: Rec) => fields.filter((f) => !f.optional && !str(values[f.key]).trim())
 
-  const rows = useMemo(
-    () => saved.map((r, index) => ({ r, index })).filter(({ r }) => Boolean(fields[0] && str(r[fields[0].key]).trim())),
-    [saved, fields],
+  const orderKey = `${rowsKey}Order`
+  // A choice made here shows at once; the stored one catches up after the reload.
+  const [localOrder, setLocalOrder] = useState<RowOrder | null>(null)
+  const storedOrder = payload?.[orderKey]
+  const order = useMemo<RowOrder>(
+    () =>
+      localOrder ??
+      parseRowOrder(storedOrder, fields) ??
+      (defaultSort && fields.some((f) => f.key === defaultSort) ? { key: defaultSort, dir: 'asc' } : 'manual'),
+    [localOrder, storedOrder, fields, defaultSort],
   )
+  /** Row indexes in the order just dropped, shown until the saved list (a new signature) arrives. */
+  const [dropped, setDropped] = useState<{ sig: string; ids: number[] } | null>(null)
+  const savedSig = useMemo(() => JSON.stringify(saved), [saved])
+  const dragOrder = dropped?.sig === savedSig ? dropped.ids : null
+  const setDragOrder = (ids: number[] | null) => setDropped(ids ? { sig: savedSig, ids } : null)
 
-  const run = async (fn: () => Promise<void>, ok: string) => {
-    setBusy(true)
-    try {
-      await fn()
-      toast.success(ok)
-      onChanged()
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not save')
-    } finally {
-      setBusy(false)
+  const rows = useMemo(() => {
+    const filled = saved.map((r, index) => ({ r, index })).filter(({ r }) => Boolean(fields[0] && str(r[fields[0].key]).trim()))
+    if (dragOrder) {
+      const at = new Map(dragOrder.map((index, n) => [index, n]))
+      return [...filled].sort((a, b) => (at.get(a.index) ?? Infinity) - (at.get(b.index) ?? Infinity))
     }
+    if (order === 'manual') return filled
+    const compare = byRowOrder(order)
+    return [...filled].sort((a, b) => compare(a.r, b.r))
+  }, [saved, fields, dragOrder, order])
+
+  // Saves run one after another, so a quick edit, add and reorder never overwrite each other.
+  const queueRef = useRef<Promise<unknown>>(Promise.resolve())
+  const pendingRef = useRef(0)
+  const run = (fn: () => Promise<void>, ok?: string): Promise<boolean> => {
+    pendingRef.current += 1
+    setBusy(true)
+    const job = queueRef.current.then(async () => {
+      try {
+        await fn()
+        if (ok) toast.success(ok)
+        onChanged()
+        return true
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Could not save')
+        return false
+      } finally {
+        pendingRef.current -= 1
+        if (pendingRef.current === 0) setBusy(false)
+      }
+    })
+    queueRef.current = job
+    return job
   }
 
   const add = () => {
@@ -416,9 +484,9 @@ export function EditableRows({
       toast.error(bad)
       return
     }
+    const sortedBy = order
     void run(async () => {
       await patchPayload(projectId, kind, (p) => {
-        const list = listOf(p).filter(isFilled)
         const row: Rec = { ...blank(), ...draft }
         // A drop-down left on an invalid value saves the default shown on screen.
         for (const f of fields) {
@@ -427,38 +495,209 @@ export function EditableRows({
           else if (!f.options.includes(str(row[f.key]))) row[f.key] = blank()[f.key]
         }
         for (const f of fields) if (f.normalize) row[f.key] = f.normalize(str(row[f.key]), row)
-        let next: Rec = { ...p, [rowsKey]: [...list, row] }
+        // A sorted table keeps the saved list sorted, so the new row lands where it shows.
+        const list = [...listOf(p).filter(isFilled), row]
+        if (sortedBy !== 'manual') list.sort(byRowOrder(sortedBy))
+        let next: Rec = { ...p, [rowsKey]: list, ...(sortedBy !== 'manual' ? { [orderKey]: sortedBy } : {}) }
         if (draft.applySignatureToDocuments) {
           next = {
             ...next,
-            rows: (next.rows as Rec[]).map((r, i, all) => ({ ...r, applySignatureToDocuments: i === all.length - 1 })),
+            rows: (next.rows as Rec[]).map((r) => ({ ...r, applySignatureToDocuments: r === row })),
             signatoryName: str(draft.personName) || str(p.signatoryName),
             signatoryDesignation: str(draft.designation) || str(p.signatoryDesignation),
           }
         }
-        if (draft.isAuthorizedSignatory) next = withAuthorizedSignatory(next, (next.rows as Rec[]).length - 1)
+        if (draft.isAuthorizedSignatory) next = withAuthorizedSignatory(next, list.indexOf(row))
         return next
       })
       setDraft(blank())
+      setSelected(new Set())
     }, 'Row added')
   }
 
-  const saveEdit = () => {
-    if (editIndex == null) return
-    const bad = fieldError(fields, editDraft)
-    if (bad) {
-      toast.error(bad)
-      return
+  const startEdit = (index: number, row: Rec, key: string) => {
+    if (editIndex === index) return
+    // Moving to another row saves the open one first; a row with a required cell empty stays open.
+    if (editIndex != null && !commitEdit(false)) return
+    editTokenRef.current += 1
+    editBaseRef.current = JSON.stringify(row)
+    editSentRef.current = JSON.stringify(row)
+    setEditIndex(index)
+    setEditDraft({ ...row })
+    setEditFocus(key)
+    setShowRequired(false)
+  }
+  const cancelEdit = () => {
+    editTokenRef.current += 1
+    setEditIndex(null)
+  }
+
+  /** Saves the open row if it changed; `close` also ends editing (unless another row opened meanwhile). False = refused. */
+  const commitEdit = (close: boolean): boolean => {
+    if (editIndex == null) return true
+    const index = editIndex
+    const values = editDraft
+    const base = editBaseRef.current
+    const token = editTokenRef.current
+    const closeIfCurrent = () => {
+      if (close && editTokenRef.current === token) cancelEdit()
     }
+    if (JSON.stringify(values) === editSentRef.current) {
+      closeIfCurrent()
+      return true
+    }
+    const missing = missingRequired(values)
+    if (missing.length > 0) {
+      setShowRequired(true)
+      toast.error(`Fill In ${missing.map((f) => f.label.replace(/\n/g, ' ')).join(', ')} Before Leaving the Row.`, { id: 'er-required' })
+      return false
+    }
+    const bad = fieldError(fields, values)
+    if (bad) {
+      toast.error(bad, { id: 'er-required' })
+      return false
+    }
+    const previousSent = editSentRef.current
+    editSentRef.current = JSON.stringify(values)
+    const sortedBy = order
     void run(async () => {
       await patchPayload(projectId, kind, (p) => {
         const normalized = (r: Rec) => fields.reduce((acc, f) => (f.normalize ? { ...acc, [f.key]: f.normalize(str(acc[f.key]), acc) } : acc), r)
-        const list = listOf(p).map((r, i) => (i === editIndex ? normalized({ ...r, ...editDraft }) : r))
+        const current = listOf(p)
+        // The row as it was opened; its old place when it cannot be found (e.g. a list shown with defaults filled in).
+        const found = JSON.stringify(current[index]) === base ? index : current.findIndex((r) => JSON.stringify(r) === base)
+        const at = found >= 0 ? found : index
+        const list = current.map((r, i) => (i === at ? normalized({ ...r, ...values }) : r))
+        if (sortedBy !== 'manual') list.sort(byRowOrder(sortedBy))
         return { ...p, [rowsKey]: list }
       })
-      setEditIndex(null)
-    }, 'Row updated')
+    }, 'Row updated').then((ok) => {
+      if (ok) closeIfCurrent()
+      // Not saved: the row stays open and the next leave tries again.
+      else if (editTokenRef.current === token) editSentRef.current = previousSent
+    })
+    return true
   }
+  const commitRef = useRef(commitEdit)
+  useEffect(() => {
+    commitRef.current = commitEdit
+  })
+
+  // A save elsewhere may have moved the open row (sorted list); keep editing the same row.
+  useEffect(() => {
+    if (editIndex == null) return
+    const base = editBaseRef.current
+    if (saved[editIndex] && JSON.stringify(saved[editIndex]) === base) return
+    const at = saved.findIndex((r) => JSON.stringify(r) === base)
+    if (at >= 0) setEditIndex(at)
+  }, [saved, editIndex])
+
+  // Leaving the row saves it: a click anywhere else on the page / dialog commits the edit.
+  // A click on another row waits a moment, so a double-click there can switch rows first
+  // (startEdit saves the old row while switching) without the rows jumping under the mouse.
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (editIndex == null) return
+    const onDown = (e: MouseEvent) => {
+      const t = elementFromEventTarget(e.target)
+      if (!t || t.closest('[data-er-editing]') || isPickerTarget(t)) return
+      const root = rootRef.current
+      // Another dialog on top (confirm, master list…) is not leaving the row.
+      if (t.closest('[role=dialog]') !== (root?.closest('[role=dialog]') ?? null)) return
+      const token = editTokenRef.current
+      if (root?.contains(t) && t.closest('[data-er-row]')) {
+        window.setTimeout(() => {
+          if (editTokenRef.current === token) commitRef.current(true)
+        }, 350)
+        return
+      }
+      commitRef.current(true)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [editIndex])
+
+  /** Header click: sort by that column (again → reverse), and save the list in that order. */
+  const sortBy = (key: string) => {
+    const previous = localOrder
+    const next: RowOrder = order !== 'manual' && order.key === key ? { key, dir: order.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }
+    setLocalOrder(next)
+    setDragOrder(null)
+    setSelected(new Set())
+    void run(async () => {
+      await patchPayload(projectId, kind, (p) => ({ ...p, [rowsKey]: listOf(p).filter(isFilled).sort(byRowOrder(next)), [orderKey]: next }))
+    }).then((ok) => {
+      if (!ok) setLocalOrder(previous)
+    })
+  }
+
+  /** Drag-and-drop: the shown order becomes the saved (custom) order until a header is clicked again. */
+  const reorder = (dragged: number, target: number, place: 'before' | 'after') => {
+    const ids = rows.map(({ index }) => index).filter((i) => i !== dragged)
+    const at = ids.indexOf(target)
+    if (at < 0) return
+    ids.splice(place === 'before' ? at : at + 1, 0, dragged)
+    const previous = localOrder
+    const expected = saved.length
+    setDragOrder(ids)
+    setLocalOrder('manual')
+    setSelected(new Set())
+    void run(async () => {
+      await patchPayload(projectId, kind, (p) => {
+        const list = listOf(p)
+        if (list.length !== expected) throw new Error('The Table Changed Meanwhile — Please Try Again.')
+        const rest = list.filter((r, i) => !ids.includes(i) && isFilled(r))
+        return { ...p, [rowsKey]: [...ids.map((i) => list[i]), ...rest], [orderKey]: 'manual' }
+      })
+    }).then((ok) => {
+      if (ok) return
+      setDragOrder(null)
+      setLocalOrder(previous)
+    })
+  }
+
+  const [dragIndex, setDragIndex] = useState<number | null>(null)
+  const [dropTarget, setDropTarget] = useState<{ index: number; place: 'before' | 'after' } | null>(null)
+  // Refs: dragover/drop can fire before React re-renders with the new state.
+  const dragIndexRef = useRef<number | null>(null)
+  const dropTargetRef = useRef<{ index: number; place: 'before' | 'after' } | null>(null)
+  const dragEnabled = editIndex == null && !busy && rows.length > 1
+  const endDrag = () => {
+    dragIndexRef.current = null
+    dropTargetRef.current = null
+    setDragIndex(null)
+    setDropTarget(null)
+  }
+  const dragRowProps = (index: number) =>
+    dragEnabled
+      ? {
+          draggable: true,
+          onDragStart: (e: DragEvent<HTMLTableRowElement>) => {
+            dragIndexRef.current = index
+            setDragIndex(index)
+            e.dataTransfer.effectAllowed = 'move'
+            e.dataTransfer.setData('text/plain', String(index))
+          },
+          onDragOver: (e: DragEvent<HTMLTableRowElement>) => {
+            const dragging = dragIndexRef.current
+            if (dragging == null || dragging === index) return
+            e.preventDefault()
+            e.dataTransfer.dropEffect = 'move'
+            const rect = e.currentTarget.getBoundingClientRect()
+            const place = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after'
+            dropTargetRef.current = { index, place }
+            setDropTarget((prev) => (prev?.index === index && prev.place === place ? prev : { index, place }))
+          },
+          onDrop: (e: DragEvent<HTMLTableRowElement>) => {
+            e.preventDefault()
+            const dragging = dragIndexRef.current
+            const target = dropTargetRef.current
+            if (dragging != null && target && dragging !== target.index) reorder(dragging, target.index, target.place)
+            endDrag()
+          },
+          onDragEnd: endDrag,
+        }
+      : {}
 
   const remove = (indexes: number[]) => {
     if (indexes.length === 0) return
@@ -470,6 +709,17 @@ export function EditableRows({
       setSelected(new Set())
     }, indexes.length > 1 ? 'Rows deleted' : 'Row deleted')
   }
+  const removeSelected = async () => {
+    const indexes = [...selected]
+    const n = indexes.length
+    if (n === 0) return
+    const ok = await confirm(`Delete ${n} selected row${n === 1 ? '' : 's'}? This cannot be undone.`, {
+      title: 'Delete Selected Rows',
+      confirmLabel: 'Delete',
+      destructive: true,
+    })
+    if (ok) remove(indexes)
+  }
 
   const toggle = (index: number) =>
     setSelected((prev) => {
@@ -478,9 +728,11 @@ export function EditableRows({
       else next.add(index)
       return next
     })
+  const allSelected = rows.length > 0 && rows.every(({ index }) => selected.has(index))
+  const someSelected = rows.some(({ index }) => selected.has(index))
 
   return (
-    <div className="space-y-2">
+    <div ref={rootRef} className="space-y-2">
       {selected.size > 0 ? (
         <div className="flex justify-end">
           <Button
@@ -489,9 +741,9 @@ export function EditableRows({
             variant="outline"
             disabled={busy}
             className="h-7 rounded-none border-red-300 text-xs text-red-700 hover:bg-red-50"
-            onClick={() => remove([...selected])}
+            onClick={() => void removeSelected()}
           >
-            <Trash2 className="mr-1 h-3 w-3" aria-hidden /> Delete selected ({selected.size})
+            <Trash2 className="mr-1 h-3 w-3" aria-hidden /> Delete Selected ({selected.size})
           </Button>
         </div>
       ) : null}
@@ -499,19 +751,48 @@ export function EditableRows({
         <table className="er-table w-full border-collapse text-sm">
           <thead>
             <tr>
-              <th className={cn(thCls, 'w-8 px-1 text-center')} aria-label="Select" />
-              {fields.map((f) => (
-                <th key={f.key} className={cn(thCls, 'whitespace-pre-line text-center')} style={f.width ? { width: f.width } : undefined}>
-                  {f.label}
-                  {f.optional ? null : <span className="text-red-400">*</span>}
-                </th>
-              ))}
+              <th className={cn(thCls, 'w-8 px-1 text-center')}>
+                <input
+                  type="checkbox"
+                  className={cn(checkCls, 'align-middle')}
+                  aria-label="Select All"
+                  title="Select All"
+                  disabled={rows.length === 0}
+                  checked={allSelected}
+                  ref={(el) => {
+                    if (el) el.indeterminate = !allSelected && someSelected
+                  }}
+                  onChange={(e) => setSelected(e.target.checked ? new Set(rows.map(({ index }) => index)) : new Set())}
+                />
+              </th>
+              {fields.map((f) => {
+                const active = order !== 'manual' && order.key === f.key
+                const Icon = active ? (order.dir === 'asc' ? ArrowUp : ArrowDown) : ArrowUpDown
+                const label = f.label.replace(/\n/g, ' ')
+                return (
+                  <th key={f.key} className={cn(thCls, 'whitespace-pre-line text-center')} style={f.width ? { width: f.width } : undefined}>
+                    <button
+                      type="button"
+                      className="inline-flex w-full items-center justify-center gap-1 uppercase transition-colors hover:text-amber-100"
+                      title={order === 'manual' ? `Custom Order — Click to Sort by ${label}` : `Sort by ${label}`}
+                      aria-label={`Sort by ${label}${active ? `, ${order.dir === 'asc' ? 'ascending' : 'descending'}` : ''}`}
+                      onClick={() => sortBy(f.key)}
+                    >
+                      <span>
+                        {f.label}
+                        {f.optional ? null : <span className="text-red-400">*</span>}
+                      </span>
+                      <Icon className={cn('h-3.5 w-3.5 shrink-0', active ? 'text-amber-300' : 'text-amber-200/50')} aria-hidden />
+                    </button>
+                  </th>
+                )
+              })}
               {extraColumns?.map((c) => (
                 <th key={c.label} className={cn(thCls, c.compact && 'w-[1%] text-center')}>
                   {c.label}
                 </th>
               ))}
-              <th className={cn(thCls, 'w-24 text-center')}>Action</th>
+              <th className={cn(thCls, 'w-[1%] whitespace-nowrap px-1 text-center text-[10px] tracking-normal')}>Action</th>
             </tr>
           </thead>
           <tbody>
@@ -577,7 +858,7 @@ export function EditableRows({
                   {c.renderDraft ? c.renderDraft(draft, (patch) => setDraft((d) => ({ ...d, ...patch }))) : 'Add the row, then attach documents'}
                 </td>
               ))}
-              <td className={cn(tdCls, 'er-actions text-center')}>
+              <td className={cn(tdCls, 'er-actions w-[1%] whitespace-nowrap px-1 text-center')}>
                 <Button
                   type="button"
                   size="sm"
@@ -601,57 +882,88 @@ export function EditableRows({
               rows.map(({ r, index }, n) => {
                 const editing = editIndex === index
                 return (
-                  <tr key={index} className={n % 2 ? 'bg-[#f7f3eb]' : 'bg-[#fffcf7]'}>
+                  <tr
+                    key={index}
+                    data-er-row=""
+                    data-er-editing={editing ? '' : undefined}
+                    title={editing ? undefined : dragEnabled ? 'Double-Click to Edit · Drag to Move' : 'Double-Click to Edit'}
+                    {...dragRowProps(index)}
+                    className={cn(
+                      n % 2 ? 'bg-[#f7f3eb]' : 'bg-[#fffcf7]',
+                      dragIndex === index && 'opacity-40',
+                      dropTarget?.index === index &&
+                        (dropTarget.place === 'before' ? '[&>td]:border-t-2 [&>td]:border-t-amber-600' : '[&>td]:border-b-2 [&>td]:border-b-amber-600'),
+                    )}
+                  >
                     <td className={cn(tdCls, 'er-select px-1 text-center')}>
-                      <input
-                        type="checkbox"
-                        className={checkCls}
-                        aria-label={`Select row ${n + 1}`}
-                        checked={selected.has(index)}
-                        onChange={() => toggle(index)}
-                      />
+                      <div className="flex items-center justify-center gap-0.5">
+                        {dragEnabled ? <GripVertical className="h-3.5 w-3.5 shrink-0 cursor-grab text-stone-400" aria-hidden /> : null}
+                        <input
+                          type="checkbox"
+                          className={checkCls}
+                          aria-label={`Select row ${n + 1}`}
+                          checked={selected.has(index)}
+                          onChange={() => toggle(index)}
+                        />
+                      </div>
                     </td>
-                    {fields.map((f) => (
+                    {fields.map((f) => {
+                      const required = editing && showRequired && !f.optional && !str(editDraft[f.key]).trim() ? 'Required' : null
+                      return (
                       <td
                         key={f.key}
                         data-label={f.label.replace(/\n/g, ' ')}
                         className={cn(tdCls, f.alignLeft ? 'text-left' : 'text-center', !editing && 'cursor-default select-none')}
-                        title={editing ? undefined : 'Double-Click to Edit'}
                         onDoubleClick={() => startEdit(index, r, f.key)}
                         onKeyDown={editing ? (e) => {
-                          if (e.key === 'Escape') setEditIndex(null)
-                          if (e.key === 'Enter' && (e.target as HTMLElement).tagName === 'INPUT') saveEdit()
+                          if (e.key === 'Escape') cancelEdit()
+                          if (e.key === 'Enter' && (e.target as HTMLElement).tagName === 'INPUT') commitEdit(true)
                         } : undefined}
                       >
                         {editing && f.options && f.multiple ? (
-                          <MultiOptionSelect field={f} value={str(editDraft[f.key])} onChange={(v) => setEditDraft((d) => ({ ...d, [f.key]: v }))} />
+                          <>
+                            <MultiOptionSelect field={f} value={str(editDraft[f.key])} onChange={(v) => setEditDraft((d) => ({ ...d, [f.key]: v }))} />
+                            <InlineError message={required} />
+                          </>
                         ) : editing && f.options ? (
                           <>
                             <OptionSelect field={f} value={str(editDraft[f.key])} onChange={(v) => setEditDraft((d) => ({ ...d, [f.key]: v }))} />
-                            <InlineError message={inlineError(f, str(editDraft[f.key]))} />
+                            <InlineError message={required ?? inlineError(f, str(editDraft[f.key]))} />
                           </>
                         ) : editing && f.suggestions ? (
-                          <SuggestCell field={f} id={`er-${kind}-${f.key}-${index}`} value={str(editDraft[f.key])} onChange={(v) => setEditDraft((d) => ({ ...d, [f.key]: v }))} />
+                          <>
+                            <SuggestCell field={f} id={`er-${kind}-${f.key}-${index}`} value={str(editDraft[f.key])} onChange={(v) => setEditDraft((d) => ({ ...d, [f.key]: v }))} />
+                            <InlineError message={required} />
+                          </>
                         ) : editing && f.type === 'date' ? (
-                          <LimsDatePicker aria-label={f.label} className="h-8 w-full" value={str(editDraft[f.key])} onChange={(v) => setEditDraft((d) => ({ ...d, [f.key]: v }))} />
+                          <>
+                            <LimsDatePicker aria-label={f.label} className="h-8 w-full" value={str(editDraft[f.key])} onChange={(v) => setEditDraft((d) => ({ ...d, [f.key]: v }))} />
+                            <InlineError message={required} />
+                          </>
                         ) : editing && f.lookup ? (
-                          <LookupCell field={f} id={`er-${kind}-${f.key}-${index}`} row={editDraft} onChange={(patch) => setEditDraft((d) => ({ ...d, ...patch }))} />
+                          <>
+                            <LookupCell field={f} id={`er-${kind}-${f.key}-${index}`} row={editDraft} onChange={(patch) => setEditDraft((d) => ({ ...d, ...patch }))} />
+                            <InlineError message={required} />
+                          </>
                         ) : editing && f.master ? (
-                          <MasterOptionFieldWithAdd
-                            category={f.master}
-                            label={f.label}
-                            manageTitle={f.label}
-                            showLabel={false}
-                            inputId={`er-${kind}-${f.key}-${index}`}
-                            listId={`er-${kind}-${f.key}-${index}-list`}
-                            value={str(editDraft[f.key])}
-                            onChange={(v) => setEditDraft((d) => ({ ...d, [f.key]: v }))}
-                            placeholder="Select or Add"
-                          />
+                          <>
+                            <MasterOptionFieldWithAdd
+                              category={f.master}
+                              label={f.label}
+                              manageTitle={f.label}
+                              showLabel={false}
+                              inputId={`er-${kind}-${f.key}-${index}`}
+                              listId={`er-${kind}-${f.key}-${index}-list`}
+                              value={str(editDraft[f.key])}
+                              onChange={(v) => setEditDraft((d) => ({ ...d, [f.key]: v }))}
+                              placeholder="Select or Add"
+                            />
+                            <InlineError message={required} />
+                          </>
                         ) : editing ? (
                           (() => {
                             const cellId = `${index}:${f.key}`
-                            const err = typingError(f, cellId, str(editDraft[f.key]))
+                            const err = required ?? typingError(f, cellId, str(editDraft[f.key]))
                             return (
                               <>
                                 <Input
@@ -678,29 +990,23 @@ export function EditableRows({
                           (f.type === 'date' && str(r[f.key]) ? formatDisplayDate(str(r[f.key])) : str(r[f.key])) || <span className="text-stone-400">—</span>
                         )}
                       </td>
-                    ))}
+                      )
+                    })}
                     {extraColumns?.map((c) => (
                       <td key={c.label} data-label={c.label} className={cn(tdCls, c.compact && 'w-[1%] text-center')}>
                         {c.render(r, index)}
                       </td>
                     ))}
-                    <td className={cn(tdCls, 'er-actions text-center')}>
-                      <span className="inline-flex gap-1">
-                        {editing ? (
-                          <>
-                            <Button type="button" variant="ghost" className={iconBtn} disabled={busy} title="Save" onClick={saveEdit}>
-                              <Check size={14} />
-                            </Button>
-                            <Button type="button" variant="ghost" className={iconBtn} title="Cancel" onClick={() => setEditIndex(null)}>
-                              <X size={14} />
-                            </Button>
-                          </>
-                        ) : (
-                          <Button type="button" variant="ghost" className={iconBtn} disabled={busy} title="Delete Row" onClick={() => remove([index])}>
-                            <Trash2 size={13} />
-                          </Button>
-                        )}
-                      </span>
+                    <td className={cn(tdCls, 'er-actions w-[1%] whitespace-nowrap px-1 text-center')}>
+                      {editing ? (
+                        <Button type="button" variant="ghost" className={iconBtn} title="Save (Enter) · Esc to Cancel" aria-label="Save Row" onClick={() => commitEdit(true)}>
+                          <Check size={14} />
+                        </Button>
+                      ) : (
+                        <Button type="button" variant="ghost" className={iconBtn} disabled={busy} title="Delete Row" aria-label="Delete Row" onClick={() => remove([index])}>
+                          <Trash2 size={13} />
+                        </Button>
+                      )}
                     </td>
                   </tr>
                 )
@@ -709,6 +1015,7 @@ export function EditableRows({
           </tbody>
         </table>
       </div>
+      {confirmDialog}
     </div>
   )
 }
@@ -870,6 +1177,7 @@ export function ManakManagementStep({
             ]}
             blank={blankTm}
             saved={tmRows}
+            payload={topManagement}
             onChanged={onChanged}
             addLabel="Add top management person"
           />
@@ -1068,6 +1376,7 @@ export function ManakManagementStep({
             },
           ]}
           saved={rowsOf(technicalStaff)}
+          payload={technicalStaff}
           onChanged={onChanged}
           addLabel="Add technical person"
         />
