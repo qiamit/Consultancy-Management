@@ -158,6 +158,12 @@
     if (event.origin !== window.location.origin) return;
     const data = event.data;
     if (!data || typeof data !== "object") return;
+    if (data.type === "QE_GST_SEARCH") {
+      // Client Master → Verify GST: gst-fill.js puts this GSTIN into the GST portal's search box.
+      const gstin = String(data.gstin || "").trim().toUpperCase();
+      if (storageOk() && /^[0-9]{2}[A-Z0-9]{13}$/.test(gstin)) chrome.storage.local.set({ qeGstSearch: { gstin, at: Date.now() } });
+      return;
+    }
     if (data.type === "QE_MANAK_PULL_RESULT") {
       pullStoredResult(true);
       return;

@@ -585,6 +585,16 @@ export function ClientsForm({
                   rel="noreferrer"
                   aria-label="Verify GST"
                   title="Verify GST"
+                  onClick={() => {
+                    // The portal opens in a new tab; the QE extension types this GSTIN there, the clipboard is the fallback.
+                    const gstin = form.gstNumber.trim().toUpperCase()
+                    if (!gstin) return
+                    window.postMessage({ type: 'QE_GST_SEARCH', gstin }, window.location.origin)
+                    void navigator.clipboard
+                      ?.writeText(gstin)
+                      .then(() => toast.success(`GSTIN ${gstin} Copied — It Is Filled on the GST Portal (or Paste With Ctrl/Cmd + V)`))
+                      .catch(() => undefined)
+                  }}
                 >
                   <Search size={14} strokeWidth={2.25} aria-hidden />
                 </a>
