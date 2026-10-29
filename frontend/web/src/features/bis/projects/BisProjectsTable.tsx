@@ -788,7 +788,7 @@ export function BisProjectsTable({
                           {formatDisplayDate(r.license_validity_date)}
                         </p>
                         {validity.daysLeft != null && validity.state === 'expiring' ? (
-                          <p className="text-[11px] text-amber-700">{validity.daysLeft} day(s) left</p>
+                          <p className="text-[11px] text-amber-700">{validity.daysLeft} Days Left</p>
                         ) : null}
                         {validity.daysLeft != null && validity.state === 'deferred' ? (
                           <p className="text-[11px] text-orange-700">
