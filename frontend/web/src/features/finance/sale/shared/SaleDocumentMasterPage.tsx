@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { limsDarkBarGlowStyle, limsPageShellClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { activePickerClients, getPickerClients, type PickerClientRow } from '@/lib/clientsCache'
@@ -145,6 +146,7 @@ function isAbortOrLockError(err: unknown): boolean {
  */
 export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleConfig }) {
   const { editId, setEdit } = useMasterUiSearchState()
+  const [confirm, confirmDialog] = useConfirmDialog()
   const hydratedEditRef = useRef<string | null>(null)
   const [rows, setRows] = useState<QuotationRow[]>([])
   const [outstandingById, setOutstandingById] = useState<Record<string, number>>({})
@@ -694,7 +696,7 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
   const handleDeleteSelected = async () => {
     const ids = [...selectedIds]
     if (ids.length === 0) return
-    if (!window.confirm(`Delete ${ids.length} ${config.title.toLowerCase()} record(s)?`)) return
+    if (!(await confirm(`Delete ${ids.length} ${config.title} Record(s)?`, { title: `Delete ${config.title} Records`, confirmLabel: 'Delete', destructive: true }))) return
     try {
       await deleteSaleDocuments(config.documentKind, ids)
       setSelectedIds(new Set())
@@ -785,6 +787,7 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
         'flex h-full min-h-0 flex-col overflow-hidden !space-y-0 gap-2 sm:gap-3 md:gap-3',
       )}
     >
+      {confirmDialog}
       <div className="shrink-0">
         <QuotationHeaderBar
           title={config.title}

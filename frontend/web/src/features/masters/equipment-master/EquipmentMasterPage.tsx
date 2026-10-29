@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
+import { toast } from 'sonner'
 import { limsDarkBarGlowStyle, limsPageShellClass, limsFullscreenDialogClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabaseClient'
@@ -40,6 +42,7 @@ type EquipmentFormSection = 'calibration' | 'intermediate' | 'maintenance' | 'de
 
 export default function EquipmentMasterPage() {
   const { editId, moduleSlug, setEdit, setModule } = useMasterUiSearchState()
+  const [confirm, confirmDialog] = useConfirmDialog()
   const [saveLoading, setSaveLoading] = useState(false)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const [activeFormSection, setActiveFormSection] = useState<'calibration' | 'intermediate' | 'maintenance' | null>(null)
@@ -236,10 +239,10 @@ export default function EquipmentMasterPage() {
       if (data?.signedUrl) {
         window.open(data.signedUrl, '_blank')
       } else {
-        alert('Could not generate download link.')
+        toast.error('Could Not Generate Download Link.')
       }
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Unable to load file')
+      toast.error(err instanceof Error ? err.message : 'Unable to Load File')
     }
   }
 
@@ -649,7 +652,7 @@ export default function EquipmentMasterPage() {
   const handleDeleteSelected = () => {
     void (async () => {
       if (selectedRows.length === 0) return
-      const ok = window.confirm(`Delete ${selectedRows.length} selected equipment(s)?`)
+      const ok = await confirm(`Delete ${selectedRows.length} Selected Equipment(s)?`, { title: 'Delete Equipment', confirmLabel: 'Delete', destructive: true })
       if (!ok) return
       setSaveMessage(null)
       setSaveLoading(true)
@@ -901,6 +904,7 @@ export default function EquipmentMasterPage() {
 
   return (
     <div className={limsPageShellClass}>
+      {confirmDialog}
       <EquipmentHeaderBar
         search={search}
         onSearchChange={setSearch}

@@ -5,10 +5,13 @@ function uniqueIds(ids: string[]): string[] {
   return [...new Set(ids.map((id) => id.trim()).filter(Boolean))]
 }
 
-export function confirmDestructiveDelete(count: number, noun: string): boolean {
+type ConfirmFn = (message: string, options?: { title?: string; confirmLabel?: string; destructive?: boolean }) => Promise<boolean>
+
+/** Asks through the caller's in-app confirm (from useConfirmDialog); browser confirm() is blocked in embedded browsers. */
+export async function confirmDestructiveDelete(count: number, noun: string, confirm: ConfirmFn): Promise<boolean> {
   if (count <= 0) return false
-  const label = count === 1 ? `this ${noun}` : `these ${count} ${noun}s`
-  return window.confirm(`Delete ${label}? This cannot be undone.`)
+  const label = count === 1 ? `This ${noun}` : `These ${count} ${noun}s`
+  return confirm(`Delete ${label}? This Cannot Be Undone.`, { title: `Delete ${noun}${count === 1 ? '' : 's'}`, confirmLabel: 'Delete', destructive: true })
 }
 
 /** Deletes SRF rows and cascades allocations, test allocations, and parameters. */

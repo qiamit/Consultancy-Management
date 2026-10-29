@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { FileCheck2, Loader2, Plus, Trash2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { LimsDatePicker } from '@/components/lims/LimsDatePicker'
 import { cn } from '@/lib/utils'
@@ -38,6 +39,7 @@ export function Cmpf307ModuleFields({ value, onChange, disabled = false, project
   disabled?: boolean
   projectId: string | null
 }) {
+  const [confirm, confirmDialog] = useConfirmDialog()
   const [uploading, setUploading] = useState<string | null>(null)
   const [selectedRows, setSelectedRows] = useState<string[]>([])
   const updateRow = (rowId: string, patch: Partial<Cmpf307BrandRow>) => onChange({
@@ -116,7 +118,7 @@ export function Cmpf307ModuleFields({ value, onChange, disabled = false, project
         }}
         onDoubleClick={() => {
           clearTimeout(clickTimers.current[uploadKey])
-          if (window.confirm(`Delete the ${label}?`)) void removeAttachment(row, key)
+          void confirm(`Delete the ${label}?`, { title: `Delete ${label}`, confirmLabel: 'Delete', destructive: true }).then((ok) => { if (ok) void removeAttachment(row, key) })
         }}
       >
         <FileCheck2 className="h-4 w-4" aria-hidden />
@@ -126,6 +128,7 @@ export function Cmpf307ModuleFields({ value, onChange, disabled = false, project
 
   const allSelected = value.rows.length > 0 && selectedRows.length === value.rows.length
   return <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-3 sm:p-5">
+    {confirmDialog}
     <section className="space-y-2">
       <h3 className="text-sm font-bold text-stone-800">Brand Names / Trade Marks to Be Marked on BIS Standard Mark Product</h3>
       <div className="overflow-x-auto border border-stone-400 bg-white"><table className="list-cards w-full min-w-[900px] table-fixed border-collapse text-xs"><thead><tr>

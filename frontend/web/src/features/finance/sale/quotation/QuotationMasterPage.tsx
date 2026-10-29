@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { limsDarkBarGlowStyle, limsPageShellClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { activePickerClients, getPickerClients, type PickerClientRow } from '@/lib/clientsCache'
@@ -115,6 +116,7 @@ function safePdfFilename(quotationNumber: string): string {
 
 export default function QuotationMasterPage() {
   const { editId, setEdit } = useMasterUiSearchState()
+  const [confirm, confirmDialog] = useConfirmDialog()
   const hydratedEditRef = useRef<string | null>(null)
   const [rows, setRows] = useState<QuotationRow[]>([])
   const [listLoading, setListLoading] = useState(true)
@@ -638,7 +640,7 @@ export default function QuotationMasterPage() {
   const handleDeleteSelected = async () => {
     const ids = [...selectedIds]
     if (ids.length === 0) return
-    if (!window.confirm(`Delete ${ids.length} quotation(s)?`)) return
+    if (!(await confirm(`Delete ${ids.length} Quotation(s)?`, { title: 'Delete Quotations', confirmLabel: 'Delete', destructive: true }))) return
     setSaveMessage(null)
     try {
       const { error } = await supabase.from('quotations').delete().in('id', ids)
@@ -741,6 +743,7 @@ export default function QuotationMasterPage() {
         'flex h-full min-h-0 flex-col overflow-hidden !space-y-0 gap-2 sm:gap-3 md:gap-3',
       )}
     >
+      {confirmDialog}
       <div className="shrink-0">
         <QuotationHeaderBar
           search={search}

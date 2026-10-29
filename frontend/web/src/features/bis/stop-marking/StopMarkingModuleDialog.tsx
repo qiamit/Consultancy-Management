@@ -3,6 +3,7 @@ import { Check, ChevronLeft, ChevronRight, ExternalLink, Eye, FileDown, LoaderCi
 import { toast } from 'sonner'
 import { LimsDatePicker } from '@/components/lims/LimsDatePicker'
 import { Button } from '@/components/ui/button'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -55,6 +56,7 @@ export function StopMarkingModuleDialog({
   onUpdated: (row: StopMarkingRow) => void
   onClosedCase: () => void
 }) {
+  const [confirm, confirmDialog] = useConfirmDialog()
   const [form, setForm] = useState<StopMarkingCaseForm | null>(null)
   const [step, setStep] = useState(0)
   const [busy, setBusy] = useState<string | null>(null)
@@ -209,6 +211,7 @@ export function StopMarkingModuleDialog({
 
   return (
     <>
+      {confirmDialog}
       <Dialog open onOpenChange={(open) => (open ? onOpenChange(true) : requestClose())}>
         <DialogContent
           persistOnFocusLoss
@@ -572,8 +575,8 @@ export function StopMarkingModuleDialog({
                             variant="outline"
                             className="h-8 rounded-none border-emerald-700 text-emerald-800 hover:bg-emerald-50"
                             disabled={busy !== null}
-                            onClick={() => {
-                              if (!window.confirm(noticeHoldsMarking(row.case_type) ? 'Marking resumed? This closes the case and puts the licence back to its earlier status.' : 'Close this case?')) return
+                            onClick={async () => {
+                              if (!(await confirm(noticeHoldsMarking(row.case_type) ? 'Marking Resumed? This Closes the Case and Puts the Licence Back to Its Earlier Status.' : 'Close This Case?', { title: 'Close Case', confirmLabel: 'Close Case', destructive: false }))) return
                               void run('close', async () => {
                                 await save()
                                 await closeStopMarkingCase(row)

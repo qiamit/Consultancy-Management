@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { FileCheck2, Loader2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -33,6 +34,7 @@ export function FileAttachButton({
   disabled?: boolean
   onBusyChange?: (busy: boolean) => void
 }) {
+  const [confirm, confirmDialog] = useConfirmDialog()
   const [busy, setBusy] = useState(false)
   const clickTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   useEffect(() => () => clearTimeout(clickTimer.current), [])
@@ -106,6 +108,7 @@ export function FileAttachButton({
     )
   }
   return (
+    <>
     <button
       type="button"
       disabled={disabled || busy}
@@ -118,11 +121,13 @@ export function FileAttachButton({
       }}
       onDoubleClick={() => {
         clearTimeout(clickTimer.current)
-        if (window.confirm(`Delete the ${label}?`)) void remove(file)
+        void confirm(`Delete the ${label}?`, { title: `Delete ${label}`, confirmLabel: 'Delete', destructive: true }).then((ok) => { if (ok) void remove(file) })
       }}
     >
       {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <FileCheck2 className="h-4 w-4" aria-hidden />}
     </button>
+    {confirmDialog}
+    </>
   )
 }
 

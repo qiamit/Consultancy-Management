@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { FileCheck2, FileDown, Loader2, Plus, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { usePdfViewer } from '@/components/ui/usePdfViewer'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabaseClient'
@@ -532,7 +533,9 @@ function DocumentsStep({
 function PdfFileButton({ title, onView, onDelete, confirmDelete = true }: { title: string; onView: () => void; onDelete: () => void; confirmDelete?: boolean }) {
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   useEffect(() => () => clearTimeout(timer.current), [])
+  const [confirm, confirmDialog] = useConfirmDialog()
   return (
+    <>
     <button
       type="button"
       title={title}
@@ -544,16 +547,20 @@ function PdfFileButton({ title, onView, onDelete, confirmDelete = true }: { titl
       }}
       onDoubleClick={() => {
         clearTimeout(timer.current)
-        if (!confirmDelete || window.confirm('Delete this document?')) onDelete()
+        if (!confirmDelete) onDelete()
+        else void confirm('Delete This Document?', { title: 'Delete Document', confirmLabel: 'Delete', destructive: true }).then((ok) => { if (ok) onDelete() })
       }}
     >
       <FileCheck2 className="h-4 w-4" aria-hidden />
     </button>
+    {confirmDialog}
+    </>
   )
 }
 
 /** Named PDFs merged (in this order, after the request letter) into Manak's single "Any Other Document". */
 function OtherDocuments({ row, letterOn }: { row: BisProjectRow; letterOn: boolean }) {
+  const [confirm, confirmDialog] = useConfirmDialog()
   const [files, setFiles] = useState<BisProjectViewFile[]>([])
   const [tick, setTick] = useState(0)
   const [name, setName] = useState('')
@@ -633,7 +640,7 @@ function OtherDocuments({ row, letterOn }: { row: BisProjectRow; letterOn: boole
   }
 
   const remove = async (file: BisProjectViewFile) => {
-    if (!window.confirm(`Delete ${file.file_name}?`)) return
+    if (!(await confirm(`Delete ${file.file_name}?`, { title: 'Delete Document', confirmLabel: 'Delete', destructive: true }))) return
     try {
       await deleteBisProjectFile(file)
       setTick((t) => t + 1)
@@ -781,6 +788,7 @@ function OtherDocuments({ row, letterOn }: { row: BisProjectRow; letterOn: boole
         </tbody>
       </table>
       {pdfViewer}
+      {confirmDialog}
     </ManakSubPanel>
   )
 }

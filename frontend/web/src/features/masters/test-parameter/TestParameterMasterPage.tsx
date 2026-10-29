@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { limsPageShellClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { useSearchParams } from 'react-router-dom'
@@ -176,6 +177,7 @@ function parseCsv(text: string) {
 
 export default function TestParameterMasterPage() {
   const [searchParams, setSearchParams] = useSearchParams()
+  const [confirm, confirmDialog] = useConfirmDialog()
   const { editId, setEdit } = useMasterUiSearchState()
   const [saveLoading, setSaveLoading] = useState(false)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
@@ -1004,7 +1006,7 @@ export default function TestParameterMasterPage() {
         setSaveMessage('Select at least one parameter to archive.')
         return
       }
-      const ok = window.confirm(`Archive ${selectedRows.length} selected record(s)?`)
+      const ok = await confirm(`Archive ${selectedRows.length} Selected Record(s)?`, { title: 'Archive Test Parameters', confirmLabel: 'Archive', destructive: false })
       if (!ok) return
       setSaveMessage(null)
       setSaveLoading(true)
@@ -1069,8 +1071,9 @@ export default function TestParameterMasterPage() {
   const handleDeleteSelected = () => {
     void (async () => {
       if (selectedRows.length === 0) return
-      const ok = window.confirm(
-        `Permanently delete ${selectedRows.length} record(s)? Records still used elsewhere will be skipped. This cannot be undone.`,
+      const ok = await confirm(
+        `Permanently Delete ${selectedRows.length} Record(s)? Records Still Used Elsewhere Will Be Skipped. This Cannot Be Undone.`,
+        { title: 'Delete Test Parameters', confirmLabel: 'Delete', destructive: true },
       )
       if (!ok) return
       setSaveMessage(null)
@@ -1099,8 +1102,9 @@ export default function TestParameterMasterPage() {
   const handleDeleteRow = (row: TestParameterRow) => {
     void (async () => {
       const label = row.item_name?.trim() || 'this record'
-      const ok = window.confirm(
-        `Permanently delete 1 record(s)? Records still used elsewhere will be skipped. This cannot be undone.`,
+      const ok = await confirm(
+        `Permanently Delete 1 Record(s)? Records Still Used Elsewhere Will Be Skipped. This Cannot Be Undone.`,
+        { title: 'Delete Test Parameter', confirmLabel: 'Delete', destructive: true },
       )
       if (!ok) return
       setSaveMessage(null)
@@ -1359,6 +1363,7 @@ export default function TestParameterMasterPage() {
         'flex h-full min-h-0 flex-col overflow-hidden !space-y-0 gap-2 sm:gap-3 md:gap-3',
       )}
     >
+      {confirmDialog}
       <div className="shrink-0">
         <TestParameterHeaderBar
           search={search}

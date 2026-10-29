@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { BellRing, LoaderCircle, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useIsLaboratoryDirector } from '@/components/lims/LaboratoryDirectorOnly'
 import { cn } from '@/lib/utils'
@@ -34,6 +35,7 @@ function actionText(item: RenewalReminderPlanItem, enabled: boolean): string {
 /** Automatic renewal reminders: on / off, today's plan and a per-licence pause. */
 export function RenewalRemindersDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const isAdmin = useIsLaboratoryDirector()
+  const [confirm, confirmDialog] = useConfirmDialog()
   const [plan, setPlan] = useState<RenewalReminderPlan | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -67,7 +69,7 @@ export function RenewalRemindersDialog({ open, onOpenChange }: { open: boolean; 
   const toggleEnabled = async () => {
     if (!settings) return
     const next = !settings.enabled
-    if (next && !window.confirm(`Turn on automatic reminders?${sendCount ? ` The ${sendCount} reminder(s) already due today will be marked skipped (no email).` : ''} Emails go out as licences reach the next stage.`)) return
+    if (next && !(await confirm(`Turn On Automatic Reminders?${sendCount ? ` The ${sendCount} Reminder(s) Already Due Today Will Be Marked Skipped (No Email).` : ''} Emails Go Out as Licences Reach the Next Stage.`, { title: 'Turn On Reminders', confirmLabel: 'Turn On', destructive: false }))) return
     setBusy(true)
     try {
       if (next) {
@@ -98,6 +100,7 @@ export function RenewalRemindersDialog({ open, onOpenChange }: { open: boolean; 
   }
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(next) => !busy && onOpenChange(next)}>
       <DialogContent
         persistOnFocusLoss
@@ -193,5 +196,7 @@ export function RenewalRemindersDialog({ open, onOpenChange }: { open: boolean; 
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    {confirmDialog}
+    </>
   )
 }

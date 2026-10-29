@@ -3,6 +3,7 @@ import { LoaderCircle, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { LimsDatePicker } from '@/components/lims/LimsDatePicker'
 import { Button } from '@/components/ui/button'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
@@ -41,6 +42,7 @@ export function StopMarkingReplyEditor({
   onDate: (iso: string) => void
 }) {
   const s = form.replySections
+  const [confirm, confirmDialog] = useConfirmDialog()
   const [busy, setBusy] = useState<string | null>(null)
   const [instruction, setInstruction] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -97,12 +99,13 @@ export function StopMarkingReplyEditor({
 
   return (
     <div className="space-y-3">
+      {confirmDialog}
       <div className="flex flex-wrap items-end gap-2 border border-amber-300 bg-amber-50/70 p-2.5">
         <div className="min-w-0 flex-1 basis-64 space-y-1.5">
           <Label className={label} htmlFor="smk-reply-instruction">Tell the AI Anything Extra (Optional)</Label>
           <Input id="smk-reply-instruction" className={cn(field, 'h-9')} value={instruction} disabled={busy !== null || closed} placeholder="e.g. Failure due to a faulty tensile test setup; stock of 5 tonne is on hold" onChange={(e) => setInstruction(e.target.value)} />
         </div>
-        <Button type="button" variant="outline" className="h-9 gap-1.5 rounded-none border-amber-600 bg-white px-3 text-xs font-semibold text-amber-900 hover:bg-amber-100" disabled={busy !== null || closed} onClick={() => { const filled = ALL_KEYS.some((k) => String(s[k] ?? '').trim()); if (filled && !window.confirm('The AI will rewrite every section of the letter and replace what is written now. Continue?')) return; void draft(ALL_KEYS, 'all') }}>
+        <Button type="button" variant="outline" className="h-9 gap-1.5 rounded-none border-amber-600 bg-white px-3 text-xs font-semibold text-amber-900 hover:bg-amber-100" disabled={busy !== null || closed} onClick={async () => { const filled = ALL_KEYS.some((k) => String(s[k] ?? '').trim()); if (filled && !(await confirm('The AI Will Rewrite Every Section of the Letter and Replace What Is Written Now. Continue?', { title: 'Replace the Letter', confirmLabel: 'Continue', destructive: false }))) return; void draft(ALL_KEYS, 'all') }}>
           {busy === 'all' ? <LoaderCircle size={14} className="animate-spin" aria-hidden /> : <Sparkles size={14} aria-hidden />} {busy === 'all' ? 'Drafting the Reply…' : 'Draft Full Reply with AI'}
         </Button>
       </div>

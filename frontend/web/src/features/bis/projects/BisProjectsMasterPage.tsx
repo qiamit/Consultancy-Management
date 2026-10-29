@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { useNavigate } from 'react-router-dom'
 import { Select, SelectContent, selectFitTriggerClass, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { limsDarkBarFieldClass, limsPageShellClass } from '@/lib/limsThemeUi'
@@ -77,6 +78,7 @@ function formForListMode(
 
 export default function BisProjectsMasterPage({ listMode }: { listMode: BisProjectsListMode }) {
   const navigate = useNavigate()
+  const [confirm, confirmDialog] = useConfirmDialog()
   const {
     editId,
     viewId,
@@ -583,7 +585,7 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
       setMessage('Old Inclusion Records Cannot Be Cancelled Here.')
       return
     }
-    if (!window.confirm(`Cancel the Inclusion on ${licences.length} License(s)? The License and Its Scope Stay as They Are.`)) return
+    if (!(await confirm(`Cancel the Inclusion on ${licences.length} License(s)? The License and Its Scope Stay as They Are.`, { title: 'Cancel Inclusion', confirmLabel: 'Cancel Inclusion', destructive: false }))) return
     setMessage(null)
     try {
       for (const row of licences) await cancelInclusion(row.id)
@@ -599,7 +601,7 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
   const handleDeleteSelected = async () => {
     const ids = [...selectedIds]
     if (ids.length === 0) return
-    if (!window.confirm(`Delete ${ids.length} license(s)? This cannot be undone.`)) return
+    if (!(await confirm(`Delete ${ids.length} License(s)? This Cannot Be Undone.`, { title: 'Delete Licenses', confirmLabel: 'Delete', destructive: true }))) return
     setMessage(null)
     try {
       await deleteBisProjects(ids)
@@ -619,6 +621,7 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
         'bis-projects-responsive-page flex h-full min-h-0 flex-col overflow-hidden !space-y-0 gap-2 sm:gap-3 md:gap-3',
       )}
     >
+      {confirmDialog}
       <div className="shrink-0">
         <BisProjectsHeaderBar
           title={BIS_PROJECTS_LIST_TITLES[listMode]}
