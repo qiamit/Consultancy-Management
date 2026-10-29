@@ -207,7 +207,7 @@ export function ProcessFlowChartAiDialog({
                 disabled={disabled || busy}
                 onChange={(e) => setStepCount(e.target.value === 'auto' ? null : Number(e.target.value))}
               >
-                <option value="auto">Auto (as the Process Needs)</option>
+                <option value="auto">Auto (As the Process Needs)</option>
                 {STEP_COUNTS.map((n) => (
                   <option key={n} value={n}>
                     About {n} Steps
