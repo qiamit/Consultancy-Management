@@ -22,6 +22,10 @@ export type QiAssistantResponse = {
 
 const MAX_PDF_BYTES = 5 * 1024 * 1024
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024
+/** Pictures for vision requests: count and total base64 size (the functions service accepts 25 MB bodies). */
+export const MAX_AI_IMAGES = 8
+const MAX_AI_IMAGE_PAYLOAD = 16 * 1024 * 1024
+const AI_IMAGE_DATA_URL = /^data:image\/(?:jpeg|png|webp|gif);base64,[A-Za-z0-9+/=]+$/
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
 
 async function fileToBase64(file: File): Promise<string> {
@@ -94,6 +98,11 @@ async function postQiAssistant(body: Record<string, unknown>): Promise<QiAssista
   }
 }
 
+/** True when the service says a vision model is needed to read pictures (none set up in AI Settings). */
+export function isVisionModelMissingError(message: string): boolean {
+  return /needs a vision ai model/i.test(message)
+}
+
 export function validateAssistantPdfFile(file: File): void {
   if (!file.name.toLowerCase().endsWith('.pdf')) {
     throw new Error('Only PDF files are supported.')
@@ -148,6 +157,11 @@ export async function sendQiAssistantMessage(input: {
   attachedPdfs?: File[]
   /** Business card / photo attached in chat (vision). */
   attachedImage?: File
+  /**
+   * Pictures for a vision model, as data URLs (`data:image/jpeg;base64,…`), already resized (see aiImages.ts).
+   * The service then uses a vision-capable model from AI Settings, or explains that one is needed.
+   */
+  images?: string[]
   history: Array<{ role: 'user' | 'assistant'; content: string }>
 }): Promise<QiAssistantResponse> {
   const body: Record<string, unknown> = {
@@ -160,6 +174,15 @@ export async function sendQiAssistantMessage(input: {
     activeRecordTable: input.activeRecordTable,
     activeSkillId: input.activeSkillId,
     history: input.history,
+  }
+
+  if (input.images?.length) {
+    const images = input.images.filter((url) => AI_IMAGE_DATA_URL.test(url))
+    if (images.length !== input.images.length) throw new Error('Only JPG, PNG, WEBP or GIF Pictures Can Be Sent to the AI.')
+    if (images.length > MAX_AI_IMAGES) throw new Error(`Send at Most ${MAX_AI_IMAGES} Pictures at a Time.`)
+    const bytes = images.reduce((sum, url) => sum + url.length, 0)
+    if (bytes > MAX_AI_IMAGE_PAYLOAD) throw new Error('The Pictures Are Too Large Together. Remove Some Pages or Photos.')
+    body.images = images
   }
 
   const pdfs: File[] = []

@@ -16,6 +16,7 @@ import {
   limsPrimaryBtnClass,
 } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
+import { PlantLayoutAiDialog } from './PlantLayoutAiDialog'
 import { PlantLayoutColorPickerDialog } from './PlantLayoutColorPickerDialog'
 import {
   boxFromFreehandCanvasPoints,
@@ -25,10 +26,16 @@ import {
   findParentBox,
   normalizeBox,
   PLANT_LAYOUT_SHAPES,
+  PLANT_LAYOUT_BOX_STROKE,
+  PLANT_LAYOUT_LABEL_FONT,
+  PLANT_LAYOUT_LABEL_WEIGHT,
+  PLANT_LAYOUT_VIEW_H,
+  PLANT_LAYOUT_VIEW_W,
   plantLayoutBoxColors,
   plantLayoutBoxDisplayLabel,
-  plantLayoutBoxPathD,
+  plantLayoutBoxGraphic,
   plantLayoutBoxSizeMm,
+  plantLayoutContainerIds,
   plantLayoutMmToPercent,
   type PlantLayoutBox,
   type PlantLayoutModulePayload,
@@ -71,10 +78,19 @@ export function PlantLayoutModuleFields({
   value,
   onChange,
   disabled = false,
+  aiOpen = false,
+  onAiOpenChange,
+  applicantName = '',
+  productName = '',
 }: {
   value: PlantLayoutModulePayload
   onChange: (next: PlantLayoutModulePayload) => void
   disabled?: boolean
+  /** Plant Layout AI dialog (opened from the module header's AI button). */
+  aiOpen?: boolean
+  onAiOpenChange?: (open: boolean) => void
+  applicantName?: string
+  productName?: string
 }) {
   const canvasRef = useRef<HTMLDivElement | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -437,6 +453,7 @@ export function PlantLayoutModuleFields({
   const selectedParent = selected ? findParentBox(selected, boxes) : null
 
   const selectedColors = selected ? plantLayoutBoxColors(selected) : null
+  const containerIds = plantLayoutContainerIds(boxes)
 
   return (
     <>
@@ -446,19 +463,27 @@ export function PlantLayoutModuleFields({
           Plant Layout Canvas
         </p>
 
+        {/* The frame keeps the print proportion (1000 × 700) and fits the space left, so the canvas matches print. */}
+        <div
+          className="flex min-h-[min(58vh,520px)] flex-1 items-start justify-center"
+          style={{ containerType: 'size' }}
+        >
         <div
           ref={canvasRef}
           tabIndex={0}
           className={cn(
-            'relative min-h-[min(58vh,520px)] flex-1 overflow-hidden rounded-none border-2 border-stone-600 bg-[#fffdf8]',
+            'relative shrink-0 overflow-hidden rounded-none border-2 border-stone-600 bg-[#fffdf8]',
             'shadow-[inset_0_0_0_1px_rgba(180,83,9,0.15)] outline-none',
             disabled ? 'opacity-70' : freehandDraw ? 'cursor-crosshair' : 'cursor-crosshair',
             freehandDraw && 'ring-2 ring-amber-500 ring-inset',
           )}
           style={{
+            width: `min(100cqw, calc(100cqh * ${PLANT_LAYOUT_VIEW_W} / ${PLANT_LAYOUT_VIEW_H}))`,
+            aspectRatio: `${PLANT_LAYOUT_VIEW_W} / ${PLANT_LAYOUT_VIEW_H}`,
             backgroundImage:
               'linear-gradient(to right, rgba(168,162,158,0.22) 1px, transparent 1px), linear-gradient(to bottom, rgba(168,162,158,0.22) 1px, transparent 1px)',
-            backgroundSize: '28px 28px',
+            // Same 50-unit grid as the print drawing.
+            backgroundSize: `5% ${(50 / PLANT_LAYOUT_VIEW_H) * 100}%`,
           }}
           onPointerDown={(e) => {
             if (disabled) return
@@ -485,7 +510,7 @@ export function PlantLayoutModuleFields({
 
           {freehandDraw ? (
             <div className="pointer-events-none absolute left-1/2 top-2 z-30 -translate-x-1/2 border border-amber-700 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-950">
-              Freehand draw mode — drag to outline · Esc to cancel
+              Freehand Draw Mode — Drag to Outline · Esc to Cancel
             </div>
           ) : null}
 
@@ -494,8 +519,11 @@ export function PlantLayoutModuleFields({
             const isSelected = box.id === selectedId
             const isEditing = box.id === editingId
             const parent = findParentBox(box, boxes)
-            const isRect =
-              box.shape === 'rectangle' || box.shape === 'square'
+            const graphic = plantLayoutBoxGraphic(
+              box,
+              box.label.trim() ? undefined : 'Box Name',
+              containerIds.has(box.id),
+            )
             const dimForDraw =
               !!freehandDraw && freehandDraw.boxId === box.id
             return (
@@ -533,34 +561,56 @@ export function PlantLayoutModuleFields({
                 }}
                 title={plantLayoutBoxDisplayLabel(box)}
               >
+                {/* Same layout-unit drawing as print (plantLayoutBoxGraphic), so the label wraps and centres identically. */}
                 <svg
-                  className="pointer-events-none absolute inset-0 h-full w-full"
-                  viewBox="0 0 100 100"
+                  className="pointer-events-none absolute inset-0 h-full w-full overflow-visible"
+                  viewBox={`0 0 ${graphic.width.toFixed(1)} ${graphic.height.toFixed(1)}`}
                   preserveAspectRatio="none"
                   aria-hidden
                 >
-                  {isRect ? (
+                  {graphic.shape.kind === 'rect' ? (
                     <rect
-                      x="2"
-                      y="2"
-                      width="96"
-                      height="96"
-                      rx="3"
-                      ry="3"
+                      x={graphic.shape.x}
+                      y={graphic.shape.y}
+                      width={graphic.shape.w}
+                      height={graphic.shape.h}
+                      rx={graphic.shape.rx}
+                      ry={graphic.shape.rx}
                       fill={colors.fill}
                       stroke={colors.stroke}
-                      strokeWidth={isSelected ? 3.2 : 2.2}
-                      vectorEffect="non-scaling-stroke"
+                      strokeWidth={isSelected ? PLANT_LAYOUT_BOX_STROKE * 1.6 : PLANT_LAYOUT_BOX_STROKE}
+                      strokeLinejoin="round"
                     />
                   ) : (
                     <path
-                      d={plantLayoutBoxPathD(box)}
+                      d={graphic.shape.d}
                       fill={colors.fill}
                       stroke={colors.stroke}
-                      strokeWidth={isSelected ? 3.2 : 2.2}
-                      vectorEffect="non-scaling-stroke"
+                      strokeWidth={isSelected ? PLANT_LAYOUT_BOX_STROKE * 1.6 : PLANT_LAYOUT_BOX_STROKE}
+                      strokeLinejoin="round"
                     />
                   )}
+                  {!isEditing ? (
+                    <text
+                      textAnchor="middle"
+                      transform={
+                        graphic.label.rotate
+                          ? `rotate(${graphic.label.rotate} ${graphic.label.cx} ${graphic.label.cy})`
+                          : undefined
+                      }
+                      fontFamily={PLANT_LAYOUT_LABEL_FONT}
+                      fontSize={graphic.label.size}
+                      fontWeight={PLANT_LAYOUT_LABEL_WEIGHT}
+                      fill={colors.text}
+                      opacity={box.label.trim() ? 1 : 0.45}
+                    >
+                      {graphic.label.lines.map((line, i) => (
+                        <tspan key={i} x={graphic.label.cx} y={line.y}>
+                          {line.text}
+                        </tspan>
+                      ))}
+                    </text>
+                  ) : null}
                 </svg>
 
                 {isSelected ? (
@@ -587,23 +637,7 @@ export function PlantLayoutModuleFields({
                         e.stopPropagation()
                       }}
                     />
-                  ) : (
-                    <span
-                      className={cn(
-                        'line-clamp-3 px-1 text-[11px] font-bold leading-tight sm:text-xs',
-                        !box.label.trim() && 'opacity-45',
-                      )}
-                      style={{
-                        transform:
-                          box.labelDegrees !== 0
-                            ? `rotate(${box.labelDegrees}deg)`
-                            : undefined,
-                        transformOrigin: 'center center',
-                      }}
-                    >
-                      {box.label.trim() ? box.label : 'Box name'}
-                    </span>
-                  )}
+                  ) : null}
                 </div>
 
                 {isSelected && !disabled && !freehandDraw ? (
@@ -650,9 +684,10 @@ export function PlantLayoutModuleFields({
 
           {boxes.length === 0 && !freehandDraw ? (
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-stone-500">
-              Outer border only — use Add Box in the right panel.
+              Outer Border Only — Use Add Box in the Right Panel.
             </div>
           ) : null}
+        </div>
         </div>
 
       </div>
@@ -929,6 +964,23 @@ export function PlantLayoutModuleFields({
 
       </aside>
     </div>
+
+    {onAiOpenChange ? (
+      <PlantLayoutAiDialog
+        open={aiOpen}
+        onOpenChange={onAiOpenChange}
+        disabled={disabled}
+        applicantName={applicantName}
+        productName={productName}
+        boxes={boxes}
+        onApply={(aiBoxes, mode) => {
+          setBoxes(mode === 'append' ? [...boxesRef.current, ...aiBoxes] : aiBoxes)
+          setSelectedId(null)
+          setEditingId(null)
+          setFreehandDraw(null)
+        }}
+      />
+    ) : null}
 
     {selected ? (
       <PlantLayoutColorPickerDialog

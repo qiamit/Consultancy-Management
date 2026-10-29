@@ -339,6 +339,17 @@ export function normalizeBox(box: PlantLayoutBox): PlantLayoutBox {
     }
   }
 
+  // Grow the box (height first) until its label fits, so the name is never cut on the canvas or in print.
+  const grown = growBoxToFitLabel(
+    plantLayoutBoxDisplayLabel({ label: String(box.label ?? '') }),
+    w,
+    h,
+    shape,
+    normalizeLabelDegrees(box.labelDegrees),
+  )
+  w = grown.w
+  h = grown.h
+
   const x = clamp(round1(box.x), 0, 100 - w)
   const y = clamp(round1(box.y), 0, 100 - h)
   const tone = TONES.includes(box.tone) ? box.tone : 'amber'
@@ -621,6 +632,272 @@ export function plantLayoutToneColors(tone: PlantLayoutTone): {
   }
 }
 
+/* ── Box label layout (shared by the editor canvas and print, so both wrap the same lines) ── */
+
+/** Layout space of the drawing: the editor canvas and the print SVG both use 1000 × 700 units. */
+export const PLANT_LAYOUT_VIEW_W = LAYOUT_VIEW_W
+export const PLANT_LAYOUT_VIEW_H = LAYOUT_VIEW_H
+
+export const PLANT_LAYOUT_LABEL_FONT = 'Arial, Helvetica, sans-serif'
+const LABEL_WEIGHT = 700
+const LABEL_LINE = 1.22
+const LABEL_PAD_X = 9
+const LABEL_PAD_Y = 7
+const LABEL_MIN_SIZE = 12
+const LABEL_MAX_SIZE = 17
+/** Border width in layout units (≈ 0.35 mm in print). */
+export const PLANT_LAYOUT_BOX_STROKE = 1.8
+
+/** Part of the box the label may use (non-rectangular shapes are narrower) and where the label sits vertically. */
+const LABEL_AREA: Record<PlantLayoutShape, { w: number; h: number; cy: number }> = {
+  rectangle: { w: 1, h: 1, cy: 0.5 },
+  square: { w: 1, h: 1, cy: 0.5 },
+  triangle: { w: 0.48, h: 0.38, cy: 0.68 },
+  cone: { w: 0.6, h: 0.5, cy: 0.56 },
+  freehand: { w: 0.72, h: 0.66, cy: 0.5 },
+}
+
+const widthCache = new Map<string, number>()
+let measureCtx: CanvasRenderingContext2D | null | undefined
+
+/** Width of `text` in bold Arial at 100 units (real browser metrics; an estimate when no canvas is available). */
+function textWidthAt100(text: string): number {
+  const cached = widthCache.get(text)
+  if (cached !== undefined) return cached
+  if (measureCtx === undefined) {
+    measureCtx = null
+    try {
+      if (typeof document !== 'undefined') {
+        const ctx = document.createElement('canvas').getContext('2d')
+        if (ctx) {
+          ctx.font = `${LABEL_WEIGHT} 100px ${PLANT_LAYOUT_LABEL_FONT}`
+          measureCtx = ctx
+        }
+      }
+    } catch {
+      measureCtx = null
+    }
+  }
+  // A small margin keeps the text clear of the border when the print font renders a touch wider.
+  const width = (measureCtx ? measureCtx.measureText(text).width : text.length * 62) * 1.04
+  if (widthCache.size > 4000) widthCache.clear()
+  widthCache.set(text, width)
+  return width
+}
+
+function textWidth(text: string, size: number): number {
+  return (textWidthAt100(text) * size) / 100
+}
+
+function wrapWords(words: string[], maxWidth: number, size: number): string[] {
+  const lines: string[] = []
+  let line = ''
+  for (const word of words) {
+    const next = line ? `${line} ${word}` : word
+    if (!line || textWidth(next, size) <= maxWidth) line = next
+    else {
+      lines.push(line)
+      line = word
+    }
+  }
+  if (line) lines.push(line)
+  return lines
+}
+
+type LabelFit = {
+  lines: string[]
+  size: number
+  /** Box size (layout units) the label needs; larger than the box when it does not fit. */
+  needW: number
+  needH: number
+}
+
+function isTurnedLabel(degrees: number): boolean {
+  return Math.abs(Math.round(degrees)) % 180 === 90
+}
+
+/**
+ * Wraps the label to the box: starts at a size that suits the box, steps down to the minimum readable size, and
+ * reports how big the box must be when even that does not fit. Turned labels (90° / 270°) run along the height.
+ */
+function fitLabel(text: string, boxW: number, boxH: number, shape: PlantLayoutShape, degrees: number): LabelFit {
+  const area = LABEL_AREA[shape] ?? LABEL_AREA.rectangle
+  const turned = isTurnedLabel(degrees)
+  const runSpan = turned ? boxH * area.h : boxW * area.w
+  const crossSpan = turned ? boxW * area.w : boxH * area.h
+  const runPad = turned ? LABEL_PAD_Y : LABEL_PAD_X
+  const crossPad = turned ? LABEL_PAD_X : LABEL_PAD_Y
+  const availRun = Math.max(1, runSpan - 2 * runPad)
+  const availCross = Math.max(1, crossSpan - 2 * crossPad)
+  const words = text.split(/\s+/).filter(Boolean)
+  let size = clamp(Math.min(boxW, boxH) / 6.5, LABEL_MIN_SIZE, LABEL_MAX_SIZE)
+  for (;;) {
+    const lines = wrapWords(words, availRun, size)
+    const widest = Math.max(0, ...lines.map((l) => textWidth(l, size)))
+    const block = lines.length * size * LABEL_LINE
+    const fits = widest <= availRun && block <= availCross
+    if (fits || size <= LABEL_MIN_SIZE) {
+      const needRun = Math.max(runSpan, widest + 2 * runPad) / (turned ? area.h : area.w)
+      const needCross = Math.max(crossSpan, block + 2 * crossPad) / (turned ? area.w : area.h)
+      return {
+        lines,
+        size,
+        needW: fits ? boxW : turned ? needCross : needRun,
+        needH: fits ? boxH : turned ? needRun : needCross,
+      }
+    }
+    size = Math.max(LABEL_MIN_SIZE, size - 0.5)
+  }
+}
+
+function ceilPct(n: number): number {
+  return Math.ceil(n * 10 + 0.5) / 10
+}
+
+/**
+ * Smallest growth (canvas percent) that lets the label fit: first wide enough for the longest word, then taller
+ * (more lines), and wider only when the height is used up. Square boxes keep their square proportion.
+ */
+function growBoxToFitLabel(
+  text: string,
+  w: number,
+  h: number,
+  shape: PlantLayoutShape,
+  degrees: number,
+): { w: number; h: number } {
+  const turned = isTurnedLabel(degrees)
+  for (let i = 0; i < 24; i += 1) {
+    const fit = fitLabel(text, (w / 100) * LAYOUT_VIEW_W, (h / 100) * LAYOUT_VIEW_H, shape, degrees)
+    const needW = (fit.needW / LAYOUT_VIEW_W) * 100
+    const needH = (fit.needH / LAYOUT_VIEW_H) * 100
+    if (needW <= w + 0.01 && needH <= h + 0.01) break
+    // Along the text direction only a single long word forces growth; across it, the line count does.
+    const runNeed = turned ? needH : needW
+    const runSize = turned ? h : w
+    const crossNeed = turned ? needW : needH
+    const crossSize = turned ? w : h
+    let run = runSize
+    let cross = crossSize
+    if (runNeed > runSize + 0.01) run = Math.min(100, ceilPct(runNeed))
+    else if (crossNeed > crossSize + 0.01) {
+      // Height first; once it reaches the frame, widen the text run instead so the lines get fewer.
+      if (crossSize >= 100) run = Math.min(100, run + 2)
+      else cross = Math.min(100, ceilPct(crossNeed))
+    }
+    if (turned) {
+      h = run
+      w = cross
+    } else {
+      w = run
+      h = cross
+    }
+    if (shape === 'square') {
+      w = Math.min(100, Math.max(w, round1(h * (LAYOUT_VIEW_H / LAYOUT_VIEW_W))))
+      h = Math.min(100, round1(w * (LAYOUT_VIEW_W / LAYOUT_VIEW_H)))
+    }
+    if (w >= 100 && h >= 100) break
+  }
+  return { w: round1(w), h: round1(h) }
+}
+
+/** Scales an absolute/relative SVG path (M L H V C Q Z) drawn in a 0–100 box into layout units. */
+function scalePathD(d: string, sx: number, sy: number): string {
+  const tokens = d.match(/[MLHVCQZmlhvcqz]|-?\d*\.?\d+(?:e[-+]?\d+)?/g) ?? []
+  let cmd = ''
+  let axis = 0
+  const out: string[] = []
+  for (const t of tokens) {
+    if (/^[A-Za-z]$/.test(t)) {
+      cmd = t.toUpperCase()
+      axis = 0
+      out.push(t)
+      continue
+    }
+    const n = Number(t)
+    let v: number
+    if (cmd === 'H') v = n * sx
+    else if (cmd === 'V') v = n * sy
+    else {
+      v = axis === 0 ? n * sx : n * sy
+      axis = 1 - axis
+    }
+    out.push(v.toFixed(1))
+  }
+  return out.join(' ')
+}
+
+/** Everything needed to draw one box in its own layout-unit space (0…width × 0…height). */
+export type PlantLayoutBoxGraphic = {
+  width: number
+  height: number
+  colors: { fill: string; stroke: string; text: string }
+  shape:
+    | { kind: 'rect'; x: number; y: number; w: number; h: number; rx: number }
+    | { kind: 'path'; d: string }
+  label: {
+    cx: number
+    cy: number
+    rotate: number
+    size: number
+    lines: Array<{ text: string; y: number }>
+  }
+}
+
+/** Ids of boxes that have other boxes drawn inside them (their label goes to the top so children do not hide it). */
+export function plantLayoutContainerIds(boxes: PlantLayoutBox[]): Set<string> {
+  const ids = new Set<string>()
+  for (const box of boxes) {
+    const parent = findParentBox(box, boxes)
+    if (parent) ids.add(parent.id)
+  }
+  return ids
+}
+
+/**
+ * Box drawing in layout units, used by the editor canvas (one SVG per box) and by print (translated into the page
+ * SVG), so the label wraps, centres and sits the same way in both. `labelText` overrides the shown text (placeholder);
+ * `labelAtTop` puts the label at the top centre (a box with other boxes inside it).
+ */
+export function plantLayoutBoxGraphic(
+  box: PlantLayoutBox,
+  labelText?: string,
+  labelAtTop = false,
+): PlantLayoutBoxGraphic {
+  const width = (box.w / 100) * LAYOUT_VIEW_W
+  const height = (box.h / 100) * LAYOUT_VIEW_H
+  const colors = plantLayoutBoxColors(box)
+  const s = PLANT_LAYOUT_BOX_STROKE
+  const shape: PlantLayoutBoxGraphic['shape'] =
+    box.shape === 'rectangle' || box.shape === 'square'
+      ? { kind: 'rect', x: s / 2, y: s / 2, w: width - s, h: height - s, rx: Math.min(6, width / 10, height / 10) }
+      : { kind: 'path', d: scalePathD(plantLayoutBoxPathD(box), width / 100, height / 100) }
+  const area = LABEL_AREA[box.shape] ?? LABEL_AREA.rectangle
+  const turned = isTurnedLabel(box.labelDegrees)
+  const fit = fitLabel(labelText ?? plantLayoutBoxDisplayLabel(box), width, height, box.shape, box.labelDegrees)
+  const lineH = fit.size * LABEL_LINE
+  const cx = width / 2
+  const blockH = fit.lines.length * lineH
+  const atTop = labelAtTop && !turned && (box.shape === 'rectangle' || box.shape === 'square')
+  const cy = atTop ? LABEL_PAD_Y + blockH / 2 : turned ? height / 2 : height * area.cy
+  const top = cy - blockH / 2
+  return {
+    width,
+    height,
+    colors: { fill: colors.fill, stroke: colors.stroke, text: colors.text },
+    shape,
+    label: {
+      cx,
+      cy,
+      rotate: box.labelDegrees,
+      size: fit.size,
+      // Explicit baselines (≈ 0.35 em below each line's middle) instead of dominant-baseline, which print engines vary on.
+      lines: fit.lines.map((text, i) => ({ text, y: top + (i + 0.5) * lineH + fit.size * 0.35 })),
+    },
+  }
+}
+
+export const PLANT_LAYOUT_LABEL_WEIGHT = LABEL_WEIGHT
+
 function escSvg(raw: string): string {
   return raw
     .replace(/&/g, '&amp;')
@@ -629,79 +906,29 @@ function escSvg(raw: string): string {
     .replace(/"/g, '&quot;')
 }
 
-/**
- * Break a label into lines that fit `width` (SVG text does not wrap by itself), shrinking the font when the lines
- * would not fit `height`. Character width is estimated for bold Arial.
- */
-function wrapSvgLabel(text: string, width: number, height: number, startSize: number): { lines: string[]; size: number } {
-  const words = text.split(/\s+/).filter(Boolean)
-  const layout = (size: number) => {
-    const perLine = Math.max(1, Math.floor((width - 10) / (size * 0.6)))
-    const lines: string[] = []
-    let line = ''
-    for (const word of words) {
-      const next = line ? `${line} ${word}` : word
-      if (next.length <= perLine || !line) line = next
-      else {
-        lines.push(line)
-        line = word
-      }
-    }
-    if (line) lines.push(line)
-    return lines
-  }
-  let size = startSize
-  let lines = layout(size)
-  while (size > 8 && (lines.length * size * 1.15 > height - 6 || lines.some((l) => l.length * size * 0.6 > width - 6))) {
-    size -= 0.5
-    lines = layout(size)
-  }
-  return { lines, size }
-}
-
 /** SVG markup for print (viewBox 0 0 1000 700). */
 export function buildPlantLayoutSvgMarkup(boxes: PlantLayoutBox[]): string {
+  const containers = plantLayoutContainerIds(boxes)
   const rects = boxes
     .map((box) => {
-      const c = plantLayoutBoxColors(box)
+      const g = plantLayoutBoxGraphic(box, undefined, containers.has(box.id))
       const x = (box.x / 100) * LAYOUT_VIEW_W
       const y = (box.y / 100) * LAYOUT_VIEW_H
-      const w = (box.w / 100) * LAYOUT_VIEW_W
-      const h = (box.h / 100) * LAYOUT_VIEW_H
-      const cx = x + w / 2
-      const cy = y + h / 2
-      // Turned labels (90° / 270°) run along the box height.
-      const turned = Math.abs(Math.round(box.labelDegrees ?? 0)) % 180 === 90
-      const wrapped = wrapSvgLabel(
-        plantLayoutBoxDisplayLabel(box),
-        turned ? h : w,
-        turned ? w : h,
-        Math.max(11, Math.min(16, Math.min(w, h) / 8)),
-      )
-      const fontSize = wrapped.size
-      const lineH = fontSize * 1.15
-      const label = wrapped.lines
-        .map((line, i) => `<tspan x="${cx.toFixed(1)}" dy="${(i === 0 ? -((wrapped.lines.length - 1) * lineH) / 2 : lineH).toFixed(1)}">${escSvg(line)}</tspan>`)
-        .join('')
-      const pathD = plantLayoutBoxPathD(box)
-      const rounded =
-        box.shape === 'rectangle' || box.shape === 'square'
-          ? 'rx="4" ry="4"'
-          : ''
+      const paint = `fill="${g.colors.fill}" stroke="${g.colors.stroke}" stroke-width="${PLANT_LAYOUT_BOX_STROKE}" stroke-linejoin="round"`
       const shapeEl =
-        box.shape === 'rectangle' || box.shape === 'square'
-          ? `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}"
-          ${rounded} fill="${c.fill}" stroke="${c.stroke}" stroke-width="2.2"/>`
-          : `<path transform="translate(${x.toFixed(1)},${y.toFixed(1)}) scale(${(w / 100).toFixed(4)},${(h / 100).toFixed(4)})"
-          d="${pathD}" fill="${c.fill}" stroke="${c.stroke}" stroke-width="${(2.2 * 100 / Math.min(w, h)).toFixed(2)}"
-          vector-effect="non-scaling-stroke"/>`
+        g.shape.kind === 'rect'
+          ? `<rect x="${g.shape.x.toFixed(1)}" y="${g.shape.y.toFixed(1)}" width="${g.shape.w.toFixed(1)}" height="${g.shape.h.toFixed(1)}" rx="${g.shape.rx.toFixed(1)}" ry="${g.shape.rx.toFixed(1)}" ${paint}/>`
+          : `<path d="${g.shape.d}" ${paint}/>`
+      const { cx, cy, rotate, size, lines } = g.label
+      const tspans = lines
+        .map((l) => `<tspan x="${cx.toFixed(1)}" y="${l.y.toFixed(1)}">${escSvg(l.text)}</tspan>`)
+        .join('')
       return `
-      <g>
+      <g transform="translate(${x.toFixed(1)} ${y.toFixed(1)})">
         ${shapeEl}
-        <text x="${cx.toFixed(1)}" y="${cy.toFixed(1)}" text-anchor="middle" dominant-baseline="middle"
-          transform="rotate(${box.labelDegrees} ${cx.toFixed(1)} ${cy.toFixed(1)})"
-          font-family="Arial, Helvetica, sans-serif" font-size="${fontSize.toFixed(1)}"
-          font-weight="700" fill="${c.text}">${label}</text>
+        <text text-anchor="middle"${rotate ? ` transform="rotate(${rotate} ${cx.toFixed(1)} ${cy.toFixed(1)})"` : ''}
+          font-family="${PLANT_LAYOUT_LABEL_FONT}" font-size="${size.toFixed(1)}"
+          font-weight="${LABEL_WEIGHT}" fill="${g.colors.text}">${tspans}</text>
       </g>`
     })
     .join('')
