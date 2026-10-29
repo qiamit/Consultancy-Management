@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/supabaseClient'
 import { currentUserId } from '../shared/bisLookupApi'
 import type { OslSampleRequirementRow } from '../projects/oslSampleRequirementsModel'
-import { findingsToText, replySectionsToText, type StopMarkingDocument, type StopMarkingTestReportModule } from './types'
+import { findingsToText, replySectionsToText, todayIso, type StopMarkingDocument, type StopMarkingTestReportModule } from './types'
 import { NOTICE_TYPE_OPTIONS, noticeHoldsMarking, type StopMarkingAddForm, type StopMarkingCaseForm, type StopMarkingNoticeFilter, type StopMarkingRow, type StopMarkingStatusFilter } from './types'
 
 /** Case types that prohibit marking, so they put the licence into Stop Marking status. */
@@ -112,7 +112,7 @@ export async function createStopMarkingCase(form: StopMarkingAddForm): Promise<{
       cm_l_digits: form.cmLDigits || null,
       project_kind: form.projectKind || null,
       case_type: form.noticeType,
-      stop_date: form.stopDate || new Date().toISOString().slice(0, 10),
+      stop_date: form.stopDate || todayIso(),
       reason_type: form.reasonType,
       sample_code: form.sampleCode.trim(),
       sample_qr_code: form.sampleQrCode.trim(),
@@ -142,7 +142,7 @@ export async function saveStopMarkingCase(id: string, form: StopMarkingCaseForm)
   const { data, error } = await supabase
     .from('bis_stop_marking_cases')
     .update({
-      stop_date: form.stopDate || new Date().toISOString().slice(0, 10),
+      stop_date: form.stopDate || todayIso(),
       reason_type: form.reasonType,
       sample_code: form.sampleCode.trim(),
       sample_qr_code: form.sampleQrCode.trim(),

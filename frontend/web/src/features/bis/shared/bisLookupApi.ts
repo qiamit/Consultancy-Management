@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabaseClient'
 import { formatIsCodeLabel } from '@/features/masters/is-codes/formatIsCodeLabel'
 import type { FilterComboboxOption } from '@/features/sample-handling/receiving/FilterCombobox'
+import { isLicenceKind, LICENCE_KINDS } from '../projects/types'
 
 export type BisLicenseOption = {
   id: string
@@ -18,7 +19,7 @@ type IsCodeJoin = {
   standard_prefix?: string | null
 }
 
-/** IS codes that already have a (non-application) BIS project for this client. */
+/** IS codes the client holds a BIS licence for (no Applications, no old Inclusion rows). */
 export async function searchClientIsCodeOptions(
   clientId: string,
   term: string,
@@ -28,6 +29,7 @@ export async function searchClientIsCodeOptions(
     .from('bis_projects')
     .select('is_code_id, project_kind, is_code:is_codes(is_number, title, revision_year, part_no, section_no, standard_prefix)')
     .eq('client_id', clientId)
+    .in('project_kind', LICENCE_KINDS)
     .not('is_code_id', 'is', null)
     .order('created_at', { ascending: false })
     .limit(500)
@@ -43,7 +45,7 @@ export async function searchClientIsCodeOptions(
       is_code: IsCodeJoin | IsCodeJoin[] | null
     }
     if (!row.is_code_id || seen.has(row.is_code_id)) continue
-    if ((row.project_kind ?? '').trim().toLowerCase() === 'application') continue
+    if (!isLicenceKind(row.project_kind)) continue
     const code = Array.isArray(row.is_code) ? row.is_code[0] : row.is_code
     const label = (code ? formatIsCodeLabel(code) : '') || 'Unnamed'
     const title = (code?.title ?? '').trim()
@@ -66,6 +68,7 @@ export async function fetchLicenseOptions(
     .select('id, cm_l_digits, project_kind, title')
     .eq('client_id', clientId)
     .eq('is_code_id', isCodeId)
+    .in('project_kind', LICENCE_KINDS)
   if (options?.qeManagedOnly) query = query.eq('is_qe_managed', true)
   const { data, error } = await query.order('created_at', { ascending: false }).limit(100)
   if (error) throw error
@@ -85,7 +88,8 @@ export async function fetchLicenseOptions(
         title: (r.title ?? '').trim(),
       }
     })
-    .filter((r) => r.projectKind.toLowerCase() !== 'application' && r.cmLDigits.length > 0)
+    // Licences only: an old Inclusion row shares the licence's CM/L and must not be picked (e.g. Stop Marking).
+    .filter((r) => isLicenceKind(r.projectKind) && r.cmLDigits.length > 0)
 }
 
 export async function fetchEmployeeNames(): Promise<string[]> {

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { limsDarkBarGlowStyle, limsPageShellClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabaseClient'
+import { LICENCE_KINDS } from '@/features/bis/projects/types'
 import { useCanEditCurrentModule } from '@/features/settings/module-access/useCanEditCurrentModule'
 import { useFormDialogOpenChange } from '@/lib/formDialogOpenChange'
 import { useMasterUiSearchState } from '@/lib/useMasterUiSearchState'
@@ -483,7 +484,7 @@ export default function IsCodesMasterPage() {
       const { data, error } = await supabase
         .from('bis_projects')
         .select('is_code_id')
-        .eq('project_kind', 'Licence')
+        .in('project_kind', LICENCE_KINDS)
         .not('is_code_id', 'is', null)
         .range(from, from + pageSize - 1)
       if (error) throw error

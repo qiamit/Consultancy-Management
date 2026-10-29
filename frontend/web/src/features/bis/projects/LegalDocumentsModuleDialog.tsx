@@ -152,6 +152,7 @@ import {
 } from '../print/oslSampleTestRequestHtml'
 import { openPendingPrintWindow, openPrintHtml } from '../print/openPrintHtml'
 import {
+  bisDateOrderIssue,
   clientDisplayName,
   emptyBisApplicationDetailsForm,
   formatCmA,
@@ -1173,6 +1174,17 @@ export function LegalDocumentsModuleDialog({
       appDetails.licenseNumberDigits.length !== 10
     ) {
       toast.error('License Number Must Be Exactly 10 Digits (CM/L-).')
+      return
+    }
+    const dateIssue = showApplicationFields
+      ? bisDateOrderIssue({
+          applicationDate: appDetails.applicationDate,
+          grantedDate: appDetails.grantedDate,
+          validityDate: appDetails.licenseValidityDate,
+        })
+      : null
+    if (dateIssue) {
+      toast.error(dateIssue)
       return
     }
 

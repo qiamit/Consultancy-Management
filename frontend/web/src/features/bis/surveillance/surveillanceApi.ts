@@ -4,7 +4,7 @@ import type { SurveillanceForm, SurveillanceRow } from './types'
 export { formatBisApiError } from '../projects/bisProjectsApi'
 
 const SELECT_WITH_JOINS =
-  '*, client:clients(company_name), is_code:is_codes(is_number, title, revision_year, part_no, section_no, standard_prefix), bis_project:bis_projects(title, license_number)'
+  '*, client:clients(company_name), is_code:is_codes(is_number, title, revision_year, part_no, section_no, standard_prefix), bis_project:bis_projects(title, license_number, cm_l_digits)'
 
 const LOOKUP_ID_LIMIT = 100
 

@@ -1,6 +1,7 @@
 import { formatIsCodeLabel } from '@/features/masters/is-codes/formatIsCodeLabel'
 import { EMPTY_CLIENT_IS_LICENSE, type ClientIsLicenseValue } from '../shared/ClientIsLicenseFields'
 import type { OslSampleRequirementRow } from '../projects/oslSampleRequirementsModel'
+import { todayIsoDate } from '../projects/types'
 
 export const STOP_MARKING_STATUS_OPTIONS = [
   { value: 'open', label: 'Report Awaited' },
@@ -208,7 +209,8 @@ export type StopMarkingCaseForm = {
 export type StopMarkingStatusFilter = 'active' | 'all' | 'closed'
 export type StopMarkingNoticeFilter = 'all' | (typeof NOTICE_TYPE_OPTIONS)[number]['value']
 
-export const todayIso = () => new Date().toISOString().slice(0, 10)
+/** Local (IST) calendar date — toISOString() would still give yesterday until 05:30. */
+export const todayIso = () => todayIsoDate()
 
 export function emptyStopMarkingAddForm(): StopMarkingAddForm {
   return { ...EMPTY_CLIENT_IS_LICENSE, noticeType: 'stop_marking', stopDate: todayIso(), reasonType: '', sampleCode: '', sampleQrCode: '', letterFile: null }

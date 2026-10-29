@@ -1,5 +1,5 @@
 import { formatIsCodeLabel } from '@/features/masters/is-codes/formatIsCodeLabel'
-import { formatDisplayDate } from '../projects/types'
+import { formatDisplayDate, RENEWAL_DEFERRED_DAYS, todayIsoDate } from '../projects/types'
 
 export {
   formatCmL,
@@ -638,7 +638,9 @@ export type RenewalMarkingFeeSummary = {
   applicationFee: number
   /** BIS annual licence fee (₹1,000 per year). */
   licenceFee: number
-  /** Marking fee payable + application fee + licence fee. */
+  /** ₹5,000 when the renewal is applied after the validity date, within the deferred window (else 0). */
+  lateFee: number
+  /** Marking fee payable + application fee + licence fee + late fee. */
   subtotal: number
   gstRate: number
   gst: number
@@ -649,7 +651,21 @@ export type RenewalMarkingFeeSummary = {
 /** BIS Conformity Assessment Regulations, Scheme-I: renewal application fee and annual licence fee. */
 export const RENEWAL_APPLICATION_FEE = 1000
 export const ANNUAL_LICENCE_FEE = 1000
+/** Deferred renewal (applied after validity, within RENEWAL_DEFERRED_DAYS): late fee per licence. */
+export const RENEWAL_LATE_FEE = 5000
 export const RENEWAL_GST_RATE = 18
+
+/**
+ * Deferred renewal: applied (or, before the application date is known, today) after the validity date
+ * and no more than RENEWAL_DEFERRED_DAYS after it.
+ */
+export function isDeferredRenewal(validity: string | null | undefined, applicationDate?: string | null): boolean {
+  const end = parseIsoUtcDate(String(validity ?? '').slice(0, 10))
+  const applied = parseIsoUtcDate(String(applicationDate ?? '').slice(0, 10) || todayIsoDate())
+  if (!end || !applied) return false
+  const daysLate = Math.round((applied.getTime() - end.getTime()) / 86_400_000)
+  return daysLate > 0 && daysLate <= RENEWAL_DEFERRED_DAYS
+}
 
 /**
  * BIS marking fee for the production statement: the production-based fee, or the minimum marking fee for the
@@ -657,7 +673,8 @@ export const RENEWAL_GST_RATE = 18
  */
 export function renewalMarkingFeeSummary(
   rows: RenewalProductionRow[],
-  form: Pick<BisRenewalForm, 'firmScale' | 'minimumFees' | 'renewalPeriodFrom' | 'renewalPeriodTo'>,
+  form: Pick<BisRenewalForm, 'firmScale' | 'minimumFees' | 'renewalPeriodFrom' | 'renewalPeriodTo'>
+    & Partial<Pick<BisRenewalForm, 'currentValidity' | 'applicationDate'>>,
 ): RenewalMarkingFeeSummary {
   const calculated = rows.reduce((sum, row) => sum + (finiteNumber(row.markingFee) ?? 0), 0)
   const scale = renewalFirmScale(form.firmScale)
@@ -670,7 +687,8 @@ export function renewalMarkingFeeSummary(
   const payable = Math.max(calculated, minimumTotal)
   const applicationFee = RENEWAL_APPLICATION_FEE
   const licenceFee = ANNUAL_LICENCE_FEE * years
-  const subtotal = payable + applicationFee + licenceFee
+  const lateFee = isDeferredRenewal(form.currentValidity, form.applicationDate) ? RENEWAL_LATE_FEE : 0
+  const subtotal = payable + applicationFee + licenceFee + lateFee
   const gst = Math.round(subtotal * RENEWAL_GST_RATE) / 100
   return {
     calculated,
@@ -682,6 +700,7 @@ export function renewalMarkingFeeSummary(
     basis: minimumTotal > calculated ? 'minimum' : 'calculated',
     applicationFee,
     licenceFee,
+    lateFee,
     subtotal,
     gstRate: RENEWAL_GST_RATE,
     gst,

@@ -23,6 +23,7 @@ import {
 } from './types'
 
 export type RenewalFeeContext = Pick<BisRenewalForm, 'firmScale' | 'minimumFees' | 'renewalPeriodFrom' | 'renewalPeriodTo'>
+  & Partial<Pick<BisRenewalForm, 'currentValidity' | 'applicationDate'>>
 
 /** Marking fee payable → + application fee + licence fee → + GST → total fee to pay BIS. */
 function FeeBreakup({ fee, className }: { fee: RenewalMarkingFeeSummary; className?: string }) {
@@ -31,6 +32,7 @@ function FeeBreakup({ fee, className }: { fee: RenewalMarkingFeeSummary; classNa
     [`Marking Fee Payable${fee.basis === 'minimum' ? ' (minimum)' : ''}`, fee.payable],
     ['Renewal Application Fee', fee.applicationFee],
     [`Annual Licence Fee${fee.years > 1 ? ` (× ${fee.years} years)` : ''}`, fee.licenceFee],
+    ...(fee.lateFee ? [['Late Fee (Deferred Renewal)', fee.lateFee] as [string, number]] : []),
     ['Subtotal', fee.subtotal],
     [`GST @ ${fee.gstRate}%`, fee.gst],
     ['Total Fee Payable (incl. GST)', fee.total, true],
@@ -660,11 +662,11 @@ function MarkingFeeCalculationDialog({
                     </li>
                     <li className="flex min-w-0 items-start gap-2 border border-stone-200 bg-white p-2.5 text-xs leading-relaxed">
                       <span className="flex size-6 shrink-0 items-center justify-center bg-stone-800 text-amber-50 font-semibold">9</span>
-                      <p className="min-w-0 break-words [overflow-wrap:anywhere]">Renewal Application Fee + Annual Licence Fee: <strong>{getCurrencySymbol()} {formatAmountTotal(feeSummary.applicationFee)} + {getCurrencySymbol()} {formatAmountTotal(feeSummary.licenceFee)}{feeSummary.years > 1 ? ` (${getCurrencySymbol()} 1,000.00 × ${feeSummary.years} years)` : ''}</strong></p>
+                      <p className="min-w-0 break-words [overflow-wrap:anywhere]">Renewal Application Fee + Annual Licence Fee{feeSummary.lateFee ? ' + Late Fee (Deferred Renewal)' : ''}: <strong>{getCurrencySymbol()} {formatAmountTotal(feeSummary.applicationFee)} + {getCurrencySymbol()} {formatAmountTotal(feeSummary.licenceFee)}{feeSummary.years > 1 ? ` (${getCurrencySymbol()} 1,000.00 × ${feeSummary.years} years)` : ''}{feeSummary.lateFee ? ` + ${getCurrencySymbol()} ${formatAmountTotal(feeSummary.lateFee)}` : ''}</strong></p>
                     </li>
                     <li className="flex min-w-0 items-start gap-2 border border-stone-200 bg-white p-2.5 text-xs leading-relaxed">
                       <span className="flex size-6 shrink-0 items-center justify-center bg-stone-800 text-amber-50 font-semibold">10</span>
-                      <p className="min-w-0 break-words [overflow-wrap:anywhere]">Subtotal = marking fee payable + application fee + licence fee: <strong>{getCurrencySymbol()} {formatAmountTotal(feeSummary.payable)} + {getCurrencySymbol()} {formatAmountTotal(feeSummary.applicationFee)} + {getCurrencySymbol()} {formatAmountTotal(feeSummary.licenceFee)} = {getCurrencySymbol()} {formatAmountTotal(feeSummary.subtotal)}</strong></p>
+                      <p className="min-w-0 break-words [overflow-wrap:anywhere]">Subtotal = marking fee payable + application fee + licence fee{feeSummary.lateFee ? ' + late fee' : ''}: <strong>{getCurrencySymbol()} {formatAmountTotal(feeSummary.payable)} + {getCurrencySymbol()} {formatAmountTotal(feeSummary.applicationFee)} + {getCurrencySymbol()} {formatAmountTotal(feeSummary.licenceFee)}{feeSummary.lateFee ? ` + ${getCurrencySymbol()} ${formatAmountTotal(feeSummary.lateFee)}` : ''} = {getCurrencySymbol()} {formatAmountTotal(feeSummary.subtotal)}</strong></p>
                     </li>
                     <li className="flex min-w-0 items-start gap-2 border border-stone-200 bg-white p-2.5 text-xs leading-relaxed">
                       <span className="flex size-6 shrink-0 items-center justify-center bg-stone-800 text-amber-50 font-semibold">11</span>
