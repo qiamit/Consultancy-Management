@@ -65,6 +65,11 @@ export type BisDocumentPrintPageSettings = {
   showSignatureImage: boolean
   showSealNote: boolean
   signatureSpaceMm: number
+  /**
+   * Unit of the *Pt size fields. Settings saved before the sizes were applied as real points were rendered as
+   * CSS px; they carry no marker and are converted once when read (see parseBisDocumentPrintPageSettings).
+   */
+  sizeUnit?: 'pt'
 }
 
 export const DEFAULT_BIS_DOCUMENT_PRINT_PAGE_SETTINGS: BisDocumentPrintPageSettings = {
@@ -91,11 +96,11 @@ export const DEFAULT_BIS_DOCUMENT_PRINT_PAGE_SETTINGS: BisDocumentPrintPageSetti
   letterheadContactStacked: false,
   letterheadCompact: false,
   letterheadFirmColor: 'black',
-  letterheadFirmSizePt: 20,
-  letterheadAddressSizePt: 12.5,
-  letterheadContactSizePt: 11.5,
+  letterheadFirmSizePt: 15,
+  letterheadAddressSizePt: 9.5,
+  letterheadContactSizePt: 8.5,
   showLetterheadRule: true,
-  letterheadRuleThicknessPt: 2,
+  letterheadRuleThicknessPt: 1.5,
   letterheadBottomGapMm: 3,
   letterheadTopPadMm: 0,
   showPreparedBy: false,
@@ -107,13 +112,26 @@ export const DEFAULT_BIS_DOCUMENT_PRINT_PAGE_SETTINGS: BisDocumentPrintPageSetti
   showPageNumber: true,
   pageNumberAlign: 'right',
   showPageNumberRule: true,
-  pageNumberSizePt: 10.5,
+  pageNumberSizePt: 9,
   pageNumberBottomMm: 2,
   showSignatureBlock: true,
   showSignatureImage: true,
   showSealNote: false,
   signatureSpaceMm: 12,
+  sizeUnit: 'pt',
 }
+
+/**
+ * Size fields that used to be rendered as CSS px, with the default each had then. A stored px value equal to that old
+ * default maps to today's default (what the page looked like); any other value is converted px → pt (× 0.75).
+ */
+const LEGACY_PX_SIZE_FIELDS = {
+  letterheadFirmSizePt: 20,
+  letterheadAddressSizePt: 12.5,
+  letterheadContactSizePt: 11.5,
+  letterheadRuleThicknessPt: 2,
+  pageNumberSizePt: 10.5,
+} as const
 
 function asBool(raw: unknown, fallback: boolean): boolean {
   return typeof raw === 'boolean' ? raw : fallback
@@ -139,6 +157,14 @@ export function parseBisDocumentPrintPageSettings(
     raw && typeof raw === 'object' && !Array.isArray(raw)
       ? (raw as Record<string, unknown>)
       : {}
+  // Saved before sizes were real points (no marker): convert those px values once.
+  const legacyPx = Object.keys(src).length > 0 && src.sizeUnit !== 'pt'
+  const size = (key: keyof typeof LEGACY_PX_SIZE_FIELDS): number => {
+    const value = asNumber(src[key], d[key])
+    if (!legacyPx || src[key] === undefined || src[key] === null) return value
+    if (value === LEGACY_PX_SIZE_FIELDS[key]) return d[key]
+    return Math.round(value * 0.75 * 2) / 2
+  }
   return {
     pageSize: asEnum(src.pageSize, ['A4', 'A5', 'Letter', 'Legal'] as const, d.pageSize),
     orientation: asEnum(src.orientation, ['portrait', 'landscape'] as const, d.orientation),
@@ -182,14 +208,11 @@ export function parseBisDocumentPrintPageSettings(
       ['stone', 'amber', 'black'] as const,
       d.letterheadFirmColor,
     ),
-    letterheadFirmSizePt: asNumber(src.letterheadFirmSizePt, d.letterheadFirmSizePt),
-    letterheadAddressSizePt: asNumber(src.letterheadAddressSizePt, d.letterheadAddressSizePt),
-    letterheadContactSizePt: asNumber(src.letterheadContactSizePt, d.letterheadContactSizePt),
+    letterheadFirmSizePt: size('letterheadFirmSizePt'),
+    letterheadAddressSizePt: size('letterheadAddressSizePt'),
+    letterheadContactSizePt: size('letterheadContactSizePt'),
     showLetterheadRule: asBool(src.showLetterheadRule, d.showLetterheadRule),
-    letterheadRuleThicknessPt: asNumber(
-      src.letterheadRuleThicknessPt,
-      d.letterheadRuleThicknessPt,
-    ),
+    letterheadRuleThicknessPt: size('letterheadRuleThicknessPt'),
     letterheadBottomGapMm: asNumber(src.letterheadBottomGapMm, d.letterheadBottomGapMm),
     letterheadTopPadMm: asNumber(src.letterheadTopPadMm, d.letterheadTopPadMm),
     showPreparedBy: asBool(src.showPreparedBy, d.showPreparedBy),
@@ -213,12 +236,13 @@ export function parseBisDocumentPrintPageSettings(
       d.pageNumberAlign,
     ),
     showPageNumberRule: asBool(src.showPageNumberRule, d.showPageNumberRule),
-    pageNumberSizePt: asNumber(src.pageNumberSizePt, d.pageNumberSizePt),
+    pageNumberSizePt: size('pageNumberSizePt'),
     pageNumberBottomMm: asNumber(src.pageNumberBottomMm, d.pageNumberBottomMm),
     showSignatureBlock: asBool(src.showSignatureBlock, d.showSignatureBlock),
     showSignatureImage: asBool(src.showSignatureImage, d.showSignatureImage),
     showSealNote: asBool(src.showSealNote, d.showSealNote),
     signatureSpaceMm: asNumber(src.signatureSpaceMm, d.signatureSpaceMm),
+    sizeUnit: 'pt',
   }
 }
 
@@ -316,6 +340,36 @@ export function applyBisDocumentPrintPageSettings(
   const borderCss = settings.showPageBorder
     ? `border: ${borderPt}pt ${settings.pageBorderStyle === 'solid' ? 'solid' : 'double'} ${borderColor} !important;`
     : `border: none !important;`
+  /*
+   * Page frame geometry (same on screen and paper): the frame is drawn inset at the page margins, never on the paper
+   * edge, and content starts `pad` inside it. On screen the sheet is the whole physical page, so the frame is a
+   * ::before inset at the margins and the sheet's padding is margin + frame width + pad (content size is unchanged
+   * from the old frame-on-the-edge layout). On paper the printer page margins are the same margins and the sheet
+   * itself carries the frame, cloned onto every page a tall block spills onto.
+   */
+  const bw = settings.showPageBorder ? Math.round(borderPt * (25.4 / 72) * 1000) / 1000 : 0
+  const sheetPadCss = `${mt + bw + pad}mm ${mr + bw + pad}mm ${mb + bw + pad}mm ${ml + bw + pad}mm`
+  const frameCss = settings.showPageBorder
+    ? `
+  .pd-sheet::before, .al-sheet::before, .f1-sheet::before, .f1-continuous::before {
+    content: '' !important;
+    display: block !important;
+    position: absolute !important;
+    top: ${mt}mm !important;
+    right: ${mr}mm !important;
+    bottom: ${mb}mm !important;
+    left: ${ml}mm !important;
+    ${borderCss}
+    box-sizing: border-box !important;
+    pointer-events: none !important;
+    z-index: 3 !important;
+  }`
+    : ''
+  const cloneCss = `
+    -webkit-box-decoration-break: clone !important;
+    box-decoration-break: clone !important;`
+  // Form-I page counter ("Page 01 of 03") sits in the bottom page margin, which must be at least 10 mm for it.
+  const f1BottomMm = Math.max(mb, 10)
 
   const hAlign =
     settings.alignHorizontal === 'center'
@@ -393,30 +447,34 @@ export function applyBisDocumentPrintPageSettings(
     align-self: stretch !important;
   }
 `
-  const continuousFormCss = /class=["']f1-continuous["']/.test(html)
+  const hasContinuousForm = /class=["']f1-continuous["']/.test(html)
+  /* Form-I flows across pages (no fixed sheets): screen shows one long page, print fragments it. */
+  const continuousScreenCss = hasContinuousForm
     ? `
-.f1-continuous {
-  display: block !important;
-  align-self: ${hAlign} !important;
-  width: ${widthMm}mm !important;
-  min-width: ${widthMm}mm !important;
-  max-width: ${widthMm}mm !important;
-  height: auto !important;
-  min-height: 0 !important;
-  max-height: none !important;
-  margin: 0 auto !important;
-  padding: ${mt + pad}mm ${mr + pad}mm ${mb + pad}mm ${ml + pad}mm !important;
-  overflow: visible !important;
-  position: relative !important;
-  box-sizing: border-box !important;
-  background: #fff !important;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.22), 0 10px 28px rgba(0,0,0,0.16) !important;
-  text-align: ${textAlign} !important;
-  ${borderCss}
-}
-.f1-continuous > * { max-width: 100% !important; box-sizing: border-box !important; }
-.f1-continuous .f1-box { width: 100% !important; max-width: 100% !important; }
-@media print {
+  .f1-continuous {
+    display: block !important;
+    align-self: ${hAlign} !important;
+    width: ${widthMm}mm !important;
+    min-width: ${widthMm}mm !important;
+    max-width: ${widthMm}mm !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    margin: 0 auto !important;
+    padding: ${sheetPadCss} !important;
+    overflow: visible !important;
+    position: relative !important;
+    box-sizing: border-box !important;
+    background: #fff !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.22), 0 10px 28px rgba(0,0,0,0.16) !important;
+    text-align: ${textAlign} !important;
+    border: none !important;
+  }
+  .f1-continuous > * { max-width: 100% !important; box-sizing: border-box !important; }
+  .f1-continuous .f1-box { width: 100% !important; max-width: 100% !important; }`
+    : ''
+  const continuousPrintCss = hasContinuousForm
+    ? `
   body.f1-print-document {
     display: block !important;
     width: auto !important;
@@ -426,6 +484,7 @@ export function applyBisDocumentPrintPageSettings(
     transform: none !important;
   }
   .f1-continuous {
+    page: bis-form1;
     display: block !important;
     width: auto !important;
     min-width: 0 !important;
@@ -434,27 +493,39 @@ export function applyBisDocumentPrintPageSettings(
     min-height: 0 !important;
     max-height: none !important;
     margin: 0 !important;
-    padding: 0 !important;
+    padding: ${pad}mm !important;
     overflow: visible !important;
     box-shadow: none !important;
-    border: none !important;
+    position: relative !important;
+    ${borderCss}
+    ${cloneCss}
   }
   .f1-continuous > * { break-inside: auto; page-break-inside: auto; }
   .f1-continuous .f1-box { break-inside: avoid; page-break-inside: avoid; }
-  .f1-continuous + .pd-sheet { break-before: page; page-break-before: always; }
-}`
+  .f1-continuous + .pd-sheet { break-before: page; page-break-before: always; }`
     : ''
 
   const override = `<style id="bis-print-preview-override">
-/* Sheet documents keep their margins inside each sheet (as on screen), so a printed / PDF page is laid out exactly
-   like the preview. The continuous Form-I flows across pages and keeps the printer page margins. */
-@page { size: ${settings.pageSize} ${settings.orientation}; margin: ${continuousFormCss ? margin : '0'} !important; }
+/* Printer page margins = Page Setting margins. Fixed sheets fill the area inside them (see the frame note above). */
+@page { size: ${settings.pageSize} ${settings.orientation}; margin: ${margin} !important; }
+${hasContinuousForm ? `@page bis-form1 {
+  margin: ${mt}mm ${mr}mm ${f1BottomMm}mm ${ml}mm !important;
+  @bottom-right {
+    content: "Page " counter(page, decimal-leading-zero) " of " counter(pages, decimal-leading-zero);
+    font-family: Arial, Helvetica, "Liberation Sans", sans-serif;
+    font-size: 9pt;
+    font-weight: 600;
+    color: #111;
+    vertical-align: middle;
+    padding-right: ${pad}mm;
+  }
+}` : ''}
 .pd-letterhead, .al-letterhead, .f1-header {
   display: ${settings.showLetterhead ? 'block' : 'none'} !important;
   text-align: ${lhAlign} !important;
   border-bottom: ${
     settings.showLetterhead && settings.showLetterheadRule
-      ? `${rulePt}px solid #b45309`
+      ? `${rulePt}pt solid #b45309`
       : 'none'
   } !important;
   padding-top: ${lhTopPad}mm !important;
@@ -463,7 +534,7 @@ export function applyBisDocumentPrintPageSettings(
 }
 .pd-firm, .al-firm {
   display: ${settings.showLetterheadFirm ? 'block' : 'none'} !important;
-  font-size: ${firmPt}px !important;
+  font-size: ${firmPt}pt !important;
   font-weight: ${settings.letterheadFirmBold ? 700 : 400} !important;
   text-transform: ${settings.letterheadFirmUppercase ? 'uppercase' : 'none'} !important;
   letter-spacing: ${settings.letterheadFirmUppercase ? '0.03em' : 'normal'} !important;
@@ -472,7 +543,7 @@ export function applyBisDocumentPrintPageSettings(
 }
 .pd-firm-addr, .al-firm-addr {
   display: ${settings.showLetterheadAddress ? 'block' : 'none'} !important;
-  font-size: ${addrPt}px !important;
+  font-size: ${addrPt}pt !important;
   font-style: ${settings.letterheadAddressItalic ? 'italic' : 'normal'} !important;
   margin: 0 0 ${lhLineGap}px !important;
 }
@@ -487,7 +558,7 @@ export function applyBisDocumentPrintPageSettings(
     lhAlign === 'left' ? 'flex-start' : lhAlign === 'right' ? 'flex-end' : 'center'
   } !important;
   gap: ${settings.letterheadContactStacked ? '1px' : '0.15em 0.85em'} !important;
-  font-size: ${contactPt}px !important;
+  font-size: ${contactPt}pt !important;
   margin: 0 !important;
 }
 .pd-lh-phone { display: ${settings.showLetterheadPhone ? 'inline' : 'none'} !important; }
@@ -502,7 +573,7 @@ export function applyBisDocumentPrintPageSettings(
 .pd-page-num {
   position: absolute !important;
   margin: 0 !important;
-  font-size: ${pageNumPt}px !important;
+  font-size: ${pageNumPt}pt !important;
   color: #222 !important;
   font-weight: 600 !important;
   text-align: ${pageNumAlign} !important;
@@ -512,10 +583,14 @@ export function applyBisDocumentPrintPageSettings(
   padding-top: ${settings.showPageNumberRule ? 4 : 0}px !important;
   display: ${settings.showPageNumber ? 'block' : 'none'} !important;
   background: #fff !important;
-  z-index: 2 !important;
+  z-index: 4 !important;
   width: auto !important;
   max-width: none !important;
   box-sizing: border-box !important;
+}
+/* Beats the scan-friendly floor (loaded after this) so the Page Number pt setting applies. */
+body .pd-sheet .pd-page-num, body .al-sheet .pd-page-num, body .f1-sheet .pd-page-num {
+  font-size: ${pageNumPt}pt !important;
 }
 /* Scan-friendly body text (preview + print). */
 .pd-sheet, .al-sheet, .f1-sheet {
@@ -647,23 +722,25 @@ export function applyBisDocumentPrintPageSettings(
     max-height: ${heightMm}mm !important;
     margin: 0 !important;
     box-sizing: border-box !important;
-    padding: ${mt + pad}mm ${mr + pad}mm ${mb + pad}mm ${ml + pad}mm !important;
+    padding: ${sheetPadCss} !important;
     background: #fff !important;
     box-shadow: 0 1px 3px rgba(0,0,0,0.22), 0 10px 28px rgba(0,0,0,0.16) !important;
     /* auto: long Process Description points stay readable in preview (hidden clipped them). */
     overflow: auto !important;
     position: relative !important;
-    ${borderCss}
+    /* The frame is the ::before inset at the margins, not the sheet edge (= the paper edge). */
+    border: none !important;
     ${alignCss}
   }
-  /* Footer sits in the bottom margin strip of every page. */
+  ${frameCss}
+  /* Page number sits inside the frame, Page Number Bottom mm above its inner edge. */
   .pd-page-num {
-    left: ${ml + pad}mm !important;
-    right: ${mr + pad}mm !important;
-    bottom: ${pageNumBottom}mm !important;
+    left: ${ml + bw + pad}mm !important;
+    right: ${mr + bw + pad}mm !important;
+    bottom: ${mb + bw + pageNumBottom}mm !important;
   }
   ${alignChildCss}
-  ${continuousFormCss}
+  ${continuousScreenCss}
   .pd-sheet + .pd-sheet,
   .pd-sheet + .al-sheet,
   .al-sheet + .pd-sheet,
@@ -689,9 +766,15 @@ export function applyBisDocumentPrintPageSettings(
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
+  .pd-sheet::before, .al-sheet::before, .f1-sheet::before, .f1-continuous::before {
+    content: none !important;
+    display: none !important;
+  }
   /*
    * Flex sheets break browser print fragmentation — long Process Description
    * text can vanish on Print / Save-as-PDF / scan. Use block for print.
+   * The sheet fills the area inside the printer margins and carries the frame itself; box-decoration-break: clone
+   * repeats frame + inner padding on every page an unsplittable tall block runs onto (never up to the paper edge).
    */
   .pd-sheet, .f1-sheet, .al-sheet {
     display: block !important;
@@ -699,11 +782,11 @@ export function applyBisDocumentPrintPageSettings(
     max-width: none !important;
     min-width: 0 !important;
     height: auto !important;
-    /* Same size and padding as the screen sheet; 1 mm slack: an exact fit can overflow by a sub-pixel and add a blank page. */
-    min-height: calc(${heightMm}mm - ${continuousFormCss ? mt + mb : 0}mm - 1mm) !important;
+    /* Fills the page inside the margins; 1 mm slack: an exact fit can overflow by a sub-pixel and add a blank page. */
+    min-height: calc(${heightMm - mt - mb}mm - 1mm) !important;
     max-height: none !important;
     margin: 0 auto !important;
-    padding: ${continuousFormCss ? `${pad}mm ${pad}mm ${Math.max(pad + 6, 8)}mm ${pad}mm` : `${mt + pad}mm ${mr + pad}mm ${mb + pad}mm ${ml + pad}mm`} !important;
+    padding: ${pad}mm !important;
     box-sizing: border-box !important;
     box-shadow: none !important;
     overflow: visible !important;
@@ -714,6 +797,7 @@ export function applyBisDocumentPrintPageSettings(
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
     ${borderCss}
+    ${cloneCss}
   }
   .pd-sheet *, .al-sheet *, .f1-sheet * {
     color: #000 !important;
@@ -732,12 +816,13 @@ export function applyBisDocumentPrintPageSettings(
     -webkit-text-fill-color: #000 !important;
   }
   .pd-page-num {
-    left: ${continuousFormCss ? pad : ml + pad}mm !important;
-    right: ${continuousFormCss ? pad : mr + pad}mm !important;
+    left: ${pad}mm !important;
+    right: ${pad}mm !important;
     bottom: ${pageNumBottom}mm !important;
     background: #fff !important;
   }
   ${alignChildCss}
+  ${continuousPrintCss}
   .pd-sheet + .pd-sheet,
   .pd-sheet + .al-sheet,
   .al-sheet + .pd-sheet,
