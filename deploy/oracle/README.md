@@ -1,0 +1,88 @@
+# Consultancy Pro → Oracle Cloud (Always Free)
+
+Consultancy Management (QE Consultancy) को Railway से एक Oracle Cloud server पर ले जाने का पूरा kit।
+बाकी apps (LIMS, Accounting, Finance, Metallurgy, BIS Record) Railway पर ही रहेंगी।
+
+```
+Internet ─► Caddy (HTTPS, अपने-आप certificate)
+              ├─ qengineering.in, www          → web app (Vite build)
+              ├─ api.qengineering.in           → auth (GoTrue) / rest (PostgREST) / storage / functions
+              ├─ mcp.qengineering.in           → MCP server
+              └─ pdf.qengineering.in           → PDF service (Chrome)
+                         सब ─► Postgres 17.6 (same as Railway)  +  files server की disk पर
+```
+
+Server: Ampere A1 (ARM64), 2 OCPU, 12 GB RAM, 150–200 GB disk, Ubuntu 24.04।
+Versions Railway जैसे ही हैं: Postgres `supabase/postgres:17.6.1.136`, GoTrue `v2.174.0`, PostgREST `v12.2.12`,
+storage-api `v1.24.7` — इसलिए data जैसा का तैसा आ जाता है। सभी images ARM64 पर चलती हैं।
+
+## Files
+
+| File | काम |
+| --- | --- |
+| `docker-compose.yml` | db, auth, rest, storage, functions, mcp, pdf, caddy |
+| `Caddyfile` | HTTPS, web app, API routes + CORS (Railway gateway जैसा) |
+| `env.template` | `.env` में कौन-कौन सी settings हैं (असली `.env` कभी commit नहीं होता) |
+| `db/roles.sql` | Supabase roles के passwords |
+| `scripts/server-bootstrap.sh` | नए server का एक बार setup (Docker, firewall, swap, updates, fail2ban, backup cron) |
+| `scripts/make-env-from-railway.mjs` | Mac पर: Railway से secrets लेकर `.env` बनाता है (वही JWT secret → logins/keys/extension चलते रहें) |
+| `scripts/deploy.sh` | Server पर: latest main, web build, containers, DB migrations |
+| `scripts/migrate-db.sh` | Railway DB → Oracle (Railway सिर्फ़ पढ़ा जाता है) + हर table की row गिनती मिलाना |
+| `scripts/migrate-storage.mjs` | Railway bucket की files → server disk (resume हो सकता है) + जाँच |
+| `scripts/backup.sh` | रोज़ रात DB backup (14 दिन), हर रविवार files snapshot (4 हफ़्ते) |
+| `.github/workflows/deploy-oracle.yml` | GitHub से deploy (cutover के बाद हर merge पर अपने-आप) |
+
+## Phase 0 — आपका काम (Oracle account)
+
+1. oracle.com/cloud/free पर account, Home Region **Mumbai / Hyderabad**।
+2. **Pay As You Go** में upgrade (free limit में ₹0) + Budget alert ₹100।
+3. Instance: Ubuntu 24.04 (aarch64), **VM.Standard.A1.Flex 2 OCPU / 12 GB**, public IP, boot volume 150 GB,
+   SSH public key = Mac की `~/.ssh/qe_oracle.pub`।
+4. Security List में TCP **80, 443** खोलें।
+5. Public IP बताएँ।
+
+## Phase 1 — Server setup (मैं करूँगा)
+
+```bash
+# Mac से
+ssh -i ~/.ssh/qe_oracle ubuntu@<IP>
+# server पर (repo आने से पहले script अकेली copy होती है)
+bash server-bootstrap.sh          # GitHub deploy key दिखाएगा → GitHub में read-only जोड़ें → script दोबारा
+# Mac पर: test नाम (app.<IP>.sslip.io …) के साथ .env
+node deploy/oracle/scripts/make-env-from-railway.mjs --ip <IP>
+scp -i ~/.ssh/qe_oracle deploy/oracle/.env ubuntu@<IP>:/opt/qe/app/deploy/oracle/.env
+# server पर
+bash /opt/qe/app/deploy/oracle/scripts/deploy.sh
+```
+
+## Phase 2 — Data copy और test (Railway चलता रहेगा)
+
+```bash
+bash /opt/qe/app/deploy/oracle/scripts/migrate-db.sh              # DB copy + row गिनती मिलान
+cd /opt/qe/app/deploy/oracle/scripts && npm ci
+node migrate-storage.mjs --check-layout                           # test file से path की पुष्टि
+node migrate-storage.mjs                                          # 3.8 GB files (बीच में रुके तो दोबारा चलाएँ)
+node migrate-storage.mjs --verify                                 # हर file disk पर + 25 random files API से
+```
+
+फिर browser में `https://app.<IP-dashes>.sslip.io` खोलकर पूरा app test करें (login, documents, PDF, uploads)।
+Renewal reminders यहाँ बंद रहते हैं (`RENEWAL_REMINDERS_DISABLED=1`) ताकि दो जगह से mail न जाए।
+
+## Phase 3 — Cutover (रात में, ~30–60 मिनट)
+
+1. Railway पर functions में `RENEWAL_REMINDERS_DISABLED=1`।
+2. Data दोबारा copy: `migrate-db.sh` (पूरा) + `migrate-storage.mjs` (सिर्फ़ नई files) + `--verify`।
+3. Mac पर: `make-env-from-railway.mjs --domain qengineering.in` → `.env` server पर → `deploy.sh`।
+4. DNS (domain registrar पर): `qengineering.in`, `www`, `api`, `mcp`, `pdf` → A record = Oracle IP
+   (Railway वाले CNAME हटाएँ)। Caddy अपने-आप certificates ले लेगा।
+5. Test: login, documents, PDF download, file upload/view, MCP, QE extension।
+6. GitHub secrets `ORACLE_HOST`, `ORACLE_SSH_KEY` डालें, workflow में `push` चालू करें।
+7. Railway की Consultancy services 1 हफ़्ते तक fallback के लिए रखें, फिर बंद करें (आपकी मंज़ूरी से)।
+
+**Rollback:** DNS को वापस Railway पर कर दें — Railway का data cutover तक का है।
+
+## रोज़ का काम
+
+- कुछ नहीं। Security updates अपने-आप (unattended-upgrades), backups रोज़ 02:30 IST।
+- महीने में एक बार: `sudo apt upgrade` + `docker compose pull` (मैं कर दूँगा)।
+- Site बंद होने पर alert के लिए UptimeRobot (free) लगाएँ।
