@@ -99,7 +99,7 @@ export function SignatoriesEditor({
       ) : null}
 
       <div className="overflow-x-auto border-2 border-stone-500 bg-white shadow-sm ring-1 ring-amber-700/15">
-        <table className="w-full min-w-[980px] border-collapse text-sm">
+        <table className="er-table w-full min-w-[980px] border-collapse text-sm max-lg:!min-w-0">
           <thead>
             <tr className="bg-stone-800 text-left text-[11px] font-bold uppercase tracking-[0.12em] text-amber-200">
               <th className="w-12 border-b border-stone-600 px-2 py-2 text-center">Select</th>
@@ -128,7 +128,7 @@ export function SignatoriesEditor({
                     sig.enabled === false && 'bg-stone-100/80 opacity-70',
                   )}
                 >
-                  <td className="px-2 py-2 text-center">
+                  <td data-label="Include on Print" className="er-select px-2 py-2 text-center">
                     <input
                       id={`${idPrefix}-enabled-${index}`}
                       type="checkbox"
@@ -140,7 +140,7 @@ export function SignatoriesEditor({
                       title="Include on Print"
                     />
                   </td>
-                  <td className="px-2 py-2">
+                  <td data-label="Role Label" className="px-2 py-2">
                     <Select
                       value={sig.roleLabel || undefined}
                       onValueChange={(roleLabel) => onChange(index, { roleLabel })}
@@ -158,7 +158,7 @@ export function SignatoriesEditor({
                       </SelectContent>
                     </Select>
                   </td>
-                  <td className="px-2 py-2">
+                  <td data-label="Person Name" className="px-2 py-2">
                     <Select
                       value={sig.userId || undefined}
                       onValueChange={(userId) => onSelectUser(index, userId)}
@@ -190,7 +190,7 @@ export function SignatoriesEditor({
                       </SelectContent>
                     </Select>
                   </td>
-                  <td className="px-2 py-2 text-center">
+                  <td data-label="Designation" className="px-2 py-2 text-center">
                     <Input
                       id={`${idPrefix}-designation-${index}`}
                       value={sig.designation}
@@ -200,7 +200,7 @@ export function SignatoriesEditor({
                       placeholder="Auto from User Management"
                     />
                   </td>
-                  <td className="px-2 py-2 text-center">
+                  <td data-label="Department" className="px-2 py-2 text-center">
                     <Input
                       id={`${idPrefix}-department-${index}`}
                       value={sig.department}
@@ -210,7 +210,7 @@ export function SignatoriesEditor({
                       placeholder="Auto from User Management"
                     />
                   </td>
-                  <td className="px-2 py-2">
+                  <td data-label="Show After" className="px-2 py-2">
                     <div className="flex flex-wrap items-center justify-center gap-1">
                       {TEST_REPORT_SIGNATURE_PART_IDS.map((part) => {
                         const checked = showAfter.has(part)
@@ -242,7 +242,7 @@ export function SignatoriesEditor({
                       })}
                     </div>
                   </td>
-                  <td className="px-2 py-2 text-center">
+                  <td data-label="Required" className="px-2 py-2 text-center">
                     <input
                       id={`${idPrefix}-required-${index}`}
                       type="checkbox"
@@ -254,7 +254,7 @@ export function SignatoriesEditor({
                       title="Show on Signature Line (Required)"
                     />
                   </td>
-                  <td className="px-2 py-2 text-center">
+                  <td className="er-actions px-2 py-2 text-center">
                     <button
                       type="button"
                       className="inline-flex size-8 items-center justify-center rounded-none border border-stone-400 bg-white text-base leading-none transition-colors hover:border-red-500 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
@@ -271,12 +271,12 @@ export function SignatoriesEditor({
             })}
 
             <tr className="bg-stone-50">
-              <td colSpan={7} className="px-2 py-2 text-xs text-stone-500">
+              <td colSpan={7} className="er-empty px-2 py-2 text-xs text-stone-500">
                 {signatures.length === 0
                   ? 'No signatories yet — click + to add.'
                   : `${signatures.filter((s) => s.enabled !== false && s.required).length} required & selected for print · tick A/B/C/D under Show after`}
               </td>
-              <td className="px-2 py-2 text-center">
+              <td className="er-actions px-2 py-2 text-center">
                 <Button
                   type="button"
                   variant="outline"

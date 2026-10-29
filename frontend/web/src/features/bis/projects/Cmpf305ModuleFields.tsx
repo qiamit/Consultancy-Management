@@ -214,7 +214,7 @@ export function Cmpf305ModuleFields({
 
       {/* Entry row — always a single add/update form */}
       <div className="shrink-0 overflow-hidden rounded-none border-2 border-stone-500 bg-[#f7f3eb]">
-        <Table className="w-full min-w-[880px] border-collapse [&_td]:border [&_td]:border-stone-400 [&_th]:border [&_th]:border-stone-700">
+        <Table className="er-table w-full min-w-[880px] border-collapse [&_td]:border [&_td]:border-stone-400 [&_th]:border [&_th]:border-stone-700 max-lg:!min-w-0">
           <TableHeader>
             <TableRow className="border-stone-700 hover:bg-transparent">
               <TableHead className={cn(thClass, 'w-[28%]')}>Name of the Machinery</TableHead>
@@ -226,8 +226,8 @@ export function Cmpf305ModuleFields({
             </TableRow>
           </TableHeader>
           <TableBody>
-            <TableRow className={cn('border-stone-400', rowOddClass)}>
-              <TableCell className="px-1 py-1">
+            <TableRow className={cn('er-draft border-stone-400', rowOddClass)}>
+              <TableCell data-label="Name of the Machinery" className="px-1 py-1">
                 <Input
                   ref={nameInputRef}
                   className={cellInputClass}
@@ -238,17 +238,17 @@ export function Cmpf305ModuleFields({
                   onKeyDown={onDraftKeyDown}
                 />
               </TableCell>
-              <TableCell className="px-1 py-1">{stickySuggest('make', 'Make / ID No.')}</TableCell>
-              <TableCell className="px-1 py-1">
+              <TableCell data-label="Make" className="px-1 py-1">{stickySuggest('make', 'Make / ID No.')}</TableCell>
+              <TableCell data-label="Production Capacity" className="px-1 py-1">
                 {stickySuggest('capacityPerDay', 'If Applicable')}
               </TableCell>
-              <TableCell className="px-1 py-1">
+              <TableCell data-label="Number" className="px-1 py-1">
                 {stickySuggest('number', 'Qty', 'tabular-nums')}
               </TableCell>
-              <TableCell className="px-1 py-1">
+              <TableCell data-label="Remarks" className="px-1 py-1">
                 {stickySuggest('remarks', 'Remarks')}
               </TableCell>
-              <TableCell className="px-1 text-center">
+              <TableCell className="er-actions px-1 text-center">
                 <Button
                   type="button"
                   size="sm"
@@ -275,7 +275,7 @@ export function Cmpf305ModuleFields({
               No machinery added yet — fill the row above and press +.
             </p>
           ) : (
-            <Table className="w-full min-w-[880px] border-collapse [&_td]:border [&_td]:border-stone-400 [&_th]:border [&_th]:border-stone-700">
+            <Table className="er-table w-full min-w-[880px] border-collapse [&_td]:border [&_td]:border-stone-400 [&_th]:border [&_th]:border-stone-700 max-lg:!min-w-0">
               <TableHeader className="sticky top-0 z-10">
                 <TableRow className="border-stone-700 hover:bg-transparent">
                   <TableHead className={cn(thClass, 'w-[5%]')}>Sr</TableHead>
@@ -302,25 +302,25 @@ export function Cmpf305ModuleFields({
                           : rowOddClass,
                     )}
                   >
-                    <TableCell className="px-1 text-center text-xs font-semibold text-stone-700">
+                    <TableCell data-label="Sr. No." className="px-1 text-center text-xs font-semibold text-stone-700">
                       {index + 1}
                     </TableCell>
-                    <TableCell className="px-2 py-1.5 text-left text-sm text-stone-800">
+                    <TableCell data-label="Name of the Machinery" className="px-2 py-1.5 text-left text-sm text-stone-800">
                       {row.machineryName || '—'}
                     </TableCell>
-                    <TableCell className="px-2 py-1.5 text-center text-sm text-stone-700">
+                    <TableCell data-label="Make" className="px-2 py-1.5 text-center text-sm text-stone-700">
                       {row.make || '—'}
                     </TableCell>
-                    <TableCell className="px-2 py-1.5 text-center text-sm text-stone-700">
+                    <TableCell data-label="Production Capacity" className="px-2 py-1.5 text-center text-sm text-stone-700">
                       {row.capacityPerDay || '—'}
                     </TableCell>
-                    <TableCell className="px-2 py-1.5 text-center text-sm tabular-nums text-stone-700">
+                    <TableCell data-label="Number" className="px-2 py-1.5 text-center text-sm tabular-nums text-stone-700">
                       {row.number || '—'}
                     </TableCell>
-                    <TableCell className="px-2 py-1.5 text-center text-sm text-stone-700">
+                    <TableCell data-label="Remarks" className="px-2 py-1.5 text-center text-sm text-stone-700">
                       {row.remarks || '—'}
                     </TableCell>
-                    <TableCell className="px-1 text-center">
+                    <TableCell className="er-actions px-1 text-center">
                       <div className="inline-flex items-center justify-center gap-0.5">
                         <Button
                           type="button"
