@@ -1270,7 +1270,7 @@ export function TestReportPrintSettingDialog({
           ) : null}
         </div>
 
-        <div className="relative shrink-0 border-t border-stone-700 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-3">
+        <div className="relative shrink-0 border-t border-stone-700 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={limsDarkBarGlowStyle} />
           <DialogFooter className="relative gap-2 sm:justify-between">
             <PrintSettingsDefaultActions
@@ -1927,7 +1927,7 @@ export function TestReportPageSettingDialog({
           ) : null}
         </div>
 
-        <div className="relative shrink-0 border-t border-stone-700 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-3">
+        <div className="relative shrink-0 border-t border-stone-700 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={limsDarkBarGlowStyle} />
           <DialogFooter className="relative gap-2 sm:justify-between">
             <PrintSettingsDefaultActions

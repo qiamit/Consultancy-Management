@@ -479,7 +479,7 @@ export function ApplyMuOnOtherParameterDialog({
           </div>
         </div>
 
-        <DialogFooter className="shrink-0 gap-2 border-t border-stone-300 bg-stone-50 px-4 py-3 sm:justify-between sm:px-5">
+        <DialogFooter className="shrink-0 gap-2 border-t border-stone-300 bg-stone-50 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:justify-between sm:px-5">
           <p className="text-xs text-stone-500 self-center">
             {selectedPeers.length > 0 ? `${selectedPeers.length} selected` : 'Select rows for bulk apply'}
           </p>

@@ -441,7 +441,7 @@ export function BisRenewalsForm({
           {form.projectId && certificateFile?.url ? <a className="truncate text-xs text-stone-700 underline" href={certificateFile.url} target="_blank" rel="noreferrer">{certificateFile.name}</a> : null}
         </section>
 
-        <div className="flex shrink-0 items-center justify-end gap-2 border-t-2 border-stone-500 bg-stone-100 px-4 py-3 sm:px-6">
+        <div className="flex shrink-0 items-center justify-end gap-2 border-t-2 border-stone-500 bg-stone-100 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
           <Button
             type="button"
             variant="outline"

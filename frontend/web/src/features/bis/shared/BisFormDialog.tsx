@@ -4,9 +4,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import {
   limsDarkBarGlowStyle,
   limsDialogClass,
+  limsOutlineBtnClass,
   limsPrimaryBtnClass,
   limsRegistryFormClass,
   limsFullscreenDialogClass,
+  limsSafeAreaFooterPadClass,
 } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 
@@ -74,17 +76,22 @@ export function BisFormDialog({
               {errorMessage}
             </p>
           ) : null}
-          <div className={limsRegistryFormClass}>
+          <div className={cn(limsRegistryFormClass, 'mx-auto w-full max-w-[1440px]')}>
             <div className="grid grid-cols-12 gap-4">{children}</div>
           </div>
         </div>
 
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t-2 border-stone-500 bg-stone-100 px-4 py-3 sm:px-6">
+        <div
+          className={cn(
+            'flex shrink-0 flex-wrap items-center justify-end gap-2 border-t-2 border-stone-500 bg-stone-100 px-4 py-3 sm:px-6',
+            limsSafeAreaFooterPadClass,
+          )}
+        >
           {footerExtra ? <div className="mr-auto flex flex-wrap items-center gap-2">{footerExtra}</div> : null}
           <Button
             type="button"
             variant="outline"
-            className="h-8 rounded-none border-stone-500"
+            className={limsOutlineBtnClass}
             onClick={() => onOpenChange(false)}
             disabled={saving}
           >

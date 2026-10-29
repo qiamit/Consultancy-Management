@@ -106,7 +106,7 @@ export function ConductIntermediateCheckDialog({
           </div>
         </div>
 
-        <DialogFooter className="shrink-0 gap-2 border-t border-stone-300 bg-white px-4 py-3 sm:px-5">
+        <DialogFooter className="shrink-0 gap-2 border-t border-stone-300 bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5">
           <Button
             type="button"
             className={limsPrimaryBtnClass}

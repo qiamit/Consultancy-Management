@@ -948,7 +948,7 @@ export default function ModuleAccessMasterPage() {
             )}
           </div>
 
-          <DialogFooter className="shrink-0 gap-2 border-t border-stone-200 bg-stone-50 px-4 py-3 sm:justify-end">
+          <DialogFooter className="shrink-0 gap-2 border-t border-stone-200 bg-stone-50 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:justify-end">
             <Button
               type="button"
               className={cn('gap-2', limsPrimaryBtnClass)}

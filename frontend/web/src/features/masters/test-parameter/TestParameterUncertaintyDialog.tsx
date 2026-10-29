@@ -1147,7 +1147,7 @@ export function TestParameterUncertaintyDialog({
           </div>
         ) : null}
 
-        <DialogFooter className="shrink-0 gap-2 border-t border-stone-300 bg-stone-50 px-4 py-3 sm:justify-end sm:px-6">
+        <DialogFooter className="shrink-0 gap-2 border-t border-stone-300 bg-stone-50 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:justify-end sm:px-6">
           <Button
             type="button"
             className={limsPrimaryBtnClass}

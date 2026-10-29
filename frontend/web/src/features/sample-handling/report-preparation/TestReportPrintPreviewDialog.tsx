@@ -159,7 +159,7 @@ export function TestReportPrintPreviewDialog({
           />
         </div>
 
-        <div className="relative shrink-0 border-t border-stone-700 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-3">
+        <div className="relative shrink-0 border-t border-stone-700 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={limsDarkBarGlowStyle} />
           <div className="relative flex flex-wrap items-center justify-end gap-2">
             {actionError ? (

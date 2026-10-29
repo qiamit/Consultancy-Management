@@ -447,7 +447,7 @@ export function UncertaintyHistoryDialog({
             </div>
           </div>
 
-          <DialogFooter className="shrink-0 gap-2 border-t border-stone-200 bg-stone-50 px-4 py-3 sm:justify-end sm:px-5">
+          <DialogFooter className="shrink-0 gap-2 border-t border-stone-200 bg-stone-50 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:justify-end sm:px-5">
             <Button type="button" className={limsPrimaryBtnClass} onClick={() => onOpenChange(false)}>
               Close
             </Button>
@@ -491,7 +491,7 @@ export function UncertaintyHistoryDialog({
           <div className="min-h-0 flex-1 overflow-y-auto bg-gradient-to-b from-stone-100/80 to-white px-4 py-4 sm:px-5">
             <CalculationSnapshot data={viewing?.calculationData ?? null} />
           </div>
-          <DialogFooter className="shrink-0 border-t border-stone-200 bg-stone-50 px-4 py-3 sm:justify-end">
+          <DialogFooter className="shrink-0 border-t border-stone-200 bg-stone-50 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:justify-end">
             <Button type="button" className={limsPrimaryBtnClass} onClick={() => setViewing(null)}>
               Close
             </Button>

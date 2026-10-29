@@ -462,7 +462,7 @@ export function MaintenanceHistoryDialog({
           </div>
 
           <div className={cn(limsPanelClass, 'shrink-0')}>
-            <div className="relative overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-3 py-1.5 text-white sm:px-5 sm:py-2">
+            <div className="relative overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-3 py-1.5 pb-[max(0.375rem,env(safe-area-inset-bottom))] text-white sm:px-5 sm:py-2 sm:pb-[max(0.5rem,env(safe-area-inset-bottom))]">
               <div
                 className="pointer-events-none absolute inset-0 opacity-[0.18]"
                 style={limsDarkBarGlowStyle}
@@ -708,7 +708,7 @@ export function MaintenanceHistoryDialog({
           </div>
 
           <div className={cn(limsPanelClass, 'shrink-0')}>
-            <div className="relative overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-3 py-2 text-white sm:px-5">
+            <div className="relative overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] text-white sm:px-5">
               <div
                 className="pointer-events-none absolute inset-0 opacity-[0.18]"
                 style={limsDarkBarGlowStyle}

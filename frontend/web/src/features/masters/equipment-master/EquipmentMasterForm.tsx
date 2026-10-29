@@ -419,7 +419,7 @@ export function EquipmentMasterForm({
             'text-[11px] font-semibold uppercase tracking-wide text-stone-600',
           )}
         </div>
-        <DialogFooter className="shrink-0 gap-2 border-t border-stone-300 bg-white px-4 py-3 sm:px-6">
+        <DialogFooter className="shrink-0 gap-2 border-t border-stone-300 bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
           <Button
             type="button"
             className={limsPrimaryBtnClass}
@@ -713,7 +713,7 @@ export function EquipmentMasterForm({
         >
           {renderCalibrationFormFields('dialog')}
         </div>
-        <DialogFooter className="shrink-0 gap-2 border-t border-stone-300 bg-white px-4 py-3 sm:px-6">
+        <DialogFooter className="shrink-0 gap-2 border-t border-stone-300 bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
           <Button
             type="button"
             className={limsPrimaryBtnClass}
@@ -1302,7 +1302,7 @@ export function EquipmentMasterForm({
         >
           {renderIntermediateCheckFormBody('dialog')}
         </div>
-        <DialogFooter className="shrink-0 gap-2 border-t border-stone-300 bg-white px-4 py-3 sm:px-6">
+        <DialogFooter className="shrink-0 gap-2 border-t border-stone-300 bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
           <Button
             type="button"
             className={limsPrimaryBtnClass}
