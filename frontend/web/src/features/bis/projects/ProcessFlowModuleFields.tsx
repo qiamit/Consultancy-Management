@@ -816,8 +816,8 @@ export function ProcessFlowModuleFields({
     setPoints(next.length > 0 ? next : [''])
   }
 
-  /** AI steps become the main sequence (Replace), or follow its last step (Append); blank boxes are dropped. */
-  const applyAiSteps = (labels: string[], mode: 'replace' | 'append') => {
+  /** AI flow (with its branches) becomes the chart (Replace), or follows the main sequence (Append); blank boxes are dropped. */
+  const applyAiSteps = (aiNodes: ProcessFlowNode[], mode: 'replace' | 'append') => {
     const current = valueRef.current.nodes
     const kept =
       mode === 'append'
@@ -825,7 +825,7 @@ export function ProcessFlowModuleFields({
         : []
     const roots = processFlowChildren(kept, null)
     const start = roots.length ? Math.max(...roots.map((n) => n.sortOrder)) + 1 : 0
-    const added = labels.map((label, i) => emptyProcessFlowNode({ label, sortOrder: start + i }))
+    const added = aiNodes.map((n) => (n.parentId == null ? { ...n, sortOrder: start + n.sortOrder } : n))
     setNodes(reindexProcessFlowSiblings([...kept, ...added], null))
     if (added[0]) {
       setSelectedIds([added[0].id])

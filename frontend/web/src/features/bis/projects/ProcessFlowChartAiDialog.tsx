@@ -24,6 +24,7 @@ import {
   generateProcessFlowSteps,
   isAiModelMissingError,
   loadProcessFlowAiSources,
+  loadProcessFlowWebReference,
   readProcessFlowReferencePdf,
   type ProcessFlowAiSourceDoc,
   type ProcessFlowAiSources,
@@ -32,8 +33,13 @@ import { flattenProcessFlowTree, processFlowNodeHasContent, type ProcessFlowNode
 
 const STEP_COUNTS = [8, 10, 12, 14, 16, 18, 20, 24] as const
 
-type SourceKey = 'standard' | 'manual' | 'scope'
-const SOURCE_LABELS: Record<SourceKey, string> = { standard: 'IS Standard', manual: 'Product Manual', scope: 'Licence Scope' }
+type SourceKey = 'standard' | 'manual' | 'scope' | 'web'
+const SOURCE_LABELS: Record<SourceKey, string> = {
+  standard: 'IS Standard',
+  manual: 'Product Manual',
+  scope: 'Licence Scope',
+  web: 'Web Reference',
+}
 const TURNED_OFF = { fileName: '', text: '', problem: 'Turned Off' }
 
 /**
@@ -63,19 +69,22 @@ export function ProcessFlowChartAiDialog({
   licenseScope: string
   isCodeId?: string | null
   nodes: ProcessFlowNode[]
-  onApplySteps: (steps: string[], mode: 'replace' | 'append') => void
+  onApplySteps: (nodes: ProcessFlowNode[], mode: 'replace' | 'append') => void
 }) {
   const [stepCount, setStepCount] = useState<number | null>(null)
   const [append, setAppend] = useState(false)
   const [instructions, setInstructions] = useState('')
   const [busy, setBusy] = useState(false)
   const [phase, setPhase] = useState('')
-  const [steps, setSteps] = useState<string[] | null>(null)
+  /** AI flow as chart boxes (branches included), editable before it goes into the chart. */
+  const [steps, setSteps] = useState<ProcessFlowNode[] | null>(null)
   const [notes, setNotes] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [sources, setSources] = useState<ProcessFlowAiSources | null>(null)
   /** Select Source: which inputs the AI reads (all on by default). */
-  const [use, setUse] = useState<Record<SourceKey, boolean>>({ standard: true, manual: true, scope: true })
+  const [use, setUse] = useState<Record<SourceKey, boolean>>({ standard: true, manual: true, scope: true, web: true })
+  const [web, setWeb] = useState<ProcessFlowAiSourceDoc | null>(null)
+  const webCacheRef = useRef<{ key: string; doc: ProcessFlowAiSourceDoc } | null>(null)
   /** Extra PDFs added under Select Source → Add Files (read once when added). */
   const [references, setReferences] = useState<Array<{ id: string; doc: ProcessFlowAiSourceDoc; on: boolean }>>([])
   const [readingFiles, setReadingFiles] = useState(false)
@@ -141,6 +150,17 @@ export function ProcessFlowChartAiDialog({
           description: 'Steps Are Based on the IS Title and Licence Scope Only — Please Check Them.',
         })
       }
+      let webDoc: ProcessFlowAiSourceDoc | null = null
+      if (use.web) {
+        const key = (isTitle || productName).trim()
+        webDoc = webCacheRef.current?.key === key ? webCacheRef.current.doc : null
+        if (!webDoc) {
+          setPhase('Reading Web Reference…')
+          webDoc = await loadProcessFlowWebReference(key)
+          if (webDoc.text) webCacheRef.current = { key, doc: webDoc }
+        }
+        setWeb(webDoc)
+      }
       setPhase('Generating Process Steps…')
       const result = await generateProcessFlowSteps({
         applicantName,
@@ -151,11 +171,12 @@ export function ProcessFlowChartAiDialog({
         isCodeId,
         sources: picked,
         references: references.filter((r) => r.on).map((r) => r.doc),
+        web: webDoc,
         stepCount,
         existingSteps: append ? existingSteps : [],
         instructions,
       })
-      setSteps(result.steps)
+      setSteps(result.nodes)
       setNotes(result.notes)
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'AI Generation Failed'
@@ -175,7 +196,30 @@ export function ProcessFlowChartAiDialog({
     }
   }
 
-  const cleanSteps = (steps ?? []).map((s) => s.replace(/\s+/g, ' ').trim()).filter(Boolean)
+  // Boxes left blank are dropped with everything under them.
+  const blank = new Set((steps ?? []).filter((n) => !n.label.trim()).map((n) => n.id))
+  for (let grew = true; grew; ) {
+    grew = false
+    for (const n of steps ?? []) if (n.parentId && blank.has(n.parentId) && !blank.has(n.id)) (blank.add(n.id), (grew = true))
+  }
+  const cleanSteps = (steps ?? [])
+    .filter((n) => !blank.has(n.id))
+    .map((n) => ({ ...n, label: n.label.replace(/\s+/g, ' ').trim(), linkFromId: n.linkFromId && blank.has(n.linkFromId) ? null : n.linkFromId }))
+
+  /** Removes a box and everything under it; boxes fed from it are fed from its own source instead. */
+  const removeStep = (id: string) =>
+    setSteps((prev) => {
+      if (!prev) return prev
+      const gone = new Set([id])
+      for (let grew = true; grew; ) {
+        grew = false
+        for (const n of prev) if (n.parentId && gone.has(n.parentId) && !gone.has(n.id)) (gone.add(n.id), (grew = true))
+      }
+      const removed = prev.find((n) => n.id === id)
+      return prev
+        .filter((n) => !gone.has(n.id))
+        .map((n) => (n.linkFromId && gone.has(n.linkFromId) ? { ...n, linkFromId: removed?.linkFromId ?? null } : n))
+    })
   const mode: 'replace' | 'append' = append && hasChart ? 'append' : 'replace'
 
   const apply = () => {
@@ -265,14 +309,14 @@ export function ProcessFlowChartAiDialog({
                   Select Source
                   <span className="text-xs text-stone-500">
                     ({(Object.keys(use) as SourceKey[]).filter((k) => use[k]).length + references.filter((r) => r.on).length}/
-                    {3 + references.length})
+                    {Object.keys(SOURCE_LABELS).length + references.length})
                   </span>
                   <ChevronDown className="h-4 w-4 opacity-60" aria-hidden />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="z-[110] w-80 rounded-none p-1">
                 {(Object.keys(SOURCE_LABELS) as SourceKey[]).map((key) => {
-                  const doc = key === 'standard' ? sources?.standard : key === 'manual' ? sources?.manual : null
+                  const doc = key === 'standard' ? sources?.standard : key === 'manual' ? sources?.manual : key === 'web' ? web : null
                   const detail =
                     key === 'scope'
                       ? scopeGiven
@@ -282,7 +326,9 @@ export function ProcessFlowChartAiDialog({
                         ? doc.text
                           ? doc.fileName
                           : doc.problem
-                        : 'Read When You Click Generate'
+                        : key === 'web'
+                          ? 'Wikipedia Articles on This Product, Read When You Click Generate'
+                          : 'Read When You Click Generate'
                   return (
                     <DropdownMenuCheckboxItem
                       key={key}
@@ -392,15 +438,22 @@ export function ProcessFlowChartAiDialog({
                 </p>
               ) : null}
               <ol className="space-y-1">
-                {steps.map((step, i) => (
-                  <li key={i} className="flex items-center gap-1.5">
-                    <span className="w-6 shrink-0 text-right text-xs font-semibold text-stone-500">{i + 1}.</span>
+                {flattenProcessFlowTree(steps).map(({ node, depth }, i) => (
+                  <li key={node.id} className="flex items-center gap-1.5" style={{ paddingLeft: depth * 18 }}>
+                    <span
+                      className={cn('w-6 shrink-0 text-right text-xs font-semibold', node.horizontalWithPrev ? 'text-sky-700' : 'text-stone-500')}
+                      title={node.horizontalWithPrev ? 'Branch (Beside the Box Above)' : undefined}
+                    >
+                      {node.horizontalWithPrev ? '⇄' : `${i + 1}.`}
+                    </span>
                     <input
-                      className={cn(limsFieldClass, 'h-8 min-w-0 flex-1 text-sm')}
-                      value={step}
+                      className={cn(limsFieldClass, 'h-8 min-w-0 flex-1 text-sm', node.horizontalWithPrev && 'border-l-[3px] border-l-sky-600')}
+                      value={node.label}
                       disabled={disabled}
                       aria-label={`Step ${i + 1}`}
-                      onChange={(e) => setSteps((prev) => (prev ? prev.map((s, j) => (j === i ? e.target.value : s)) : prev))}
+                      onChange={(e) =>
+                        setSteps((prev) => (prev ? prev.map((n) => (n.id === node.id ? { ...n, label: e.target.value } : n)) : prev))
+                      }
                     />
                     <button
                       type="button"
@@ -408,7 +461,7 @@ export function ProcessFlowChartAiDialog({
                       title="Remove Step"
                       aria-label={`Remove Step ${i + 1}`}
                       disabled={disabled}
-                      onClick={() => setSteps((prev) => (prev ? prev.filter((_, j) => j !== i) : prev))}
+                      onClick={() => removeStep(node.id)}
                     >
                       <X size={14} aria-hidden />
                     </button>
