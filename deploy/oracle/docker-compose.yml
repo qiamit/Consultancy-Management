@@ -80,6 +80,8 @@ services:
       GOTRUE_SMTP_USER: ${GOTRUE_SMTP_USER:-}
       GOTRUE_SMTP_PASS: ${GOTRUE_SMTP_PASS:-}
       GOTRUE_SMTP_SENDER_NAME: ${GOTRUE_SMTP_SENDER_NAME:-}
+      # Per-client-IP rate limits (Caddy sets X-Forwarded-For; supported by GoTrue v2.174.0).
+      GOTRUE_RATE_LIMIT_HEADER: ${GOTRUE_RATE_LIMIT_HEADER:-X-Forwarded-For}
 
   rest:
     <<: *service
