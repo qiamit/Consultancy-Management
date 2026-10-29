@@ -1,6 +1,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useState } from 'react'
 import { Pencil, Trash2, Star } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -67,6 +68,7 @@ export const AiModelsPanel = forwardRef<AiModelsPanelHandle, AiModelsPanelProps>
   { searchQuery },
   ref,
 ) {
+  const [confirm, confirmDialog] = useConfirmDialog()
   const [rows, setRows] = useState<AiModelRow[]>([])
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState<string | null>(null)
@@ -166,8 +168,8 @@ export const AiModelsPanel = forwardRef<AiModelsPanelHandle, AiModelsPanelProps>
     })()
   }
 
-  const handleDelete = (row: AiModelRow) => {
-    if (!window.confirm(`Delete model "${row.display_name}"?`)) return
+  const handleDelete = async (row: AiModelRow) => {
+    if (!(await confirm(`Delete Model "${row.display_name}"?`, { title: 'Delete Model', confirmLabel: 'Delete', destructive: true }))) return
     void (async () => {
       try {
         await deleteAiModel(row.id)
@@ -188,10 +190,10 @@ export const AiModelsPanel = forwardRef<AiModelsPanelHandle, AiModelsPanelProps>
     })
   }
 
-  const handleBulkDelete = () => {
+  const handleBulkDelete = async () => {
     const ids = Array.from(selectedIds)
     if (ids.length === 0) return
-    if (!window.confirm(`Delete ${ids.length} selected model${ids.length === 1 ? '' : 's'}?`)) return
+    if (!(await confirm(`Delete ${ids.length} Selected Model${ids.length === 1 ? '' : 's'}?`, { title: 'Delete Models', confirmLabel: 'Delete', destructive: true }))) return
     void (async () => {
       try {
         for (const id of ids) {
@@ -582,6 +584,7 @@ export const AiModelsPanel = forwardRef<AiModelsPanelHandle, AiModelsPanelProps>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {confirmDialog}
     </div>
   )
 })

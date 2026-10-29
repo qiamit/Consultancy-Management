@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { getCurrencySymbol } from '@/lib/appCurrency'
 import { limsDarkBarGlowStyle, limsPageShellClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
@@ -197,6 +198,7 @@ const CSV_HEADERS = [
 
 export default function ProductsServicesMasterPage() {
   const { editId, setEdit } = useMasterUiSearchState()
+  const [confirm, confirmDialog] = useConfirmDialog()
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const [saveLoading, setSaveLoading] = useState(false)
   const canEdit = useCanEditCurrentModule()
@@ -519,7 +521,7 @@ export default function ProductsServicesMasterPage() {
       setSaveMessage('Select at least one item to archive.')
       return
     }
-    if (!window.confirm(`Archive ${ids.length} selected item(s)?`)) return
+    if (!(await confirm(`Archive ${ids.length} Selected Item(s)?`, { title: 'Archive Items', confirmLabel: 'Archive', destructive: false }))) return
     setSaveLoading(true)
     setSaveMessage(null)
     try {
@@ -580,9 +582,10 @@ export default function ProductsServicesMasterPage() {
     const ids = [...selectedIds]
     if (ids.length === 0) return
     if (
-      !window.confirm(
-        `Permanently delete ${ids.length} record(s)? Records still used elsewhere will be skipped. This cannot be undone.`,
-      )
+      !(await confirm(
+        `Permanently Delete ${ids.length} Record(s)? Records Still Used Elsewhere Will Be Skipped. This Cannot Be Undone.`,
+        { title: 'Delete Items', confirmLabel: 'Delete', destructive: true },
+      ))
     )
       return
     setSaveLoading(true)
@@ -711,6 +714,7 @@ export default function ProductsServicesMasterPage() {
         'flex h-full min-h-0 flex-col overflow-hidden !space-y-0 gap-2 sm:gap-3 md:gap-3',
       )}
     >
+      {confirmDialog}
       <div className="shrink-0">
         <ProductsServicesHeaderBar
           search={search}

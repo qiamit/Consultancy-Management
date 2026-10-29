@@ -843,10 +843,10 @@ export default function IsCodesMasterPage() {
     })()
   }
 
-  const handleFormDeleteSavedFile = (file: IsCodeViewFile) => {
+  const handleFormDeleteSavedFile = async (file: IsCodeViewFile) => {
     const isCodeId = editingId
     if (!file.storage_path) return
-    const ok = window.confirm(`Delete file ${file.file_name}?`)
+    const ok = await confirmAction(`Delete File ${file.file_name}?`, { title: 'Delete File', confirmLabel: 'Delete', destructive: true })
     if (!ok) return
     void (async () => {
       setSaveLoading(true)
@@ -876,10 +876,13 @@ export default function IsCodesMasterPage() {
 
       if (!hasPending && !isCodeId) return
 
-      const ok = window.confirm(
+      const ok = await confirmAction(
         isCodeId
-          ? 'Delete all files for this IS Code? Pending uploads will also be cleared.'
-          : 'Clear selected files for upload?',
+          ? 'Delete All Files for This IS Code? Pending Uploads Will Also Be Cleared.'
+          : 'Clear Selected Files for Upload?',
+        isCodeId
+          ? { title: 'Delete Files', confirmLabel: 'Delete', destructive: true }
+          : { title: 'Clear Files', confirmLabel: 'Clear', destructive: true },
       )
       if (!ok) return
 
@@ -1404,7 +1407,7 @@ export default function IsCodesMasterPage() {
         setSaveMessage('Select at least one IS code to archive.')
         return
       }
-      const ok = window.confirm(`Archive ${selectedRows.length} selected IS code(s)?`)
+      const ok = await confirmAction(`Archive ${selectedRows.length} Selected IS Code(s)?`, { title: 'Archive IS Codes', confirmLabel: 'Archive', destructive: false })
       if (!ok) return
       setSaveMessage(null)
       setSaveLoading(true)
@@ -1469,8 +1472,9 @@ export default function IsCodesMasterPage() {
   const handleDeleteSelected = () => {
     void (async () => {
       if (selectedRows.length === 0) return
-      const ok = window.confirm(
-        `Permanently delete ${selectedRows.length} record(s)? Records still used elsewhere will be skipped. This cannot be undone.`,
+      const ok = await confirmAction(
+        `Permanently Delete ${selectedRows.length} Record(s)? Records Still Used Elsewhere Will Be Skipped. This Cannot Be Undone.`,
+        { title: 'Delete IS Codes', confirmLabel: 'Delete', destructive: true },
       )
       if (!ok) return
       setSaveMessage(null)

@@ -28,6 +28,7 @@ import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 import { useFormDialogOpenChange } from '@/lib/formDialogOpenChange'
 import { useMasterUiSearchState } from '@/lib/useMasterUiSearchState'
 import { Button } from '@/components/ui/button'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { AuditHistoryDialog } from '@/components/lims/AuditHistoryDialog'
@@ -366,6 +367,7 @@ function rowToClientForm(row: ClientRow): ClientFormType {
 
 export default function ClientsMasterPage() {
   const { editId, setEdit } = useMasterUiSearchState()
+  const [confirm, confirmDialog] = useConfirmDialog()
   const [saveLoading, setSaveLoading] = useState(false)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const canEdit = useCanEditCurrentModule()
@@ -1455,7 +1457,7 @@ export default function ClientsMasterPage() {
         setSaveMessage('Select at least one client to archive.')
         return
       }
-      const ok = window.confirm(`Archive ${selectedRows.length} selected client(s)?`)
+      const ok = await confirm(`Archive ${selectedRows.length} Selected Client(s)?`, { title: 'Archive Clients', confirmLabel: 'Archive', destructive: false })
       if (!ok) return
       setSaveMessage(null)
       setSaveLoading(true)
@@ -1525,8 +1527,9 @@ export default function ClientsMasterPage() {
         setSaveMessage('Select at least one client to delete.')
         return
       }
-      const ok = window.confirm(
-        `Permanently delete ${selectedRows.length} record(s)? Records still used elsewhere will be skipped. This cannot be undone.`,
+      const ok = await confirm(
+        `Permanently Delete ${selectedRows.length} Record(s)? Records Still Used Elsewhere Will Be Skipped. This Cannot Be Undone.`,
+        { title: 'Delete Clients', confirmLabel: 'Delete', destructive: true },
       )
       if (!ok) return
       setSaveMessage(null)
@@ -1781,6 +1784,7 @@ export default function ClientsMasterPage() {
         'flex h-full min-h-0 flex-col overflow-hidden !space-y-0 gap-2 sm:gap-3 md:gap-3',
       )}
     >
+      {confirmDialog}
       <div className="shrink-0">
         <ClientsHeaderBar
           search={search}
@@ -1802,8 +1806,12 @@ export default function ClientsMasterPage() {
           persistOnFocusLoss
           aria-describedby={undefined}
           onEscapeKeyDown={(event) => {
-            // Esc used to close the form and lose everything typed; ask first.
-            if (form.companyName.trim() && !window.confirm('Close this client form? Changes not saved will be lost.')) event.preventDefault()
+            // Esc used to close the form and lose everything typed; ask first (in-app, then close on Yes).
+            if (!form.companyName.trim()) return
+            event.preventDefault()
+            void confirm('Close This Client Form? Changes Not Saved Will Be Lost.', { title: 'Close Form', confirmLabel: 'Close', destructive: false }).then((ok) => {
+              if (ok) handleFormOpenChange(false)
+            })
           }}
           className={cn(
             '!flex z-50 h-[100dvh] max-h-[100dvh] translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 bg-white p-0 shadow-none sm:rounded-none',

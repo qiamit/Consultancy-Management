@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { limsDarkBarGlowStyle, limsDialogClass, limsPageShellClass, limsDialogWidthCapClass } from '@/lib/limsThemeUi'
 import { useAuth } from '@/hooks/useAuth'
 import { canDeleteSampleHandlingRecords } from '@/lib/isLaboratoryDirector'
@@ -98,6 +99,7 @@ function escapeHtml(s: string) {
 
 export default function TestReportPreparationMasterPage() {
   const { user, profileName, departmentName, role } = useAuth()
+  const [confirm, confirmDialog] = useConfirmDialog()
   const showDelete = canDeleteSampleHandlingRecords(role)
   const [rows, setRows] = useState<ListRow[]>([])
   const [loading, setLoading] = useState(false)
@@ -521,9 +523,9 @@ export default function TestReportPreparationMasterPage() {
     }
   }
 
-  const handleDeleteSelected = () => {
+  const handleDeleteSelected = async () => {
     const ids = selectedRows.map((r) => r.id)
-    if (!confirmDestructiveDelete(ids.length, 'SRF')) return
+    if (!(await confirmDestructiveDelete(ids.length, 'SRF', confirm))) return
     void (async () => {
       setLoading(true)
       setSaveMessage(null)
@@ -608,9 +610,10 @@ export default function TestReportPreparationMasterPage() {
     if (scopes.length === 0) return
     const scopeLabel = scopes.map((s) => (s === 'nabl' ? 'NABL (A)' : 'Non-NABL (B)')).join(' & ')
     if (
-      !window.confirm(
-        `Issue ${scopeLabel} test report(s) for this SRF and move to Issued Test Report?`,
-      )
+      !(await confirm(
+        `Issue ${scopeLabel} Test Report(s) for This SRF and Move to Issued Test Report?`,
+        { title: 'Issue Test Report', confirmLabel: 'Issue', destructive: false },
+      ))
     ) {
       return
     }
@@ -739,6 +742,7 @@ export default function TestReportPreparationMasterPage() {
 
   return (
     <div className={limsPageShellClass}>
+      {confirmDialog}
       <TestReportPreparationHeaderBar
         search={search}
         onSearchChange={setSearch}

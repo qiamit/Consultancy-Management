@@ -24,6 +24,7 @@ import {
 import QRCode from 'qrcode'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { useVoiceInput } from '../shared/useVoiceInput'
@@ -317,6 +318,7 @@ export function OslSampleRequirementsModuleFields({
   const rows = value.rows
   /** Without a QR code on any sample the QR code, sample code and conformity columns are not needed. */
   const showQrCols = !qrOnlyFields || rows.some((r) => r.qrCode.trim() !== '')
+  const [confirm, confirmDialog] = useConfirmDialog({ layer: 'top' })
   const [editIndex, setEditIndex] = useState<number | null>(null)
   const [draft, setDraft] = useState<OslSampleRequirementRow | null>(null)
   const [declaredValueUploadBusy, setDeclaredValueUploadBusy] = useState(false)
@@ -1752,7 +1754,7 @@ export function OslSampleRequirementsModuleFields({
         }}
         onDoubleClick={() => {
           window.clearTimeout(fileClickTimers.current[key])
-          if (window.confirm(`Delete the ${label}?`)) onDelete()
+          void confirm(`Delete the ${label}?`, { title: `Delete ${label}`, confirmLabel: 'Delete', destructive: true }).then((ok) => { if (ok) onDelete() })
         }}
       >
         <FileCheck2 size={14} aria-hidden />
@@ -1858,6 +1860,7 @@ export function OslSampleRequirementsModuleFields({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden rounded-none border border-stone-400 bg-[#fffcf7] p-2 sm:p-3">
+      {confirmDialog}
       <input
         ref={courierSlipInputRef}
         type="file"
@@ -3313,7 +3316,7 @@ export function OslSampleRequirementsModuleFields({
                           }}
                           onDoubleClick={() => {
                             if (declaredValueClickTimer.current) window.clearTimeout(declaredValueClickTimer.current)
-                            if (window.confirm('Delete the Declared Value PDF?')) deleteDeclaredValueFile(draft)
+                            void confirm('Delete the Declared Value PDF?', { title: 'Delete Declared Value PDF', confirmLabel: 'Delete', destructive: true }).then((ok) => { if (ok) deleteDeclaredValueFile(draft) })
                           }}
                         >
                           <FileCheck2 size={14} aria-hidden />

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { useSearchParams } from 'react-router-dom'
 import { limsPageShellClass } from '@/lib/limsThemeUi'
 import { useFormDialogOpenChange } from '@/lib/formDialogOpenChange'
@@ -81,6 +82,7 @@ function removeRenewalDraft(editId: string | null): void {
 
 export default function BisRenewalsMasterPage({ dialogOnly = false }: { dialogOnly?: boolean }) {
   const [searchParams, setSearchParams] = useSearchParams()
+  const [confirm, confirmDialog] = useConfirmDialog()
   const requestedProjectId = (searchParams.get('projectId') ?? '').trim()
   const { editId, setEdit } = useMasterUiSearchState({
     editKey: dialogOnly ? 'renewalEdit' : 'edit',
@@ -365,7 +367,7 @@ export default function BisRenewalsMasterPage({ dialogOnly = false }: { dialogOn
   const handleDeleteSelected = async () => {
     const ids = [...selectedIds]
     if (ids.length === 0) return
-    if (!window.confirm(`Delete ${ids.length} renewal(s)? This cannot be undone.`)) return
+    if (!(await confirm(`Delete ${ids.length} Renewal(s)? This Cannot Be Undone.`, { title: 'Delete Renewals', confirmLabel: 'Delete', destructive: true }))) return
     setMessage(null)
     try {
       await deleteRenewals(ids)
@@ -458,6 +460,7 @@ export default function BisRenewalsMasterPage({ dialogOnly = false }: { dialogOn
 
   return (
     <div className={limsPageShellClass}>
+      {confirmDialog}
       <BisProjectsHeaderBar
         title="BIS License Renewals"
         addLabel="Add Renewal"

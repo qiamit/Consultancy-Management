@@ -3,6 +3,7 @@ import { History, Printer, Trash2 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { isLaboratoryDirector } from '@/lib/isLaboratoryDirector'
 import { Button } from '@/components/ui/button'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import {
   Dialog,
   DialogContent,
@@ -215,6 +216,7 @@ export function UncertaintyHistoryDialog({
   layer?: 'default' | 'nested' | 'stacked' | 'top'
 }) {
   const { role } = useAuth()
+  const [confirm, confirmDialog] = useConfirmDialog({ layer: 'overlay' })
   const canDelete = isLaboratoryDirector(role)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [viewing, setViewing] = useState<UncertaintyHistoryRecord | null>(null)
@@ -257,10 +259,11 @@ export function UncertaintyHistoryDialog({
 
   const handleDelete = async (ids: string[]) => {
     if (!canDelete || ids.length === 0) return
-    const ok = window.confirm(
+    const ok = await confirm(
       ids.length === 1
-        ? 'Delete this uncertainty history record? This cannot be undone.'
-        : `Delete ${ids.length} uncertainty history records? This cannot be undone.`,
+        ? 'Delete This Uncertainty History Record? This Cannot Be Undone.'
+        : `Delete ${ids.length} Uncertainty History Records? This Cannot Be Undone.`,
+      { title: 'Delete History', confirmLabel: 'Delete', destructive: true },
     )
     if (!ok) return
     setBusy(true)
@@ -498,6 +501,7 @@ export function UncertaintyHistoryDialog({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {confirmDialog}
     </>
   )
 }

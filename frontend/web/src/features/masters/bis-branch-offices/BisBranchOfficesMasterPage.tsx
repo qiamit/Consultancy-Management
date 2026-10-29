@@ -3,6 +3,7 @@ import { Building2, Copy, Mail, MapPin, Pencil, Phone, Plus, Search } from 'luci
 import { QiAssistant } from '@/components/qi-assistant/QiAssistant'
 import { AuditHistoryDialog } from '@/components/lims/AuditHistoryDialog'
 import { Button } from '@/components/ui/button'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -73,6 +74,7 @@ function matchesSearch(row: BisBranchOfficeRow, search: string): boolean {
 
 export default function BisBranchOfficesMasterPage() {
   const canEdit = useCanEditCurrentModule()
+  const [confirm, confirmDialog] = useConfirmDialog()
   const fileRef = useRef<HTMLInputElement>(null)
   const [rows, setRows] = useState<BisBranchOfficeRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -207,6 +209,7 @@ export default function BisBranchOfficesMasterPage() {
 
   return (
     <div data-master-scroll="table" className={cn(clientPageShellClass, 'bis-branch-offices-page-container flex h-full min-h-0 flex-col overflow-hidden !space-y-0 gap-2 sm:gap-3 md:gap-3')}>
+      {confirmDialog}
       <div className="shrink-0">
         <div className={clientPanelClass}>
           <div className="relative overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-2 py-2 text-white sm:px-4 sm:py-2.5 md:px-5">
@@ -462,8 +465,8 @@ export default function BisBranchOfficesMasterPage() {
             popup.document.close()
             popup.print()
           }}
-          onDeleteSelected={() => {
-            if (!window.confirm(`Delete ${selectedIds.size} BIS branch office record(s)?`)) return
+          onDeleteSelected={async () => {
+            if (!(await confirm(`Delete ${selectedIds.size} BIS Branch Office Record(s)?`, { title: 'Delete BIS Branch Offices', confirmLabel: 'Delete', destructive: true }))) return
             void deleteBisBranchOffices([...selectedIds])
               .then(() => { setSelectedIds(new Set()); setMessage('Deleted.'); refresh() })
               .catch((err: unknown) => setMessage(err instanceof Error ? err.message : 'Delete failed'))

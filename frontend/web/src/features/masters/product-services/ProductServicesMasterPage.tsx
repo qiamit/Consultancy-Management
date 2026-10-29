@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { limsDarkBarGlowStyle, limsPageShellClass, limsDialogWidthCapClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabaseClient'
@@ -108,6 +109,7 @@ function nextSNo(list: NablScopeRow[]) {
 
 export default function ProductServicesMasterPage() {
   const { editId, setEdit } = useMasterUiSearchState()
+  const [confirm, confirmDialog] = useConfirmDialog()
   const [saveLoading, setSaveLoading] = useState(false)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const importInputRef = useRef<HTMLInputElement | null>(null)
@@ -364,7 +366,7 @@ export default function ProductServicesMasterPage() {
   const handleDeleteSelected = () => {
     void (async () => {
       if (selectedRows.length === 0) return
-      const ok = window.confirm(`Delete ${selectedRows.length} selected scope entry(ies)?`)
+      const ok = await confirm(`Delete ${selectedRows.length} Selected Scope Entry(ies)?`, { title: 'Delete Scope Entries', confirmLabel: 'Delete', destructive: true })
       if (!ok) return
       setSaveMessage(null)
       setSaveLoading(true)
@@ -561,6 +563,7 @@ export default function ProductServicesMasterPage() {
 
   return (
     <div className={limsPageShellClass}>
+      {confirmDialog}
       <ProductServicesHeaderBar
         search={search}
         onSearchChange={setSearch}

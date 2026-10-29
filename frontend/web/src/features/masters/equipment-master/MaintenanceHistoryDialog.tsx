@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, Pencil, Search, Trash2 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { isLaboratoryDirector } from '@/lib/isLaboratoryDirector'
 import { Button } from '@/components/ui/button'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import {
   Dialog,
   DialogContent,
@@ -98,6 +99,7 @@ export function MaintenanceHistoryDialog({
   layer?: 'default' | 'nested' | 'stacked'
 }) {
   const { role } = useAuth()
+  const [confirm, confirmDialog] = useConfirmDialog({ layer: 'overlay' })
   const canManageActions = isLaboratoryDirector(role)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [viewing, setViewing] = useState<HistoryListRow | null>(null)
@@ -252,10 +254,10 @@ export function MaintenanceHistoryDialog({
     setViewing(null)
   }
 
-  const deleteRecord = (row: HistoryListRow) => {
+  const deleteRecord = async (row: HistoryListRow) => {
     if (!onDirectorChange) return
     const label = `${row.equipmentCode} · ${formatDisplayDate(row.date)}`
-    if (!window.confirm(`Delete maintenance record ${label}?`)) return
+    if (!(await confirm(`Delete Maintenance Record ${label}?`, { title: 'Delete Maintenance Record', confirmLabel: 'Delete', destructive: true }))) return
     if (row.id === CURRENT_ROW_ID) {
       applyDirectorChange({
         history,
@@ -733,6 +735,7 @@ export function MaintenanceHistoryDialog({
           </div>
         </DialogContent>
       </Dialog>
+      {confirmDialog}
     </>
   )
 }

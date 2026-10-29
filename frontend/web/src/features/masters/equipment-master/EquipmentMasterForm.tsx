@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import {
   Dialog,
   DialogContent,
@@ -178,6 +179,7 @@ export function EquipmentMasterForm({
   equipments?: EquipmentRow[]
   iqcMasters?: any[]
 }) {
+  const [confirm, confirmDialog] = useConfirmDialog({ layer: 'top' })
   const [showCalcSteps, setShowCalcSteps] = useState(false)
   const [showCalculator, setShowCalculator] = useState(false)
   const [calcInput, setCalcInput] = useState('')
@@ -631,9 +633,10 @@ export function EquipmentMasterForm({
               title="Delete"
               aria-label="Delete Calibration Certificate"
               disabled={!form.uploadCertificatePath && !form.certificateFile}
-              onClick={() => {
-                const ok = window.confirm(
-                  'Are you sure you want to delete the uploaded certificate?',
+              onClick={async () => {
+                const ok = await confirm(
+                  'Are You Sure You Want to Delete the Uploaded Certificate?',
+                  { title: 'Delete Certificate', confirmLabel: 'Delete', destructive: true },
                 )
                 if (!ok) return
                 onChange({
@@ -2752,9 +2755,10 @@ export function EquipmentMasterForm({
                   title="Delete"
                   aria-label="Delete Manual / SOP"
                   disabled={!form.uploadManualSopPath && !form.manualSopFile}
-                  onClick={() => {
-                    const ok = window.confirm(
-                      'Are you sure you want to delete the uploaded Manual/SOP?',
+                  onClick={async () => {
+                    const ok = await confirm(
+                      'Are You Sure You Want to Delete the Uploaded Manual/SOP?',
+                      { title: 'Delete Manual / SOP', confirmLabel: 'Delete', destructive: true },
                     )
                     if (!ok) return
                     onChange({
@@ -2838,6 +2842,7 @@ export function EquipmentMasterForm({
       {renderIntermediateFormDialog()}
       {renderMaintenanceHistoryDialog()}
       {renderIntermediateCheckHistoryDialog()}
+      {confirmDialog}
     </Card>
   )
 }

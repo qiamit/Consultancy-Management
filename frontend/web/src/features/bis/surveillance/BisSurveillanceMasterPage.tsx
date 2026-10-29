@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { limsPageShellClass } from '@/lib/limsThemeUi'
 import { useFormDialogOpenChange } from '@/lib/formDialogOpenChange'
 import { useMasterUiSearchState } from '@/lib/useMasterUiSearchState'
@@ -28,6 +29,7 @@ const SEARCH_DEBOUNCE_MS = 350
 
 export default function BisSurveillanceMasterPage() {
   const { editId, setEdit } = useMasterUiSearchState()
+  const [confirm, confirmDialog] = useConfirmDialog()
   const [rows, setRows] = useState<SurveillanceRow[]>([])
   const [total, setTotal] = useState(0)
   const [listLoading, setListLoading] = useState(false)
@@ -185,7 +187,7 @@ export default function BisSurveillanceMasterPage() {
   const handleDeleteSelected = async () => {
     const ids = [...selectedIds]
     if (ids.length === 0) return
-    if (!window.confirm(`Delete ${ids.length} surveillance record(s)? This cannot be undone.`)) return
+    if (!(await confirm(`Delete ${ids.length} Surveillance Record(s)? This Cannot Be Undone.`, { title: 'Delete Surveillance Records', confirmLabel: 'Delete', destructive: true }))) return
     setMessage(null)
     try {
       await deleteSurveillance(ids)
@@ -260,6 +262,7 @@ export default function BisSurveillanceMasterPage() {
 
   return (
     <div className={limsPageShellClass}>
+      {confirmDialog}
       <BisProjectsHeaderBar
         title="BIS Surveillances"
         search={searchInput}
