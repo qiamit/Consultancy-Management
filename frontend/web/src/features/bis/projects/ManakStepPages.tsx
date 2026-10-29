@@ -32,7 +32,7 @@ import { ManakPackagingStep } from './ManakPackagingStep'
 import { ManakTestingStep } from './ManakTestingStep'
 import { ManakTestReportsStep } from './ManakTestReportsStep'
 import { ManakDeclarationStep } from './ManakDeclarationStep'
-import { isLicenceKind, type BisProjectRow } from './types'
+import { type BisProjectRow } from './types'
 
 /* ───────── Manak Online look: blue section bars, light-blue sub-panels, label / value grids ───────── */
 
@@ -462,7 +462,8 @@ export function ManakStepPage({
     const varieties = list(payloads['osl-sample-requirements'], 'rows')
       .map((r) => s(r.gradeTypeVariety))
       .filter(Boolean)
-    const linked = !s(row?.cm_l_digits) && !isLicenceKind(row?.project_kind)
+    // Applications and licences (including licences taken over without our application) stay linked to Client Master.
+    const linked = true
     body = (
       <ManakGeneralStep
         row={row}

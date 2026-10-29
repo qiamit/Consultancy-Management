@@ -786,12 +786,6 @@ export function ManakGeneralStep({
 
   return (
     <div className="space-y-4">
-      {locked ? (
-        <p className="border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs text-amber-900">
-          This application is no longer linked to Client Master (a licence number exists), so these details are read-only here.
-        </p>
-      ) : null}
-
       <ManakApplicationPanel row={row} projectRaw={projectRaw} branches={branches} onSaved={onProjectSaved} />
 
       <ManakSubPanel title="Registration Details">
