@@ -19,6 +19,7 @@ import {
   limsOutlineBtnClass,
   limsPanelClass,
   limsPrimaryBtnClass,
+  limsFullscreenDialogClass,
 } from '@/lib/limsThemeUi'
 import { cn, formatDate } from '@/lib/utils'
 import { MeasurementUnitSelect } from '@/features/masters/measurement-units/MeasurementUnitSelect'
@@ -388,12 +389,10 @@ export function EquipmentMasterForm({
       <DialogContent
         persistOnFocusLoss
         layer="nested"
-        overlayClassName="lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto"
         className={cn(
           limsDialogClass,
           '!flex h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden p-0',
-          'left-0 top-0',
-          'lg:left-[268px] lg:w-[calc(100vw-268px)] lg:max-w-[calc(100vw-268px)]',
+          limsFullscreenDialogClass,
         )}
         aria-describedby={undefined}
       >
@@ -687,12 +686,10 @@ export function EquipmentMasterForm({
       <DialogContent
         persistOnFocusLoss
         layer="nested"
-        overlayClassName="lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto"
         className={cn(
           limsDialogClass,
           '!flex h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden p-0',
-          'left-0 top-0',
-          'lg:left-[268px] lg:w-[calc(100vw-268px)] lg:max-w-[calc(100vw-268px)]',
+          limsFullscreenDialogClass,
         )}
         aria-describedby={undefined}
       >
@@ -1278,12 +1275,10 @@ export function EquipmentMasterForm({
       <DialogContent
         persistOnFocusLoss
         layer="nested"
-        overlayClassName="lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto"
         className={cn(
           limsDialogClass,
           '!flex h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden p-0',
-          'left-0 top-0',
-          'lg:left-[268px] lg:w-[calc(100vw-268px)] lg:max-w-[calc(100vw-268px)]',
+          limsFullscreenDialogClass,
         )}
         aria-describedby={undefined}
       >

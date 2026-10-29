@@ -14,16 +14,15 @@ import {
   limsDialogClass,
   limsOutlineBtnClass,
   limsPrimaryBtnClass,
+  limsFullscreenDialogClass,
 } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 
-const FULLSCREEN_OVERLAY = 'lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto'
 
 const FULLSCREEN_DIALOG_CLASS = cn(
   limsDialogClass,
   '!flex h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden p-0',
-  'left-0 top-0',
-  'lg:left-[268px] lg:w-[calc(100vw-268px)] lg:max-w-[calc(100vw-268px)]',
+  limsFullscreenDialogClass,
 )
 
 export function ConductIntermediateCheckDialog({
@@ -54,7 +53,6 @@ export function ConductIntermediateCheckDialog({
       <DialogContent
         persistOnFocusLoss
         layer={layer === 'default' ? 'nested' : layer}
-        overlayClassName={FULLSCREEN_OVERLAY}
         className={FULLSCREEN_DIALOG_CLASS}
         aria-describedby={undefined}
       >

@@ -27,6 +27,7 @@ import {
   limsOutlineBtnClass,
   limsPanelClass,
   limsPrimaryBtnClass,
+  limsFullscreenDialogClass,
 } from '@/lib/limsThemeUi'
 import { cn, formatDate } from '@/lib/utils'
 import { sortMaintenanceHistoryNewestFirst, type MaintenanceHistoryRecord } from './maintenanceHistory'
@@ -39,13 +40,11 @@ export type MaintenanceHistoryDirectorChange = {
   currentChecklist: MaintenanceChecklistItem[]
 }
 
-const FULLSCREEN_OVERLAY = 'lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto'
 
 const FULLSCREEN_DIALOG_CLASS = cn(
   limsDialogClass,
   '!flex h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden p-0',
-  'left-0 top-0',
-  'lg:left-[268px] lg:w-[calc(100vw-268px)] lg:max-w-[calc(100vw-268px)]',
+  limsFullscreenDialogClass,
 )
 
 const CURRENT_ROW_ID = '__current__'
@@ -289,7 +288,6 @@ export function MaintenanceHistoryDialog({
         <DialogContent
           persistOnFocusLoss
           layer={layer === 'default' ? 'nested' : layer}
-          overlayClassName={FULLSCREEN_OVERLAY}
           className={FULLSCREEN_DIALOG_CLASS}
           aria-describedby={undefined}
         >
@@ -558,7 +556,6 @@ export function MaintenanceHistoryDialog({
         <DialogContent
           persistOnFocusLoss
           layer="top"
-          overlayClassName={FULLSCREEN_OVERLAY}
           className={FULLSCREEN_DIALOG_CLASS}
           aria-describedby={undefined}
         >

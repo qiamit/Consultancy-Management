@@ -18,6 +18,7 @@ import {
   limsPanelClass,
   limsPrimaryBtnClass,
   limsRegistryFormClass,
+  limsFullscreenDialogClass,
 } from '@/lib/limsThemeUi'
 import { cn, formatDate } from '@/lib/utils'
 import type { UncertaintyCalculationData } from './testParameterUncertainty'
@@ -288,12 +289,10 @@ export function UncertaintyHistoryDialog({
           persistOnFocusLoss
           layer={layer}
           aria-describedby={undefined}
-          overlayClassName="lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto"
           className={cn(
             limsDialogClass,
             '!flex h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col overflow-hidden p-0',
-            'left-0 top-0',
-            'lg:left-[268px] lg:w-[calc(100vw-268px)] lg:max-w-[calc(100vw-268px)]',
+            limsFullscreenDialogClass,
             '[&>button]:!text-white [&>button]:hover:bg-white/10',
           )}
         >
@@ -461,12 +460,10 @@ export function UncertaintyHistoryDialog({
           persistOnFocusLoss
           layer="top"
           aria-describedby={undefined}
-          overlayClassName="lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto"
           className={cn(
             limsDialogClass,
             '!flex h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col overflow-hidden p-0',
-            'left-0 top-0',
-            'lg:left-[268px] lg:w-[calc(100vw-268px)] lg:max-w-[calc(100vw-268px)]',
+            limsFullscreenDialogClass,
             '[&>button]:!text-white [&>button]:hover:bg-white/10',
           )}
         >

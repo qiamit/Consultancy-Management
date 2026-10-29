@@ -88,6 +88,32 @@ export const limsDialogSidebarPortalClass =
 export const limsDialogCenterClass =
   'left-[var(--app-dialog-center-x,50%)] right-auto top-1/2 mx-0 -translate-x-1/2 -translate-y-1/2'
 
+/**
+ * Full-bleed sheet filling the main content area (right of the docked sidebar).
+ * --app-dialog-overlay-left is 0px when the sidebar is a drawer or collapsed, so phones/tablets get full width.
+ * Pair with the DialogContent defaults for overlay/portal (do not hard-code sidebar offsets).
+ */
+export const limsFullscreenDialogClass =
+  'left-[var(--app-dialog-overlay-left,0px)] top-0 w-[calc(100vw-var(--app-dialog-overlay-left,0px))] max-w-none h-[100dvh] max-h-[100dvh] translate-x-0 translate-y-0'
+
+/** Bottom padding for full-screen dialog footers — clears the iOS home indicator. */
+export const limsSafeAreaFooterPadClass = 'pb-[max(0.75rem,env(safe-area-inset-bottom))]'
+
+/**
+ * Width caps for centred wide dialogs: never wider than the content area beside the docked sidebar.
+ * Literal strings (not built at runtime) so Tailwind JIT emits them.
+ */
+export const limsDialogWidthCapClass = {
+  '42rem':
+    'w-[min(42rem,calc(100vw-var(--app-dialog-overlay-left,0px)-1.5rem))] max-w-[min(42rem,calc(100vw-var(--app-dialog-overlay-left,0px)-1.5rem))]',
+  '48rem':
+    'w-[min(48rem,calc(100vw-var(--app-dialog-overlay-left,0px)-1.5rem))] max-w-[min(48rem,calc(100vw-var(--app-dialog-overlay-left,0px)-1.5rem))]',
+  '56rem':
+    'w-[min(56rem,calc(100vw-var(--app-dialog-overlay-left,0px)-1.5rem))] max-w-[min(56rem,calc(100vw-var(--app-dialog-overlay-left,0px)-1.5rem))]',
+  '72rem':
+    'w-[min(72rem,calc(100vw-var(--app-dialog-overlay-left,0px)-1.5rem))] max-w-[min(72rem,calc(100vw-var(--app-dialog-overlay-left,0px)-1.5rem))]',
+} as const
+
 export const limsAddLinkClass =
   'inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-[11px] font-semibold text-amber-800 hover:text-amber-950 hover:underline'
 

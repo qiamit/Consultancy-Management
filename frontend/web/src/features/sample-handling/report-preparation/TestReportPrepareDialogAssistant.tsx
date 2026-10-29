@@ -108,11 +108,10 @@ export function TestReportPrepareDialogAssistant({
       <DialogContent
         layer="nested"
         aria-describedby={undefined}
-        overlayClassName="lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto"
         className={cn(
           limsDialogClass,
           'flex max-h-[88vh] flex-col sm:max-w-2xl',
-          'lg:left-[calc(268px+(100vw-268px)/2)] md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2',
+          'md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2',
         )}
       >
         <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white sm:px-5">

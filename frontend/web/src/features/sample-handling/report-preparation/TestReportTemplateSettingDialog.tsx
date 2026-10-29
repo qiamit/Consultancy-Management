@@ -32,6 +32,7 @@ import {
   limsFieldClass,
   limsPrimaryBtnClass,
   limsRegistryFormClass,
+  limsFullscreenDialogClass,
 } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { REPORT_SCOPE_TITLE, type ReportScopeKind } from './reportScope'
@@ -52,18 +53,17 @@ import type { TestReportCoverDetails } from './fetchTestReportCoverDetails'
 import type { ReportResultRow } from './reportResultRows'
 import type { TestReportPartBDetails } from './testReportPartB'
 
-const dialogOverlayClass = 'lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto'
 
 const dialogShellClass = cn(
   limsDialogClass,
-  'left-0 top-0 flex h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden border-0 p-0',
-  'lg:left-[268px] md:h-[100dvh] lg:w-[calc(100vw-268px)] lg:max-w-[calc(100vw-268px)]',
+  'flex h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden border-0 p-0',
+  limsFullscreenDialogClass,
 )
 
 const nestedShellClass = cn(
   limsDialogClass,
-  'left-0 top-0 flex h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden p-0',
-  'lg:left-[268px] md:h-[100dvh] lg:w-[calc(100vw-268px)] lg:max-w-[calc(100vw-268px)]',
+  'flex h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden p-0',
+  limsFullscreenDialogClass,
 )
 
 const NONE = '__none__'
@@ -280,7 +280,6 @@ export function TestReportTemplateSettingDialog({
         persistOnFocusLoss
         layer="nested"
         aria-describedby={undefined}
-        overlayClassName={dialogOverlayClass}
         className={dialogShellClass}
       >
         <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white sm:px-5 sm:py-3">
@@ -404,7 +403,6 @@ export function TestReportTemplateSettingDialog({
             persistOnFocusLoss
             layer="nested"
             aria-describedby={undefined}
-            overlayClassName={dialogOverlayClass}
             className={nestedShellClass}
           >
             <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white">

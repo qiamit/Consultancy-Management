@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { limsDarkBarGlowStyle, limsDialogClass, limsPageShellClass } from '@/lib/limsThemeUi'
+import { limsDarkBarGlowStyle, limsDialogClass, limsPageShellClass, limsDialogWidthCapClass } from '@/lib/limsThemeUi'
 import { useAuth } from '@/hooks/useAuth'
 import { canDeleteSampleHandlingRecords } from '@/lib/isLaboratoryDirector'
 import {
@@ -908,11 +908,11 @@ export default function TestReportPreparationMasterPage() {
         <DialogContent
           persistOnFocusLoss
           aria-describedby={undefined}
-          overlayClassName="lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto"
           className={cn(
             limsDialogClass,
-            'flex max-h-[90vh] w-[min(96vw,72rem)] max-w-6xl flex-col',
-            'lg:left-[calc(268px+(100vw-268px)/2)] md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2',
+            'flex max-h-[90vh] flex-col',
+            limsDialogWidthCapClass['72rem'],
+            'md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2',
           )}
         >
           <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white sm:px-5 sm:py-3">
