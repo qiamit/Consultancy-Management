@@ -99,7 +99,7 @@ export function TestParameterAiDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (busy === null) onOpenChange(next) }}>
-      <DialogContent className="flex max-h-[92vh] w-[min(72rem,calc(100vw-1.5rem))] max-w-none flex-col gap-3 overflow-hidden rounded-none border-2 border-stone-500 bg-[#f7f3eb] p-3 sm:p-4">
+      <DialogContent className="flex max-h-[92dvh] w-[min(72rem,calc(100vw-1.5rem))] max-w-none flex-col gap-3 overflow-hidden rounded-none border-2 border-stone-500 bg-[#f7f3eb] p-3 sm:p-4">
         <DialogHeader>
           <DialogTitle className="font-jakarta text-base">Add Test Parameters with AI</DialogTitle>
         </DialogHeader>

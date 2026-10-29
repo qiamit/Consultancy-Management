@@ -174,7 +174,7 @@ export function AuditHistoryDialog({
       <DialogContent
         className={cn(
           limsDialogClass,
-          'flex max-h-[85vh] w-[min(42rem,calc(100vw-1rem))] flex-col overflow-hidden p-0',
+          'flex max-h-[85dvh] w-[min(42rem,calc(100vw-1rem))] flex-col overflow-hidden p-0',
         )}
         aria-describedby={undefined}
       >

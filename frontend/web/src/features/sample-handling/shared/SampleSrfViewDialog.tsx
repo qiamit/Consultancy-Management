@@ -208,7 +208,7 @@ export function SampleSrfViewDialog({
           portalClassName={cn(limsDialogSidebarPortalClass, 'lg:p-2')}
           className={cn(
             limsDialogClass,
-            'flex h-[96vh] w-[calc(100vw-0.75rem)] max-w-none flex-col',
+            'flex h-[96dvh] w-[calc(100vw-0.75rem)] max-w-none flex-col',
             'lg:!relative lg:!left-auto lg:!right-auto lg:!top-auto lg:!mx-0 lg:!translate-x-0 lg:!translate-y-0',
             'lg:h-full lg:w-full lg:max-h-none',
           )}

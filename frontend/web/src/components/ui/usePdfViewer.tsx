@@ -24,7 +24,7 @@ export function usePdfViewer(): [(url: string | undefined, title?: string, missi
         persistOnFocusLoss
         layer="stacked"
         aria-describedby={undefined}
-        className={cn(limsManageDialogClass, 'flex h-[88vh] w-[min(64rem,calc(100vw-2rem))] max-w-none flex-col gap-0 bg-white p-0')}
+        className={cn(limsManageDialogClass, 'flex h-[88dvh] w-[min(64rem,calc(100vw-2rem))] max-w-none flex-col gap-0 bg-white p-0')}
       >
         <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white">
           <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={limsDarkBarGlowStyle} />

@@ -910,7 +910,7 @@ export default function TestReportPreparationMasterPage() {
           aria-describedby={undefined}
           className={cn(
             limsDialogClass,
-            'flex max-h-[90vh] flex-col',
+            'flex max-h-[90dvh] flex-col',
             limsDialogWidthCapClass['72rem'],
             'md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2',
           )}

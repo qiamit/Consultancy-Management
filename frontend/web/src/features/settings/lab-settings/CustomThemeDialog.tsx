@@ -82,7 +82,7 @@ export function CustomThemeDialog({
 
   return (
     <DialogContent
-      className={cn(limsDialogClass, 'flex max-h-[90vh] w-[min(92vw,32rem)] flex-col gap-0 p-0')}
+      className={cn(limsDialogClass, 'flex max-h-[90dvh] w-[min(92vw,32rem)] flex-col gap-0 p-0')}
     >
       <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-3 text-white">
         <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={limsDarkBarGlowStyle} />

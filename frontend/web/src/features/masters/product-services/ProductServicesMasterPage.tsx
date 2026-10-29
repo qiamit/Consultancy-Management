@@ -582,7 +582,7 @@ export default function ProductServicesMasterPage() {
           persistOnFocusLoss
           aria-describedby={undefined}
           className={cn(
-            'max-h-[92vh] w-[calc(100vw-1rem)] max-w-4xl gap-0 overflow-hidden rounded-none border-4 border-stone-700 bg-white p-0 shadow-2xl ring-2 ring-amber-700/40 sm:w-full sm:rounded-none',
+            'max-h-[92dvh] w-[calc(100vw-1rem)] max-w-4xl gap-0 overflow-hidden rounded-none border-4 border-stone-700 bg-white p-0 shadow-2xl ring-2 ring-amber-700/40 sm:w-full sm:rounded-none',
             '[&>button]:!rounded-none [&>button]:text-white [&>button]:opacity-100 [&>button]:hover:bg-white/10',
             'md:top-1/2 md:!-translate-x-1/2 md:!-translate-y-1/2',
             limsDialogWidthCapClass['56rem'],
@@ -601,7 +601,7 @@ export default function ProductServicesMasterPage() {
             </DialogHeader>
           </div>
 
-          <div className="max-h-[min(72vh,720px)] overflow-y-auto overflow-x-hidden bg-gradient-to-b from-stone-100/80 to-white px-4 py-4 sm:px-6 sm:py-5">
+          <div className="max-h-[min(72dvh,720px)] overflow-y-auto overflow-x-hidden bg-gradient-to-b from-stone-100/80 to-white px-4 py-4 sm:px-6 sm:py-5">
             {saveMessage ? (
               <p className="mb-4 border-l-2 border-destructive bg-destructive/5 px-3 py-2 text-sm text-destructive">
                 {saveMessage}

@@ -138,7 +138,7 @@ export function AuthorizationLetterDialog({ open, onOpenChange, projectRow, lega
 
   return <>
     <Dialog open={open} onOpenChange={close}>
-      <DialogContent persistOnFocusLoss layer="stacked" aria-describedby={undefined} className={cn(limsDialogClass, 'flex max-h-[90vh] w-[min(64rem,calc(100vw_-_var(--app-dialog-overlay-left,0px)_-_2rem))] min-w-0 max-w-6xl flex-col p-0')}>
+      <DialogContent persistOnFocusLoss layer="stacked" aria-describedby={undefined} className={cn(limsDialogClass, 'flex max-h-[90dvh] w-[min(64rem,calc(100vw_-_var(--app-dialog-overlay-left,0px)_-_2rem))] min-w-0 max-w-6xl flex-col p-0')}>
         <DialogHeader className="bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 py-2.5 pl-4 pr-12 text-left"><DialogTitle className="text-base font-semibold text-white">Authorization Letter of Person Submitting the Application</DialogTitle></DialogHeader>
         <div className="min-h-0 flex-1 space-y-3 overflow-auto bg-[#fffcf7] p-4">
           {loading ? <p className="text-sm text-stone-500">Loading Top Management…</p> : error ? <p role="alert" className="text-sm text-red-700">{error}</p> : !people.length ? <p className="text-sm text-amber-800">Add the persons in Step 2 → Top Management before generating this letter.</p> : null}

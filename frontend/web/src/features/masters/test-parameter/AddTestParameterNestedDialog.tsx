@@ -201,7 +201,7 @@ export function AddTestParameterNestedDialog({
         aria-describedby={undefined}
         className={cn(
           limsDialogClass,
-          'max-h-[92vh] w-[calc(100%-1.5rem)] max-w-[51.2rem] p-0 sm:w-full',
+          'max-h-[92dvh] w-[calc(100%-1.5rem)] max-w-[51.2rem] p-0 sm:w-full',
           'md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2',
         )}
       >
@@ -214,7 +214,7 @@ export function AddTestParameterNestedDialog({
             </DialogTitle>
           </DialogHeader>
         </div>
-        <div className="flex max-h-[min(78vh,760px)] min-h-0 flex-col overflow-hidden bg-gradient-to-b from-stone-100/90 to-stone-50">
+        <div className="flex max-h-[min(78dvh,760px)] min-h-0 flex-col overflow-hidden bg-gradient-to-b from-stone-100/90 to-stone-50">
           {saveMessage ? (
             <p className="shrink-0 px-4 pt-3 text-sm text-red-700 sm:px-6">{saveMessage}</p>
           ) : null}

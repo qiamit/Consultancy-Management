@@ -348,7 +348,7 @@ export function QuotationTemplatesDialog({
           layer="nested"
           className={cn(
             limsDialogClass,
-            'flex max-h-[90vh] w-[min(96vw,780px)] max-w-[780px] flex-col gap-0 overflow-hidden p-0',
+            'flex max-h-[90dvh] w-[min(96vw,780px)] max-w-[780px] flex-col gap-0 overflow-hidden p-0',
           )}
         >
           <div className="relative shrink-0 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white">

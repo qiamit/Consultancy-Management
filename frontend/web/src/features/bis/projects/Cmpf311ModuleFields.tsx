@@ -382,7 +382,7 @@ export function Cmpf311ModuleFields({
               <DialogHeader className="border-b border-amber-700 bg-stone-900 px-4 py-3 text-left text-white">
                 <DialogTitle className="text-base font-semibold">Choose Product Manual PDFs</DialogTitle>
               </DialogHeader>
-              <div className="max-h-[55vh] space-y-2 overflow-y-auto p-4">
+              <div className="max-h-[55dvh] space-y-2 overflow-y-auto p-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-stone-600">Files in IS Code Master</p>
                 {currentMasterData?.availableFiles.length ? currentMasterData.availableFiles.map((file) => {
                   const isPdf = file.fileName.toLowerCase().endsWith('.pdf')

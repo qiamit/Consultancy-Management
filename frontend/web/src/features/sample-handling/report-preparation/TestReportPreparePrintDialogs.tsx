@@ -1455,7 +1455,7 @@ export function TestReportSignatureSettingDialog({
         aria-describedby={undefined}
         className={cn(
           limsDialogClass,
-          'flex max-h-[90vh] max-w-2xl flex-col',
+          'flex max-h-[90dvh] max-w-2xl flex-col',
           'md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2',
         )}
       >

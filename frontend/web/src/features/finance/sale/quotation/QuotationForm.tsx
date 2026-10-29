@@ -2764,7 +2764,7 @@ export function QuotationFormView({
         <DialogContent
           className={cn(
             limsDialogClass,
-            'max-h-[min(90vh,640px)] w-[min(30rem,calc(100vw-1.5rem))] max-w-lg',
+            'max-h-[min(90dvh,640px)] w-[min(30rem,calc(100vw-1.5rem))] max-w-lg',
           )}
           aria-describedby={undefined}
           layer="nested"

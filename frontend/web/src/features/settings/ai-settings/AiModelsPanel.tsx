@@ -49,7 +49,7 @@ const checkboxClass =
 
 const AI_MODEL_DIALOG_CLASS = cn(
   limsDialogClass,
-  'max-h-[92vh] w-[calc(100vw-1rem)] max-w-2xl',
+  'max-h-[92dvh] w-[calc(100vw-1rem)] max-w-2xl',
   '[&>button]:!rounded-none [&>button]:text-white [&>button]:opacity-100 [&>button]:hover:bg-white/10',
   'md:top-1/2 md:!-translate-x-1/2 md:!-translate-y-1/2',
   limsDialogWidthCapClass['42rem'],
@@ -435,7 +435,7 @@ export const AiModelsPanel = forwardRef<AiModelsPanelHandle, AiModelsPanelProps>
           <div
             className={cn(
               limsRegistryFormClass,
-              'max-h-[min(62vh,480px)] space-y-5 overflow-y-auto bg-gradient-to-b from-stone-100/80 to-white px-4 py-4 sm:px-6 sm:py-5',
+              'max-h-[min(62dvh,480px)] space-y-5 overflow-y-auto bg-gradient-to-b from-stone-100/80 to-white px-4 py-4 sm:px-6 sm:py-5',
             )}
           >
             <div className="grid grid-cols-1 gap-x-6 gap-y-5 md:grid-cols-2">

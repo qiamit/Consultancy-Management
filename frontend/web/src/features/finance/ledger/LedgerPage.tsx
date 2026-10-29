@@ -155,7 +155,7 @@ export default function LedgerPage() {
         )}
       </div>
       <Dialog open={selectedLedger != null} onOpenChange={(open) => { if (!open) setSelectedLedger(null) }}>
-        <DialogContent className="max-h-[85vh] max-w-4xl overflow-y-auto rounded-none">
+        <DialogContent className="max-h-[85dvh] max-w-4xl overflow-y-auto rounded-none">
           <DialogHeader><DialogTitle>{selectedLedger?.party_name || 'Ledger'} entries</DialogTitle></DialogHeader>
           {entriesLoading ? <p className="text-sm text-stone-600">Loading Entries…</p> : null}
           {!entriesLoading && !entries.length ? <p className="text-sm text-stone-600">No Transaction Entries for This Ledger.</p> : null}

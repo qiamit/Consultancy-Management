@@ -595,7 +595,7 @@ export function UserManagementForm(props: UserManagementFormProps) {
         persistOnFocusLoss
         className={cn(
           limsDialogClass,
-          'max-h-[92vh] max-w-2xl',
+          'max-h-[92dvh] max-w-2xl',
           sidebarCenteredDialogPositionClass,
         )}
         aria-describedby={undefined}
@@ -612,7 +612,7 @@ export function UserManagementForm(props: UserManagementFormProps) {
 
         <div
           className={cn(
-            'max-h-[min(62vh,520px)] space-y-7 overflow-y-auto bg-gradient-to-b from-stone-100/80 to-white px-4 py-4 sm:px-6 sm:py-5',
+            'max-h-[min(62dvh,520px)] space-y-7 overflow-y-auto bg-gradient-to-b from-stone-100/80 to-white px-4 py-4 sm:px-6 sm:py-5',
             limsRegistryFormClass,
           )}
         >

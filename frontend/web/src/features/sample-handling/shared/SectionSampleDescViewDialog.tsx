@@ -241,7 +241,7 @@ export function SectionSampleDescViewDialog({
         layer={layer}
         className={cn(
           limsDialogClass,
-          'max-h-[88vh] max-w-3xl overflow-hidden p-0',
+          'max-h-[88dvh] max-w-3xl overflow-hidden p-0',
           'md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2',
         )}
         aria-describedby={undefined}
@@ -263,7 +263,7 @@ export function SectionSampleDescViewDialog({
         </div>
 
         {row ? (
-          <div className="max-h-[calc(88vh-8rem)] space-y-5 overflow-y-auto bg-[#f7f3eb] px-4 py-4 sm:px-5">
+          <div className="max-h-[calc(88dvh-8rem)] space-y-5 overflow-y-auto bg-[#f7f3eb] px-4 py-4 sm:px-5">
             <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
               <SectionBlock icon={FileText} title="Sample Description">
                 <ProsePanel>{fmt(row.sampleDescription)}</ProsePanel>

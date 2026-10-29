@@ -586,7 +586,7 @@ function MarkingFeeCalculationDialog({
 
   return (
     <Dialog open={selection !== null} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[90vh] w-[min(96vw,1100px)] max-w-none flex-col overflow-hidden rounded-none border-stone-500 p-0">
+      <DialogContent className="flex max-h-[90dvh] w-[min(96vw,1100px)] max-w-none flex-col overflow-hidden rounded-none border-stone-500 p-0">
         <DialogHeader>
           <div className="shrink-0 border-b border-stone-300 bg-stone-900 px-5 py-4 text-amber-50">
             <DialogTitle className="text-base">{selection?.total ? 'Total Marking Fee Calculation' : 'Marking Fee Calculation'}</DialogTitle>

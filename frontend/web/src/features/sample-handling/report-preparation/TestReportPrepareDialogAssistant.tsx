@@ -110,7 +110,7 @@ export function TestReportPrepareDialogAssistant({
         aria-describedby={undefined}
         className={cn(
           limsDialogClass,
-          'flex max-h-[88vh] flex-col sm:max-w-2xl',
+          'flex max-h-[88dvh] flex-col sm:max-w-2xl',
           'md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2',
         )}
       >

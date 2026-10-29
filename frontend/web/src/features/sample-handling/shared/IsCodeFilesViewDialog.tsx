@@ -67,7 +67,7 @@ export function IsCodeFilesViewDialog({
         aria-describedby={undefined}
         className={cn(
           limsDialogClass,
-          'max-h-[min(72vh,520px)] w-[calc(100%-1.5rem)] max-w-lg p-0 sm:w-full',
+          'max-h-[min(72dvh,520px)] w-[calc(100%-1.5rem)] max-w-lg p-0 sm:w-full',
           'md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2',
         )}
       >
