@@ -1,0 +1,354 @@
+import { useEffect, useRef, useState } from 'react'
+import { AlertTriangle, CheckCircle2, Loader2, Send, Sparkles, X } from 'lucide-react'
+import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  limsDialogSidebarOverlayClass,
+  limsDialogSidebarPortalClass,
+  limsFieldClass,
+  limsOutlineBtnClass,
+  limsPrimaryBtnClass,
+} from '@/lib/limsThemeUi'
+import { cn } from '@/lib/utils'
+import {
+  generateProcessFlowSteps,
+  isAiModelMissingError,
+  loadProcessFlowAiSources,
+  type ProcessFlowAiSources,
+} from './generateProcessFlowChart'
+import { flattenProcessFlowTree, processFlowNodeHasContent, type ProcessFlowNode } from './processFlowModel'
+
+const STEP_COUNTS = [8, 10, 12, 14, 16, 18, 20, 24] as const
+
+/**
+ * AI draft of the Process Flow Chart: reads the IS standard and Product Manual PDFs of the project's IS code plus the
+ * licence scope, shows the ordered steps to check / edit, then replaces or extends the chart (Save keeps it).
+ */
+export function ProcessFlowChartAiDialog({
+  open,
+  onOpenChange,
+  disabled = false,
+  applicantName,
+  isNumber,
+  isTitle,
+  productName,
+  licenseScope,
+  isCodeId,
+  nodes,
+  onApplySteps,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  disabled?: boolean
+  applicantName: string
+  isNumber: string
+  isTitle: string
+  productName: string
+  licenseScope: string
+  isCodeId?: string | null
+  nodes: ProcessFlowNode[]
+  onApplySteps: (steps: string[], mode: 'replace' | 'append') => void
+}) {
+  const [stepCount, setStepCount] = useState<number | null>(null)
+  const [append, setAppend] = useState(false)
+  const [instructions, setInstructions] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [phase, setPhase] = useState('')
+  const [steps, setSteps] = useState<string[] | null>(null)
+  const [notes, setNotes] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [sources, setSources] = useState<ProcessFlowAiSources | null>(null)
+  /** PDFs are read once per IS code while the dialog stays mounted (Regenerate does not download them again). */
+  const sourcesCacheRef = useRef<{ isCodeId: string; sources: ProcessFlowAiSources } | null>(null)
+
+  const existingSteps = flattenProcessFlowTree(nodes)
+    .map((r) => r.node)
+    .filter(processFlowNodeHasContent)
+    .map((n) => n.label.trim())
+  const hasChart = existingSteps.length > 0
+  const scopeGiven = licenseScope.trim().length > 0
+
+  useEffect(() => {
+    if (!open) return
+    setSteps(null)
+    setNotes('')
+    setError(null)
+    setPhase('')
+    setBusy(false)
+  }, [open])
+
+  const generate = async () => {
+    if (disabled || busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      const id = (isCodeId ?? '').trim()
+      let loaded = sourcesCacheRef.current?.isCodeId === id ? sourcesCacheRef.current.sources : null
+      if (!loaded) {
+        setPhase('Reading IS Standard and Product Manual…')
+        loaded = await loadProcessFlowAiSources(id)
+        // A failed download is tried again next time; a missing or scanned PDF is not.
+        const transient = [loaded.standard, loaded.manual].some((d) => /could not be/i.test(d.problem))
+        sourcesCacheRef.current = transient ? null : { isCodeId: id, sources: loaded }
+      }
+      setSources(loaded)
+      if (!loaded.standard.text && !loaded.manual.text) {
+        toast.warning('IS PDFs Not Available', {
+          description: 'Steps Are Based on the IS Title and Licence Scope Only — Please Check Them.',
+        })
+      }
+      setPhase('Generating Process Steps…')
+      const result = await generateProcessFlowSteps({
+        applicantName,
+        isNumber,
+        isTitle,
+        productName,
+        licenseScope,
+        isCodeId,
+        sources: loaded,
+        stepCount,
+        existingSteps: append ? existingSteps : [],
+        instructions,
+      })
+      setSteps(result.steps)
+      setNotes(result.notes)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'AI Generation Failed'
+      if (isAiModelMissingError(msg)) {
+        const text = 'No AI Model Is Set Up. Go to Settings → AI Settings → AI Models and Add a Default Model with an API Key.'
+        setError(text)
+        toast.error('No AI Model Is Set Up', {
+          description: 'Go to Settings → AI Settings → AI Models and Add a Default Model with an API Key.',
+        })
+      } else {
+        setError(msg)
+        toast.error(msg)
+      }
+    } finally {
+      setBusy(false)
+      setPhase('')
+    }
+  }
+
+  const cleanSteps = (steps ?? []).map((s) => s.replace(/\s+/g, ' ').trim()).filter(Boolean)
+  const mode: 'replace' | 'append' = append && hasChart ? 'append' : 'replace'
+
+  const apply = () => {
+    if (cleanSteps.length === 0) return
+    if (mode === 'replace' && hasChart && !window.confirm('Replace the Steps in This Chart with the AI Steps?')) return
+    onApplySteps(cleanSteps, mode)
+    onOpenChange(false)
+    toast.success(
+      mode === 'append' ? `Added ${cleanSteps.length} AI Step(s)` : `Chart Filled with ${cleanSteps.length} AI Step(s)`,
+      { description: 'Check the Boxes, Then Click Save.' },
+    )
+  }
+
+  const sourceRow = (label: string, doc: { fileName: string; text: string; problem: string } | null, fallback: string) => {
+    const ok = Boolean(doc?.text)
+    return (
+      <li className="flex items-start gap-1.5">
+        {doc == null ? (
+          <span className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded-full border border-stone-400" aria-hidden />
+        ) : ok ? (
+          <CheckCircle2 size={14} className="mt-0.5 shrink-0 text-emerald-700" aria-hidden />
+        ) : (
+          <AlertTriangle size={14} className="mt-0.5 shrink-0 text-amber-700" aria-hidden />
+        )}
+        <span className="min-w-0">
+          <span className="font-semibold">{label}:</span>{' '}
+          {doc == null ? fallback : ok ? doc.fileName : doc.problem}
+        </span>
+      </li>
+    )
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        persistOnFocusLoss
+        layer="top"
+        aria-describedby={undefined}
+        overlayClassName={limsDialogSidebarOverlayClass}
+        portalClassName={limsDialogSidebarPortalClass}
+        className={cn(
+          'flex max-h-[min(92dvh,860px)] w-[min(96vw,660px)] flex-col gap-0 overflow-hidden rounded-none border-4 border-stone-700 bg-[#fffcf7] p-0 shadow-2xl ring-2 ring-amber-700/35',
+          '[&>button]:!rounded-none [&>button]:opacity-100',
+        )}
+      >
+        <div className="relative shrink-0 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-3 text-white">
+          <div
+            className="pointer-events-none absolute inset-0 opacity-[0.18]"
+            style={{
+              backgroundImage:
+                'radial-gradient(circle at 12% 20%, rgba(217,119,6,0.45), transparent 42%), radial-gradient(circle at 88% 0%, rgba(251,191,36,0.25), transparent 35%)',
+            }}
+          />
+          <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
+          <DialogHeader className="relative space-y-1 pr-10 text-left">
+            <DialogTitle className="flex items-center gap-2.5 text-base font-semibold tracking-tight text-white">
+              <span className="flex h-8 w-8 items-center justify-center border border-amber-400/40 bg-amber-400/15">
+                <Sparkles size={16} className="text-amber-200" />
+              </span>
+              Process Flow Chart AI
+            </DialogTitle>
+          </DialogHeader>
+        </div>
+
+        <div className="shrink-0 space-y-2.5 border-b border-stone-400 bg-[#fffcf7] px-4 py-3">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <label className="flex flex-col gap-1 text-xs text-stone-700">
+              <span className="font-semibold">Number of Steps</span>
+              <select
+                className={cn(limsFieldClass, 'h-9')}
+                value={stepCount ?? 'auto'}
+                disabled={disabled || busy}
+                onChange={(e) => setStepCount(e.target.value === 'auto' ? null : Number(e.target.value))}
+              >
+                <option value="auto">Auto (as the Process Needs)</option>
+                {STEP_COUNTS.map((n) => (
+                  <option key={n} value={n}>
+                    About {n} Steps
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-stone-700">
+              <span className="font-semibold">Insert Mode</span>
+              <select
+                className={cn(limsFieldClass, 'h-9')}
+                value={append && hasChart ? 'append' : 'replace'}
+                disabled={disabled || busy || !hasChart}
+                onChange={(e) => setAppend(e.target.value === 'append')}
+              >
+                <option value="replace">Replace Chart</option>
+                <option value="append">Append to Chart</option>
+              </select>
+            </label>
+          </div>
+          <ul className="space-y-1 text-[11px] text-stone-600">
+            {sourceRow('IS Standard', sources?.standard ?? null, 'Read When You Click Generate')}
+            {sourceRow('Product Manual', sources?.manual ?? null, 'Read When You Click Generate')}
+            <li className="flex items-start gap-1.5">
+              {scopeGiven ? (
+                <CheckCircle2 size={14} className="mt-0.5 shrink-0 text-emerald-700" aria-hidden />
+              ) : (
+                <AlertTriangle size={14} className="mt-0.5 shrink-0 text-amber-700" aria-hidden />
+              )}
+              <span>
+                <span className="font-semibold">Licence Scope:</span>{' '}
+                {scopeGiven ? 'From the Application Notes' : 'Not Entered — the AI Uses the IS Title Only'}
+              </span>
+            </li>
+          </ul>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto bg-white px-4 py-3">
+          {busy ? (
+            <p className="flex items-center justify-center gap-2 py-8 text-sm text-stone-600">
+              <Loader2 size={16} className="animate-spin" aria-hidden />
+              {phase || 'Working…'}
+            </p>
+          ) : steps ? (
+            <div className="space-y-2">
+              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-amber-800/80">
+                Preview — {cleanSteps.length} Step{cleanSteps.length === 1 ? '' : 's'} (Edit or Remove Before Applying)
+              </p>
+              {sources && (!sources.standard.text || !sources.manual.text) ? (
+                <p className="border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900">
+                  {!sources.standard.text && !sources.manual.text
+                    ? 'No IS PDF Could Be Read: These Steps Come from the IS Title and Licence Scope. Check Them Carefully.'
+                    : 'One IS PDF Could Not Be Read: Check the Steps Against the Standard.'}
+                </p>
+              ) : null}
+              <ol className="space-y-1">
+                {steps.map((step, i) => (
+                  <li key={i} className="flex items-center gap-1.5">
+                    <span className="w-6 shrink-0 text-right text-xs font-semibold text-stone-500">{i + 1}.</span>
+                    <input
+                      className={cn(limsFieldClass, 'h-8 min-w-0 flex-1 text-sm')}
+                      value={step}
+                      disabled={disabled}
+                      aria-label={`Step ${i + 1}`}
+                      onChange={(e) => setSteps((prev) => (prev ? prev.map((s, j) => (j === i ? e.target.value : s)) : prev))}
+                    />
+                    <button
+                      type="button"
+                      className="inline-flex h-8 w-8 shrink-0 items-center justify-center text-stone-500 hover:bg-red-50 hover:text-red-700"
+                      title="Remove Step"
+                      aria-label={`Remove Step ${i + 1}`}
+                      disabled={disabled}
+                      onClick={() => setSteps((prev) => (prev ? prev.filter((_, j) => j !== i) : prev))}
+                    >
+                      <X size={14} aria-hidden />
+                    </button>
+                  </li>
+                ))}
+              </ol>
+              {notes ? <p className="text-[11px] italic text-stone-500">AI Note: {notes}</p> : null}
+            </div>
+          ) : (
+            <p className="py-6 text-center text-xs text-stone-500">
+              Click Generate: the AI Reads the IS Standard, the Product Manual and the Licence Scope, and Drafts the
+              Process Steps in Order.
+            </p>
+          )}
+        </div>
+
+        {error ? (
+          <p className="border-t border-red-200 bg-red-50 px-4 py-2 text-xs text-red-800">{error}</p>
+        ) : null}
+
+        <div className="shrink-0 space-y-2 border-t border-stone-400 bg-[#fffcf7] p-3 sm:px-4">
+          <div className="flex items-end gap-2">
+            <Textarea
+              value={instructions}
+              onChange={(e) => setInstructions(e.target.value)}
+              className="min-h-10 max-h-28 flex-1 resize-none rounded-none border-stone-500 bg-stone-50 shadow-none focus-visible:border-amber-600 focus-visible:ring-amber-500/20"
+              rows={1}
+              disabled={busy || disabled}
+              placeholder="Special Instructions (Optional)"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  void generate()
+                }
+              }}
+              aria-label="Special Instructions for the Process Flow"
+            />
+            <Button
+              type="button"
+              className="h-10 shrink-0 rounded-none bg-amber-700 px-3 text-white hover:bg-amber-800"
+              title="Generate the Process Steps with AI"
+              disabled={busy || disabled}
+              onClick={() => void generate()}
+            >
+              {busy ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+              <span className="ml-1.5 text-sm">{steps ? 'Regenerate' : 'Generate'}</span>
+            </Button>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className={cn(limsOutlineBtnClass, 'h-9 px-4 text-sm')}
+              onClick={() => onOpenChange(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className={cn(limsPrimaryBtnClass, 'h-9 px-4 text-sm')}
+              disabled={busy || disabled || cleanSteps.length === 0}
+              onClick={apply}
+            >
+              {!hasChart ? 'Add to Chart' : mode === 'append' ? 'Append to Chart' : 'Replace Chart'}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}

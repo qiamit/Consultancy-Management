@@ -18,6 +18,11 @@ import {
 import {
   buildProcessFlowPrintMarkup,
   parseProcessFlowPayload,
+  PROCESS_FLOW_BOX_BORDER,
+  PROCESS_FLOW_LABEL_FONT_FAMILY,
+  PROCESS_FLOW_LABEL_LINE_HEIGHT,
+  PROCESS_FLOW_LABEL_MAX_LINES,
+  PROCESS_FLOW_LABEL_PAD_X,
   type ProcessFlowArrowStyle,
   type ProcessFlowBoxStyle,
   type ProcessFlowNode,
@@ -149,13 +154,24 @@ const STYLES = `
     align-items: center;
     justify-content: center;
     box-sizing: border-box;
-    padding: 0 8px;
-    border: 2px solid #92400e;
+    padding: 0 ${PROCESS_FLOW_LABEL_PAD_X}px;
+    border: ${PROCESS_FLOW_BOX_BORDER}px solid #92400e;
     background: #fffbeb;
     color: #78350f;
+    font-family: ${PROCESS_FLOW_LABEL_FONT_FAMILY};
     font-weight: 700;
     text-align: center;
-    line-height: 1.2;
+    line-height: ${PROCESS_FLOW_LABEL_LINE_HEIGHT};
+    overflow: hidden;
+  }
+  /* Wraps onto at most the clamped number of lines (set per box), so long names never leave the box. */
+  .pfc-label {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: ${PROCESS_FLOW_LABEL_MAX_LINES};
+    overflow: hidden;
+    max-width: 100%;
+    overflow-wrap: anywhere;
     word-break: break-word;
   }
   .pfc-branch-single {

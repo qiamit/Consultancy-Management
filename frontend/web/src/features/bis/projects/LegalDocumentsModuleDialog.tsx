@@ -1,6 +1,6 @@
 import { UndertakingGeneralFields } from './UndertakingGeneralFields'
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Check, Download, Eye, FileDown, FileType, Import, Pencil, Plus, Printer, Trash2, Upload, X } from 'lucide-react'
+import { Check, Download, Eye, FileDown, FileType, Import, Pencil, Plus, Printer, Sparkles, Trash2, Upload, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
@@ -20,6 +20,7 @@ import {
   limsPrimaryBtnClass,
 } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
+import { useShowAiButtons } from '@/hooks/useShowAiAssistant'
 import { getCurrencyCode, getCurrencySymbol } from '@/lib/appCurrency'
 import { formatMoneyInput, sanitizeMoneyInput } from '@/features/masters/products-services/types'
 import { supabase } from '@/lib/supabaseClient'
@@ -131,6 +132,7 @@ import {
 import {
   emptyProcessFlowPayload,
   parseProcessFlowPayload,
+  processFlowNodeHasContent,
   type ProcessFlowModulePayload,
 } from './processFlowModel'
 import { OslSampleRequirementsModuleFields } from './OslSampleRequirementsModuleFields'
@@ -385,6 +387,9 @@ export function LegalDocumentsModuleDialog({
   /** Merged Process Flow Chart + Process Description (shared payload). */
   const showProcessFlowFields =
     printKind === 'process-flow-chart' || printKind === 'process-description'
+  const showAiButtons = useShowAiButtons()
+  /** Chart mode only: the AI button sits next to Import in the header (Description has its own AI button). */
+  const showFlowChartAi = printKind === 'process-flow-chart' && showAiButtons && Boolean(row?.id)
   /** Compact modules: dialog height follows content (no forced tall empty body). */
   const compactFormModule =
     showTopManagementFields ||
@@ -504,6 +509,7 @@ export function LegalDocumentsModuleDialog({
   const [cmpf307, setCmpf307] = useState<Cmpf307ModulePayload>(() => emptyCmpf307Payload())
   const [brandImportOpen, setBrandImportOpen] = useState(false)
   const [flowImportOpen, setFlowImportOpen] = useState(false)
+  const [flowAiOpen, setFlowAiOpen] = useState(false)
   const [cmpf310, setCmpf310] = useState<Cmpf310ModulePayload>(() => emptyCmpf310Payload())
   const [rawMaterialReference, setRawMaterialReference] = useState<RawMaterialReferencePayload>(() => emptyRawMaterialReferencePayload())
   const [processFlow, setProcessFlow] = useState<ProcessFlowModulePayload>(() =>
@@ -628,6 +634,7 @@ export function LegalDocumentsModuleDialog({
       setUndertakingPreviewOptionsLoadedFor(null)
       setUndertakingPreviewOptionsTouched(false)
       setLicenseScopeNotes('')
+      setFlowAiOpen(false)
       return
     }
     setDrafts([newDraft()])
@@ -1853,7 +1860,7 @@ export function LegalDocumentsModuleDialog({
             style={limsDarkBarGlowStyle}
           />
           <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
-          <DialogHeader className="relative pr-10 text-left">
+          <DialogHeader className={cn('relative text-left', showFlowChartAi ? 'pr-24' : 'pr-10')}>
             <DialogTitle className="text-base font-semibold tracking-tight text-white">
               {title}
             </DialogTitle>
@@ -1887,6 +1894,20 @@ export function LegalDocumentsModuleDialog({
               onClick={() => setFlowImportOpen(true)}
             >
               <Import size={15} aria-hidden />
+            </Button>
+          ) : null}
+          {showFlowChartAi ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={busy || saving || loading}
+              className="absolute right-[4.75rem] top-2 z-10 h-7 w-7 rounded-none border border-amber-500/60 bg-stone-800 p-0 text-amber-200 shadow-sm transition-colors hover:border-amber-400 hover:bg-amber-600 hover:text-white"
+              title="Generate Process Flow Chart with AI"
+              aria-label="Generate Process Flow Chart with AI"
+              onClick={() => setFlowAiOpen(true)}
+            >
+              <Sparkles size={15} aria-hidden />
             </Button>
           ) : null}
         </div>
@@ -2498,6 +2519,8 @@ export function LegalDocumentsModuleDialog({
                   productName={(row?.is_code?.title ?? '').trim()}
                   licenseScope={licenseScopeNotes}
                   isCodeId={row?.is_code_id ?? null}
+                  chartAiOpen={flowAiOpen}
+                  onChartAiOpenChange={setFlowAiOpen}
                 />
               )}
             </div>
@@ -2710,10 +2733,10 @@ export function LegalDocumentsModuleDialog({
         kind="process-flow-chart"
         onPickSource={async (sourceProjectId) => {
           const source = parseProcessFlowPayload(await fetchBisModulePayload(sourceProjectId, 'process-flow-chart'))
-          if (source.nodes.length === 0 && source.descriptionPoints.length === 0) {
+          if (!source.nodes.some(processFlowNodeHasContent) && !source.descriptionPoints.some((point) => point.trim())) {
             throw new Error('The selected application has no process flow chart.')
           }
-          const hasCurrent = processFlow.nodes.length > 0 || processFlow.descriptionPoints.some((point) => point.trim())
+          const hasCurrent = processFlow.nodes.some(processFlowNodeHasContent) || processFlow.descriptionPoints.some((point) => point.trim())
           if (hasCurrent && !window.confirm('Replace the process flow chart and description here with the imported one?')) return
           setProcessFlow(source)
           toast.success('Process Flow Chart Imported', { description: 'Check the boxes and description, then click Save.' })

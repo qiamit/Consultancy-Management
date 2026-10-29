@@ -250,6 +250,18 @@ export async function downloadCmpf311MasterFile(option: Cmpf311MasterFileOption)
 export async function extractProductManualText(file: File): Promise<string> {
   if (!file.name.toLowerCase().endsWith('.pdf')) throw new Error('The Product Manual must be a PDF file.')
   if (file.size > 20 * 1024 * 1024) throw new Error('The Product Manual PDF must be 20 MB or smaller.')
+  const extracted = (await extractPdfPages(file)).join('\n\n').trim()
+  if (!extracted) {
+    throw new Error('No selectable text was found in this PDF. Scanned image-only manuals need OCR before AI generation.')
+  }
+  if (extracted.length > 120_000) {
+    throw new Error('The Product Manual has too much selectable text for one extraction. Use a shorter or section-specific PDF so the AI can review the complete source without skipping pages.')
+  }
+  return extracted
+}
+
+/** Selectable text of a PDF, one "PAGE n" block per page (pages without text are left out). */
+export async function extractPdfPages(file: File): Promise<string[]> {
   const { getDocument } = await loadPdfjs()
   const pdf = await getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise
   const pages: string[] = []
@@ -287,14 +299,7 @@ export async function extractProductManualText(file: File): Promise<string> {
       .join('\n')
     if (pageText.trim()) pages.push(`PAGE ${pageNumber}\n${pageText}`)
   }
-  const extracted = pages.join('\n\n').trim()
-  if (!extracted) {
-    throw new Error('No selectable text was found in this PDF. Scanned image-only manuals need OCR before AI generation.')
-  }
-  if (extracted.length > 120_000) {
-    throw new Error('The Product Manual has too much selectable text for one extraction. Use a shorter or section-specific PDF so the AI can review the complete source without skipping pages.')
-  }
-  return extracted
+  return pages
 }
 
 function parseJson(reply: string): Record<string, unknown> {

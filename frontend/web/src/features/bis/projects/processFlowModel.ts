@@ -82,6 +82,81 @@ export function fitProcessFlowFontSize(
   return Math.max(min, Math.min(max, byWidth, byHeight))
 }
 
+/** Box labels use one font on the canvas and in print, so they wrap at the same words. */
+export const PROCESS_FLOW_LABEL_FONT_FAMILY = 'Arial, Helvetica, sans-serif'
+export const PROCESS_FLOW_LABEL_LINE_HEIGHT = 1.15
+export const PROCESS_FLOW_LABEL_MAX_LINES = 3
+/** Box border (each side) and horizontal text padding inside it, in px. */
+export const PROCESS_FLOW_BOX_BORDER = 2
+export const PROCESS_FLOW_LABEL_PAD_X = 6
+const LABEL_FONT_MAX = 14
+const LABEL_FONT_FLOOR = 8
+
+let labelMeasureCtx: CanvasRenderingContext2D | null | undefined
+
+function labelTextWidth(text: string, fontSize: number): number {
+  if (labelMeasureCtx === undefined) {
+    try {
+      labelMeasureCtx = typeof document !== 'undefined' ? document.createElement('canvas').getContext('2d') : null
+    } catch {
+      labelMeasureCtx = null
+    }
+  }
+  if (!labelMeasureCtx) return text.length * fontSize * 0.6
+  labelMeasureCtx.font = `700 ${fontSize}px ${PROCESS_FLOW_LABEL_FONT_FAMILY}`
+  return labelMeasureCtx.measureText(text).width
+}
+
+/** Lines a label takes when word-wrapped to `width` px (a word longer than a line breaks inside it). */
+export function countProcessFlowLabelLines(text: string, fontSize: number, width: number): number {
+  const words = text.trim().split(/\s+/).filter(Boolean)
+  if (words.length === 0) return 1
+  const space = labelTextWidth(' ', fontSize)
+  let lines = 1
+  let lineW = 0
+  for (const word of words) {
+    const w = labelTextWidth(word, fontSize)
+    if (lineW > 0 && lineW + space + w <= width) {
+      lineW += space + w
+      continue
+    }
+    if (lineW > 0) lines += 1
+    // An over-long word fills whole lines and leaves the rest on the last one.
+    const extra = Math.max(0, Math.ceil(w / width) - 1)
+    lines += extra
+    lineW = w - extra * width
+  }
+  return lines
+}
+
+/**
+ * Font size and line count for a box label: one line at 12–14px when it fits, else wrapped onto up to 3 lines
+ * at the largest size down to 10px; only text too long for that goes smaller (8px), and is clipped at 3 lines.
+ */
+export function fitProcessFlowLabel(
+  text: string,
+  boxW: number,
+  boxH: number,
+): { fontSize: number; lines: number; maxLines: number } {
+  const sample = text.trim() || 'Type Step Name…'
+  // 2px slack: browsers wrap a little earlier than the measured width.
+  const availW = Math.max(24, boxW - 2 * (PROCESS_FLOW_BOX_BORDER + PROCESS_FLOW_LABEL_PAD_X) - 2)
+  const availH = Math.max(10, boxH - 2 * PROCESS_FLOW_BOX_BORDER - 2)
+  const maxLinesAt = (fs: number) =>
+    Math.max(1, Math.min(PROCESS_FLOW_LABEL_MAX_LINES, Math.floor(availH / (fs * PROCESS_FLOW_LABEL_LINE_HEIGHT))))
+  const top = Math.max(LABEL_FONT_FLOOR, Math.min(LABEL_FONT_MAX, availH / PROCESS_FLOW_LABEL_LINE_HEIGHT))
+  for (let fs = top; fs >= 12; fs -= 0.5) {
+    if (countProcessFlowLabelLines(sample, fs, availW) === 1) return { fontSize: fs, lines: 1, maxLines: maxLinesAt(fs) }
+  }
+  // Largest size that fits wins, so sizes below 10px are reached only when nothing at 10px or more fits.
+  for (let fs = top; fs >= LABEL_FONT_FLOOR; fs -= 0.5) {
+    const lines = countProcessFlowLabelLines(sample, fs, availW)
+    if (lines <= maxLinesAt(fs)) return { fontSize: fs, lines, maxLines: maxLinesAt(fs) }
+  }
+  const lines = countProcessFlowLabelLines(sample, LABEL_FONT_FLOOR, availW)
+  return { fontSize: LABEL_FONT_FLOOR, lines: Math.min(lines, maxLinesAt(LABEL_FONT_FLOOR)), maxLines: maxLinesAt(LABEL_FONT_FLOOR) }
+}
+
 export function resolveProcessFlowBoxSize(
   node: ProcessFlowNode,
   boxStyle: ProcessFlowBoxStyle,
@@ -183,16 +258,10 @@ export function emptyProcessFlowNode(
   }
 }
 
+/** A new chart starts empty (steps are added by hand or with AI); saved charts keep their own steps. */
 export function emptyProcessFlowPayload(): ProcessFlowModulePayload {
   return {
-    nodes: [
-      emptyProcessFlowNode({ label: 'Raw Material Receipt', sortOrder: 0 }),
-      emptyProcessFlowNode({ label: 'Incoming Inspection', sortOrder: 1 }),
-      emptyProcessFlowNode({ label: 'Production / Processing', sortOrder: 2 }),
-      emptyProcessFlowNode({ label: 'In-process Checks', sortOrder: 3 }),
-      emptyProcessFlowNode({ label: 'Finished Goods Inspection', sortOrder: 4 }),
-      emptyProcessFlowNode({ label: 'Packing & Dispatch', sortOrder: 5 }),
-    ],
+    nodes: [],
     descriptionPoints: [''],
     arrowStyle: defaultProcessFlowArrowStyle(),
     boxStyle: defaultProcessFlowBoxStyle(),
@@ -246,7 +315,7 @@ export function parseProcessFlowPayload(
                 : Number(raw.boxHeight),
           }),
         )
-    : emptyProcessFlowPayload().nodes
+    : []
 
   const ids = new Set(nodes.map((n) => n.id))
   const cleaned = nodes.map((n) => {
@@ -267,10 +336,7 @@ export function parseProcessFlowPayload(
     descriptionPointsRaw.length > 0 ? descriptionPointsRaw : ['']
 
   return {
-    nodes:
-      cleaned.length > 0
-        ? normalizeProcessFlowHorizontal(cleaned)
-        : emptyProcessFlowPayload().nodes,
+    nodes: normalizeProcessFlowHorizontal(cleaned),
     descriptionPoints,
     arrowStyle: parseProcessFlowArrowStyle(payload.arrowStyle),
     boxStyle: parseProcessFlowBoxStyle(payload.boxStyle),
@@ -996,8 +1062,9 @@ export function buildProcessFlowHtmlMarkup(
   const PAD = 8
   const parts = layout.items.map((it) => {
     if (it.kind === 'box') {
-      const fs = fitProcessFlowFontSize(it.node.label, it.w, it.h)
-      return `<div class="pfc-box" style="position:absolute;left:${it.x + PAD}px;top:${it.y + PAD}px;width:${it.w}px;height:${it.h}px;font-size:${fs}px">${escSvg(it.node.label.trim())}</div>`
+      // Same wrap rule as the canvas boxes; the print script below re-fits it after scaling.
+      const fit = fitProcessFlowLabel(it.node.label, it.w, it.h)
+      return `<div class="pfc-box" style="position:absolute;left:${it.x + PAD}px;top:${it.y + PAD}px;width:${it.w}px;height:${it.h}px;font-size:${fit.fontSize}px"><span class="pfc-label" style="-webkit-line-clamp:${fit.maxLines}">${escSvg(it.node.label.trim())}</span></div>`
     }
     if (it.kind === 'hline') {
       return `<div class="pfc-hline" style="${hLineStyle}left:${it.x1 - lineW / 2 + PAD}px;top:${it.y - lineW + PAD}px;width:${it.x2 - it.x1 + lineW}px"></div>`
@@ -1056,20 +1123,34 @@ export function buildProcessFlowHtmlMarkup(
       natW=natW*k;
       canvas.style.width=natW+"px";
     }
-    // Readable text after scaling: aim for about 10.5px on paper (never below 8px), wrapping to more lines
-    // inside the (now wider) box instead of shrinking.
-    var target=10.5/s, floor=8/s;
+    // Readable text after scaling: aim for about 10.5px on paper (never below 8px), wrapping onto up to
+    // ${PROCESS_FLOW_LABEL_MAX_LINES} lines inside the (now wider) box like the canvas does; anything longer is clipped in the box.
+    var target=10.5/s, floor=8/s, LH=${PROCESS_FLOW_LABEL_LINE_HEIGHT}, MAXL=${PROCESS_FLOW_LABEL_MAX_LINES};
+    var ctx=null; try{ ctx=document.createElement("canvas").getContext("2d"); }catch(e){}
+    function tw(t,fs){ if(!ctx) return t.length*fs*0.6; ctx.font="700 "+fs+"px ${PROCESS_FLOW_LABEL_FONT_FAMILY}"; return ctx.measureText(t).width; }
+    function lineCount(text,fs,w){
+      var words=text.split(/\\s+/).filter(Boolean), lines=1, lw=0, sp=tw(" ",fs);
+      words.forEach(function(word){
+        var ww=tw(word,fs);
+        if(lw>0&&lw+sp+ww<=w){ lw+=sp+ww; return; }
+        if(lw>0) lines++;
+        var extra=Math.max(0,Math.ceil(ww/w)-1); lines+=extra; lw=ww-extra*w;
+      });
+      return lines;
+    }
     Array.prototype.forEach.call(canvas.querySelectorAll(".pfc-box"),function(box){
       if(!box.dataset.fs) box.dataset.fs=box.style.fontSize;
-      var w=parseFloat(box.style.width)-16, h=parseFloat(box.style.height)-4, len=(box.textContent||"").trim().length||1;
-      var fs=Math.max(parseFloat(box.dataset.fs)||14,target);
-      while(fs>floor){
-        var perLine=Math.max(1,Math.floor(w/(fs*0.58)));
-        if(Math.ceil(len/perLine)*fs*1.1<=h) break;
+      var label=box.querySelector(".pfc-label")||box;
+      var w=parseFloat(box.style.width)-${2 * (PROCESS_FLOW_BOX_BORDER + PROCESS_FLOW_LABEL_PAD_X) + 2}, h=parseFloat(box.style.height)-${2 * PROCESS_FLOW_BOX_BORDER + 2};
+      var text=(box.textContent||"").trim();
+      var fs=Math.max(parseFloat(box.dataset.fs)||14,target), maxL=1;
+      while(true){
+        maxL=Math.max(1,Math.min(MAXL,Math.floor(h/(fs*LH))));
+        if(fs<=floor||lineCount(text,fs,w)<=maxL) break;
         fs-=0.5;
       }
       box.style.fontSize=fs+"px";
-      box.style.lineHeight="1.1";
+      label.style.webkitLineClamp=String(maxL);
     });
     scaleEl.style.width=natW+"px";
     scaleEl.style.height=natH+"px";
