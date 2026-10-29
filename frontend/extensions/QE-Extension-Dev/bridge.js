@@ -162,6 +162,11 @@
       pullStoredResult(true);
       return;
     }
+    if (data.type === "QE_MANAK_RESULT_ACK") {
+      // The app attached the Test Request PDF — background drops the stored copy (no more re-posts).
+      sendRuntime({ type: "QE_MANAK_RESULT_ACK", sampleId: String(data.sampleId || "") });
+      return;
+    }
     if (data.type === "QE_IS_CODE_PING") {
       markPresent();
       let version = "";

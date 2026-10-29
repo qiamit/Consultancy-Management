@@ -22,13 +22,42 @@ function setStatus(message, isError) {
   statusEl.classList.toggle("error", Boolean(isError && message));
 }
 
-function paintPower(on) {
+/** A Test Request armed by Consultancy Pro for one sample (login-only / empty never counts). */
+function hasTrSample(pending) {
+  return Boolean(
+    pending &&
+      typeof pending === "object" &&
+      pending.kind === "QE_MANAK_TR_V1" &&
+      String(pending.sampleId || "").trim(),
+  );
+}
+
+/** "IS 1234 · QR 123456789012" — which sample the armed Test Request is for. */
+function describeTrSample(pending) {
+  if (!hasTrSample(pending)) return "";
+  const sample = pending.sample || {};
+  const app = pending.application || {};
+  const parts = [];
+  if (app.isSearch) parts.push(`IS ${app.isSearch}`);
+  const code = String(sample.sample_code || "").trim();
+  const qr = String(sample.qr_code || "").trim();
+  if (code) parts.push(`Sample ${code}`);
+  else if (qr) parts.push(`QR ${qr}`);
+  const variety = String(sample.grade_type_variety || sample.sample_description || "").trim();
+  if (variety) parts.push(variety);
+  return parts.join(" · ") || `Sample ${String(pending.sampleId).slice(0, 8)}`;
+}
+
+function paintPower(on, pending) {
   document.body.classList.toggle("off", !on);
   if (powerToggle) powerToggle.checked = on;
   if (powerLabel) {
+    const armed = describeTrSample(pending);
     powerLabel.textContent = on
-      ? "ON — login → Test Request → save back"
-      : "OFF — Manak site works normally (auto-ON only from 🧪)";
+      ? `ON — Test Request${armed ? ` for ${armed}` : ""} → save back`
+      : armed
+        ? `OFF — armed sample: ${armed}`
+        : "OFF — Manak site works normally (auto-ON only from 🧪)";
   }
 }
 
@@ -124,6 +153,7 @@ function paintImportQrLast(result) {
 async function loadPower() {
   const data = await chrome.storage.local.get([
     "qeManakEnabled",
+    "pendingFill",
     "qeManakImportQrEnabled",
     "qeManakImportQr",
     "manakQrImport",
@@ -140,7 +170,7 @@ async function loadPower() {
     "renewalFill",
   ]);
   // Default OFF — only explicit true means Manak auto-flow is active.
-  paintPower(data.qeManakEnabled === true);
+  paintPower(data.qeManakEnabled === true && hasTrSample(data.pendingFill), data.pendingFill || null);
   const waiting = data.qeManakImportQr === true && data.qeManakImportQrEnabled !== true;
   const on = data.qeManakImportQrEnabled === true;
   paintImportQr(on, waiting);
@@ -179,44 +209,57 @@ function init() {
   powerToggle.addEventListener("change", async () => {
     const next = powerToggle.checked;
     if (next) {
+      // Test Request runs only for a sample sent from Consultancy Pro — never armed empty
+      // (an empty run would capture every later Manak PDF download).
+      const { pendingFill } = await chrome.storage.local.get(["pendingFill"]);
+      if (!hasTrSample(pendingFill)) {
+        paintPower(false, null);
+        setStatus("No Test Request sample is armed. Start Generate Test Request (🧪) on a sample in Consultancy Pro.", true);
+        return;
+      }
       await chrome.storage.local.set({
         qeManakEnabled: true,
         qeManakArmed: true,
       });
-    } else {
-      // Hard idle: clear every Manak auto flag so downloads / navigation stay normal.
-      await chrome.storage.local.set({
-        qeManakEnabled: false,
-        qeManakArmed: false,
-        pendingFill: null,
-        qeManakHomeReady: false,
-        qeManakPortal: null,
-        qeManakImportQr: false,
-        qeManakImportQrEnabled: false,
-        qeManakImportQrLanded: false,
-        qeManakImportQrTabId: 0,
-        qeManakNewApp: false,
-        qeManakNewAppEnabled: false,
-        newAppFill: null,
-        newAppLog: null,
-        qeManakInclusion: false,
-        qeManakInclusionEnabled: false,
-        inclusionFill: null,
-        qeManakRenewal: false,
-        qeManakRenewalEnabled: false,
-        renewalFill: null,
-      });
-      chrome.runtime.sendMessage({ type: "QE_MANAK_IDLE" }, () => {
-        void chrome.runtime.lastError;
-      });
+      paintPower(true, pendingFill);
+      setStatus(`ON — Test Request for ${describeTrSample(pendingFill)} (login → fill → PDF → Sample Code).`, false);
+      return;
     }
-    paintPower(next);
-    setStatus(
-      next
-        ? "ON — Generate Test Request from Consultancy Pro (login → fill → PDF → Sample Code)."
-        : "OFF — Manak pages work normally (Test Report download etc.). Auto Test Request paused.",
-      false,
-    );
+    // Hard idle: clear every Manak auto flag so downloads / navigation stay normal.
+    const all = await chrome.storage.local.get(null);
+    const pdfKeys = Object.keys(all || {}).filter((key) => /^manakPdf_\d+$/.test(key));
+    if (pdfKeys.length) await chrome.storage.local.remove(pdfKeys);
+    await chrome.storage.local.set({
+      qeManakEnabled: false,
+      qeManakArmed: false,
+      pendingFill: null,
+      qeManakTrTabId: 0,
+      qeManakReturn: null,
+      manakResult: null,
+      manakPdfMeta: null,
+      qeManakHomeReady: false,
+      qeManakPortal: null,
+      qeManakImportQr: false,
+      qeManakImportQrEnabled: false,
+      qeManakImportQrLanded: false,
+      qeManakImportQrTabId: 0,
+      qeManakNewApp: false,
+      qeManakNewAppEnabled: false,
+      newAppFill: null,
+      newAppLog: null,
+      qeManakInclusion: false,
+      qeManakInclusionEnabled: false,
+      inclusionFill: null,
+      qeManakRenewal: false,
+      qeManakRenewalEnabled: false,
+      renewalFill: null,
+      renewalStage: null,
+    });
+    chrome.runtime.sendMessage({ type: "QE_MANAK_IDLE" }, () => {
+      void chrome.runtime.lastError;
+    });
+    paintPower(false, null);
+    setStatus("OFF — Manak pages work normally (Test Report download etc.). Auto Test Request paused.", false);
   });
 
   importQrToggle.addEventListener("change", async () => {
@@ -280,6 +323,7 @@ function init() {
       qeManakRenewal: false,
       qeManakRenewalEnabled: false,
       renewalFill: null,
+      renewalStage: null,
     });
     chrome.runtime.sendMessage({ type: "QE_MANAK_IDLE" }, () => {
       void chrome.runtime.lastError;
@@ -295,6 +339,7 @@ function init() {
     }
     if (
       changes.qeManakEnabled ||
+      changes.pendingFill ||
       changes.qeManakArmed ||
       changes.qeManakImportQrEnabled ||
       changes.qeManakImportQr ||
