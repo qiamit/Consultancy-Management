@@ -84,6 +84,7 @@ function LongDurationTests({
         ]}
         blank={() => ({ clauseNo: '', testName: '', labName: '', labId: '', duration: '', expectedDate: '', inHouseReport: null, labReport: null })}
         saved={rowsOf(payload)}
+        payload={payload}
         onChanged={onChanged}
         addLabel="Add long duration test"
       />
@@ -256,6 +257,7 @@ export function ManakTestReportsStep({
             ]}
             blank={() => ({ description: '', complete: 'Yes', conformity: 'Yes', testReport: null })}
             saved={rowsOf(payloads['raw-material-test-reports'])}
+            payload={payloads['raw-material-test-reports']}
             onChanged={onChanged}
             addLabel="Add raw material test report"
           />

@@ -157,6 +157,7 @@ export function ManakTestingStep({
         ]}
         blank={() => ({ equipmentName: '', make: '', leastCount: '', range: '', calibrationStatus: 'Yes', clauseNo: '', quantity: '1 Nos' })}
         saved={rowsOf(payloads['cmpf-306']).map(normalizeCmpf306Row)}
+        payload={payloads['cmpf-306']}
         onChanged={onChanged}
         addLabel="Add testing equipment"
       />
@@ -205,6 +206,7 @@ export function ManakTestingStep({
           ]}
           blank={() => ({ clauseNo: '', testName: '', laboratoryName: '', laboratoryId: '' })}
           saved={rowsOf(payloads['subcontracted-tests'])}
+          payload={payloads['subcontracted-tests']}
           onChanged={onChanged}
           addLabel="Add sub-contracted test"
         />

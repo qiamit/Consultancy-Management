@@ -418,6 +418,8 @@ function ListsStep({
         ]}
         blank={() => ({ machineryName: '', make: '', capacityPerDay: '', number: '', remarks: '', [INCLUSION_ADDITION_KEY]: 'Yes' })}
         saved={withAdditionDefault(rowsOf(payloads['cmpf-305']))}
+        payload={payloads['cmpf-305']}
+        defaultSort="machineryName"
         onChanged={onChanged}
         addLabel="Add machinery"
       />
@@ -453,6 +455,7 @@ function ListsStep({
         ]}
         blank={() => ({ equipmentName: '', make: '', leastCount: '', range: '', calibrationStatus: 'Yes', clauseNo: '', quantity: '1 Nos', [INCLUSION_ADDITION_KEY]: 'Yes' })}
         saved={withAdditionDefault(rowsOf(payloads['cmpf-306']).map(normalizeCmpf306Row))}
+        payload={payloads['cmpf-306']}
         onChanged={onChanged}
         addLabel="Add testing equipment"
       />
