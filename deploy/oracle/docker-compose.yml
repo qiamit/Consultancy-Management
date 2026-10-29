@@ -143,6 +143,7 @@ services:
       RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-}
       # Off until cutover, so Railway and Oracle never both send renewal reminders.
       RENEWAL_REMINDERS_DISABLED: ${RENEWAL_REMINDERS_DISABLED:-1}
+      ALLOW_LOCALHOST_ORIGINS: ${ALLOW_LOCALHOST_ORIGINS:-1}
 
   mcp:
     <<: *service
