@@ -9,17 +9,12 @@ const TEST_REQUEST =
 const RESULT_KIND = "QE_MANAK_TR_RESULT_V1";
 const QR_IMPORT_KIND = "QE_MANAK_QR_IMPORT_V1";
 const PLAY_STORE = /play\.google\.com|apps\.apple\.com|com\.bis\.app|itunes\.apple\.com/i;
-const APP_TAB_URLS = [
-  "http://localhost/*",
-  "http://localhost:*/*",
-  "http://127.0.0.1/*",
-  "http://127.0.0.1:*/*",
-  "http://localhost:3000/*",
-  "https://qengineering.in/*",
-  "https://www.qengineering.in/*",
-  "https://*.qengineering.in/*",
-];
-const APP_HOST_RE = /localhost|127\.0\.0\.1|qengineering\.in/i;
+// Consultancy Pro tabs that may receive Manak results / PDFs (exact hostnames, checked before every send).
+const APP_HOSTS_HTTPS = ["qengineering.in", "www.qengineering.in"];
+const DEV_HOSTS = ["localhost", "127.0.0.1"];
+// Manak PDF inbox (API gateway). Local dev: any localhost / 127.0.0.1 port.
+const RETURN_ORIGINS = ["https://api.qengineering.in"];
+const MANAK_HOSTS = ["manakonline.in", "www.manakonline.in"];
 const PDF_CHUNK = 160000;
 
 const hasDebugger = Boolean(chrome.debugger);
@@ -180,7 +175,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
         data &&
         data.qeManakEnabled === true &&
         data.qeManakArmed === true &&
-        Boolean(data.pendingFill);
+        hasTrSample(data.pendingFill);
       if (!importArmed && !trArmed && !newAppArmed) return;
 
       // New Application stays armed through all 8 steps; re-fill login only on the eBIS login page.
@@ -265,64 +260,82 @@ async function printTabToPdf(tabId) {
   }
 }
 
-async function injectPdfViaScript(tabId, result) {
-  if (!tabId || !result.pdfBase64 || !chrome.scripting || !chrome.scripting.executeScript) return;
-  const pdf = result.pdfBase64;
-  const chunk = 80000;
-  const total = Math.ceil(pdf.length / chunk) || 1;
-  const injectId = `inj-${result.sampleId || "x"}-${result.filledAt || Date.now()}`;
-  const meta = {
-    kind: RESULT_KIND,
-    sampleId: result.sampleId || "",
-    sample_code: result.sample_code || "",
-    qr_code: result.qr_code || "",
-    pdfName: result.pdfName || "Test_Request.pdf",
-    filledAt: result.filledAt || Date.now(),
-  };
+/** True for a Test Request payload armed by Consultancy Pro for one sample (login-only / {} never counts). */
+function hasTrSample(pending) {
+  return Boolean(
+    pending &&
+      typeof pending === "object" &&
+      pending.kind === "QE_MANAK_TR_V1" &&
+      String(pending.sampleId || "").trim(),
+  );
+}
+
+function parseUrl(url) {
   try {
-    await chrome.scripting.executeScript({
-      target: { tabId },
-      func: (id, count, info) => {
-        window.__qePdfInject = { id, total: count, meta: info, parts: [] };
-      },
-      args: [injectId, total, meta],
-    });
-    for (let i = 0; i < total; i += 1) {
-      await chrome.scripting.executeScript({
-        target: { tabId },
-        func: (id, index, part) => {
-          if (!window.__qePdfInject || window.__qePdfInject.id !== id) return;
-          window.__qePdfInject.parts[index] = part;
-        },
-        args: [injectId, i, pdf.slice(i * chunk, (i + 1) * chunk)],
-      });
-    }
-    await chrome.scripting.executeScript({
-      target: { tabId },
-      func: (id) => {
-        const bag = window.__qePdfInject;
-        if (!bag || bag.id !== id) return;
-        if (bag.parts.filter((part) => typeof part === "string").length !== bag.total) return;
-        const payload = { ...bag.meta, pdfBase64: bag.parts.join("") };
-        window.__qePdfInject = null;
-        window.postMessage({ type: "QE_MANAK_RESULT", result: payload }, window.location.origin);
-        window.dispatchEvent(new CustomEvent("qe-manak-sample-result", { detail: payload }));
-      },
-      args: [injectId],
-    });
+    return new URL(String(url || ""));
   } catch {
-    /* tab may have closed */
+    return null;
   }
 }
 
+/** Consultancy Pro tab: exact app hostnames only (dev: localhost / 127.0.0.1 on any port). */
+function isAppTabUrl(url) {
+  const u = parseUrl(url);
+  if (!u) return false;
+  const host = u.hostname.toLowerCase();
+  if (u.protocol === "https:" && APP_HOSTS_HTTPS.includes(host)) return true;
+  return (u.protocol === "http:" || u.protocol === "https:") && DEV_HOSTS.includes(host);
+}
+
+/** Manak PDF inbox origin: https://api.qengineering.in, or localhost / 127.0.0.1 in dev. "" when not allowed. */
+function allowedReturnUrl(value) {
+  const u = parseUrl(String(value || "").trim());
+  if (!u || u.username || u.password) return "";
+  const host = u.hostname.toLowerCase();
+  const devOk = (u.protocol === "http:" || u.protocol === "https:") && DEV_HOSTS.includes(host);
+  if (!devOk && !RETURN_ORIGINS.includes(u.origin)) return "";
+  return `${u.origin}${u.pathname}`.replace(/\/+$/, "");
+}
+
+/** Manak / FMCS login page on manakonline.in (https only). "" when not allowed. */
+function allowedManakUrl(value) {
+  const u = parseUrl(String(value || "").trim());
+  if (!u || u.protocol !== "https:" || u.username || u.password) return "";
+  return MANAK_HOSTS.includes(u.hostname.toLowerCase()) ? u.toString() : "";
+}
+
+function getTab(tabId) {
+  return new Promise((resolve) => {
+    if (!tabId) {
+      resolve(null);
+      return;
+    }
+    try {
+      chrome.tabs.get(tabId, (tab) => {
+        void chrome.runtime.lastError;
+        resolve(tab || null);
+      });
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+/** Re-checks the tab's current URL right before every send — tab ids get reused for other sites. */
+async function sendToAppTab(tabId, message) {
+  const tab = await getTab(Number(tabId) || 0);
+  if (!tab || !tab.id || !isAppTabUrl(tab.url || "")) return false;
+  await safeSendTab(tab.id, message);
+  return true;
+}
+
+// bridge.js (content script on the app tab) posts the result and assembles the chunked PDF for the page.
 function deliverResultToTab(tabId, result) {
   if (!tabId) return;
   const pdf = result.pdfBase64 || "";
   const light = { ...result, pdfBase64: "" };
-  void safeSendTab(tabId, { type: "QE_MANAK_RESULT", result: light });
-  injectLightResult(tabId, light);
+  void sendToAppTab(tabId, { type: "QE_MANAK_RESULT", result: light });
   if (!pdf) return;
-  void injectPdfViaScript(tabId, result);
   const id = `manak-pdf-${result.sampleId || "x"}-${result.filledAt || Date.now()}`;
   const total = Math.ceil(pdf.length / PDF_CHUNK) || 1;
   const meta = {
@@ -333,7 +346,7 @@ function deliverResultToTab(tabId, result) {
     filledAt: result.filledAt || Date.now(),
   };
   for (let i = 0; i < total; i += 1) {
-    void safeSendTab(tabId, {
+    void sendToAppTab(tabId, {
       type: "QE_MANAK_PDF_CHUNK",
       id,
       index: i,
@@ -361,7 +374,7 @@ function deliverQrImportToTab(tabId, result) {
   if (!tabId || !result) return;
   // Bridge content script posts to the page once — do not also executeScript
   // postMessage or the app gets duplicate import events / toasts.
-  void safeSendTab(tabId, { type: "QE_MANAK_QR_IMPORT", result });
+  void sendToAppTab(tabId, { type: "QE_MANAK_QR_IMPORT", result });
 }
 
 function notifyQrImportToApp(result, targetAppTabId) {
@@ -380,11 +393,16 @@ function notifyQrImportToApp(result, targetAppTabId) {
 }
 
 const STORE_CHUNK = 350000;
+const UPLOADED_TOKENS_KEY = "qeManakUploadedTokens";
+const inboxUploads = new Map();
 
 function rememberManakReturn(payload) {
-  const returnUrl = String((payload && payload.returnUrl) || "").trim().replace(/\/$/, "");
+  const returnUrl = allowedReturnUrl(payload && payload.returnUrl);
   const returnToken = String((payload && payload.returnToken) || "").trim();
-  if (!returnUrl || !returnToken) return;
+  if (!returnUrl || !returnToken) {
+    chrome.storage.local.set({ qeManakReturn: null });
+    return;
+  }
   chrome.storage.local.set({
     qeManakReturn: {
       returnUrl,
@@ -394,66 +412,125 @@ function rememberManakReturn(payload) {
   });
 }
 
+async function postInbox(url, body) {
+  let lastError = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (attempt) await new Promise((resolve) => setTimeout(resolve, 1000 * 2 ** (attempt - 1)));
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      let json = null;
+      try {
+        json = await res.json();
+      } catch {
+        json = null;
+      }
+      if (res.ok && (!json || json.ok !== false)) return json || { ok: true };
+      lastError = new Error((json && json.error) || `HTTP ${res.status}`);
+      // Wrong token / bad request will not get better on a retry.
+      if (res.status >= 400 && res.status < 500 && res.status !== 408 && res.status !== 429) break;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error("Manak PDF inbox unavailable.");
+}
+
+/** Upload the captured PDF to the app's inbox once per hand-off token (chunk → finish), with retries. */
 async function uploadPdfToAppInbox(result) {
   if (!result || !result.pdfBase64) return;
   let stored = {};
   try {
-    stored = await chrome.storage.local.get(["pendingFill", "qeManakReturn"]);
+    stored = await chrome.storage.local.get(["pendingFill", "qeManakReturn", UPLOADED_TOKENS_KEY]);
   } catch {
     return;
   }
   const pending = (stored && stored.pendingFill) || {};
   const ret = (stored && stored.qeManakReturn) || {};
-  const returnUrl = String(pending.returnUrl || ret.returnUrl || "").replace(/\/$/, "");
+  const returnUrl = allowedReturnUrl(pending.returnUrl || ret.returnUrl);
   const returnToken = String(pending.returnToken || ret.returnToken || "").trim();
   if (!returnUrl || !returnToken) return;
+  const tokenSampleId = String(pending.sampleId || ret.sampleId || "").trim();
+  // A PDF for another sample must never land in this token's inbox.
+  if (result.sampleId && tokenSampleId && String(result.sampleId) !== tokenSampleId) return;
+  const done = Array.isArray(stored[UPLOADED_TOKENS_KEY]) ? stored[UPLOADED_TOKENS_KEY] : [];
+  if (done.includes(returnToken) || inboxUploads.has(returnToken)) return;
   const pdf = String(result.pdfBase64)
     .replace(/^data:application\/pdf;base64,/i, "")
     .replace(/\s+/g, "");
   if (!pdf) return;
-  const chunkSize = 120000;
-  const total = Math.ceil(pdf.length / chunkSize) || 1;
-  try {
+  const endpoint = `${returnUrl}/api/osl/manak-pdf`;
+  const job = (async () => {
+    const chunkSize = 120000;
+    const total = Math.ceil(pdf.length / chunkSize) || 1;
     for (let index = 0; index < total; index += 1) {
-      const res = await fetch(`${returnUrl}/api/osl/manak-pdf`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "chunk",
-          token: returnToken,
-          index,
-          total,
-          chunk: pdf.slice(index * chunkSize, (index + 1) * chunkSize),
-        }),
-      });
-      if (!res.ok) return;
-    }
-    await fetch(`${returnUrl}/api/osl/manak-pdf`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "finish",
+      await postInbox(endpoint, {
+        action: "chunk",
         token: returnToken,
-        pdfName: result.pdfName || "Test_Request.pdf",
-        sample_code: result.sample_code || "",
-        sampleId: result.sampleId || pending.sampleId || ret.sampleId || "",
-      }),
+        index,
+        total,
+        chunk: pdf.slice(index * chunkSize, (index + 1) * chunkSize),
+      });
+    }
+    await postInbox(endpoint, {
+      action: "finish",
+      token: returnToken,
+      pdfName: result.pdfName || "Test_Request.pdf",
+      sample_code: result.sample_code || "",
+      sampleId: result.sampleId || tokenSampleId,
     });
+    // Done: never reuse this token for a later capture.
+    const latest = await chrome.storage.local.get([UPLOADED_TOKENS_KEY, "qeManakReturn"]);
+    const list = Array.isArray(latest[UPLOADED_TOKENS_KEY]) ? latest[UPLOADED_TOKENS_KEY] : [];
+    const updates = { [UPLOADED_TOKENS_KEY]: [...list.filter((t) => t !== returnToken), returnToken].slice(-20) };
+    if (latest.qeManakReturn && latest.qeManakReturn.returnToken === returnToken) updates.qeManakReturn = null;
+    await chrome.storage.local.set(updates);
+  })();
+  inboxUploads.set(returnToken, job);
+  try {
+    await job;
   } catch {
-    /* app inbox unavailable */
+    /* app inbox unavailable after retries — the app still gets the PDF from the bridge / stored copy */
+  } finally {
+    inboxUploads.delete(returnToken);
   }
+}
+
+function storedPdfKeys(all) {
+  return Object.keys(all || {}).filter((key) => /^manakPdf_\d+$/.test(key));
+}
+
+/** Drop the stored Test Request result + PDF chunks (after the app confirms attach, or a new flow starts). */
+function clearStoredManakPdf() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(null, (all) => {
+      void chrome.runtime.lastError;
+      const keys = [...storedPdfKeys(all), "manakPdfMeta", "manakResult"];
+      chrome.storage.local.remove(keys, () => {
+        void chrome.runtime.lastError;
+        resolve();
+      });
+    });
+  });
 }
 
 function persistManakResult(result) {
   const pdf = result.pdfBase64 || "";
   const light = { ...result, pdfBase64: "" };
+  if (!pdf) {
+    // Sample Code only: keep a PDF already stored for the app (it is cleared once the app confirms attach).
+    chrome.storage.local.set({ manakResult: light }, () => void chrome.runtime.lastError);
+    return;
+  }
+  void uploadPdfToAppInbox({ ...result, pdfBase64: pdf });
   chrome.storage.local.get(null, (all) => {
-    const stale = Object.keys(all || {}).filter((key) => /^manakPdf_\d+$/.test(key) || key === "manakPdfMeta");
+    const stale = [...storedPdfKeys(all), "manakPdfMeta"];
     const writeChunks = () => {
       chrome.storage.local.set({ manakResult: light, manakPdfMeta: null }, () => {
         void chrome.runtime.lastError;
-        if (!pdf) return;
-        void uploadPdfToAppInbox({ ...result, pdfBase64: pdf });
         const total = Math.ceil(pdf.length / STORE_CHUNK) || 1;
         let index = 0;
         const next = () => {
@@ -484,8 +561,7 @@ function persistManakResult(result) {
         next();
       });
     };
-    if (stale.length) chrome.storage.local.remove(stale, writeChunks);
-    else writeChunks();
+    chrome.storage.local.remove(stale, writeChunks);
   });
 }
 
@@ -553,7 +629,7 @@ async function isManakTrCaptureActive() {
       data.qeManakEnabled === true &&
       data.qeManakArmed === true &&
       data.qeManakImportQr !== true &&
-      Boolean(data.pendingFill)
+      hasTrSample(data.pendingFill)
     );
   } catch {
     return false;
@@ -632,9 +708,9 @@ let lastManakAppTabId = 0;
 const fillSentAt = new Map();
 const incomingManakPdf = new Map();
 
-function rememberAppTab(tabId) {
+function rememberAppTab(tabId, url) {
   const id = Number(tabId) || 0;
-  if (!id) return;
+  if (!id || !isAppTabUrl(url)) return;
   lastManakAppTabId = id;
   lastIsCodeAppTabId = lastIsCodeAppTabId || id;
   chrome.storage.local.set({ lastManakAppTabId: id, lastIsCodeAppTabId: lastIsCodeAppTabId }, () => {
@@ -647,41 +723,47 @@ chrome.storage.local.get(["lastManakAppTabId", "lastIsCodeAppTabId"], (data) => 
   if (data && data.lastIsCodeAppTabId) lastIsCodeAppTabId = Number(data.lastIsCodeAppTabId) || lastIsCodeAppTabId;
 });
 
-function isAppTabUrl(url) {
-  return APP_HOST_RE.test(String(url || ""));
-}
-
 function findAppTabIds(tabs) {
   return (tabs || [])
     .filter((tab) => tab && tab.id && isAppTabUrl(tab.url || ""))
     .map((tab) => tab.id);
 }
 
-function injectLightResult(tabId, result) {
-  if (!tabId || !chrome.scripting || !chrome.scripting.executeScript) return;
-  const light = {
-    kind: result.kind || RESULT_KIND,
-    sampleId: result.sampleId || "",
-    sample_code: result.sample_code || "",
-    qr_code: result.qr_code || "",
-    filledAt: result.filledAt || Date.now(),
-    pdfName: result.pdfName || "",
-    pdfBase64: "",
+/**
+ * Storage for one Manak flow: every other section's flags / stage / payload are cleared, so a leftover
+ * New Application, Inclusion, Renewal, Import QR or Test Request run never hijacks the next one.
+ * section: "tr" | "import" | "newApp" | "inclusion" | "renewal" | "login".
+ */
+function armOnly(section, extra) {
+  const state = {
+    pendingFill: null,
+    qeManakEnabled: false,
+    qeManakArmed: true,
+    qeManakHomeReady: false,
+    qeManakTrTabId: 0,
+    qeManakImportQr: false,
+    qeManakImportQrEnabled: false,
+    qeManakImportQrLanded: false,
+    qeManakImportQrTabId: 0,
+    qeManakImportAppTabId: 0,
+    qeManakImportProjectId: "",
+    qeManakImportPortalUserId: "",
+    qeManakNewApp: false,
+    qeManakNewAppEnabled: false,
+    newAppFill: null,
+    newAppLog: null,
+    qeManakInclusion: false,
+    qeManakInclusionEnabled: false,
+    inclusionFill: null,
+    inclusionLog: null,
+    qeManakRenewal: false,
+    qeManakRenewalEnabled: false,
+    renewalFill: null,
+    renewalLog: null,
+    renewalStage: null,
   };
-  void settle(
-    chrome.scripting.executeScript({
-      target: { tabId },
-      func: (payload) => {
-        try {
-          window.postMessage({ type: "QE_MANAK_RESULT", result: payload }, window.location.origin);
-          window.dispatchEvent(new CustomEvent("qe-manak-sample-result", { detail: payload }));
-        } catch {
-          /* ignore */
-        }
-      },
-      args: [light],
-    }),
-  );
+  if (section !== "tr") state.qeManakReturn = null;
+  return { ...state, ...(extra || {}) };
 }
 
 function payloadWithoutPassword(payload) {
@@ -834,8 +916,35 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || typeof message.type !== "string") return;
 
   if (message.type === "QE_IS_CODE_PING" || message.type === "QE_MANAK_APP_HELLO") {
-    if (sender && sender.tab && sender.tab.id) rememberAppTab(sender.tab.id);
+    if (sender && sender.tab && sender.tab.id) rememberAppTab(sender.tab.id, sender.tab.url);
     sendResponse({ ok: true, extension: "QE Consultancy" });
+    return true;
+  }
+
+  if (message.type === "QE_MANAK_WHOAMI") {
+    // content.js asks which tab it runs in, to act only in the tab tracked for this Test Request.
+    sendResponse({ tabId: (sender && sender.tab && sender.tab.id) || 0 });
+    return true;
+  }
+
+  if (message.type === "QE_MANAK_RESULT_ACK") {
+    // The app attached the Test Request PDF: drop the stored copy so bridge.js stops re-posting it.
+    if (!(sender && sender.tab && isAppTabUrl(sender.tab.url || ""))) {
+      sendResponse({ ok: false });
+      return true;
+    }
+    const ackSampleId = String(message.sampleId || "").trim();
+    chrome.storage.local.get(["manakResult", "manakPdfMeta"], (data) => {
+      void chrome.runtime.lastError;
+      const storedIds = [data && data.manakResult, data && data.manakPdfMeta]
+        .map((entry) => String((entry && entry.sampleId) || "").trim())
+        .filter(Boolean);
+      if (!ackSampleId || !storedIds.includes(ackSampleId)) {
+        sendResponse({ ok: true, cleared: false });
+        return;
+      }
+      void clearStoredManakPdf().then(() => sendResponse({ ok: true, cleared: true }));
+    });
     return true;
   }
 
@@ -993,21 +1102,38 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === "QE_MANAK_OPEN_TR") {
-    if (sender && sender.tab && sender.tab.id) {
-      rememberAppTab(sender.tab.id);
+    const senderTab = sender && sender.tab;
+    if (senderTab && senderTab.id) {
+      // Only Consultancy Pro (qengineering.in / local dev) may start a Manak flow.
+      if (!isAppTabUrl(senderTab.url || "")) {
+        sendResponse({ ok: false, message: "Manak flows can only be started from Consultancy Pro." });
+        return true;
+      }
+      rememberAppTab(senderTab.id, senderTab.url);
     } else {
       chrome.tabs.query({}, (tabs) => {
-        const appId = findAppTabIds(tabs)[0];
-        if (appId) rememberAppTab(appId);
+        const appTab = (tabs || []).find((tab) => tab && tab.id && isAppTabUrl(tab.url || ""));
+        if (appTab) rememberAppTab(appTab.id, appTab.url);
       });
     }
     const payload = message.payload || null;
-    rememberManakReturn(payload);
     const portalUserId = String(message.portalUserId || payload?.portalUserId || "").trim();
     const portalPassword = String(message.portalPassword || payload?.portalPassword || "").trim();
-    rememberPortal(portalUserId, portalPassword);
     const importQr = Boolean(message.importQr);
-    const importAppTabId = Number(sender && sender.tab && sender.tab.id) || lastManakAppTabId || 0;
+    const trRun = !importQr && !message.newApp && !message.inclusion && !message.renewal && !message.loginOnly;
+    if (trRun) {
+      // Test Request needs one sample from the app, and the PDF goes back only to the app's own API.
+      if (!hasTrSample(payload)) {
+        sendResponse({ ok: false, message: "No Test Request sample was sent. Start Generate Test Request from Consultancy Pro again." });
+        return true;
+      }
+      if (payload.returnUrl && !allowedReturnUrl(payload.returnUrl)) {
+        sendResponse({ ok: false, message: "The PDF return address is not Consultancy Pro's API — Test Request not started." });
+        return true;
+      }
+    }
+    rememberPortal(portalUserId, portalPassword);
+    const importAppTabId = Number(senderTab && senderTab.id) || lastManakAppTabId || 0;
     const importProjectId = String(message.projectId || "").trim();
     const qrCount = Math.max(1, Math.min(5, Number(message.qrCount) || 1));
     const openKey = [
@@ -1035,37 +1161,30 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     lastOpenKey = openKey;
     lastOpenAt = now;
     // Import QR must always use eBIS login — never /MANAK/login.
-    const ebisLoginUrl = ebisLoginHref(portalUserId, portalPassword);
-    const loginUrl = importQr
-      ? ebisLoginUrl
-      : typeof message.loginUrl === "string" && message.loginUrl.trim()
-        ? message.loginUrl.trim()
-        : ebisLoginUrl;
+    const ebisLoginUrl = ebisLoginHref(portalUserId);
+    // The app may send the FMCS login (foreign manufacturers); only manakonline.in pages are opened.
+    const loginUrl = importQr ? ebisLoginUrl : allowedManakUrl(message.loginUrl) || ebisLoginUrl;
+    const portal = { qeManakPortal: { userId: portalUserId } };
     void (async () => {
       if (importQr) {
         try {
           // Import QR is independent of Manak Test Request Auto power.
           // Section enables after Login; never create Test Request.
-          await chrome.storage.local.set({
-            pendingFill: null,
-            manakQrImport: null,
-            manakResult: null,
-            qeManakImportQr: true,
-            qeManakImportQrEnabled: false,
-            qeManakImportQrLanded: false,
-            qeManakQrCount: qrCount,
-            // Kill any leftover Test Request auto-flow so captcha never routes to TR.
-            qeManakEnabled: false,
-            qeManakArmed: true,
-            qeManakHomeReady: false,
-            qeManakImportQrTabId: 0,
-            qeManakImportAppTabId: importAppTabId,
-            qeManakImportProjectId: importProjectId,
-            qeManakImportPortalUserId: portalUserId,
-            qeManakPortal: {
-              userId: portalUserId,
-            },
-          });
+          await clearStoredManakPdf();
+          await chrome.storage.local.set(
+            armOnly("import", {
+              manakQrImport: null,
+              qeManakImportQr: true,
+              qeManakImportQrEnabled: false,
+              qeManakImportQrLanded: false,
+              qeManakQrCount: qrCount,
+              qeManakImportQrTabId: 0,
+              qeManakImportAppTabId: importAppTabId,
+              qeManakImportProjectId: importProjectId,
+              qeManakImportPortalUserId: portalUserId,
+              ...portal,
+            }),
+          );
           const reused = await findConfirmedLoggedInManakTab();
           if (reused && reused.tab.id) {
             if (
@@ -1127,29 +1246,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (message.inclusion) {
         // Manak Assist on BIS New Inclusion: login, then the Inclusion section opens this licence's
         // Change in Scope (Inclusion) form and fills it. Test Request / Import QR / New Application stay OFF.
-        await chrome.storage.local.set({
-          pendingFill: null,
-          manakResult: null,
-          qeManakImportQr: false,
-          qeManakImportQrEnabled: false,
-          qeManakEnabled: false,
-          qeManakArmed: true,
-          qeManakHomeReady: false,
-          qeManakNewApp: false,
-          qeManakNewAppEnabled: false,
-          newAppFill: null,
-          qeManakRenewal: false,
-          qeManakRenewalEnabled: false,
-          renewalFill: null,
-          qeManakInclusion: true,
-          // Section switches ON once a signed-in Manak page is seen (inclusion-fill.js).
-          qeManakInclusionEnabled: false,
-          inclusionFill: payloadWithoutPassword(payload),
-          inclusionLog: null,
-          qeManakPortal: {
-            userId: portalUserId,
-          },
-        });
+        await clearStoredManakPdf();
+        await chrome.storage.local.set(
+          armOnly("inclusion", {
+            qeManakInclusion: true,
+            // Section switches ON once a signed-in Manak page is seen (inclusion-fill.js).
+            qeManakInclusionEnabled: false,
+            inclusionFill: payloadWithoutPassword(payload),
+            ...portal,
+          }),
+        );
         const reused = await findConfirmedLoggedInManakTab();
         if (reused && reused.tab.id) {
           clearRememberedPortal();
@@ -1160,7 +1266,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           sendResponse({ ok: true, message: "Already logged in. Inclusion ON — opening the licence's Change in Scope (Inclusion)." });
           return;
         }
-        const created = await safeTabCreate({ url: ebisLoginUrl, active: true });
+        const created = await safeTabCreate({ url: loginUrl, active: true });
         if (created && created.id) scheduleLoginFill(created.id, portalUserId, portalPassword);
         sendResponse({
           ok: true,
@@ -1172,30 +1278,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // Manak Assist on BIS License Renewals: login, then the Renewal section (renewal-fill.js) opens this
         // licence's Apply for Renewal and adds the production returns. Test Request / Import QR /
         // New Application / Inclusion stay OFF.
-        await chrome.storage.local.set({
-          pendingFill: null,
-          manakResult: null,
-          qeManakImportQr: false,
-          qeManakImportQrEnabled: false,
-          qeManakEnabled: false,
-          qeManakArmed: true,
-          qeManakHomeReady: false,
-          qeManakNewApp: false,
-          qeManakNewAppEnabled: false,
-          newAppFill: null,
-          qeManakInclusion: false,
-          qeManakInclusionEnabled: false,
-          inclusionFill: null,
-          qeManakRenewal: true,
-          // Switches ON after captcha sign-in (content.js).
-          qeManakRenewalEnabled: false,
-          renewalFill: payloadWithoutPassword(payload),
-          renewalLog: null,
-          renewalStage: null,
-          qeManakPortal: {
-            userId: portalUserId,
-          },
-        });
+        await clearStoredManakPdf();
+        await chrome.storage.local.set(
+          armOnly("renewal", {
+            qeManakRenewal: true,
+            // Switches ON after captcha sign-in (content.js).
+            qeManakRenewalEnabled: false,
+            renewalFill: payloadWithoutPassword(payload),
+            ...portal,
+          }),
+        );
         const reused = await findConfirmedLoggedInManakTab();
         if (reused && reused.tab.id) {
           clearRememberedPortal();
@@ -1206,7 +1298,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           sendResponse({ ok: true, message: "Already logged in. Renewal ON — opening this licence's Apply for Renewal." });
           return;
         }
-        const created = await safeTabCreate({ url: ebisLoginUrl, active: true });
+        const created = await safeTabCreate({ url: loginUrl, active: true });
         if (created && created.id) scheduleLoginFill(created.id, portalUserId, portalPassword);
         sendResponse({
           ok: true,
@@ -1217,29 +1309,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (message.newApp) {
         // Manak Assist: login in a new tab, then the New Application section fills the
         // licence application for this project. Test Request / Import QR stay OFF.
-        await chrome.storage.local.set({
-          pendingFill: null,
-          manakResult: null,
-          qeManakImportQr: false,
-          qeManakImportQrEnabled: false,
-          qeManakEnabled: false,
-          qeManakArmed: true,
-          qeManakHomeReady: false,
-          qeManakNewApp: true,
-          // Section switches ON after captcha sign-in (content.js).
-          qeManakNewAppEnabled: false,
-          qeManakInclusion: false,
-          qeManakInclusionEnabled: false,
-          inclusionFill: null,
-          qeManakRenewal: false,
-          qeManakRenewalEnabled: false,
-          renewalFill: null,
-          newAppFill: payloadWithoutPassword(payload),
-          newAppLog: null,
-          qeManakPortal: {
-            userId: portalUserId,
-          },
-        });
+        await clearStoredManakPdf();
+        await chrome.storage.local.set(
+          armOnly("newApp", {
+            qeManakNewApp: true,
+            // Section switches ON after captcha sign-in (content.js).
+            qeManakNewAppEnabled: false,
+            newAppFill: payloadWithoutPassword(payload),
+            ...portal,
+          }),
+        );
         const reused = await findConfirmedLoggedInManakTab();
         if (reused && reused.tab.id) {
           clearRememberedPortal();
@@ -1253,7 +1332,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           });
           return;
         }
-        const created = await safeTabCreate({ url: ebisLoginUrl, active: true });
+        const created = await safeTabCreate({ url: loginUrl, active: true });
         if (created && created.id) scheduleLoginFill(created.id, portalUserId, portalPassword);
         sendResponse({
           ok: true,
@@ -1262,69 +1341,52 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return;
       }
       if (message.loginOnly) {
-        // App-started login always turns Manak Test Request Auto flow ON.
-        await chrome.storage.local.set({
-          qeManakRenewal: false,
-          qeManakRenewalEnabled: false,
-          pendingFill: null,
-          qeManakImportQr: false,
-          qeManakEnabled: true,
-          qeManakArmed: true,
-          qeManakHomeReady: false,
-          qeManakPortal: {
-            userId: portalUserId,
-          },
-        });
+        // Sign-in only (e.g. FMCS): every section stays OFF — no Test Request without a sample.
+        await chrome.storage.local.set(armOnly("login", portal));
         const created = await safeTabCreate({ url: loginUrl });
         if (created && created.id) {
           scheduleLoginFill(created.id, portalUserId, portalPassword);
         }
         sendResponse({
           ok: true,
-          message: "Opening eBIS login. User ID / Password will be filled. Type captcha only.",
+          message: "Opening Manak login. User ID / Password will be filled. Type captcha only.",
         });
         return;
       }
       // Generate Test Request from app — always re-enable Auto flow (even if last run turned it OFF).
+      // Ack right away (the app waits a few seconds); the tab work below can take longer.
+      await clearStoredManakPdf();
+      await chrome.storage.local.set(
+        armOnly("tr", {
+          pendingFill: payloadWithoutPassword(payload),
+          qeManakEnabled: true,
+          ...portal,
+        }),
+      );
+      rememberManakReturn(payload);
+      sendResponse({
+        ok: true,
+        message: "Manak Test Request ON. Opening Manak — User ID / Password are filled; type the captcha (10s wait).",
+      });
       // Use confirmed session only (same as Import QR) so User ID / captcha wait are not skipped.
       const reused = await findConfirmedLoggedInManakTab();
-      await chrome.storage.local.set({
-        qeManakRenewal: false,
-        qeManakRenewalEnabled: false,
-        pendingFill: payloadWithoutPassword(payload),
-        manakResult: null,
-        qeManakImportQr: false,
-        qeManakEnabled: true,
-        qeManakArmed: true,
-        qeManakHomeReady: Boolean(reused),
-        qeManakPortal: {
-          userId: portalUserId,
-        },
-      });
       if (reused && reused.tab.id) {
         clearRememberedPortal();
+        await chrome.storage.local.set({ qeManakHomeReady: true, qeManakTrTabId: reused.tab.id });
         if (reused.session && reused.session.onTr) {
           await safeTabUpdate(reused.tab.id, { active: true });
           await safeSendTab(reused.tab.id, { type: "QE_MANAK_FILL", payload });
         } else {
           await safeTabUpdate(reused.tab.id, { active: true, url: TEST_REQUEST });
         }
-        sendResponse({
-          ok: true,
-          message: "Manak Test Request ON. Already logged in — opening Test Request.",
-        });
         return;
       }
       // Prefer eBIS login URL with portal query params so content can fill even if message is late.
       const created = await safeTabCreate({ url: ebisLoginUrl });
       if (created && created.id) {
+        await chrome.storage.local.set({ qeManakTrTabId: created.id });
         scheduleLoginFill(created.id, portalUserId, portalPassword);
       }
-      sendResponse({
-        ok: true,
-        message:
-          "Manak Test Request ON. Opening eBIS login — User ID / Password will be filled. Type captcha (10s wait).",
-      });
     })();
     return true;
   }
@@ -1368,7 +1430,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               ? "QR import rejected: these codes came from a Manak tab that is not linked to the active project import."
               : "QR import rejected: the signed-in Manak account does not match this firm's saved account.";
           if (targetAppTabId) {
-            void safeSendTab(targetAppTabId, { type: "QE_MANAK_QR_IMPORT_REJECTED", message: reason });
+            void sendToAppTab(targetAppTabId, { type: "QE_MANAK_QR_IMPORT_REJECTED", message: reason });
           }
           sendResponse({ ok: false, message: reason });
           return;
@@ -1450,6 +1512,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       qeManakEnabled: false,
       qeManakHomeReady: false,
       qeManakImportQr: false,
+      qeManakTrTabId: 0,
     });
     void broadcastManakIdle();
     if (message.closeTab && senderTabId) {
@@ -1487,7 +1550,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === "QE_IS_CODE_FETCH") {
-    const appTabId = sender && sender.tab && sender.tab.id;
+    const appTabId =
+      sender && sender.tab && sender.tab.id && isAppTabUrl(sender.tab.url || "") ? sender.tab.id : 0;
     lastIsCodeAppTabId = appTabId || lastIsCodeAppTabId;
     const isNumber = String(message.isNumber || "").trim();
     const sites = Array.isArray(message.sites) ? message.sites : null;
@@ -1524,7 +1588,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 function notifyIsCodeApp(tabId, type, extra) {
   if (!tabId) return;
-  void safeSendTab(tabId, { type, ...(extra || {}) });
+  void sendToAppTab(tabId, { type, ...(extra || {}) });
 }
 
 function waitTabComplete(tabId, timeoutMs) {
@@ -1618,7 +1682,11 @@ async function runPortalJob(appTabId, url, site, isNumber, creds) {
     }
     if (res && res.result) return res.result;
     if (res && res.error) return { fields: {}, files: [], notes: [`${site}: ${res.error}`] };
-    return { fields: {}, files: [], notes: [`${site}: no response. Reload QE Consultancy 2.2.7.`] };
+    return {
+      fields: {},
+      files: [],
+      notes: [`${site}: no response. Reload QE Consultancy ${chrome.runtime.getManifest().version}.`],
+    };
   } finally {
     const keep = Boolean(res && res.result && res.result.keepTab) || (needsCaptcha && !(res && res.result));
     if (!keep) void settle(chrome.tabs.remove(tab.id));
@@ -1758,12 +1826,11 @@ function limsUrl(isNumber) {
 }
 
 async function findConsultancyAppTabId() {
-  if (lastIsCodeAppTabId) return lastIsCodeAppTabId;
+  const last = await getTab(lastIsCodeAppTabId);
+  if (last && last.id && isAppTabUrl(last.url || "")) return last.id;
   try {
     const tabs = await chrome.tabs.query({});
-    const hit = tabs.find((tab) =>
-      /localhost:\d+|qengineering\.in|consultancy-production|frontend-production|railway\.app/i.test(tab.url || ""),
-    );
+    const hit = tabs.find((tab) => tab && tab.id && isAppTabUrl(tab.url || ""));
     return hit && hit.id ? hit.id : null;
   } catch {
     return null;

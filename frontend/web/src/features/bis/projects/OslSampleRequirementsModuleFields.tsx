@@ -82,6 +82,7 @@ import {
   registerManakPdfInbox,
   subscribeManakQrImport,
   subscribeManakTestRequestResult,
+  ackManakTestRequestResult,
   type ManakTrResult,
 } from './manakExtensionBridge'
 import {
@@ -435,7 +436,12 @@ export function OslSampleRequirementsModuleFields({
     const isThisRun = Boolean(run) && (returnToken
       ? returnToken === run!.token
       : !result.filledAt || result.filledAt >= run!.startedAt)
-    if (!run || !isThisRun || run.done) return
+    if (!run || !isThisRun) return
+    if (run.done) {
+      // Already attached for this run: let the extension drop its stored copy (stops the replays).
+      ackManakTestRequestResult(row.id)
+      return
+    }
     // Claim before the upload, so a delivery arriving mid-upload is ignored too.
     run.done = true
     saveManakTrRuns(pid, runs)
@@ -468,6 +474,7 @@ export function OslSampleRequirementsModuleFields({
     )
     onChangeRef.current({ ...latest, rows: nextRows })
     setExtensionBusyId((prev) => (prev === row.id ? null : prev))
+    ackManakTestRequestResult(row.id)
     toast.success(`Test Request PDF attached${result.sample_code ? ` (${result.sample_code})` : ''}`)
   }
 

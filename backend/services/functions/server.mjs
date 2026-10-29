@@ -263,7 +263,9 @@ async function handleManakPdf(req, res) {
     entry.ref = ref
     entry.pdfName = pdfName
     entry.sample_code = String(body.sample_code || entry.sample_code || '')
+    // Reset the chunk state, so a later upload for this token starts clean (a new total is allowed).
     entry.chunks = []
+    entry.chunkTotal = 0
     entry.createdAt = Date.now()
     writeManakEntry(entry)
     return corsJson(res, 200, { ok: true, ref, pdfName })

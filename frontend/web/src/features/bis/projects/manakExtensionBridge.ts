@@ -130,6 +130,22 @@ export function cmLDigitsOnly(value: string | null | undefined): string {
 }
 
 /**
+ * The 10-digit CM/L the extension matches on Manak. Throws a clear message otherwise — an empty or
+ * short CM/L would match the wrong licence row.
+ */
+export function requireManakCmL(value: string | null | undefined, purpose: string): string {
+  const digits = cmLDigitsOnly(value)
+  if (!/^\d{10}$/.test(digits)) {
+    throw new Error(
+      digits
+        ? `CM/L ${digits} Is Not a 10-Digit Licence Number — Fix the CM/L on This Licence Before Manak Assist (${purpose}).`
+        : `This Licence Has No CM/L Number — Add the 10-Digit CM/L Before Manak Assist (${purpose}).`,
+    )
+  }
+  return digits
+}
+
+/**
  * Open Manak Application / Licence Related Report and copy the 10-digit CM/L to clipboard.
  */
 export async function openManakLicenceRelatedRpt(
@@ -495,9 +511,15 @@ export async function openManakTestRequestFill(options: {
 
   let acked = false
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     function onAck(event: MessageEvent) {
       if (event.source !== window) return
+      if (event.data?.type === 'QE_MANAK_OPEN_ERROR') {
+        acked = true
+        window.removeEventListener('message', onAck)
+        reject(new Error(String(event.data.error || 'The extension could not start the Manak Test Request.')))
+        return
+      }
       if (event.data?.type !== 'QE_MANAK_OPEN_ACK') return
       acked = true
       window.removeEventListener('message', onAck)
@@ -524,8 +546,18 @@ export async function openManakTestRequestFill(options: {
       if (acked) return
       openManakUrl(loginUrl)
       resolve({ extensionUsed: false })
-    }, 600)
+    }, 6000)
   })
+}
+
+/**
+ * Tell the extension this sample's Test Request PDF is attached, so it drops its stored copy
+ * (otherwise bridge.js re-posts the old PDF on every page load / focus).
+ */
+export function ackManakTestRequestResult(sampleId: string): void {
+  const id = String(sampleId ?? '').trim()
+  if (!id) return
+  window.postMessage({ type: 'QE_MANAK_RESULT_ACK', sampleId: id }, window.location.origin)
 }
 
 /** Listen for Manak Test Request results (includes PDF when available). */
