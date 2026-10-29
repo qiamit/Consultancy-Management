@@ -792,7 +792,7 @@ export function BisProjectsTable({
                         ) : null}
                         {validity.daysLeft != null && validity.state === 'deferred' ? (
                           <p className="text-[11px] text-orange-700">
-                            Validity crossed {Math.abs(validity.daysLeft)} day(s) ago · {RENEWAL_DEFERRED_DAYS + validity.daysLeft} day(s) left with late fee
+                            Late Fee · {RENEWAL_DEFERRED_DAYS + validity.daysLeft} Days Left
                           </p>
                         ) : null}
                         {validity.state === 'expired' ? (
