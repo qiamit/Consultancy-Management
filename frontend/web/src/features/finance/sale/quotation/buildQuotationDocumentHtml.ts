@@ -102,6 +102,16 @@ function lineToForm(l: NonNullable<QuotationRow['line_items']>[number]): Quotati
   }
 }
 
+/** Gap between the page frame and the content (mm). */
+export const QUOTATION_FRAME_PAD_MM = 2
+
+/**
+ * Typed signature font: Segoe Script / Brush Script MT on Windows / macOS; the PDF service (Linux) has Z003 / URW
+ * Chancery from fonts-urw-base35, and `cursive` covers anything else.
+ */
+export const QUOTATION_SIGNATURE_FONT_FAMILY =
+  '"Segoe Script", "Brush Script MT", Z003, "URW Chancery L", cursive'
+
 function mmToPx(mm: number): number {
   // html2canvas is unreliable with CSS `mm` — use 96dpi px for PDF capture fidelity.
   return Math.round(mm * (96 / 25.4) * 100) / 100
@@ -111,6 +121,7 @@ function quotationStylesCss(tpl: FinanceDocumentTemplate): string {
   const scale = Math.max(0.1, Math.min(4, (tpl.pageScalingPercent || 100) / 100))
   const headerScale = tpl.scaleWithDocument ? scale : 1
   const font = esc(tpl.fontFamily || 'Arial, Helvetica, sans-serif')
+  /** Template sizes are points (a 10 pt body prints as 10 pt). */
   const size = Math.max(7, Math.min(18, (tpl.baseFontSizePt || 10) * scale))
   const portraitW: Record<FinanceDocumentTemplate['paperSize'], number> = {
     A4: 210,
@@ -134,14 +145,16 @@ function quotationStylesCss(tpl: FinanceDocumentTemplate): string {
       : portraitH[tpl.paperSize]
   const headerH = Math.max(tpl.headerMarginMm || 0, 8) * headerScale
   const footerH = Math.max(tpl.footerMarginMm || 0, 6) * headerScale
+  /*
+   * Page margins. The double frame is drawn inset at these margins (never on the paper edge) and content starts
+   * FRAME_PAD inside it. Printing uses the same margins as printer page margins, so every page of a long document
+   * gets the same frame (the page box is cloned onto each page).
+   */
   const padT = tpl.pageMarginTopMm || 0
   const padR = tpl.pageMarginRightMm || 0
-  const padB = tpl.showLetterFooter ? 0 : tpl.pageMarginBottomMm || 0
+  const padB = tpl.pageMarginBottomMm || 0
   const padL = tpl.pageMarginLeftMm || 0
-  const contentW = Math.max(
-    40,
-    pageW - (tpl.alignWithPageMargin ? padL + padR : 0),
-  )
+  const contentW = Math.max(40, pageW - padL - padR - 2 * QUOTATION_FRAME_PAD_MM)
   const pageCssSize =
     tpl.pageOrientation === 'landscape'
       ? `${tpl.paperSize === 'Letter' ? 'letter' : tpl.paperSize === 'Legal' ? 'legal' : tpl.paperSize.toLowerCase()} landscape`
@@ -157,10 +170,8 @@ function quotationStylesCss(tpl: FinanceDocumentTemplate): string {
   const headerHpx = mmToPx(headerH)
   const footerHpx = mmToPx(footerH)
   const contentWpx = mmToPx(contentW)
-  const padTpx = mmToPx(padT)
-  const padRpx = mmToPx(padR)
-  const padBpx = mmToPx(padB)
-  const padLpx = mmToPx(padL)
+  const frameInsetPx = `${mmToPx(QUOTATION_FRAME_PAD_MM)}px`
+  const screenPad = (mm: number) => `calc(${mmToPx(mm + QUOTATION_FRAME_PAD_MM)}px + 3px)`
   const rateColPx = mmToPx(28)
   const signHpx = mmToPx(18)
   const signWpx = mmToPx(46)
@@ -175,35 +186,68 @@ function quotationStylesCss(tpl: FinanceDocumentTemplate): string {
   const itemsFrame = `border: 3px double #292524;`
 
   return `
-  @page { size: ${pageCssSize}; margin: 0; }
+  @page { size: ${pageCssSize}; margin: ${padT}mm ${padR}mm ${padB}mm ${padL}mm; }
   * { box-sizing: border-box; }
   html, body {
-    margin: 0; padding: 0; width: ${pageWpx}px; background: #fff;
+    margin: 0; padding: 0; background: #fff;
   }
   body {
     font-family: ${font};
-    font-size: ${size}px;
+    font-size: ${size}pt;
     color: #1c1917;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
   table { border-collapse: collapse; border-spacing: 0; }
+  /* A page grows with its content (more items → more pages); it is at least one page tall so the letter footer
+     sits at the foot of a one-page document. */
   .page {
-    width: ${pageWpx}px;
-    min-height: ${pageHpx}px;
-    height: ${pageHpx}px;
-    ${boxFrame}
+    position: relative;
     background: #fff;
-    padding: ${padTpx}px ${padRpx}px ${padBpx}px ${padLpx}px;
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
   }
-  .page-body { flex: 1 1 auto; min-height: 0; }
+  .page-body { flex: 1 0 auto; }
   .letter-footer-wrap {
     margin-top: auto;
     flex-shrink: 0;
     width: 100%;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  @media screen {
+    html, body { width: ${pageWpx}px; }
+    .page {
+      width: ${pageWpx}px;
+      min-height: ${pageHpx}px;
+      padding: ${screenPad(padT)} ${screenPad(padR)} ${screenPad(padB)} ${screenPad(padL)};
+    }
+    .page::before {
+      content: '';
+      position: absolute;
+      top: ${padT}mm; right: ${padR}mm; bottom: ${padB}mm; left: ${padL}mm;
+      ${boxFrame}
+      pointer-events: none;
+      z-index: 3;
+    }
+  }
+  @media print {
+    html, body { width: auto; }
+    .page {
+      width: auto;
+      /* 1 mm slack: an exact fit can overflow by a sub-pixel and add a blank page. */
+      min-height: calc(${pageH - padT - padB}mm - 1mm);
+      padding: ${frameInsetPx};
+      ${boxFrame}
+      -webkit-box-decoration-break: clone;
+      box-decoration-break: clone;
+    }
+    .items-wrap {
+      overflow: visible;
+      -webkit-box-decoration-break: clone;
+      box-decoration-break: clone;
+    }
   }
   .letter-header {
     width: 100%; height: ${headerHpx}px; text-align: center; vertical-align: middle;
@@ -211,7 +255,7 @@ function quotationStylesCss(tpl: FinanceDocumentTemplate): string {
   }
   .letter-header img {
     width: 100%; max-width: ${contentWpx}px; height: ${headerHpx}px;
-    object-fit: fill; object-position: center; display: block;
+    object-fit: contain; object-position: center; display: block;
   }
   .letter-header .ph { font-size: 12px; font-weight: 700; color: #333; }
   .letter-header .brand {
@@ -222,7 +266,7 @@ function quotationStylesCss(tpl: FinanceDocumentTemplate): string {
   }
   .title-bar {
     width: 100%; border-bottom: none; text-align: center;
-    font-size: ${Math.max(size + 8, 18)}px; font-weight: 700; letter-spacing: 1.5px;
+    font-size: ${Math.max(size + 8, 18)}pt; font-weight: 700; letter-spacing: 1.5px;
     padding: 8px 4px 10px; color: #1c1917;
   }
   .meta-outer {
@@ -243,8 +287,8 @@ function quotationStylesCss(tpl: FinanceDocumentTemplate): string {
   .meta-outer > tbody > tr > td.meta-info {
     width: 42%; padding: 0; height: 100%; vertical-align: top;
   }
-  .lbl { font-size: ${size + 1}px; font-weight: 700; margin: 0 0 6px; }
-  .client-line { margin: 0 0 3px; line-height: 1.35; font-size: ${size}px; }
+  .lbl { font-size: ${size + 1}pt; font-weight: 700; margin: 0 0 6px; }
+  .client-line { margin: 0 0 3px; line-height: 1.35; font-size: ${size}pt; }
   /* Plain table — flex/grid fill was collapsing rows in the preview iframe */
   .kv {
     width: 100%; height: 100%;
@@ -256,7 +300,7 @@ function quotationStylesCss(tpl: FinanceDocumentTemplate): string {
   .kv td {
     border-top: ${hairSoft}; border-bottom: ${hairSoft};
     border-left: none; border-right: none;
-    padding: 5px 6px; vertical-align: middle; font-size: ${size}px;
+    padding: 5px 6px; vertical-align: middle; font-size: ${size}pt;
     line-height: 1.25;
   }
   .kv tr:first-child td { border-top: none; }
@@ -272,20 +316,23 @@ function quotationStylesCss(tpl: FinanceDocumentTemplate): string {
     width: 100%; margin-top: 8px; overflow: hidden; ${itemsFrame}
   }
   .items { width: 100%; border-collapse: collapse; border-spacing: 0; border: none; table-layout: fixed; }
+  /* Long item lists continue on the next page: the header row repeats and a row is never cut in half. */
+  .items thead { display: table-header-group; }
+  .items tr { break-inside: avoid; page-break-inside: avoid; }
   .items th, .items td {
     border: ${hairSoft}; padding: 5px 4px; vertical-align: middle;
-    font-size: ${Math.max(size - 1, 8)}px; color: #1c1917;
+    font-size: ${Math.max(size - 1, 8)}pt; color: #1c1917;
   }
+  .items .item-details { font-size: 0.85em; color: #444; margin-top: 2px; }
   .items tr:first-child > * { border-top: none; }
   .items tr:last-child > * { border-bottom: none; }
   .items tr > *:first-child { border-left: none; }
   .items tr > *:last-child { border-right: none; }
   .items th {
-    background: #1c1917;
-    background: linear-gradient(180deg, #44403c 0%, #1c1917 100%);
-    color: #fde68a; font-weight: 700; text-transform: uppercase;
-    font-size: ${Math.max(size - 2, 7)}px; letter-spacing: 0.08em;
-    border-bottom: 1px solid #b45309;
+    background: #f0f0f0;
+    color: #000; font-weight: 700; text-transform: uppercase;
+    font-size: ${Math.max(size - 2, 7)}pt; letter-spacing: 0.06em;
+    border-bottom: 1px solid #78716c;
     vertical-align: middle;
   }
   .items th .sr-stack {
@@ -294,8 +341,8 @@ function quotationStylesCss(tpl: FinanceDocumentTemplate): string {
   }
   .items col.col-sr { width: 7mm; }
   .items col.col-desc { width: auto; }
-  .items col.col-make { width: 9mm; }
-  .items col.col-hsn { width: 10mm; }
+  .items col.col-make { width: 18mm; }
+  .items col.col-hsn { width: 16mm; }
   .items col.col-qty { width: 8mm; }
   .items col.col-unit { width: 9mm; }
   .items col.col-rate { width: 24mm; }
@@ -306,6 +353,7 @@ function quotationStylesCss(tpl: FinanceDocumentTemplate): string {
   .finance {
     width: 100%; margin-top: ${gap2}px; ${boxFrame}
     border-collapse: separate; border-spacing: 0;
+    break-inside: avoid; page-break-inside: avoid;
   }
   .finance > tbody > tr > td { vertical-align: stretch; padding: 0; height: 1px; }
   .finance-left { width: 62%; border-right: ${hair}; height: 100%; }
@@ -321,7 +369,7 @@ function quotationStylesCss(tpl: FinanceDocumentTemplate): string {
     flex: 1 1 0;
     display: flex; align-items: center; width: 100%;
     border-bottom: ${hairSoft};
-    font-size: ${size}px; line-height: 1.15; min-height: 0;
+    font-size: ${size}pt; line-height: 1.15; min-height: 0;
   }
   .totals-fill .tr:last-child { border-bottom: none; }
   .totals-fill .tr.grand { font-weight: 700; }
@@ -330,8 +378,8 @@ function quotationStylesCss(tpl: FinanceDocumentTemplate): string {
   .totals-fill .v {
     flex: 0 0 ${rateColPx}px; text-align: right; font-weight: 700; padding: 2px 6px;
   }
-  .words, .bank-line { font-size: ${size}px; line-height: 1.2; margin: 0 0 1px; }
-  .bottom { width: 100%; margin-top: ${gap2}px; ${boxFrame} border-collapse: separate; border-spacing: 0; }
+  .words, .bank-line { font-size: ${size}pt; line-height: 1.2; margin: 0 0 1px; }
+  .bottom { width: 100%; margin-top: ${gap2}px; ${boxFrame} border-collapse: separate; border-spacing: 0; break-inside: avoid; page-break-inside: avoid; }
   .bottom-terms {
     width: 100%; padding: 6px 8px; border-bottom: ${hairSoft}; min-height: ${termsMinPx}px;
   }
@@ -344,7 +392,7 @@ function quotationStylesCss(tpl: FinanceDocumentTemplate): string {
     width: 50%; text-align: right; vertical-align: stretch; padding: 0;
     height: ${sealHpx}px; max-height: ${mmToPx(25)}px;
   }
-  .body-text { font-size: ${size}px; line-height: 1.4; white-space: pre-wrap; margin-top: 4px; }
+  .body-text { font-size: ${size}pt; line-height: 1.4; white-space: pre-wrap; margin-top: 4px; }
   .sign-block {
     position: relative;
     display: flex;
@@ -361,7 +409,7 @@ function quotationStylesCss(tpl: FinanceDocumentTemplate): string {
   .sign-company {
     position: relative;
     z-index: 1;
-    font-size: ${Math.max(size + 3, 13)}px;
+    font-size: ${Math.max(size + 3, 13)}pt;
     font-weight: 700;
     line-height: 1.15;
   }
@@ -388,7 +436,7 @@ function quotationStylesCss(tpl: FinanceDocumentTemplate): string {
     top: 50%;
     transform: translateY(-50%);
     z-index: 2;
-    font-family: "Segoe Script", "Brush Script MT", cursive;
+    font-family: ${QUOTATION_SIGNATURE_FONT_FAMILY};
     font-size: 15px;
     font-style: italic;
     white-space: nowrap;
@@ -398,7 +446,7 @@ function quotationStylesCss(tpl: FinanceDocumentTemplate): string {
   .sign-caption {
     position: relative;
     z-index: 1;
-    font-size: ${Math.max(size + 1, 11)}px;
+    font-size: ${Math.max(size + 1, 11)}pt;
     font-weight: 700;
     line-height: 1.15;
     color: #a16207;
@@ -406,7 +454,7 @@ function quotationStylesCss(tpl: FinanceDocumentTemplate): string {
   .letter-footer { width: 100%; height: ${footerHpx}px; text-align: center; vertical-align: middle; }
   .letter-footer img {
     width: 100%; max-width: ${contentWpx}px; height: ${footerHpx}px;
-    object-fit: fill; object-position: center; display: block;
+    object-fit: contain; object-position: center; display: block;
   }
   .letter-footer .ph { font-size: 11px; color: #333; font-weight: 700; }
   `
@@ -472,7 +520,7 @@ function buildOneQuotationHtml(
         <td class="c">${idx + 1}</td>
         <td>
           <div>${cell(l.description)}</div>
-          ${l.details?.trim() ? `<div style="font-size:8px;color:#444;margin-top:2px;">${esc(l.details)}</div>` : ''}
+          ${l.details?.trim() ? `<div class="item-details">${esc(l.details)}</div>` : ''}
         </td>
         ${tpl.lineShowMake ? `<td class="c">${cell(l.make)}</td>` : ''}
         ${tpl.lineShowHsn ? `<td class="c">${cell(l.hsn_sac)}</td>` : ''}

@@ -335,7 +335,7 @@ function buildFormBody(data: BisForm1Data): string {
 }
 
 const FORM1_STYLES = `
-  @page { size: Letter portrait; margin: 8mm 10mm; }
+  @page { size: A4 portrait; margin: 8mm 10mm; }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; background: #fff; }
   .f1-continuous {
@@ -436,6 +436,9 @@ ${buildFormBody(data)}
 </html>`
 }
 
+/** Indian digit grouping with paise, e.g. 12,34,567.50. */
+const INR_AMOUNT = new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
 /** Maps a BIS project row + client + IS code + consultancy context into Form-I fields. */
 export function bisForm1DataFromPrintData(printData: BisPrintData): BisForm1Data {
   const { row, client, isCode, company } = printData
@@ -447,7 +450,7 @@ export function bisForm1DataFromPrintData(printData: BisPrintData): BisForm1Data
   const actualCapacity = row.actual_capacity ?? ''
   const productionValue = row.production_value ?? (
     actualCapacity && productionRate
-      ? (Number(actualCapacity) * Number(productionRate)).toFixed(2)
+      ? INR_AMOUNT.format(Number(actualCapacity) * Number(productionRate))
       : ''
   )
   const sig = printSignatoryDefaults(printData)

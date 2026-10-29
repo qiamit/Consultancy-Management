@@ -435,7 +435,7 @@ export function computeQuotationTotals(
 
 export function formatMoney(value: number | null | undefined): string {
   const v = typeof value === 'number' && Number.isFinite(value) ? value : 0
-  return v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 export { formatDate } from '@/lib/utils'

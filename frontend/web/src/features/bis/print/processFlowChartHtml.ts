@@ -59,7 +59,7 @@ function buildChartSheet(data: ProcessFlowChartData): string {
     </div>
   </div>
 
-  <p class="pd-body">Respected / Sir,</p>
+  <p class="pd-body">Respected Sir,</p>
   <p class="pd-body">
     We hereby submit the process flow chart of our manufacturing process for your kind
     reference in connection with our BIS licence / certification application. This chart

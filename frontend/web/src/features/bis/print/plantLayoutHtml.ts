@@ -46,7 +46,7 @@ function buildBody(data: PlantLayoutData): string {
     </div>
   </div>
 
-  <p class="pd-body">Respected / Sir,</p>
+  <p class="pd-body">Respected Sir,</p>
   <p class="pd-body">
     We hereby submit the enclosed plant layout drawing of our manufacturing unit for your kind
     perusal and record in connection with our application for grant of BIS licence under the

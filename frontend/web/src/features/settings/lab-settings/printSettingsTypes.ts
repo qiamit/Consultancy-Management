@@ -103,11 +103,18 @@ export function cssPageSizeValue(settings: {
 
 export type PdfOutputMode = 'browser_print' | 'playwright'
 
+/**
+ * Default print font. Pages are split in the browser but the PDF is drawn by Chromium on Linux (pdf-service), so the
+ * font must have the same widths in both: Arial / Helvetica, and the metric-compatible Liberation Sans in the image.
+ * (system-ui differs per OS, so text measured on one machine overflowed the fixed page bodies on the other.)
+ */
+export const PRINT_DEFAULT_FONT_FAMILY = 'Arial, Helvetica, "Liberation Sans", sans-serif'
+
 /** Preset font stacks for test report / SRF print (web-safe for browser print & PDF). */
 export const PRINT_FONT_FAMILY_OPTIONS: ReadonlyArray<{ label: string; value: string }> = [
   { label: 'System UI', value: 'system-ui, sans-serif' },
   { label: 'Segoe UI', value: '"Segoe UI", system-ui, sans-serif' },
-  { label: 'Arial', value: 'Arial, Helvetica, sans-serif' },
+  { label: 'Arial', value: PRINT_DEFAULT_FONT_FAMILY },
   { label: 'Helvetica', value: 'Helvetica, Arial, sans-serif' },
   { label: 'Calibri', value: 'Calibri, "Segoe UI", Arial, sans-serif' },
   { label: 'Tahoma', value: 'Tahoma, Geneva, sans-serif' },
@@ -117,6 +124,15 @@ export const PRINT_FONT_FAMILY_OPTIONS: ReadonlyArray<{ label: string; value: st
   { label: 'Georgia', value: 'Georgia, "Times New Roman", serif' },
   { label: 'Courier New', value: '"Courier New", Courier, monospace' },
 ]
+
+/** The Arial preset before Liberation Sans was added to it: the same font, shown as the Arial option. */
+const LEGACY_ARIAL_FONT_FAMILY = 'Arial, Helvetica, sans-serif'
+
+function normalizePrintFontFamily(raw: unknown, fallback: string): string {
+  const value = typeof raw === 'string' ? raw.trim() : ''
+  if (!value) return fallback
+  return value === LEGACY_ARIAL_FONT_FAMILY ? PRINT_DEFAULT_FONT_FAMILY : value
+}
 
 export function printFontFamilyOptions(currentValue?: string): Array<{ label: string; value: string }> {
   const trimmed = (currentValue ?? '').trim()
@@ -786,17 +802,17 @@ export function effectiveTableFontSizePt(settings: TestReportPrintSettings): num
 }
 
 export const DEFAULT_TEST_REPORT_PRINT_SETTINGS: TestReportPrintSettings = {
-  pageSize: 'Letter',
+  pageSize: 'A4',
   pageOrientation: 'portrait',
-  customPageWidthMm: 216,
-  customPageHeightMm: 279,
+  customPageWidthMm: 210,
+  customPageHeightMm: 297,
   bodyPaddingTopMm: 36,
   bodyPaddingBottomMm: 28,
   bodyPaddingLeftMm: 12,
   bodyPaddingRightMm: 12,
   headerMaxHeightMm: 32,
   footerMaxHeightMm: 22,
-  fontFamily: 'system-ui, sans-serif',
+  fontFamily: PRINT_DEFAULT_FONT_FAMILY,
   baseFontSizePt: 10,
   titleFontSizePt: 22,
   lineHeight: 1.4,
@@ -846,16 +862,16 @@ export const DEFAULT_TEST_REPORT_PRINT_SETTINGS: TestReportPrintSettings = {
 }
 
 export const DEFAULT_SRF_PRINT_SETTINGS: SrfPrintSettings = {
-  pageSize: 'Letter',
+  pageSize: 'A4',
   pageOrientation: 'portrait',
-  customPageWidthMm: 216,
-  customPageHeightMm: 279,
+  customPageWidthMm: 210,
+  customPageHeightMm: 297,
   bodyPaddingTopMm: 32,
   bodyPaddingBottomMm: 22,
   bodyPaddingHorizontalMm: 12,
   headerMaxHeightMm: 26,
   footerMaxHeightMm: 18,
-  fontFamily: 'system-ui, sans-serif',
+  fontFamily: PRINT_DEFAULT_FONT_FAMILY,
   baseFontSizePt: 10,
   showHeader: true,
   showFooter: true,
@@ -962,10 +978,7 @@ export function parseTestReportPrintSettings(raw: unknown): TestReportPrintSetti
     bodyPaddingRightMm,
     headerMaxHeightMm: clamp(Number(o.headerMaxHeightMm), 12, 60),
     footerMaxHeightMm: clamp(Number(o.footerMaxHeightMm), 10, 60),
-    fontFamily:
-      typeof o.fontFamily === 'string' && o.fontFamily.trim()
-        ? o.fontFamily.trim()
-        : d.fontFamily,
+    fontFamily: normalizePrintFontFamily(o.fontFamily, d.fontFamily),
     baseFontSizePt: clamp(Number(o.baseFontSizePt), 8, 14),
     titleFontSizePt: clamp(Number(o.titleFontSizePt), 14, 28),
     lineHeight: clamp(Number(o.lineHeight), 1.2, 1.65),
@@ -1030,10 +1043,7 @@ export function parseSrfPrintSettings(raw: unknown): SrfPrintSettings {
     bodyPaddingHorizontalMm: clamp(Number(o.bodyPaddingHorizontalMm), 8, 25),
     headerMaxHeightMm: clamp(Number(o.headerMaxHeightMm), 12, 40),
     footerMaxHeightMm: clamp(Number(o.footerMaxHeightMm), 10, 35),
-    fontFamily:
-      typeof o.fontFamily === 'string' && o.fontFamily.trim()
-        ? o.fontFamily.trim()
-        : d.fontFamily,
+    fontFamily: normalizePrintFontFamily(o.fontFamily, d.fontFamily),
     baseFontSizePt: clamp(Number(o.baseFontSizePt), 8, 14),
     showHeader: asBool(o.showHeader, d.showHeader),
     showFooter: asBool(o.showFooter, d.showFooter),
