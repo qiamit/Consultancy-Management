@@ -4,6 +4,9 @@
 #
 # Needs two repository secrets: ORACLE_HOST (server IP or hostname) and ORACLE_SSH_KEY (a private key whose
 # public half is in the server's ~/.ssh/authorized_keys for the "ubuntu" user).
+# Recommended third secret: ORACLE_KNOWN_HOSTS — the server's host key line(s), so a swapped server is refused.
+# Get it once from a trusted network:  ssh-keyscan -t ed25519 <ORACLE_HOST>  (check the fingerprint against
+# `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on the server). Without it the first key seen is accepted.
 # The server key is limited to running deploy.sh (forced command in authorized_keys). Every merge to main goes
 # live on Oracle; it can also be run by hand (Actions → Deploy to Oracle → Run workflow).
 name: Deploy to Oracle
@@ -12,6 +15,10 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+
+# The job never uses the GitHub token (it only SSHes to the server); keep it read-only.
+permissions:
+  contents: read
 
 concurrency:
   group: oracle-deploy
@@ -26,13 +33,24 @@ jobs:
         env:
           ORACLE_HOST: ${{ secrets.ORACLE_HOST }}
           ORACLE_SSH_KEY: ${{ secrets.ORACLE_SSH_KEY }}
+          ORACLE_KNOWN_HOSTS: ${{ secrets.ORACLE_KNOWN_HOSTS }}
         run: |
           if [ -z "$ORACLE_HOST" ] || [ -z "$ORACLE_SSH_KEY" ]; then
             echo "ORACLE_HOST / ORACLE_SSH_KEY secrets are not set."
             exit 1
           fi
           mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
           printf '%s\n' "$ORACLE_SSH_KEY" > ~/.ssh/oracle
           chmod 600 ~/.ssh/oracle
-          ssh -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 -i ~/.ssh/oracle "ubuntu@$ORACLE_HOST" \
+          if [ -n "$ORACLE_KNOWN_HOSTS" ]; then
+            printf '%s\n' "$ORACLE_KNOWN_HOSTS" > ~/.ssh/known_hosts
+            chmod 600 ~/.ssh/known_hosts
+            HOST_KEY_CHECK=yes
+          else
+            echo "::warning::ORACLE_KNOWN_HOSTS secret is not set; accepting the server's host key on first use."
+            HOST_KEY_CHECK=accept-new
+          fi
+          ssh -o StrictHostKeyChecking="$HOST_KEY_CHECK" -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -o ServerAliveInterval=30 -i ~/.ssh/oracle "ubuntu@$ORACLE_HOST" \
             'bash /opt/qe/app/deploy/oracle/scripts/deploy.sh'

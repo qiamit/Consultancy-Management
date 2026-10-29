@@ -184,7 +184,7 @@ services:
 
   caddy:
     <<: *service
-    image: caddy:2.10-alpine
+    image: caddy:2.10.2-alpine
     depends_on: [auth, rest, storage, functions, mcp, pdf]
     ports:
       - "80:80"
