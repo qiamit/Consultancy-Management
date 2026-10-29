@@ -224,12 +224,16 @@ export function ProcessFlowChartAiDialog({
 
   const apply = () => {
     if (cleanSteps.length === 0) return
-    if (mode === 'replace' && hasChart && !window.confirm('Replace the Steps in This Chart with the AI Steps?')) return
+    // No browser confirm(): embedded browsers block it (it returns false, so Replace did nothing). Undo brings the old chart back.
     onApplySteps(cleanSteps, mode)
     onOpenChange(false)
     toast.success(
-      mode === 'append' ? `Added ${cleanSteps.length} AI Step(s)` : `Chart Filled with ${cleanSteps.length} AI Step(s)`,
-      { description: 'Check the Boxes, Then Click Save.' },
+      mode === 'append'
+        ? `Added ${cleanSteps.length} AI Step(s)`
+        : hasChart
+          ? `Chart Replaced with ${cleanSteps.length} AI Step(s)`
+          : `Chart Filled with ${cleanSteps.length} AI Step(s)`,
+      { description: hasChart && mode === 'replace' ? 'Use Undo (Ctrl/⌘Z) to Bring the Old Chart Back. Click Save to Keep It.' : 'Check the Boxes, Then Click Save.' },
     )
   }
 
