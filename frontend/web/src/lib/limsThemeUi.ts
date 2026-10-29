@@ -57,7 +57,7 @@ export const limsTableClass =
   'w-full border-collapse font-jakarta [&_th]:border [&_td]:border [&_th]:border-stone-700 [&_td]:border-[rgb(var(--lims-paper-border))]'
 
 export const limsTableHeadClass =
-  'bg-stone-800 text-center text-[11px] font-bold uppercase tracking-[0.14em] text-amber-200'
+  'bg-stone-800 text-center text-xs font-bold uppercase tracking-[0.14em] text-amber-200'
 
 export const limsTableBodyToneClass = 'bg-lims-paper text-foreground'
 
@@ -144,7 +144,7 @@ export const limsFieldWithAddControlClass = cn(
  */
 export const limsRegistryFormClass = cn(
   'lims-registry-form',
-  '[&_label]:text-[11px] [&_label]:font-semibold [&_label]:uppercase [&_label]:tracking-wide [&_label]:text-stone-600',
+  '[&_label]:text-xs [&_label]:font-semibold [&_label]:uppercase [&_label]:tracking-wide [&_label]:text-stone-600',
   /* Label / field stack spacing (~0.5mm) */
   '[&_.space-y-2]:!space-y-0.5 [&_.space-y-1]:!space-y-0.5',
   '[&_input:not([type=checkbox]):not([type=file]):not([type=radio])]:!h-10',
