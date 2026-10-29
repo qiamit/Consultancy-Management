@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Check, ChevronDown, FileText, ImagePlus, Loader2, Send, Sparkles, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
   DropdownMenu,
@@ -57,6 +58,8 @@ export function PlantLayoutAiDialog({
   boxes: PlantLayoutBox[]
   onApply: (boxes: PlantLayoutBox[], mode: 'replace' | 'append') => void
 }) {
+  // In-app confirm (embedded browsers answer window.confirm with false at once).
+  const [confirmAction, confirmDialog] = useConfirmDialog({ layer: 'overlay' })
   const [sources, setSources] = useState<Array<PlantLayoutAiSource & { on: boolean }>>([])
   const [readingFiles, setReadingFiles] = useState(false)
   const [dragOver, setDragOver] = useState(false)
@@ -139,9 +142,18 @@ export function PlantLayoutAiDialog({
   const cleanResult = (result ?? []).map((b) => normalizeBox({ ...b, label: b.label.replace(/\s+/g, ' ').trim() || 'Area' }))
   const previewSvg = useMemo(() => (cleanResult.length ? buildPlantLayoutSvgMarkup(cleanResult) : ''), [result]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const apply = () => {
+  const apply = async () => {
     if (cleanResult.length === 0) return
-    if (mode === 'replace' && hasCanvas && !window.confirm('Replace the Boxes on This Canvas with the AI Layout?')) return
+    if (
+      mode === 'replace' &&
+      hasCanvas &&
+      !(await confirmAction('Replace the Boxes on This Canvas with the AI Layout?', {
+        title: 'Replace Canvas',
+        confirmLabel: 'Replace',
+        destructive: false,
+      }))
+    )
+      return
     onApply(cleanResult, mode)
     onOpenChange(false)
     toast.success(
@@ -469,13 +481,14 @@ export function PlantLayoutAiDialog({
               type="button"
               className={cn(limsPrimaryBtnClass, 'h-10 shrink-0 px-4 text-sm')}
               disabled={busy || disabled || cleanResult.length === 0}
-              onClick={apply}
+              onClick={() => void apply()}
             >
               {!hasCanvas ? 'Add to Canvas' : mode === 'append' ? 'Add to Canvas' : 'Replace Canvas'}
             </Button>
           </div>
         </div>
-      </DialogContent>
+      {confirmDialog}
+        </DialogContent>
     </Dialog>
   )
 }
