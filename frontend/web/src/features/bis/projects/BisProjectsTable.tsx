@@ -797,7 +797,7 @@ export function BisProjectsTable({
                         ) : null}
                         {validity.state === 'expired' ? (
                           <p className="text-[11px] text-red-700">
-                            Expired {Math.abs(validity.daysLeft ?? 0)} day(s) ago
+                            Expired {Math.abs(validity.daysLeft ?? 0)} Days
                           </p>
                         ) : null}
                       </TableCell>
