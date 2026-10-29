@@ -56,6 +56,14 @@
 		-Server
 	}
 
+	# Stored files (IS Code PDFs, product manuals, legal documents …) open in the app's own PDF viewer (an iframe),
+	# so only these may be framed, and only by the app.
+	@storageFile path /storage/v1/object/sign/* /storage/v1/object/public/* /storage/v1/object/authenticated/*
+	header @storageFile {
+		-X-Frame-Options
+		Content-Security-Policy "frame-ancestors 'self' https://{$APP_DOMAIN} https://www.{$APP_DOMAIN} http://localhost:* http://127.0.0.1:*"
+	}
+
 	@preflight method OPTIONS
 	handle @preflight {
 		header Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"
