@@ -77,6 +77,8 @@ Renewal reminders यहाँ बंद रहते हैं (`RENEWAL_REMIND
    (Railway वाले CNAME हटाएँ)। Caddy अपने-आप certificates ले लेगा।
 5. Test: login, documents, PDF download, file upload/view, MCP, QE extension।
 6. GitHub secrets `ORACLE_HOST`, `ORACLE_SSH_KEY` डालें, workflow में `push` चालू करें।
+   साथ में `ORACLE_KNOWN_HOSTS` भी डालें (`ssh-keyscan -t ed25519 <ORACLE_HOST>` की line; fingerprint server पर
+   `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` से मिलाएँ) — तब workflow सिर्फ़ इसी server key पर चलेगा।
 7. Railway की Consultancy services 1 हफ़्ते तक fallback के लिए रखें, फिर बंद करें (आपकी मंज़ूरी से)।
 
 **Rollback:** DNS को वापस Railway पर कर दें — Railway का data cutover तक का है।

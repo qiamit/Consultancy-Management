@@ -24,6 +24,7 @@
     Access-Control-Expose-Headers "Content-Range, Range, Content-Location, Content-Profile, Preference-Applied, X-Request-Id"
     Vary "Origin"
     # APP-S05 — API hardening (no secrets in responses; browsers still send CORS separately)
+    Strict-Transport-Security "max-age=31536000; includeSubDomains"
     X-Content-Type-Options "nosniff"
     Referrer-Policy "strict-origin-when-cross-origin"
     Permissions-Policy "camera=(), microphone=(), geolocation=()"

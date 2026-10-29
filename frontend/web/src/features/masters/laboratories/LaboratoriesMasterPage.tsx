@@ -19,6 +19,8 @@ import {
   clientPrimaryBtnClass,
 } from '@/features/masters/clients/clientsFormUi'
 import { useFormDialogOpenChange } from '@/lib/formDialogOpenChange'
+import { printHtmlInFrame } from '@/lib/printHtmlInFrame'
+import { escapeHtml } from '@/lib/sendAppEmail'
 import { cn } from '@/lib/utils'
 import { LaboratoriesForm } from './LaboratoriesForm'
 import {
@@ -458,11 +460,10 @@ export default function LaboratoriesMasterPage() {
               setMessage('Select a laboratory to print.')
               return
             }
-            const popup = window.open('', '_blank', 'noopener,noreferrer')
-            if (!popup) return
-            popup.document.write(`<title>Laboratories</title><pre>${selectedRows.map((row) => `${row.name} · ${row.lab_type} · ${row.osl_code ?? ''}`).join('\n')}</pre>`)
-            popup.document.close()
-            popup.print()
+            const lines = selectedRows.map((row) => escapeHtml(`${row.name} · ${row.lab_type} · ${row.osl_code ?? ''}`))
+            if (!printHtmlInFrame(`<!doctype html><html><head><meta charset="utf-8"/><title>Laboratories</title></head><body><pre>${lines.join('\n')}</pre></body></html>`)) {
+              setMessage('Print Could Not Start. Try Again.')
+            }
           }}
           onDeleteSelected={async () => {
             if (!(await confirm(`Delete ${selectedIds.size} Laboratory Record(s)?`, { title: 'Delete Laboratories', confirmLabel: 'Delete', destructive: true }))) return
