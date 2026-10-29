@@ -273,8 +273,8 @@ export function SaleDocumentPreviewDialog({
           </DialogHeader>
         </div>
 
-        <div className="flex min-h-0 flex-1 overflow-hidden">
-          <aside className="flex w-[min(100%,20rem)] shrink-0 flex-col border-r-2 border-stone-500 bg-[#f7f3eb]">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
+          <aside className="flex max-h-[40dvh] w-full shrink-0 flex-col border-b-2 border-stone-500 bg-[#f7f3eb] md:max-h-none md:w-80 md:border-b-0 md:border-r-2">
             <div className="space-y-1.5 border-b border-stone-400 p-2.5">
               {sidebarBtn('page', 'Page Settings', FileText)}
               {sidebarBtn('print', 'Print Settings', Printer)}

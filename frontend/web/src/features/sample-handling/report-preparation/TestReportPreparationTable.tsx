@@ -106,7 +106,7 @@ export function TestReportPreparationTable({
           </p>
         </div>
       ) : (
-        <Table className={cn(limsTableClass, 'min-w-[820px] table-fixed')}>
+        <Table className={cn(limsTableClass, 'list-cards min-w-[820px] table-fixed')}>
           <colgroup>
             <col className="w-[44px]" />
             <col className="w-[22%]" />
@@ -164,7 +164,7 @@ export function TestReportPreparationTable({
           <TableBody>
             {rows.map((r, index) => (
               <TableRow key={r.id} className={index % 2 === 0 ? rowEvenClass : rowOddClass}>
-                <TableCell className={cn(tdClass, 'text-center')}>
+                <TableCell className={cn(tdClass, 'lc-check text-center')}>
                   <input
                     type="checkbox"
                     className={checkboxClass}
@@ -173,7 +173,7 @@ export function TestReportPreparationTable({
                     onChange={() => onToggle(r.id)}
                   />
                 </TableCell>
-                <TableCell className={cn(tdClass, 'pl-3 text-left font-medium')}>
+                <TableCell className={cn(tdClass, 'lc-title pl-3 text-left font-medium')}>
                   <div className="flex min-w-0 items-center justify-between gap-2">
                     <div className="min-w-0 flex-1 line-clamp-2 break-words leading-snug">
                       {fmt(r.srfNumber)}
@@ -191,16 +191,16 @@ export function TestReportPreparationTable({
                     </Button>
                   </div>
                 </TableCell>
-                <TableCell className={cn(tdClass, 'text-center')}>
+                <TableCell data-label="Client" className={cn(tdClass, 'text-center')}>
                   <div className="line-clamp-2 break-words leading-snug">{fmt(r.clientName)}</div>
                 </TableCell>
-                <TableCell className={cn(tdClass, 'text-center')}>
+                <TableCell data-label="IS Code" className={cn(tdClass, 'text-center')}>
                   <div className="line-clamp-2 break-words leading-snug">{fmt(r.isCodeLabel)}</div>
                 </TableCell>
-                <TableCell className={cn(tdClass, 'text-center text-[#78716c]')}>
+                <TableCell data-label="Received Date" className={cn(tdClass, 'text-center text-[#78716c]')}>
                   {formatDate(r.dateReceiving ?? '')}
                 </TableCell>
-                <TableCell className={cn(tdClass, 'text-center')}>
+                <TableCell className={cn(tdClass, 'lc-actions text-center')}>
                   <div className="inline-flex items-center justify-center gap-1.5">
                     <Button
                       type="button"

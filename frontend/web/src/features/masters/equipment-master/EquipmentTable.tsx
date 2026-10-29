@@ -152,7 +152,7 @@ export function EquipmentTable({
         <p className="px-4 py-6 text-center text-sm text-stone-600">Loading…</p>
       ) : (
         <div className="[&>div]:overflow-x-auto">
-          <Table className={cn(limsTableClass, 'table-fixed min-w-[960px]')}>
+          <Table className={cn(limsTableClass, 'list-cards table-fixed min-w-[960px]')}>
             <colgroup>
               <col className="w-[44px]" />
               <col className="w-[28%]" />
@@ -217,7 +217,7 @@ export function EquipmentTable({
                       data-state={selected ? 'selected' : undefined}
                       className={cn('border-[#e7e0d4]', rowTone)}
                     >
-                      <TableCell className="align-middle px-2 text-center">
+                      <TableCell className="lc-check align-middle px-2 text-center">
                         <input
                           type="checkbox"
                           className={checkboxClass}
@@ -226,7 +226,7 @@ export function EquipmentTable({
                           onChange={() => onToggle(r.id)}
                         />
                       </TableCell>
-                      <TableCell className="align-middle text-left">
+                      <TableCell className="lc-title align-middle text-left">
                         <button
                           type="button"
                           className="line-clamp-2 max-w-full break-words text-left text-[13px] font-bold leading-snug text-amber-800 underline-offset-2 hover:text-amber-950 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40"
@@ -237,14 +237,14 @@ export function EquipmentTable({
                           {r.equipment_name || '—'}
                         </button>
                       </TableCell>
-                      <TableCell className="align-middle text-center text-sm font-medium text-stone-800">
+                      <TableCell data-label="Least Count" className="align-middle text-center text-sm font-medium text-stone-800">
                         {r.resolution_least_count?.trim() || '—'}
                       </TableCell>
-                      <TableCell className="align-middle text-center text-sm font-medium text-stone-800">
+                      <TableCell data-label="Range" className="align-middle text-center text-sm font-medium text-stone-800">
                         {r.range_capacity?.trim() || '—'}
                       </TableCell>
-                      <TableCell className="align-middle text-center">
-                        <div className="flex justify-center">
+                      <TableCell data-label="Calibration" className="align-middle text-center">
+                        <div className="flex justify-center max-lg:justify-start">
                           <ScheduleStatusButton
                             label="Calibration"
                             section="calibration"
@@ -254,8 +254,8 @@ export function EquipmentTable({
                           />
                         </div>
                       </TableCell>
-                      <TableCell className="align-middle text-center">
-                        <div className="flex justify-center">
+                      <TableCell data-label="Intermediate Check" className="align-middle text-center">
+                        <div className="flex justify-center max-lg:justify-start">
                           <ScheduleStatusButton
                             label="Intermediate Check"
                             section="intermediate"
@@ -265,8 +265,8 @@ export function EquipmentTable({
                           />
                         </div>
                       </TableCell>
-                      <TableCell className="align-middle text-center">
-                        <div className="flex justify-center">
+                      <TableCell data-label="Maintenance" className="align-middle text-center">
+                        <div className="flex justify-center max-lg:justify-start">
                           <ScheduleStatusButton
                             label="Maintenance"
                             section="maintenance"
@@ -276,8 +276,8 @@ export function EquipmentTable({
                           />
                         </div>
                       </TableCell>
-                      <TableCell className="align-middle text-center">
-                        <div className="flex items-center justify-center gap-1">
+                      <TableCell className="lc-actions align-middle text-center">
+                        <div className="flex items-center justify-center gap-1 max-lg:justify-end">
                           <Button
                             type="button"
                             size="icon"
