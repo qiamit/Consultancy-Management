@@ -3,6 +3,7 @@ import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from '
 import { Check, Download, Eye, FileDown, FileType, Import, Pencil, Plus, Printer, Sparkles, Trash2, Upload, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import {
   Dialog,
   DialogContent,
@@ -364,6 +365,8 @@ export function LegalDocumentsModuleDialog({
   /** Undertaking shown first when the All Undertakings module opens (for example the Minimum Marking Fee one from step 1). */
   initialUndertaking?: (typeof UNDERTAKING_OPTIONS)[number]['kind'] | null
 }) {
+  // In-app confirm (embedded browsers answer window.confirm with false at once).
+  const [confirmAction, confirmDialog] = useConfirmDialog({ layer: 'overlay' })
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const uploadTargetRef = useRef<{ type: 'draft' | 'file'; id: string } | null>(null)
   const showApplicationFields = docKind === 'application' || printKind === 'application-details'
@@ -1813,7 +1816,7 @@ export function LegalDocumentsModuleDialog({
   }
 
   const removeClientDocument = async (document: ClientCertificateFile) => {
-    if (!window.confirm(`Delete ${document.cert_name} from Client Master?`)) return
+    if (!(await confirmAction(`Delete ${document.cert_name} from Client Master?`, { title: 'Delete Client Document', confirmLabel: 'Delete' }))) return
     try {
       await deleteClientCertificate(document)
       setClientLegalDocuments((current) => current.filter((item) => item.id !== document.id))
@@ -2760,7 +2763,15 @@ export function LegalDocumentsModuleDialog({
             throw new Error('The selected application has no process flow chart.')
           }
           const hasCurrent = processFlow.nodes.some(processFlowNodeHasContent) || processFlow.descriptionPoints.some((point) => point.trim())
-          if (hasCurrent && !window.confirm('Replace the process flow chart and description here with the imported one?')) return
+          if (
+            hasCurrent &&
+            !(await confirmAction('Replace the Process Flow Chart and Description Here with the Imported One?', {
+              title: 'Replace Process Flow',
+              confirmLabel: 'Replace',
+              destructive: false,
+            }))
+          )
+            return
           setProcessFlow(source)
           toast.success('Process Flow Chart Imported', { description: 'Check the boxes and description, then click Save.' })
         }}
@@ -2791,6 +2802,7 @@ export function LegalDocumentsModuleDialog({
         }}
       />
     ) : null}
+    {confirmDialog}
     </>
   )
 }
