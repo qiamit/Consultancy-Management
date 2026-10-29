@@ -7,6 +7,7 @@ import {
   limsDarkBarBtnClass,
   limsDarkBarGlowStyle,
   limsDialogClass,
+  limsDialogSidebarPortalClass,
 } from '@/lib/limsThemeUi'
 import { cn, formatDate } from '@/lib/utils'
 import {
@@ -204,11 +205,10 @@ export function SampleSrfViewDialog({
         <DialogContent
           persistOnFocusLoss
           aria-describedby={undefined}
-          overlayClassName="lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto"
-          portalClassName="lg:left-[268px] lg:p-2"
+          portalClassName={cn(limsDialogSidebarPortalClass, 'lg:p-2')}
           className={cn(
             limsDialogClass,
-            'flex h-[96vh] w-[calc(100vw-0.75rem)] max-w-none flex-col',
+            'flex h-[96dvh] w-[calc(100vw-0.75rem)] max-w-none flex-col',
             'lg:!relative lg:!left-auto lg:!right-auto lg:!top-auto lg:!mx-0 lg:!translate-x-0 lg:!translate-y-0',
             'lg:h-full lg:w-full lg:max-h-none',
           )}

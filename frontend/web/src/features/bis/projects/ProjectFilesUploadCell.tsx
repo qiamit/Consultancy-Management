@@ -121,7 +121,7 @@ export function ProjectFilesUploadCell({ projectId, docKind, label }: { projectI
           <DialogHeader className="bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 py-2.5 pl-4 pr-12 text-left">
             <DialogTitle className="text-base font-semibold tracking-tight text-white">{label}</DialogTitle>
           </DialogHeader>
-          <ul className="max-h-[60vh] divide-y divide-[#e7e0d4] overflow-y-auto bg-[#fffcf7] px-4 py-2 text-left">
+          <ul className="max-h-[60dvh] divide-y divide-[#e7e0d4] overflow-y-auto bg-[#fffcf7] px-4 py-2 text-left">
             {files.map((file, i) => (
               <li key={file.id} className="flex items-center gap-2 py-2 text-sm text-stone-800">
                 <span className="w-6 shrink-0 text-stone-500">{i + 1}.</span>

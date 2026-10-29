@@ -155,7 +155,7 @@ export function AddProductServiceDialog({
         className={cn(
           limsDialogClass,
           'flex w-[min(920px,92vw)] max-w-4xl flex-col',
-          'max-h-[min(90vh,720px)]',
+          'max-h-[min(90dvh,720px)]',
         )}
         aria-describedby={undefined}
         layer={nested ? 'nested' : 'default'}

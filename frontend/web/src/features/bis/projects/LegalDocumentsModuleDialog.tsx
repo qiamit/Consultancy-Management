@@ -1838,8 +1838,8 @@ export function LegalDocumentsModuleDialog({
                 limsDialogClass,
                 'bg-white',
                 compactFormModule
-                  ? 'h-auto max-h-[min(92vh,860px)] w-[min(68rem,calc(100vw_-_var(--app-dialog-overlay-left,0px)_-_1.5rem))] max-w-[68rem]'
-                  : 'max-h-[min(92vh,860px)]',
+                  ? 'h-auto max-h-[min(92dvh,860px)] w-[min(68rem,calc(100vw_-_var(--app-dialog-overlay-left,0px)_-_1.5rem))] max-w-[68rem]'
+                  : 'max-h-[min(92dvh,860px)]',
                 !compactFormModule &&
                   (showApplicationFields
                     ? 'w-[min(56rem,calc(100vw_-_var(--app-dialog-overlay-left,0px)_-_1.5rem))] max-w-[56rem]'
@@ -2520,7 +2520,7 @@ export function LegalDocumentsModuleDialog({
                 {loading ? (
                   <p className="px-3 py-8 text-center text-sm text-stone-500">Loading…</p>
                 ) : (
-                  <div className="h-full max-h-[min(56vh,520px)] overflow-y-auto overflow-x-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
+                  <div className="h-full max-h-[min(56dvh,520px)] overflow-y-auto overflow-x-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
                     {/* Cards — &lt; ~10″ */}
                     <div className={cn(CARDS_MQ_SHOW, 'space-y-2 p-2')}>
                       {entries.map((entry, index) => {

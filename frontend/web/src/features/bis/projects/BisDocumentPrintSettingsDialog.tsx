@@ -200,7 +200,7 @@ export function BisDocumentPrintSettingsDialog({
           </DialogHeader>
         </div>
 
-        <div className="max-h-[min(70vh,36rem)] space-y-3 overflow-y-auto px-4 py-4">
+        <div className="max-h-[min(70dvh,36rem)] space-y-3 overflow-y-auto px-4 py-4">
           {panel === 'letterhead-header' ? (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-2">

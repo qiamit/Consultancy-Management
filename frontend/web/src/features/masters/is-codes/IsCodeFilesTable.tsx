@@ -84,7 +84,7 @@ export function IsCodeFilesTable({
   onDeleteFile,
   onDocumentKindChange,
   className,
-  scrollClassName = 'max-h-[min(40vh,360px)]',
+  scrollClassName = 'max-h-[min(40dvh,360px)]',
   /** Reset draft rows when this key changes (e.g. dialog open / editing id). */
   resetKey,
 }: {

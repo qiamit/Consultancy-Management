@@ -376,7 +376,7 @@ export function ManageQuotationNotesDialog({
               </DialogTitle>
             </DialogHeader>
           </div>
-          <div className="max-h-[50vh] overflow-y-auto bg-gradient-to-b from-stone-100/80 to-white px-4 py-4">
+          <div className="max-h-[50dvh] overflow-y-auto bg-gradient-to-b from-stone-100/80 to-white px-4 py-4">
             <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-stone-800">
               {viewingNote?.content}
             </p>

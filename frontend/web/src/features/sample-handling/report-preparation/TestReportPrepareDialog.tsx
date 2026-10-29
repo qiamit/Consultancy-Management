@@ -7,6 +7,7 @@ import {
   limsDarkBarGlowStyle,
   limsDialogClass,
   limsPrimaryBtnClass,
+  limsFullscreenDialogClass,
 } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { type ReportScopeKind, REPORT_SCOPE_SUFFIX } from './reportScope'
@@ -152,11 +153,10 @@ export function TestReportPrepareDialog({
       <DialogContent
         persistOnFocusLoss
         aria-describedby={undefined}
-        overlayClassName="lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto"
         className={cn(
           limsDialogClass,
-          'left-0 top-0 flex h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col border-0',
-          'lg:left-[268px] md:h-[100dvh] lg:w-[calc(100vw-268px)] lg:max-w-[calc(100vw-268px)]',
+          'flex h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col border-0',
+          limsFullscreenDialogClass,
         )}
       >
         <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white sm:px-5 sm:py-3">
@@ -172,7 +172,7 @@ export function TestReportPrepareDialog({
 
         <div className="min-h-0 flex-1 overflow-y-auto bg-gradient-to-b from-stone-100/90 to-stone-50 px-4 py-4 sm:px-5">
           {active && (
-            <div className="space-y-4">
+            <div className="mx-auto w-full max-w-[1440px] space-y-4">
               {saveMessage && <p className="text-sm text-stone-600">{saveMessage}</p>}
 
               {coverLoading ? (
@@ -229,7 +229,7 @@ export function TestReportPrepareDialog({
           )}
         </div>
 
-        <div className="relative shrink-0 border-t border-stone-700 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-3 sm:px-5">
+        <div className="relative shrink-0 border-t border-stone-700 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5">
           <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={limsDarkBarGlowStyle} />
           <div className="absolute top-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
           <div className="relative flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

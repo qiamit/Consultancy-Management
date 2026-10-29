@@ -4,8 +4,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import {
   limsDarkBarGlowStyle,
   limsDialogClass,
+  limsOutlineBtnClass,
   limsPrimaryBtnClass,
   limsRegistryFormClass,
+  limsFullscreenDialogClass,
+  limsSafeAreaFooterPadClass,
 } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 
@@ -42,7 +45,6 @@ export function BisFormDialog({
       <DialogContent
         persistOnFocusLoss
         aria-describedby={undefined}
-        overlayClassName={compact ? undefined : 'lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto'}
         className={
           compact
             ? cn(
@@ -52,8 +54,7 @@ export function BisFormDialog({
               )
             : cn(
                 '!flex z-50 h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 bg-white p-0 shadow-none sm:rounded-none',
-                'left-0 top-0',
-                'lg:left-[268px] lg:w-[calc(100vw-268px)] lg:max-w-[calc(100vw-268px)]',
+                limsFullscreenDialogClass,
                 'border-stone-600 ring-1 ring-amber-700/20',
                 '[&>button]:!rounded-none [&>button]:text-white [&>button]:opacity-100 [&>button]:hover:bg-white/10',
               )
@@ -75,17 +76,22 @@ export function BisFormDialog({
               {errorMessage}
             </p>
           ) : null}
-          <div className={limsRegistryFormClass}>
+          <div className={cn(limsRegistryFormClass, 'mx-auto w-full max-w-[1440px]')}>
             <div className="grid grid-cols-12 gap-4">{children}</div>
           </div>
         </div>
 
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t-2 border-stone-500 bg-stone-100 px-4 py-3 sm:px-6">
+        <div
+          className={cn(
+            'flex shrink-0 flex-wrap items-center justify-end gap-2 border-t-2 border-stone-500 bg-stone-100 px-4 py-3 sm:px-6',
+            limsSafeAreaFooterPadClass,
+          )}
+        >
           {footerExtra ? <div className="mr-auto flex flex-wrap items-center gap-2">{footerExtra}</div> : null}
           <Button
             type="button"
             variant="outline"
-            className="h-8 rounded-none border-stone-500"
+            className={limsOutlineBtnClass}
             onClick={() => onOpenChange(false)}
             disabled={saving}
           >

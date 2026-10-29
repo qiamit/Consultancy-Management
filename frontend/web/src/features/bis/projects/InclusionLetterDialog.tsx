@@ -163,7 +163,7 @@ export function InclusionLetterDialog({ row, open, onOpenChange, onSaved }: { ro
   return (
     <>
       <Dialog open={open} onOpenChange={(next) => { if (!busy) onOpenChange(next) }}>
-        <DialogContent persistOnFocusLoss layer="stacked" aria-describedby={undefined} className={cn(limsDialogClass, 'flex h-[88vh] w-[min(80rem,calc(100vw_-_var(--app-dialog-overlay-left,0px)_-_2rem))] min-w-0 max-w-none flex-col gap-0 p-0')}>
+        <DialogContent persistOnFocusLoss layer="stacked" aria-describedby={undefined} className={cn(limsDialogClass, 'flex h-[88dvh] w-[min(80rem,calc(100vw_-_var(--app-dialog-overlay-left,0px)_-_2rem))] min-w-0 max-w-none flex-col gap-0 p-0')}>
           <DialogHeader className="shrink-0 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 py-3 pl-4 pr-12 text-left">
             <DialogTitle className="text-base text-white">{TITLE}{row.cm_l_digits ? ` · ${formatCmL(row.cm_l_digits)}` : ''}</DialogTitle>
           </DialogHeader>

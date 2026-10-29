@@ -240,7 +240,7 @@ export function StopMarkingTestReportModule({
       </ManakPanel>
 
       <Dialog open={sampleOpen} onOpenChange={(open) => { if (!open) setSampleOpen(false) }}>
-        <DialogContent className="flex max-h-[92vh] w-[min(72rem,calc(100vw-1.5rem))] max-w-none flex-col gap-3 overflow-hidden rounded-none border-2 border-stone-500 bg-[#f7f3eb] p-3 sm:p-4">
+        <DialogContent className="flex max-h-[92dvh] w-[min(72rem,calc(100vw-1.5rem))] max-w-none flex-col gap-3 overflow-hidden rounded-none border-2 border-stone-500 bg-[#f7f3eb] p-3 sm:p-4">
           <DialogHeader>
             <DialogTitle className="font-jakarta text-base">Sample Offer Letter &amp; Test Request</DialogTitle>
           </DialogHeader>
@@ -293,7 +293,7 @@ export function StopMarkingTestReportModule({
       </Dialog>
 
       <Dialog open={ftrOpen} onOpenChange={(open) => { if (!open) setFtrOpen(false) }}>
-        <DialogContent className="flex max-h-[92vh] w-[min(52rem,calc(100vw-1.5rem))] max-w-none flex-col gap-3 overflow-hidden rounded-none border-2 border-stone-500 bg-[#f7f3eb] p-3 sm:p-4">
+        <DialogContent className="flex max-h-[92dvh] w-[min(52rem,calc(100vw-1.5rem))] max-w-none flex-col gap-3 overflow-hidden rounded-none border-2 border-stone-500 bg-[#f7f3eb] p-3 sm:p-4">
           <DialogHeader>
             <DialogTitle className="font-jakarta text-base">Factory Test Report</DialogTitle>
           </DialogHeader>

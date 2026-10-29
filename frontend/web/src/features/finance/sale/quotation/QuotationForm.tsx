@@ -1411,7 +1411,7 @@ export function QuotationFormView({
 
                     <div className="space-y-2.5 p-2.5">
                       <div className="min-w-0 space-y-1">
-                        <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
+                        <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-stone-500">
                           Item / Description
                         </p>
                         {isLast ? (
@@ -1480,7 +1480,7 @@ export function QuotationFormView({
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                         {visibleLineColumns.make ? (
                           <div className="min-w-0 space-y-1">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
+                            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-stone-500">
                               Make
                             </p>
                             {isLast ? (
@@ -1497,7 +1497,7 @@ export function QuotationFormView({
                         ) : null}
                         {visibleLineColumns.hsnSac ? (
                           <div className="min-w-0 space-y-1">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
+                            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-stone-500">
                               HSN/SAC
                             </p>
                             {isLast ? (
@@ -1513,7 +1513,7 @@ export function QuotationFormView({
                         ) : null}
                         {visibleLineColumns.itemCode ? (
                           <div className="min-w-0 space-y-1">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
+                            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-stone-500">
                               Item Code
                             </p>
                             {isLast ? (
@@ -1530,7 +1530,7 @@ export function QuotationFormView({
                         ) : null}
                         {visibleLineColumns.quantity ? (
                           <div className="min-w-0 space-y-1">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
+                            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-stone-500">
                               Qty
                             </p>
                             {isLast ? (
@@ -1551,7 +1551,7 @@ export function QuotationFormView({
                         ) : null}
                         {visibleLineColumns.unit ? (
                           <div className="min-w-0 space-y-1">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
+                            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-stone-500">
                               Unit
                             </p>
                             {isLast ? (
@@ -1567,7 +1567,7 @@ export function QuotationFormView({
                         ) : null}
                         {visibleLineColumns.rate ? (
                           <div className="min-w-0 space-y-1">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
+                            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-stone-500">
                               Rate
                             </p>
                             {isLast ? (
@@ -1613,7 +1613,7 @@ export function QuotationFormView({
                         ) : null}
                         {visibleLineColumns.discountPercent ? (
                           <div className="min-w-0 space-y-1">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
+                            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-stone-500">
                               Disc %
                             </p>
                             {isLast ? (
@@ -1637,7 +1637,7 @@ export function QuotationFormView({
                         ) : null}
                         {visibleLineColumns.gstPercent ? (
                           <div className="min-w-0 space-y-1">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
+                            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-stone-500">
                               GST %
                             </p>
                             {isLast ? (
@@ -1659,7 +1659,7 @@ export function QuotationFormView({
                         ) : null}
                         {visibleLineColumns.lineRemarks ? (
                           <div className="col-span-2 min-w-0 space-y-1 sm:col-span-3">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
+                            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-stone-500">
                               Remarks
                             </p>
                             {isLast ? (
@@ -1678,7 +1678,7 @@ export function QuotationFormView({
                         ) : null}
                         {visibleLineColumns.deliveryPeriod ? (
                           <div className="min-w-0 space-y-1">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
+                            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-stone-500">
                               Delivery
                             </p>
                             {isLast ? (
@@ -2764,7 +2764,7 @@ export function QuotationFormView({
         <DialogContent
           className={cn(
             limsDialogClass,
-            'max-h-[min(90vh,640px)] w-[min(30rem,calc(100vw-1.5rem))] max-w-lg',
+            'max-h-[min(90dvh,640px)] w-[min(30rem,calc(100vw-1.5rem))] max-w-lg',
           )}
           aria-describedby={undefined}
           layer="nested"

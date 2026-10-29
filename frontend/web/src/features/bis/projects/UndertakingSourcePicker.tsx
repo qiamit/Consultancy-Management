@@ -26,7 +26,7 @@ export function UndertakingSourcePicker({
         <DialogHeader className="border-b border-amber-700 bg-stone-900 px-4 py-3 text-left text-white">
           <DialogTitle className="text-base font-semibold">Select Source PDFs</DialogTitle>
         </DialogHeader>
-        <div className="max-h-[55vh] space-y-2 overflow-y-auto p-4">
+        <div className="max-h-[55dvh] space-y-2 overflow-y-auto p-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-stone-600">{heading}</p>
           {error ? <p role="alert" className="text-xs text-amber-800">{error}</p> : null}
           {sources.length ? (

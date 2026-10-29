@@ -74,6 +74,7 @@ import {
   limsOutlineBtnClass,
   limsPrimaryBtnClass,
   limsRegistryFormClass,
+  limsFullscreenDialogClass,
 } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { REPORT_SCOPE_TITLE, type ReportScopeKind } from './reportScope'
@@ -1115,11 +1116,10 @@ export function TestReportPrintSettingDialog({
         persistOnFocusLoss
         layer="nested"
         aria-describedby={undefined}
-        overlayClassName="lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto"
         className={cn(
           limsDialogClass,
-          'left-0 top-0 flex h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden p-0',
-          'lg:left-[268px] md:h-[100dvh] lg:w-[calc(100vw-268px)] lg:max-w-[calc(100vw-268px)]',
+          'flex h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden p-0',
+          limsFullscreenDialogClass,
         )}
       >
         <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white">
@@ -1270,7 +1270,7 @@ export function TestReportPrintSettingDialog({
           ) : null}
         </div>
 
-        <div className="relative shrink-0 border-t border-stone-700 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-3">
+        <div className="relative shrink-0 border-t border-stone-700 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={limsDarkBarGlowStyle} />
           <DialogFooter className="relative gap-2 sm:justify-between">
             <PrintSettingsDefaultActions
@@ -1453,11 +1453,10 @@ export function TestReportSignatureSettingDialog({
         persistOnFocusLoss
         layer="nested"
         aria-describedby={undefined}
-        overlayClassName="lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto"
         className={cn(
           limsDialogClass,
-          'flex max-h-[90vh] max-w-2xl flex-col',
-          'lg:left-[calc(268px+(100vw-268px)/2)] md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2',
+          'flex max-h-[90dvh] max-w-2xl flex-col',
+          'md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2',
         )}
       >
         <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white">
@@ -1598,11 +1597,10 @@ export function TestReportPageSettingDialog({
         persistOnFocusLoss
         layer="nested"
         aria-describedby={undefined}
-        overlayClassName="lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto"
         className={cn(
           limsDialogClass,
-          'left-0 top-0 flex h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden p-0',
-          'lg:left-[268px] md:h-[100dvh] lg:w-[calc(100vw-268px)] lg:max-w-[calc(100vw-268px)]',
+          'flex h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden p-0',
+          limsFullscreenDialogClass,
         )}
       >
         <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white">
@@ -1929,7 +1927,7 @@ export function TestReportPageSettingDialog({
           ) : null}
         </div>
 
-        <div className="relative shrink-0 border-t border-stone-700 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-3">
+        <div className="relative shrink-0 border-t border-stone-700 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={limsDarkBarGlowStyle} />
           <DialogFooter className="relative gap-2 sm:justify-between">
             <PrintSettingsDefaultActions

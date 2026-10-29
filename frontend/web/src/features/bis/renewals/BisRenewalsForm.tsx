@@ -9,7 +9,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { limsDarkBarGlowStyle, limsPrimaryBtnClass } from '@/lib/limsThemeUi'
+import { limsDarkBarGlowStyle, limsPrimaryBtnClass, limsFullscreenDialogClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { PeriodDateInput, RenewalProductionTable } from './RenewalProductionTable'
 import { RenewalCurrencyInput } from './RenewalCurrencyInput'
@@ -270,11 +270,9 @@ export function BisRenewalsForm({
       <DialogContent
         persistOnFocusLoss
         aria-describedby={undefined}
-        overlayClassName="lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto"
         className={cn(
           '!flex z-50 h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 bg-white p-0 shadow-none sm:rounded-none',
-          'left-0 top-0',
-          'lg:left-[268px] lg:w-[calc(100vw-268px)] lg:max-w-[calc(100vw-268px)]',
+          limsFullscreenDialogClass,
           'border-stone-600 ring-1 ring-amber-700/20',
           '[&>button]:!rounded-none [&>button]:text-white [&>button]:opacity-100 [&>button]:hover:bg-white/10',
         )}
@@ -443,7 +441,7 @@ export function BisRenewalsForm({
           {form.projectId && certificateFile?.url ? <a className="truncate text-xs text-stone-700 underline" href={certificateFile.url} target="_blank" rel="noreferrer">{certificateFile.name}</a> : null}
         </section>
 
-        <div className="flex shrink-0 items-center justify-end gap-2 border-t-2 border-stone-500 bg-stone-100 px-4 py-3 sm:px-6">
+        <div className="flex shrink-0 items-center justify-end gap-2 border-t-2 border-stone-500 bg-stone-100 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
           <Button
             type="button"
             variant="outline"

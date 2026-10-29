@@ -63,7 +63,7 @@ export function AddSymbolDialog({
         aria-describedby={undefined}
         className={cn(
           limsDialogClass,
-          'flex max-h-[min(72vh,560px)] w-[calc(100%-1.5rem)] max-w-xl flex-col p-0 sm:w-full',
+          'flex max-h-[min(72dvh,560px)] w-[calc(100%-1.5rem)] max-w-xl flex-col p-0 sm:w-full',
         )}
       >
         <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white">

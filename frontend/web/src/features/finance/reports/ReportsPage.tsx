@@ -96,7 +96,7 @@ export default function ReportsPage() {
 
   return (
     <BookChrome title="Reports" hint="The date range starts as this financial year, 1 April to 31 March.">
-      <div className={`${limsPanelClass} space-y-3`}>
+      <div className={`${limsPanelClass} space-y-3 p-3 sm:p-4`}>
         <div className="flex flex-wrap gap-2">
           {REPORTS.map((item) => (
             <Button key={item.id} type="button" className="min-h-10" variant={report === item.id ? 'default' : 'outline'} onClick={() => setReport(item.id)}>

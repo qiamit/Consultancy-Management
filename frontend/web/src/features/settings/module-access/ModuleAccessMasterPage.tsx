@@ -31,6 +31,7 @@ import {
   limsTableBodyToneClass,
   limsTableClass,
   limsTableHeadClass,
+  limsFullscreenDialogClass,
 } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabaseClient'
@@ -161,12 +162,10 @@ function SortableHead({
   )
 }
 
-const sidebarFullscreenOverlayClass = 'lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto'
 const sidebarFullscreenDialogClass = cn(
   limsDialogClass,
   '!flex h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden p-0',
-  'left-0 top-0',
-  'lg:left-[268px] lg:w-[calc(100vw-268px)] lg:max-w-[calc(100vw-268px)]',
+  limsFullscreenDialogClass,
 )
 
 const ACCESS_ACTION_COLUMNS = [
@@ -823,7 +822,6 @@ export default function ModuleAccessMasterPage() {
       >
         <DialogContent
           persistOnFocusLoss
-          overlayClassName={sidebarFullscreenOverlayClass}
           className={sidebarFullscreenDialogClass}
           aria-describedby={undefined}
         >
@@ -950,7 +948,7 @@ export default function ModuleAccessMasterPage() {
             )}
           </div>
 
-          <DialogFooter className="shrink-0 gap-2 border-t border-stone-200 bg-stone-50 px-4 py-3 sm:justify-end">
+          <DialogFooter className="shrink-0 gap-2 border-t border-stone-200 bg-stone-50 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:justify-end">
             <Button
               type="button"
               className={cn('gap-2', limsPrimaryBtnClass)}

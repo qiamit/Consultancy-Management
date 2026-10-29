@@ -160,7 +160,7 @@ const DialogContent = React.forwardRef<
         {children}
         {showCloseButton ? (
           <DialogPrimitive.Close
-            className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-none border !border-red-600 !bg-red-600 !text-white shadow-sm ring-offset-background transition-colors hover:!border-red-700 hover:!bg-red-700 hover:!text-white focus:outline-none focus:ring-2 focus:!ring-red-500 focus:ring-offset-2 disabled:pointer-events-none"
+            className="absolute right-2 top-2 z-10 flex h-9 w-9 items-center sm:h-7 sm:w-7 justify-center rounded-none border !border-red-600 !bg-red-600 !text-white shadow-sm ring-offset-background transition-colors hover:!border-red-700 hover:!bg-red-700 hover:!text-white focus:outline-none focus:ring-2 focus:!ring-red-500 focus:ring-offset-2 disabled:pointer-events-none"
             aria-label="Close"
           >
             <X className="h-3.5 w-3.5 !text-white" strokeWidth={2.75} aria-hidden />

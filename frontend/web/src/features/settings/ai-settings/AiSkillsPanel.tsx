@@ -378,7 +378,7 @@ export const AiSkillsPanel = forwardRef<AiSkillsPanelHandle, AiSkillsPanelProps>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent
-          className="max-h-[92vh] max-w-2xl gap-0 overflow-hidden border-slate-300 bg-white p-0 shadow-2xl sm:rounded-lg [&>button]:text-white [&>button]:opacity-80 [&>button]:hover:opacity-100 [&>button]:hover:bg-white/10"
+          className="max-h-[92dvh] max-w-2xl gap-0 overflow-hidden border-slate-300 bg-white p-0 shadow-2xl sm:rounded-lg [&>button]:text-white [&>button]:opacity-80 [&>button]:hover:opacity-100 [&>button]:hover:bg-white/10"
           aria-describedby={undefined}
         >
           <div className="relative bg-slate-900 px-6 py-5 text-white">
@@ -393,7 +393,7 @@ export const AiSkillsPanel = forwardRef<AiSkillsPanelHandle, AiSkillsPanelProps>
             </DialogHeader>
           </div>
 
-          <div className="max-h-[min(62vh,520px)] space-y-5 overflow-y-auto bg-[#fafbfc] px-6 py-6">
+          <div className="max-h-[min(62dvh,520px)] space-y-5 overflow-y-auto bg-[#fafbfc] px-6 py-6">
             <div className="grid grid-cols-1 gap-x-6 gap-y-5 md:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="skill-name" className="text-[12px] font-medium text-slate-600">

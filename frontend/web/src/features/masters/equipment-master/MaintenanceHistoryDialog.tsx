@@ -27,6 +27,7 @@ import {
   limsOutlineBtnClass,
   limsPanelClass,
   limsPrimaryBtnClass,
+  limsFullscreenDialogClass,
 } from '@/lib/limsThemeUi'
 import { cn, formatDate } from '@/lib/utils'
 import { sortMaintenanceHistoryNewestFirst, type MaintenanceHistoryRecord } from './maintenanceHistory'
@@ -39,13 +40,11 @@ export type MaintenanceHistoryDirectorChange = {
   currentChecklist: MaintenanceChecklistItem[]
 }
 
-const FULLSCREEN_OVERLAY = 'lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto'
 
 const FULLSCREEN_DIALOG_CLASS = cn(
   limsDialogClass,
   '!flex h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden p-0',
-  'left-0 top-0',
-  'lg:left-[268px] lg:w-[calc(100vw-268px)] lg:max-w-[calc(100vw-268px)]',
+  limsFullscreenDialogClass,
 )
 
 const CURRENT_ROW_ID = '__current__'
@@ -289,7 +288,6 @@ export function MaintenanceHistoryDialog({
         <DialogContent
           persistOnFocusLoss
           layer={layer === 'default' ? 'nested' : layer}
-          overlayClassName={FULLSCREEN_OVERLAY}
           className={FULLSCREEN_DIALOG_CLASS}
           aria-describedby={undefined}
         >
@@ -464,7 +462,7 @@ export function MaintenanceHistoryDialog({
           </div>
 
           <div className={cn(limsPanelClass, 'shrink-0')}>
-            <div className="relative overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-3 py-1.5 text-white sm:px-5 sm:py-2">
+            <div className="relative overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-3 py-1.5 pb-[max(0.375rem,env(safe-area-inset-bottom))] text-white sm:px-5 sm:py-2 sm:pb-[max(0.5rem,env(safe-area-inset-bottom))]">
               <div
                 className="pointer-events-none absolute inset-0 opacity-[0.18]"
                 style={limsDarkBarGlowStyle}
@@ -558,7 +556,6 @@ export function MaintenanceHistoryDialog({
         <DialogContent
           persistOnFocusLoss
           layer="top"
-          overlayClassName={FULLSCREEN_OVERLAY}
           className={FULLSCREEN_DIALOG_CLASS}
           aria-describedby={undefined}
         >
@@ -711,7 +708,7 @@ export function MaintenanceHistoryDialog({
           </div>
 
           <div className={cn(limsPanelClass, 'shrink-0')}>
-            <div className="relative overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-3 py-2 text-white sm:px-5">
+            <div className="relative overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] text-white sm:px-5">
               <div
                 className="pointer-events-none absolute inset-0 opacity-[0.18]"
                 style={limsDarkBarGlowStyle}

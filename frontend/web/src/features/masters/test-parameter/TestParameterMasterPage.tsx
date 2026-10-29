@@ -1418,7 +1418,7 @@ export default function TestParameterMasterPage() {
       />
 
       <Dialog open={isCodeDialogOpen} onOpenChange={setIsCodeDialogOpen}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
+        <DialogContent className="max-w-5xl max-h-[90dvh] overflow-y-auto" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>Add New IS Code</DialogTitle>
           </DialogHeader>

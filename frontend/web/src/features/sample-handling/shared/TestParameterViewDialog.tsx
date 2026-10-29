@@ -116,7 +116,7 @@ export function TestParameterViewDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         layer="nested"
-        className={cn(limsDialogClass, 'max-h-[88vh] max-w-3xl overflow-hidden p-0')}
+        className={cn(limsDialogClass, 'max-h-[88dvh] max-w-3xl overflow-hidden p-0')}
         aria-describedby={undefined}
       >
         <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white sm:px-5">
@@ -129,7 +129,7 @@ export function TestParameterViewDialog({
           </DialogHeader>
         </div>
 
-        <div className="max-h-[calc(88vh-4.5rem)] space-y-4 overflow-y-auto bg-[#f7f3eb] px-4 py-4 sm:px-5">
+        <div className="max-h-[calc(88dvh-4.5rem)] space-y-4 overflow-y-auto bg-[#f7f3eb] px-4 py-4 sm:px-5">
           {parameters.length === 0 ? (
             <>
               {!extras.loading ? (

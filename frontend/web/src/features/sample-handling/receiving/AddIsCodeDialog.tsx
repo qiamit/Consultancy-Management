@@ -8,6 +8,7 @@ import {
   limsDarkBarGlowStyle,
   limsOutlineBtnClass,
   limsPrimaryBtnClass,
+  limsDialogWidthCapClass,
 } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 
@@ -25,12 +26,11 @@ function parseIsCodeLabelInput(label: string): Partial<IsCodeForm> {
 }
 
 /** Client Master–style shell: dark header, stone body, centered in main area (excl. sidebar). */
-const addIsCodeOverlayClass = 'lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto'
-
 const addIsCodeDialogClass = cn(
-  'max-h-[92vh] w-[calc(100vw-1rem)] max-w-3xl gap-0 overflow-hidden rounded-none border-4 border-stone-700 bg-white p-0 shadow-2xl ring-2 ring-amber-700/40 sm:w-full sm:rounded-none',
+  'max-h-[92dvh] w-[calc(100vw-1rem)] max-w-3xl gap-0 overflow-hidden rounded-none border-4 border-stone-700 bg-white p-0 shadow-2xl ring-2 ring-amber-700/40 sm:w-full sm:rounded-none',
   '[&>button]:!rounded-none [&>button]:text-white [&>button]:opacity-100 [&>button]:hover:bg-white/10',
-  'lg:left-[calc(268px+(100vw-268px)/2)] md:top-1/2 lg:w-[min(48rem,calc(100vw-268px-2rem))] lg:max-w-[min(48rem,calc(100vw-268px-2rem))] md:!-translate-x-1/2 md:!-translate-y-1/2',
+  'md:top-1/2 md:!-translate-x-1/2 md:!-translate-y-1/2',
+  limsDialogWidthCapClass['48rem'],
 )
 
 export function AddIsCodeDialog({
@@ -135,7 +135,6 @@ export function AddIsCodeDialog({
         persistOnFocusLoss
         aria-describedby={undefined}
         layer={nested ? 'nested' : 'default'}
-        overlayClassName={addIsCodeOverlayClass}
         className={addIsCodeDialogClass}
       >
         <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white sm:px-5 sm:py-3">
@@ -151,7 +150,7 @@ export function AddIsCodeDialog({
           </DialogHeader>
         </div>
 
-        <div className="max-h-[min(72vh,720px)] overflow-y-auto overflow-x-hidden bg-gradient-to-b from-stone-100/80 to-white px-4 py-4 sm:px-6 sm:py-5">
+        <div className="max-h-[min(72dvh,720px)] overflow-y-auto overflow-x-hidden bg-gradient-to-b from-stone-100/80 to-white px-4 py-4 sm:px-6 sm:py-5">
           {saveMessage ? (
             <p className="mb-4 border-l-2 border-destructive bg-destructive/5 px-3 py-2 text-sm text-destructive">
               {saveMessage}

@@ -13,6 +13,7 @@ import {
   limsDarkBarGlowStyle,
   limsDialogClass,
   limsPrimaryBtnClass,
+  limsFullscreenDialogClass,
 } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
@@ -42,13 +43,11 @@ import { calculateNextDueDate, sanitizeDateStr } from './types'
 export type { MaintenanceCheckpointRow, MaintenanceCheckpointStatus }
 export { REPAIR_DEFAULT_OK, REPAIR_DEFAULT_NOT_OK, defaultRepairForStatus } from './maintenanceChecklist'
 
-const FULLSCREEN_OVERLAY = 'lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto'
 
 const FULLSCREEN_DIALOG_CLASS = cn(
   limsDialogClass,
   '!flex h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden p-0',
-  'left-0 top-0',
-  'lg:left-[268px] lg:w-[calc(100vw-268px)] lg:max-w-[calc(100vw-268px)]',
+  limsFullscreenDialogClass,
 )
 
 function newCheckpointRow(checkPoint = ''): MaintenanceCheckpointRow {
@@ -210,7 +209,6 @@ export function ConductMaintenanceDialog({
       <DialogContent
         persistOnFocusLoss
         layer={layer === 'default' ? 'nested' : layer}
-        overlayClassName={FULLSCREEN_OVERLAY}
         className={FULLSCREEN_DIALOG_CLASS}
         aria-describedby={undefined}
       >
@@ -350,7 +348,7 @@ export function ConductMaintenanceDialog({
         </div>
         </div>
 
-        <DialogFooter className="shrink-0 gap-2 border-t border-stone-300 bg-white px-4 py-3 sm:px-5">
+        <DialogFooter className="shrink-0 gap-2 border-t border-stone-300 bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5">
           <Button type="button" className={limsPrimaryBtnClass} onClick={handleSaveAndClose}>
             Save & Close
           </Button>

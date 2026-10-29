@@ -39,7 +39,7 @@ export function IsCodesFilesDialog({
         className={cn(
           limsDialogClass,
           'flex !flex-col gap-0 overflow-hidden p-0',
-          'max-h-[min(92vh,860px)] w-[min(48rem,calc(100vw-1.5rem))] max-w-3xl bg-white',
+          'max-h-[min(92dvh,860px)] w-[min(48rem,calc(100vw-1.5rem))] max-w-3xl bg-white',
         )}
       >
         <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white">
@@ -67,7 +67,7 @@ export function IsCodesFilesDialog({
             onDeleteFile={onDeleteFile}
             onDocumentKindChange={onDocumentKindChange}
             resetKey={open}
-            scrollClassName="max-h-[min(56vh,520px)]"
+            scrollClassName="max-h-[min(56dvh,520px)]"
           />
         </div>
       </DialogContent>

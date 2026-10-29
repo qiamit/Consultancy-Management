@@ -662,7 +662,7 @@ export function IsCodesForm({
             busy={saveLoading}
             status={filesStatus}
             resetKey={filesResetKey}
-            scrollClassName="max-h-[min(36vh,320px)]"
+            scrollClassName="max-h-[min(36dvh,320px)]"
             onAddFiles={(picked) => {
               if (onAddSavedFiles) {
                 onAddSavedFiles(picked)
