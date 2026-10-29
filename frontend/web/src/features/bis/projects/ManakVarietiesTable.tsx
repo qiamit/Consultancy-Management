@@ -234,7 +234,9 @@ export function ManakVarietiesTable({
   const [notesOverride, setNotesOverride] = useState<string | null>(null)
   const baseNotes = scopeNotes.trim() ? scopeNotes : varieties.join('\n')
   const effectiveNotes = notesOverride ?? baseNotes
-  const scope = parseBisNotesScope(effectiveNotes)
+  // An empty scope starts as a 2-column table (same default as the Licence form's License Scope).
+  const parsedScope = parseBisNotesScope(effectiveNotes.trim() ? effectiveNotes : setBisNotesScopeColumnCount('', 2))
+  const scope = !effectiveNotes.trim() && parsedScope.mode === 'table' ? { ...parsedScope, rows: [] } : parsedScope
   const headers = scope.mode === 'table' ? scope.headers : ['Variety applied for']
   const scopeRows: string[][] = scope.mode === 'table' ? scope.rows : scope.text.split('\n').map((line) => line.trim()).filter(Boolean).map((line) => [line])
   const currentColumns = headers.length
