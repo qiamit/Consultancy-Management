@@ -7,23 +7,26 @@ set -euo pipefail
 QE_ROOT=/opt/qe
 REPO_SSH=git@github.com:qiamit/Consultancy-Management.git
 
+# A fresh server runs unattended-upgrades right after boot; wait for its apt lock instead of failing.
+apt_get() { sudo DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=1200 "$@"; }
+
 echo "== Packages and automatic security updates"
 sudo timedatectl set-timezone Asia/Kolkata
-sudo apt-get update -y
-sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
-sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+apt_get update -y
+apt_get upgrade -y
+apt_get install -y \
   ca-certificates curl gnupg git attr jq unattended-upgrades fail2ban netfilter-persistent iptables-persistent rclone
 sudo dpkg-reconfigure -f noninteractive unattended-upgrades
 
 echo "== Docker (official repository)"
 if ! command -v docker >/dev/null 2>&1; then
   sudo install -m 0755 -d /etc/apt/keyrings
-  curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+  curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --batch --yes --dearmor -o /etc/apt/keyrings/docker.gpg
   sudo chmod a+r /etc/apt/keyrings/docker.gpg
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
     | sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
-  sudo apt-get update -y
-  sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  apt_get update -y
+  apt_get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 fi
 sudo usermod -aG docker "$USER"
 sudo systemctl enable --now docker
@@ -31,7 +34,7 @@ sudo systemctl enable --now docker
 echo "== Node.js 22 (for the migration and backup scripts)"
 if ! command -v node >/dev/null 2>&1 || ! node -v | grep -q '^v22'; then
   curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-  sudo apt-get install -y nodejs
+  apt_get install -y nodejs
 fi
 
 echo "== Firewall: open 80/443 (Oracle Ubuntu images reject everything except SSH by default)"
