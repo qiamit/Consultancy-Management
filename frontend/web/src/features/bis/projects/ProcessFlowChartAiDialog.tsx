@@ -1,9 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, ChevronDown, Loader2, Send, Sparkles, X } from 'lucide-react'
+import { Check, ChevronDown, FilePlus2, Loader2, Send, Sparkles, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Textarea } from '@/components/ui/textarea'
 import {
   limsDialogSidebarOverlayClass,
@@ -17,6 +24,8 @@ import {
   generateProcessFlowSteps,
   isAiModelMissingError,
   loadProcessFlowAiSources,
+  readProcessFlowReferencePdf,
+  type ProcessFlowAiSourceDoc,
   type ProcessFlowAiSources,
 } from './generateProcessFlowChart'
 import { flattenProcessFlowTree, processFlowNodeHasContent, type ProcessFlowNode } from './processFlowModel'
@@ -67,6 +76,10 @@ export function ProcessFlowChartAiDialog({
   const [sources, setSources] = useState<ProcessFlowAiSources | null>(null)
   /** Select Source: which inputs the AI reads (all on by default). */
   const [use, setUse] = useState<Record<SourceKey, boolean>>({ standard: true, manual: true, scope: true })
+  /** Extra PDFs added under Select Source → Add Files (read once when added). */
+  const [references, setReferences] = useState<Array<{ id: string; doc: ProcessFlowAiSourceDoc; on: boolean }>>([])
+  const [readingFiles, setReadingFiles] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   /** PDFs are read once per IS code while the dialog stays mounted (Regenerate does not download them again). */
   const sourcesCacheRef = useRef<{ isCodeId: string; sources: ProcessFlowAiSources } | null>(null)
 
@@ -85,6 +98,24 @@ export function ProcessFlowChartAiDialog({
     setPhase('')
     setBusy(false)
   }, [open])
+
+  const addReferenceFiles = async (files: FileList | null) => {
+    const list = Array.from(files ?? []).filter((f) => /\.pdf$/i.test(f.name) || f.type === 'application/pdf')
+    if (!list.length) return
+    setReadingFiles(true)
+    try {
+      const docs = await Promise.all(list.map((f) => readProcessFlowReferencePdf(f)))
+      setReferences((prev) => [
+        ...prev,
+        ...docs.map((doc, i) => ({ id: `${Date.now()}-${i}-${doc.fileName}`, doc, on: Boolean(doc.text) })),
+      ])
+      const unreadable = docs.filter((d) => !d.text)
+      if (unreadable.length) toast.warning(`${unreadable.length} File(s) Could Not Be Read`, { description: unreadable.map((d) => d.problem).join(' · ') })
+      else toast.success(`${docs.length} Reference File(s) Added`)
+    } finally {
+      setReadingFiles(false)
+    }
+  }
 
   const generate = async () => {
     if (disabled || busy) return
@@ -119,6 +150,7 @@ export function ProcessFlowChartAiDialog({
         licenseScope: use.scope ? licenseScope : '',
         isCodeId,
         sources: picked,
+        references: references.filter((r) => r.on).map((r) => r.doc),
         stepCount,
         existingSteps: append ? existingSteps : [],
         instructions,
@@ -226,11 +258,15 @@ export function ProcessFlowChartAiDialog({
                   type="button"
                   variant="outline"
                   className={cn(limsOutlineBtnClass, 'h-10 shrink-0 gap-1.5 px-3 text-sm')}
-                  disabled={disabled || busy}
+                  disabled={disabled || busy || readingFiles}
                   title="Choose What the AI Reads"
                 >
+                  {readingFiles ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
                   Select Source
-                  <span className="text-xs text-stone-500">({(Object.keys(use) as SourceKey[]).filter((k) => use[k]).length}/3)</span>
+                  <span className="text-xs text-stone-500">
+                    ({(Object.keys(use) as SourceKey[]).filter((k) => use[k]).length + references.filter((r) => r.on).length}/
+                    {3 + references.length})
+                  </span>
                   <ChevronDown className="h-4 w-4 opacity-60" aria-hidden />
                 </Button>
               </DropdownMenuTrigger>
@@ -271,8 +307,69 @@ export function ProcessFlowChartAiDialog({
                     </DropdownMenuCheckboxItem>
                   )
                 })}
+                {references.map((ref) => (
+                  <DropdownMenuCheckboxItem
+                    key={ref.id}
+                    className="items-start gap-2 rounded-none py-2 pl-2 pr-8 [&>span:first-child]:hidden"
+                    checked={ref.on}
+                    onCheckedChange={(on) => {
+                      // An unreadable file stays off but can still be removed.
+                      if (!ref.doc.text) return
+                      setReferences((prev) => prev.map((r) => (r.id === ref.id ? { ...r, on: on === true } : r)))
+                    }}
+                    onSelect={(e) => e.preventDefault()}
+                  >
+                    <span
+                      aria-hidden
+                      className={cn(
+                        'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center border',
+                        ref.on ? 'border-amber-700 bg-amber-700 text-white' : 'border-stone-400 bg-white',
+                      )}
+                    >
+                      {ref.on ? <Check className="h-3 w-3" /> : null}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-semibold text-stone-800">{ref.doc.fileName}</span>
+                      <span className="block text-[11px] text-stone-500">
+                        {ref.doc.text ? (ref.on ? 'Reference File' : 'Turned Off') : ref.doc.problem}
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      className="absolute right-1.5 top-2 inline-flex h-6 w-6 items-center justify-center text-stone-500 hover:bg-red-50 hover:text-red-700"
+                      title="Remove File"
+                      aria-label={`Remove ${ref.doc.fileName}`}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setReferences((prev) => prev.filter((r) => r.id !== ref.id))
+                      }}
+                    >
+                      <X size={13} aria-hidden />
+                    </button>
+                  </DropdownMenuCheckboxItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="gap-2 rounded-none py-2 pl-2 text-sm font-semibold text-amber-800"
+                  onSelect={() => fileInputRef.current?.click()}
+                >
+                  <FilePlus2 className="h-4 w-4" aria-hidden />
+                  Add Files (PDF)
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/pdf,.pdf"
+              multiple
+              className="sr-only"
+              onChange={(e) => {
+                void addReferenceFiles(e.target.files)
+                e.target.value = ''
+              }}
+            />
           </div>
         </div>
 
@@ -332,7 +429,7 @@ export function ProcessFlowChartAiDialog({
           <p className="border-t border-red-200 bg-red-50 px-4 py-2 text-xs text-red-800">{error}</p>
         ) : null}
 
-        {/* Instructions, Generate, Cancel and Apply on one line (they wrap only on narrow phones). */}
+        {/* Instructions, Generate and Apply on one line (they wrap only on narrow phones). */}
         <div className="shrink-0 border-t border-stone-400 bg-[#fffcf7] p-3 sm:px-4">
           <div className="flex flex-wrap items-end gap-2 sm:flex-nowrap">
             <Textarea
@@ -359,14 +456,6 @@ export function ProcessFlowChartAiDialog({
             >
               {busy ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
               <span className="ml-1.5 text-sm">{steps ? 'Regenerate' : 'Generate'}</span>
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className={cn(limsOutlineBtnClass, 'h-10 shrink-0 px-4 text-sm')}
-              onClick={() => onOpenChange(false)}
-            >
-              Cancel
             </Button>
             <Button
               type="button"
