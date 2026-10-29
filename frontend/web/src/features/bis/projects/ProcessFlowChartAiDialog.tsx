@@ -174,7 +174,7 @@ export function ProcessFlowChartAiDialog({
         overlayClassName={limsDialogSidebarOverlayClass}
         portalClassName={limsDialogSidebarPortalClass}
         className={cn(
-          'flex max-h-[min(92dvh,860px)] w-[min(96vw,660px)] flex-col gap-0 overflow-hidden rounded-none border-4 border-stone-700 bg-[#fffcf7] p-0 shadow-2xl ring-2 ring-amber-700/35',
+          'flex max-h-[min(92dvh,860px)] w-[min(96vw,720px)] max-w-none flex-col gap-0 overflow-hidden rounded-none border-4 border-stone-700 bg-[#fffcf7] p-0 shadow-2xl ring-2 ring-amber-700/35',
           '[&>button]:!rounded-none [&>button]:opacity-100',
         )}
       >
@@ -301,12 +301,13 @@ export function ProcessFlowChartAiDialog({
           <p className="border-t border-red-200 bg-red-50 px-4 py-2 text-xs text-red-800">{error}</p>
         ) : null}
 
-        <div className="shrink-0 space-y-2 border-t border-stone-400 bg-[#fffcf7] p-3 sm:px-4">
-          <div className="flex items-end gap-2">
+        {/* Instructions, Generate, Cancel and Apply on one line (they wrap only on narrow phones). */}
+        <div className="shrink-0 border-t border-stone-400 bg-[#fffcf7] p-3 sm:px-4">
+          <div className="flex flex-wrap items-end gap-2 sm:flex-nowrap">
             <Textarea
               value={instructions}
               onChange={(e) => setInstructions(e.target.value)}
-              className="min-h-10 max-h-28 flex-1 resize-none rounded-none border-stone-500 bg-stone-50 shadow-none focus-visible:border-amber-600 focus-visible:ring-amber-500/20"
+              className="min-h-10 max-h-28 min-w-[10rem] flex-1 basis-full resize-none sm:basis-auto rounded-none border-stone-500 bg-stone-50 shadow-none focus-visible:border-amber-600 focus-visible:ring-amber-500/20"
               rows={1}
               disabled={busy || disabled}
               placeholder="Special Instructions (Optional)"
@@ -328,19 +329,17 @@ export function ProcessFlowChartAiDialog({
               {busy ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
               <span className="ml-1.5 text-sm">{steps ? 'Regenerate' : 'Generate'}</span>
             </Button>
-          </div>
-          <div className="flex justify-end gap-2">
             <Button
               type="button"
               variant="outline"
-              className={cn(limsOutlineBtnClass, 'h-9 px-4 text-sm')}
+              className={cn(limsOutlineBtnClass, 'h-10 shrink-0 px-4 text-sm')}
               onClick={() => onOpenChange(false)}
             >
               Cancel
             </Button>
             <Button
               type="button"
-              className={cn(limsPrimaryBtnClass, 'h-9 px-4 text-sm')}
+              className={cn(limsPrimaryBtnClass, 'h-10 shrink-0 px-4 text-sm')}
               disabled={busy || disabled || cleanSteps.length === 0}
               onClick={apply}
             >
