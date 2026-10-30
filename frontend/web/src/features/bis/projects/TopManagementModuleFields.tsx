@@ -23,6 +23,7 @@ import {
 } from './bisProjectFilesApi'
 import { removeSignatureImageBackground } from './removeSignatureBackground'
 import { manakEmailError } from './manakChecks'
+import { fileViewHref } from '@/lib/fileViewer'
 
 const SIGNATURE_DOC_KIND = 'top-management-signature'
 const AUTHORIZED_SIGNATURE_DOC_KIND = 'top-management-authorized-signature'
@@ -448,7 +449,7 @@ export function TopManagementModuleFields({
         </Button>
         {opts.hasSignature && urls?.viewUrl ? (
           <a
-            href={urls.viewUrl}
+            href={fileViewHref(urls.viewUrl, opts.fileName || 'signature')}
             target="_blank"
             rel="noreferrer"
             className={sigActionBtnClass}

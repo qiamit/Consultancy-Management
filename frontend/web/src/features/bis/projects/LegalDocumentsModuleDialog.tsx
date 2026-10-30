@@ -167,6 +167,7 @@ import {
   type BisApplicationDetailsForm,
   type BisProjectRow,
 } from './types'
+import { fileViewHref } from '@/lib/fileViewer'
 
 const thBase =
   'bg-stone-800 text-center text-[11px] font-bold uppercase tracking-[0.14em] text-amber-200'
@@ -1687,7 +1688,7 @@ export function LegalDocumentsModuleDialog({
         </Button>
         {file.viewUrl ? (
           <a
-            href={file.viewUrl}
+            href={fileViewHref(file.viewUrl, file.file_name)}
             target="_blank"
             rel="noreferrer"
             className={cn(limsOutlineBtnClass, actionBtnClass)}

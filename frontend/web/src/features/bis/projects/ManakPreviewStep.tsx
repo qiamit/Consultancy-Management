@@ -8,7 +8,6 @@ import type { BisPrintDocumentKind } from '../print/printBisDocument'
 import { openPendingPrintWindow } from '../print/openPrintHtml'
 import { fetchBisModulePayload } from './bisModuleDataApi'
 import { createBisProjectFileUrls } from './bisProjectFilesApi'
-import { writePdfViewerHtml } from './mergeBisProjectFilesPdf'
 import { BIS_APPLICATION_STEPS } from './bisApplicationSteps'
 import type { BisProjectRow } from './types'
 import {
@@ -20,6 +19,7 @@ import {
   type PreviewSelection,
   type Row,
 } from './applicationDocuments'
+import { fileViewHref, openFileInNewTab } from '@/lib/fileViewer'
 
 export type { PreviewFile, PreviewSelection } from './applicationDocuments'
 
@@ -30,7 +30,6 @@ type Rec = Record<string, unknown>
    then previewed or downloaded together. */
 
 /** Browser-viewable types for View (by file extension). */
-const VIEW_TYPES: Record<string, string> = { pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif' }
 
 const thCls = 'border border-stone-700 bg-stone-800 px-2 py-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-amber-200'
 const tdCls = 'border border-[#e7e0d4] px-2 py-1.5 align-middle text-stone-700'
@@ -185,21 +184,10 @@ export function ManakPreviewStep({
     try {
       const urls = await createBisProjectFileUrls(file.storage_path, file.file_name, file.bucket)
       if (!urls.viewUrl) throw new Error('Unable to open this file.')
-      // Re-type the bytes so the browser shows the file in the tab instead of downloading it.
-      const res = await fetch(urls.viewUrl)
-      if (!res.ok) throw new Error('Unable to open this file.')
-      const ext = (file.file_name.match(/\.([a-z0-9]+)$/i)?.[1] ?? '').toLowerCase()
-      const type = VIEW_TYPES[ext] ?? res.headers.get('content-type') ?? 'application/octet-stream'
-      const url = URL.createObjectURL(new Blob([await res.arrayBuffer()], { type }))
-      // Write a viewer page into the tab (navigating a tab to a blob: URL is refused by some browsers).
-      const win = target ?? window.open('', '_blank')
-      if (!win) throw new Error('Allow popups to view the file.')
-      if (type.startsWith('image/')) {
-        win.document.open()
-        win.document.write(`<!doctype html><html><head><meta charset="utf-8"/><title>${file.file_name.replace(/</g, '&lt;')}</title><style>html,body{margin:0;min-height:100%;background:#525659;display:flex;align-items:center;justify-content:center}img{max-width:100%;height:auto;background:#fff}</style></head><body><img src="${url}" alt=""/></body></html>`)
-        win.document.close()
-      } else writePdfViewerHtml(win, file.file_name, url, false)
-      window.setTimeout(() => URL.revokeObjectURL(url), 600_000)
+      // The app's own viewer page: shows the file in the tab, never a download.
+      const href = fileViewHref(urls.viewUrl, file.file_name)
+      if (target) target.location.replace(href)
+      else openFileInNewTab(urls.viewUrl, file.file_name)
     } catch (err) {
       target?.close()
       toast.error(err instanceof Error ? err.message : 'Unable to open this file.')

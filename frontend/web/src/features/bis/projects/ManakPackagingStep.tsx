@@ -15,6 +15,7 @@ import { BisModuleImportDialog } from './BisModuleImportDialog'
 import { PACKAGING_COMPONENTS_KIND } from './manakModuleKinds'
 import { ManakPanel } from './ManakStepPages'
 import type { BisProjectRow } from './types'
+import { openFileInNewTab } from '@/lib/fileViewer'
 
 type Rec = Record<string, unknown>
 type Payload = Rec | null | undefined
@@ -142,7 +143,7 @@ function PackagingMarkingDialog({
   const viewLabel = async () => {
     try {
       const urls = await createBisProjectFileUrls(form.labelStoragePath, form.labelFileName)
-      if (urls.viewUrl) window.open(urls.viewUrl, '_blank', 'noopener')
+      openFileInNewTab(urls.viewUrl, form.labelFileName)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not open the label')
     }

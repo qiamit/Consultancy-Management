@@ -10,7 +10,8 @@ function canUseStorage(): boolean {
 /** Paths that should never be restored after refresh / login. */
 export function isEphemeralRoute(pathname: string): boolean {
   const path = pathname.replace(/\/+$/, '') || '/'
-  return isPublicSitePath(path) || path.startsWith('/auth/')
+  // The file viewer tab must not become the screen a refresh of the app returns to.
+  return isPublicSitePath(path) || path.startsWith('/auth/') || path === '/view-file'
 }
 
 export function readLastRoute(): string | null {

@@ -81,6 +81,7 @@ function isFileModuleKind(kind: BisPrintDocumentKind): boolean {
 }
 
 import { clientDisplayName, formatCmL, isCodeDisplayLabel, type BisProjectRow } from './types'
+import { fileViewHref, openFileInNewTab } from '@/lib/fileViewer'
 
 const checkboxClass =
   'h-4 w-4 rounded-none border-stone-500 text-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/30'
@@ -670,8 +671,10 @@ export function BisLicenseDocumentsDialog({
         const blob = await uploadedFilesPdf(sel.previewFiles)
         if (!blob) throw new Error('No PDF or image files could be read from the selection.')
         const url = URL.createObjectURL(blob)
-        const win = target ?? window.open('', '_blank')
-        if (win) writePdfViewerHtml(win, 'Selected Files', url, false)
+        // The app's own viewer page (never a download); the blob stays valid for it for ten minutes.
+        if (target) target.location.replace(fileViewHref(url, 'Selected Files.pdf'))
+        else openFileInNewTab(url, 'Selected Files.pdf')
+        window.setTimeout(() => URL.revokeObjectURL(url), 600_000)
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Preview failed')

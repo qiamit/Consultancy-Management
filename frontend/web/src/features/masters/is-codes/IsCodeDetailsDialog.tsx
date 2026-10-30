@@ -13,6 +13,8 @@ import { cn } from '@/lib/utils'
 import { formatIsCodeLabel } from './formatIsCodeLabel'
 import { loadIsCodeFileLinks, type IsCodeFileLink } from './loadIsCodeFileLinks'
 import type { IsCodeRow } from './types'
+import { downloadFile, fileViewHref } from '@/lib/fileViewer'
+import { toast } from 'sonner'
 
 function formatSupabaseError(err: unknown): string {
   if (!err) return 'Unknown error'
@@ -231,7 +233,7 @@ export function IsCodeDetailsDialog({
                         {file.url ? (
                           <div className="inline-flex shrink-0 items-center gap-0.5">
                             <a
-                              href={file.url}
+                              href={fileViewHref(file.url, file.file_name)}
                               target="_blank"
                               rel="noreferrer"
                               className={cn(limsOutlineBtnClass, 'inline-flex h-8 w-8 items-center justify-center p-0')}
@@ -240,15 +242,17 @@ export function IsCodeDetailsDialog({
                             >
                               <Eye size={15} aria-hidden />
                             </a>
-                            <a
-                              href={file.url}
-                              download={file.file_name}
+                            {/* The storage server is another site, so a download attribute would be ignored (the
+                                link would just open); the file is fetched and saved instead. */}
+                            <button
+                              type="button"
+                              onClick={() => void downloadFile(file.url!, file.file_name).catch((err: unknown) => toast.error(err instanceof Error ? err.message : 'Download failed'))}
                               className={cn(limsOutlineBtnClass, 'inline-flex h-8 w-8 items-center justify-center p-0')}
                               title={`Download ${file.file_name}`}
                               aria-label={`Download ${file.file_name}`}
                             >
                               <Download size={15} aria-hidden />
-                            </a>
+                            </button>
                           </div>
                         ) : (
                           <span className="shrink-0 text-[11px] text-stone-500">Unavailable</span>

@@ -14,6 +14,7 @@ import {
   uploadBisProjectFile,
   type BisProjectViewFile,
 } from './bisProjectFilesApi'
+import { openFileInNewTab } from '@/lib/fileViewer'
 
 const btn = 'inline-flex h-8 w-8 items-center justify-center rounded-none border p-0 text-white shadow-sm transition-colors'
 
@@ -62,7 +63,7 @@ export function ProjectFilesUploadCell({ projectId, docKind, label }: { projectI
     try {
       const urls = await createBisProjectFileUrls(file.storage_path, file.file_name)
       if (!urls.viewUrl) throw new Error('Unable to open this PDF.')
-      window.open(urls.viewUrl, '_blank', 'noopener,noreferrer')
+      openFileInNewTab(urls.viewUrl, file.file_name)
     } catch (err) {
       toast.error(formatBisProjectFilesError(err))
     }

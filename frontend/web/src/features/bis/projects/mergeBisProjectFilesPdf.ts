@@ -7,6 +7,7 @@ import {
   docKindsForList,
   type BisProjectDocKind,
 } from './bisProjectFilesApi'
+import { fileViewHref } from '@/lib/fileViewer'
 
 type StoredFile = {
   file_name: string
@@ -263,8 +264,10 @@ export async function openMergedBisModulePdf(
   try {
     const bytes = await buildMergedBisModulePdf(projectId, docKind)
     const url = URL.createObjectURL(blobFromPdfBytes(bytes))
-    writePdfViewerHtml(target, options.title, url, options.mode === 'print')
-    window.setTimeout(() => URL.revokeObjectURL(url), 120_000)
+    // View: the app's own viewer page (never a download). Print keeps the browser's PDF frame and its print dialog.
+    if (options.mode === 'view') target.location.replace(fileViewHref(url, `${options.title}.pdf`))
+    else writePdfViewerHtml(target, options.title, url, true)
+    window.setTimeout(() => URL.revokeObjectURL(url), 600_000)
     return null
   } catch (err) {
     try {
