@@ -10,6 +10,7 @@ import {
   X,
   LogOut,
   KeyRound,
+  ShieldCheck,
   Bot,
   Shield,
   Globe,
@@ -42,6 +43,7 @@ import {
 } from '@/lib/appNav'
 import { QiAssistant } from '@/components/qi-assistant/QiAssistant'
 import { ChangePasswordDialog } from '@/components/auth/ChangePasswordDialog'
+import { TwoStepLoginDialog } from '@/components/auth/TwoStepLoginDialog'
 import { OfflineBanner } from '@/components/OfflineBanner'
 import { toProperLabelText } from '@/lib/properLabelText'
 
@@ -447,6 +449,7 @@ export default function GlobalLayout() {
     location.pathname.startsWith('/masters/test-parameter/')
   const { profileName, designation, profileReady, user, mustChangePassword, clearMustChangePassword } = useAuth()
   const [changePasswordOpen, setChangePasswordOpen] = useState(false)
+  const [twoStepOpen, setTwoStepOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false
     return window.localStorage.getItem('app.sidebarCollapsed') === '1'
@@ -781,6 +784,11 @@ export default function GlobalLayout() {
                   Change Password
                 </DropdownMenuItem>
 
+                <DropdownMenuItem onSelect={() => setTwoStepOpen(true)}>
+                  <ShieldCheck size={14} />
+                  Two-Step Login
+                </DropdownMenuItem>
+
                 <DropdownMenuItem
                   className="text-destructive focus:text-destructive"
                   onSelect={async (event) => {
@@ -811,6 +819,7 @@ export default function GlobalLayout() {
           onOpenChange={setChangePasswordOpen}
           onChanged={clearMustChangePassword}
         />
+        <TwoStepLoginDialog open={twoStepOpen} onOpenChange={setTwoStepOpen} />
         <ChangePasswordDialog
           mode="forced"
           open={profileReady && mustChangePassword}

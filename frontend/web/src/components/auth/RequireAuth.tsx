@@ -1,5 +1,6 @@
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
+import { RequireTwoStepLogin } from '@/components/auth/RequireTwoStepLogin'
 
 export function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -20,5 +21,5 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
     )
   }
 
-  return <>{children}</>
+  return <RequireTwoStepLogin>{children}</RequireTwoStepLogin>
 }

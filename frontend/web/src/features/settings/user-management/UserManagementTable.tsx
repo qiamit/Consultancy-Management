@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { KeyRound, Pencil } from 'lucide-react'
+import { KeyRound, Pencil, ShieldOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
@@ -24,6 +24,8 @@ type UserManagementTableProps = {
   currentUserId: string | null
   onEdit: (user: UserAccount) => void
   onSetPassword: (user: UserAccount) => void
+  /** Admin: remove another user's authenticator (lost phone). Not offered on the signed-in admin's own row. */
+  onResetTwoStep: (user: UserAccount) => void
   onStatusChange: (user: UserAccount, status: 'Active' | 'Inactive') => void
 }
 
@@ -90,6 +92,19 @@ export function UserManagementTable(props: UserManagementTableProps) {
         >
           <KeyRound size={16} />
         </Button>
+        {props.currentUserId !== user.id && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => props.onResetTwoStep(user)}
+            disabled={busy}
+            aria-label={`Reset Two-Step Login for ${user.name}`}
+            title="Reset Two-Step Login"
+          >
+            <ShieldOff size={16} />
+          </Button>
+        )}
       </>
     )
   }
