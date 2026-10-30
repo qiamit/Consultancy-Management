@@ -75,6 +75,12 @@ services:
       GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
       GOTRUE_EXTERNAL_PHONE_ENABLED: "false"
       GOTRUE_MAILER_AUTOCONFIRM: ${GOTRUE_MAILER_AUTOCONFIRM:-true}
+      # Links in auth emails and generate_link: GoTrue keeps only the host of API_EXTERNAL_URL, so the
+      # gateway prefix /auth/v1 has to be part of the path, or the link lands on the API root (404).
+      GOTRUE_MAILER_URLPATHS_INVITE: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_CONFIRMATION: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_RECOVERY: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: /auth/v1/verify
       GOTRUE_MAILER_SUBJECTS_RECOVERY: ${GOTRUE_MAILER_SUBJECTS_RECOVERY:-Reset Your Password}
       GOTRUE_PASSWORD_MIN_LENGTH: ${GOTRUE_PASSWORD_MIN_LENGTH:-8}
       GOTRUE_SMTP_ADMIN_EMAIL: ${GOTRUE_SMTP_ADMIN_EMAIL:-}
@@ -156,6 +162,7 @@ services:
       RENEWAL_REMINDERS_DISABLED: ${RENEWAL_REMINDERS_DISABLED:-1}
       ALLOW_LOCALHOST_ORIGINS: ${ALLOW_LOCALHOST_ORIGINS:-1}
       APP_URL: https://${APP_DOMAIN}
+      AUTH_PUBLIC_URL: https://${API_DOMAIN}/auth/v1
       # Customer Portal invites stay off until the owner opens the portal (after Railway shutdown + secrets rotation).
       CUSTOMER_PORTAL_INVITES: ${CUSTOMER_PORTAL_INVITES:-0}
 
