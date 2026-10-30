@@ -33,6 +33,7 @@ import StatementsPage from '@/features/finance/statements/StatementsPage'
 import ReportsPage from '@/features/finance/reports/ReportsPage'
 import BisProjectsMasterPage from '@/features/bis/projects/BisProjectsMasterPage'
 import BisLicenseLifecyclePage from '@/features/bis/renewals/BisLicenseLifecyclePage'
+import type { ReactNode } from 'react'
 import { Navigate } from 'react-router-dom'
 import BisSurveillanceMasterPage from '@/features/bis/surveillance/BisSurveillanceMasterPage'
 import StopMarkingMasterPage from '@/features/bis/stop-marking/StopMarkingMasterPage'
@@ -41,15 +42,45 @@ import EmailToolsPage from '@/features/tools/email/EmailToolsPage'
 import CmsToolsPage from '@/features/tools/cms/CmsToolsPage'
 import ClaudeConnectorPage from '@/features/tools/mcp/ClaudeConnectorPage'
 import { RequireAuth } from '@/components/auth/RequireAuth'
+import { useAuth } from '@/hooks/useAuth'
+import PortalLayout from '@/features/portal/PortalLayout'
 import { RequireLaboratoryDirector } from '@/components/auth/RequireLaboratoryDirector'
 
 /** Stable route shells — avoid remount when App re-renders after auth/session updates. */
 export function AuthenticatedShell() {
   return (
     <RequireAuth>
-      <GlobalLayout />
+      <StaffArea>
+        <GlobalLayout />
+      </StaffArea>
     </RequireAuth>
   )
+}
+
+/** The staff app: Customer Portal logins go to their own area (the database gives them nothing here anyway). */
+function StaffArea({ children }: { children: ReactNode }) {
+  const { role, profileReady } = useAuth()
+  if (!profileReady) return null
+  if (role === 'customer') return <Navigate to="/portal" replace />
+  return <>{children}</>
+}
+
+/** Customer Portal: only customer logins; staff are sent to the app. */
+export function PortalShell() {
+  return (
+    <RequireAuth>
+      <CustomerArea>
+        <PortalLayout />
+      </CustomerArea>
+    </RequireAuth>
+  )
+}
+
+function CustomerArea({ children }: { children: ReactNode }) {
+  const { role, profileReady } = useAuth()
+  if (!profileReady) return null
+  if (role !== 'customer') return <Navigate to="/" replace />
+  return <>{children}</>
 }
 
 export function LabSettingsRoute() {

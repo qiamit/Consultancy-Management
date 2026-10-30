@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, ArrowUpDown, Building2, Copy, Mail, MapPin, Pencil, Phone, Wallet } from 'lucide-react'
+import { ArrowDown, ArrowUp, ArrowUpDown, Building2, Copy, Mail, MapPin, Pencil, Phone, UserRoundCheck, Wallet } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
 import type { ClientRow } from './types'
@@ -102,10 +102,13 @@ function ClientRowActions({
   row,
   onEdit,
   onCopy,
+  onPortal,
 }: {
   row: ClientRow
   onEdit: (row: ClientRow) => void
   onCopy: (row: ClientRow) => void
+  /** Customer Portal logins of this client (admins only). */
+  onPortal?: (row: ClientRow) => void
 }) {
   return (
     <div className="flex shrink-0 items-center gap-0.5">
@@ -129,6 +132,19 @@ function ClientRowActions({
       >
         <Copy size={16} />
       </Button>
+      {onPortal ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-8 w-8 rounded-none p-0 text-[#92400e] hover:bg-[#f3e9d8] hover:text-[#78350f]"
+          aria-label={`Customer Portal for ${row.company_name}`}
+          title="Customer Portal"
+          onClick={() => onPortal(row)}
+        >
+          <UserRoundCheck size={16} />
+        </Button>
+      ) : null}
     </div>
   )
 }
@@ -143,6 +159,7 @@ export function ClientsTable({
   onToggleAll,
   onEdit,
   onCopy,
+  onPortal,
   sortKey,
   sortDir,
   onSort,
@@ -156,6 +173,7 @@ export function ClientsTable({
   onToggleAll: (checked: boolean) => void
   onEdit: (row: ClientRow) => void
   onCopy: (row: ClientRow) => void
+  onPortal?: (row: ClientRow) => void
   sortKey: ClientSortKey
   sortDir: ClientSortDir
   onSort: (key: ClientSortKey) => void
@@ -273,7 +291,7 @@ export function ClientsTable({
                             </span>
                           </div>
                         </div>
-                        <ClientRowActions row={r} onEdit={onEdit} onCopy={onCopy} />
+                        <ClientRowActions row={r} onEdit={onEdit} onCopy={onCopy} onPortal={onPortal} />
                       </div>
 
                       <div
@@ -461,7 +479,7 @@ export function ClientsTable({
                       </TableCell>
                       <TableCell className="w-[5.5rem] align-middle text-center">
                         <div className="flex w-full items-center justify-center gap-0.5 p-[1mm]">
-                          <ClientRowActions row={r} onEdit={onEdit} onCopy={onCopy} />
+                          <ClientRowActions row={r} onEdit={onEdit} onCopy={onCopy} onPortal={onPortal} />
                         </div>
                       </TableCell>
                     </TableRow>

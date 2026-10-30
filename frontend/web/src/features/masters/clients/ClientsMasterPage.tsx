@@ -32,6 +32,8 @@ import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { ClientsTableFooterBar } from './ClientsFooterBar'
+import { CustomerPortalDialog } from './CustomerPortalDialog'
+import { useIsLaboratoryDirector } from '@/components/lims/LaboratoryDirectorOnly'
 import { setClientPortalPassword } from './clientPortalSecretApi'
 import { ClientsForm } from './ClientsForm'
 import { ClientsHeaderBar } from './ClientsHeaderBar'
@@ -359,6 +361,8 @@ function rowToClientForm(row: ClientRow): ClientFormType {
 export default function ClientsMasterPage() {
   const { editId, setEdit } = useMasterUiSearchState()
   const [confirm, confirmDialog] = useConfirmDialog()
+  const isAdmin = useIsLaboratoryDirector()
+  const [portalClient, setPortalClient] = useState<{ id: string; company_name: string } | null>(null)
   const [saveLoading, setSaveLoading] = useState(false)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const canEdit = useCanEditCurrentModule()
@@ -1892,6 +1896,7 @@ export default function ClientsMasterPage() {
           onToggleAll={toggleAllOnPage}
           onEdit={handleEdit}
           onCopy={handleCopy}
+          onPortal={isAdmin ? (row) => setPortalClient({ id: row.id, company_name: row.company_name }) : undefined}
           sortKey={sortKey}
           sortDir={sortDir}
           onSort={handleSort}
@@ -1899,6 +1904,7 @@ export default function ClientsMasterPage() {
       </div>
 
       <div className="shrink-0">
+        <CustomerPortalDialog key={portalClient?.id ?? 'none'} client={portalClient} onOpenChange={(open) => !open && setPortalClient(null)} />
         <ClientsTableFooterBar
           message={saveMessage}
           responsiveWrap

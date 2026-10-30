@@ -42,7 +42,8 @@ export function RequireTwoStepLogin({ children }: { children: ReactNode }) {
       const two = await readTwoStepState()
       if (run !== runRef.current) return
       if (two.needsCode) setGate('code')
-      else if (role === 'admin' && two.verifiedTotp.length === 0) setGate('enroll')
+      // Admins and Customer Portal logins must have an authenticator.
+      else if ((role === 'admin' || role === 'customer') && two.verifiedTotp.length === 0) setGate('enroll')
       else setGate('ok')
     } catch {
       if (run !== runRef.current) return
