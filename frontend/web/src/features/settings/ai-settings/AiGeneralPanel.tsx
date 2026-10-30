@@ -163,6 +163,9 @@ export const AiGeneralPanel = forwardRef<AiGeneralPanelHandle, AiGeneralPanelPro
       setSaving(true)
       setMessage(null)
       try {
+        // Number('') is 0: a cleared field would silently save temperature 0 / fail on tokens.
+        if (!String(temperature).trim()) throw new Error('Temperature is required (0 to 2)')
+        if (!String(maxTokens).trim()) throw new Error('Max tokens is required (256 to 128000)')
         const temp = Number(temperature)
         const tokens = Number(maxTokens)
         if (!Number.isFinite(temp) || temp < 0 || temp > 2) {

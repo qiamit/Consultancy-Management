@@ -33,14 +33,21 @@ export async function upsertAiModel(
     await supabase.from('ai_models').update({ is_default: false }).neq('id', editId ?? '00000000-0000-0000-0000-000000000000')
   }
 
+  let savedId = editId
   if (editId) {
     const { error } = await supabase.from('ai_models').update(row).eq('id', editId)
     if (error) throw error
-    return
+  } else {
+    const { data, error } = await supabase.from('ai_models').insert(row).select('id').single()
+    if (error) throw error
+    savedId = (data as { id?: string } | null)?.id ?? null
   }
 
-  const { error } = await supabase.from('ai_models').insert(row)
-  if (error) throw error
+  // The assistant uses ai_settings.default_model_id first and is_default only when that is empty,
+  // so ticking "Default" here had no effect once General settings had been saved. Keep both in step.
+  if (row.is_default && savedId) {
+    await upsertAiSettings({ default_model_id: savedId })
+  }
 }
 
 /** Admin only, logged: the saved key for one model (encrypted at rest). */
