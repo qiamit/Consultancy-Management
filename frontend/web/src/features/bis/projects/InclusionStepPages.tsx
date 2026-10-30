@@ -329,6 +329,7 @@ function LicenceStep({
       </ManakSubPanel>
       <ManakVarietiesTable
         projectId={row.id}
+        projectRow={row}
         isCodeId={row.is_code_id ?? null}
         isNumber={str(row.is_code?.is_number)}
         varieties={[]}

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
-import { BookOpen, Check, Columns3, Download, Eye, ExternalLink, FileText, FileType, Globe, LogIn, Paperclip, Plus, Trash2, Upload, X, Printer } from 'lucide-react'
+import { BookOpen, Check, Columns3, Download, Eye, ExternalLink, FileText, FileType, Globe, Import, LogIn, Paperclip, Plus, Trash2, Upload, X, Printer } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -18,14 +18,18 @@ import {
   uploadBisProjectFile,
   type BisProjectViewFile,
 } from './bisProjectFilesApi'
+import { supabase } from '@/lib/supabaseClient'
 import { isQeExtensionPresent } from './manakExtensionBridge'
 import { saveBisProjectNotes } from './bisProjectsApi'
+import { fetchBisModulePayload } from './bisModuleDataApi'
+import { BisModuleImportDialog } from './BisModuleImportDialog'
 import {
   BIS_NOTES_COLUMN_COUNT_OPTIONS,
   parseBisNotesScope,
   sanitizeBisLicenseScopeNotes,
   serializeBisNotesScope,
   setBisNotesScopeColumnCount,
+  type BisProjectRow,
 } from './types'
 
 const iconBtn =
@@ -206,8 +210,11 @@ export function ManakVarietiesTable({
   saveNotes,
   filesDocKind = 'manufacturing-scope',
   scopeDocumentLabel = 'Undertaking for Manufacturing Scope',
+  projectRow,
 }: {
   projectId: string | null
+  /** The application itself; enables "Import from Another Application" (other applications / licences of the client). */
+  projectRow?: BisProjectRow | null
   isCodeId: string | null
   isNumber: string
   varieties: string[]
@@ -230,6 +237,7 @@ export function ManakVarietiesTable({
   const [confirmAction, confirmDialog] = useConfirmDialog()
   const [columnOpen, setColumnOpen] = useState(false)
   const [columnDraft, setColumnDraft] = useState('2')
+  const [importOpen, setImportOpen] = useState(false)
   // Until the scope has been edited here, the varieties from Sample Requirements are shown as its rows.
   const [notesOverride, setNotesOverride] = useState<string | null>(null)
   const baseNotes = scopeNotes.trim() ? scopeNotes : varieties.join('\n')
@@ -312,6 +320,64 @@ export function ManakVarietiesTable({
         ? serializeBisNotesScope({ mode: 'table', headers: scope.headers, rows: rows.length ? rows : [headers.map(() => '')] })
         : rows.map((row) => row[0] ?? '').filter(Boolean).join('\n'),
     )
+  // Unlike saveScope, a failure is thrown so the import dialog stays open and shows it.
+  const saveImported = async (notes: string) => {
+    const clean = sanitizeBisLicenseScopeNotes(notes)
+    setNotesOverride(clean)
+    try {
+      await persistNotes(clean)
+    } catch (error) {
+      setNotesOverride(null)
+      throw error
+    }
+    onScopeSaved?.()
+  }
+  /** Scope rows of another application / licence: its License Scope, else the varieties of its Sample Requirements. */
+  const importScope = async (sourceProjectId: string) => {
+    const { data, error } = await supabase.from('bis_projects').select('notes').eq('id', sourceProjectId).maybeSingle()
+    if (error) throw error
+    const source = parseBisNotesScope(String((data as { notes?: string | null } | null)?.notes ?? ''))
+    let sourceRows = (source.mode === 'table' ? source.rows : source.text.split('\n').map((line) => [line]))
+      .map((row) => row.map((cell) => (cell ?? '').trim()))
+      .filter((row) => row.some(Boolean))
+    if (sourceRows.length === 0) {
+      const sample = await fetchBisModulePayload(sourceProjectId, 'osl-sample-requirements').catch(() => null)
+      const rows = Array.isArray(sample?.rows) ? (sample.rows as Array<Record<string, unknown>>) : []
+      sourceRows = rows.map((r) => [String(r.gradeTypeVariety ?? '').trim()]).filter((row) => row[0])
+    }
+    if (sourceRows.length === 0) throw new Error('The selected application has no Scope / Varieties.')
+    // An empty scope takes the source as it is (its columns too); otherwise the rows are fitted to these columns.
+    if (scopeRows.length === 0 && source.mode === 'table' && source.rows.length) {
+      await saveImported(serializeBisNotesScope({ mode: 'table', headers: source.headers, rows: sourceRows }))
+      toast.success(`Imported ${sourceRows.length} scope row${sourceRows.length === 1 ? '' : 's'}`)
+      return
+    }
+    const width = headers.length
+    const fitted = sourceRows.map((row) =>
+      row.length <= width
+        ? [...row, ...Array.from({ length: width - row.length }, () => '')]
+        : [...row.slice(0, width - 1), row.slice(width - 1).filter(Boolean).join(' - ')],
+    )
+    const keyOf = (row: string[]) => row.map((cell) => cell.trim().toLowerCase()).join('\u0001')
+    const known = new Set(scopeRows.map(keyOf))
+    const fresh = fitted.filter((row) => {
+      const key = keyOf(row)
+      if (known.has(key)) return false
+      known.add(key)
+      return true
+    })
+    if (fresh.length === 0) {
+      toast.message('Nothing New to Import', { description: 'All these scope rows are already here.' })
+      return
+    }
+    const rows = [...scopeRows, ...fresh]
+    await saveImported(
+      scope.mode === 'table'
+        ? serializeBisNotesScope({ mode: 'table', headers: scope.headers, rows })
+        : rows.map((row) => row[0] ?? '').filter(Boolean).join('\n'),
+    )
+    toast.success(`Imported ${fresh.length} scope row${fresh.length === 1 ? '' : 's'}`)
+  }
   const retag = async (file: BisProjectViewFile, key: RowKey): Promise<BisProjectViewFile> => {
     const name = `${tagFor(key)}${stripKey(file.file_name)}`
     await updateBisProjectFileName(file.id, name)
@@ -526,6 +592,17 @@ export function ManakVarietiesTable({
       >
         <LogIn size={15} aria-hidden />
       </a>
+      {projectRow?.id ? (
+        <button
+          type="button"
+          className={cn(iconBtn, 'border-stone-400 text-amber-800')}
+          title="Import from Another Application / Licence"
+          aria-label="Import from Another Application"
+          onClick={() => setImportOpen(true)}
+        >
+          <Import size={15} aria-hidden />
+        </button>
+      ) : null}
       <button
         type="button"
         className={cn(iconBtn, 'border-stone-400 text-amber-800')}
@@ -723,6 +800,14 @@ export function ManakVarietiesTable({
       )}
       {viewer}
       {confirmDialog}
+      <BisModuleImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        targetRow={projectRow ?? null}
+        kind={null}
+        title="Scope / Varieties"
+        onPickSource={importScope}
+      />
       <Dialog open={columnOpen} onOpenChange={setColumnOpen}>
         <DialogContent persistOnFocusLoss layer="stacked" aria-describedby={undefined} className={cn(limsManageDialogClass, 'max-w-sm bg-white')}>
           <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white">

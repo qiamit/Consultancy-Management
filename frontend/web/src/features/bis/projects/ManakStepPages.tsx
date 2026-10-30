@@ -540,6 +540,7 @@ export function ManakStepPage({
         </ManakSubPanel>
         <ManakVarietiesTable
           projectId={row?.id ?? null}
+          projectRow={row}
           isCodeId={row?.is_code_id ?? null}
           isNumber={isCode?.label || isCode?.isNumber || ''}
           varieties={varieties}
