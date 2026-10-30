@@ -19,13 +19,14 @@ import {
   type AccountRow,
   type JournalRow,
 } from '../books/booksApi'
+import { todayLocalIso } from '@/lib/localDate'
 
 export default function JournalPage() {
   const [accounts, setAccounts] = useState<AccountRow[]>([])
   const [rows, setRows] = useState<JournalRow[]>([])
   const [open, setOpen] = useState(false)
   const [number, setNumber] = useState('')
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [date, setDate] = useState(() => todayLocalIso())
   const [name, setName] = useState('')
   const [debitAccount, setDebitAccount] = useState('')
   const [creditAccount, setCreditAccount] = useState('')
@@ -48,7 +49,7 @@ export default function JournalPage() {
   const start = () => {
     setName('')
     setAmount('')
-    setDate(new Date().toISOString().slice(0, 10))
+    setDate(todayLocalIso())
     setDebitAccount(accounts[0]?.id ?? '')
     setCreditAccount(accounts[1]?.id ?? accounts[0]?.id ?? '')
     setOpen(true)

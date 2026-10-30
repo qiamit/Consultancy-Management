@@ -23,6 +23,7 @@ import type { BisPrintClient } from '../print/loadBisPrintData'
 import { ManakApplicationPanel } from './ManakApplicationPanel'
 import { ManakSubPanel, arrangeByLabelLength } from './ManakStepPages'
 import type { BisProjectRow } from './types'
+import { todayLocalIso } from '@/lib/localDate'
 
 type Rec = Record<string, unknown>
 
@@ -247,7 +248,7 @@ function ProofButton({
     if (!clientId) return
     setBusy(true)
     try {
-      const today = new Date().toISOString().slice(0, 10)
+      const today = todayLocalIso()
       await uploadClientCertificate(clientId, {
         certName,
         documentNumber: doc?.document_number ?? defaultNumber ?? '',

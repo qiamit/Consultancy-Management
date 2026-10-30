@@ -22,7 +22,7 @@ import {
   limsPrimaryBtnClass,
   limsFullscreenDialogClass,
 } from '@/lib/limsThemeUi'
-import { cn, formatDate } from '@/lib/utils'
+import { cn, formatDate, isCalibrationOverdue } from '@/lib/utils'
 import { MeasurementUnitSelect } from '@/features/masters/measurement-units/MeasurementUnitSelect'
 import {
   FilterCombobox,
@@ -1533,7 +1533,7 @@ export function EquipmentMasterForm({
                   const eq = iqcMasters.find((e) => e.id === id)
                   if (!eq) return null
                   const isOverdue =
-                    eq.next_calibration_due && new Date(eq.next_calibration_due) < new Date()
+                    !!eq.next_calibration_due && isCalibrationOverdue(eq.next_calibration_due)
                   const calPoints = Array.isArray(eq.calibration_points) ? eq.calibration_points : []
                   return (
                     <div

@@ -1,3 +1,4 @@
+import { addMonthsIso, timestampToLocalIsoDate, todayLocalIso } from '@/lib/localDate'
 export type IntermediateCheckReadingItem = {
   checkPointValue: string
   std: string
@@ -255,11 +256,9 @@ export function sortIntermediateCheckHistoryNewestFirst(
 
 export function isDateWithinLastYears(dateStr: string, years = INTERMEDIATE_CHECK_HISTORY_YEARS): boolean {
   if (!dateStr.trim()) return false
-  const date = new Date(dateStr)
-  if (Number.isNaN(date.getTime())) return false
-  const cutoff = new Date()
-  cutoff.setFullYear(cutoff.getFullYear() - years)
-  return date >= cutoff
+  const day = timestampToLocalIsoDate(dateStr)
+  if (!day) return false
+  return day >= addMonthsIso(todayLocalIso(), -12 * years)
 }
 
 export function filterIntermediateCheckHistoryLastYears(

@@ -4,6 +4,7 @@ import {
   formatDateByPreference,
   formatTimeByPreference,
 } from '@/lib/appDateFormat'
+import { daysUntilIso } from '@/lib/localDate'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -31,12 +32,12 @@ export function generateCode(prefix: string, sequence: number, padLength = 5): s
 }
 
 export function isCalibrationDue(dueDateString: string, warningDays = 30): boolean {
-  const due = new Date(dueDateString)
-  const now = new Date()
-  const diffDays = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-  return diffDays <= warningDays
+  const diffDays = daysUntilIso(dueDateString)
+  return diffDays != null && diffDays <= warningDays
 }
 
+/** Overdue only after the due date has passed (the due day itself is not overdue). */
 export function isCalibrationOverdue(dueDateString: string): boolean {
-  return new Date(dueDateString) < new Date()
+  const diffDays = daysUntilIso(dueDateString)
+  return diffDays != null && diffDays < 0
 }

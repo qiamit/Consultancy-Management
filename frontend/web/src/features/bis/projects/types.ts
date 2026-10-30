@@ -1,4 +1,5 @@
 import { formatIsCodeLabel } from '@/features/masters/is-codes/formatIsCodeLabel'
+import { addDaysIso, diffDaysIso, timestampToLocalIsoDate, todayLocalIso } from '@/lib/localDate'
 
 export type BisProjectsListMode =
   | 'all'
@@ -533,16 +534,16 @@ export function buildBisProjectTitle(form: BisProjectForm): string {
   return parts.join(' — ') || 'BIS License'
 }
 
+/** Today's local (IST) calendar date as YYYY-MM-DD. */
 export function todayIsoDate(): string {
-  const d = new Date()
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  const dd = String(d.getDate()).padStart(2, '0')
-  return `${d.getFullYear()}-${mm}-${dd}`
+  return todayLocalIso()
 }
 
+/** dd/mm/yyyy for a date column; a timestamp is shown as its local (IST) day, not its UTC day. */
 export function formatDisplayDate(value: string | null | undefined): string {
   if (!value) return '—'
-  const [y, m, d] = value.slice(0, 10).split('-')
+  const iso = value.length > 10 ? timestampToLocalIsoDate(value) || value.slice(0, 10) : value
+  const [y, m, d] = iso.slice(0, 10).split('-')
   if (!y || !m || !d) return value
   return `${d}/${m}/${y}`
 }
@@ -653,12 +654,7 @@ export const RENEWAL_DEFERRED_DAYS = 90
 
 /** Inclusive end date (YYYY-MM-DD) for the due-soon renewal window. */
 export function dueSoonEndIsoDate(today: string = todayIsoDate(), days = RENEWAL_WINDOW_DAYS): string {
-  const d = new Date(`${today.slice(0, 10)}T00:00:00`)
-  d.setDate(d.getDate() + days)
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
+  return addDaysIso(today.slice(0, 10), days)
 }
 
 export function licenseValidityState(
@@ -666,10 +662,9 @@ export function licenseValidityState(
   today: string = todayIsoDate(),
 ): { state: LicenseValidityState; daysLeft: number | null } {
   if (!validityDate) return { state: 'unknown', daysLeft: null }
-  const end = new Date(`${validityDate.slice(0, 10)}T00:00:00`)
-  const now = new Date(`${today}T00:00:00`)
-  if (Number.isNaN(end.getTime())) return { state: 'unknown', daysLeft: null }
-  const daysLeft = Math.round((end.getTime() - now.getTime()) / 86_400_000)
+  // Whole calendar days, independent of time zone and time of day.
+  const daysLeft = diffDaysIso(today.slice(0, 10), validityDate.slice(0, 10))
+  if (daysLeft == null) return { state: 'unknown', daysLeft: null }
   if (daysLeft < -RENEWAL_DEFERRED_DAYS) return { state: 'expired', daysLeft }
   if (daysLeft < 0) return { state: 'deferred', daysLeft }
   if (daysLeft <= RENEWAL_WINDOW_DAYS) return { state: 'expiring', daysLeft }

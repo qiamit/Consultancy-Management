@@ -11,6 +11,7 @@ import {
   preparedByHtml,
   type PrintApplicantContext,
 } from './printDocumentShared'
+import { todayLocalIso } from '@/lib/localDate'
 
 export type OslSampleTestRequestRow = {
   laboratoryName: string
@@ -91,7 +92,7 @@ function pageHtml(data: OslSampleTestRequestData, row: OslSampleTestRequestRow, 
   const firm = row.laboratoryName.trim() || '________________'
   const address = row.laboratoryAddress.trim()
   const mobile = row.laboratoryMobile.trim() || BLV_MOBILE
-  const today = dateOrNa(new Date().toISOString().slice(0, 10))
+  const today = dateOrNa(todayLocalIso())
   const isNo = data.isNumber.trim() || '—'
   const firmFrom = [data.applicantName, data.applicantAddress].filter(Boolean).join(', ') || '—'
 

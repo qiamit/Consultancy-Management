@@ -16,6 +16,7 @@ import {
 import { setSaleDocumentCache } from './clientSaleBalance'
 import { allocateDocumentNumber } from './documentSeriesApi'
 import { gstSupplyMode, linesForDocumentKind, type GstSupplyMode } from './financeRules'
+import { todayLocalIso } from '@/lib/localDate'
 
 /** Sale modules persisted in Postgres through the finance_* tables / transactions. */
 export type SaleDocumentKind =
@@ -518,7 +519,7 @@ async function saveHeaderDocument(
       ? await resolveGstSupplyMode(companyGstin, form.clientGstNumber)
       : 'intra'
   const totals = computeQuotationTotals(prepared, supplyMode)
-  const date = form.quotationDate || new Date().toISOString().slice(0, 10)
+  const date = form.quotationDate || todayLocalIso()
   const id = editingId ?? crypto.randomUUID()
 
   const payload: Record<string, unknown> = {
@@ -591,7 +592,7 @@ async function saveReceipt(kind: SaleDocumentKind, form: QuotationForm, editingI
     client_id: form.clientId || null,
     amount,
     currency: 'INR',
-    txn_date: form.quotationDate || new Date().toISOString().slice(0, 10),
+    txn_date: form.quotationDate || todayLocalIso(),
     status: 'completed',
     mode_of_payment: MODE_TO_DB[method],
     bank_account_id: method === 'Bank' ? form.bankAccountId || null : null,

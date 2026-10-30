@@ -68,6 +68,7 @@ import {
   type CompanyType,
   type PaymentTerm,
 } from './types'
+import { todayLocalIso } from '@/lib/localDate'
 
 const normalizeText = (value: string) => value.trim()
 
@@ -1611,7 +1612,7 @@ export default function ClientsMasterPage() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `clients-export-${new Date().toISOString().slice(0, 10)}.csv`
+      a.download = `clients-export-${todayLocalIso()}.csv`
       a.click()
       URL.revokeObjectURL(url)
       const exportNote = `Exported this page (${exportRows.length} of ${total}).`

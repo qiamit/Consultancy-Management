@@ -20,6 +20,7 @@ import {
   type ExpenseCategory,
   type ExpenseRow,
 } from '../books/booksApi'
+import { todayLocalIso } from '@/lib/localDate'
 
 export default function ExpensePage() {
   const [rows, setRows] = useState<ExpenseRow[]>([])
@@ -27,7 +28,7 @@ export default function ExpensePage() {
   const [message, setMessage] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
   const [number, setNumber] = useState('')
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [date, setDate] = useState(() => todayLocalIso())
   const [categoryId, setCategoryId] = useState('')
   const [amount, setAmount] = useState('')
   const [notes, setNotes] = useState('')
@@ -47,7 +48,7 @@ export default function ExpensePage() {
   }, [])
 
   const startNew = () => {
-    setDate(new Date().toISOString().slice(0, 10))
+    setDate(todayLocalIso())
     setAmount('')
     setNotes('')
     setCategoryId(categories[0]?.id ?? '')
