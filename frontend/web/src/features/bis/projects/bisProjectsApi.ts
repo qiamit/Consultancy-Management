@@ -257,6 +257,17 @@ export async function fetchBisProjectsPage(
     query = query.is('license_validity_date', null)
   }
 
+  // Expired licences live only in the Expired Licenses list. They come back to All / QE BIS Licenses once their
+  // validity is updated or they are turned into a new Application (unless the header filter asks for Expired).
+  if ((listMode === 'all' || listMode === 'our') && licenseStatusFilter === 'all') {
+    query = query.or(
+      `license_validity_date.is.null,license_validity_date.gte.${deferredFrom},project_kind.in.(Application,application)`,
+    )
+  }
+  if (listMode === 'expired') {
+    query = query.not('project_kind', 'in', '("Application","application")')
+  }
+
   if (listMode === 'stop_marking') query = query.eq('status', 'stop_marking')
   if (listMode === 'due_soon') {
     query = query.not('project_kind', 'in', '("Application","application")')
