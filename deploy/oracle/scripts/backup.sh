@@ -21,7 +21,7 @@ mkdir -p "$DB_DIR" "$FILES_DIR"
 
 echo "[$(date)] database dump"
 compose exec -T db pg_dump -U supabase_admin -d postgres -Fc \
-  -n public -n private -n auth -n storage > "$DB_DIR/qe-$STAMP.dump.part"
+  -n public -n private -n auth -n storage -n vault > "$DB_DIR/qe-$STAMP.dump.part"
 mv "$DB_DIR/qe-$STAMP.dump.part" "$DB_DIR/qe-$STAMP.dump"
 find "$DB_DIR" -name 'qe-*.dump' -mtime +14 -delete
 # Content-Type / Cache-Control of every stored file live in xattrs, which the off-site file sync cannot carry:
@@ -43,6 +43,8 @@ if [ -n "${BACKUP_RCLONE_REMOTE:-}" ]; then
   echo "[$(date)] copy off the server → $REMOTE"
   rclone copy "$DB_DIR" "$REMOTE/db" --include 'qe-*.dump' --include 'xattrs-*.txt.gz' --max-age 3d
   rclone delete "$REMOTE/db" --min-age 30d
+  # Vault root key: without it the vault.secrets rows in the dumps cannot be decrypted.
+  sudo rclone --config "$HOME/.config/rclone/rclone.conf" copy "${SECRETS_DIR:-/opt/qe/secrets}/pgsodium_root.key" "$REMOTE/keys"
   # Storage files belong to the container user, so sudo reads them with this user's rclone config.
   sudo rclone --config "$HOME/.config/rclone/rclone.conf" sync "$DATA_DIR/storage" "$REMOTE/files" \
     --backup-dir "$REMOTE/files-old/$STAMP" --transfers 4

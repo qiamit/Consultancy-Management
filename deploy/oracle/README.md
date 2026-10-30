@@ -95,13 +95,17 @@ Renewal reminders यहाँ बंद रहते हैं (`RENEWAL_REMIND
   encrypted remote `ociqe-crypt:` — bucket में नाम और data दोनों encrypted हैं। `.env`: `BACKUP_RCLONE_REMOTE=ociqe-crypt:qe`।
 - हर रात: DB dump + xattrs list → `qe/db/` (30 दिन)। Files → `qe/files/` (sync); बदली/हटाई files
   `qe/files-old/<तारीख>/` में 60 दिन रहती हैं।
+- Vault root key `/opt/qe/secrets/pgsodium_root.key` (db container में mount) → `qe/keys/`। Manak passwords,
+  AI keys और email secrets की key Vault में इसी root key से encrypted है — dump अकेला कुछ नहीं खोल सकता।
 - **Encryption passphrase** सिर्फ़ owner के पास (password manager) — उसके बिना off-site copy नहीं खुलेगी।
   Server खो जाए तो: नए server पर `rclone config` से `ociqe` (नई Customer Secret Key) और `ociqe-crypt`
   (वही passphrase) बनाएँ।
 
-Restore (नए / खाली server पर, app बंद करके):
+Restore (नए / खाली server पर, app बंद करके; db container चलाने से **पहले** root key वापस रखें):
 
 ```bash
+sudo rclone --config ~/.config/rclone/rclone.conf copy ociqe-crypt:qe/keys/pgsodium_root.key /opt/qe/secrets/
+sudo chown 100:101 /opt/qe/secrets/pgsodium_root.key && sudo chmod 400 /opt/qe/secrets/pgsodium_root.key
 rclone copy ociqe-crypt:qe/db/qe-<stamp>.dump /opt/qe/backups/db/
 docker compose exec -T db pg_restore -U supabase_admin -d postgres --clean --if-exists < /opt/qe/backups/db/qe-<stamp>.dump
 sudo rclone --config ~/.config/rclone/rclone.conf copy ociqe-crypt:qe/files /opt/qe/data/storage

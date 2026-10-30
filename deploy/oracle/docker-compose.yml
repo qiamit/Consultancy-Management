@@ -36,6 +36,9 @@ services:
     volumes:
       - ./db/roles.sql:/docker-entrypoint-initdb.d/init-scripts/99-roles.sql:ro
       - ${DATA_DIR:-/opt/qe/data}/db:/var/lib/postgresql/data
+      # Vault root key (encrypts the S6 key in vault.secrets). Kept outside the database so a dump alone
+      # cannot decrypt anything; server-bootstrap.sh creates it, backup.sh copies it off the server.
+      - ${SECRETS_DIR:-/opt/qe/secrets}/pgsodium_root.key:/etc/postgresql-custom/pgsodium_root.key:ro
     # Reachable from the server itself only (backups, migrations, admin) — never from the internet.
     ports:
       - "127.0.0.1:5432:5432"
