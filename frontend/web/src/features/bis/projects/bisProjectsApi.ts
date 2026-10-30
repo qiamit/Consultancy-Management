@@ -283,13 +283,14 @@ export async function fetchBisProjectsPage(
   const ascending = sortDir === 'asc'
   // Null validity dates last when sorting by days remaining (asc or desc).
   const nullsFirst = false
+  // Sort the list itself by the embedded (to-one) column; foreignTable would only order inside the embed.
   if (sortKey === 'client') {
     query = query
-      .order('company_name', { ascending, foreignTable: 'client', nullsFirst })
+      .order('client(company_name)', { ascending, nullsFirst })
       .order('id', { ascending: true })
   } else if (sortKey === 'isCode') {
     query = query
-      .order('is_number', { ascending, foreignTable: 'is_code', nullsFirst })
+      .order('is_code(is_number)', { ascending, nullsFirst })
       .order('id', { ascending: true })
   } else if (sortKey === 'cmL') {
     query = query.order('cm_l_digits', { ascending, nullsFirst }).order('id', { ascending: true })
