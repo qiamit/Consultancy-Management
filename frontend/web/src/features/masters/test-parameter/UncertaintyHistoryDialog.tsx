@@ -3,6 +3,7 @@ import { History, Printer, Trash2 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { isLaboratoryDirector } from '@/lib/isLaboratoryDirector'
 import { Button } from '@/components/ui/button'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import {
   Dialog,
   DialogContent,
@@ -18,6 +19,7 @@ import {
   limsPanelClass,
   limsPrimaryBtnClass,
   limsRegistryFormClass,
+  limsFullscreenDialogClass,
 } from '@/lib/limsThemeUi'
 import { cn, formatDate } from '@/lib/utils'
 import type { UncertaintyCalculationData } from './testParameterUncertainty'
@@ -83,7 +85,8 @@ function printHistoryRecords(
 </body>
 </html>`
 
-  const win = window.open('', '_blank', 'noopener,noreferrer,width=900,height=700')
+  // No 'noopener': with it window.open returns null and nothing could be printed (the HTML is escaped).
+  const win = window.open('', '_blank', 'width=900,height=700')
   if (!win) return
   win.document.open()
   win.document.write(html)
@@ -214,6 +217,7 @@ export function UncertaintyHistoryDialog({
   layer?: 'default' | 'nested' | 'stacked' | 'top'
 }) {
   const { role } = useAuth()
+  const [confirm, confirmDialog] = useConfirmDialog({ layer: 'overlay' })
   const canDelete = isLaboratoryDirector(role)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [viewing, setViewing] = useState<UncertaintyHistoryRecord | null>(null)
@@ -256,10 +260,11 @@ export function UncertaintyHistoryDialog({
 
   const handleDelete = async (ids: string[]) => {
     if (!canDelete || ids.length === 0) return
-    const ok = window.confirm(
+    const ok = await confirm(
       ids.length === 1
-        ? 'Delete this uncertainty history record? This cannot be undone.'
-        : `Delete ${ids.length} uncertainty history records? This cannot be undone.`,
+        ? 'Delete This Uncertainty History Record? This Cannot Be Undone.'
+        : `Delete ${ids.length} Uncertainty History Records? This Cannot Be Undone.`,
+      { title: 'Delete History', confirmLabel: 'Delete', destructive: true },
     )
     if (!ok) return
     setBusy(true)
@@ -288,12 +293,10 @@ export function UncertaintyHistoryDialog({
           persistOnFocusLoss
           layer={layer}
           aria-describedby={undefined}
-          overlayClassName="lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto"
           className={cn(
             limsDialogClass,
             '!flex h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col overflow-hidden p-0',
-            'left-0 top-0',
-            'lg:left-[268px] lg:w-[calc(100vw-268px)] lg:max-w-[calc(100vw-268px)]',
+            limsFullscreenDialogClass,
             '[&>button]:!text-white [&>button]:hover:bg-white/10',
           )}
         >
@@ -448,7 +451,7 @@ export function UncertaintyHistoryDialog({
             </div>
           </div>
 
-          <DialogFooter className="shrink-0 gap-2 border-t border-stone-200 bg-stone-50 px-4 py-3 sm:justify-end sm:px-5">
+          <DialogFooter className="shrink-0 gap-2 border-t border-stone-200 bg-stone-50 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:justify-end sm:px-5">
             <Button type="button" className={limsPrimaryBtnClass} onClick={() => onOpenChange(false)}>
               Close
             </Button>
@@ -461,12 +464,10 @@ export function UncertaintyHistoryDialog({
           persistOnFocusLoss
           layer="top"
           aria-describedby={undefined}
-          overlayClassName="lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto"
           className={cn(
             limsDialogClass,
             '!flex h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col overflow-hidden p-0',
-            'left-0 top-0',
-            'lg:left-[268px] lg:w-[calc(100vw-268px)] lg:max-w-[calc(100vw-268px)]',
+            limsFullscreenDialogClass,
             '[&>button]:!text-white [&>button]:hover:bg-white/10',
           )}
         >
@@ -494,13 +495,14 @@ export function UncertaintyHistoryDialog({
           <div className="min-h-0 flex-1 overflow-y-auto bg-gradient-to-b from-stone-100/80 to-white px-4 py-4 sm:px-5">
             <CalculationSnapshot data={viewing?.calculationData ?? null} />
           </div>
-          <DialogFooter className="shrink-0 border-t border-stone-200 bg-stone-50 px-4 py-3 sm:justify-end">
+          <DialogFooter className="shrink-0 border-t border-stone-200 bg-stone-50 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:justify-end">
             <Button type="button" className={limsPrimaryBtnClass} onClick={() => setViewing(null)}>
               Close
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {confirmDialog}
     </>
   )
 }

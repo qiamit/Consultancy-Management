@@ -89,7 +89,7 @@ export function TestReportPreparationAssistant({
           QI Assistant
         </Button>
       </DialogTrigger>
-      <DialogContent className={cn(limsDialogClass, 'flex max-h-[88vh] flex-col sm:max-w-xl')}>
+      <DialogContent className={cn(limsDialogClass, 'flex max-h-[88dvh] flex-col sm:max-w-xl')}>
         <DialogHeader className="border-b border-stone-200 bg-[#f7f3eb] px-5 py-4">
           <DialogTitle className="flex items-center gap-2 text-base text-[#1c1917]">
             <Bot size={20} className="text-amber-700" />

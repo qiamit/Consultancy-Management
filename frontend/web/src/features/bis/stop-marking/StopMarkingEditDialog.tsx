@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { toast } from 'sonner'
 import { LimsDatePicker } from '@/components/lims/LimsDatePicker'
 import { Label } from '@/components/ui/label'
@@ -34,6 +35,7 @@ export function StopMarkingEditDialog({
   onOpenChange: (open: boolean) => void
   onUpdated: (row: StopMarkingRow) => void
 }) {
+  const [confirm, confirmDialog] = useConfirmDialog()
   const [stopDate, setStopDate] = useState('')
   const [reasonType, setReasonType] = useState('')
   const [status, setStatus] = useState('open')
@@ -140,7 +142,7 @@ export function StopMarkingEditDialog({
           busy={busy === 'letter'}
           disabled={closed}
           onPick={(file) => void run('letter', async () => { onUpdated(await uploadStopMarkingReport(row.id, file)); toast.success('BIS letter uploaded.') })}
-          onClear={row.report_path ? () => { if (window.confirm('Remove the BIS letter?')) void run('letter', async () => { onUpdated(await clearStopMarkingReport(row.id, row.report_path)) }) } : undefined}
+          onClear={row.report_path ? () => void confirm('Remove the BIS Letter?', { title: 'Remove BIS Letter', confirmLabel: 'Remove', destructive: true }).then((ok) => { if (ok) void run('letter', async () => { onUpdated(await clearStopMarkingReport(row.id, row.report_path)) }) }) : undefined}
           onOpen={row.report_path ? () => void run('letter', () => openStopMarkingReport(row.report_path!)) : undefined}
         />
       </div>
@@ -148,6 +150,7 @@ export function StopMarkingEditDialog({
         <Label htmlFor="smk-edit-notes">Notes</Label>
         <Textarea id="smk-edit-notes" rows={2} disabled={closed} className="rounded-none border-stone-500 bg-stone-50" value={notes} onChange={(e) => setNotes(e.target.value)} />
       </div>
+      {confirmDialog}
     </BisFormDialog>
   )
 }

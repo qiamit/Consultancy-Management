@@ -10,6 +10,7 @@ import {
   X,
   LogOut,
   KeyRound,
+  ShieldCheck,
   Bot,
   Shield,
   Globe,
@@ -42,6 +43,7 @@ import {
 } from '@/lib/appNav'
 import { QiAssistant } from '@/components/qi-assistant/QiAssistant'
 import { ChangePasswordDialog } from '@/components/auth/ChangePasswordDialog'
+import { TwoStepLoginDialog } from '@/components/auth/TwoStepLoginDialog'
 import { OfflineBanner } from '@/components/OfflineBanner'
 import { toProperLabelText } from '@/lib/properLabelText'
 
@@ -230,7 +232,7 @@ function NavSectionGroup({
         <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-none bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/30">
           <SectionIcon size={13} aria-hidden />
         </span>
-        <span className="min-w-0 flex-1 truncate text-[10px] font-bold uppercase tracking-wide text-stone-300">
+        <span className="min-w-0 flex-1 truncate text-[11px] font-bold uppercase tracking-wide text-stone-300 sm:text-xs">
           {formatNavLabel(section.title)}
         </span>
         <span className="shrink-0 text-stone-500">
@@ -447,6 +449,7 @@ export default function GlobalLayout() {
     location.pathname.startsWith('/masters/test-parameter/')
   const { profileName, designation, profileReady, user, mustChangePassword, clearMustChangePassword } = useAuth()
   const [changePasswordOpen, setChangePasswordOpen] = useState(false)
+  const [twoStepOpen, setTwoStepOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false
     return window.localStorage.getItem('app.sidebarCollapsed') === '1'
@@ -636,7 +639,7 @@ export default function GlobalLayout() {
         ) : (
           <button
             type="button"
-            className="relative z-10 shrink-0 rounded-none p-1.5 text-stone-200 hover:bg-white/10 hover:text-white xl:hidden"
+            className="relative z-10 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-none text-stone-200 hover:bg-white/10 hover:text-white xl:hidden"
             onClick={() => setMobileNavOpen(false)}
             aria-label="Close Navigation Menu"
           >
@@ -686,7 +689,7 @@ export default function GlobalLayout() {
       ) : null}
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="relative sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between gap-2 overflow-hidden border-b border-stone-700 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-2 text-white shadow-md sm:px-4 md:px-6">
+        <header className="relative sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between gap-2 overflow-hidden border-b border-stone-700 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 pl-[max(0.5rem,env(safe-area-inset-left))] pr-[max(0.5rem,env(safe-area-inset-right))] text-white shadow-md sm:pl-[max(1rem,env(safe-area-inset-left))] sm:pr-[max(1rem,env(safe-area-inset-right))] md:pl-[max(1.5rem,env(safe-area-inset-left))] md:pr-[max(1.5rem,env(safe-area-inset-right))]">
           <div
             className="pointer-events-none absolute inset-0 opacity-[0.16]"
             style={{
@@ -757,7 +760,7 @@ export default function GlobalLayout() {
                     <p className="max-w-[140px] truncate text-xs font-semibold text-white lg:max-w-[180px]">
                       {profileReady ? profileName || 'User' : 'Loading profile…'}
                     </p>
-                    <p className="max-w-[140px] truncate text-[10px] text-stone-300 lg:max-w-[180px]">
+                    <p className="max-w-[140px] truncate text-[11px] text-stone-300 sm:text-xs lg:max-w-[180px]">
                       {profileReady ? designation || 'Staff' : ' '}
                     </p>
                   </div>
@@ -779,6 +782,11 @@ export default function GlobalLayout() {
                 <DropdownMenuItem onSelect={() => setChangePasswordOpen(true)}>
                   <KeyRound size={14} />
                   Change Password
+                </DropdownMenuItem>
+
+                <DropdownMenuItem onSelect={() => setTwoStepOpen(true)}>
+                  <ShieldCheck size={14} />
+                  Two-Step Login
                 </DropdownMenuItem>
 
                 <DropdownMenuItem
@@ -811,6 +819,7 @@ export default function GlobalLayout() {
           onOpenChange={setChangePasswordOpen}
           onChanged={clearMustChangePassword}
         />
+        <TwoStepLoginDialog open={twoStepOpen} onOpenChange={setTwoStepOpen} />
         <ChangePasswordDialog
           mode="forced"
           open={profileReady && mustChangePassword}

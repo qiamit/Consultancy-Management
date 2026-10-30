@@ -95,6 +95,9 @@ const env = {
   GOTRUE_SMTP_USER: pick(auth.GOTRUE_SMTP_USER),
   GOTRUE_SMTP_PASS: pick(auth.GOTRUE_SMTP_PASS),
   GOTRUE_SMTP_SENDER_NAME: pick(auth.GOTRUE_SMTP_SENDER_NAME),
+  GOTRUE_RATE_LIMIT_HEADER: pick(previous.GOTRUE_RATE_LIMIT_HEADER, 'X-Forwarded-For'),
+  // 1 while the SPA is tested from localhost against this server (see env.template).
+  ALLOW_LOCALHOST_ORIGINS: pick(previous.ALLOW_LOCALHOST_ORIGINS, '1'),
 
   PGRST_DB_SCHEMAS: pick(rest.PGRST_DB_SCHEMAS, 'public,storage,graphql_public'),
   PGRST_DB_MAX_ROWS: pick(rest.PGRST_DB_MAX_ROWS),

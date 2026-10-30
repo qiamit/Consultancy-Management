@@ -89,7 +89,7 @@ function SendDialog({ row, onOpenChange }: { row: BisProjectRow | null; onOpenCh
                 <ul className="space-y-0.5 text-stone-700">
                   {history.map((h) => (
                     <li key={h.id}>
-                      {formatDisplayDate(h.created_at.slice(0, 10))} · {reminderStageLabel(h.stage)} ·{' '}
+                      {formatDisplayDate(h.created_at)} · {reminderStageLabel(h.stage)} ·{' '}
                       <span className={h.status === 'sent' ? 'text-emerald-700' : 'text-red-700'}>{h.status}</span>
                       {h.recipient ? ` · ${h.recipient}` : ''}
                     </li>

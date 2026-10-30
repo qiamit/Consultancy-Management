@@ -316,7 +316,7 @@ export function ClientsTable({
 
           {/* Table rows — ~10" / lg and above */}
           <div className={TABLE_MQ_SHOW}>
-            <Table className={GRID_TABLE}>
+            <Table className={GRID_TABLE} containerClassName="overflow-visible">
               <colgroup>
                 <col className="w-11" />
                 <col className="min-w-[12rem]" />

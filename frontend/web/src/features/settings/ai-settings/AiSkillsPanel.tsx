@@ -1,6 +1,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useState } from 'react'
 import { Pencil, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -45,6 +46,7 @@ export const AiSkillsPanel = forwardRef<AiSkillsPanelHandle, AiSkillsPanelProps>
   { searchQuery },
   ref,
 ) {
+  const [confirm, confirmDialog] = useConfirmDialog()
   const [rows, setRows] = useState<AiSkillRow[]>([])
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState<string | null>(null)
@@ -127,8 +129,8 @@ export const AiSkillsPanel = forwardRef<AiSkillsPanelHandle, AiSkillsPanelProps>
     })()
   }
 
-  const handleDelete = (row: AiSkillRow) => {
-    if (!window.confirm(`Delete skill "${row.name}"?`)) return
+  const handleDelete = async (row: AiSkillRow) => {
+    if (!(await confirm(`Delete Skill "${row.name}"?`, { title: 'Delete Skill', confirmLabel: 'Delete', destructive: true }))) return
     void (async () => {
       try {
         await deleteAiSkill(row.id)
@@ -149,10 +151,10 @@ export const AiSkillsPanel = forwardRef<AiSkillsPanelHandle, AiSkillsPanelProps>
     })
   }
 
-  const handleBulkDelete = () => {
+  const handleBulkDelete = async () => {
     const ids = Array.from(selectedIds)
     if (ids.length === 0) return
-    if (!window.confirm(`Delete ${ids.length} selected skill${ids.length === 1 ? '' : 's'}?`)) return
+    if (!(await confirm(`Delete ${ids.length} Selected Skill${ids.length === 1 ? '' : 's'}?`, { title: 'Delete Skills', confirmLabel: 'Delete', destructive: true }))) return
     void (async () => {
       try {
         for (const id of ids) {
@@ -378,7 +380,7 @@ export const AiSkillsPanel = forwardRef<AiSkillsPanelHandle, AiSkillsPanelProps>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent
-          className="max-h-[92vh] max-w-2xl gap-0 overflow-hidden border-slate-300 bg-white p-0 shadow-2xl sm:rounded-lg [&>button]:text-white [&>button]:opacity-80 [&>button]:hover:opacity-100 [&>button]:hover:bg-white/10"
+          className="max-h-[92dvh] max-w-2xl gap-0 overflow-hidden border-slate-300 bg-white p-0 shadow-2xl sm:rounded-lg [&>button]:text-white [&>button]:opacity-80 [&>button]:hover:opacity-100 [&>button]:hover:bg-white/10"
           aria-describedby={undefined}
         >
           <div className="relative bg-slate-900 px-6 py-5 text-white">
@@ -393,7 +395,7 @@ export const AiSkillsPanel = forwardRef<AiSkillsPanelHandle, AiSkillsPanelProps>
             </DialogHeader>
           </div>
 
-          <div className="max-h-[min(62vh,520px)] space-y-5 overflow-y-auto bg-[#fafbfc] px-6 py-6">
+          <div className="max-h-[min(62dvh,520px)] space-y-5 overflow-y-auto bg-[#fafbfc] px-6 py-6">
             <div className="grid grid-cols-1 gap-x-6 gap-y-5 md:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="skill-name" className="text-[12px] font-medium text-slate-600">
@@ -480,6 +482,7 @@ export const AiSkillsPanel = forwardRef<AiSkillsPanelHandle, AiSkillsPanelProps>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {confirmDialog}
     </div>
   )
 })

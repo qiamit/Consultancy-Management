@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { useNavigate } from 'react-router-dom'
 import { Select, SelectContent, selectFitTriggerClass, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { limsDarkBarFieldClass, limsPageShellClass } from '@/lib/limsThemeUi'
@@ -16,8 +17,10 @@ import { RenewalReminderSendDialog } from '../renewals/RenewalReminderSendDialog
 import { IsCodeDetailsDialog } from '@/features/masters/is-codes/IsCodeDetailsDialog'
 import { ClientDetailsDialog } from '@/features/masters/clients/ClientDetailsDialog'
 import {
+  cancelInclusion,
   deleteBisProjects,
   fetchBisProjectById,
+  fetchInclusionNewScope,
   fetchBisProjectsPage,
   formatBisApiError,
   saveBisProject,
@@ -39,11 +42,13 @@ import {
 } from '../print/printBisDocument'
 import {
   BIS_PROJECTS_LIST_TITLES,
+  bisLicenseFormIssue,
   clientDisplayName,
   defaultProjectKindForListMode,
   emptyBisProjectForm,
   formatCmL,
   isCodeDisplayLabel,
+  isInclusionKind,
   rowToBisProjectForm,
   sanitizeBisLicenseScopeNotes,
   type BisProjectForm,
@@ -53,25 +58,27 @@ import {
 
 const SEARCH_DEBOUNCE_MS = 350
 
-/** Inclusion form: editable notes = new scope to set (`inclusion_scope_draft`), not the live licence scope. */
+/**
+ * Inclusion form: the editable notes are the New Scope (inclusion-details.newScope), never the live licence
+ * scope. The licence's own fields (QE managed, billing …) are left as loaded; the inclusion save does not
+ * write them.
+ */
 function formForListMode(
   form: BisProjectForm,
   listMode: BisProjectsListMode,
-  sourceRow?: BisProjectRow | null,
+  newScope?: string,
 ): BisProjectForm {
   if (listMode !== 'inclusion') return form
   return {
     ...form,
     projectKind: 'Inclusion',
-    isQeManaged: true,
-    ...(sourceRow
-      ? { notes: sanitizeBisLicenseScopeNotes(sourceRow.inclusion_scope_draft ?? '') }
-      : {}),
+    ...(newScope !== undefined ? { notes: sanitizeBisLicenseScopeNotes(newScope) } : {}),
   }
 }
 
 export default function BisProjectsMasterPage({ listMode }: { listMode: BisProjectsListMode }) {
   const navigate = useNavigate()
+  const [confirm, confirmDialog] = useConfirmDialog()
   const {
     editId,
     viewId,
@@ -106,9 +113,10 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
   const [projectKindFilter, setProjectKindFilter] = useState<BisProjectKindFilter>('all')
   const [licenseStatusFilter, setLicenseStatusFilter] =
     useState<BisLicenseStatusFilter>('all')
-  /** Least days remaining on License Validity first. */
-  const [sortKey, setSortKey] = useState<BisProjectSortKey>('validity')
-  const [sortDir, setSortDir] = useState<BisProjectSortDir>('asc')
+  /** Applications and inclusions in progress: last edited first. Licence lists: least days remaining on validity first. */
+  const lastEditedFirst = listMode === 'applications' || listMode === 'inclusion'
+  const [sortKey, setSortKey] = useState<BisProjectSortKey>(lastEditedFirst ? 'updated' : 'validity')
+  const [sortDir, setSortDir] = useState<BisProjectSortDir>(lastEditedFirst ? 'desc' : 'asc')
   const [jumpTo, setJumpTo] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
@@ -132,6 +140,9 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const hydratedEditRef = useRef<string | null>(null)
+  /** Inclusion list: New Scope loaded for this licence id (the form cannot be saved before). */
+  const inclusionScopeRef = useRef<{ id: string; notes: string } | null>(null)
+  const [inclusionScopeLoadedId, setInclusionScopeLoadedId] = useState<string | null>(null)
 
   const [printDocsBusy, setPrintDocsBusy] = useState(false)
   /** Form-I / Auth / More BIS pack — available on any project list that selects one row. */
@@ -140,6 +151,16 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
   const hydratedViewRef = useRef<string | null>(null)
 
   const requestRef = useRef(0)
+
+  const formFromRow = useCallback((row: BisProjectRow): BisProjectForm => {
+    const scope = inclusionScopeRef.current
+    // New Scope not loaded yet → empty (Save waits for the load below).
+    return formForListMode(
+      rowToBisProjectForm(row),
+      listMode,
+      scope?.id === row.id ? scope.notes : emptyBisProjectForm().notes,
+    )
+  }, [listMode])
 
   const buildNewForm = useCallback((): BisProjectForm => {
     const next = emptyBisProjectForm(defaultProjectKindForListMode(listMode))
@@ -243,7 +264,7 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
 
     const fromPage = rows.find((r) => r.id === editId)
     if (fromPage) {
-      setForm(formForListMode(rowToBisProjectForm(fromPage), listMode, fromPage))
+      setForm(formFromRow(fromPage))
       setFormError(null)
       hydratedEditRef.current = editId
       return
@@ -258,7 +279,7 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
           setEdit(null)
           return
         }
-        setForm(formForListMode(rowToBisProjectForm(row), listMode, row))
+        setForm(formFromRow(row))
         setFormError(null)
         hydratedEditRef.current = editId
       } catch (err) {
@@ -270,7 +291,31 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
     return () => {
       cancelled = true
     }
-  }, [editId, rows, buildNewForm, listMode, setEdit])
+  }, [editId, rows, buildNewForm, formFromRow, setEdit])
+
+  // Inclusion list: load the New Scope of the licence being edited (inclusion-details.newScope).
+  useEffect(() => {
+    if (listMode !== 'inclusion' || !editId || editId === 'new') return
+    let cancelled = false
+    void fetchInclusionNewScope(editId)
+      .then((notes) => {
+        if (cancelled) return
+        inclusionScopeRef.current = { id: editId, notes }
+        setForm((prev) => (hydratedEditRef.current === editId
+          ? { ...prev, notes: sanitizeBisLicenseScopeNotes(notes) }
+          : prev))
+        setInclusionScopeLoadedId(editId)
+      })
+      .catch((err) => {
+        if (!cancelled) setFormError(`Could Not Load the New Scope: ${formatBisApiError(err)}`)
+      })
+    return () => {
+      cancelled = true
+      // Reopening must load again: a scope saved meanwhile would otherwise be overwritten by this copy.
+      inclusionScopeRef.current = null
+      setInclusionScopeLoadedId(null)
+    }
+  }, [listMode, editId])
 
   // Restore View Documents from URL (refresh-safe).
   useEffect(() => {
@@ -331,13 +376,18 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
   const isApplicationProject =
     form.projectKind.trim().toLowerCase() === 'application'
   const isInclusionMode = listMode === 'inclusion'
+  // Inclusion: CM/L, dates and the rest belong to the licence and are not edited here.
+  const formIssue = isInclusionMode ? null : bisLicenseFormIssue(form)
   const canSave =
     !saving &&
     form.clientId.length > 0 &&
     form.status.length > 0 &&
+    !formIssue &&
     // CM/L + Validity required for License (not for Application).
     (isApplicationProject ||
-      (form.cmLDigits.length > 0 && (isInclusionMode || form.licenseValidityDate.trim().length > 0)))
+      (form.cmLDigits.length > 0 && (isInclusionMode || form.licenseValidityDate.trim().length > 0))) &&
+    // Inclusion saves on a selected licence once its New Scope has loaded.
+    (!isInclusionMode || (editingId != null && inclusionScopeLoadedId === editingId))
 
   const openNew = () => {
     setForm(buildNewForm())
@@ -347,7 +397,7 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
   }
 
   const openEdit = (row: BisProjectRow) => {
-    setForm(formForListMode(rowToBisProjectForm(row), listMode, row))
+    setForm(formFromRow(row))
     setFormError(null)
     hydratedEditRef.current = row.id
     setEdit(row.id)
@@ -405,7 +455,7 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
   const handleSelectExistingLicenseForInclusion = (row: BisProjectRow) => {
     const nextId = row.id
     // Existing scope stays in ExistingLicenseScope; this field is only the new scope to set.
-    setForm(formForListMode(rowToBisProjectForm(row), listMode, row))
+    setForm(formFromRow(row))
     setFormError(null)
     hydratedEditRef.current = nextId
     setEdit(nextId)
@@ -525,10 +575,34 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
     setReminderRow(row)
   }
 
+  /** Inclusion list: closes the inclusion on each selected licence. The licence itself is never deleted. */
+  const handleCancelInclusions = async () => {
+    const selected = rows.filter((r) => selectedIds.has(r.id))
+    if (selected.length === 0) return
+    // Old separate Inclusion rows are not licences; only inclusions running on a licence can be cancelled.
+    const licences = selected.filter((r) => !isInclusionKind(r.project_kind))
+    const skipped = selected.length - licences.length
+    if (licences.length === 0) {
+      setMessage('Old Inclusion Records Cannot Be Cancelled Here.')
+      return
+    }
+    if (!(await confirm(`Cancel the Inclusion on ${licences.length} License(s)? The License and Its Scope Stay as They Are.`, { title: 'Cancel Inclusion', confirmLabel: 'Cancel Inclusion', destructive: false }))) return
+    setMessage(null)
+    try {
+      for (const row of licences) await cancelInclusion(row.id)
+      setSelectedIds(new Set())
+      setMessage(`Cancelled ${licences.length} Inclusion(s).${skipped ? ` ${skipped} Old Inclusion Record(s) Skipped.` : ''}`)
+      reload()
+    } catch (err) {
+      setMessage(formatBisApiError(err))
+      reload()
+    }
+  }
+
   const handleDeleteSelected = async () => {
     const ids = [...selectedIds]
     if (ids.length === 0) return
-    if (!window.confirm(`Delete ${ids.length} license(s)? This cannot be undone.`)) return
+    if (!(await confirm(`Delete ${ids.length} License(s)? This Cannot Be Undone.`, { title: 'Delete Licenses', confirmLabel: 'Delete', destructive: true }))) return
     setMessage(null)
     try {
       await deleteBisProjects(ids)
@@ -548,6 +622,7 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
         'bis-projects-responsive-page flex h-full min-h-0 flex-col overflow-hidden !space-y-0 gap-2 sm:gap-3 md:gap-3',
       )}
     >
+      {confirmDialog}
       <div className="shrink-0">
         <BisProjectsHeaderBar
           title={BIS_PROJECTS_LIST_TITLES[listMode]}
@@ -654,7 +729,9 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
           totalCount={total}
           page={Math.min(page, pageCount)}
           pageCount={pageCount}
-          onDeleteSelected={() => void handleDeleteSelected()}
+          onDeleteSelected={() => void (isInclusionMode ? handleCancelInclusions() : handleDeleteSelected())}
+          deleteLabel={isInclusionMode ? 'Cancel Inclusion' : undefined}
+          deleteTitle={isInclusionMode ? 'Cancel the Inclusion on the Selected License(s)' : undefined}
           onExport={handleExport}
           onPrintList={handlePrintList}
           onStartRenewal={
@@ -682,6 +759,7 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
         canSave={canSave}
         saving={saving}
         errorMessage={formError}
+        validationMessage={formIssue}
         onSave={() => void handleSave()}
         onCompleteInclusion={isInclusionMode ? () => void handleFinishInclusion() : undefined}
         onExistingLicenseSelected={isInclusionMode ? handleSelectExistingLicenseForInclusion : undefined}

@@ -289,6 +289,7 @@ export function ManakManufacturingStep({
         blank={() => ({ rawMaterial: '', supplierName: '', supplierCountry: '', bisCertificationMark: 'ISI Marked', testCertificate: 'Yes', batchesPackaging: 'Batch' })}
         // Stored values as they are, so an old "With" is flagged instead of looking like ISI Marked (the fill sends what is stored).
         saved={rawMaterials}
+        payload={payloads['raw-material-reference']}
         onChanged={onChanged}
         addLabel="Add raw material"
       />
@@ -307,6 +308,7 @@ export function ManakManufacturingStep({
         ]}
         blank={() => ({ crmName: '', crmNumber: '', crmType: '', validity: '', traceability: '' })}
         saved={rowsOf(payloads['raw-material-reference'], 'certifiedReferenceMaterials')}
+        payload={payloads['raw-material-reference']}
         onChanged={onChanged}
         addLabel="Add certified reference material"
       />
@@ -333,6 +335,8 @@ export function ManakManufacturingStep({
         ]}
         blank={() => ({ machineryName: '', make: '', capacityPerDay: '', number: '', remarks: '' })}
         saved={rowsOf(payloads['cmpf-305'])}
+        payload={payloads['cmpf-305']}
+        defaultSort="machineryName"
         onChanged={onChanged}
         addLabel="Add machinery"
       />
@@ -350,6 +354,7 @@ export function ManakManufacturingStep({
         ]}
         blank={() => ({ process: '', machinery: '', subcontractorName: '', subcontractorAddress: '', remarks: '' })}
         saved={subcontracting}
+        payload={payloads['manufacturing-subcontracting']}
         onChanged={onChanged}
         addLabel="Add sub-contracted process"
       />
@@ -365,6 +370,7 @@ export function ManakManufacturingStep({
         ]}
         blank={() => ({ aspect: '', arrangement: '', remarks: '' })}
         saved={hygiene}
+        payload={payloads['hygiene-conditions']}
         onChanged={onChanged}
         addLabel="Add hygiene condition"
       />
@@ -487,7 +493,7 @@ export function ManakManufacturingStep({
           persistOnFocusLoss
           layer="stacked"
           aria-describedby={undefined}
-          className={cn(limsDialogClass, 'flex max-h-[90vh] w-[min(72rem,calc(100vw_-_var(--app-dialog-overlay-left,0px)_-_1.5rem))] max-w-6xl flex-col p-0')}
+          className={cn(limsDialogClass, 'flex max-h-[90dvh] w-[min(72rem,calc(100vw_-_var(--app-dialog-overlay-left,0px)_-_1.5rem))] max-w-6xl flex-col p-0')}
         >
           <DialogHeader className="flex-row items-center justify-between gap-2 space-y-0 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 py-1.5 pl-4 pr-12 text-left">
             <DialogTitle className="text-base font-semibold tracking-tight text-white">{popup?.label}</DialogTitle>

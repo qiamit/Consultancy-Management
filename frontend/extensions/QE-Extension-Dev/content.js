@@ -27,6 +27,30 @@
     return new Promise((resolve) => window.setTimeout(resolve, ms));
   }
 
+  /** A Test Request armed by Consultancy Pro for one sample (login-only `{}` never counts). */
+  function hasTrSample(pending) {
+    return Boolean(
+      pending && typeof pending === "object" && pending.kind === KIND && text(pending.sampleId),
+    );
+  }
+
+  let myTabId = 0;
+  /** This tab's id, from background (content scripts cannot read it themselves). */
+  function getMyTabId() {
+    if (myTabId) return Promise.resolve(myTabId);
+    return new Promise((resolve) => {
+      try {
+        chrome.runtime.sendMessage({ type: "QE_MANAK_WHOAMI" }, (res) => {
+          void chrome.runtime.lastError;
+          myTabId = Number(res && res.tabId) || 0;
+          resolve(myTabId);
+        });
+      } catch {
+        resolve(0);
+      }
+    });
+  }
+
   /** Tell MAIN-world page-hook when Test Request PDF capture may intercept downloads. */
   function setTrCaptureFlag(on) {
     try {
@@ -43,7 +67,7 @@
       data.qeManakEnabled === true &&
       data.qeManakArmed === true &&
       data.qeManakImportQr !== true &&
-      Boolean(data.pendingFill);
+      hasTrSample(data.pendingFill);
     setTrCaptureFlag(on);
     return on;
   }
@@ -1323,6 +1347,8 @@
     if (!data || data.type !== "QE_PAGE_PDF" || !data.base64) return;
     chrome.storage.local.get(["pendingFill"], (store) => {
       const payload = (store && store.pendingFill) || {};
+      // Only a Test Request armed for a sample sends PDFs to the app.
+      if (!hasTrSample(payload)) return;
       void sendPdfToApp(payload, data.base64, data.name || "");
     });
   });
@@ -1479,6 +1505,18 @@
             }, 1600);
             return;
           }
+          // Sign-in only (no Test Request sample from the app): stay signed in, Test Request stays OFF,
+          // so later Manak PDF downloads are never captured.
+          if (!hasTrSample(payload)) {
+            setTrCaptureFlag(false);
+            chrome.storage.local.set({
+              qeManakEnabled: false,
+              qeManakHomeReady: true,
+              pendingFill: null,
+            });
+            showBanner("Signed in. Test Request stays OFF (no sample sent from Consultancy Pro).", true);
+            return;
+          }
           chrome.storage.local.set({
             qeManakEnabled: true,
             qeManakArmed: true,
@@ -1486,7 +1524,7 @@
             qeManakImportQr: false,
             pendingFill: payloadWithoutPassword(payload),
           });
-          setTrCaptureFlag(Boolean(payload && payload.sampleId));
+          setTrCaptureFlag(true);
           const trUrl = (map && map.testRequestUrl) || TR_URL;
           window.setTimeout(() => {
             if (isLoginPage() && !isLoggedInSession()) return;
@@ -2118,6 +2156,7 @@
       return { ok: false, message: "Extension is OFF." };
     }
     if (!payload) return { ok: false, message: "No QE_MANAK_TR_V1 payload." };
+    if (!hasTrSample(payload)) return { ok: false, message: "No Test Request sample armed." };
     // New Application (Manak Assist) owns this session — never open or fill Test Request.
     if (payload.kind === "QE_MANAK_NEWAPP_V1") return { ok: false, message: "New Application payload." };
     if (payload.kind === "QE_MANAK_INCLUSION_V1") return { ok: false, message: "Inclusion payload." };
@@ -3025,7 +3064,7 @@
       const trActive =
         data?.qeManakEnabled === true &&
         data?.qeManakArmed === true &&
-        Boolean(data?.pendingFill);
+        hasTrSample(data?.pendingFill);
       // Only auto-fill login when a flow is actively armed — never when both are OFF.
       if (isLoginPage() && (importArmed || trActive)) {
         const portal = data.qeManakPortal || {};
@@ -3073,13 +3112,20 @@
       }
       // App armed a new Test Request after this tab already loaded — re-run workflow
       // (login fill + captcha wait) instead of only flipping the capture flag.
+      // Only in the Manak tab background tracks for this Test Request — never in every open Manak tab.
       // Never steal the session while Import QR is armed.
-      if (changes.pendingFill && changes.pendingFill.newValue) {
-        chrome.storage.local.get(["qeManakImportQr"], (store) => {
+      if (changes.pendingFill && hasTrSample(changes.pendingFill.newValue)) {
+        const next = changes.pendingFill.newValue;
+        chrome.storage.local.get(["qeManakImportQr", "qeManakTrTabId"], (store) => {
           if (store && store.qeManakImportQr === true) return;
-          window.__qeManakCaptchaWatch = false;
-          window.__qeManakSubmitted = false;
-          void runWorkflow(changes.pendingFill.newValue, { force: true });
+          const tracked = Number(store && store.qeManakTrTabId) || 0;
+          if (!tracked) return;
+          void getMyTabId().then((id) => {
+            if (!id || id !== tracked) return;
+            window.__qeManakCaptchaWatch = false;
+            window.__qeManakSubmitted = false;
+            void runWorkflow(next, { force: true });
+          });
         });
       }
       // App re-armed Import QR, or Import section turned ON after login.

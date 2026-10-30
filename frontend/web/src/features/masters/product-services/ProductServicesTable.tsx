@@ -74,7 +74,7 @@ export function ProductServicesTable({
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <Table className={GRID_TABLE}>
+          <Table className={cn(GRID_TABLE, 'list-cards')}>
             <colgroup>
               <col className="w-[3%]" />
               <col className="w-[24%]" />
@@ -121,7 +121,7 @@ export function ProductServicesTable({
                     data-state={selected ? 'selected' : undefined}
                     className={cn('group border-[#e7e0d4] transition-colors', rowTone)}
                   >
-                    <TableCell className="w-[3%] text-center align-middle">
+                    <TableCell className="lc-check w-[3%] text-center align-middle">
                       <input
                         type="checkbox"
                         className={checkboxClass}
@@ -131,28 +131,28 @@ export function ProductServicesTable({
                       />
                     </TableCell>
 
-                    <TableCell className="w-[24%] align-middle text-left">
-                      <div className={cn(cellInnerClass, 'text-left')}>
+                    <TableCell className="lc-title w-[24%] align-middle text-left">
+                      <div className={cn(cellInnerClass, 'text-left max-lg:p-0')}>
                         <p className={primaryLineClass}>{r.discipline_group?.trim() || '—'}</p>
                         <p className={secondaryLineClass}>{r.materials_products?.trim() || '—'}</p>
                       </div>
                     </TableCell>
 
-                    <TableCell className="w-[20%] align-middle text-center">
-                      <div className={cn(cellInnerClass, 'text-center')}>
+                    <TableCell data-label="Test Parameter" className="w-[20%] align-middle text-center">
+                      <div className={cn(cellInnerClass, 'text-center max-lg:p-0 max-lg:text-left')}>
                         <p className={primaryLineClass}>{r.component_parameter?.trim() || '—'}</p>
                         <p className={secondaryLineClass}>{typeAndStatus}</p>
                       </div>
                     </TableCell>
 
-                    <TableCell className="w-[15%] align-middle text-center">
-                      <div className={cn(cellInnerClass, 'text-center')}>
+                    <TableCell data-label="Test Method" className="w-[15%] align-middle text-center">
+                      <div className={cn(cellInnerClass, 'text-center max-lg:p-0 max-lg:text-left')}>
                         <p className={primaryLineClass}>{r.test_method_specification?.trim() || '—'}</p>
                       </div>
                     </TableCell>
 
-                    <TableCell className="w-[18%] align-middle text-center">
-                      <div className={cn(cellInnerClass, 'text-center')}>
+                    <TableCell data-label="Range" className="w-[18%] align-middle text-center">
+                      <div className={cn(cellInnerClass, 'text-center max-lg:p-0 max-lg:text-left')}>
                         <p className={monoLineClass}>
                           {formatScopeNumber(r.range_minimum)} - {formatScopeNumber(r.range_maximum)}
                           {r.unit?.trim() ? ` ${r.unit.trim()}` : ''}
@@ -160,14 +160,14 @@ export function ProductServicesTable({
                       </div>
                     </TableCell>
 
-                    <TableCell className="w-[12%] align-middle text-center">
-                      <div className={cn(cellInnerClass, 'text-center')}>
+                    <TableCell data-label="Uncertainty" className="w-[12%] align-middle text-center">
+                      <div className={cn(cellInnerClass, 'text-center max-lg:p-0 max-lg:text-left')}>
                         <p className={monoLineClass}>{formatUncertaintyDisplay(r.uncertainty)}</p>
                       </div>
                     </TableCell>
 
-                    <TableCell className="w-[8%] align-middle text-center">
-                      <div className="flex w-full items-center justify-center gap-0.5 p-[1mm]">
+                    <TableCell className="lc-actions w-[8%] align-middle text-center">
+                      <div className="flex w-full items-center justify-center gap-0.5 p-[1mm] max-lg:w-auto max-lg:justify-end">
                         <Button
                           type="button"
                           size="sm"

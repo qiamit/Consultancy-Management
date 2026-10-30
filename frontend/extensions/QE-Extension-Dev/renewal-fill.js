@@ -165,7 +165,11 @@
     html += `<div class="row">${done ? "" : '<button class="pri" id="again">Fill again</button>'}<button id="off">Turn OFF</button></div>`;
     root.getElementById("b").innerHTML = html;
     const again = root.getElementById("again");
-    if (again) again.addEventListener("click", () => safeRun(true));
+    if (again) {
+      again.addEventListener("click", () => {
+        void chrome.storage.local.set({ renewalStage: null }).then(() => safeRun(true));
+      });
+    }
     root.getElementById("off").addEventListener("click", () => {
       void turnOff(null);
       if (panelHost) panelHost.remove();
@@ -226,12 +230,15 @@
     return true;
   }
 
-  const digitsOnPage = () => norm(document.body.innerText).replace(/\D+/g, " ").split(" ");
+  const digitsOnPage = () => norm(document.body.innerText).replace(/\D+/g, " ").split(" ").filter(Boolean);
+  // An empty / short CM/L would match any licence ("".includes): only a 10-digit CM/L is used.
+  const validCml = (cml) => /^\d{10}$/.test(String(cml || ""));
   const onReturns = () => Boolean($id("todate") && $id("save") && $id("quantity10"));
   const onPerformance = () => Boolean($id("brief_info_diff") && $id("test_file") && $id("Next"));
 
   async function licenceRow(cml) {
-    const find = () => Array.from(document.querySelectorAll("table tbody tr")).find((tr) => norm(tr.innerText).replace(/\D+/g, " ").split(" ").includes(cml));
+    if (!validCml(cml)) return null;
+    const find = () => Array.from(document.querySelectorAll("table tbody tr")).find((tr) => norm(tr.innerText).replace(/\D+/g, " ").split(" ").filter(Boolean).includes(cml));
     let row = find();
     if (row) return row;
     const search = Array.from(document.querySelectorAll("input[type=search], .dataTables_filter input")).find(visible);
@@ -383,9 +390,30 @@
     }
     const brand = $id("brandPR01");
     if (brand) {
-      const wanted = low(data.brand || "");
+      const key = (v) => low(v).replace(/[^a-z0-9]+/g, "");
       const options = Array.from(brand.options).filter((o) => o.value && !/^select/i.test(o.text));
-      const pick = (wanted && options.find((o) => low(o.text) === wanted)) || options.find((o) => low(o.text) !== "other");
+      const real = options.filter((o) => low(o.text) !== "other");
+      const wanted = key(data.brand || "");
+      let pick = null;
+      if (wanted) {
+        pick = real.find((o) => key(o.text) === wanted) || null;
+        if (!pick) {
+          report.missing.push(`Brand: "${norm(data.brand)}" is not in Manak's brand list (${real.map((o) => norm(o.text)).join(", ") || "none"}) — choose the brand, then Fill again.`);
+          return "stop";
+        }
+      } else if (real.length === 1) {
+        pick = real[0];
+      } else if (real.length > 1) {
+        // Several brands and none sent from Consultancy Pro: use the one chosen on the page, never guess.
+        pick = real.find((o) => o.value === brand.value) || null;
+        if (!pick) {
+          report.missing.push(`Brand: this licence has ${real.length} brands on Manak (${real.map((o) => norm(o.text)).join(", ")}). Choose the brand for these returns, then Fill again.`);
+          return "stop";
+        }
+        // Keep the chosen brand for the next months (Manak reloads the page after each return).
+        data.brand = norm(pick.text);
+        await chrome.storage.local.set({ renewalFill: data });
+      }
       if (!pick) {
         report.missing.push('Brand: only "Other" is listed — choose it and enter the brand, then Fill again.');
         return "stop";
@@ -494,6 +522,8 @@
       const said = [...alertLog(), ...(s ? [`${s.title} ${s.text}`.trim()] : [])].filter(Boolean);
       if (said.length) {
         if (s) closeSwal(s);
+        // Manak stayed on this page: clear the stage, or the panel waits for a next page forever.
+        await chrome.storage.local.set({ renewalStage: null });
         report.portal.push(`Next: ${said.join(" / ")}`);
         return "stop";
       }
@@ -590,6 +620,10 @@
       return;
     }
     const data = store.renewalFill;
+    if (!validCml(data.cmlNo)) {
+      renderPanel(data, "This licence has no 10-digit CM/L in Consultancy Pro — nothing done. Fix the CM/L, then run Manak Assist again.", null, false);
+      return;
+    }
     // Report of Performance went through: this is the payment page. Stop here — the extension never pays.
     if (store.renewalStage === "performance-next" && !onPerformance() && !onReturns() && signedIn()) {
       finished = true;

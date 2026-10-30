@@ -27,6 +27,11 @@ export function stripSecrets(value) {
 }
 
 /** Safe text for PostgREST ilike filters inside or=(...). */
+/** Calendar date in India (UTC+05:30), optionally offset by ms — the app's "today", not the server's UTC day. */
+function istDate(offsetMs = 0) {
+  return new Date(Date.now() + offsetMs + 330 * 60 * 1000).toISOString().slice(0, 10)
+}
+
 function term(value) {
   return String(value ?? '')
     .replace(/[,()*%\\"'.:]/g, ' ')
@@ -348,8 +353,8 @@ export const TOOLS = [
       limit: limitSchema,
     },
     run: async ({ days, include_expired, limit }, ctx) => {
-      const today = new Date().toISOString().slice(0, 10)
-      const until = new Date(Date.now() + (days ?? 60) * 86_400_000).toISOString().slice(0, 10)
+      const today = istDate()
+      const until = istDate((days ?? 60) * 86_400_000)
       const from = include_expired ? '' : `&license_validity_date=gte.${today}`
       const { data } = await userRest(
         ctx.jwt,

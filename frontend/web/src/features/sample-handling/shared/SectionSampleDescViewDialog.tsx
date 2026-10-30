@@ -241,11 +241,9 @@ export function SectionSampleDescViewDialog({
         layer={layer}
         className={cn(
           limsDialogClass,
-          'max-h-[88vh] max-w-3xl overflow-hidden p-0',
-          'lg:left-[calc(268px+(100vw-268px)/2)] md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2',
+          'max-h-[88dvh] max-w-3xl overflow-hidden p-0',
+          'md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2',
         )}
-        overlayClassName="lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto"
-        portalClassName="lg:left-[268px]"
         aria-describedby={undefined}
       >
         <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white sm:px-5">
@@ -265,7 +263,7 @@ export function SectionSampleDescViewDialog({
         </div>
 
         {row ? (
-          <div className="max-h-[calc(88vh-8rem)] space-y-5 overflow-y-auto bg-[#f7f3eb] px-4 py-4 sm:px-5">
+          <div className="max-h-[calc(88dvh-8rem)] space-y-5 overflow-y-auto bg-[#f7f3eb] px-4 py-4 sm:px-5">
             <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
               <SectionBlock icon={FileText} title="Sample Description">
                 <ProsePanel>{fmt(row.sampleDescription)}</ProsePanel>

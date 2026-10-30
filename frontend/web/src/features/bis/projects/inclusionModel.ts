@@ -1,5 +1,5 @@
 import type { BisPrintDocumentKind } from '../print/printBisDocument'
-import { parseBisNotesScope, sanitizeBisLicenseScopeNotes } from './types'
+import { parseBisNotesScope, sanitizeBisLicenseScopeNotes, serializeBisNotesScope } from './types'
 
 /* Change in Scope (Inclusion) on an existing licence — data kept apart from the New Application modules.
    Mirrors Manak "Application For Change in Scope (Inclusion)" (varietyInclusionForm). */
@@ -124,4 +124,55 @@ export function licenceScopeText(notes: string | null | undefined): string {
     .map((cells) => cells.map((c) => c.trim()).filter(Boolean).join(' - '))
     .filter(Boolean)
     .join('\n')
+}
+
+/** Same variety, whatever the spacing or case ("Size - 20 mm" = "size -  20 MM"). */
+const varietyKey = (line: string) => line.replace(/\s+/g, ' ').trim().toLowerCase()
+const rowLine = (cells: string[]) => cells.map((c) => c.trim()).filter(Boolean).join(' - ')
+
+/**
+ * Licence scope after an inclusion: the existing scope plus the New Scope varieties it does not already have
+ * (a variety is the row as licenceScopeText shows it). Keeps the licence's table layout; new rows with more
+ * columns than the licence table join the extra cells into its last column.
+ */
+export function mergeInclusionScopeIntoLicence(existingNotes: string | null | undefined, newScopeNotes: string | null | undefined): string {
+  const existing = parseBisNotesScope(sanitizeBisLicenseScopeNotes(String(existingNotes ?? '')))
+  const added = parseBisNotesScope(sanitizeBisLicenseScopeNotes(String(newScopeNotes ?? '')))
+  const addedRows: string[][] = added.mode === 'table'
+    ? added.rows.filter((r) => r.some((c) => c.trim()))
+    : added.text.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => [l])
+  const existingRows: string[][] = existing.mode === 'table'
+    ? existing.rows.filter((r) => r.some((c) => c.trim()))
+    : existing.text.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => [l])
+
+  // Nothing on the licence yet: the New Scope becomes the scope as it is.
+  if (!existingRows.length) return serializeBisNotesScope(added.mode === 'table' ? { ...added, rows: addedRows } : added)
+
+  const seen = new Set(existingRows.map((r) => varietyKey(rowLine(r))))
+  const fresh = addedRows.filter((r) => {
+    const key = varietyKey(rowLine(r))
+    if (!key || seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+  if (!fresh.length) return serializeBisNotesScope(existing)
+
+  if (existing.mode === 'plain') {
+    return [existing.text.replace(/\s+$/, ''), ...fresh.map(rowLine)].join('\n')
+  }
+  const width = existing.headers.length
+  const fitted = fresh.map((r) =>
+    r.length <= width
+      ? Array.from({ length: width }, (_, i) => r[i] ?? '')
+      : [...r.slice(0, width - 1), rowLine(r.slice(width - 1))],
+  )
+  return serializeBisNotesScope({ mode: 'table', headers: existing.headers, rows: [...existingRows, ...fitted] })
+}
+
+/** inclusion-details keys that belong to one inclusion (New Scope, Manak rows, letter wording …); `history` is kept. */
+export function archiveInclusionDetails(details: Rec | null | undefined, entry: Rec): Rec {
+  const current = details ?? {}
+  const history = Array.isArray(current.history) ? (current.history as Rec[]) : []
+  const active = Object.fromEntries(Object.entries(current).filter(([k]) => k !== 'history'))
+  return { history: [...history, { ...active, ...entry }] }
 }

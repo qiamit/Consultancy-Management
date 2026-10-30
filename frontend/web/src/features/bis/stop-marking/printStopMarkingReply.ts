@@ -11,6 +11,7 @@ import { loadCompanyPrintContext } from '../print/loadCompanyPrintContext'
 import { escapeHtml as esc, openPendingPrintWindow, openPrintHtml } from '../print/openPrintHtml'
 import { emailHtmlDocumentToClient } from '../shared/emailHtmlToClient'
 import { EMPTY_REPLY_SECTIONS, noticeTypeLabel, REPLY_BODY_SECTIONS, stopMarkingClientName, stopMarkingIsCodeLabel, type StopMarkingReplySections, type StopMarkingRow } from './types'
+import { todayLocalIso } from '@/lib/localDate'
 
 const longDate = (iso: string | null | undefined) =>
   iso ? new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' }) : ''
@@ -21,7 +22,7 @@ async function buildPlainReplyHtml(row: StopMarkingRow): Promise<string> {
   const client = stopMarkingClientName(row) || 'Licensee'
   const isLabel = stopMarkingIsCodeLabel(row)
   const cmL = row.cm_l_digits ? `CM/L-${row.cm_l_digits}` : ''
-  const date = longDate(row.reply_date) || longDate(new Date().toISOString())
+  const date = longDate(row.reply_date) || longDate(todayLocalIso())
   const contact = [company.phone ? `Tel: ${company.phone}` : '', company.email ? `Email: ${company.email}` : ''].filter(Boolean).join(' | ')
   const reference = [
     cmL ? `Licence No.: ${cmL}` : '',
@@ -55,7 +56,7 @@ async function buildPlainReplyHtml(row: StopMarkingRow): Promise<string> {
 
 /** The default "Our Ref." of the letter: licence number and reply date. */
 export function defaultReplyRef(row: Pick<StopMarkingRow, 'cm_l_digits' | 'reply_date'>): string {
-  const d = (row.reply_date ?? new Date().toISOString()).slice(0, 10)
+  const d = (row.reply_date || todayLocalIso()).slice(0, 10)
   return `${row.cm_l_digits ? `CM/L-${row.cm_l_digits}` : 'BIS'}/NC/${d.slice(8, 10)}${d.slice(5, 7)}${d.slice(0, 4)}`
 }
 
@@ -81,7 +82,7 @@ export async function buildStopMarkingReplyHtml(row: StopMarkingRow): Promise<st
   const printData = await loadBisPrintData(project)
   const ctx = applicantContextFromPrintData(printData)
   const sig = printSignatoryDefaults(printData)
-  const date = longDate(row.reply_date) || longDate(new Date().toISOString())
+  const date = longDate(row.reply_date) || longDate(todayLocalIso())
   const ourRef = sections.ourRef.trim() || defaultReplyRef(row)
   const isLabel = stopMarkingIsCodeLabel(row)
   const cmL = row.cm_l_digits ? `CM/L-${row.cm_l_digits}` : ''

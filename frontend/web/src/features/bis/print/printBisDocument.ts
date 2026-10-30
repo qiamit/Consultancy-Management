@@ -331,7 +331,12 @@ export const MORE_PRINTS_TOOLTIP =
 export function combinePrintHtmlDocuments(title: string, documents: string[]): string {
   const pageBodies = documents.map((html) => {
     const body = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i)?.[1] ?? html
-    const style = html.match(/<style[^>]*>([\s\S]*?)<\/style>/i)?.[1] ?? ''
+    // Every <style> block of the document (a document can carry more than one, e.g. its own + the scan-friendly floor).
+    // A page-settings override is skipped: it is applied once to the combined document.
+    const style = [...html.matchAll(/<style([^>]*)>([\s\S]*?)<\/style>/gi)]
+      .filter((m) => !/bis-print-preview-override/.test(m[1]))
+      .map((m) => m[2])
+      .join('\n')
     return { body, style }
   })
   const first = pageBodies[0]

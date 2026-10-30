@@ -156,6 +156,18 @@
     @apply min-h-0 flex-1;
   }
 
+  /* Phones in landscape: too short to pin header + footer around the table, so the page scrolls. */
+  @media (max-height: 500px) {
+    .app-shell-main:has([data-master-scroll='table']) {
+      overflow-y: auto;
+    }
+
+    .app-shell-main:has([data-master-scroll='table']) > * {
+      flex: none;
+      height: auto;
+    }
+  }
+
   /* Master list footers / dark bars: keep action buttons tappable while scrolling sideways */
   .app-toolbar-scroll {
     @apply flex min-w-0 max-w-full flex-nowrap items-center gap-1 overflow-x-auto overscroll-x-contain sm:gap-1.5;
@@ -259,16 +271,19 @@ th * {
     font-size: 0.75rem !important;
   }
 
-  .bis-project-row-actions button {
-    width: 1.4375rem !important;
-    height: 1.4375rem !important;
-    min-height: 1.4375rem !important;
-    padding: 0 !important;
-  }
+  /* Mouse/trackpad only: touch keeps full-size (≥2.25rem) action buttons. */
+  @media (hover: hover) and (pointer: fine) {
+    .bis-projects-table-view .bis-project-row-actions button {
+      width: 1.4375rem !important;
+      height: 1.4375rem !important;
+      min-height: 1.4375rem !important;
+      padding: 0 !important;
+    }
 
-  .bis-project-row-actions svg {
-    width: 0.934rem !important;
-    height: 0.934rem !important;
+    .bis-projects-table-view .bis-project-row-actions svg {
+      width: 0.934rem !important;
+      height: 0.934rem !important;
+    }
   }
 
   .bis-projects-action-column {
@@ -290,10 +305,10 @@ th * {
   }
 }
 
-@container bis-projects (max-width: 1120px) {
-  /* The app sidebar reduces the usable panel width before the viewport hits
-     Tailwind's lg breakpoint. Keep the search controls and filters on separate
-     rows so they cannot collide in the remaining desktop-width content area. */
+@container bis-projects (max-width: 1440px) {
+  /* The five filters alone need ~900px, so below ~1440px of panel width the title, search and buttons get
+     squeezed under them (search shrank to nothing and Add New License slid beneath the filters at 1158px).
+     Keep the search controls and the filters on separate rows. */
   .bis-projects-toolbar {
     flex-direction: column !important;
     align-items: stretch !important;
@@ -307,8 +322,6 @@ th * {
     width: 100%;
   }
 
-  .bis-projects-add-label,
-  .bis-projects-footer-track button > span:not(.sr-only) { display: none !important; }
   .bis-projects-toolbar-filters .bis-projects-filter-trigger {
     flex: 1 1 8rem;
     width: auto !important;
@@ -317,16 +330,23 @@ th * {
     padding-inline: 0.375rem !important;
     font-size: 0.75rem !important;
   }
+}
 
-  .bis-project-row-actions button {
-    width: 1.29375rem !important;
-    height: 1.29375rem !important;
-    min-height: 1.29375rem !important;
-  }
+@container bis-projects (max-width: 1120px) {
+  .bis-projects-add-label,
+  .bis-projects-footer-track button > span:not(.sr-only) { display: none !important; }
 
-  .bis-project-row-actions svg {
-    width: 0.8625rem !important;
-    height: 0.8625rem !important;
+  @media (hover: hover) and (pointer: fine) {
+    .bis-projects-table-view .bis-project-row-actions button {
+      width: 1.29375rem !important;
+      height: 1.29375rem !important;
+      min-height: 1.29375rem !important;
+    }
+
+    .bis-projects-table-view .bis-project-row-actions svg {
+      width: 0.8625rem !important;
+      height: 0.8625rem !important;
+    }
   }
 
   .bis-projects-action-column {
@@ -334,6 +354,25 @@ th * {
     min-width: 5.75rem !important;
     max-width: 5.75rem !important;
     padding-inline: 0.25rem !important;
+  }
+}
+
+/* Touch screens: the narrowed action column keeps full-size buttons and wraps them onto two lines. */
+@media (hover: none), (pointer: coarse) {
+  .bis-projects-table-view .bis-project-row-actions {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.125rem;
+  }
+}
+
+/* Narrow license cards: the action buttons drop below the client name instead of squeezing it. */
+@container bis-projects (max-width: 479px) {
+  .bis-project-card-head { flex-wrap: wrap; }
+  .bis-project-card-head > .bis-project-row-actions {
+    flex-basis: 100%;
+    justify-content: flex-end;
+    gap: 0.25rem;
   }
 }
 
@@ -561,7 +600,7 @@ th * {
     content: attr(data-label);
     display: block;
     margin-bottom: 0.2rem;
-    font-size: 0.625rem;
+    font-size: 0.75rem;
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -657,7 +696,7 @@ th * {
   .row-cards td:first-child { grid-column: 1; font-weight: 700; color: #92400e; text-align: center !important; }
   .row-cards td:not(:first-child) { grid-column: 2; }
   .row-cards td[colspan] { grid-column: 1 / -1; text-align: center !important; font-weight: 400; color: #78716c; }
-  .row-cards td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 0.125rem; font-size: 0.625rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #78716c; }
+  .row-cards td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 0.125rem; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #78716c; }
   .row-cards td.rc-actions > div { justify-content: flex-start; }
 }
 
@@ -689,7 +728,7 @@ th * {
   .list-cards:not(.auto-cards) tr:has(> td.lc-check):not(:has(> td.lc-title)) > td:nth-child(2) { padding-left: 1.75rem !important; }
   .list-cards:not(.auto-cards) td.lc-wide { grid-column: 1 / -1; }
   .list-cards:not(.auto-cards) td.lc-title p { white-space: normal; }
-  .list-cards:not(.auto-cards) td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 0.125rem; font-size: 0.625rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #78716c; }
+  .list-cards:not(.auto-cards) td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 0.125rem; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #78716c; }
   .list-cards:not(.auto-cards) td.lc-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 0.375rem; padding-top: 0.5rem !important; border-top: 1px solid #e7e5e4 !important; }
   .list-cards:not(.auto-cards) td[colspan] { grid-column: 1 / -1; text-align: center !important; }
 }
@@ -714,7 +753,7 @@ th * {
   .sm-cards tr:has(> td.lc-check):not(:has(> td.lc-title)) > td:nth-child(2) { padding-left: 1.75rem !important; }
   .sm-cards td.lc-wide { grid-column: 1 / -1; }
   .sm-cards td.lc-title p { white-space: normal; }
-  .sm-cards td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 0.125rem; font-size: 0.625rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #78716c; }
+  .sm-cards td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 0.125rem; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #78716c; }
   .sm-cards td.lc-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 0.375rem; padding-top: 0.5rem !important; border-top: 1px solid #e7e5e4 !important; }
   .sm-cards td[colspan] { grid-column: 1 / -1; text-align: center !important; }}
 @container smtable (min-width: 640px) and (max-width: 1239px) {
@@ -739,7 +778,7 @@ th * {
   .auto-cards tr:has(> td.lc-check) td.lc-title { padding-left: 1.75rem !important; }
   .auto-cards td.lc-wide { grid-column: 1 / -1; }
   .auto-cards td.lc-title p { white-space: normal; }
-  .auto-cards td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 0.125rem; font-size: 0.625rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #78716c; }
+  .auto-cards td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 0.125rem; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #78716c; }
   .auto-cards td.lc-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 0.375rem; padding-top: 0.5rem !important; border-top: 1px solid #e7e5e4 !important; }
   .auto-cards td[colspan] { grid-column: 1 / -1; text-align: center !important; }
   .auto-cards td.lc-title[data-label]::before { content: none; }
@@ -776,4 +815,13 @@ th * {
   .kv-stack th,
   .kv-stack td { display: block; width: auto !important; white-space: normal !important; }
   .kv-stack th { border-bottom-width: 0 !important; padding-bottom: 0.125rem !important; font-size: 0.75rem; }
+}
+
+/* iOS zooms the page when a focused field's text is under 16px; phones/tablets with touch get 16px fields. */
+@media (max-width: 767px) and (pointer: coarse) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
 }

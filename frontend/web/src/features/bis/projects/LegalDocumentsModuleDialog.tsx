@@ -1,8 +1,9 @@
 import { UndertakingGeneralFields } from './UndertakingGeneralFields'
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Check, Download, Eye, FileDown, FileType, Import, Pencil, Plus, Printer, Trash2, Upload, X } from 'lucide-react'
+import { Check, Download, Eye, FileDown, FileType, Import, Pencil, Plus, Printer, Sparkles, Trash2, Upload, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import {
   Dialog,
   DialogContent,
@@ -20,6 +21,7 @@ import {
   limsPrimaryBtnClass,
 } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
+import { useShowAiButtons } from '@/hooks/useShowAiAssistant'
 import { getCurrencyCode, getCurrencySymbol } from '@/lib/appCurrency'
 import { formatMoneyInput, sanitizeMoneyInput } from '@/features/masters/products-services/types'
 import { supabase } from '@/lib/supabaseClient'
@@ -131,6 +133,7 @@ import {
 import {
   emptyProcessFlowPayload,
   parseProcessFlowPayload,
+  processFlowNodeHasContent,
   type ProcessFlowModulePayload,
 } from './processFlowModel'
 import { OslSampleRequirementsModuleFields } from './OslSampleRequirementsModuleFields'
@@ -152,6 +155,7 @@ import {
 } from '../print/oslSampleTestRequestHtml'
 import { openPendingPrintWindow, openPrintHtml } from '../print/openPrintHtml'
 import {
+  bisDateOrderIssue,
   clientDisplayName,
   emptyBisApplicationDetailsForm,
   formatCmA,
@@ -361,6 +365,8 @@ export function LegalDocumentsModuleDialog({
   /** Undertaking shown first when the All Undertakings module opens (for example the Minimum Marking Fee one from step 1). */
   initialUndertaking?: (typeof UNDERTAKING_OPTIONS)[number]['kind'] | null
 }) {
+  // In-app confirm (embedded browsers answer window.confirm with false at once).
+  const [confirmAction, confirmDialog] = useConfirmDialog({ layer: 'overlay' })
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const uploadTargetRef = useRef<{ type: 'draft' | 'file'; id: string } | null>(null)
   const showApplicationFields = docKind === 'application' || printKind === 'application-details'
@@ -384,6 +390,11 @@ export function LegalDocumentsModuleDialog({
   /** Merged Process Flow Chart + Process Description (shared payload). */
   const showProcessFlowFields =
     printKind === 'process-flow-chart' || printKind === 'process-description'
+  const showAiButtons = useShowAiButtons()
+  /** Chart mode only: the AI button sits next to Import in the header (Description has its own AI button). */
+  const showFlowChartAi = printKind === 'process-flow-chart' && showAiButtons && Boolean(row?.id)
+  /** Plant Layout: AI button in the header draws the canvas from a photo / sketch / PDF of the factory. */
+  const showPlantLayoutAi = showPlantLayoutFields && showAiButtons && Boolean(row?.id)
   /** Compact modules: dialog height follows content (no forced tall empty body). */
   const compactFormModule =
     showTopManagementFields ||
@@ -503,6 +514,9 @@ export function LegalDocumentsModuleDialog({
   const [cmpf307, setCmpf307] = useState<Cmpf307ModulePayload>(() => emptyCmpf307Payload())
   const [brandImportOpen, setBrandImportOpen] = useState(false)
   const [flowImportOpen, setFlowImportOpen] = useState(false)
+  const [flowAiOpen, setFlowAiOpen] = useState(false)
+  const [plantLayoutAiOpen, setPlantLayoutAiOpen] = useState(false)
+  const [plantImportOpen, setPlantImportOpen] = useState(false)
   const [cmpf310, setCmpf310] = useState<Cmpf310ModulePayload>(() => emptyCmpf310Payload())
   const [rawMaterialReference, setRawMaterialReference] = useState<RawMaterialReferencePayload>(() => emptyRawMaterialReferencePayload())
   const [processFlow, setProcessFlow] = useState<ProcessFlowModulePayload>(() =>
@@ -627,6 +641,8 @@ export function LegalDocumentsModuleDialog({
       setUndertakingPreviewOptionsLoadedFor(null)
       setUndertakingPreviewOptionsTouched(false)
       setLicenseScopeNotes('')
+      setFlowAiOpen(false)
+      setPlantLayoutAiOpen(false)
       return
     }
     setDrafts([newDraft()])
@@ -1173,6 +1189,17 @@ export function LegalDocumentsModuleDialog({
       appDetails.licenseNumberDigits.length !== 10
     ) {
       toast.error('License Number Must Be Exactly 10 Digits (CM/L-).')
+      return
+    }
+    const dateIssue = showApplicationFields
+      ? bisDateOrderIssue({
+          applicationDate: appDetails.applicationDate,
+          grantedDate: appDetails.grantedDate,
+          validityDate: appDetails.licenseValidityDate,
+        })
+      : null
+    if (dateIssue) {
+      toast.error(dateIssue)
       return
     }
 
@@ -1790,7 +1817,7 @@ export function LegalDocumentsModuleDialog({
   }
 
   const removeClientDocument = async (document: ClientCertificateFile) => {
-    if (!window.confirm(`Delete ${document.cert_name} from Client Master?`)) return
+    if (!(await confirmAction(`Delete ${document.cert_name} from Client Master?`, { title: 'Delete Client Document', confirmLabel: 'Delete' }))) return
     try {
       await deleteClientCertificate(document)
       setClientLegalDocuments((current) => current.filter((item) => item.id !== document.id))
@@ -1826,8 +1853,8 @@ export function LegalDocumentsModuleDialog({
                 limsDialogClass,
                 'bg-white',
                 compactFormModule
-                  ? 'h-auto max-h-[min(92vh,860px)] w-[min(68rem,calc(100vw_-_var(--app-dialog-overlay-left,0px)_-_1.5rem))] max-w-[68rem]'
-                  : 'max-h-[min(92vh,860px)]',
+                  ? 'h-auto max-h-[min(92dvh,860px)] w-[min(68rem,calc(100vw_-_var(--app-dialog-overlay-left,0px)_-_1.5rem))] max-w-[68rem]'
+                  : 'max-h-[min(92dvh,860px)]',
                 !compactFormModule &&
                   (showApplicationFields
                     ? 'w-[min(56rem,calc(100vw_-_var(--app-dialog-overlay-left,0px)_-_1.5rem))] max-w-[56rem]'
@@ -1841,7 +1868,7 @@ export function LegalDocumentsModuleDialog({
             style={limsDarkBarGlowStyle}
           />
           <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
-          <DialogHeader className="relative pr-10 text-left">
+          <DialogHeader className={cn('relative text-left', showFlowChartAi ? 'pr-24' : showPlantLayoutAi ? 'pr-20' : 'pr-10')}>
             <DialogTitle className="text-base font-semibold tracking-tight text-white">
               {title}
             </DialogTitle>
@@ -1875,6 +1902,48 @@ export function LegalDocumentsModuleDialog({
               onClick={() => setFlowImportOpen(true)}
             >
               <Import size={15} aria-hidden />
+            </Button>
+          ) : null}
+          {showFlowChartAi ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={busy || saving || loading}
+              className="absolute right-[4.75rem] top-2 z-10 h-7 w-7 rounded-none border border-amber-500/60 bg-stone-800 p-0 text-amber-200 shadow-sm transition-colors hover:border-amber-400 hover:bg-amber-600 hover:text-white"
+              title="Generate Process Flow Chart with AI"
+              aria-label="Generate Process Flow Chart with AI"
+              onClick={() => setFlowAiOpen(true)}
+            >
+              <Sparkles size={15} aria-hidden />
+            </Button>
+          ) : null}
+          {showPlantLayoutFields && row?.id ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={busy || saving}
+              className="absolute right-11 top-2 z-10 h-7 w-7 rounded-none border border-amber-500/60 bg-stone-800 p-0 text-amber-200 shadow-sm transition-colors hover:border-amber-400 hover:bg-amber-600 hover:text-white"
+              title="Import from Another Application"
+              aria-label="Import from Another Application"
+              onClick={() => setPlantImportOpen(true)}
+            >
+              <Import size={15} aria-hidden />
+            </Button>
+          ) : null}
+          {showPlantLayoutAi ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={busy || saving || loading}
+              className="absolute right-[4.75rem] top-2 z-10 h-7 w-7 rounded-none border border-amber-500/60 bg-stone-800 p-0 text-amber-200 shadow-sm transition-colors hover:border-amber-400 hover:bg-amber-600 hover:text-white"
+              title="Draw Plant Layout with AI from a Photo or PDF"
+              aria-label="Draw Plant Layout with AI from a Photo or PDF"
+              onClick={() => setPlantLayoutAiOpen(true)}
+            >
+              <Sparkles size={15} aria-hidden />
             </Button>
           ) : null}
         </div>
@@ -2404,6 +2473,10 @@ export function LegalDocumentsModuleDialog({
                   value={plantLayout}
                   onChange={setPlantLayout}
                   disabled={busy || saving}
+                  aiOpen={plantLayoutAiOpen}
+                  onAiOpenChange={showPlantLayoutAi ? setPlantLayoutAiOpen : undefined}
+                  applicantName={row ? clientDisplayName(row) : ''}
+                  productName={(row?.is_code?.title ?? '').trim()}
                 />
               )}
             </div>
@@ -2486,6 +2559,8 @@ export function LegalDocumentsModuleDialog({
                   productName={(row?.is_code?.title ?? '').trim()}
                   licenseScope={licenseScopeNotes}
                   isCodeId={row?.is_code_id ?? null}
+                  chartAiOpen={flowAiOpen}
+                  onChartAiOpenChange={setFlowAiOpen}
                 />
               )}
             </div>
@@ -2508,7 +2583,7 @@ export function LegalDocumentsModuleDialog({
                 {loading ? (
                   <p className="px-3 py-8 text-center text-sm text-stone-500">Loading…</p>
                 ) : (
-                  <div className="h-full max-h-[min(56vh,520px)] overflow-y-auto overflow-x-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
+                  <div className="h-full max-h-[min(56dvh,520px)] overflow-y-auto overflow-x-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
                     {/* Cards — &lt; ~10″ */}
                     <div className={cn(CARDS_MQ_SHOW, 'space-y-2 p-2')}>
                       {entries.map((entry, index) => {
@@ -2698,13 +2773,44 @@ export function LegalDocumentsModuleDialog({
         kind="process-flow-chart"
         onPickSource={async (sourceProjectId) => {
           const source = parseProcessFlowPayload(await fetchBisModulePayload(sourceProjectId, 'process-flow-chart'))
-          if (source.nodes.length === 0 && source.descriptionPoints.length === 0) {
+          if (!source.nodes.some(processFlowNodeHasContent) && !source.descriptionPoints.some((point) => point.trim())) {
             throw new Error('The selected application has no process flow chart.')
           }
-          const hasCurrent = processFlow.nodes.length > 0 || processFlow.descriptionPoints.some((point) => point.trim())
-          if (hasCurrent && !window.confirm('Replace the process flow chart and description here with the imported one?')) return
+          const hasCurrent = processFlow.nodes.some(processFlowNodeHasContent) || processFlow.descriptionPoints.some((point) => point.trim())
+          if (
+            hasCurrent &&
+            !(await confirmAction('Replace the Process Flow Chart and Description Here with the Imported One?', {
+              title: 'Replace Process Flow',
+              confirmLabel: 'Replace',
+              destructive: false,
+            }))
+          )
+            return
           setProcessFlow(source)
           toast.success('Process Flow Chart Imported', { description: 'Check the boxes and description, then click Save.' })
+        }}
+      />
+    ) : null}
+    {showPlantLayoutFields ? (
+      <BisModuleImportDialog
+        open={plantImportOpen}
+        onOpenChange={setPlantImportOpen}
+        targetRow={row}
+        kind="plant-layout"
+        onPickSource={async (sourceProjectId) => {
+          const source = parsePlantLayoutPayload(await fetchBisModulePayload(sourceProjectId, 'plant-layout'))
+          if (!source.boxes.length) throw new Error('The Selected Application Has No Plant Layout.')
+          if (
+            plantLayout.boxes.length > 0 &&
+            !(await confirmAction('Replace the Plant Layout Here with the Imported One?', {
+              title: 'Replace Plant Layout',
+              confirmLabel: 'Replace',
+              destructive: false,
+            }))
+          )
+            return
+          setPlantLayout(source)
+          toast.success('Plant Layout Imported', { description: 'Check the Boxes, Then Click Save.' })
         }}
       />
     ) : null}
@@ -2733,6 +2839,7 @@ export function LegalDocumentsModuleDialog({
         }}
       />
     ) : null}
+    {confirmDialog}
     </>
   )
 }

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { limsDarkBarGlowStyle, limsPageShellClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { activePickerClients, getPickerClients, type PickerClientRow } from '@/lib/clientsCache'
@@ -145,6 +146,7 @@ function isAbortOrLockError(err: unknown): boolean {
  */
 export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleConfig }) {
   const { editId, setEdit } = useMasterUiSearchState()
+  const [confirm, confirmDialog] = useConfirmDialog()
   const hydratedEditRef = useRef<string | null>(null)
   const [rows, setRows] = useState<QuotationRow[]>([])
   const [outstandingById, setOutstandingById] = useState<Record<string, number>>({})
@@ -583,11 +585,12 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
       setSaveMessage(isVendorParty ? 'Select a vendor.' : 'Select a client.')
       return
     }
-    if (isPaymentReceipt && parseMoney(String(form.paymentAmount ?? '')) <= 0) {
+    // Payment Made and Refund are money forms too (no line items on screen).
+    if (isMoneyForm && parseMoney(String(form.paymentAmount ?? '')) <= 0) {
       setSaveMessage('Enter a payment amount greater than 0.')
       return
     }
-    if (!isPaymentReceipt && !form.lines.some((l) => l.description.trim().length > 0)) {
+    if (!isMoneyForm && !form.lines.some((l) => l.description.trim().length > 0)) {
       setSaveMessage('Add at least one line item.')
       return
     }
@@ -659,7 +662,8 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
         convertMsg =
           (await convertInvoiceToCreditNoteIfNeeded(convertSource, convertAction)) ??
           (await convertInvoiceToPaymentReceiptIfNeeded(convertSource, convertAction))
-      } else if (config.documentKind === 'proformaInvoice') {
+      } else if (config.documentKind === 'proformaInvoice' && convertAction === 'Invoice') {
+        // A proforma's own status is "Proforma"; only "Convert to Invoice" creates another document.
         convertMsg = await convertQuotationIfNeeded(convertSource, convertAction)
       }
       setMessage(convertMsg ?? `Saved ${form.quotationNumber.trim()}.`)
@@ -694,7 +698,7 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
   const handleDeleteSelected = async () => {
     const ids = [...selectedIds]
     if (ids.length === 0) return
-    if (!window.confirm(`Delete ${ids.length} ${config.title.toLowerCase()} record(s)?`)) return
+    if (!(await confirm(`Delete ${ids.length} ${config.title} Record(s)?`, { title: `Delete ${config.title} Records`, confirmLabel: 'Delete', destructive: true }))) return
     try {
       await deleteSaleDocuments(config.documentKind, ids)
       setSelectedIds(new Set())
@@ -785,6 +789,7 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
         'flex h-full min-h-0 flex-col overflow-hidden !space-y-0 gap-2 sm:gap-3 md:gap-3',
       )}
     >
+      {confirmDialog}
       <div className="shrink-0">
         <QuotationHeaderBar
           title={config.title}
@@ -987,29 +992,31 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-gradient-to-b from-stone-100/80 to-white px-3 py-3 sm:px-5 sm:py-4 md:px-6 md:py-5">
-            {saveMessage && showForm ? (
-              <p className="mb-4 border-l-2 border-destructive bg-destructive/5 px-3 py-2 text-sm text-destructive">
-                {saveMessage}
-              </p>
-            ) : null}
-            <QuotationFormView
-              key={editingId ?? `new-${form.quotationNumber}`}
-              form={form}
-              onChange={setForm}
-              clientOptions={clientOptions}
-              clientContactById={clientContactById}
-              productOptions={productOptions}
-              productById={productById}
-              onReloadClients={loadClients}
-              onReloadProducts={() => loadProducts()}
-              canSave={canSave}
-              saveLoading={saveLoading}
-              onSave={() => void handleSave()}
-              documentLabel={config.title}
-              formMode={isMoneyForm ? 'paymentReceipt' : 'standard'}
-              documentKind={config.documentKind}
-              excludeReceiptId={editingId}
-            />
+            <div className="mx-auto w-full max-w-[1440px]">
+              {saveMessage && showForm ? (
+                <p className="mb-4 border-l-2 border-destructive bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                  {saveMessage}
+                </p>
+              ) : null}
+              <QuotationFormView
+                key={editingId ?? 'new'}
+                form={form}
+                onChange={setForm}
+                clientOptions={clientOptions}
+                clientContactById={clientContactById}
+                productOptions={productOptions}
+                productById={productById}
+                onReloadClients={loadClients}
+                onReloadProducts={() => loadProducts()}
+                canSave={canSave}
+                saveLoading={saveLoading}
+                onSave={() => void handleSave()}
+                documentLabel={config.title}
+                formMode={isMoneyForm ? 'paymentReceipt' : 'standard'}
+                documentKind={config.documentKind}
+                excludeReceiptId={editingId}
+              />
+            </div>
           </div>
         </DialogContent>
       </Dialog>

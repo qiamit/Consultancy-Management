@@ -237,7 +237,7 @@ async function loadClient(row: BisProjectRow): Promise<BisPrintClient> {
   const loaded: BisPrintClient = {
     companyName: text(c.company_name) || fallbackName,
     contactPerson: text(c.contact_person_name),
-    ceoName: text(c.ceo_name) || text(c.contact_person_name),
+    ceoName: text(c.contact_person_name) || text(c.ceo_name),
     city: text(c.city),
     mobile: mobile && code && !mobile.startsWith('+') ? `${code} ${mobile}` : mobile,
     email: text(c.email),

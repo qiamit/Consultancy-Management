@@ -28,6 +28,7 @@ import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 import { useFormDialogOpenChange } from '@/lib/formDialogOpenChange'
 import { useMasterUiSearchState } from '@/lib/useMasterUiSearchState'
 import { Button } from '@/components/ui/button'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { AuditHistoryDialog } from '@/components/lims/AuditHistoryDialog'
@@ -38,6 +39,14 @@ import { ClientsHeaderBar } from './ClientsHeaderBar'
 import { ClientsTable, type ClientSortDir, type ClientSortKey } from './ClientsTable'
 import { clientPageShellClass } from './clientsFormUi'
 import { buildClientsAssistantContext } from './buildClientsAssistantContext'
+import {
+  buildClientRowPayload,
+  CLIENT_OPTIONAL_COLUMNS,
+  clientSitesAndContactsForSave,
+  missingColumnError,
+  missingColumnName,
+  SIMILAR_CLIENT_WARNING_THRESHOLD,
+} from './clientSavePayload'
 import { isValidGstin, isValidIndianMobile, isValidPan } from '@/lib/indiaValidators'
 import { limsDialogClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
@@ -58,7 +67,6 @@ import {
   isValidLatitude,
   isValidLongitude,
   PAYMENT_TERMS,
-  toContinuousText,
   toProperTitleCase,
   type BalanceType,
   type ClientForm as ClientFormType,
@@ -67,11 +75,11 @@ import {
   type CompanyType,
   type PaymentTerm,
 } from './types'
+import { todayLocalIso } from '@/lib/localDate'
 
 const normalizeText = (value: string) => value.trim()
 
 const VIEW_ONLY_MSG = 'View-only access — ask the Laboratory Director for Edit access.'
-const SIMILAR_CLIENT_WARNING_THRESHOLD = 0.5
 
 type MasterDeleteResult = {
   deleted?: string[] | null
@@ -223,21 +231,6 @@ const CLIENT_FORM_COLUMNS_FLAGS = `${CLIENT_FORM_COLUMNS}, women_entrepreneur, s
 const CLIENT_FORM_COLUMNS_EXTRA = `${CLIENT_FORM_COLUMNS_GEO}, women_entrepreneur, startup_status`
 const CLIENT_FORM_COLUMNS_MANAK = `${CLIENT_FORM_COLUMNS_EXTRA}, manak_user_id, manak_password_set`
 
-function missingColumnName(error: { message?: string } | null) {
-  const message = error?.message ?? ''
-  return (
-    message.match(/'([a-z0-9_]+)' column/i)?.[1]
-    ?? message.match(/column (?:[a-z0-9_]+\.)?([a-z0-9_]+) does not exist/i)?.[1]
-    ?? message.match(/column "([a-z0-9_]+)"/i)?.[1]
-    ?? null
-  )
-}
-
-function missingColumnError(error: { code?: string; message?: string } | null) {
-  if (!error) return false
-  return error.code === '42703' || error.code === 'PGRST204' || /does not exist|schema cache/i.test(error.message ?? '')
-}
-
 async function loadClientForForm(id: string): Promise<ClientRow> {
   const selects = [CLIENT_FORM_COLUMNS_MANAK, CLIENT_FORM_COLUMNS_EXTRA, CLIENT_FORM_COLUMNS_FLAGS, CLIENT_FORM_COLUMNS_GEO, CLIENT_FORM_COLUMNS, CLIENT_FORM_COLUMNS_LEGACY]
   let lastError: { message?: string } | null = null
@@ -320,8 +313,8 @@ function rowToClientForm(row: ClientRow): ClientFormType {
     companyType: row.company_type,
     companyScale: row.company_scale,
     companyName: row.company_name ?? '',
-    contactPersonName: row.contact_person_name ?? '',
-    ceoName: String((row as { ceo_name?: string | null }).ceo_name ?? ''),
+    contactPersonName: row.contact_person_name || String((row as { ceo_name?: string | null }).ceo_name ?? ''),
+    ceoName: String((row as { ceo_name?: string | null }).ceo_name || row.contact_person_name || ''),
     countryCode: row.country_code ?? '+91',
     mobile: row.mobile ?? '',
     email: row.email ?? '',
@@ -366,6 +359,7 @@ function rowToClientForm(row: ClientRow): ClientFormType {
 
 export default function ClientsMasterPage() {
   const { editId, setEdit } = useMasterUiSearchState()
+  const [confirm, confirmDialog] = useConfirmDialog()
   const [saveLoading, setSaveLoading] = useState(false)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const canEdit = useCanEditCurrentModule()
@@ -1099,51 +1093,7 @@ export default function ClientsMasterPage() {
         setDuplicates([])
         setAllowDuplicateSave(false)
         allowDuplicateRef.current = false
-        const payload = {
-          // Production DB still has legacy NOT NULL `name` alongside `company_name`.
-          name: companyName,
-          gst_number: form.gstNumber.trim().toUpperCase() || null,
-          company_type: form.companyType,
-          company_scale: form.companyScale,
-          company_name: companyName,
-          contact_person_name: form.contactPersonName.trim() || null,
-          country_code: form.countryCode || null,
-          mobile: form.mobile.trim() || null,
-          email: form.email.trim() || null,
-          address: toContinuousText(toProperTitleCase(form.address)) || null,
-          pin_code: form.pinCode.trim() || null,
-          city: form.city.trim() || null,
-          district: form.district.trim() || null,
-          state: form.state || null,
-          country: form.country || null,
-          opening_balance: form.openingBalance ? Number(form.openingBalance) : 0,
-          balance_type: form.balanceType,
-          payment_term: form.paymentTerm,
-          longitude: form.longitude.trim() || null,
-          latitude: form.latitude.trim() || null,
-          manak_user_id: form.manakUserId.trim() || null,
-          remark: form.remark.trim() || null,
-          pan: form.pan.trim().toUpperCase() || null,
-          cin: form.cin.trim() || null,
-          llpin: form.llpin.trim() || null,
-          udyam_no: form.udyamNo.trim() || null,
-          msme_category: form.msmeCategory.trim() || null,
-          udyam_date: form.udyamDate || null,
-          constitution: form.constitution.trim() || null,
-          landline: form.landline.trim() || null,
-          ceo_name: form.ceoName.trim() || null,
-          sector: form.sector || null,
-          is_startup: form.startupStatus.trim().toLowerCase() === 'yes',
-          startup_status: form.startupStatus.trim() || 'No',
-          startup_dpiit_no: form.startupDpiitNo.trim() || null,
-          is_women_entrepreneur: form.womenEntrepreneur.trim().toLowerCase() === 'yes',
-          women_entrepreneur: form.womenEntrepreneur.trim() || 'No',
-          gst_registration_type: form.gstRegistrationType.trim() || null,
-          gst_state_code: form.gstStateCode.trim() || null,
-          client_status: form.clientStatus,
-          lead_source: form.leadSource.trim() || null,
-          referred_by: form.referredBy.trim() || null,
-        }
+        const payload = buildClientRowPayload(form)
 
         // Prefer insert/update over upsert — avoids 42P10 when the unique index
         // on company_name is missing on some environments.
@@ -1163,14 +1113,7 @@ export default function ClientsMasterPage() {
         let savedId: string | null = null
         // Coordinates are now part of the required client schema. Never retry a
         // save without them, or the form can close while silently losing values.
-        const optionalColumns = [
-          'women_entrepreneur',
-          'startup_status',
-          'manak_user_id',
-          'city',
-          'landline',
-          'ceo_name',
-        ]
+        const optionalColumns = CLIENT_OPTIONAL_COLUMNS
         const row: Record<string, unknown> = { ...payload }
         for (let attempt = 0; attempt < optionalColumns.length + 1; attempt += 1) {
           try {
@@ -1184,47 +1127,23 @@ export default function ClientsMasterPage() {
           }
         }
         if (savedId) {
-          const sites = (form.sites.length > 0 ? form.sites : emptyClientSites()).map((site, index) => {
-            const primaryOffice = site.siteRole === 'Registered Office' && (site.isPrimary || index === 0)
-            if (!primaryOffice) {
-              if (site.siteRole !== 'Factory') return { ...site, isPrimary: false }
-              // A factory that follows the office, or a new factory site, takes the office district / state / PIN.
-              const followOffice = form.factorySameAsOffice !== false || !site.id
-              return {
-                ...site,
-                isPrimary: false,
-                address: form.factorySameAsOffice !== false ? form.address : site.address,
-                district: followOffice ? form.district : site.district,
-                state: followOffice ? form.state : site.state,
-                pinCode: form.factorySameAsOffice !== false ? form.pinCode : site.pinCode,
-                country: form.factorySameAsOffice !== false ? '' : site.country,
-              }
+          const { sites, contacts } = clientSitesAndContactsForSave(form)
+          try {
+            await saveClientSites(savedId, sites)
+            await saveClientContacts(savedId, contacts)
+            if (form.clearManakPassword) await setClientPortalPassword(savedId, null)
+            else if (form.manakPassword.trim()) await setClientPortalPassword(savedId, form.manakPassword)
+          } catch (childErr) {
+            // The client row exists now. Keep the form open on it as an edit, so the next Save updates
+            // it instead of failing with "firm name already taken".
+            if (!editingId) {
+              hydratedEditRef.current = savedId
+              originalCompanyNameRef.current = { id: savedId, name: form.companyName }
+              setEdit(savedId)
+              void loadClients()
             }
-            return {
-              ...site,
-              isPrimary: true,
-              address: form.address,
-              district: form.district,
-              state: form.state,
-              pinCode: form.pinCode,
-              gstNumber: form.gstNumber,
-            }
-          })
-          const contacts = (form.contacts.length > 0 ? form.contacts : emptyClientContacts()).map((contact, index) => {
-            if (!(contact.isPrimary || index === 0)) return { ...contact, isPrimary: false }
-            return {
-              ...contact,
-              isPrimary: true,
-              contactRole: contact.contactRole === 'Other' ? 'Primary' as const : contact.contactRole,
-              name: form.contactPersonName,
-              mobile: form.mobile,
-              email: form.email,
-            }
-          })
-          await saveClientSites(savedId, sites)
-          await saveClientContacts(savedId, contacts)
-          if (form.clearManakPassword) await setClientPortalPassword(savedId, null)
-          else if (form.manakPassword.trim()) await setClientPortalPassword(savedId, form.manakPassword)
+            throw childErr
+          }
         }
         invalidateClientsCache()
         void loadClientAddressDirectory().then(setAddressDirectory).catch(() => {})
@@ -1453,7 +1372,7 @@ export default function ClientsMasterPage() {
         setSaveMessage('Select at least one client to archive.')
         return
       }
-      const ok = window.confirm(`Archive ${selectedRows.length} selected client(s)?`)
+      const ok = await confirm(`Archive ${selectedRows.length} Selected Client(s)?`, { title: 'Archive Clients', confirmLabel: 'Archive', destructive: false })
       if (!ok) return
       setSaveMessage(null)
       setSaveLoading(true)
@@ -1523,8 +1442,9 @@ export default function ClientsMasterPage() {
         setSaveMessage('Select at least one client to delete.')
         return
       }
-      const ok = window.confirm(
-        `Permanently delete ${selectedRows.length} record(s)? Records still used elsewhere will be skipped. This cannot be undone.`,
+      const ok = await confirm(
+        `Permanently Delete ${selectedRows.length} Record(s)? Records Still Used Elsewhere Will Be Skipped. This Cannot Be Undone.`,
+        { title: 'Delete Clients', confirmLabel: 'Delete', destructive: true },
       )
       if (!ok) return
       setSaveMessage(null)
@@ -1606,7 +1526,7 @@ export default function ClientsMasterPage() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `clients-export-${new Date().toISOString().slice(0, 10)}.csv`
+      a.download = `clients-export-${todayLocalIso()}.csv`
       a.click()
       URL.revokeObjectURL(url)
       const exportNote = `Exported this page (${exportRows.length} of ${total}).`
@@ -1779,6 +1699,7 @@ export default function ClientsMasterPage() {
         'flex h-full min-h-0 flex-col overflow-hidden !space-y-0 gap-2 sm:gap-3 md:gap-3',
       )}
     >
+      {confirmDialog}
       <div className="shrink-0">
         <ClientsHeaderBar
           search={search}
@@ -1800,8 +1721,12 @@ export default function ClientsMasterPage() {
           persistOnFocusLoss
           aria-describedby={undefined}
           onEscapeKeyDown={(event) => {
-            // Esc used to close the form and lose everything typed; ask first.
-            if (form.companyName.trim() && !window.confirm('Close this client form? Changes not saved will be lost.')) event.preventDefault()
+            // Esc used to close the form and lose everything typed; ask first (in-app, then close on Yes).
+            if (!form.companyName.trim()) return
+            event.preventDefault()
+            void confirm('Close This Client Form? Changes Not Saved Will Be Lost.', { title: 'Close Form', confirmLabel: 'Close', destructive: false }).then((ok) => {
+              if (ok) handleFormOpenChange(false)
+            })
           }}
           className={cn(
             '!flex z-50 h-[100dvh] max-h-[100dvh] translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 bg-white p-0 shadow-none sm:rounded-none',

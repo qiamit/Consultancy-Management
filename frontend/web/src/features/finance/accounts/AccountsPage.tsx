@@ -78,7 +78,7 @@ export default function AccountsPage() {
 
   return (
     <BookChrome title="Chart of Accounts" hint="Sale and purchase documents stay in their own books. These accounts are for the manual journal.">
-      <div className={`${limsPanelClass} space-y-3`}>
+      <div className={`${limsPanelClass} space-y-3 p-3 sm:p-4`}>
         {message ? <p className="text-sm text-stone-700">{message}</p> : null}
         {rows.length === 0 ? <p className="text-sm text-stone-600">No Accounts Yet.</p> : (
           <div className="overflow-x-auto">

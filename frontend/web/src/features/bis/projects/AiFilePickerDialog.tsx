@@ -135,7 +135,7 @@ Choose at most 10 files, best match first. Return { "picks": [] } when nothing m
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent layer="top" aria-describedby={undefined} className={cn(limsDialogClass, 'flex max-h-[85vh] w-[min(56rem,calc(100vw_-_var(--app-dialog-overlay-left,0px)_-_1.5rem))] max-w-4xl flex-col p-0')}>
+      <DialogContent layer="top" aria-describedby={undefined} className={cn(limsDialogClass, 'flex max-h-[85dvh] w-[min(56rem,calc(100vw_-_var(--app-dialog-overlay-left,0px)_-_1.5rem))] max-w-4xl flex-col p-0')}>
         <DialogHeader className="bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 py-2.5 pl-4 pr-12 text-left">
           <DialogTitle className="flex items-center gap-2 text-base font-semibold tracking-tight text-white">
             <Sparkles size={16} className="text-amber-300" aria-hidden /> Find Files with AI — {title}

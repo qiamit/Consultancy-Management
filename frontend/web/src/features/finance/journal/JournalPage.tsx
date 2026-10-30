@@ -19,18 +19,20 @@ import {
   type AccountRow,
   type JournalRow,
 } from '../books/booksApi'
+import { todayLocalIso } from '@/lib/localDate'
 
 export default function JournalPage() {
   const [accounts, setAccounts] = useState<AccountRow[]>([])
   const [rows, setRows] = useState<JournalRow[]>([])
   const [open, setOpen] = useState(false)
   const [number, setNumber] = useState('')
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [date, setDate] = useState(() => todayLocalIso())
   const [name, setName] = useState('')
   const [debitAccount, setDebitAccount] = useState('')
   const [creditAccount, setCreditAccount] = useState('')
   const [amount, setAmount] = useState('')
   const [message, setMessage] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
 
   const load = () => {
     void Promise.all([listAccounts(), listJournals()])
@@ -48,7 +50,7 @@ export default function JournalPage() {
   const start = () => {
     setName('')
     setAmount('')
-    setDate(new Date().toISOString().slice(0, 10))
+    setDate(todayLocalIso())
     setDebitAccount(accounts[0]?.id ?? '')
     setCreditAccount(accounts[1]?.id ?? accounts[0]?.id ?? '')
     setOpen(true)
@@ -56,11 +58,14 @@ export default function JournalPage() {
   }
 
   const save = () => {
-    const value = Number(amount)
-    if (!debitAccount || !creditAccount || debitAccount === creditAccount || !Number.isFinite(value) || value <= 0) {
+    if (saving) return
+    // Accept Indian grouping ("1,25,000").
+    const value = Number(amount.replace(/[,\s₹]/g, ''))
+    if (!debitAccount || !creditAccount || debitAccount === creditAccount || !amount.trim() || !Number.isFinite(value) || value <= 0) {
       setMessage('Choose two different accounts and enter an amount.')
       return
     }
+    setSaving(true)
     void saveJournal({
       number,
       date,
@@ -76,11 +81,12 @@ export default function JournalPage() {
         load()
       })
       .catch((err: unknown) => setMessage(err instanceof Error ? err.message : 'Save failed'))
+      .finally(() => setSaving(false))
   }
 
   return (
     <BookChrome title="Manual Journal" hint="A journal is saved only when debit equals credit. It is for adjustments.">
-      <div className={`${limsPanelClass} space-y-3`}>
+      <div className={`${limsPanelClass} space-y-3 p-3 sm:p-4`}>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <Button type="button" className="min-h-10" onClick={start}>Add New Journal</Button>
           {message ? <p className="text-sm text-stone-700">{message}</p> : null}
@@ -131,7 +137,7 @@ export default function JournalPage() {
               <Input id="journal-amount" className="min-h-10" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
             </div>
             <div className="flex items-end gap-2">
-              <Button type="button" className="min-h-10" onClick={save}>Save Journal</Button>
+              <Button type="button" className="min-h-10" disabled={saving} onClick={save}>Save Journal</Button>
               <Button type="button" variant="outline" className="min-h-10" onClick={() => setOpen(false)}>Close</Button>
             </div>
           </div>

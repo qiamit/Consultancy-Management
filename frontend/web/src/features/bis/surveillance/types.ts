@@ -24,7 +24,7 @@ export type SurveillanceRow = {
     section_no?: string | null
     standard_prefix?: string | null
   } | null
-  bis_project: { title: string | null; license_number: string | null } | null
+  bis_project: { title: string | null; license_number: string | null; cm_l_digits?: string | null } | null
 }
 
 export type SurveillanceForm = ClientIsLicenseValue & {

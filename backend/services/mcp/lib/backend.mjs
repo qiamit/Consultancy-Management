@@ -87,6 +87,33 @@ export async function gotruePassword(email, password) {
   return data
 }
 
+/** The user's verified authenticator (TOTP) factor id from a GoTrue session response, or ''. */
+export function verifiedTotpFactorId(gotrueSession) {
+  const factors = Array.isArray(gotrueSession?.user?.factors) ? gotrueSession.user.factors : []
+  const factor = factors.find((f) => f?.factor_type === 'totp' && f?.status === 'verified')
+  return factor ? String(factor.id || '') : ''
+}
+
+/**
+ * Two-Step Login: challenge + verify the 6-digit code on a password session. Returns the upgraded
+ * (aal2) GoTrue session; its refresh token keeps aal2.
+ */
+export async function gotrueVerifyTotp(accessToken, factorId, code) {
+  const headers = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${accessToken}`,
+    ...(config.anonKey ? { apikey: config.anonKey } : {}),
+  }
+  const factorPath = `${config.authUrl}/factors/${encodeURIComponent(factorId)}`
+  const { data: challenge } = await call(`${factorPath}/challenge`, { method: 'POST', headers, body: '{}' }, 'Auth')
+  const { data } = await call(
+    `${factorPath}/verify`,
+    { method: 'POST', headers, body: JSON.stringify({ challenge_id: String(challenge?.id || ''), code }) },
+    'Auth',
+  )
+  return data
+}
+
 export async function gotrueRefresh(refreshToken) {
   const { data } = await call(
     `${config.authUrl}/token?grant_type=refresh_token`,

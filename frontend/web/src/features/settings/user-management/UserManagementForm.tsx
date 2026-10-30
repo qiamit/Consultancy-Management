@@ -39,9 +39,8 @@ import { cn } from '@/lib/utils'
 import type { AccessRole, UserAccount, UserForm } from './types'
 import { emptyUserForm } from './types'
 
-const sidebarCenteredOverlayClass = 'lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto'
 const sidebarCenteredDialogPositionClass =
-  'lg:left-[calc(268px+(100vw-268px)/2)] md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2'
+  'md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2'
 
 type UserManagementFormProps = {
   mode: 'create' | 'edit' | 'delete'
@@ -508,7 +507,6 @@ export function UserManagementForm(props: UserManagementFormProps) {
       <LabManageDialogContent
         open={open}
         layer="nested"
-        overlayClassName={sidebarCenteredOverlayClass}
         className={cn('max-w-md', sidebarCenteredDialogPositionClass)}
         title={title}
         addLabel={addLabel}
@@ -531,7 +529,6 @@ export function UserManagementForm(props: UserManagementFormProps) {
     return (
       <Dialog open={props.open} onOpenChange={props.onOpenChange}>
         <DialogContent
-          overlayClassName={sidebarCenteredOverlayClass}
           className={cn(limsDialogClass, 'max-w-md', sidebarCenteredDialogPositionClass)}
           aria-describedby={undefined}
         >
@@ -596,10 +593,9 @@ export function UserManagementForm(props: UserManagementFormProps) {
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
       <DialogContent
         persistOnFocusLoss
-        overlayClassName={sidebarCenteredOverlayClass}
         className={cn(
           limsDialogClass,
-          'max-h-[92vh] max-w-2xl',
+          'max-h-[92dvh] max-w-2xl',
           sidebarCenteredDialogPositionClass,
         )}
         aria-describedby={undefined}
@@ -616,7 +612,7 @@ export function UserManagementForm(props: UserManagementFormProps) {
 
         <div
           className={cn(
-            'max-h-[min(62vh,520px)] space-y-7 overflow-y-auto bg-gradient-to-b from-stone-100/80 to-white px-4 py-4 sm:px-6 sm:py-5',
+            'max-h-[min(62dvh,520px)] space-y-7 overflow-y-auto bg-gradient-to-b from-stone-100/80 to-white px-4 py-4 sm:px-6 sm:py-5',
             limsRegistryFormClass,
           )}
         >

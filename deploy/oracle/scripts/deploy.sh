@@ -28,7 +28,7 @@ docker run --rm \
   -e VITE_SUPABASE_URL="https://$API_DOMAIN" \
   -e VITE_SUPABASE_ANON_KEY="$ANON_KEY" \
   -e VITE_PDF_SERVICE_URL="https://$PDF_DOMAIN/pdf" \
-  node:22-bookworm-slim sh -c "npm ci --no-audit --no-fund --loglevel=error && npx vite build --outDir /web/dist-oracle --emptyOutDir"
+  node:22.23-bookworm-slim sh -c "npm ci --no-audit --no-fund --loglevel=error && npx vite build --outDir /web/dist-oracle --emptyOutDir"
 # Swap the served folder in one step so visitors never see a half-copied build.
 rm -rf "$DATA_DIR/web.next" && cp -a "$APP/frontend/web/dist-oracle" "$DATA_DIR/web.next"
 rm -rf "$DATA_DIR/web.prev" && { [ -d "$DATA_DIR/web" ] && mv "$DATA_DIR/web" "$DATA_DIR/web.prev" || true; }
@@ -44,7 +44,8 @@ compose restart caddy >/dev/null
 
 echo "== Database migrations"
 if compose exec -T db psql -U supabase_admin -d postgres -tAc "select to_regclass('public.app_schema_migrations') is not null" | grep -q t; then
-  (cd "$APP" && npm ci --no-audit --no-fund --loglevel=error >/dev/null)
+  # Only pg is needed to run migrations; --ignore-scripts keeps package install scripts off the server.
+  (cd "$APP" && npm ci --ignore-scripts --no-audit --no-fund --loglevel=error >/dev/null)
   DATABASE_URL="postgres://supabase_admin:${POSTGRES_PASSWORD}@127.0.0.1:5432/postgres" node "$APP/backend/scripts/apply-migrations.mjs"
 else
   echo "Skipped: the database has not been restored from Railway yet (scripts/migrate-db.sh)."

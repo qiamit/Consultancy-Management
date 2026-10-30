@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { limsDarkBarGlowStyle, limsDialogClass, limsPageShellClass } from '@/lib/limsThemeUi'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
+import { limsDarkBarGlowStyle, limsDialogClass, limsPageShellClass, limsDialogWidthCapClass } from '@/lib/limsThemeUi'
 import { useAuth } from '@/hooks/useAuth'
 import { canDeleteSampleHandlingRecords } from '@/lib/isLaboratoryDirector'
 import {
@@ -98,6 +99,7 @@ function escapeHtml(s: string) {
 
 export default function TestReportPreparationMasterPage() {
   const { user, profileName, departmentName, role } = useAuth()
+  const [confirm, confirmDialog] = useConfirmDialog()
   const showDelete = canDeleteSampleHandlingRecords(role)
   const [rows, setRows] = useState<ListRow[]>([])
   const [loading, setLoading] = useState(false)
@@ -149,6 +151,8 @@ export default function TestReportPreparationMasterPage() {
   const [srfViewOpen, setSrfViewOpen] = useState(false)
   const [srfViewRow, setSrfViewRow] = useState<ListRow | null>(null)
   const loadListGenerationRef = useRef(0)
+  /** Bumped per openPrepare: late answers for a previously opened SRF must not land on this one. */
+  const prepareGenerationRef = useRef(0)
 
   const fullReportNumber = useMemo(() => toCanonicalReportNumber(reportNumber), [reportNumber])
 
@@ -365,16 +369,27 @@ export default function TestReportPreparationMasterPage() {
     })
     setPrepareResultsLoading(true)
     setCoverLoading(true)
+    // Open SRF A, close, open SRF B quickly: A's late answers used to overwrite B's result rows,
+    // report number and ULR (and Save Draft then wrote A's number onto B).
+    const generation = ++prepareGenerationRef.current
+    const current = () => prepareGenerationRef.current === generation
     void fetchReportResultRowsForSample(r.id)
-      .then(setPrepareResultRows)
-      .catch(() => setPrepareResultRows([]))
-      .finally(() => setPrepareResultsLoading(false))
+      .then((resultRows) => {
+        if (current()) setPrepareResultRows(resultRows)
+      })
+      .catch(() => {
+        if (current()) setPrepareResultRows([])
+      })
+      .finally(() => {
+        if (current()) setPrepareResultsLoading(false)
+      })
     setUlrPrefixLoading(true)
     setReportNumberLoading(true)
 
     void (async () => {
       try {
         const [trPrefix, ulrPref] = await Promise.all([fetchTestReportPrefix(), fetchUlrPrefix()])
+        if (!current()) return
         setTestReportPrefix(trPrefix)
         setUlrPrefix(ulrPref)
 
@@ -383,6 +398,7 @@ export default function TestReportPreparationMasterPage() {
           setReportNumber(storedReport)
         } else {
           const { prefix, number } = await fetchNextTestReportNumber(r.id)
+          if (!current()) return
           setTestReportPrefix(prefix)
           setReportNumber(number)
         }
@@ -392,11 +408,14 @@ export default function TestReportPreparationMasterPage() {
           setNablUlrNumber(stored)
         } else {
           const { ulr } = await fetchNextNablUlrNumber(r.id)
+          if (!current()) return
           setNablUlrNumber(ulr)
         }
       } finally {
-        setUlrPrefixLoading(false)
-        setReportNumberLoading(false)
+        if (current()) {
+          setUlrPrefixLoading(false)
+          setReportNumberLoading(false)
+        }
       }
     })()
   }
@@ -521,9 +540,9 @@ export default function TestReportPreparationMasterPage() {
     }
   }
 
-  const handleDeleteSelected = () => {
+  const handleDeleteSelected = async () => {
     const ids = selectedRows.map((r) => r.id)
-    if (!confirmDestructiveDelete(ids.length, 'SRF')) return
+    if (!(await confirmDestructiveDelete(ids.length, 'SRF', confirm))) return
     void (async () => {
       setLoading(true)
       setSaveMessage(null)
@@ -608,9 +627,10 @@ export default function TestReportPreparationMasterPage() {
     if (scopes.length === 0) return
     const scopeLabel = scopes.map((s) => (s === 'nabl' ? 'NABL (A)' : 'Non-NABL (B)')).join(' & ')
     if (
-      !window.confirm(
-        `Issue ${scopeLabel} test report(s) for this SRF and move to Issued Test Report?`,
-      )
+      !(await confirm(
+        `Issue ${scopeLabel} Test Report(s) for This SRF and Move to Issued Test Report?`,
+        { title: 'Issue Test Report', confirmLabel: 'Issue', destructive: false },
+      ))
     ) {
       return
     }
@@ -643,17 +663,9 @@ export default function TestReportPreparationMasterPage() {
       }
       let { error: uErr } = await supabase.from('samples').update(issuePayload).eq('id', active.id)
       if (uErr && isSupabaseMissingColumnError(uErr, 'test_report_nabl_required')) {
-        const { test_report_nabl_required: _n, ...withoutNabl } = partBUpdate
-        const retry: Record<string, string | boolean | null> = {
-          stage: issuePayload.stage,
-          test_report_number: issuePayload.test_report_number,
-          test_report_draft_notes: issuePayload.test_report_draft_notes,
-          test_report_nabl_ulr_number: issuePayload.test_report_nabl_ulr_number,
-          test_report_issued_at: issuePayload.test_report_issued_at,
-          test_report_nabl_issued_at: issuePayload.test_report_nabl_issued_at,
-          test_report_non_nabl_issued_at: issuePayload.test_report_non_nabl_issued_at,
-          ...withoutNabl,
-        }
+        // Same payload minus the one missing column (the old retry also dropped the sample
+        // retention dates and letterhead selection).
+        const { test_report_nabl_required: _n, ...retry } = issuePayload
         ;({ error: uErr } = await supabase.from('samples').update(retry).eq('id', active.id))
       }
       if (uErr) throw uErr
@@ -739,6 +751,7 @@ export default function TestReportPreparationMasterPage() {
 
   return (
     <div className={limsPageShellClass}>
+      {confirmDialog}
       <TestReportPreparationHeaderBar
         search={search}
         onSearchChange={setSearch}
@@ -908,11 +921,11 @@ export default function TestReportPreparationMasterPage() {
         <DialogContent
           persistOnFocusLoss
           aria-describedby={undefined}
-          overlayClassName="lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto"
           className={cn(
             limsDialogClass,
-            'flex max-h-[90vh] w-[min(96vw,72rem)] max-w-6xl flex-col',
-            'lg:left-[calc(268px+(100vw-268px)/2)] md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2',
+            'flex max-h-[90dvh] flex-col',
+            limsDialogWidthCapClass['72rem'],
+            'md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2',
           )}
         >
           <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white sm:px-5 sm:py-3">

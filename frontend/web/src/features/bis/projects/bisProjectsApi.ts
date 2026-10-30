@@ -1,4 +1,15 @@
 import { fetchProjectIdsWithOpenNotices } from './bisOpenNotices'
+import { fetchBisModulePayload, saveBisModulePayload } from './bisModuleDataApi'
+import {
+  archiveInclusionDetails,
+  INCLUSION_ADDITION_KEY,
+  INCLUSION_COMPONENTS_KIND,
+  INCLUSION_DETAILS_KIND,
+  isInclusionAddition,
+  mergeInclusionScopeIntoLicence,
+  newScopeVarieties,
+  syncInclusionVarietyRowsFromNewScope,
+} from './inclusionModel'
 import { searchClients } from '@/lib/clientsApi'
 import { supabase } from '@/lib/supabaseClient'
 import { formatIsCodeLabel } from '@/features/masters/is-codes/formatIsCodeLabel'
@@ -12,6 +23,9 @@ import {
   DEFAULT_CASE_REFERRED_BY,
   DEFAULT_PROJECT_KIND,
   dueSoonEndIsoDate,
+  INCLUSION_KINDS,
+  isInclusionKind,
+  LICENCE_KINDS,
   RENEWAL_DEFERRED_DAYS,
   sanitizeBisLicenseScopeNotes,
   todayIsoDate,
@@ -133,7 +147,7 @@ export type BisLicenseStatusFilter =
   | 'no_validity'
 
 /** Sortable table columns (Action excluded). */
-export type BisProjectSortKey = 'client' | 'isCode' | 'cmL' | 'validity' | 'billing'
+export type BisProjectSortKey = 'client' | 'isCode' | 'cmL' | 'validity' | 'billing' | 'updated'
 export type BisProjectSortDir = 'asc' | 'desc'
 
 export type FetchBisProjectsParams = {
@@ -269,18 +283,22 @@ export async function fetchBisProjectsPage(
   const ascending = sortDir === 'asc'
   // Null validity dates last when sorting by days remaining (asc or desc).
   const nullsFirst = false
+  // Sort the list itself by the embedded (to-one) column; foreignTable would only order inside the embed.
   if (sortKey === 'client') {
     query = query
-      .order('company_name', { ascending, foreignTable: 'client', nullsFirst })
+      .order('client(company_name)', { ascending, nullsFirst })
       .order('id', { ascending: true })
   } else if (sortKey === 'isCode') {
     query = query
-      .order('is_number', { ascending, foreignTable: 'is_code', nullsFirst })
+      .order('is_code(is_number)', { ascending, nullsFirst })
       .order('id', { ascending: true })
   } else if (sortKey === 'cmL') {
     query = query.order('cm_l_digits', { ascending, nullsFirst }).order('id', { ascending: true })
   } else if (sortKey === 'billing') {
     query = query.order('billing_amount', { ascending, nullsFirst }).order('id', { ascending: true })
+  } else if (sortKey === 'updated') {
+    // Last edited first (module data and file changes also bump updated_at).
+    query = query.order('updated_at', { ascending, nullsFirst }).order('id', { ascending: true })
   } else {
     // validity — least days remaining first when ascending
     query = query
@@ -314,7 +332,7 @@ export async function fetchBisProjectsPage(
         .from('bis_projects')
         .select('cm_l_digits, license_validity_date')
         .in('cm_l_digits', cmLDigits)
-        .in('project_kind', ['Licence', 'License', 'licence', 'license'])
+        .in('project_kind', LICENCE_KINDS)
       if (licenseError) throw licenseError
       const validityByCmL = new Map<string, string>()
       for (const license of licenses ?? []) {
@@ -455,7 +473,7 @@ export async function searchClientLicensedIsCodeOptions(
     .from('bis_projects')
     .select('is_code_id')
     .eq('client_id', id)
-    .in('project_kind', ['Licence', 'License', 'licence', 'license'])
+    .in('project_kind', LICENCE_KINDS)
     .not('is_code_id', 'is', null)
     .limit(LOOKUP_ID_LIMIT)
   if (error) throw error
@@ -501,7 +519,7 @@ export async function findClientCmLForIsCode(
     .select(SELECT_WITH_JOINS)
     .eq('client_id', client)
     .eq('is_code_id', code)
-    .in('project_kind', ['Licence', 'License', 'licence', 'license'])
+    .in('project_kind', LICENCE_KINDS)
     .not('cm_l_digits', 'is', null)
     .order('updated_at', { ascending: false })
     .limit(LOOKUP_OPTION_LIMIT)
@@ -540,7 +558,7 @@ export async function fetchExistingLicenseScopesByCmL(
     .from('bis_projects')
     .select('id, cm_l_digits, notes, client:clients(company_name), is_code:is_codes(is_number, title, revision_year, part_no, section_no, standard_prefix)')
     .eq('cm_l_digits', digits)
-    .in('project_kind', ['Licence', 'License', 'licence', 'license'])
+    .in('project_kind', LICENCE_KINDS)
     .order('updated_at', { ascending: false })
     .limit(20)
   if (error) throw error
@@ -606,12 +624,19 @@ export async function saveBisProject(
     licence_status_id: form.licenceStatusId || null,
     is_code_id: form.isCodeId || null,
     project_kind: projectKind,
-    title: form.title.trim() || buildBisProjectTitle(form),
+    // The title is not editable: rebuild it so a corrected client, IS Code or CM/L shows up in the
+    // renewal picker (it used to stay as created). Keep the stored one if the labels did not load.
+    title:
+      form.clientLabel.trim() && form.isCodeLabel.trim()
+        ? buildBisProjectTitle(form)
+        : form.title.trim() || buildBisProjectTitle(form),
     status: form.status || 'in_progress',
     // NOT NULL on production — never send null (overrides DB default).
     application_stage:
       form.applicationStage.trim() || DEFAULT_APPLICATION_STAGE,
     cm_l_digits: form.cmLDigits || null,
+    // Prints prefer license_number; keep it in step with the CM/L typed here.
+    ...(form.cmLDigits ? { license_number: `CM/L-${form.cmLDigits}` } : {}),
     license_validity_date: form.licenseValidityDate || null,
     granted_date: form.grantedDate || null,
     is_qe_managed: form.isQeManaged,
@@ -632,6 +657,8 @@ export async function saveBisProject(
       .from('bis_projects')
       .select('id, client:clients(company_name), is_code:is_codes(is_number)')
       .eq('cm_l_digits', cmLDigits)
+      // Same scope as the unique index: old Inclusion rows may share a licence's CM/L.
+      .not('project_kind', 'in', `(${INCLUSION_KINDS.map((k) => `"${k}"`).join(',')})`)
       .limit(1)
     if (editingId) duplicateQuery = duplicateQuery.neq('id', editingId)
     const { data: duplicates, error: duplicateError } = await duplicateQuery
@@ -650,7 +677,7 @@ export async function saveBisProject(
     }
   }
 
-  if (projectKind.toLowerCase() === 'inclusion') {
+  if (isInclusionKind(projectKind)) {
     const editingProject = editingId
       ? await supabase
           .from('bis_projects')
@@ -672,37 +699,31 @@ export async function saveBisProject(
         .eq('cm_l_digits', cmLDigits)
         .eq('client_id', payload.client_id)
         .eq('is_code_id', payload.is_code_id)
-        .in('project_kind', ['Licence', 'License', 'licence', 'license'])
+        .in('project_kind', LICENCE_KINDS)
         .order('updated_at', { ascending: false })
         .limit(1)
       if (editingId) licenseQuery = licenseQuery.eq('id', editingId)
       const { data: licenseData, error: licenseError } = await licenseQuery
       if (licenseError) throw licenseError
-      const license = (licenseData?.[0] ?? null) as {
-        id?: string
-        project_kind?: string | null
-        notes?: string | null
-      } | null
+      const license = (licenseData?.[0] ?? null) as { id?: string } | null
       if (!license?.id) {
         throw new Error('Select an existing license with this client, IS Code, and CM/L number before saving an Inclusion.')
       }
 
-      const { error } = await supabase
-        .from('bis_projects')
-        .update({
-          ...payload,
-          project_kind: license.project_kind || 'Licence',
-          inclusion_in_progress: !finishInclusion,
-          notes: finishInclusion
-            ? payload.notes
-            : license.notes ?? null,
-          inclusion_scope_draft: finishInclusion
-            ? null
-            : payload.notes,
-        })
-        .eq('id', license.id)
-      if (error) throw error
-      return String(license.id)
+      // The Inclusion form only owns the New Scope; licence fields (validity, billing, QE managed …) are
+      // never written from here, so a half-loaded form cannot blank them.
+      const licenceId = String(license.id)
+      await saveInclusionNewScope(licenceId, payload.notes ?? '')
+      if (finishInclusion) {
+        await completeInclusion(licenceId)
+      } else {
+        const { error } = await supabase
+          .from('bis_projects')
+          .update({ inclusion_in_progress: true, inclusion_scope_draft: null })
+          .eq('id', licenceId)
+        if (error) throw error
+      }
+      return licenceId
     }
   }
 
@@ -721,6 +742,111 @@ export async function saveBisProject(
   }
   if (!id) throw new Error('BIS project was saved but its id was missing.')
   return id
+}
+
+/**
+ * New Scope of the inclusion running on a licence. inclusion-details.newScope is the one store; the
+ * inclusion_scope_draft column is only read for inclusions saved before that, and an old separate
+ * Inclusion row keeps its scope in its own notes.
+ */
+export async function fetchInclusionNewScope(licenceId: string): Promise<string> {
+  const details = await fetchBisModulePayload(licenceId, INCLUSION_DETAILS_KIND)
+  const newScope = typeof details?.newScope === 'string' ? details.newScope : ''
+  if (newScope.trim()) return newScope
+  const { data, error } = await supabase
+    .from('bis_projects')
+    .select('project_kind, notes, inclusion_scope_draft')
+    .eq('id', licenceId)
+    .maybeSingle()
+  if (error) throw error
+  const row = data as { project_kind?: string | null; notes?: string | null; inclusion_scope_draft?: string | null } | null
+  if (row?.inclusion_scope_draft?.trim()) return row.inclusion_scope_draft
+  return isInclusionKind(row?.project_kind) ? String(row?.notes ?? '') : ''
+}
+
+/** Saves the New Scope into inclusion-details (and keeps its Manak variety rows linked). */
+export async function saveInclusionNewScope(licenceId: string, notes: string): Promise<void> {
+  const current = (await fetchBisModulePayload(licenceId, INCLUSION_DETAILS_KIND)) ?? {}
+  const next: Record<string, unknown> = { ...current, newScope: sanitizeBisLicenseScopeNotes(notes).trim() }
+  next.rows = syncInclusionVarietyRowsFromNewScope(next)
+  await saveBisModulePayload(licenceId, INCLUSION_DETAILS_KIND, next)
+}
+
+/**
+ * Inclusion over (completed or cancelled): inclusion-details moves into its history, the per-inclusion
+ * Yes / No choices are cleared, and CMPF-305 / 306 rows "Added for Inclusion" are settled — on completion
+ * they become ordinary licence rows (marker No), on cancel they are taken out (kept in the history entry).
+ */
+async function closeInclusionPayloads(licenceId: string, outcome: 'completed' | 'cancelled'): Promise<void> {
+  const [details, components, machinery, equipment] = await Promise.all([
+    fetchBisModulePayload(licenceId, INCLUSION_DETAILS_KIND),
+    fetchBisModulePayload(licenceId, INCLUSION_COMPONENTS_KIND),
+    fetchBisModulePayload(licenceId, 'cmpf-305'),
+    fetchBisModulePayload(licenceId, 'cmpf-306'),
+  ])
+  const additions: Record<string, unknown[]> = {}
+  const settle = async (kind: 'cmpf-305' | 'cmpf-306', payload: Record<string, unknown> | null) => {
+    const rows = Array.isArray(payload?.rows) ? (payload.rows as Record<string, unknown>[]) : []
+    const added = rows.filter((r) => r && typeof r === 'object' && isInclusionAddition(r))
+    if (!payload || !added.length) return
+    additions[kind] = added
+    const nextRows = outcome === 'completed'
+      ? rows.map((r) => (added.includes(r) ? { ...r, [INCLUSION_ADDITION_KEY]: 'No' } : r))
+      : rows.filter((r) => !added.includes(r))
+    await saveBisModulePayload(licenceId, kind, { ...payload, rows: nextRows })
+  }
+  await settle('cmpf-305', machinery)
+  await settle('cmpf-306', equipment)
+  if (components?.applicable) {
+    await saveBisModulePayload(licenceId, INCLUSION_COMPONENTS_KIND, { ...components, applicable: {} })
+  }
+  const at = new Date().toISOString()
+  await saveBisModulePayload(
+    licenceId,
+    INCLUSION_DETAILS_KIND,
+    archiveInclusionDetails(details, {
+      outcome,
+      [outcome === 'completed' ? 'completedAt' : 'cancelledAt']: at,
+      applicable: components?.applicable ?? null,
+      ...(Object.keys(additions).length ? { cmpfAdditions: additions } : {}),
+    }),
+  )
+}
+
+/**
+ * Complete Inclusion: licence scope = existing scope + the New Scope varieties it does not have yet.
+ * Only notes and the inclusion flags change on the licence row.
+ */
+export async function completeInclusion(licenceId: string): Promise<void> {
+  const [newScope, licence] = await Promise.all([
+    fetchInclusionNewScope(licenceId),
+    supabase.from('bis_projects').select('notes').eq('id', licenceId).maybeSingle(),
+  ])
+  if (licence.error) throw licence.error
+  if (!newScopeVarieties({ newScope }).length) {
+    throw new Error('Add at Least One Variety Under New Scope Before Completing the Inclusion.')
+  }
+  const notes = mergeInclusionScopeIntoLicence((licence.data as { notes?: string | null } | null)?.notes, newScope)
+  const { error } = await supabase
+    .from('bis_projects')
+    .update({ notes: notes.trim() || null, inclusion_in_progress: false, inclusion_scope_draft: null })
+    .eq('id', licenceId)
+  if (error) throw error
+  try {
+    await closeInclusionPayloads(licenceId, 'completed')
+  } catch (err) {
+    throw new Error(`Inclusion Completed and the License Scope Updated, but the Inclusion Details Could Not Be Reset: ${formatBisApiError(err)}`)
+  }
+}
+
+/** Cancel Inclusion: the licence row is kept as it is; only the inclusion work on it is closed. */
+export async function cancelInclusion(licenceId: string): Promise<void> {
+  await closeInclusionPayloads(licenceId, 'cancelled')
+  const { error } = await supabase
+    .from('bis_projects')
+    .update({ inclusion_in_progress: false, inclusion_scope_draft: null })
+    .eq('id', licenceId)
+  if (error) throw error
 }
 
 export async function deleteBisProjects(ids: string[]): Promise<void> {
@@ -743,18 +869,25 @@ export async function saveBisProjectNotes(
 export async function saveBisApplicationDetails(
   projectId: string,
   form: BisApplicationDetailsForm,
+  options: { keepIdentity?: boolean } = {},
 ): Promise<void> {
   const licenseDigits = form.licenseNumberDigits.replace(/\D/g, '').slice(0, 10)
   const applicationNumber = form.applicationNumber.replace(/\D/g, '')
+  // Numbers and dates that identify this application / licence. Import from another project keeps the target's.
+  const identity = options.keepIdentity
+    ? {}
+    : {
+        application_number: applicationNumber || null,
+        application_date: form.applicationDate || null,
+        cm_l_digits: licenseDigits || null,
+        license_number: licenseDigits ? `CM/L-${licenseDigits}` : null,
+        granted_date: form.grantedDate || null,
+        license_validity_date: form.licenseValidityDate || null,
+      }
   const payload = {
     application_process: form.applicationProcess === 'normal' ? 'normal' : 'simplified',
-    application_number: applicationNumber || null,
-    application_date: form.applicationDate || null,
+    ...identity,
     inspection_date: form.inspectionDate || null,
-    cm_l_digits: licenseDigits || null,
-    license_number: licenseDigits ? `CM/L-${licenseDigits}` : null,
-    granted_date: form.grantedDate || null,
-    license_validity_date: form.licenseValidityDate || null,
     branch_name: form.branchName.trim() || null,
     branch_state: form.branchState.trim() || null,
     branch_head_name: form.branchHeadName.trim() || null,

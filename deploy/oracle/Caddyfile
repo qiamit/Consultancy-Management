@@ -1,8 +1,14 @@
 # Oracle server: one Caddy for the web app, the API gateway, MCP and the PDF service.
 # Domains come from deploy/oracle/.env (APP_DOMAIN, API_DOMAIN, MCP_DOMAIN, PDF_DOMAIN); Caddy gets and renews
 # the HTTPS certificates itself. API routes and CORS mirror backend/services/gateway/Caddyfile (Railway).
+# ALLOW_LOCALHOST_ORIGINS (default 1): 0 stops browsers on localhost / 127.0.0.1 from using the API (CORS) and
+# from framing stored files. The owner tests the SPA from http://localhost:5176 against this API, so it is on.
 {
 	email {$ACME_EMAIL}
+}
+
+(hsts) {
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
 }
 
 (strip_upstream_cors) {
@@ -23,9 +29,19 @@
 	@pages not path /assets/*
 	header @pages Cache-Control "no-cache"
 
+	import hsts
 	header {
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "DENY"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+		# Report-only for now (browser console shows what an enforcing policy would block). Built from what the
+		# app loads: API (auth/rest/storage/functions — AI calls go through it too) and PDF service; Wikipedia API
+		# (process flow chart web reference); OSRM routing (location map); Google map tiles mt0-3.google.com and
+		# the Google Maps embed (public home page); pdf.js worker and the service worker are same-origin.
+		# Known reports before enforcing: inline <script> in index.html and in print / preview windows (needs
+		# 'unsafe-inline' or hashes), and new Function in the Equipment Master formula field (needs a rewrite).
+		Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://{$API_DOMAIN} https://*.google.com https://*.gstatic.com https://*.googleapis.com; font-src 'self' data:; connect-src 'self' data: blob: https://{$API_DOMAIN} https://{$PDF_DOMAIN} https://en.wikipedia.org https://router.project-osrm.org https://routing.openstreetmap.de; frame-src 'self' blob: data: https://{$API_DOMAIN} https://maps.google.com https://www.google.com; worker-src 'self' blob:; manifest-src 'self'; media-src 'self' blob: data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 		-Server
 	}
 
@@ -35,8 +51,20 @@
 
 # API gateway: auth / rest / storage / functions.
 {$API_DOMAIN} {
-	@localDev header_regexp Origin ^https?://(localhost|127\.0\.0\.1):(3000|517[3-9]|518[0-5])$
+	import hsts
+
+	# Local Vite origins, unless ALLOW_LOCALHOST_ORIGINS=0.
+	@localDev {
+		header_regexp Origin ^https?://(localhost|127\.0\.0\.1):(3000|517[3-9]|518[0-5])$
+		not vars {env.ALLOW_LOCALHOST_ORIGINS} 0
+	}
 	header @localDev Access-Control-Allow-Origin "{http.request.header.Origin}"
+
+	# Localhost may frame stored files only while localhost origins are allowed.
+	map {env.ALLOW_LOCALHOST_ORIGINS} {local_frame_ancestors} {
+		0 ""
+		default "http://localhost:* http://127.0.0.1:*"
+	}
 
 	@app header Origin https://{$APP_DOMAIN}
 	header @app Access-Control-Allow-Origin "https://{$APP_DOMAIN}"
@@ -54,6 +82,14 @@
 		X-Frame-Options "DENY"
 		Content-Security-Policy "frame-ancestors 'none'"
 		-Server
+	}
+
+	# Stored files (IS Code PDFs, product manuals, legal documents …) open in the app's own PDF viewer (an iframe),
+	# so only these may be framed, and only by the app.
+	@storageFile path /storage/v1/object/sign/* /storage/v1/object/public/* /storage/v1/object/authenticated/*
+	header @storageFile {
+		-X-Frame-Options
+		Content-Security-Policy "frame-ancestors 'self' https://{$APP_DOMAIN} https://www.{$APP_DOMAIN} {local_frame_ancestors}"
 	}
 
 	@preflight method OPTIONS
@@ -115,13 +151,28 @@
 	}
 }
 
-# MCP server (it answers CORS / OAuth itself).
+# MCP server (it answers CORS / OAuth itself). Its OAuth login page must never be framed (clickjacking).
 {$MCP_DOMAIN} {
+	import hsts
+	header {
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "DENY"
+		Content-Security-Policy "frame-ancestors 'none'"
+		-Server
+	}
 	reverse_proxy mcp:8090
 }
 
-# PDF service (it answers CORS itself; large HTML bodies allowed).
+# PDF service (it answers CORS and checks the user's session itself; large HTML bodies allowed).
 {$PDF_DOMAIN} {
+	import hsts
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Content-Security-Policy "frame-ancestors 'none'"
+		-Server
+	}
 	encode zstd gzip
 	reverse_proxy pdf:3847
 }

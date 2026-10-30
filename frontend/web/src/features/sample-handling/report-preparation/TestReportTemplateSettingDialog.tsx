@@ -32,6 +32,7 @@ import {
   limsFieldClass,
   limsPrimaryBtnClass,
   limsRegistryFormClass,
+  limsFullscreenDialogClass,
 } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { REPORT_SCOPE_TITLE, type ReportScopeKind } from './reportScope'
@@ -52,18 +53,17 @@ import type { TestReportCoverDetails } from './fetchTestReportCoverDetails'
 import type { ReportResultRow } from './reportResultRows'
 import type { TestReportPartBDetails } from './testReportPartB'
 
-const dialogOverlayClass = 'lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto'
 
 const dialogShellClass = cn(
   limsDialogClass,
-  'left-0 top-0 flex h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden border-0 p-0',
-  'lg:left-[268px] md:h-[100dvh] lg:w-[calc(100vw-268px)] lg:max-w-[calc(100vw-268px)]',
+  'flex h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden border-0 p-0',
+  limsFullscreenDialogClass,
 )
 
 const nestedShellClass = cn(
   limsDialogClass,
-  'left-0 top-0 flex h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden p-0',
-  'lg:left-[268px] md:h-[100dvh] lg:w-[calc(100vw-268px)] lg:max-w-[calc(100vw-268px)]',
+  'flex h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden p-0',
+  limsFullscreenDialogClass,
 )
 
 const NONE = '__none__'
@@ -280,7 +280,6 @@ export function TestReportTemplateSettingDialog({
         persistOnFocusLoss
         layer="nested"
         aria-describedby={undefined}
-        overlayClassName={dialogOverlayClass}
         className={dialogShellClass}
       >
         <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white sm:px-5 sm:py-3">
@@ -332,7 +331,7 @@ export function TestReportTemplateSettingDialog({
           />
         </div>
 
-        <div className="relative shrink-0 border-t border-stone-700 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-3 sm:px-5">
+        <div className="relative shrink-0 border-t border-stone-700 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5">
           <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={limsDarkBarGlowStyle} />
           <div className="absolute top-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
           <div className="relative flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -404,7 +403,6 @@ export function TestReportTemplateSettingDialog({
             persistOnFocusLoss
             layer="nested"
             aria-describedby={undefined}
-            overlayClassName={dialogOverlayClass}
             className={nestedShellClass}
           >
             <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white">
@@ -596,7 +594,7 @@ export function TestReportTemplateSettingDialog({
 
             <DialogFooter
               className={cn(
-                'shrink-0 border-t border-stone-300 bg-stone-50 px-4 py-3',
+                'shrink-0 border-t border-stone-300 bg-stone-50 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]',
                 activePanel === 'header' ? 'sm:justify-between' : 'sm:justify-end',
               )}
             >

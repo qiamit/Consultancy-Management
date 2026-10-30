@@ -2,7 +2,9 @@
 # Nightly backup on the Oracle server (cron 02:30 IST, installed by server-bootstrap.sh):
 #   - full database dump every night, kept 14 days;
 #   - files (storage) snapshot every Sunday, kept 4 weeks;
-#   - optional copy off the server when BACKUP_RCLONE_REMOTE is set (e.g. Oracle Object Storage or Cloudflare R2).
+#   - off the server when BACKUP_RCLONE_REMOTE is set (an rclone crypt remote over the Oracle Object Storage bucket,
+#     see README): every night's dump (kept 30 days there) and a daily sync of the files — changed or deleted files
+#     move to files-old/<date> (kept 60 days), so a deletion on the server never wipes the off-site copy.
 set -euo pipefail
 
 ORACLE=/opt/qe/app/deploy/oracle
@@ -22,6 +24,10 @@ compose exec -T db pg_dump -U supabase_admin -d postgres -Fc \
   -n public -n private -n auth -n storage > "$DB_DIR/qe-$STAMP.dump.part"
 mv "$DB_DIR/qe-$STAMP.dump.part" "$DB_DIR/qe-$STAMP.dump"
 find "$DB_DIR" -name 'qe-*.dump' -mtime +14 -delete
+# Content-Type / Cache-Control of every stored file live in xattrs, which the off-site file sync cannot carry:
+# keep a list to put back after a restore (cd "$DATA_DIR" && sudo setfattr --restore=<list>).
+(cd "$DATA_DIR" && sudo getfattr -R -d -m '^user\.' storage) | gzip > "$DB_DIR/xattrs-$STAMP.txt.gz"
+find "$DB_DIR" -name 'xattrs-*.txt.gz' -mtime +14 -delete
 
 if [ "$(date +%u)" = "7" ]; then
   echo "[$(date)] files snapshot"
@@ -33,8 +39,18 @@ if [ "$(date +%u)" = "7" ]; then
 fi
 
 if [ -n "${BACKUP_RCLONE_REMOTE:-}" ]; then
-  echo "[$(date)] copy off the server → $BACKUP_RCLONE_REMOTE"
-  rclone copy "$BACKUP_DIR" "$BACKUP_RCLONE_REMOTE" --include 'db/**' --include 'files/**' --max-age 8d
+  REMOTE="${BACKUP_RCLONE_REMOTE%/}"
+  echo "[$(date)] copy off the server → $REMOTE"
+  rclone copy "$DB_DIR" "$REMOTE/db" --include 'qe-*.dump' --include 'xattrs-*.txt.gz' --max-age 3d
+  rclone delete "$REMOTE/db" --min-age 30d
+  # Storage files belong to the container user, so sudo reads them with this user's rclone config.
+  sudo rclone --config "$HOME/.config/rclone/rclone.conf" sync "$DATA_DIR/storage" "$REMOTE/files" \
+    --backup-dir "$REMOTE/files-old/$STAMP" --transfers 4
+  # files-old/<stamp> folders go by their date (a file's own time can be years old).
+  CUTOFF=$(date -d '60 days ago' +%Y-%m-%d)
+  { rclone lsf --dirs-only "$REMOTE/files-old" 2>/dev/null || true; } | while read -r d; do
+    if [[ "${d%%_*}" < "$CUTOFF" ]]; then rclone purge "$REMOTE/files-old/${d%/}"; fi
+  done
 fi
 
 df -h "$BACKUP_DIR" | tail -1

@@ -215,9 +215,14 @@
 
   const onForm = () => Boolean($id("varietyTextArea") && $id("addVarietyButton"));
 
+  /** Digit groups on the page / in a row ("" tokens dropped — "".includes would match any licence). */
+  const digitTokens = (textValue) => norm(textValue).replace(/\D+/g, " ").split(" ").filter(Boolean);
+  const validCml = (cml) => /^\d{10}$/.test(String(cml || ""));
+
   /** Granted Licenses row for this CM/L (the list is a searchable DataTable). */
   async function licenceRow(cml) {
-    const find = () => Array.from(document.querySelectorAll("table tbody tr")).find((tr) => norm(tr.innerText).replace(/\D+/g, " ").split(" ").includes(cml));
+    if (!validCml(cml)) return null;
+    const find = () => Array.from(document.querySelectorAll("table tbody tr")).find((tr) => digitTokens(tr.innerText).includes(cml));
     let row = find();
     if (row) return row;
     const search = Array.from(document.querySelectorAll("input[type=search], .dataTables_filter input")).find(visible);
@@ -243,7 +248,7 @@
       return "Opening Change in Scope (Inclusion) for this licence…";
     }
     if (/ListAllInclusion/i.test(path)) {
-      if (!norm(document.body.innerText).replace(/\D+/g, " ").split(" ").includes(data.cmlNo)) {
+      if (!digitTokens(document.body.innerText).includes(data.cmlNo)) {
         return `This page is not for CM/L ${data.cmlNo} — go back to Granted Licenses.`;
       }
       const apply = Array.from(document.querySelectorAll("a, button")).find((a) => /varietyInclusionForm/i.test(a.getAttribute("href") || "") || /^apply\s*for\s*change\s*in\s*scope/i.test(norm(a.innerText)));
@@ -444,14 +449,17 @@
       return;
     }
     const data = store.inclusionFill;
+    if (!validCml(data.cmlNo)) {
+      renderPanel(data, "This licence has no 10-digit CM/L in Consultancy Pro — nothing done. Fix the CM/L, then run Manak Assist again.", null, false);
+      return;
+    }
     if (!onForm()) {
       const note = signedIn() ? await autoNavigate(data) : "";
       if (note) renderPanel(data, note, null, false);
       return;
     }
     sessionStorage.removeItem(NAV_KEY);
-    const licence = norm(document.body.innerText).replace(/\D+/g, " ").split(" ");
-    if (!licence.includes(data.cmlNo)) {
+    if (!digitTokens(document.body.innerText).includes(data.cmlNo)) {
       renderPanel(data, `This inclusion form is not for CM/L ${data.cmlNo} — nothing filled.`, null, false);
       return;
     }

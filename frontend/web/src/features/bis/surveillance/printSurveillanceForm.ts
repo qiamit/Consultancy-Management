@@ -57,7 +57,7 @@ export async function buildSurveillanceFormHtml(row: SurveillanceRow): Promise<s
     ${cell('Firm Name', client, true)}
     ${cell('CM/L Number', cmL)}
     ${cell('IS Code', `${isLabel}${isTitle !== '—' ? ` — ${isTitle}` : ''}`, true)}
-    ${cell('Project / License', row.bis_project?.license_number || row.bis_project?.title || '—')}
+    ${cell('Project / License', row.bis_project?.license_number || formatCmL(row.bis_project?.cm_l_digits) || row.bis_project?.title || '—')}
     ${cell('Surveillance Date', row.surveillance_date ? formatDisplayDate(row.surveillance_date) : '—')}
     ${cell('Allotted Employee', row.allotted_employee_name || '—', true)}
     ${cell('Project Kind', row.project_kind || '—')}

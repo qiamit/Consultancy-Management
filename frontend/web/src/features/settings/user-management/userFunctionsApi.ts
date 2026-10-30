@@ -51,6 +51,14 @@ export async function deleteTeamUser(userId: string): Promise<void> {
   await callUserFunction('delete-user', { user_id: userId })
 }
 
+/** Admin: remove every Two-Step Login authenticator of another user (lost phone). Returns how many. */
+export async function resetTeamUserTwoStep(userId: string): Promise<number> {
+  const payload = (await callUserFunction('reset-user-mfa', { user_id: userId })) as {
+    factors_removed?: unknown
+  } | null
+  return Number(payload?.factors_removed ?? 0) || 0
+}
+
 export async function setTeamUserPassword(
   userId: string,
   password: string,

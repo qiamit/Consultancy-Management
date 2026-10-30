@@ -328,15 +328,6 @@ const STYLES = `
   .ftr-sig-label { font-size: 11px; font-weight: 700; text-decoration: none; }
   .ftr-sig-space { height: 10mm; display: flex; align-items: flex-end; justify-content: center; }
   .ftr-sig-img { max-height: 9mm; max-width: 36mm; object-fit: contain; }
-  .ftr-sheet .pd-page-num {
-    left: auto !important;
-    right: 3mm !important;
-    bottom: 3mm !important;
-    text-align: right !important;
-    border-top: none !important;
-    padding-top: 0 !important;
-    background: transparent !important;
-  }
 `
 
 export function buildFactoryTestReportHtml(data: FactoryTestReportData): string {

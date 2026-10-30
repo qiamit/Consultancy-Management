@@ -1399,7 +1399,7 @@ export function TestParameterTable({
           </div>
 
           <div className={TABLE_MQ_SHOW}>
-            <Table className={GRID_TABLE}>
+            <Table className={GRID_TABLE} containerClassName="overflow-visible">
               <colgroup>
                 <col style={{ width: '2.75rem' }} />
                 <col style={{ width: '11%' }} />

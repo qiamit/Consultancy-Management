@@ -108,7 +108,9 @@ export function printBisProjectsList(
 ): string | null {
   if (rows.length === 0) return 'Nothing to print on this page.'
 
-  const win = window.open('', '_blank', 'noopener,noreferrer')
+  // No 'noopener': with it window.open returns null and the document could never be written. The page is
+  // our own escaped HTML on about:blank, so the opener link is harmless.
+  const win = window.open('', '_blank')
   if (!win) return 'Popup blocked. Allow popups to print.'
 
   win.document.open()

@@ -1,3 +1,4 @@
+import { createClient } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabaseClient'
 
 export const PASSWORD_MIN_LENGTH = 8
@@ -40,11 +41,28 @@ export async function changeOwnPassword(
   if (currentPassword === newPassword) {
     throw new Error('The new password must be different from the current one.')
   }
-  const { error: verifyError } = await supabase.auth.signInWithPassword({
+  // Check the current password on a separate, non-persisted client: signing in again on the app's own
+  // client would replace the session with a password-only (aal1) one, and GoTrue then refuses the new
+  // password for a user with Two-Step Login (and the app would ask for the code again).
+  const checker = createClient(
+    import.meta.env.VITE_SUPABASE_URL as string,
+    import.meta.env.VITE_SUPABASE_ANON_KEY as string,
+    {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+        storageKey: 'qe-password-check',
+      },
+    },
+  )
+  const { error: verifyError } = await checker.auth.signInWithPassword({
     email,
     password: currentPassword,
   })
   if (verifyError) throw new Error('Current password is incorrect.')
+  // End only that check session (server side); the app session stays as it is.
+  await checker.auth.signOut({ scope: 'local' }).catch(() => undefined)
   await setOwnPassword(newPassword)
 }
 

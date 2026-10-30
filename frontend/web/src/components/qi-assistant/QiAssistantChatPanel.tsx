@@ -196,7 +196,7 @@ export function QiAssistantChatPanel({
           </Button>
         </div>
       ) : null}
-      <div ref={scrollRef} className="min-h-[240px] max-h-[45vh] flex-1 space-y-3 overflow-y-auto px-1 py-2">
+      <div ref={scrollRef} className="min-h-[240px] max-h-[45dvh] flex-1 space-y-3 overflow-y-auto px-1 py-2">
         {messages.map((m) => (
           <div
             key={m.id}

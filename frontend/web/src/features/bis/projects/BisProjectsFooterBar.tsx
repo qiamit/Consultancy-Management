@@ -8,6 +8,7 @@ import {
   Printer,
   RefreshCw,
   Trash2,
+  XCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
@@ -35,6 +36,8 @@ export function BisProjectsFooterBar({
   page,
   pageCount,
   onDeleteSelected,
+  deleteLabel = 'Delete',
+  deleteTitle = 'Delete Selected',
   onExport,
   onPrintList,
   printListLabel = 'Print list',
@@ -60,6 +63,9 @@ export function BisProjectsFooterBar({
   page: number
   pageCount: number
   onDeleteSelected: () => void
+  /** Inclusion list: the same button cancels the inclusion instead of deleting the licence. */
+  deleteLabel?: string
+  deleteTitle?: string
   /** Export current page / selection as CSV. */
   onExport?: () => void
   onPrintList?: () => void
@@ -93,6 +99,7 @@ export function BisProjectsFooterBar({
     message != null &&
     (message.toLowerCase().includes('saved') ||
       message.toLowerCase().includes('deleted') ||
+      message.toLowerCase().includes('cancelled') ||
       message.toLowerCase().includes('exported') ||
       message.toLowerCase().includes('emailed'))
 
@@ -117,10 +124,13 @@ export function BisProjectsFooterBar({
               )}
               onClick={onDeleteSelected}
               disabled={loading || selectedCount === 0}
-              title="Delete Selected"
+              title={deleteTitle}
+              aria-label={deleteTitle}
             >
-              <Trash2 className="size-3.5 shrink-0 sm:size-4" />
-              <span className="hidden lg:inline">Delete</span>
+              {deleteLabel === 'Delete'
+                ? <Trash2 className="size-3.5 shrink-0 sm:size-4" />
+                : <XCircle className="size-3.5 shrink-0 sm:size-4" />}
+              <span className="hidden lg:inline">{deleteLabel}</span>
             </Button>
           </LaboratoryDirectorOnly>
           {onExport ? (

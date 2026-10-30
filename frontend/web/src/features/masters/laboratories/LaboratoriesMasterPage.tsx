@@ -3,6 +3,7 @@ import { Building2, Copy, Mail, MapPin, Pencil, Phone, Plus, Search } from 'luci
 import { QiAssistant } from '@/components/qi-assistant/QiAssistant'
 import { AuditHistoryDialog } from '@/components/lims/AuditHistoryDialog'
 import { Button } from '@/components/ui/button'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -18,6 +19,8 @@ import {
   clientPrimaryBtnClass,
 } from '@/features/masters/clients/clientsFormUi'
 import { useFormDialogOpenChange } from '@/lib/formDialogOpenChange'
+import { printHtmlInFrame } from '@/lib/printHtmlInFrame'
+import { escapeHtml } from '@/lib/sendAppEmail'
 import { cn } from '@/lib/utils'
 import { LaboratoriesForm } from './LaboratoriesForm'
 import {
@@ -29,6 +32,7 @@ import {
   type LaboratoryForm,
   type LaboratoryRow,
 } from './laboratoriesApi'
+import { parseCsv } from '@/lib/csv'
 
 const GRID_TABLE =
   'w-full min-w-0 table-fixed border-collapse font-jakarta [&_th]:break-words [&_td]:break-words [&_th]:border [&_td]:border [&_th]:border-stone-700 [&_td]:border-[#e7e0d4] [&_th]:p-[1mm] [&_td]:!p-[1mm] [&_th]:sticky [&_th]:top-0 [&_th]:z-[1]'
@@ -107,6 +111,7 @@ function matchesSearch(row: LaboratoryRow, search: string): boolean {
 
 export default function LaboratoriesMasterPage() {
   const canEdit = useCanEditCurrentModule()
+  const [confirm, confirmDialog] = useConfirmDialog()
   const fileRef = useRef<HTMLInputElement>(null)
   const [rows, setRows] = useState<LaboratoryRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -234,6 +239,7 @@ export default function LaboratoriesMasterPage() {
       data-master-scroll="table"
       className={cn(clientPageShellClass, 'laboratories-page-container flex h-full min-h-0 flex-col overflow-hidden !space-y-0 gap-2 sm:gap-3 md:gap-3')}
     >
+      {confirmDialog}
       <div className="shrink-0">
         <div className={clientPanelClass}>
           <div className="relative overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-2 py-2 text-white sm:px-4 sm:py-2.5 md:px-5">
@@ -399,37 +405,44 @@ export default function LaboratoriesMasterPage() {
           e.target.value = ''
           if (!file) return
           void file.text().then(async (text) => {
-            const lines = text.split(/\r?\n/).filter((line) => line.trim())
-            const header = (lines.shift() ?? '').split(',').map((cell) => cell.trim().replace(/^"|"$/g, '').toLowerCase())
+            // Quote-aware: exported addresses contain commas.
+            const lines = parseCsv(text)
+            const header = (lines.shift() ?? []).map((cell) => cell.toLowerCase())
             const index = (name: string) => header.indexOf(name)
+            // Re-importing an export updates the matching lab (by name) instead of duplicating it.
+            const existingByName = new Map(rows.map((row) => [row.name.trim().toLowerCase(), row]))
             let saved = 0
-            for (const line of lines) {
-              const cells = line.split(',').map((cell) => cell.trim().replace(/^"|"$/g, ''))
-              const name = cells[index('name')] ?? ''
-              if (!name) continue
-              await saveLaboratory({
-                ...emptyLaboratoryForm(),
-                name,
-                labType: cells[index('lab_type')] || 'OSL',
-                oslCode: cells[index('osl_code')] ?? '',
-                address: cells[index('address')] ?? '',
-                pinCode: cells[index('pin_code')] ?? '',
-                district: cells[index('district')] ?? '',
-                state: cells[index('state')] ?? '',
-                country: cells[index('country')] || 'India',
-                gstNumber: cells[index('gst_number')] ?? '',
-                openingBalance: cells[index('opening_balance')] ?? '',
-                balanceType: cells[index('balance_type')] === 'Cr' ? 'Cr' : 'Dr',
-                paymentTerm: cells[index('payment_term')] || '100 % Advance',
-                remark: cells[index('remark')] ?? '',
-                contactName: cells[index('contact_name')] ?? '',
-                email: cells[index('email')] ?? '',
-                mobile: cells[index('mobile')] ?? '',
-              }, null)
-              saved += 1
+            try {
+              for (const cells of lines) {
+                const name = cells[index('name')] ?? ''
+                if (!name) continue
+                // Columns the CSV does not carry keep their saved values.
+                const existing = existingByName.get(name.trim().toLowerCase())
+                await saveLaboratory({
+                  ...(existing ? rowToForm(existing) : emptyLaboratoryForm()),
+                  name,
+                  labType: cells[index('lab_type')] || 'OSL',
+                  oslCode: cells[index('osl_code')] ?? '',
+                  address: cells[index('address')] ?? '',
+                  pinCode: cells[index('pin_code')] ?? '',
+                  district: cells[index('district')] ?? '',
+                  state: cells[index('state')] ?? '',
+                  country: cells[index('country')] || 'India',
+                  gstNumber: cells[index('gst_number')] ?? '',
+                  openingBalance: cells[index('opening_balance')] ?? '',
+                  balanceType: cells[index('balance_type')] === 'Cr' ? 'Cr' : 'Dr',
+                  paymentTerm: cells[index('payment_term')] || '100 % Advance',
+                  remark: cells[index('remark')] ?? '',
+                  contactName: cells[index('contact_name')] ?? '',
+                  email: cells[index('email')] ?? '',
+                  mobile: cells[index('mobile')] ?? '',
+                }, existing?.id ?? null)
+                saved += 1
+              }
+            } finally {
+              refresh()
             }
             setMessage(`Import saved (${saved}).`)
-            refresh()
           }).catch((err: unknown) => setMessage(err instanceof Error ? err.message : 'Import failed'))
         }} />
         <ClientsTableFooterBar
@@ -455,14 +468,13 @@ export default function LaboratoriesMasterPage() {
               setMessage('Select a laboratory to print.')
               return
             }
-            const popup = window.open('', '_blank', 'noopener,noreferrer')
-            if (!popup) return
-            popup.document.write(`<title>Laboratories</title><pre>${selectedRows.map((row) => `${row.name} · ${row.lab_type} · ${row.osl_code ?? ''}`).join('\n')}</pre>`)
-            popup.document.close()
-            popup.print()
+            const lines = selectedRows.map((row) => escapeHtml(`${row.name} · ${row.lab_type} · ${row.osl_code ?? ''}`))
+            if (!printHtmlInFrame(`<!doctype html><html><head><meta charset="utf-8"/><title>Laboratories</title></head><body><pre>${lines.join('\n')}</pre></body></html>`)) {
+              setMessage('Print Could Not Start. Try Again.')
+            }
           }}
-          onDeleteSelected={() => {
-            if (!window.confirm(`Delete ${selectedIds.size} laboratory record(s)?`)) return
+          onDeleteSelected={async () => {
+            if (!(await confirm(`Delete ${selectedIds.size} Laboratory Record(s)?`, { title: 'Delete Laboratories', confirmLabel: 'Delete', destructive: true }))) return
             void deleteLaboratories([...selectedIds])
               .then(() => { setSelectedIds(new Set()); setMessage('Deleted.'); refresh() })
               .catch((err: unknown) => setMessage(err instanceof Error ? err.message : 'Delete failed'))

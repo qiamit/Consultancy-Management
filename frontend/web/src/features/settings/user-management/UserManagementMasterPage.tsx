@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { limsPageShellClass } from '@/lib/limsThemeUi'
 import { useAuth } from '@/hooks/useAuth'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { supabase } from '@/lib/supabaseClient'
 import { useMasterUiSearchState } from '@/lib/useMasterUiSearchState'
 import { fetchTeamUsers, type TeamUserRecord } from '@/lib/fetchTeamUsers'
@@ -15,7 +16,7 @@ import { UserManagementFooterBar } from './UserManagementFooterBar'
 import { UserManagementForm } from './UserManagementForm'
 import { buildUsersPrintHtml, printUsersViaIframe } from './printSelectedUsers'
 import { SetPasswordDialog } from './SetPasswordDialog'
-import { createTeamUser, deleteTeamUser } from './userFunctionsApi'
+import { createTeamUser, deleteTeamUser, resetTeamUserTwoStep } from './userFunctionsApi'
 import type { AccessRole, UserAccount, UserForm } from './types'
 
 /**
@@ -91,6 +92,8 @@ export default function UserManagementMasterPage() {
   const currentUserId = session?.user?.id ?? null
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [printMessage, setPrintMessage] = useState<string | null>(null)
+  const [twoStepNotice, setTwoStepNotice] = useState<string | null>(null)
+  const [confirm, confirmDialog] = useConfirmDialog()
 
   const [designations, setDesignations] = useState<OptionItem[]>([])
   const [departments, setDepartments] = useState<OptionItem[]>([])
@@ -364,6 +367,7 @@ export default function UserManagementMasterPage() {
       {usersLoadError && <p className="text-sm text-destructive">{usersLoadError}</p>}
       {userUpdateError && <p className="text-sm text-destructive">{userUpdateError}</p>}
       {printMessage && <p className="text-sm text-destructive">{printMessage}</p>}
+      {twoStepNotice && <p className="text-sm text-emerald-700">{twoStepNotice}</p>}
       <UserManagementTable
         users={pagedUsers}
         loading={usersLoading}
@@ -378,6 +382,28 @@ export default function UserManagementMasterPage() {
           setEdit(user.id)
         }}
         onSetPassword={(user: UserAccount) => setPasswordTarget(user)}
+        onResetTwoStep={async (user: UserAccount) => {
+          setTwoStepNotice(null)
+          setUserUpdateError(null)
+          const ok = await confirm(
+            `Reset Two-Step Login for ${user.name || user.email}? Their Authenticator Is Removed and They Are Signed Out Everywhere. On the Next Sign-In They Set Up the Authenticator App Again${user.accessRole === 'admin' ? ' (Required for Admins)' : ''}.`,
+            { title: 'Reset Two-Step Login', confirmLabel: 'Reset', destructive: true },
+          )
+          if (!ok) return
+          setUserUpdateLoadingId(user.id)
+          try {
+            const removed = await resetTeamUserTwoStep(user.id)
+            setTwoStepNotice(
+              removed > 0
+                ? `Two-Step Login Reset for ${user.name || user.email}.`
+                : `${user.name || user.email} Had No Two-Step Login Set Up. Nothing to Reset.`,
+            )
+          } catch (err) {
+            setUserUpdateError(err instanceof Error ? err.message : 'Could Not Reset Two-Step Login.')
+          } finally {
+            setUserUpdateLoadingId(null)
+          }
+        }}
         onStatusChange={async (user, status) => {
           if (user.status === status) return
 
@@ -553,6 +579,7 @@ export default function UserManagementMasterPage() {
         />
       )}
 
+      {confirmDialog}
       <SetPasswordDialog
         user={passwordTarget}
         isSelf={passwordTarget != null && passwordTarget.id === currentUserId}

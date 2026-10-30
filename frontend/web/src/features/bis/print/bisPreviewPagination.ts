@@ -82,8 +82,9 @@ export function paginateSheetsIn(doc: Document): void {
     const kids = foot ? allKids.slice(0, -1) : allKids
     const view0 = doc.defaultView
     const footSpace = foot ? foot.offsetHeight + (view0 ? parseFloat(view0.getComputedStyle(foot).marginTop || '0') : 0) : 0
-    // A couple of pixels of tolerance: borders and rounding must not push a whole block to the next page.
-    const max = limitOf(sheet) + 2 - footSpace
+    // Two pixels of safety below the limit: a block that overshoots by rounding would make the printed sheet taller
+    // than the page and add a blank page (a block that fits only by a hair moves on instead).
+    const max = limitOf(sheet) - 2 - footSpace
     let idx = -1
     for (let i = 0; i < kids.length; i++) { if (contentBottom(kids[i], sheet) > max) { idx = i; break } }
     if (idx < 0) return null
@@ -199,14 +200,25 @@ export function paginateSheetsIn(doc: Document): void {
     const over = sheet.scrollHeight - sheet.clientHeight
     if (over > 0 && over <= 3) sheet.style.setProperty('overflow', 'hidden', 'important')
   })
-  // Renumber "Page X of Y" by position among all sheets (a cover page without a number still counts).
+  // Renumber "Page X of Y" by position among the sheets of each document (a cover page without a number still
+  // counts). Documents combined for one print (each in a .merged-print-section) are numbered on their own, the same
+  // way their separately rendered PDFs are numbered, so a printed selection matches the merged PDF.
   const allSheets = Array.prototype.slice.call(doc.querySelectorAll(SHEETS)) as HTMLElement[]
   const pad2 = function (n: number) { return n < 10 ? '0' + n : String(n) }
-  allSheets.forEach(function (s, i) {
-    const num = Array.prototype.find.call(s.children, function (k: Element) { return k.classList.contains('pd-page-num') }) as HTMLElement | undefined
-    if (num && /Page\s+\d+\s+of\s+\d+/i.test(num.textContent || '')) {
-      num.textContent = (num.textContent || '').replace(/Page\s+\d+\s+of\s+\d+/i, 'Page ' + pad2(i + 1) + ' of ' + pad2(allSheets.length))
-    }
+  const groups: { root: Element | null; sheets: HTMLElement[] }[] = []
+  allSheets.forEach(function (s) {
+    const root = s.closest('.merged-print-section')
+    let group = groups.find(function (g) { return g.root === root })
+    if (!group) { group = { root: root, sheets: [] }; groups.push(group) }
+    group.sheets.push(s)
+  })
+  groups.forEach(function (g) {
+    g.sheets.forEach(function (s, i) {
+      const num = Array.prototype.find.call(s.children, function (k: Element) { return k.classList.contains('pd-page-num') }) as HTMLElement | undefined
+      if (num && /Page\s+\d+\s+of\s+\d+/i.test(num.textContent || '')) {
+        num.textContent = (num.textContent || '').replace(/Page\s+\d+\s+of\s+\d+/i, 'Page ' + pad2(i + 1) + ' of ' + pad2(g.sheets.length))
+      }
+    })
   })
 }
 

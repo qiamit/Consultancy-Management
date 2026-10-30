@@ -6,9 +6,11 @@ import {
   renderPdfViaPlaywright,
 } from '@/lib/playwrightPdfClient'
 import { applyBisDocumentPrintPageSettings } from '../print/bisDocumentPrintPageSettings'
+import { paginateHtmlForDownload } from '../print/bisPreviewPagination'
 import type { BisDocumentPrintPageSettings } from '../print/bisDocumentPrintPageSettings'
 import { listClientCertificates } from '@/features/masters/clients/clientsApi'
 import {
+  addImageAsA4Page,
   buildMergedBisProjectFilesPdf,
   detectBisPdfAssetKind,
 } from './mergeBisProjectFilesPdf'
@@ -53,7 +55,8 @@ export async function buildApplicationDetailsPackPdf(
   settings: BisDocumentPrintPageSettings,
   filename: string,
 ): Promise<Blob> {
-  const configuredHtml = applyBisDocumentPrintPageSettings(html, settings)
+  // Same page breaks as the preview (long sheets split onto extra pages, numbered "Page X of Y").
+  const configuredHtml = await paginateHtmlForDownload(applyBisDocumentPrintPageSettings(html, settings))
   const [generatedPdf, attachedBytes, clientCertificates] = await Promise.all([
     renderPdfViaPlaywright({
       html: configuredHtml,
@@ -101,13 +104,9 @@ export async function buildApplicationDetailsPackPdf(
       const pages = await packet.copyPages(attachment, attachment.getPageIndices())
       for (const page of pages) packet.addPage(page)
     } else if (assetKind === 'png') {
-      const image = await packet.embedPng(bytes)
-      const page = packet.addPage([image.width, image.height])
-      page.drawImage(image, { x: 0, y: 0, width: image.width, height: image.height })
+      addImageAsA4Page(packet, await packet.embedPng(bytes))
     } else if (assetKind === 'jpeg') {
-      const image = await packet.embedJpg(bytes)
-      const page = packet.addPage([image.width, image.height])
-      page.drawImage(image, { x: 0, y: 0, width: image.width, height: image.height })
+      addImageAsA4Page(packet, await packet.embedJpg(bytes))
     } else {
       throw new Error(`Could not include attached certificate ${certificate.cert_name}: unsupported file type.`)
     }

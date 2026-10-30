@@ -192,7 +192,7 @@ export function ProductsServicesForm({
                 value={form.hsnCode}
                 onChange={(e) => set('hsnCode', e.target.value)}
                 placeholder="HSN Code"
-                className="min-w-0 pr-9"
+                className="min-w-0 !pr-9"
               />
               <a
                 href={HSN_SAC_FINDER_URL}

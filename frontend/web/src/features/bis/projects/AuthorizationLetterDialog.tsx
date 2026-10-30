@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Calendar, Check, Eye, LoaderCircle, Plus, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { DateInput } from '@/components/ui/date-input'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { LimsFieldWithAdd } from '@/components/lims/LimsFieldWithAdd'
 import { usePdfViewer } from '@/components/ui/usePdfViewer'
@@ -138,11 +139,11 @@ export function AuthorizationLetterDialog({ open, onOpenChange, projectRow, lega
 
   return <>
     <Dialog open={open} onOpenChange={close}>
-      <DialogContent persistOnFocusLoss layer="stacked" aria-describedby={undefined} className={cn(limsDialogClass, 'flex max-h-[90vh] w-[min(64rem,calc(100vw_-_var(--app-dialog-overlay-left,0px)_-_2rem))] min-w-0 max-w-6xl flex-col p-0')}>
+      <DialogContent persistOnFocusLoss layer="stacked" aria-describedby={undefined} className={cn(limsDialogClass, 'flex max-h-[90dvh] w-[min(64rem,calc(100vw_-_var(--app-dialog-overlay-left,0px)_-_2rem))] min-w-0 max-w-6xl flex-col p-0')}>
         <DialogHeader className="bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 py-2.5 pl-4 pr-12 text-left"><DialogTitle className="text-base font-semibold text-white">Authorization Letter of Person Submitting the Application</DialogTitle></DialogHeader>
         <div className="min-h-0 flex-1 space-y-3 overflow-auto bg-[#fffcf7] p-4">
           {loading ? <p className="text-sm text-stone-500">Loading Top Management…</p> : error ? <p role="alert" className="text-sm text-red-700">{error}</p> : !people.length ? <p className="text-sm text-amber-800">Add the persons in Step 2 → Top Management before generating this letter.</p> : null}
-          <div className="max-w-xs space-y-1"><label htmlFor="authorization-letter-date" className="text-xs font-semibold">Letter Date</label><LimsFieldWithAdd addButton={<button type="button" className={limsFieldAddBtnClass} aria-label="Open Letter Date Calendar" disabled={busy || loading} onClick={() => { try { dateInput.current?.showPicker() } catch { dateInput.current?.focus() } }}><Calendar size={14} /></button>}><input id="authorization-letter-date" ref={dateInput} type="date" className={cn(limsFieldClass, 'min-w-0 tabular-nums [&::-webkit-calendar-picker-indicator]:pointer-events-none [&::-webkit-calendar-picker-indicator]:opacity-0')} disabled={busy || loading} value={form.letterDate} onChange={(event) => setForm((previous) => ({ ...previous, letterDate: event.target.value }))} /></LimsFieldWithAdd></div>
+          <div className="max-w-xs space-y-1"><label htmlFor="authorization-letter-date" className="text-xs font-semibold">Letter Date</label><LimsFieldWithAdd addButton={<button type="button" className={limsFieldAddBtnClass} aria-label="Open Letter Date Calendar" disabled={busy || loading} onClick={() => { try { dateInput.current?.showPicker() } catch { dateInput.current?.focus() } }}><Calendar size={14} /></button>}><DateInput id="authorization-letter-date" ref={dateInput} className={cn(limsFieldClass, 'min-w-0 tabular-nums [&::-webkit-calendar-picker-indicator]:pointer-events-none [&::-webkit-calendar-picker-indicator]:opacity-0')} disabled={busy || loading} value={form.letterDate} onChange={(event) => setForm((previous) => ({ ...previous, letterDate: event.target.value }))} /></LimsFieldWithAdd></div>
           <div className="overflow-x-auto"><table className="list-cards w-full min-w-[780px] border-collapse text-sm"><thead><tr><th className={th}>Role</th><th className={th}>Name</th><th className={cn(th, 'text-center')}>Designation</th><th className={cn(th, 'text-center')}>Action</th></tr></thead><tbody>
             {selectPerson('person')}{selectPerson('by')}
           </tbody></table></div>

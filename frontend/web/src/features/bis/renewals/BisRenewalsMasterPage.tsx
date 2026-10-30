@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { useSearchParams } from 'react-router-dom'
 import { limsPageShellClass } from '@/lib/limsThemeUi'
 import { useFormDialogOpenChange } from '@/lib/formDialogOpenChange'
@@ -81,6 +82,7 @@ function removeRenewalDraft(editId: string | null): void {
 
 export default function BisRenewalsMasterPage({ dialogOnly = false }: { dialogOnly?: boolean }) {
   const [searchParams, setSearchParams] = useSearchParams()
+  const [confirm, confirmDialog] = useConfirmDialog()
   const requestedProjectId = (searchParams.get('projectId') ?? '').trim()
   const { editId, setEdit } = useMasterUiSearchState({
     editKey: dialogOnly ? 'renewalEdit' : 'edit',
@@ -121,6 +123,10 @@ export default function BisRenewalsMasterPage({ dialogOnly = false }: { dialogOn
   const editingId = editId && editId !== 'new' ? editId : null
   const handleFormOpenChange = useFormDialogOpenChange((open) => {
     if (!open) {
+      // The session draft only protects a refresh while the dialog is open. Left behind, it
+      // overrode the server copy the next time this renewal was opened (other users' edits,
+      // a new validity date or IS Code fees were hidden and then overwritten on Save).
+      removeRenewalDraft(editId)
       hydratedEditRef.current = null
       setEdit(null)
     }
@@ -365,7 +371,7 @@ export default function BisRenewalsMasterPage({ dialogOnly = false }: { dialogOn
   const handleDeleteSelected = async () => {
     const ids = [...selectedIds]
     if (ids.length === 0) return
-    if (!window.confirm(`Delete ${ids.length} renewal(s)? This cannot be undone.`)) return
+    if (!(await confirm(`Delete ${ids.length} Renewal(s)? This Cannot Be Undone.`, { title: 'Delete Renewals', confirmLabel: 'Delete', destructive: true }))) return
     setMessage(null)
     try {
       await deleteRenewals(ids)
@@ -458,6 +464,7 @@ export default function BisRenewalsMasterPage({ dialogOnly = false }: { dialogOn
 
   return (
     <div className={limsPageShellClass}>
+      {confirmDialog}
       <BisProjectsHeaderBar
         title="BIS License Renewals"
         addLabel="Add Renewal"

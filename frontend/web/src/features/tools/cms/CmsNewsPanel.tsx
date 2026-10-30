@@ -13,6 +13,7 @@ import {
 } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -35,6 +36,7 @@ const emptyForm = (): FormState => ({
 })
 
 export default function CmsNewsPanel() {
+  const [confirm, confirmDialog] = useConfirmDialog()
   const [rows, setRows] = useState<CmsNewsRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -102,7 +104,7 @@ export default function CmsNewsPanel() {
   }
 
   const remove = async (row: CmsNewsRow) => {
-    if (!window.confirm(`Delete news "${row.title}"?`)) return
+    if (!(await confirm(`Delete News "${row.title}"?`, { title: 'Delete News', confirmLabel: 'Delete', destructive: true }))) return
     const { error: err } = await supabase.from('website_news').delete().eq('id', row.id)
     if (err) {
       toast.error(err.message)
@@ -244,6 +246,7 @@ export default function CmsNewsPanel() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {confirmDialog}
     </div>
   )
 }

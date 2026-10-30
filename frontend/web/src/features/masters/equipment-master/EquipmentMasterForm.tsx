@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import {
   Dialog,
   DialogContent,
@@ -19,8 +20,9 @@ import {
   limsOutlineBtnClass,
   limsPanelClass,
   limsPrimaryBtnClass,
+  limsFullscreenDialogClass,
 } from '@/lib/limsThemeUi'
-import { cn, formatDate } from '@/lib/utils'
+import { cn, formatDate, isCalibrationOverdue } from '@/lib/utils'
 import { MeasurementUnitSelect } from '@/features/masters/measurement-units/MeasurementUnitSelect'
 import {
   FilterCombobox,
@@ -177,6 +179,7 @@ export function EquipmentMasterForm({
   equipments?: EquipmentRow[]
   iqcMasters?: any[]
 }) {
+  const [confirm, confirmDialog] = useConfirmDialog({ layer: 'top' })
   const [showCalcSteps, setShowCalcSteps] = useState(false)
   const [showCalculator, setShowCalculator] = useState(false)
   const [calcInput, setCalcInput] = useState('')
@@ -388,12 +391,10 @@ export function EquipmentMasterForm({
       <DialogContent
         persistOnFocusLoss
         layer="nested"
-        overlayClassName="lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto"
         className={cn(
           limsDialogClass,
           '!flex h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden p-0',
-          'left-0 top-0',
-          'lg:left-[268px] lg:w-[calc(100vw-268px)] lg:max-w-[calc(100vw-268px)]',
+          limsFullscreenDialogClass,
         )}
         aria-describedby={undefined}
       >
@@ -420,7 +421,7 @@ export function EquipmentMasterForm({
             'text-[11px] font-semibold uppercase tracking-wide text-stone-600',
           )}
         </div>
-        <DialogFooter className="shrink-0 gap-2 border-t border-stone-300 bg-white px-4 py-3 sm:px-6">
+        <DialogFooter className="shrink-0 gap-2 border-t border-stone-300 bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
           <Button
             type="button"
             className={limsPrimaryBtnClass}
@@ -632,9 +633,10 @@ export function EquipmentMasterForm({
               title="Delete"
               aria-label="Delete Calibration Certificate"
               disabled={!form.uploadCertificatePath && !form.certificateFile}
-              onClick={() => {
-                const ok = window.confirm(
-                  'Are you sure you want to delete the uploaded certificate?',
+              onClick={async () => {
+                const ok = await confirm(
+                  'Are You Sure You Want to Delete the Uploaded Certificate?',
+                  { title: 'Delete Certificate', confirmLabel: 'Delete', destructive: true },
                 )
                 if (!ok) return
                 onChange({
@@ -687,12 +689,10 @@ export function EquipmentMasterForm({
       <DialogContent
         persistOnFocusLoss
         layer="nested"
-        overlayClassName="lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto"
         className={cn(
           limsDialogClass,
           '!flex h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden p-0',
-          'left-0 top-0',
-          'lg:left-[268px] lg:w-[calc(100vw-268px)] lg:max-w-[calc(100vw-268px)]',
+          limsFullscreenDialogClass,
         )}
         aria-describedby={undefined}
       >
@@ -716,7 +716,7 @@ export function EquipmentMasterForm({
         >
           {renderCalibrationFormFields('dialog')}
         </div>
-        <DialogFooter className="shrink-0 gap-2 border-t border-stone-300 bg-white px-4 py-3 sm:px-6">
+        <DialogFooter className="shrink-0 gap-2 border-t border-stone-300 bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
           <Button
             type="button"
             className={limsPrimaryBtnClass}
@@ -1278,12 +1278,10 @@ export function EquipmentMasterForm({
       <DialogContent
         persistOnFocusLoss
         layer="nested"
-        overlayClassName="lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto"
         className={cn(
           limsDialogClass,
           '!flex h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden p-0',
-          'left-0 top-0',
-          'lg:left-[268px] lg:w-[calc(100vw-268px)] lg:max-w-[calc(100vw-268px)]',
+          limsFullscreenDialogClass,
         )}
         aria-describedby={undefined}
       >
@@ -1307,7 +1305,7 @@ export function EquipmentMasterForm({
         >
           {renderIntermediateCheckFormBody('dialog')}
         </div>
-        <DialogFooter className="shrink-0 gap-2 border-t border-stone-300 bg-white px-4 py-3 sm:px-6">
+        <DialogFooter className="shrink-0 gap-2 border-t border-stone-300 bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
           <Button
             type="button"
             className={limsPrimaryBtnClass}
@@ -1535,7 +1533,7 @@ export function EquipmentMasterForm({
                   const eq = iqcMasters.find((e) => e.id === id)
                   if (!eq) return null
                   const isOverdue =
-                    eq.next_calibration_due && new Date(eq.next_calibration_due) < new Date()
+                    !!eq.next_calibration_due && isCalibrationOverdue(eq.next_calibration_due)
                   const calPoints = Array.isArray(eq.calibration_points) ? eq.calibration_points : []
                   return (
                     <div
@@ -2757,9 +2755,10 @@ export function EquipmentMasterForm({
                   title="Delete"
                   aria-label="Delete Manual / SOP"
                   disabled={!form.uploadManualSopPath && !form.manualSopFile}
-                  onClick={() => {
-                    const ok = window.confirm(
-                      'Are you sure you want to delete the uploaded Manual/SOP?',
+                  onClick={async () => {
+                    const ok = await confirm(
+                      'Are You Sure You Want to Delete the Uploaded Manual/SOP?',
+                      { title: 'Delete Manual / SOP', confirmLabel: 'Delete', destructive: true },
                     )
                     if (!ok) return
                     onChange({
@@ -2843,6 +2842,7 @@ export function EquipmentMasterForm({
       {renderIntermediateFormDialog()}
       {renderMaintenanceHistoryDialog()}
       {renderIntermediateCheckHistoryDialog()}
+      {confirmDialog}
     </Card>
   )
 }

@@ -1,4 +1,4 @@
-import { formatCmA, formatCmL, formatDisplayDate, todayIsoDate } from '../projects/types'
+import { formatCmA, formatCmL, formatDisplayDate, isLicenceKind, todayIsoDate } from '../projects/types'
 import type { BisPrintData } from './loadBisPrintData'
 import { escapeHtml as esc } from './openPrintHtml'
 import { PRINT_SCAN_FRIENDLY_OVERRIDE_CSS } from './printScanFriendlyCss'
@@ -25,7 +25,7 @@ export function applicationNumberForProject(row: BisPrintData['row']): string {
   const validLicenseNumber = licenseNumber && !['N/A', '—'].includes(licenseNumber.toUpperCase())
   const licenseDigits = String(row.cm_l_digits ?? '').replace(/\D/g, '')
   const applicationDigits = String(row.application_number ?? '').replace(/\D/g, '')
-  const isLicenceProject = ['licence', 'license'].includes((row.project_kind ?? '').trim().toLowerCase())
+  const isLicenceProject = isLicenceKind(row.project_kind)
   if (isLicenceProject) {
     if (validLicenseNumber) return licenseNumber
     if (licenseDigits) return formatCmL(licenseDigits)

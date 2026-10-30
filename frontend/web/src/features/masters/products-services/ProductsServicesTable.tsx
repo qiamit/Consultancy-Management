@@ -270,7 +270,7 @@ export function ProductsServicesTable({
           </div>
 
           <div className={TABLE_MQ_SHOW}>
-            <Table className={GRID_TABLE}>
+            <Table className={GRID_TABLE} containerClassName="overflow-visible">
               <colgroup>
                 <col className="w-11" />
                 <col className="min-w-[12rem]" />

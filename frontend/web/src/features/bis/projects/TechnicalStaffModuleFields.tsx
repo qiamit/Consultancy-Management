@@ -23,6 +23,7 @@ import {
   limsPrimaryBtnClass,
 } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
+import { todayLocalIso } from '@/lib/localDate'
 
 function openDatePicker(el: HTMLInputElement | null) {
   if (!el || el.disabled) return
@@ -469,7 +470,7 @@ export function TechnicalStaffModuleFields({
       return
     }
     setCreateIndex(index)
-    setCreateDate(str(row.appointmentDate) || new Date().toISOString().slice(0, 10))
+    setCreateDate(str(row.appointmentDate) || todayLocalIso())
     setCreateReferenceNo(str(row.appointmentReferenceNo))
   }
 

@@ -12,7 +12,7 @@ export function BookChrome({
 }) {
   return (
     <div className={`${limsPageShellClass} space-y-3 p-3 sm:p-4`}>
-      <div className={limsPanelClass}>
+      <div className={`${limsPanelClass} p-3 sm:p-4`}>
         <h1 className="text-lg font-semibold text-stone-900">{title}</h1>
         {hint ? <p className="mt-1 text-sm text-stone-600">{hint}</p> : null}
       </div>

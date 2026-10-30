@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { limsDarkBarGlowStyle, limsPageShellClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { activePickerClients, getPickerClients, type PickerClientRow } from '@/lib/clientsCache'
@@ -115,6 +116,7 @@ function safePdfFilename(quotationNumber: string): string {
 
 export default function QuotationMasterPage() {
   const { editId, setEdit } = useMasterUiSearchState()
+  const [confirm, confirmDialog] = useConfirmDialog()
   const hydratedEditRef = useRef<string | null>(null)
   const [rows, setRows] = useState<QuotationRow[]>([])
   const [listLoading, setListLoading] = useState(true)
@@ -512,7 +514,11 @@ export default function QuotationMasterPage() {
       }
 
       let quotationId = editingId
+      // Status before this save: re-saving a quotation already converted must not convert it again.
+      let previousStatus: string | null = null
       if (editingId) {
+        const { data: before } = await supabase.from('quotations').select('status').eq('id', editingId).maybeSingle()
+        previousStatus = (before as { status?: string | null } | null)?.status ?? null
         const { error } = await supabase.from('quotations').update(payload).eq('id', editingId)
         if (error) throw error
         const { error: delErr } = await supabase
@@ -605,7 +611,8 @@ export default function QuotationMasterPage() {
         })),
       }
 
-      const convertMsg = await convertQuotationIfNeeded(savedRow, form.status)
+      const convertMsg =
+        previousStatus === form.status ? null : await convertQuotationIfNeeded(savedRow, form.status)
       setSaveMessage(convertMsg ?? `Saved ${form.quotationNumber}.`)
       hydratedEditRef.current = null
       setEdit(null)
@@ -638,7 +645,7 @@ export default function QuotationMasterPage() {
   const handleDeleteSelected = async () => {
     const ids = [...selectedIds]
     if (ids.length === 0) return
-    if (!window.confirm(`Delete ${ids.length} quotation(s)?`)) return
+    if (!(await confirm(`Delete ${ids.length} Quotation(s)?`, { title: 'Delete Quotations', confirmLabel: 'Delete', destructive: true }))) return
     setSaveMessage(null)
     try {
       const { error } = await supabase.from('quotations').delete().in('id', ids)
@@ -741,6 +748,7 @@ export default function QuotationMasterPage() {
         'flex h-full min-h-0 flex-col overflow-hidden !space-y-0 gap-2 sm:gap-3 md:gap-3',
       )}
     >
+      {confirmDialog}
       <div className="shrink-0">
         <QuotationHeaderBar
           search={search}
@@ -841,27 +849,29 @@ export default function QuotationMasterPage() {
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-gradient-to-b from-stone-100/80 to-white px-3 py-3 sm:px-5 sm:py-4 md:px-6 md:py-5">
-            {saveMessage && showForm ? (
-              <p className="mb-4 border-l-2 border-destructive bg-destructive/5 px-3 py-2 text-sm text-destructive">
-                {saveMessage}
-              </p>
-            ) : null}
-            <QuotationFormView
-              key={editingId ?? `new-${form.quotationNumber}`}
-              form={form}
-              onChange={setForm}
-              clientOptions={clientOptions}
-              clientContactById={clientContactById}
-              productOptions={productOptions}
-              productById={productById}
-              onReloadClients={loadClients}
-              onReloadProducts={() => loadProducts()}
-              canSave={canSave}
-              saveLoading={saveLoading}
-              onSave={() => void handleSave()}
-              documentKind="quotation"
-              documentLabel="Quotation"
-            />
+            <div className="mx-auto w-full max-w-[1440px]">
+              {saveMessage && showForm ? (
+                <p className="mb-4 border-l-2 border-destructive bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                  {saveMessage}
+                </p>
+              ) : null}
+              <QuotationFormView
+                key={editingId ?? `new-${form.quotationNumber}`}
+                form={form}
+                onChange={setForm}
+                clientOptions={clientOptions}
+                clientContactById={clientContactById}
+                productOptions={productOptions}
+                productById={productById}
+                onReloadClients={loadClients}
+                onReloadProducts={() => loadProducts()}
+                canSave={canSave}
+                saveLoading={saveLoading}
+                onSave={() => void handleSave()}
+                documentKind="quotation"
+                documentLabel="Quotation"
+              />
+            </div>
           </div>
         </DialogContent>
       </Dialog>

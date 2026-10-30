@@ -1,11 +1,12 @@
 import http from 'node:http'
-import fs from 'node:fs'
+import crypto from 'node:crypto'
+import fsp from 'node:fs/promises'
+import os from 'node:os'
 import path from 'node:path'
 import { createQiAssistantHandler } from './qiAssistant.mjs'
 import { createRenewalReminders } from './renewalReminders.mjs'
 
 const PORT = Number(process.env.PORT || 8080)
-const MANAK_INBOX_DIR = path.join('/tmp', 'qe-manak-pdf-inbox')
 const MANAK_TTL_MS = 45 * 60 * 1000
 const REST_URL = (process.env.REST_URL || 'http://rest.railway.internal:3000').replace(/\/$/, '')
 const AUTH_URL = (process.env.AUTH_URL || 'http://auth.railway.internal:9999').replace(/\/$/, '')
@@ -17,9 +18,11 @@ const EMAIL_FROM =
 
 // Same origins as the gateway Caddyfile, which strips this service's CORS headers and sets its
 // own. Kept here too so a direct call to this service never gets "*" (Batch D L7).
+// Localhost Vite origins only while ALLOW_LOCALHOST_ORIGINS is not 0 (the owner tests from localhost).
+const ALLOW_LOCALHOST_ORIGINS = String(process.env.ALLOW_LOCALHOST_ORIGINS ?? '1').trim() !== '0'
 const CORS_ORIGIN_PATTERNS = [
   /^https:\/\/(www\.)?qengineering\.in$/,
-  /^https?:\/\/(localhost|127\.0\.0\.1):(3000|517[3-9]|518[0-5])$/,
+  ...(ALLOW_LOCALHOST_ORIGINS ? [/^https?:\/\/(localhost|127\.0\.0\.1):(3000|517[3-9]|518[0-5])$/] : []),
   /^https:\/\/frontend-production-[a-z0-9]+\.up\.railway\.app$/,
   /^https:\/\/consultancy-[a-z0-9-]+\.up\.railway\.app$/,
 ]
@@ -63,61 +66,94 @@ function json(res, status, body) {
   res.end(payload)
 }
 
+// ── Manak PDF inbox ─────────────────────────────────────────────────────────────────────────────
+// The app registers a one-time hand-off token (signed-in user + OSL sample), the QE extension uploads the
+// captured Test Request PDF in base64 chunks against that token (no session — the token is the secret), and
+// the app collects it with GET ?token=. Each token lives in its own folder MANAK_PDF_DIR/<sha256(token)>/
+// (entry.json, chunk files, the assembled document.pdf), so nothing from a request ever becomes a path.
 const MANAK_BODY_LIMIT = 1024 * 1024
-const MANAK_CHUNK_MAX = 200_000 // the extension sends 160 000 base64 characters per chunk
+const MANAK_CHUNK_MAX = 200_000 // the extension sends 120 000 base64 characters per chunk
 const MANAK_CHUNKS_MAX = 300 // about 45 MB of PDF
 const MANAK_TOKEN_RE = /^[\w-]{32,128}$/
-const MANAK_PDF_DIR = path.join('/tmp', 'qe-manak-pdfs')
+const MANAK_SAMPLE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/
+const MANAK_PDF_DIR = process.env.MANAK_PDF_DIR || path.join(os.tmpdir(), 'qe-manak-inbox')
+const MANAK_TOKENS_PER_USER = 5
+const MANAK_INBOX_MAX_BYTES = Number(process.env.MANAK_INBOX_MAX_BYTES || 500 * 1024 * 1024)
+const MANAK_SWEEP_EVERY_MS = 30_000
 
-function manakSafeSampleId(value) {
-  return String(value || 'sample')
-    .replace(/[^\w.\-]+/g, '-')
-    .slice(0, 80)
+function manakTokenDir(token) {
+  return path.join(MANAK_PDF_DIR, crypto.createHash('sha256').update(token).digest('hex'))
 }
 
-/** Drops inbox entries and assembled PDFs older than the TTL (they only bridge one Test Request hand-off). */
-function sweepManakInbox() {
-  const cutoff = Date.now() - MANAK_TTL_MS
-  for (const dir of [MANAK_INBOX_DIR, MANAK_PDF_DIR]) {
-    try {
-      if (!fs.existsSync(dir)) continue
-      for (const name of fs.readdirSync(dir)) {
-        const full = path.join(dir, name)
-        try {
-          if (fs.statSync(full).mtimeMs < cutoff) fs.rmSync(full, { recursive: true, force: true })
-        } catch {
-          /* ignore */
-        }
-      }
-    } catch {
-      /* ignore */
-    }
+function manakSafePdfName(value) {
+  const name = String(value || 'Test_Request.pdf')
+    .replace(/[^\w.\-]+/g, '_')
+    .replace(/^\.+/, '')
+    .slice(0, 120)
+  return name || 'Test_Request.pdf'
+}
+
+/** Size of every file under dir (one level of sub-folders is enough for this inbox). */
+async function manakDirBytes(dir) {
+  let total = 0
+  for (const name of await fsp.readdir(dir).catch(() => [])) {
+    const st = await fsp.stat(path.join(dir, name)).catch(() => null)
+    if (st?.isFile()) total += st.size
   }
+  return total
 }
 
-function manakFile(token) {
-  const safe = String(token || '')
-    .replace(/[^\w.-]+/g, '_')
-    .slice(0, 80)
-  return path.join(MANAK_INBOX_DIR, `${safe}.json`)
+let manakInboxBytes = 0
+let manakLastSweep = 0
+
+/**
+ * Drops expired token folders and recounts the inbox size. Returns the live entries (for the per-user cap).
+ * Runs at most every MANAK_SWEEP_EVERY_MS unless forced.
+ */
+async function sweepManakInbox(force = false) {
+  const now = Date.now()
+  if (!force && now - manakLastSweep < MANAK_SWEEP_EVERY_MS) return null
+  manakLastSweep = now
+  await fsp.mkdir(MANAK_PDF_DIR, { recursive: true, mode: 0o700 })
+  const live = []
+  let bytes = 0
+  for (const name of await fsp.readdir(MANAK_PDF_DIR).catch(() => [])) {
+    const dir = path.join(MANAK_PDF_DIR, name)
+    const entry = await readManakEntryFile(dir)
+    if (!entry || now - Number(entry.updatedAt || entry.createdAt || 0) > MANAK_TTL_MS) {
+      await fsp.rm(dir, { recursive: true, force: true }).catch(() => undefined)
+      continue
+    }
+    bytes += (await manakDirBytes(dir)) + (await manakDirBytes(path.join(dir, 'chunks')))
+    live.push({ dir, entry })
+  }
+  manakInboxBytes = bytes
+  return live
 }
 
-function readManakEntry(token) {
+async function readManakEntryFile(dir) {
   try {
-    if (!fs.existsSync(MANAK_INBOX_DIR)) fs.mkdirSync(MANAK_INBOX_DIR, { recursive: true })
-    const raw = fs.readFileSync(manakFile(token), 'utf8')
-    const entry = JSON.parse(raw)
-    if (!entry || entry.token !== token) return null
-    if (Date.now() - Number(entry.createdAt || 0) > MANAK_TTL_MS) return null
-    return entry
+    const entry = JSON.parse(await fsp.readFile(path.join(dir, 'entry.json'), 'utf8'))
+    return entry && typeof entry === 'object' ? entry : null
   } catch {
     return null
   }
 }
 
-function writeManakEntry(entry) {
-  if (!fs.existsSync(MANAK_INBOX_DIR)) fs.mkdirSync(MANAK_INBOX_DIR, { recursive: true })
-  fs.writeFileSync(manakFile(entry.token), JSON.stringify(entry))
+async function readManakEntry(token) {
+  const dir = manakTokenDir(token)
+  const entry = await readManakEntryFile(dir)
+  if (!entry || entry.token !== token) return null
+  if (Date.now() - Number(entry.updatedAt || entry.createdAt || 0) > MANAK_TTL_MS) return null
+  return entry
+}
+
+async function writeManakEntry(entry) {
+  const dir = manakTokenDir(entry.token)
+  await fsp.mkdir(dir, { recursive: true, mode: 0o700 })
+  const tmp = path.join(dir, `entry.${process.pid}.${crypto.randomUUID()}.tmp`)
+  await fsp.writeFile(tmp, JSON.stringify(entry), { mode: 0o600 })
+  await fsp.rename(tmp, path.join(dir, 'entry.json'))
 }
 
 async function handleManakPdf(req, res) {
@@ -132,13 +168,15 @@ async function handleManakPdf(req, res) {
   if (req.method === 'GET') {
     const token = String(url.searchParams.get('token') || '').trim()
     if (!token) return corsJson(res, 400, { ready: false, error: 'token required' })
+    if (!MANAK_TOKEN_RE.test(token)) return corsJson(res, 400, { ready: false, error: 'Invalid token' })
     let caller
     try {
-      caller = await requireUser(req)
+      caller = await requireActiveUser(req)
     } catch (err) {
-      return corsJson(res, Number(err?.statusCode) || 401, { ready: false, error: 'Unauthorized' })
+      const status = Number(err?.statusCode) || 401
+      return corsJson(res, status, { ready: false, error: status === 403 ? 'Forbidden' : 'Unauthorized' })
     }
-    const entry = readManakEntry(token)
+    const entry = await readManakEntry(token)
     if (!entry) return corsJson(res, 200, { ready: false })
     // Only the user who opened the Test Request may collect the PDF.
     if (!entry.userId || entry.userId !== String(caller?.id ?? '')) {
@@ -147,14 +185,9 @@ async function handleManakPdf(req, res) {
     if (!entry.ref) return corsJson(res, 200, { ready: false, sampleId: entry.sampleId })
     let pdfBase64 = ''
     try {
-      const sampleId = manakSafeSampleId(entry.sampleId)
-      const pdfName = String(entry.pdfName || 'Test_Request.pdf').replace(/[^\w.\-]+/g, '_')
-      const pdfPath = path.join(MANAK_PDF_DIR, sampleId, pdfName)
-      if (fs.existsSync(pdfPath)) {
-        pdfBase64 = fs.readFileSync(pdfPath).toString('base64')
-      }
+      pdfBase64 = (await fsp.readFile(path.join(manakTokenDir(token), 'document.pdf'))).toString('base64')
     } catch {
-      /* ignore missing file */
+      /* swept or missing — the app falls back to the extension bridge copy */
     }
     return corsJson(res, 200, {
       ready: true,
@@ -186,26 +219,39 @@ async function handleManakPdf(req, res) {
   if (action === 'register') {
     let caller
     try {
-      caller = await requireUser(req)
+      caller = await requireActiveUser(req)
     } catch (err) {
-      return corsJson(res, Number(err?.statusCode) || 401, { ok: false, error: 'Unauthorized' })
+      const status = Number(err?.statusCode) || 401
+      return corsJson(res, status, { ok: false, error: status === 403 ? 'Forbidden' : 'Unauthorized' })
     }
     const sampleId = String(body.sampleId || '').trim()
     if (!sampleId) return corsJson(res, 400, { ok: false, error: 'sampleId required' })
-    sweepManakInbox()
-    writeManakEntry({
-      token,
-      userId: String(caller?.id ?? ''),
-      sampleId,
-      createdAt: Date.now(),
-      chunks: [],
-      chunkTotal: 0,
-    })
+    if (!MANAK_SAMPLE_ID_RE.test(sampleId)) return corsJson(res, 400, { ok: false, error: 'Invalid sampleId' })
+    const userId = String(caller?.id ?? '')
+    try {
+      const live = (await sweepManakInbox(true)) || []
+      // A token belongs to whoever registered it first.
+      const existing = await readManakEntry(token)
+      if (existing && existing.userId !== userId) return corsJson(res, 403, { ok: false, error: 'Forbidden' })
+      // At most MANAK_TOKENS_PER_USER open hand-offs per user: the oldest ones make room.
+      const mine = live
+        .filter((item) => item.entry.userId === userId && item.entry.token !== token)
+        .sort((a, b) => Number(a.entry.createdAt || 0) - Number(b.entry.createdAt || 0))
+      for (const item of mine.slice(0, Math.max(0, mine.length - (MANAK_TOKENS_PER_USER - 1)))) {
+        await fsp.rm(item.dir, { recursive: true, force: true })
+      }
+      await fsp.rm(manakTokenDir(token), { recursive: true, force: true })
+      const now = Date.now()
+      await writeManakEntry({ token, userId, sampleId, createdAt: now, updatedAt: now, chunkTotal: 0 })
+    } catch (err) {
+      console.error('[manak-pdf] register failed', err)
+      return corsJson(res, 500, { ok: false, error: 'Inbox unavailable. Try again.' })
+    }
     return corsJson(res, 200, { ok: true })
   }
 
   if (action === 'chunk') {
-    const entry = readManakEntry(token)
+    const entry = await readManakEntry(token)
     if (!entry) {
       return corsJson(res, 404, {
         ok: false,
@@ -227,45 +273,69 @@ async function handleManakPdf(req, res) {
     if (entry.chunkTotal && entry.chunkTotal !== total) {
       return corsJson(res, 400, { ok: false, error: 'Chunk total changed' })
     }
-    entry.chunkTotal = total
-    entry.chunks[index] = chunk
-    entry.createdAt = Date.now()
-    writeManakEntry(entry)
+    try {
+      await sweepManakInbox()
+      if (manakInboxBytes + chunk.length > MANAK_INBOX_MAX_BYTES) {
+        console.warn('[manak-pdf] inbox full', manakInboxBytes)
+        return corsJson(res, 503, { ok: false, error: 'Inbox is full. Try again later.' })
+      }
+      const chunkDir = path.join(manakTokenDir(token), 'chunks')
+      await fsp.mkdir(chunkDir, { recursive: true, mode: 0o700 })
+      const chunkFile = path.join(chunkDir, `${index}.b64`)
+      const previous = await fsp.stat(chunkFile).catch(() => null)
+      await fsp.writeFile(chunkFile, chunk, { mode: 0o600 })
+      manakInboxBytes += chunk.length - (previous?.size || 0)
+      entry.chunkTotal = total
+      entry.updatedAt = Date.now()
+      await writeManakEntry(entry)
+    } catch (err) {
+      console.error('[manak-pdf] chunk write failed', err)
+      return corsJson(res, 500, { ok: false, error: 'Inbox unavailable. Try again.' })
+    }
     return corsJson(res, 200, { ok: true })
   }
 
   if (action === 'finish') {
-    const entry = readManakEntry(token)
+    const entry = await readManakEntry(token)
     if (!entry) return corsJson(res, 404, { ok: false, error: 'Unknown token.' })
-    const filled = entry.chunks.filter((part) => typeof part === 'string').length
-    if (!entry.chunkTotal || filled < entry.chunkTotal) {
+    const dir = manakTokenDir(token)
+    const chunkDir = path.join(dir, 'chunks')
+    const total = Number(entry.chunkTotal || 0)
+    const parts = []
+    if (total) {
+      for (let i = 0; i < total; i += 1) {
+        const part = await fsp.readFile(path.join(chunkDir, `${i}.b64`), 'utf8').catch(() => null)
+        if (part == null) break
+        parts.push(part)
+      }
+    }
+    if (!total || parts.length < total) {
       return corsJson(res, 400, { ok: false, error: 'PDF chunks are incomplete.' })
     }
-    const pdfName = String(body.pdfName || entry.pdfName || 'Test_Request.pdf').replace(
-      /[^\w.\-]+/g,
-      '_',
-    )
-    // Always the sample the app registered, never one from the (unauthenticated) request body.
-    const sampleId = manakSafeSampleId(entry.sampleId)
-    const ref = `osl-sample-test-requests/${sampleId}/${Date.now()}-${pdfName.slice(0, 120)}`
-    // Persist assembled PDF bytes under /tmp until Storage upload is wired for OSL paths.
-    try {
-      const bin = Buffer.from(entry.chunks.join(''), 'base64')
-      const outDir = path.join(MANAK_PDF_DIR, sampleId)
-      fs.mkdirSync(outDir, { recursive: true })
-      fs.writeFileSync(path.join(outDir, pdfName), bin)
-    } catch (err) {
-      return corsJson(res, 500, {
-        ok: false,
-        error: err instanceof Error ? err.message : 'PDF write failed',
-      })
+    const bin = Buffer.from(parts.join(''), 'base64')
+    if (bin.subarray(0, 5).toString('latin1') !== '%PDF-') {
+      return corsJson(res, 400, { ok: false, error: 'The upload is not a PDF.' })
     }
-    entry.ref = ref
-    entry.pdfName = pdfName
-    entry.sample_code = String(body.sample_code || entry.sample_code || '')
-    entry.chunks = []
-    entry.createdAt = Date.now()
-    writeManakEntry(entry)
+    const pdfName = manakSafePdfName(body.pdfName || entry.pdfName)
+    // Always the sample the app registered, never one from the (unauthenticated) request body.
+    const ref = `osl-sample-test-requests/${entry.sampleId}/${Date.now()}-${pdfName}`
+    try {
+      const tmp = path.join(dir, `document.${crypto.randomUUID()}.tmp`)
+      await fsp.writeFile(tmp, bin, { mode: 0o600 })
+      await fsp.rename(tmp, path.join(dir, 'document.pdf'))
+      await fsp.rm(chunkDir, { recursive: true, force: true })
+      manakLastSweep = 0 // recount the inbox size on the next upload
+      entry.ref = ref
+      entry.pdfName = pdfName
+      entry.sample_code = String(body.sample_code || entry.sample_code || '').slice(0, 120)
+      // Reset the chunk state, so a later upload for this token starts clean (a new total is allowed).
+      entry.chunkTotal = 0
+      entry.updatedAt = Date.now()
+      await writeManakEntry(entry)
+    } catch (err) {
+      console.error('[manak-pdf] finish failed', err)
+      return corsJson(res, 500, { ok: false, error: 'PDF could not be saved. Try again.' })
+    }
     return corsJson(res, 200, { ok: true, ref, pdfName })
   }
 
@@ -273,7 +343,7 @@ async function handleManakPdf(req, res) {
 }
 
 const handleQiAssistant = createQiAssistantHandler({
-  requireUser,
+  requireUser: requireActiveUser,
   rest,
   readBody,
   corsJson,
@@ -307,7 +377,9 @@ function readBody(req, maxBytes = BODY_LIMIT_DEFAULT) {
       try {
         resolve(JSON.parse(raw))
       } catch {
-        reject(new Error('Invalid JSON body'))
+        const err = new Error('Invalid JSON body')
+        err.statusCode = 400
+        reject(err)
       }
     })
     req.on('error', reject)
@@ -357,9 +429,18 @@ async function requireUser(req) {
     err.statusCode = 401
     throw err
   }
-  const res = await fetch(`${AUTH_URL}/user`, {
-    headers: { Authorization: `Bearer ${token}`, apikey: SERVICE_ROLE_KEY },
-  })
+  let res
+  try {
+    res = await fetch(`${AUTH_URL}/user`, {
+      headers: { Authorization: `Bearer ${token}`, apikey: SERVICE_ROLE_KEY },
+      signal: AbortSignal.timeout(10_000),
+    })
+  } catch (cause) {
+    console.error('[auth] session check failed', cause)
+    const err = new Error('Sign-in check is unavailable. Try again shortly.')
+    err.statusCode = 503
+    throw err
+  }
   if (!res.ok) {
     const err = new Error('Invalid caller session')
     err.statusCode = 401
@@ -368,6 +449,58 @@ async function requireUser(req) {
   return res.json()
 }
 
+/** Recently confirmed active users (user id -> expiry), so busy endpoints do not hit REST every call. */
+const activeUserCache = new Map()
+const ACTIVE_USER_CACHE_MS = 30_000
+
+/**
+ * A valid session AND an active user_profiles row. Deactivated users keep a valid JWT until it expires,
+ * so every user-facing endpoint checks the profile too (requireFullAccess does the same for admins).
+ */
+async function requireActiveUser(req) {
+  const caller = await requireUser(req)
+  const callerId = String(caller?.id ?? '')
+  const now = Date.now()
+  if ((activeUserCache.get(callerId) ?? 0) > now) return caller
+  let row = null
+  try {
+    const rows = await rest(`/user_profiles?id=eq.${encodeURIComponent(callerId)}&select=status`)
+    row = Array.isArray(rows) ? rows[0] ?? null : null
+  } catch (cause) {
+    console.error('[auth] profile status check failed', callerId, cause)
+    const err = new Error('Account check is unavailable. Try again shortly.')
+    err.statusCode = 503
+    throw err
+  }
+  if (!callerId || !row || !isActiveStatus(row.status)) {
+    activeUserCache.delete(callerId)
+    const err = new Error('Your account is inactive. Contact the administrator.')
+    err.statusCode = 403
+    throw err
+  }
+  if (activeUserCache.size > 5_000) activeUserCache.clear()
+  activeUserCache.set(callerId, now + ACTIVE_USER_CACHE_MS)
+  return caller
+}
+
+/**
+ * The aal claim of a caller JWT. Only call after GoTrue /user accepted the token (signature and expiry
+ * are checked there); this just reads the payload.
+ */
+function jwtAal(token) {
+  try {
+    const part = String(token || '').split('.')[1] || ''
+    const payload = JSON.parse(Buffer.from(part, 'base64url').toString('utf8'))
+    return typeof payload?.aal === 'string' ? payload.aal : ''
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * Admin endpoints: active admin profile AND a session that passed Two-Step Login (JWT aal = aal2),
+ * same rule as public.app_is_admin().
+ */
 async function requireFullAccess(req) {
   const caller = await requireUser(req)
   const callerId = String(caller?.id ?? '')
@@ -393,6 +526,11 @@ async function requireFullAccess(req) {
   const active = found && (statusNorm === '' || statusNorm === 'active')
   if (!active || !isAdminRole(role)) {
     const err = new Error('Forbidden')
+    err.statusCode = 403
+    throw err
+  }
+  if (jwtAal(callerJwt(req)) !== 'aal2') {
+    const err = new Error('Admin Actions Need Two-Step Login. Log Out and Sign In Again With Your Authenticator Code.')
     err.statusCode = 403
     throw err
   }
@@ -569,7 +707,7 @@ async function logEmail(entry) {
 }
 
 async function handleSendEmail(req, res) {
-  const caller = await requireUser(req)
+  const caller = await requireActiveUser(req)
   const body = await readBody(req, EMAIL_BODY_LIMIT)
   const userId = String(caller?.id ?? '')
   const to = normalizeEmailList(body.to)
@@ -595,6 +733,7 @@ async function handleSendEmail(req, res) {
     attachmentBytes: attachments.reduce((sum, a) => sum + Math.floor((a.content.length * 3) / 4), 0),
   }
   const block = async (status, error) => {
+    console.warn(`[email] blocked user=${userId} recipients=${to.length + cc.length + bcc.length} source=${sourcePath}: ${error}`)
     await logEmail({ ...logBase, status: 'blocked', error })
     json(res, status, { error })
   }
@@ -631,13 +770,16 @@ async function handleSendEmail(req, res) {
     return
   }
 
+  const recipientCount = to.length + cc.length + bcc.length
   let sent
   try {
     sent = await sendResendEmail({ to, cc, bcc, subject, html, text: body.text, attachments })
   } catch (err) {
+    console.warn(`[email] failed user=${userId} recipients=${recipientCount} source=${sourcePath}: ${err instanceof Error ? err.message : err}`)
     await logEmail({ ...logBase, status: 'failed', error: err instanceof Error ? err.message : 'Send failed' })
     throw err
   }
+  console.log(`[email] sent user=${userId} email=${String(caller?.email ?? '')} recipients=${recipientCount} attachments=${attachments.length} source=${sourcePath} id=${sent.id ?? ''}`)
   await logEmail({ ...logBase, status: 'sent', resendId: sent.id ?? null })
   json(res, 200, { ok: true, id: sent.id ?? null })
 }
@@ -911,12 +1053,82 @@ async function handleDeleteUser(req, res) {
   json(res, 200, { ok: true })
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * Admin: "Reset Two-Step Login" for another user (lost or replaced phone). Removes every MFA factor of
+ * the user through the GoTrue admin API and signs them out everywhere; on the next sign-in they set up
+ * the authenticator again (admins are forced to). An admin manages their own factor from their profile.
+ */
+async function handleResetUserMfa(req, res) {
+  const caller = await requireFullAccess(req)
+  const body = await readBody(req)
+  const userId = String(body.user_id ?? '').trim()
+  const callerId = String(caller?.id ?? '')
+
+  if (!UUID_RE.test(userId)) {
+    json(res, 400, { error: 'user_id is required' })
+    return
+  }
+  if (userId === callerId) {
+    json(res, 400, { error: 'Manage Your Own Two-Step Login From Your Profile Menu.' })
+    return
+  }
+  const profile = await fetchProfile(userId)
+  if (!profile) {
+    json(res, 404, { error: 'User not found' })
+    return
+  }
+
+  const listed = await authAdmin(`/admin/users/${encodeURIComponent(userId)}/factors`)
+  if (!listed.ok) {
+    json(res, 400, { error: authErrorMessage(listed.data, `Auth ${listed.status}`) })
+    return
+  }
+  const factors = Array.isArray(listed.data) ? listed.data : []
+  let removed = 0
+  for (const factor of factors) {
+    const factorId = String(factor?.id ?? '')
+    if (!UUID_RE.test(factorId)) continue
+    const deleted = await authAdmin(
+      `/admin/users/${encodeURIComponent(userId)}/factors/${encodeURIComponent(factorId)}`,
+      { method: 'DELETE' },
+    )
+    if (!deleted.ok && deleted.status !== 404) {
+      json(res, 400, { error: authErrorMessage(deleted.data, `Auth ${deleted.status}`) })
+      return
+    }
+    removed += 1
+  }
+
+  let sessionsRevoked = 0
+  if (removed > 0) {
+    try {
+      const revoked = await rest('/rpc/app_revoke_user_sessions', {
+        method: 'POST',
+        body: JSON.stringify({ p_user_id: userId }),
+      })
+      sessionsRevoked = Number(revoked) || 0
+    } catch (err) {
+      console.error('[reset-user-mfa] session revoke failed', userId, err)
+    }
+  }
+
+  await auditUserEvent(callerId, userId, 'U', 'mfa_reset_by_admin', {
+    email: profile.email ?? '',
+    factors_removed: removed,
+    sessions_revoked: sessionsRevoked,
+  })
+
+  json(res, 200, { ok: true, factors_removed: removed })
+}
+
 const renewalReminders = createRenewalReminders({ rest, sendResendEmail, logEmail })
 const RENEWALS_PATH = '/bis/license-renewals'
 
 /** Today's renewal reminder plan: who gets which reminder, and why others are skipped. */
 async function handleRenewalRemindersPreview(req, res) {
-  await requireUser(req)
+  await requireActiveUser(req)
   const level = await callerModuleLevel(req, RENEWALS_PATH)
   if (level !== 'view' && level !== 'edit') {
     json(res, 403, { error: 'You need access to BIS License Renewals.' })
@@ -927,7 +1139,7 @@ async function handleRenewalRemindersPreview(req, res) {
 
 /** Send the renewal reminder for one licence now (to the client, or to the given address). */
 async function handleRenewalReminderSend(req, res) {
-  const caller = await requireUser(req)
+  const caller = await requireActiveUser(req)
   if ((await callerModuleLevel(req, RENEWALS_PATH)) !== 'edit') {
     json(res, 403, { error: 'You need edit access to BIS License Renewals to send reminders.' })
     return
@@ -961,6 +1173,7 @@ const routes = {
   'POST /create-user': handleCreateUser,
   'POST /delete-user': handleDeleteUser,
   'POST /set-user-password': handleSetUserPassword,
+  'POST /reset-user-mfa': handleResetUserMfa,
   'POST /qi-assistant': handleQiAssistant,
   'OPTIONS /qi-assistant': handleQiAssistant,
   'GET /osl/manak-pdf': handleManakPdf,
@@ -973,6 +1186,8 @@ const routes = {
 
 const server = http.createServer(async (req, res) => {
   res.qeCorsOrigin = corsOriginFor(req.headers.origin)
+  const requestId = crypto.randomUUID()
+  res.setHeader('X-Request-Id', requestId)
   const url = new URL(req.url || '/', 'http://functions.local')
   const pathname = url.pathname.replace(/\/$/, '') || '/'
   const key = `${req.method} ${pathname}`
@@ -990,7 +1205,18 @@ const server = http.createServer(async (req, res) => {
     await handler(req, res)
   } catch (err) {
     const status = Number(err?.statusCode) || 500
-    json(res, status, { error: err instanceof Error ? err.message : 'Internal error' })
+    // Our own 4xx / 503 errors carry a message meant for the user; anything else (REST, provider, bugs)
+    // is logged here and answered with a generic message and the request id.
+    const own = Number.isInteger(err?.statusCode) && (status < 500 || status === 503)
+    if (!own) console.error(`[functions] ${requestId} ${key} failed`, err)
+    if (res.headersSent) {
+      res.destroy()
+      return
+    }
+    corsJson(res, status, {
+      error: own && err instanceof Error ? err.message : `Something went wrong. Reference: ${requestId}`,
+      requestId,
+    })
   }
 })
 

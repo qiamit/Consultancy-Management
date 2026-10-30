@@ -59,6 +59,7 @@ import {
   fetchDefaultSignatureForKind,
 } from './quotationSignatureStorage'
 import {
+  computeLineTaxBreakdowns,
   computeQuotationTotals,
   defaultValidUntil,
   emptyQuotationLine,
@@ -412,7 +413,6 @@ export function QuotationFormView({
   const [manageTermsOpen, setManageTermsOpen] = useState(false)
   const [notes, setNotes] = useState<QuotationNoteRow[]>([])
   const [notesOpen, setNotesOpen] = useState(false)
-  const [convertedInvoiceTotal, setConvertedInvoiceTotal] = useState(0)
   const [ledgerVersion, setLedgerVersion] = useState(0)
   const [invoiceBalances, setInvoiceBalances] = useState<InvoiceBalance[]>([])
   const [settlements, setSettlements] = useState<InvoiceSettlement[]>([])
@@ -572,6 +572,8 @@ export function QuotationFormView({
   const showSgst = placeOfSupply ? supplyMode === 'intra' : showSgstRow
   const showIgst = placeOfSupply ? supplyMode === 'inter' : showIgstRow
   const totals = computeQuotationTotals(form, supplyMode)
+  // Per-line GST after each line's share of the header discount (adds up to the totals).
+  const lineTaxBreakdowns = computeLineTaxBreakdowns(form, supplyMode)
   const showGstBreakdown = showCgst || showSgst || showIgst
   const visibleInvoiceBalances = form.clientId ? invoiceBalances : []
   const matchedInvoiceBalance = visibleInvoiceBalances.find(
@@ -854,39 +856,6 @@ export function QuotationFormView({
   const selectedClientLabel =
     clientOptions.find((o) => o.id === form.clientId)?.label ?? form.clientName
 
-  useEffect(() => {
-    if (!isPaymentReceipt || (!form.clientId && !form.clientName.trim())) {
-      setConvertedInvoiceTotal(0)
-      return
-    }
-    let cancelled = false
-    void (async () => {
-      try {
-        let query = supabase
-          .from('quotations')
-          .select('grand_total, client_id, client_name, status')
-          .in('status', ['Invoice', 'Converted'])
-        if (form.clientId.trim()) {
-          query = query.eq('client_id', form.clientId.trim())
-        } else {
-          query = query.ilike('client_name', form.clientName.trim())
-        }
-        const { data, error } = await query
-        if (error) throw error
-        const total = (Array.isArray(data) ? data : []).reduce((sum, row) => {
-          const n = Number((row as { grand_total?: number }).grand_total)
-          return sum + (Number.isFinite(n) ? Math.max(0, n) : 0)
-        }, 0)
-        if (!cancelled) setConvertedInvoiceTotal(Math.round(total * 100) / 100)
-      } catch {
-        if (!cancelled) setConvertedInvoiceTotal(0)
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [form.clientId, form.clientName, isPaymentReceipt])
-
   const selectedClientBalance = useMemo(() => {
     const contact = form.clientId ? clientContactById[form.clientId] : undefined
     if (!form.clientId && !form.clientName.trim()) {
@@ -898,11 +867,9 @@ export function QuotationFormView({
       openingBalance: contact?.openingBalance ?? 0,
       openingType: contact?.balanceType === 'Cr' ? 'Cr' : 'Dr',
       excludeReceiptId,
-      extraDebit: convertedInvoiceTotal,
     })
   }, [
     clientContactById,
-    convertedInvoiceTotal,
     excludeReceiptId,
     form.clientId,
     form.clientName,
@@ -1350,7 +1317,7 @@ export function QuotationFormView({
             const descOpen = Boolean(descOpenByKey[line.key])
             const combined = joinLineItemText(line.description, line.details)
             const descValue = descOpen ? (descQueryByKey[line.key] ?? combined) : combined
-            const gstSplit = lineGstSplit(line, supplyMode)
+            const gstSplit = lineTaxBreakdowns[index] ?? lineGstSplit(line, supplyMode)
             return (
               <article
                 key={`card-${line.key}`}
@@ -1411,7 +1378,7 @@ export function QuotationFormView({
 
                     <div className="space-y-2.5 p-2.5">
                       <div className="min-w-0 space-y-1">
-                        <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
+                        <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-stone-500">
                           Item / Description
                         </p>
                         {isLast ? (
@@ -1480,7 +1447,7 @@ export function QuotationFormView({
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                         {visibleLineColumns.make ? (
                           <div className="min-w-0 space-y-1">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
+                            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-stone-500">
                               Make
                             </p>
                             {isLast ? (
@@ -1497,7 +1464,7 @@ export function QuotationFormView({
                         ) : null}
                         {visibleLineColumns.hsnSac ? (
                           <div className="min-w-0 space-y-1">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
+                            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-stone-500">
                               HSN/SAC
                             </p>
                             {isLast ? (
@@ -1513,7 +1480,7 @@ export function QuotationFormView({
                         ) : null}
                         {visibleLineColumns.itemCode ? (
                           <div className="min-w-0 space-y-1">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
+                            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-stone-500">
                               Item Code
                             </p>
                             {isLast ? (
@@ -1530,7 +1497,7 @@ export function QuotationFormView({
                         ) : null}
                         {visibleLineColumns.quantity ? (
                           <div className="min-w-0 space-y-1">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
+                            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-stone-500">
                               Qty
                             </p>
                             {isLast ? (
@@ -1551,7 +1518,7 @@ export function QuotationFormView({
                         ) : null}
                         {visibleLineColumns.unit ? (
                           <div className="min-w-0 space-y-1">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
+                            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-stone-500">
                               Unit
                             </p>
                             {isLast ? (
@@ -1567,7 +1534,7 @@ export function QuotationFormView({
                         ) : null}
                         {visibleLineColumns.rate ? (
                           <div className="min-w-0 space-y-1">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
+                            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-stone-500">
                               Rate
                             </p>
                             {isLast ? (
@@ -1613,7 +1580,7 @@ export function QuotationFormView({
                         ) : null}
                         {visibleLineColumns.discountPercent ? (
                           <div className="min-w-0 space-y-1">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
+                            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-stone-500">
                               Disc %
                             </p>
                             {isLast ? (
@@ -1637,7 +1604,7 @@ export function QuotationFormView({
                         ) : null}
                         {visibleLineColumns.gstPercent ? (
                           <div className="min-w-0 space-y-1">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
+                            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-stone-500">
                               GST %
                             </p>
                             {isLast ? (
@@ -1659,7 +1626,7 @@ export function QuotationFormView({
                         ) : null}
                         {visibleLineColumns.lineRemarks ? (
                           <div className="col-span-2 min-w-0 space-y-1 sm:col-span-3">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
+                            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-stone-500">
                               Remarks
                             </p>
                             {isLast ? (
@@ -1678,7 +1645,7 @@ export function QuotationFormView({
                         ) : null}
                         {visibleLineColumns.deliveryPeriod ? (
                           <div className="min-w-0 space-y-1">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">
+                            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-stone-500">
                               Delivery
                             </p>
                             {isLast ? (
@@ -1854,7 +1821,7 @@ export function QuotationFormView({
                 const descValue = descOpen ? (descQueryByKey[line.key] ?? combined) : combined
                 const cellTextClass =
                   'align-middle px-2 py-1.5 text-center text-sm text-stone-800'
-                const gstSplit = lineGstSplit(line, supplyMode)
+                const gstSplit = lineTaxBreakdowns[index] ?? lineGstSplit(line, supplyMode)
                 const moneyCellClass =
                   'align-middle px-2 py-1.5 text-center tabular-nums font-medium text-stone-900'
                 return (
@@ -2375,7 +2342,7 @@ export function QuotationFormView({
 
           {showDiscountRow ? (
             <div className="flex items-center justify-between gap-2">
-              <span className="text-stone-600">Discount</span>
+              <span className="text-stone-600">Less: Discount</span>
               <div className="flex items-center gap-1">
                 <span className="text-stone-500">{getCurrencySymbol()}</span>
                 <Input
@@ -2395,13 +2362,22 @@ export function QuotationFormView({
                   title="Remove"
                   onClick={() => {
                     setShowDiscountRow(false)
-                    set('discountAmount', '0')
-                    set('discountPercent', '0')
+                    // One update: two set() calls both spread the same old form, so the second undid the first.
+                    onChange({ ...form, discountAmount: '0', discountPercent: '0' })
                   }}
                 >
                   <X size={14} aria-hidden />
                 </button>
               </div>
+            </div>
+          ) : null}
+
+          {totals.discountAmount > 0 ? (
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-stone-600" title="GST Is Charged on This Value">
+                Taxable Value
+              </span>
+              <span className="tabular-nums">{getCurrencySymbol()} {formatMoney(totals.taxableValue)}</span>
             </div>
           ) : null}
 
@@ -2764,7 +2740,7 @@ export function QuotationFormView({
         <DialogContent
           className={cn(
             limsDialogClass,
-            'max-h-[min(90vh,640px)] w-[min(30rem,calc(100vw-1.5rem))] max-w-lg',
+            'max-h-[min(90dvh,640px)] w-[min(30rem,calc(100vw-1.5rem))] max-w-lg',
           )}
           aria-describedby={undefined}
           layer="nested"

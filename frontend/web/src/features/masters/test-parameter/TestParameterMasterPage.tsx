@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { limsPageShellClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { useSearchParams } from 'react-router-dom'
@@ -40,6 +41,7 @@ import {
   type TestParameterForm as TestParameterFormType,
   type TestParameterRow,
 } from './types'
+import { buildIsCodePayload } from '@/features/masters/is-codes/types'
 
 const formatSupabaseError = (err: unknown) => {
   if (!err || typeof err !== 'object') return 'Unknown error'
@@ -176,6 +178,7 @@ function parseCsv(text: string) {
 
 export default function TestParameterMasterPage() {
   const [searchParams, setSearchParams] = useSearchParams()
+  const [confirm, confirmDialog] = useConfirmDialog()
   const { editId, setEdit } = useMasterUiSearchState()
   const [saveLoading, setSaveLoading] = useState(false)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
@@ -564,6 +567,11 @@ export default function TestParameterMasterPage() {
   }, [filteredRows, sortKey, sortDir])
 
   const pageCount = Math.max(1, Math.ceil(sortedRows.length / pageSize))
+  // Hiding archived rows or deleting the last rows can leave the page past the end (empty table,
+  // "Page 6 of 4"): step back to the last page. Skipped while nothing is loaded.
+  useEffect(() => {
+    if (rows.length > 0 && page > pageCount) setPage(pageCount)
+  }, [rows.length, page, pageCount])
 
   const pagedRows = useMemo(() => {
     const start = (page - 1) * pageSize
@@ -705,7 +713,11 @@ export default function TestParameterMasterPage() {
       setSaveMessage(null)
       setSaveLoading(true)
       try {
-        const payload = buildInsertPayload(form)
+        // The inline row edits only these columns: keep the saved MU and accreditation scope
+        // (the insert payload blanks them for new rows).
+        const { uncertainty_mu: _mu, under_accreditation_ids: _accreditation, ...payload } = buildInsertPayload(form)
+        void _mu
+        void _accreditation
         const { data, error } = await supabase
           .from('test_parameters')
           .update(payload)
@@ -936,20 +948,14 @@ export default function TestParameterMasterPage() {
       setSaveMessage(null)
       setIsCodeSaveLoading(true)
       try {
-        const payload = {
-          is_number: normalizeIsText(isCodeForm.isNumber),
-          revision_year: normalizeIsText(isCodeForm.revisionYear) || null,
-          reaffirmation_year: normalizeIsText(isCodeForm.reaffirmationYear) || null,
-          amendment_number: normalizeIsText(isCodeForm.amendmentNumber) || null,
-          title: normalizeIsText(isCodeForm.title),
-          aspect: isCodeForm.aspect,
-          testing_charges: isCodeForm.testingCharges ? Number(isCodeForm.testingCharges) : null,
-          remarks: normalizeIsText(isCodeForm.remarks) || null,
-        }
+        // Same columns as the IS Code Master (int years, canonical number, all form fields). A plain
+        // insert: the old upsert on (is_number, revision_year) overwrote an existing code with this
+        // partial data, or failed where that index no longer exists.
+        const payload = buildIsCodePayload(isCodeForm)
 
         const { data, error } = await supabase
           .from('is_codes')
-          .upsert(payload, { onConflict: 'is_number,revision_year' })
+          .insert(payload)
           .select('id, is_number, revision_year, part_no, section_no, standard_prefix, title')
           .single()
         if (error) throw error
@@ -1004,7 +1010,7 @@ export default function TestParameterMasterPage() {
         setSaveMessage('Select at least one parameter to archive.')
         return
       }
-      const ok = window.confirm(`Archive ${selectedRows.length} selected record(s)?`)
+      const ok = await confirm(`Archive ${selectedRows.length} Selected Record(s)?`, { title: 'Archive Test Parameters', confirmLabel: 'Archive', destructive: false })
       if (!ok) return
       setSaveMessage(null)
       setSaveLoading(true)
@@ -1069,8 +1075,9 @@ export default function TestParameterMasterPage() {
   const handleDeleteSelected = () => {
     void (async () => {
       if (selectedRows.length === 0) return
-      const ok = window.confirm(
-        `Permanently delete ${selectedRows.length} record(s)? Records still used elsewhere will be skipped. This cannot be undone.`,
+      const ok = await confirm(
+        `Permanently Delete ${selectedRows.length} Record(s)? Records Still Used Elsewhere Will Be Skipped. This Cannot Be Undone.`,
+        { title: 'Delete Test Parameters', confirmLabel: 'Delete', destructive: true },
       )
       if (!ok) return
       setSaveMessage(null)
@@ -1099,8 +1106,9 @@ export default function TestParameterMasterPage() {
   const handleDeleteRow = (row: TestParameterRow) => {
     void (async () => {
       const label = row.item_name?.trim() || 'this record'
-      const ok = window.confirm(
-        `Permanently delete 1 record(s)? Records still used elsewhere will be skipped. This cannot be undone.`,
+      const ok = await confirm(
+        `Permanently Delete 1 Record(s)? Records Still Used Elsewhere Will Be Skipped. This Cannot Be Undone.`,
+        { title: 'Delete Test Parameter', confirmLabel: 'Delete', destructive: true },
       )
       if (!ok) return
       setSaveMessage(null)
@@ -1359,6 +1367,7 @@ export default function TestParameterMasterPage() {
         'flex h-full min-h-0 flex-col overflow-hidden !space-y-0 gap-2 sm:gap-3 md:gap-3',
       )}
     >
+      {confirmDialog}
       <div className="shrink-0">
         <TestParameterHeaderBar
           search={search}
@@ -1418,7 +1427,7 @@ export default function TestParameterMasterPage() {
       />
 
       <Dialog open={isCodeDialogOpen} onOpenChange={setIsCodeDialogOpen}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
+        <DialogContent className="max-w-5xl max-h-[90dvh] overflow-y-auto" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>Add New IS Code</DialogTitle>
           </DialogHeader>

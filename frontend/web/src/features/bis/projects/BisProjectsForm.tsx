@@ -150,6 +150,7 @@ export function BisProjectsForm({
   canSave,
   saving,
   errorMessage,
+  validationMessage = null,
   onSave,
   onCompleteInclusion,
   onExistingLicenseSelected,
@@ -164,6 +165,8 @@ export function BisProjectsForm({
   canSave: boolean
   saving: boolean
   errorMessage: string | null
+  /** Why the form cannot be saved yet (CM/L length, date order); shown above the buttons. */
+  validationMessage?: string | null
   onSave: () => void
   onCompleteInclusion?: () => void
   onExistingLicenseSelected?: (row: BisProjectRow) => void
@@ -741,6 +744,11 @@ export function BisProjectsForm({
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t-2 border-stone-500 bg-stone-100 px-4 py-3 sm:px-6">
+          {validationMessage ? (
+            <p role="alert" className="mr-auto text-xs font-medium text-destructive">
+              {validationMessage}
+            </p>
+          ) : null}
           <Button
             type="button"
             variant="outline"

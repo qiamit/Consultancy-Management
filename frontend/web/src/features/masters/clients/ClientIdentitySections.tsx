@@ -10,6 +10,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { isValidGstin as isValidGst, isValidPan } from '@/lib/indiaValidators'
 import { ClientManageDialogContent } from './ClientManageDialogContent'
 import type { ClientCertificateFile, ClientCertificateInput } from './clientsApi'
+import { todayLocalIso } from '@/lib/localDate'
 
 type DraftDocument = {
   key: string
@@ -52,12 +53,7 @@ function sortDocumentNames(rows: NameOption[]): NameOption[] {
   return Array.from(uniq.values()).sort((a, b) => a.label.localeCompare(b.label))
 }
 
-function todayIsoDate() {
-  const now = new Date()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  return `${now.getFullYear()}-${month}-${day}`
-}
+const todayIsoDate = todayLocalIso
 
 function blankDraft(): DraftDocument {
   return { key: crypto.randomUUID(), name: '', title: '', issuedOn: todayIsoDate(), documentNumber: '' }
@@ -214,7 +210,7 @@ export function ClientIdentitySections({
             />
             Select all
           </label>
-          <div className="hidden grid-cols-[2.5rem_minmax(0,1.2fr)_minmax(0,1.2fr)_11rem_minmax(0,1fr)_7.25rem_5rem] bg-stone-800 text-center text-[11px] font-bold uppercase leading-tight tracking-wide text-amber-200 xl:grid">
+          <div className="hidden grid-cols-[2.5rem_minmax(0,1.2fr)_minmax(0,1.2fr)_11rem_minmax(0,1fr)_8.75rem_6rem] bg-stone-800 text-center text-[11px] font-bold uppercase leading-tight tracking-wide text-amber-200 xl:grid">
             <div className="flex items-center justify-center border border-stone-700 px-1 py-2">
               <input
                 type="checkbox"
@@ -247,7 +243,7 @@ export function ClientIdentitySections({
                   ((linkedGst && !isValidGst(documentNumber)) || (linkedPan && !isValidPan(documentNumber)))
                 const hasFile = Boolean(saved?.storage_path)
                 return (
-                  <div key={entry.key} className="grid grid-cols-[2.5rem_minmax(0,1fr)] items-center gap-2 border border-stone-300 bg-white p-2 xl:grid-cols-[2.5rem_minmax(0,1.2fr)_minmax(0,1.2fr)_11rem_minmax(0,1fr)_7.25rem_5rem] xl:gap-0 xl:border-0 xl:p-0">
+                  <div key={entry.key} className="grid grid-cols-[2.5rem_minmax(0,1fr)] items-center gap-2 border border-stone-300 bg-white p-2 xl:grid-cols-[2.5rem_minmax(0,1.2fr)_minmax(0,1.2fr)_11rem_minmax(0,1fr)_8.75rem_6rem] xl:gap-0 xl:border-0 xl:p-0">
                     <div className="flex items-center justify-center xl:h-full xl:border xl:border-stone-300">
                       <input
                         type="checkbox"

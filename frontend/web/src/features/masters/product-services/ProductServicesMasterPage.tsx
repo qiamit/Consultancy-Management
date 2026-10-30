@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { limsDarkBarGlowStyle, limsPageShellClass } from '@/lib/limsThemeUi'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
+import { limsDarkBarGlowStyle, limsPageShellClass, limsDialogWidthCapClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabaseClient'
 import { useFormDialogOpenChange } from '@/lib/formDialogOpenChange'
@@ -108,6 +109,7 @@ function nextSNo(list: NablScopeRow[]) {
 
 export default function ProductServicesMasterPage() {
   const { editId, setEdit } = useMasterUiSearchState()
+  const [confirm, confirmDialog] = useConfirmDialog()
   const [saveLoading, setSaveLoading] = useState(false)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const importInputRef = useRef<HTMLInputElement | null>(null)
@@ -364,7 +366,7 @@ export default function ProductServicesMasterPage() {
   const handleDeleteSelected = () => {
     void (async () => {
       if (selectedRows.length === 0) return
-      const ok = window.confirm(`Delete ${selectedRows.length} selected scope entry(ies)?`)
+      const ok = await confirm(`Delete ${selectedRows.length} Selected Scope Entry(ies)?`, { title: 'Delete Scope Entries', confirmLabel: 'Delete', destructive: true })
       if (!ok) return
       setSaveMessage(null)
       setSaveLoading(true)
@@ -510,6 +512,19 @@ export default function ProductServicesMasterPage() {
 
         const idx = (name: string) => header.findIndex((h) => h === name)
 
+        // Rows without an S.No get consecutive numbers after every S.No already used (DB and file);
+        // one shared nextSNo(rows) gave them all the same number and the unique index failed the file.
+        const sNoIdx = idx('s_no')
+        let autoSNo = Math.max(
+          nextSNo(rows) - 1,
+          ...rowsData.map((r) => (sNoIdx >= 0 ? Number(r[sNoIdx]) || 0 : 0)),
+        )
+        const typeOfTest = (value: string): string | null => {
+          const v = value.trim().toLowerCase()
+          if (v === 'quantitative') return 'Quantitative'
+          if (v === 'qualitative') return 'Qualitative'
+          return null
+        }
         const payloads = rowsData.map((r) => {
           const get = (name: string) => {
             const i = idx(name)
@@ -517,16 +532,16 @@ export default function ProductServicesMasterPage() {
           }
 
           return {
-            s_no: Number(get('s_no')) || nextSNo(rows),
+            s_no: Number(get('s_no')) || ++autoSNo,
             discipline_group: get('discipline_group') || '',
             materials_products: get('materials_products') || '',
             component_parameter: get('component_parameter') || '',
             test_method_specification: get('test_method_specification') || '',
             permanent_testing: get('permanent_testing') || 'Permanent Testing',
             scope_status: normalizeNablScopeStatus(get('scope_status')),
-            type_of_test: get('type_of_test') || null,
-            range_minimum: parseOptionalNumber(get('range_minimum')),
-            range_maximum: parseOptionalNumber(get('range_maximum')),
+            type_of_test: typeOfTest(get('type_of_test')),
+            range_minimum: parseOptionalNumber(get('range_minimum').replace(/,/g, '')),
+            range_maximum: parseOptionalNumber(get('range_maximum').replace(/,/g, '')),
             unit: get('unit') || null,
             uncertainty: get('uncertainty') || null,
           }
@@ -561,6 +576,7 @@ export default function ProductServicesMasterPage() {
 
   return (
     <div className={limsPageShellClass}>
+      {confirmDialog}
       <ProductServicesHeaderBar
         search={search}
         onSearchChange={setSearch}
@@ -581,11 +597,11 @@ export default function ProductServicesMasterPage() {
         <DialogContent
           persistOnFocusLoss
           aria-describedby={undefined}
-          overlayClassName="lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto"
           className={cn(
-            'max-h-[92vh] w-[calc(100vw-1rem)] max-w-4xl gap-0 overflow-hidden rounded-none border-4 border-stone-700 bg-white p-0 shadow-2xl ring-2 ring-amber-700/40 sm:w-full sm:rounded-none',
+            'max-h-[92dvh] w-[calc(100vw-1rem)] max-w-4xl gap-0 overflow-hidden rounded-none border-4 border-stone-700 bg-white p-0 shadow-2xl ring-2 ring-amber-700/40 sm:w-full sm:rounded-none',
             '[&>button]:!rounded-none [&>button]:text-white [&>button]:opacity-100 [&>button]:hover:bg-white/10',
-            'lg:left-[calc(268px+(100vw-268px)/2)] md:top-1/2 lg:w-[min(56rem,calc(100vw-268px-2rem))] lg:max-w-[min(56rem,calc(100vw-268px-2rem))] md:!-translate-x-1/2 md:!-translate-y-1/2',
+            'md:top-1/2 md:!-translate-x-1/2 md:!-translate-y-1/2',
+            limsDialogWidthCapClass['56rem'],
           )}
         >
           <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white sm:px-5 sm:py-3">
@@ -601,7 +617,7 @@ export default function ProductServicesMasterPage() {
             </DialogHeader>
           </div>
 
-          <div className="max-h-[min(72vh,720px)] overflow-y-auto overflow-x-hidden bg-gradient-to-b from-stone-100/80 to-white px-4 py-4 sm:px-6 sm:py-5">
+          <div className="max-h-[min(72dvh,720px)] overflow-y-auto overflow-x-hidden bg-gradient-to-b from-stone-100/80 to-white px-4 py-4 sm:px-6 sm:py-5">
             {saveMessage ? (
               <p className="mb-4 border-l-2 border-destructive bg-destructive/5 px-3 py-2 text-sm text-destructive">
                 {saveMessage}

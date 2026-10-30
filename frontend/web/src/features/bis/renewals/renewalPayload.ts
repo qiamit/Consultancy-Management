@@ -4,7 +4,10 @@
  * (frontend/extensions/QE-Extension-Dev/renewal-fill.js — keep the shape in sync).
  */
 import { supabase } from '@/lib/supabaseClient'
+import { fetchBisModulePayload } from '../projects/bisModuleDataApi'
 import { BIS_PROJECT_FILES_BUCKET } from '../projects/bisProjectFilesApi'
+import { parseCmpf307Payload } from '../projects/cmpf307Model'
+import { requireManakCmL } from '../projects/manakExtensionBridge'
 import type { BisProjectRow } from '../projects/types'
 import { fetchLatestRenewalForProject } from './bisRenewalsApi'
 import { calculateRenewalProductionRow, rowToRenewalForm } from './types'
@@ -30,7 +33,10 @@ export type ManakRenewalPayload = {
   firmName: string
   isNumber: string
   validityDate: string
-  /** Brand to pick on each return; empty = the licence's first brand on Manak. */
+  /**
+   * Brand to pick on each return: the licence's only brand in Consultancy Pro (CMPF-307). Empty when the
+   * app has none or several — the extension then stops if Manak lists more than one brand (never guesses).
+   */
   brand: string
   /** Month-wise returns from the latest saved Renewal Sheet (empty when none is saved yet). */
   returns: ManakRenewalReturn[]
@@ -72,10 +78,21 @@ async function caCertificateFile(projectId: string): Promise<ManakRenewalFile | 
   }
 }
 
+/** The licence's brand when CMPF-307 lists exactly one; "" otherwise. */
+async function licenceBrand(projectId: string): Promise<string> {
+  const payload = await fetchBisModulePayload(projectId, 'cmpf-307')
+  const names = parseCmpf307Payload(payload).rows.map((r) => r.brandName.trim()).filter(Boolean)
+  const unique = Array.from(new Map(names.map((n) => [n.toLowerCase(), n])).values())
+  return unique.length === 1 ? unique[0] : ''
+}
+
 export async function buildManakRenewalPayload(row: BisProjectRow): Promise<ManakRenewalPayload> {
-  const [saved, caCertificate] = await Promise.all([
+  // Without a 10-digit CM/L the extension cannot tell this licence's row apart on Manak.
+  const cmlNo = requireManakCmL(row.cm_l_digits, 'Renewal')
+  const [saved, caCertificate, brand] = await Promise.all([
     fetchLatestRenewalForProject(row.id).catch(() => null),
     caCertificateFile(row.id).catch(() => null),
+    licenceBrand(row.id).catch(() => ''),
   ])
   const form = saved ? rowToRenewalForm(saved) : null
   const returns: ManakRenewalReturn[] = form
@@ -85,7 +102,7 @@ export async function buildManakRenewalPayload(row: BisProjectRow): Promise<Mana
         .map((r) => ({
           from: r.periodFrom,
           to: r.periodTo,
-          productionQty: r.stockMarkingBreak ? '0' : r.productionUnit,
+          productionQty: r.stockMarkingBreak ? '0' : String(r.productionUnit ?? '').replace(/[,\s]/g, ''),
           productionValue: r.stockMarkingBreak ? '0' : r.productionValue,
           coveredQty: r.stockMarkingBreak ? '0' : r.coveredUnit,
           coveredValue: r.stockMarkingBreak ? '0' : r.coveredValue,
@@ -94,11 +111,11 @@ export async function buildManakRenewalPayload(row: BisProjectRow): Promise<Mana
   return {
     kind: 'QE_MANAK_RENEWAL_V1',
     projectId: row.id,
-    cmlNo: String(row.cm_l_digits ?? '').replace(/\D/g, ''),
+    cmlNo,
     firmName: String(row.client?.company_name ?? '').trim(),
     isNumber: String(row.is_code?.is_number ?? '').trim(),
     validityDate: String(row.license_validity_date ?? '').slice(0, 10),
-    brand: '',
+    brand,
     returns,
     difficulties: RENEWAL_DIFFICULTIES_NIL,
     files: caCertificate ? [caCertificate] : [],

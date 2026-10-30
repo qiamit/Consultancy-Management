@@ -169,7 +169,8 @@ export async function importBisModuleFromProject(opts: {
 
   if (kind === 'application-details') {
     const form = rowToBisApplicationDetailsForm(sourceProject)
-    await saveBisApplicationDetails(targetProjectId, form)
+    // CM/L, licence number, granted / validity and application number / date stay the target's own.
+    await saveBisApplicationDetails(targetProjectId, form, { keepIdentity: true })
     fieldsCopied = true
   } else if (STRUCTURED_MODULE_KINDS.includes(kind)) {
     // Process Description shares Process Flow Chart payload.

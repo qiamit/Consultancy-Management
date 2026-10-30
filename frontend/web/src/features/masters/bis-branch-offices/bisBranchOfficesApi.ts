@@ -162,17 +162,21 @@ export async function listBisBranchOffices(includeArchived = false): Promise<Bis
 
 export async function setBisBranchOfficesArchived(ids: string[], archived: boolean): Promise<void> {
   if (ids.length === 0) return
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('bis_offices')
     .update({ archived_at: archived ? new Date().toISOString() : null })
     .in('id', ids)
+    .select('id')
   if (error) throw error
+  // RLS turns a view-only update into "0 rows, no error"; do not report success then.
+  if (!data?.length) throw new Error('You do not have edit access for these records (view-only).')
 }
 
 export async function deleteBisBranchOffices(ids: string[]): Promise<void> {
   if (ids.length === 0) return
-  const { error } = await supabase.from('bis_offices').delete().in('id', ids)
+  const { data, error } = await supabase.from('bis_offices').delete().in('id', ids).select('id')
   if (error) throw error
+  if (!data?.length) throw new Error('You do not have delete access for these records (view-only).')
 }
 
 export async function saveBisBranchOffice(form: BisBranchOfficeForm, editingId: string | null): Promise<string> {

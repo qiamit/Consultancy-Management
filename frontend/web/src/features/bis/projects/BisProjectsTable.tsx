@@ -564,7 +564,7 @@ export function BisProjectsTable({
                         onChange={() => onToggle(r.id)}
                       />
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-start gap-2.5">
+                        <div className="bis-project-card-head flex items-start gap-2.5">
                           <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-800">
                             <Building2 className="h-4 w-4" aria-hidden />
                           </span>
@@ -788,16 +788,16 @@ export function BisProjectsTable({
                           {formatDisplayDate(r.license_validity_date)}
                         </p>
                         {validity.daysLeft != null && validity.state === 'expiring' ? (
-                          <p className="text-[11px] text-amber-700">{validity.daysLeft} day(s) left</p>
+                          <p className="text-[11px] text-amber-700">{validity.daysLeft} Days Left</p>
                         ) : null}
                         {validity.daysLeft != null && validity.state === 'deferred' ? (
                           <p className="text-[11px] text-orange-700">
-                            Validity crossed {Math.abs(validity.daysLeft)} day(s) ago · {RENEWAL_DEFERRED_DAYS + validity.daysLeft} day(s) left with late fee
+                            Late Fee · {RENEWAL_DEFERRED_DAYS + validity.daysLeft} Days Left
                           </p>
                         ) : null}
                         {validity.state === 'expired' ? (
                           <p className="text-[11px] text-red-700">
-                            Expired {Math.abs(validity.daysLeft ?? 0)} day(s) ago
+                            Expired {Math.abs(validity.daysLeft ?? 0)} Days
                           </p>
                         ) : null}
                       </TableCell>

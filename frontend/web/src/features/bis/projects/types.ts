@@ -1,4 +1,5 @@
 import { formatIsCodeLabel } from '@/features/masters/is-codes/formatIsCodeLabel'
+import { addDaysIso, diffDaysIso, timestampToLocalIsoDate, todayLocalIso } from '@/lib/localDate'
 
 export type BisProjectsListMode =
   | 'all'
@@ -41,6 +42,21 @@ export const BIS_PROJECT_KIND_EXTRA_OPTIONS: Array<{ value: string; label: strin
 ]
 
 export const DEFAULT_PROJECT_KIND = 'Application'
+
+/** Every spelling of a licence row's project_kind (for `.in('project_kind', …)` queries). */
+export const LICENCE_KINDS = ['Licence', 'License', 'licence', 'license']
+/** Old separate Inclusion rows; they share a licence's CM/L but are never licences themselves. */
+export const INCLUSION_KINDS = ['Inclusion', 'inclusion']
+
+/** True for a granted licence row (not an Application, not an old Inclusion row). */
+export function isLicenceKind(kind: string | null | undefined): boolean {
+  const k = String(kind ?? '').trim().toLowerCase()
+  return k === 'licence' || k === 'license'
+}
+
+export function isInclusionKind(kind: string | null | undefined): boolean {
+  return String(kind ?? '').trim().toLowerCase() === 'inclusion'
+}
 
 /** Default project_kind when creating a row from a filtered list page. */
 export function defaultProjectKindForListMode(mode: BisProjectsListMode): string {
@@ -195,6 +211,8 @@ export type BisProjectForm = {
   cmLDigits: string
   licenseValidityDate: string
   grantedDate: string
+  /** Read only here (Application Details owns it); used to check the date order. */
+  applicationDate: string
   status: string
   applicationStage: string
   isQeManaged: boolean
@@ -393,6 +411,7 @@ export function emptyBisProjectForm(projectKind: string = DEFAULT_PROJECT_KIND):
     cmLDigits: '',
     licenseValidityDate: '',
     grantedDate: '',
+    applicationDate: '',
     status: 'in_progress',
     applicationStage: DEFAULT_APPLICATION_STAGE,
     isQeManaged: true,
@@ -442,6 +461,7 @@ export function rowToBisProjectForm(row: BisProjectRow): BisProjectForm {
     cmLDigits: String(row.cm_l_digits ?? '').replace(/\D/g, '').slice(0, 10),
     licenseValidityDate: row.license_validity_date ?? '',
     grantedDate: row.granted_date ?? '',
+    applicationDate: row.application_date ?? '',
     status: row.status?.trim() || 'in_progress',
     applicationStage: row.application_stage?.trim() || DEFAULT_APPLICATION_STAGE,
     isQeManaged: row.is_qe_managed !== false,
@@ -453,11 +473,46 @@ export function rowToBisProjectForm(row: BisProjectRow): BisProjectForm {
     portalPassword: '',
     portalPasswordSet: Boolean(row.portal_password_set),
     clearPortalPassword: false,
-    // While inclusion is open, the editable field is the new-scope draft — never the live licence notes.
-    notes: sanitizeBisLicenseScopeNotes(
-      row.inclusion_in_progress ? (row.inclusion_scope_draft ?? '') : (row.notes ?? ''),
-    ),
+    // Always the licence's own scope. The Inclusion form swaps in inclusion-details.newScope itself.
+    notes: sanitizeBisLicenseScopeNotes(row.notes ?? ''),
   }
+}
+
+/** CM/L numbers are always 10 digits (same rule as Application Details). */
+export const CM_L_DIGITS_LENGTH = 10
+
+/** Application ≤ Granted < Validity. Returns the first problem, or null when the dates are in order. */
+export function bisDateOrderIssue(dates: {
+  applicationDate?: string | null
+  grantedDate?: string | null
+  validityDate?: string | null
+}): string | null {
+  const application = String(dates.applicationDate ?? '').slice(0, 10)
+  const granted = String(dates.grantedDate ?? '').slice(0, 10)
+  const validity = String(dates.validityDate ?? '').slice(0, 10)
+  if (application && granted && granted < application) {
+    return 'Granted Date Cannot Be Before the Application Date.'
+  }
+  if (granted && validity && validity <= granted) {
+    return 'License Validity Must Be After the Granted Date.'
+  }
+  if (application && validity && validity <= application) {
+    return 'License Validity Must Be After the Application Date.'
+  }
+  return null
+}
+
+/** Licence form checks shown under the form; null when the form can be saved. */
+export function bisLicenseFormIssue(form: BisProjectForm): string | null {
+  if (form.projectKind.trim().toLowerCase() === 'application') return null
+  if (form.cmLDigits && form.cmLDigits.length !== CM_L_DIGITS_LENGTH) {
+    return 'CM/L Number Must Be Exactly 10 Digits.'
+  }
+  return bisDateOrderIssue({
+    applicationDate: form.applicationDate,
+    grantedDate: form.grantedDate,
+    validityDate: form.licenseValidityDate,
+  })
 }
 
 export function sanitizeCurrencyInput(raw: string): string {
@@ -479,16 +534,16 @@ export function buildBisProjectTitle(form: BisProjectForm): string {
   return parts.join(' — ') || 'BIS License'
 }
 
+/** Today's local (IST) calendar date as YYYY-MM-DD. */
 export function todayIsoDate(): string {
-  const d = new Date()
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  const dd = String(d.getDate()).padStart(2, '0')
-  return `${d.getFullYear()}-${mm}-${dd}`
+  return todayLocalIso()
 }
 
+/** dd/mm/yyyy for a date column; a timestamp is shown as its local (IST) day, not its UTC day. */
 export function formatDisplayDate(value: string | null | undefined): string {
   if (!value) return '—'
-  const [y, m, d] = value.slice(0, 10).split('-')
+  const iso = value.length > 10 ? timestampToLocalIsoDate(value) || value.slice(0, 10) : value
+  const [y, m, d] = iso.slice(0, 10).split('-')
   if (!y || !m || !d) return value
   return `${d}/${m}/${y}`
 }
@@ -599,12 +654,7 @@ export const RENEWAL_DEFERRED_DAYS = 90
 
 /** Inclusive end date (YYYY-MM-DD) for the due-soon renewal window. */
 export function dueSoonEndIsoDate(today: string = todayIsoDate(), days = RENEWAL_WINDOW_DAYS): string {
-  const d = new Date(`${today.slice(0, 10)}T00:00:00`)
-  d.setDate(d.getDate() + days)
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
+  return addDaysIso(today.slice(0, 10), days)
 }
 
 export function licenseValidityState(
@@ -612,10 +662,9 @@ export function licenseValidityState(
   today: string = todayIsoDate(),
 ): { state: LicenseValidityState; daysLeft: number | null } {
   if (!validityDate) return { state: 'unknown', daysLeft: null }
-  const end = new Date(`${validityDate.slice(0, 10)}T00:00:00`)
-  const now = new Date(`${today}T00:00:00`)
-  if (Number.isNaN(end.getTime())) return { state: 'unknown', daysLeft: null }
-  const daysLeft = Math.round((end.getTime() - now.getTime()) / 86_400_000)
+  // Whole calendar days, independent of time zone and time of day.
+  const daysLeft = diffDaysIso(today.slice(0, 10), validityDate.slice(0, 10))
+  if (daysLeft == null) return { state: 'unknown', daysLeft: null }
   if (daysLeft < -RENEWAL_DEFERRED_DAYS) return { state: 'expired', daysLeft }
   if (daysLeft < 0) return { state: 'deferred', daysLeft }
   if (daysLeft <= RENEWAL_WINDOW_DAYS) return { state: 'expiring', daysLeft }

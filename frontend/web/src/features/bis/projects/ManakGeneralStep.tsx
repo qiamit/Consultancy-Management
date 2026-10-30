@@ -23,6 +23,7 @@ import type { BisPrintClient } from '../print/loadBisPrintData'
 import { ManakApplicationPanel } from './ManakApplicationPanel'
 import { ManakSubPanel, arrangeByLabelLength } from './ManakStepPages'
 import type { BisProjectRow } from './types'
+import { todayLocalIso } from '@/lib/localDate'
 
 type Rec = Record<string, unknown>
 
@@ -247,7 +248,7 @@ function ProofButton({
     if (!clientId) return
     setBusy(true)
     try {
-      const today = new Date().toISOString().slice(0, 10)
+      const today = todayLocalIso()
       await uploadClientCertificate(clientId, {
         certName,
         documentNumber: doc?.document_number ?? defaultNumber ?? '',
@@ -636,6 +637,11 @@ export function ManakGeneralStep({
     if (!clientId) return
     await done(() => patchClient(clientId, { [column]: v || null }))
   }
+  // Client Master keeps one person for CEO / MD and Contact Person; the application's CEO Name writes both.
+  const personCol = async (v: string) => {
+    if (!clientId) return
+    await done(() => patchClient(clientId, { ceo_name: v || null, contact_person_name: v || null }))
+  }
 
   const proofDoc = certificates.find((d) => ESTABLISHMENT_DOC.test(d.cert_name))
   const addressDoc = certificates.find((d) => ADDRESS_DOC.test(d.cert_name))
@@ -781,12 +787,6 @@ export function ManakGeneralStep({
 
   return (
     <div className="space-y-4">
-      {locked ? (
-        <p className="border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs text-amber-900">
-          This application is no longer linked to Client Master (a licence number exists), so these details are read-only here.
-        </p>
-      ) : null}
-
       <ManakApplicationPanel row={row} projectRaw={projectRaw} branches={branches} onSaved={onProjectSaved} />
 
       <ManakSubPanel title="Registration Details">
@@ -935,7 +935,7 @@ export function ManakGeneralStep({
             ],
           ]}
           items={[
-            ['CEO Name', v(str(raw.ceo_name) || str(client?.contactPerson), col('ceo_name'))],
+            ['CEO Name', v(str(client?.contactPerson) || str(raw.ceo_name), personCol)],
             ['City', v(str(raw.city), col('city'))],
             [
               'District',

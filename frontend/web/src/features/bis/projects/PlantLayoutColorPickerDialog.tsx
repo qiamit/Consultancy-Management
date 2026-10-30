@@ -160,7 +160,7 @@ export function PlantLayoutColorPickerDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         layer="stacked"
-        className="flex max-h-[min(92vh,720px)] w-[min(96vw,520px)] flex-col gap-0 overflow-hidden rounded-none border-stone-500 p-0"
+        className="flex max-h-[min(92dvh,720px)] w-[min(96vw,520px)] flex-col gap-0 overflow-hidden rounded-none border-stone-500 p-0"
         overlayClassName="left-0"
         portalClassName="left-0"
       >

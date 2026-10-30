@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { Dialog, DialogContent, DialogFooter, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { supabase } from '@/lib/supabaseClient'
@@ -152,6 +153,7 @@ export function FtrIsTestParameterDialog({
   const lockedLabel = (isCodeLabel ?? '').trim()
 
   const [rows, setRows] = useState<FtrMasterParam[]>([])
+  const [confirm, confirmDialog] = useConfirmDialog({ layer: 'above' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
@@ -488,8 +490,9 @@ export function FtrIsTestParameterDialog({
     void (async () => {
       if (disabled) return
       const label = row.item_name?.trim() || 'this record'
-      const ok = window.confirm(
-        `Permanently delete "${label}" from the Test Parameter master? Records still used elsewhere will be skipped. This cannot be undone.`,
+      const ok = await confirm(
+        `Permanently Delete "${label}" from the Test Parameter Master? Records Still Used Elsewhere Will Be Skipped. This Cannot Be Undone.`,
+        { title: 'Delete Test Parameter', confirmLabel: 'Delete', destructive: true },
       )
       if (!ok) return
       setSaveMessage(null)
@@ -642,6 +645,7 @@ export function FtrIsTestParameterDialog({
           onInsert={handleInsertSymbol}
           layer="above"
         />
+        {confirmDialog}
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 py-3 sm:px-4">
           {saveMessage ? (

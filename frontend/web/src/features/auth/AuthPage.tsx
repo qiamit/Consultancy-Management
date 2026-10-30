@@ -4,8 +4,10 @@ import { Award, Eye, EyeOff, FlaskConical, Ruler, ShieldCheck } from 'lucide-rea
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { signIn, useAuth } from '@/hooks/useAuth'
+import { signIn, signOut, useAuth } from '@/hooks/useAuth'
 import { requestPasswordReset } from '@/features/auth/passwordApi'
+import { readTwoStepState } from '@/features/auth/mfaApi'
+import { TwoStepChallengePanel } from '@/components/auth/TwoStepLoginPanels'
 import {
   limsDarkBarAccentClass,
   limsDarkBarClass,
@@ -40,6 +42,8 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [forgotMode, setForgotMode] = useState(false)
+  /** Password accepted; the account has an authenticator, so the 6-digit code comes next. */
+  const [codeStep, setCodeStep] = useState(false)
   const [resetSending, setResetSending] = useState(false)
   const [resetSent, setResetSent] = useState(false)
   const [resetError, setResetError] = useState<string | null>(null)
@@ -64,10 +68,32 @@ export default function AuthPage() {
     navigate('/', { replace: true })
   }
 
+  /** After the password: ask for the authenticator code when the account has one, else enter the app. */
+  const continueAfterPassword = async () => {
+    if (redirectedRef.current) return
+    try {
+      const two = await readTwoStepState()
+      if (two.needsCode) {
+        setCodeStep(true)
+        return
+      }
+    } catch {
+      // The app's Two-Step Login gate checks again before showing anything.
+    }
+    goAfterAuth()
+  }
+
   useEffect(() => {
     if (authLoading || !user) return
-    goAfterAuth()
+    void continueAfterPassword()
   }, [authLoading, user, navigate])
+
+  const backToSignIn = async () => {
+    await signOut()
+    setCodeStep(false)
+    setPassword('')
+    setError(null)
+  }
 
   const handleSubmit = async () => {
     setLoading(true)
@@ -76,7 +102,7 @@ export default function AuthPage() {
     try {
       const { error: loginError } = await signIn(email.trim(), password)
       if (loginError) throw loginError
-      goAfterAuth()
+      await continueAfterPassword()
     } catch (err) {
       const isObject = typeof err === 'object' && err !== null
       const name = isObject && 'name' in err ? String((err as { name?: unknown }).name) : ''
@@ -208,7 +234,7 @@ export default function AuthPage() {
               <div className="relative flex items-center justify-center gap-2">
                 <ShieldCheck size={18} className="text-amber-300" />
                 <h2 className="text-lg font-semibold tracking-tight text-white">
-                  {forgotMode ? 'Reset Password' : 'Sign In'}
+                  {codeStep ? 'Two-Step Login' : forgotMode ? 'Reset Password' : 'Sign In'}
                 </h2>
               </div>
             </div>
@@ -219,7 +245,12 @@ export default function AuthPage() {
                   <p className="text-sm text-amber-900">{authNotice}</p>
                 </div>
               ) : null}
-              {forgotMode ? (
+              {codeStep ? (
+                <TwoStepChallengePanel
+                  onVerified={goAfterAuth}
+                  secondaryAction={{ label: 'Back to Sign In', onClick: () => void backToSignIn() }}
+                />
+              ) : forgotMode ? (
                 <div className="space-y-4">
                   {resetSent ? (
                     <div className="rounded-none border border-emerald-600/40 bg-emerald-50 px-3 py-2.5">

@@ -1,8 +1,10 @@
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type KeyboardEvent,
+  type MouseEvent,
   type ReactNode,
 } from 'react'
 import {
@@ -34,6 +36,7 @@ import {
 } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { ProcessDescriptionAiDialog } from './ProcessDescriptionAiDialog'
+import { ProcessFlowChartAiDialog } from './ProcessFlowChartAiDialog'
 import { BisModuleImportDialog } from './BisModuleImportDialog'
 import { DescriptionPointsRows } from './DescriptionPointsRows'
 import { cleanDescriptionPoints } from './descriptionPointsApi'
@@ -43,11 +46,14 @@ import {
   defaultProcessFlowArrowStyle,
   defaultProcessFlowBoxStyle,
   emptyProcessFlowNode,
-  fitProcessFlowFontSize,
+  fitProcessFlowLabel,
   flattenProcessFlowTree,
   layoutProcessFlowChart,
   normalizeProcessFlowHorizontal,
   PROCESS_FLOW_ARROW_DESIGNS,
+  PROCESS_FLOW_LABEL_FONT_FAMILY,
+  PROCESS_FLOW_LABEL_LINE_HEIGHT,
+  PROCESS_FLOW_LABEL_PAD_X,
   processFlowChildren,
   processFlowNodeHasContent,
   reindexProcessFlowSiblings,
@@ -174,6 +180,94 @@ function ProcessFlowArrowHead({
   )
 }
 
+/**
+ * One step box: the name wraps (up to the lines that fit) and sits centred in the box, like the printed chart.
+ * Module-level for the same reason as the arrow head — a remount while typing would drop the caret.
+ */
+function ProcessFlowLabelBox({
+  value,
+  width,
+  height,
+  selected,
+  beside,
+  disabled,
+  registerRef,
+  onLabelChange,
+  onBoxMouseDown,
+  onFocus,
+  onBlur,
+  onKeyDown,
+}: {
+  value: string
+  width: number
+  height: number
+  selected: boolean
+  beside: boolean
+  disabled: boolean
+  registerRef: (el: HTMLTextAreaElement | null) => void
+  onLabelChange: (label: string) => void
+  onBoxMouseDown: (e: MouseEvent) => void
+  onFocus: () => void
+  onBlur: () => void
+  onKeyDown: (e: KeyboardEvent) => void
+}) {
+  const ref = useRef<HTMLTextAreaElement | null>(null)
+  const fit = fitProcessFlowLabel(value, width, height)
+  const maxTextH = Math.ceil(fit.fontSize * PROCESS_FLOW_LABEL_LINE_HEIGHT * fit.maxLines)
+
+  // The textarea is as tall as its text (capped at the lines that fit), so the flex box centres it vertically.
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    el.style.height = '0px'
+    el.style.height = `${Math.min(el.scrollHeight, maxTextH)}px`
+  }, [value, width, fit.fontSize, maxTextH])
+
+  return (
+    <div
+      className={cn(
+        'flex items-center justify-center overflow-hidden rounded-none border-2 bg-[#fffbeb]',
+        'focus-within:border-amber-600 focus-within:bg-amber-50 focus-within:ring-2 focus-within:ring-amber-500/25',
+        selected ? 'border-amber-600 ring-2 ring-amber-500/30' : 'border-amber-800/70',
+        beside && 'border-l-[3px] border-l-sky-600',
+        disabled ? 'cursor-default opacity-70' : 'cursor-text',
+      )}
+      style={{ width, height, paddingLeft: PROCESS_FLOW_LABEL_PAD_X, paddingRight: PROCESS_FLOW_LABEL_PAD_X }}
+      onMouseDown={(e) => {
+        onBoxMouseDown(e)
+        // A click on the box margin edits the name too.
+        if (e.target === e.currentTarget && !disabled) {
+          e.preventDefault()
+          ref.current?.focus()
+        }
+      }}
+    >
+      <textarea
+        ref={(el) => {
+          ref.current = el
+          registerRef(el)
+        }}
+        rows={1}
+        className="block w-full resize-none overflow-hidden border-0 bg-transparent p-0 text-center font-bold text-[#78350f] outline-none placeholder:font-medium placeholder:text-stone-400"
+        style={{
+          fontSize: fit.fontSize,
+          lineHeight: PROCESS_FLOW_LABEL_LINE_HEIGHT,
+          fontFamily: PROCESS_FLOW_LABEL_FONT_FAMILY,
+          maxHeight: maxTextH,
+        }}
+        value={value}
+        disabled={disabled}
+        placeholder="Type Step Name…"
+        // A step name is one line of text; pasted line breaks become spaces (Enter adds a step instead).
+        onChange={(e) => onLabelChange(e.target.value.replace(/[ \t]*[\r\n]+[ \t]*/g, ' '))}
+        onFocus={onFocus}
+        onKeyDown={onKeyDown}
+        onBlur={onBlur}
+      />
+    </div>
+  )
+}
+
 export function ProcessFlowModuleFields({
   mode = 'chart',
   projectRow = null,
@@ -186,6 +280,8 @@ export function ProcessFlowModuleFields({
   productName = '',
   licenseScope = '',
   isCodeId = null,
+  chartAiOpen,
+  onChartAiOpenChange,
 }: {
   /** 'chart' edits the flow chart; 'description' edits the Process Description points (Step 3 has a row for each). */
   mode?: 'chart' | 'description'
@@ -200,6 +296,9 @@ export function ProcessFlowModuleFields({
   productName?: string
   licenseScope?: string
   isCodeId?: string | null
+  /** Chart AI dialog open state, when the host shows the AI button (e.g. in its header next to Import). */
+  chartAiOpen?: boolean
+  onChartAiOpenChange?: (open: boolean) => void
 }) {
   const showAiButtons = useShowAiButtons()
   const [selectedIds, setSelectedIds] = useState<string[]>(() => {
@@ -207,6 +306,9 @@ export function ProcessFlowModuleFields({
     return first ? [first] : []
   })
   const [descriptionAiOpen, setDescriptionAiOpen] = useState(false)
+  const [chartAiOpenLocal, setChartAiOpenLocal] = useState(false)
+  const isChartAiOpen = chartAiOpen ?? chartAiOpenLocal
+  const setChartAiOpen = onChartAiOpenChange ?? setChartAiOpenLocal
   const [importOpen, setImportOpen] = useState(false)
   /** Adjacent settings rail — no modal windows. */
   const [settingsPanel, setSettingsPanel] = useState<'arrow' | 'box' | null>(
@@ -222,7 +324,7 @@ export function ProcessFlowModuleFields({
   /** Local draft while typing — prevents lost keystrokes from parent re-renders. */
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingLabel, setEditingLabel] = useState('')
-  const inputRefs = useRef<Map<string, HTMLInputElement>>(new Map())
+  const inputRefs = useRef<Map<string, HTMLTextAreaElement>>(new Map())
   const lastClickedRef = useRef<string | null>(null)
   const pastRef = useRef<ProcessFlowModulePayload[]>([])
   const futureRef = useRef<ProcessFlowModulePayload[]>([])
@@ -231,8 +333,6 @@ export function ProcessFlowModuleFields({
   selectedIdsRef.current = selectedIds
   const valueRef = useRef(value)
   valueRef.current = value
-  /** Freeze font-size while typing so layout doesn't fight the caret. */
-  const editingFontSizeRef = useRef(14)
 
   const arrowStyle = value.arrowStyle ?? defaultProcessFlowArrowStyle()
   const boxStyle = value.boxStyle ?? defaultProcessFlowBoxStyle()
@@ -602,7 +702,7 @@ export function ProcessFlowModuleFields({
       .map((n) =>
         n.linkFromId && drop.has(n.linkFromId) ? { ...n, linkFromId: null } : n,
       )
-    if (next.length === 0) next = [emptyProcessFlowNode({ label: '' })]
+    // Deleting every step leaves an empty chart (the canvas then offers Add First Step).
     const parents = new Set(
       ids.map((id) => value.nodes.find((n) => n.id === id)?.parentId ?? null),
     )
@@ -716,6 +816,23 @@ export function ProcessFlowModuleFields({
     setPoints(next.length > 0 ? next : [''])
   }
 
+  /** AI flow (with its branches) becomes the chart (Replace), or follows the main sequence (Append); blank boxes are dropped. */
+  const applyAiSteps = (aiNodes: ProcessFlowNode[], mode: 'replace' | 'append') => {
+    const current = valueRef.current.nodes
+    const kept =
+      mode === 'append'
+        ? current.filter((n) => processFlowNodeHasContent(n) || current.some((c) => c.parentId === n.id))
+        : []
+    const roots = processFlowChildren(kept, null)
+    const start = roots.length ? Math.max(...roots.map((n) => n.sortOrder)) + 1 : 0
+    const added = aiNodes.map((n) => (n.parentId == null ? { ...n, sortOrder: start + n.sortOrder } : n))
+    setNodes(reindexProcessFlowSiblings([...kept, ...added], null))
+    if (added[0]) {
+      setSelectedIds([added[0].id])
+      lastClickedRef.current = added[0].id
+    }
+  }
+
   const focusFlatOffset = (fromId: string, delta: number) => {
     const idx = flat.findIndex((r) => r.node.id === fromId)
     if (idx < 0) return
@@ -754,7 +871,7 @@ export function ProcessFlowModuleFields({
     }
   }
 
-  const registerInput = (id: string, el: HTMLInputElement | null) => {
+  const registerInput = (id: string, el: HTMLTextAreaElement | null) => {
     if (el) inputRefs.current.set(id, el)
     else inputRefs.current.delete(id)
   }
@@ -772,59 +889,29 @@ export function ProcessFlowModuleFields({
     dashed: lineDash,
   }
 
-  const renderBox = (node: ProcessFlowNode, size: { width: number; height: number }): ReactNode => {
-    const isSelected = selectedIds.includes(node.id)
-    const displayLabel = editingId === node.id ? editingLabel : node.label
-    const fontSize =
-      editingId === node.id
-        ? editingFontSizeRef.current
-        : fitProcessFlowFontSize(displayLabel, size.width, size.height)
-    return (
-      <input
-          ref={(el) => registerInput(node.id, el)}
-          className={cn(
-            'rounded-none border-2 bg-[#fffbeb] px-2 text-center font-bold text-[#78350f]',
-            'outline-none placeholder:font-medium placeholder:text-stone-400',
-            'focus:border-amber-600 focus:bg-amber-50 focus:ring-2 focus:ring-amber-500/25',
-            isSelected
-              ? 'border-amber-600 ring-2 ring-amber-500/30'
-              : 'border-amber-800/70',
-            node.horizontalWithPrev && 'border-l-[3px] border-l-sky-600',
-            disabled && 'cursor-default opacity-70',
-          )}
-          style={{
-            width: size.width,
-            height: size.height,
-            fontSize,
-            lineHeight: 1.2,
-          }}
-          value={displayLabel}
-          disabled={disabled}
-          placeholder="Type Step Name…"
-          onChange={(e) => {
-            const nextLabel = e.target.value
-            setEditingLabel(nextLabel)
-            patchNode(node.id, { label: nextLabel })
-          }}
-          onMouseDown={(e) => {
-            // Selection BEFORE focus — Ctrl/⌘ multi-select must not be wiped by onFocus.
-            selectOnCanvas(node.id, e)
-          }}
-          onFocus={() => {
-            const sizeNow = resolveProcessFlowBoxSize(node, boxStyle)
-            editingFontSizeRef.current = fitProcessFlowFontSize(
-              node.label.trim() || 'Type step name…',
-              sizeNow.width,
-              sizeNow.height,
-            )
-            setEditingId(node.id)
-            setEditingLabel(node.label)
-          }}
-          onKeyDown={(e) => onCanvasKeyDown(e, node)}
-          onBlur={onLabelBlur}
-        />
-    )
-  }
+  const renderBox = (node: ProcessFlowNode, size: { width: number; height: number }): ReactNode => (
+    <ProcessFlowLabelBox
+      value={editingId === node.id ? editingLabel : node.label}
+      width={size.width}
+      height={size.height}
+      selected={selectedIds.includes(node.id)}
+      beside={node.horizontalWithPrev}
+      disabled={disabled}
+      registerRef={(el) => registerInput(node.id, el)}
+      onLabelChange={(nextLabel) => {
+        setEditingLabel(nextLabel)
+        patchNode(node.id, { label: nextLabel })
+      }}
+      // Selection BEFORE focus — Ctrl/⌘ multi-select must not be wiped by onFocus.
+      onBoxMouseDown={(e) => selectOnCanvas(node.id, e)}
+      onFocus={() => {
+        setEditingId(node.id)
+        setEditingLabel(node.label)
+      }}
+      onKeyDown={(e) => onCanvasKeyDown(e, node)}
+      onBlur={onLabelBlur}
+    />
+  )
 
   // Same layout as the printed chart, so the canvas and the document always match.
   const chart = layoutProcessFlowChart(value.nodes, boxStyle)
@@ -1529,6 +1616,24 @@ export function ProcessFlowModuleFields({
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             <div className="min-h-0 flex-1 overflow-auto overscroll-contain p-4 sm:p-6">
               <div className="mx-auto flex w-full min-w-0 max-w-5xl flex-col items-center">
+                {value.nodes.length === 0 ? (
+                  <div className="flex w-full max-w-md flex-col items-center gap-3 border-2 border-dashed border-stone-300 bg-white/70 px-6 py-8 text-center">
+                    <p className="text-sm font-semibold text-stone-700">No Steps Yet</p>
+                    <p className="text-xs text-stone-500">
+                      Add the First Step of the Manufacturing Process{showAiButtons ? ', or Use the AI Button at the Top to Draft the Chart' : ''}.
+                    </p>
+                    <div className="flex flex-wrap justify-center gap-2">
+                      <Button
+                        type="button"
+                        className={cn(limsPrimaryBtnClass, 'h-9 px-3 text-sm')}
+                        disabled={disabled}
+                        onClick={addRoot}
+                      >
+                        <Plus className="mr-1 h-4 w-4" aria-hidden /> Add First Step
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
                 <div className="relative shrink-0" style={{ width: chart.width + chartPad * 2, height: chart.height + chartPad * 2 }}>
                   {chart.items.map((it, i) => {
                     if (it.kind === 'box') {
@@ -1577,7 +1682,21 @@ export function ProcessFlowModuleFields({
       </div>
 
 
-      {descriptionAiDialog}
+      {showAiButtons ? (
+        <ProcessFlowChartAiDialog
+          open={isChartAiOpen}
+          onOpenChange={setChartAiOpen}
+          disabled={disabled}
+          applicantName={applicantName}
+          isNumber={isNumber}
+          isTitle={isTitle}
+          productName={productName}
+          licenseScope={licenseScope}
+          isCodeId={isCodeId}
+          nodes={value.nodes}
+          onApplySteps={applyAiSteps}
+        />
+      ) : null}
     </>
   )
 }

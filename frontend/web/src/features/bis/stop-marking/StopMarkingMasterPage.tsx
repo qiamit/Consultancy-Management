@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { Select, SelectContent, selectFitTriggerClass, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
 import { useSearchParams } from 'react-router-dom'
@@ -37,6 +38,7 @@ export default function StopMarkingMasterPage() {
   const { editId, viewId, setEdit, setView } = useMasterUiSearchState()
   const [searchParams, setSearchParams] = useSearchParams()
   const licenceParam = (searchParams.get('licence') ?? '').trim()
+  const [confirm, confirmDialog] = useConfirmDialog()
   const [rows, setRows] = useState<StopMarkingRow[]>([])
   const [total, setTotal] = useState(0)
   const [listLoading, setListLoading] = useState(false)
@@ -219,7 +221,7 @@ export default function StopMarkingMasterPage() {
   const handleDeleteSelected = async () => {
     const chosen = rows.filter((r) => selectedIds.has(r.id))
     if (chosen.length === 0) return
-    if (!window.confirm(`Delete ${chosen.length} case(s)? Licences still in Stop Marking go back to their earlier status. This cannot be undone.`)) return
+    if (!(await confirm(`Delete ${chosen.length} Case(s)? Licences Still in Stop Marking Go Back to Their Earlier Status. This Cannot Be Undone.`, { title: 'Delete Cases', confirmLabel: 'Delete', destructive: true }))) return
     try {
       await deleteStopMarkingCases(chosen)
       setSelectedIds(new Set())
@@ -265,6 +267,7 @@ export default function StopMarkingMasterPage() {
 
   return (
     <div className={limsPageShellClass}>
+      {confirmDialog}
       <BisProjectsHeaderBar
         title="License Non-Conformity"
         search={searchInput}

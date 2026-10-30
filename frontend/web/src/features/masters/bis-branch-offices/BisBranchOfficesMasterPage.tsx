@@ -3,11 +3,14 @@ import { Building2, Copy, Mail, MapPin, Pencil, Phone, Plus, Search } from 'luci
 import { QiAssistant } from '@/components/qi-assistant/QiAssistant'
 import { AuditHistoryDialog } from '@/components/lims/AuditHistoryDialog'
 import { Button } from '@/components/ui/button'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useCanEditCurrentModule } from '@/features/settings/module-access/useCanEditCurrentModule'
+import { printHtmlInFrame } from '@/lib/printHtmlInFrame'
+import { escapeHtml } from '@/lib/sendAppEmail'
 import { ClientsTableFooterBar } from '@/features/masters/clients/ClientsFooterBar'
 import {
   clientAiTriggerClass,
@@ -29,6 +32,7 @@ import {
   type BisBranchOfficeForm,
   type BisBranchOfficeRow,
 } from './bisBranchOfficesApi'
+import { parseCsv } from '@/lib/csv'
 
 const GRID_TABLE =
   'min-w-0 w-full table-fixed border-collapse font-jakarta [&_th]:border [&_td]:border [&_th]:border-stone-700 [&_td]:border-[#e7e0d4] [&_th]:p-[1mm] [&_td]:!p-[1mm] [&_th]:sticky [&_th]:top-0 [&_th]:z-[1] [&_td]:break-words'
@@ -73,6 +77,7 @@ function matchesSearch(row: BisBranchOfficeRow, search: string): boolean {
 
 export default function BisBranchOfficesMasterPage() {
   const canEdit = useCanEditCurrentModule()
+  const [confirm, confirmDialog] = useConfirmDialog()
   const fileRef = useRef<HTMLInputElement>(null)
   const [rows, setRows] = useState<BisBranchOfficeRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -207,6 +212,7 @@ export default function BisBranchOfficesMasterPage() {
 
   return (
     <div data-master-scroll="table" className={cn(clientPageShellClass, 'bis-branch-offices-page-container flex h-full min-h-0 flex-col overflow-hidden !space-y-0 gap-2 sm:gap-3 md:gap-3')}>
+      {confirmDialog}
       <div className="shrink-0">
         <div className={clientPanelClass}>
           <div className="relative overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-2 py-2 text-white sm:px-4 sm:py-2.5 md:px-5">
@@ -397,38 +403,45 @@ export default function BisBranchOfficesMasterPage() {
           e.target.value = ''
           if (!file) return
           void file.text().then(async (text) => {
-            const lines = text.split(/\r?\n/).filter((line) => line.trim())
-            const header = (lines.shift() ?? '').split(',').map((cell) => cell.trim().replace(/^"|"$/g, '').toLowerCase())
+            // Quote-aware: exported addresses contain commas.
+            const lines = parseCsv(text)
+            const header = (lines.shift() ?? []).map((cell) => cell.toLowerCase())
             const index = (name: string) => header.indexOf(name)
+            // Code is unique: re-importing an export updates the office instead of failing on it.
+            const existingByCode = new Map(rows.map((row) => [String(row.code ?? '').trim().toUpperCase(), row]))
             let saved = 0
-            for (const line of lines) {
-              const cells = line.split(',').map((cell) => cell.trim().replace(/^"|"$/g, ''))
-              const name = cells[index('name')] ?? ''
-              const code = cells[index('code')] ?? ''
-              if (!name || !code) continue
-              await saveBisBranchOffice({
-                ...emptyBisBranchOfficeForm(),
-                code,
-                name,
-                officeType: cells[index('office_type')] || 'Branch Office',
-                region: cells[index('region')] ?? '',
-                address: cells[index('address')] ?? '',
-                pinCode: cells[index('pin_code')] ?? '',
-                city: cells[index('city')] ?? '',
-                state: cells[index('state')] ?? '',
-                country: cells[index('country')] || 'India',
-                contactName: cells[index('contact_name')] ?? '',
-                email: cells[index('email')] ?? '',
-                mobile: cells[index('mobile')] ?? '',
-                remark: cells[index('remark')] ?? '',
-                gstNumber: cells[index('gst_number')] ?? '',
-                longitude: cells[index('longitude')] ?? '',
-                latitude: cells[index('latitude')] ?? '',
-              }, null)
-              saved += 1
+            try {
+              for (const cells of lines) {
+                const name = cells[index('name')] ?? ''
+                const code = cells[index('code')] ?? ''
+                if (!name || !code) continue
+                // Columns the CSV does not carry keep their saved values.
+                const existing = existingByCode.get(code.trim().toUpperCase())
+                await saveBisBranchOffice({
+                  ...(existing ? rowToForm(existing) : emptyBisBranchOfficeForm()),
+                  code,
+                  name,
+                  officeType: cells[index('office_type')] || 'Branch Office',
+                  region: cells[index('region')] ?? '',
+                  address: cells[index('address')] ?? '',
+                  pinCode: cells[index('pin_code')] ?? '',
+                  city: cells[index('city')] ?? '',
+                  state: cells[index('state')] ?? '',
+                  country: cells[index('country')] || 'India',
+                  contactName: cells[index('contact_name')] ?? '',
+                  email: cells[index('email')] ?? '',
+                  mobile: cells[index('mobile')] ?? '',
+                  remark: cells[index('remark')] ?? '',
+                  gstNumber: cells[index('gst_number')] ?? '',
+                  longitude: cells[index('longitude')] ?? '',
+                  latitude: cells[index('latitude')] ?? '',
+                }, existing?.id ?? null)
+                saved += 1
+              }
+            } finally {
+              refresh()
             }
             setMessage(`Import saved (${saved}).`)
-            refresh()
           }).catch((err: unknown) => setMessage(err instanceof Error ? err.message : 'Import failed'))
         }} />
         <ClientsTableFooterBar
@@ -456,14 +469,13 @@ export default function BisBranchOfficesMasterPage() {
               setMessage('Select an office to print.')
               return
             }
-            const popup = window.open('', '_blank', 'noopener,noreferrer')
-            if (!popup) return
-            popup.document.write(`<title>BIS Branch Offices</title><pre>${selected.map((row) => `${row.code} · ${row.name} · ${row.officeType}`).join('\n')}</pre>`)
-            popup.document.close()
-            popup.print()
+            const lines = selected.map((row) => escapeHtml(`${row.code} · ${row.name} · ${row.officeType}`))
+            if (!printHtmlInFrame(`<!doctype html><html><head><meta charset="utf-8"/><title>BIS Branch Offices</title></head><body><pre>${lines.join('\n')}</pre></body></html>`)) {
+              setMessage('Print Could Not Start. Try Again.')
+            }
           }}
-          onDeleteSelected={() => {
-            if (!window.confirm(`Delete ${selectedIds.size} BIS branch office record(s)?`)) return
+          onDeleteSelected={async () => {
+            if (!(await confirm(`Delete ${selectedIds.size} BIS Branch Office Record(s)?`, { title: 'Delete BIS Branch Offices', confirmLabel: 'Delete', destructive: true }))) return
             void deleteBisBranchOffices([...selectedIds])
               .then(() => { setSelectedIds(new Set()); setMessage('Deleted.'); refresh() })
               .catch((err: unknown) => setMessage(err instanceof Error ? err.message : 'Delete failed'))

@@ -2,7 +2,7 @@ import { ExternalLink, FileText, Mail, Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
-import { formatCmL, formatDisplayDate } from '../projects/types'
+import { formatCmL, formatDisplayDate, todayIsoDate } from '../projects/types'
 import {
   STOP_MARKING_STATUS_STYLES,
   stopMarkingClientName,
@@ -102,7 +102,7 @@ export function StopMarkingTable({
               {rows.map((r) => {
                 const selected = selectedIds.has(r.id)
                 const client = stopMarkingClientName(r) || '—'
-                const overdue = r.status !== 'closed' && r.status !== 'replied' && r.bis_deadline && r.bis_deadline.slice(0, 10) < new Date().toISOString().slice(0, 10)
+                const overdue = r.status !== 'closed' && r.status !== 'replied' && r.bis_deadline && r.bis_deadline.slice(0, 10) < todayIsoDate()
                 return (
                   <TableRow key={r.id} data-state={selected ? 'selected' : undefined} className="group cursor-pointer" onDoubleClick={() => onModule(r)}>
                     <TableCell className="lc-check text-center align-middle">

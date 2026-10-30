@@ -21,6 +21,7 @@ import {
   uploadBisProjectFile,
 } from './bisProjectFilesApi'
 import { removeSignatureImageBackground } from './removeSignatureBackground'
+import { todayLocalIso } from '@/lib/localDate'
 
 type Rec = Record<string, unknown>
 type Slot = 'appointment' | 'education' | 'photo' | 'signature'
@@ -280,7 +281,7 @@ export function StaffDocumentsCell({
       toast.warning('Enter the Person Name Before Creating the Appointment Letter.')
       return
     }
-    setGenDate(str(row.appointmentDate) || new Date().toISOString().slice(0, 10))
+    setGenDate(str(row.appointmentDate) || todayLocalIso())
     setGenRef(str(row.appointmentReferenceNo))
     setGenOpen(true)
   }

@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { formatIsCodeLabel } from '@/features/masters/is-codes/formatIsCodeLabel'
 import type { FilterComboboxOption } from '@/features/sample-handling/receiving/FilterCombobox'
 import { formatBisApiError } from '../projects/bisProjectsApi'
+import { LICENCE_KINDS } from '../projects/types'
 import {
   renewalClientName,
   coveredProductionExceedsTotal,
@@ -105,6 +106,8 @@ export async function searchRenewalProjectOptions(term: string): Promise<FilterC
   let query = supabase
     .from('bis_projects')
     .select('id, title, cm_l_digits, license_validity_date')
+    // Only granted licences are renewed (no Applications, no old Inclusion rows).
+    .in('project_kind', LICENCE_KINDS)
     .order('title', { ascending: true })
   if (clean) {
     const parts = [`title.ilike.*${clean}*`, `cm_l_digits.ilike.*${clean}*`]

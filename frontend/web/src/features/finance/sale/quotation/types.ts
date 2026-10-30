@@ -1,4 +1,5 @@
 /** Finance Management · Sale · Quotation types */
+import { addDaysIso, todayLocalIso } from '@/lib/localDate'
 
 export type QuotationStatus =
   | 'Draft'
@@ -220,21 +221,11 @@ export function normalizePaymentMethod(value: string | null | undefined): Paymen
 }
 
 export function todayIsoDate(): string {
-  const d = new Date()
-  const yyyy = d.getFullYear()
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  const dd = String(d.getDate()).padStart(2, '0')
-  return `${yyyy}-${mm}-${dd}`
+  return todayLocalIso()
 }
 
 export function defaultValidUntil(fromDate = todayIsoDate()): string {
-  const d = new Date(`${fromDate}T00:00:00`)
-  if (Number.isNaN(d.getTime())) return todayIsoDate()
-  d.setDate(d.getDate() + 30)
-  const yyyy = d.getFullYear()
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  const dd = String(d.getDate()).padStart(2, '0')
-  return `${yyyy}-${mm}-${dd}`
+  return addDaysIso(fromDate, 30) || addDaysIso(todayIsoDate(), 30)
 }
 
 export function newLineKey(): string {
@@ -327,17 +318,20 @@ export type LineGstSplit = {
   igstAmount: number
 }
 
+const round2 = (value: number): number => Math.round(value * 100) / 100
+
 /**
+ * GST on one taxable value at one rate.
  * Intra-state default: CGST + SGST = GST/2 each, IGST = 0.
  * Inter-state: IGST = full GST, CGST/SGST = 0.
  */
-export function lineGstSplit(
-  line: QuotationLineForm,
+export function gstSplitForTaxable(
+  taxable: number,
+  gstPercentValue: number,
   mode: 'intra' | 'inter' = 'intra',
 ): LineGstSplit {
-  const gstPercent = Math.max(0, parseMoney(line.gstPercent))
-  const taxable = lineTaxableAmount(line)
-  const gstAmount = Math.round(taxable * (gstPercent / 100) * 100) / 100
+  const gstPercent = Math.max(0, gstPercentValue)
+  const gstAmount = round2(taxable * (gstPercent / 100))
   if (mode === 'inter') {
     return {
       gstPercent,
@@ -350,9 +344,9 @@ export function lineGstSplit(
       igstAmount: gstAmount,
     }
   }
-  const halfPercent = Math.round((gstPercent / 2) * 100) / 100
-  const cgstAmount = Math.round((gstAmount / 2) * 100) / 100
-  const sgstAmount = Math.round((gstAmount - cgstAmount) * 100) / 100
+  const halfPercent = round2(gstPercent / 2)
+  const cgstAmount = round2(gstAmount / 2)
+  const sgstAmount = round2(gstAmount - cgstAmount)
   return {
     gstPercent,
     cgstPercent: halfPercent,
@@ -365,12 +359,99 @@ export function lineGstSplit(
   }
 }
 
+/**
+ * GST split for one line. `headerDiscountShare` is this line's part of the
+ * document-level discount (see computeLineTaxBreakdowns); GST is on the value after it.
+ */
+export function lineGstSplit(
+  line: QuotationLineForm,
+  mode: 'intra' | 'inter' = 'intra',
+  headerDiscountShare = 0,
+): LineGstSplit {
+  const taxable = Math.max(0, round2(lineTaxableAmount(line) - headerDiscountShare))
+  return gstSplitForTaxable(taxable, parseMoney(line.gstPercent), mode)
+}
+
+/** Header (document-level) discount in rupees, capped at the subtotal. Absolute amount wins over the legacy percent. */
+export function headerDiscountAmount(
+  form: Pick<QuotationForm, 'discountAmount' | 'discountPercent'>,
+  subtotal: number,
+): number {
+  let discountAmount = Math.max(0, parseMoney(form.discountAmount))
+  if (discountAmount <= 0) {
+    const discountPercent = parseMoney(form.discountPercent)
+    discountAmount = round2(subtotal * (discountPercent / 100))
+  }
+  return Math.max(0, Math.min(discountAmount, subtotal))
+}
+
+/**
+ * Splits a header discount across lines pro-rata to their taxable amounts.
+ * Each share is rounded to paise; the last line with a value takes the remainder,
+ * so the shares always add up to the discount exactly.
+ */
+export function apportionHeaderDiscount(lineTaxables: number[], discount: number): number[] {
+  const shares = lineTaxables.map(() => 0)
+  const base = round2(lineTaxables.reduce((sum, value) => sum + Math.max(0, value), 0))
+  const total = Math.max(0, Math.min(round2(discount), base))
+  if (total <= 0 || base <= 0) return shares
+  let lastIndex = -1
+  lineTaxables.forEach((value, index) => {
+    if (value > 0) lastIndex = index
+  })
+  let allocated = 0
+  lineTaxables.forEach((value, index) => {
+    if (value <= 0 || index === lastIndex) return
+    const share = Math.min(value, round2((total * value) / base))
+    shares[index] = share
+    allocated = round2(allocated + share)
+  })
+  shares[lastIndex] = Math.max(0, Math.min(lineTaxables[lastIndex], round2(total - allocated)))
+  return shares
+}
+
+export type LineTaxBreakdown = LineGstSplit & {
+  /** Amount after the line's own discount, before the header discount. */
+  lineTaxable: number
+  /** This line's part of the header discount. */
+  headerDiscountShare: number
+  /** Taxable value for GST: lineTaxable − headerDiscountShare. */
+  taxableValue: number
+}
+
+/** Per-line GST after the header discount is apportioned. Same order and length as `form.lines`. */
+export function computeLineTaxBreakdowns(
+  form: Pick<QuotationForm, 'lines' | 'discountAmount' | 'discountPercent'>,
+  gstMode: 'intra' | 'inter' = 'intra',
+): LineTaxBreakdown[] {
+  const lineTaxables = form.lines.map((line) => lineTaxableAmount(line))
+  const subtotal = round2(lineTaxables.reduce((sum, value) => sum + value, 0))
+  const shares = apportionHeaderDiscount(lineTaxables, headerDiscountAmount(form, subtotal))
+  return form.lines.map((line, index) => {
+    const lineTaxable = lineTaxables[index]
+    const headerDiscountShare = shares[index]
+    const taxableValue = Math.max(0, round2(lineTaxable - headerDiscountShare))
+    return {
+      ...gstSplitForTaxable(taxableValue, parseMoney(line.gstPercent), gstMode),
+      lineTaxable,
+      headerDiscountShare,
+      taxableValue,
+    }
+  })
+}
+
+/**
+ * Document totals. GST is charged on the value after the header discount:
+ * Basic Amount − Discount = Taxable Value; GST per line on its share of the Taxable Value.
+ */
 export function computeQuotationTotals(
   form: QuotationForm,
   gstMode: 'intra' | 'inter' = 'intra',
 ): {
   subtotal: number
   discountAmount: number
+  /** Subtotal − header discount: the value GST is charged on. */
+  taxableValue: number
   transportationCharges: number
   packagingCharges: number
   gstAmount: number
@@ -380,15 +461,8 @@ export function computeQuotationTotals(
   grandTotal: number
   effectiveGstPercent: number
 } {
-  const subtotal = form.lines.reduce((sum, line) => sum + lineTaxableAmount(line), 0)
-
-  // Prefer absolute header discount; fall back to legacy percent of subtotal.
-  let discountAmount = Math.max(0, parseMoney(form.discountAmount))
-  if (discountAmount <= 0) {
-    const discountPercent = parseMoney(form.discountPercent)
-    discountAmount = Math.round(subtotal * (discountPercent / 100) * 100) / 100
-  }
-  discountAmount = Math.min(discountAmount, subtotal)
+  const subtotal = round2(form.lines.reduce((sum, line) => sum + lineTaxableAmount(line), 0))
+  const discountAmount = headerDiscountAmount(form, subtotal)
 
   const transportationCharges = Math.max(0, parseMoney(form.transportationCharges))
   const packagingCharges = Math.max(0, parseMoney(form.packagingCharges))
@@ -397,31 +471,29 @@ export function computeQuotationTotals(
   let cgstAmount = 0
   let sgstAmount = 0
   let igstAmount = 0
-  for (const line of form.lines) {
-    const split = lineGstSplit(line, gstMode)
+  for (const split of computeLineTaxBreakdowns(form, gstMode)) {
     gstAmount += split.gstAmount
     cgstAmount += split.cgstAmount
     sgstAmount += split.sgstAmount
     igstAmount += split.igstAmount
   }
-  gstAmount = Math.round(gstAmount * 100) / 100
-  cgstAmount = Math.round(cgstAmount * 100) / 100
-  sgstAmount = Math.round(sgstAmount * 100) / 100
-  igstAmount = Math.round(igstAmount * 100) / 100
+  gstAmount = round2(gstAmount)
+  cgstAmount = round2(cgstAmount)
+  sgstAmount = round2(sgstAmount)
+  igstAmount = round2(igstAmount)
 
-  const afterDiscount = Math.max(0, subtotal - discountAmount)
+  const afterDiscount = Math.max(0, round2(subtotal - discountAmount))
   const effectiveGstPercent =
     afterDiscount > 0
       ? Math.round((gstAmount / afterDiscount) * 10000) / 100
       : parseMoney(form.gstPercent)
 
-  const grandTotal = Math.round(
-    (afterDiscount + transportationCharges + packagingCharges + gstAmount) * 100,
-  ) / 100
+  const grandTotal = round2(afterDiscount + transportationCharges + packagingCharges + gstAmount)
 
   return {
     subtotal,
     discountAmount,
+    taxableValue: afterDiscount,
     transportationCharges,
     packagingCharges,
     gstAmount,
@@ -435,7 +507,7 @@ export function computeQuotationTotals(
 
 export function formatMoney(value: number | null | undefined): string {
   const v = typeof value === 'number' && Number.isFinite(value) ? value : 0
-  return v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 export { formatDate } from '@/lib/utils'

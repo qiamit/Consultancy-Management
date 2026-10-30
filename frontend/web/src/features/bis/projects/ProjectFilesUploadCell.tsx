@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Eye, FileCheck2, Loader2, Trash2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { limsDialogClass, limsPrimaryBtnClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
@@ -22,6 +23,7 @@ const btn = 'inline-flex h-8 w-8 items-center justify-center rounded-none border
  */
 export function ProjectFilesUploadCell({ projectId, docKind, label }: { projectId: string; docKind: string; label: string }) {
   const [files, setFiles] = useState<BisProjectViewFile[]>([])
+  const [confirm, confirmDialog] = useConfirmDialog()
   const [busy, setBusy] = useState(false)
   const [listOpen, setListOpen] = useState(false)
 
@@ -67,7 +69,7 @@ export function ProjectFilesUploadCell({ projectId, docKind, label }: { projectI
   }
 
   const remove = async (file: BisProjectViewFile) => {
-    if (!window.confirm(`Delete ${file.file_name}?`)) return
+    if (!(await confirm(`Delete ${file.file_name}?`, { title: 'Delete File', confirmLabel: 'Delete', destructive: true, layer: 'top' }))) return
     try {
       await deleteBisProjectFile(file)
       reload()
@@ -79,6 +81,7 @@ export function ProjectFilesUploadCell({ projectId, docKind, label }: { projectI
   const has = files.length > 0
   return (
     <div className="inline-flex items-center gap-1">
+      {confirmDialog}
       <label
         title={busy ? 'Uploading…' : `Upload ${label} (PDF)`}
         aria-label={`Upload ${label} PDF`}
@@ -121,7 +124,7 @@ export function ProjectFilesUploadCell({ projectId, docKind, label }: { projectI
           <DialogHeader className="bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 py-2.5 pl-4 pr-12 text-left">
             <DialogTitle className="text-base font-semibold tracking-tight text-white">{label}</DialogTitle>
           </DialogHeader>
-          <ul className="max-h-[60vh] divide-y divide-[#e7e0d4] overflow-y-auto bg-[#fffcf7] px-4 py-2 text-left">
+          <ul className="max-h-[60dvh] divide-y divide-[#e7e0d4] overflow-y-auto bg-[#fffcf7] px-4 py-2 text-left">
             {files.map((file, i) => (
               <li key={file.id} className="flex items-center gap-2 py-2 text-sm text-stone-800">
                 <span className="w-6 shrink-0 text-stone-500">{i + 1}.</span>

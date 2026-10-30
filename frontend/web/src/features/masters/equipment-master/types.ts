@@ -1,3 +1,4 @@
+import { addDaysIso, addMonthsIso, normalizeDateFieldValue, parseIsoDateParts, toLocalIsoDate, todayLocalIso } from '@/lib/localDate'
 import type { MaintenanceHistoryRecord } from './maintenanceHistory'
 import type { IntermediateCheckHistoryRecord } from './intermediateCheckHistory'
 
@@ -148,57 +149,45 @@ export const normalizeText = (value: string) => value.trim()
 
 export function calculateNextDueDate(lastDateStr: string, frequency: Frequency): string {
   if (!lastDateStr || !frequency) return ''
-  const date = new Date(lastDateStr)
-  if (Number.isNaN(date.getTime())) return ''
-  
-  // Defensive check for accidental 6-digit years entered by user
-  if (date.getFullYear() > 9999) {
-    date.setFullYear(date.getFullYear() % 10000)
-  }
+  // Calendar arithmetic on YYYY-MM-DD: no Date/UTC round trip, so the due date never slips a day.
+  const last = sanitizeDateStr(lastDateStr)
+  if (!last) return ''
 
   switch (frequency) {
     case 'Daily':
-      date.setDate(date.getDate() + 1)
-      break
+      return addDaysIso(last, 1)
     case 'Weekly':
-      date.setDate(date.getDate() + 7)
-      break
+      return addDaysIso(last, 7)
     case 'Monthly':
-      date.setMonth(date.getMonth() + 1)
-      break
+      return addMonthsIso(last, 1)
     case 'Quarterly':
-      date.setMonth(date.getMonth() + 3)
-      break
+      return addMonthsIso(last, 3)
     case 'Half Yearly':
-      date.setMonth(date.getMonth() + 6)
-      break
+      return addMonthsIso(last, 6)
     case 'Yearly':
-      date.setMonth(date.getMonth() + 12)
-      break
+      return addMonthsIso(last, 12)
     default:
       return ''
   }
-
-  return date.toISOString().split('T')[0]
 }
 
+/** YYYY-MM-DD for saving, or '' when it is not a usable date (also fixes accidental 5–6 digit years). */
 export function sanitizeDateStr(dateStr: string | null | undefined): string {
-  if (!dateStr?.trim()) return ''
-  const date = new Date(dateStr)
-  if (Number.isNaN(date.getTime())) return ''
-  if (date.getFullYear() > 9999) {
-    date.setFullYear(date.getFullYear() % 10000)
+  const raw = String(dateStr ?? '').trim()
+  if (!raw) return ''
+  const parts = parseIsoDateParts(raw)
+  if (!parts) {
+    // Not YYYY-MM-DD: accept another parseable date, read as its local calendar day.
+    const t = Date.parse(raw)
+    return Number.isNaN(t) ? '' : toLocalIsoDate(new Date(t))
   }
-  return date.toISOString().split('T')[0]
+  const year = parts.y > 9999 ? parts.y % 10000 : parts.y
+  return normalizeDateFieldValue(`${String(year).padStart(4, '0')}-${String(parts.m).padStart(2, '0')}-${String(parts.d).padStart(2, '0')}`) ?? ''
 }
 
 /** Local calendar date as YYYY-MM-DD (avoids UTC day-shift). */
 export function todayIsoDate(): string {
-  const d = new Date()
-  const yyyy = d.getFullYear()
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  const dd = String(d.getDate()).padStart(2, '0')
-  return `${yyyy}-${mm}-${dd}`
+  return todayLocalIso()
 }
 
 const NUMERIC_TOKEN =

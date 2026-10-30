@@ -7,6 +7,7 @@ import {
 import { cn } from '@/lib/utils'
 import { DEFAULT_CONSULTANCY_GST } from '@/features/finance/sale/shared/financeRules'
 import { amountInIndianRupeesWords } from './amountInIndianRupeesWords'
+import { QUOTATION_FRAME_PAD_MM, QUOTATION_SIGNATURE_FONT_FAMILY } from './buildQuotationDocumentHtml'
 import {
   computeQuotationTotals,
   formatDate,
@@ -174,13 +175,13 @@ export function QuotationDocumentView({
   const heightMm = paperHeightMm(tpl)
   const headerHeightMm = Math.max(tpl.headerMarginMm || 0, 8) * headerScale
   const footerHeightMm = Math.max(tpl.footerMarginMm || 0, 6) * headerScale
-  const contentWidthMm = Math.max(
-    40,
-    widthMm -
-      (tpl.alignWithPageMargin
-        ? (tpl.pageMarginLeftMm || 0) + (tpl.pageMarginRightMm || 0)
-        : 0),
-  )
+  const marginTopMm = tpl.pageMarginTopMm || 0
+  const marginRightMm = tpl.pageMarginRightMm || 0
+  const marginBottomMm = tpl.pageMarginBottomMm || 0
+  const marginLeftMm = tpl.pageMarginLeftMm || 0
+  const contentWidthMm = Math.max(40, widthMm - marginLeftMm - marginRightMm - 2 * QUOTATION_FRAME_PAD_MM)
+  /** Same geometry as the PDF: frame inset at the margins (3px double), content FRAME_PAD inside it. */
+  const insidePad = (mm: number) => `calc(${mm + QUOTATION_FRAME_PAD_MM}mm + 3px)`
 
   const savedSupplyMode =
     row.gst_supply_mode === 'intra' || row.gst_supply_mode === 'inter' ? row.gst_supply_mode : null
@@ -245,8 +246,17 @@ export function QuotationDocumentView({
   if (tpl.showDiscount && totals.discountAmount > 0) {
     totalRows.push({
       key: 'disc',
-      label: 'Discount',
+      label: 'Less: Discount',
       value: `${getCurrencySymbol()} ${formatMoney(totals.discountAmount)}`,
+      bold: true,
+    })
+  }
+  if (totals.discountAmount > 0 && !isPaymentReceipt && (tpl.showDiscount || tpl.showBasicAmount)) {
+    // GST is charged on this value (Basic Amount − Discount).
+    totalRows.push({
+      key: 'taxable',
+      label: 'Taxable Value',
+      value: `${getCurrencySymbol()} ${formatMoney(totals.taxableValue)}`,
       bold: true,
     })
   }
@@ -312,40 +322,44 @@ export function QuotationDocumentView({
     <div
       data-quotation-page="1"
       className={cn(
-        'mx-auto flex w-full flex-col border-[3px] border-double border-stone-900 bg-white',
+        'relative mx-auto flex w-full flex-col bg-white',
         !forOutput && 'shadow-md',
         tpl.centreOnPageHorizontal ? 'mx-auto' : '',
       )}
       style={{
         fontFamily: tpl.fontFamily || 'Arial, Helvetica, sans-serif',
-        fontSize: `${fontSize}px`,
+        // Template sizes are points (a 10 pt body prints as 10 pt), as in the PDF.
+        fontSize: `${fontSize}pt`,
         width: `${widthMm}mm`,
         maxWidth: `${widthMm}mm`,
-        height: `${heightMm}mm`,
         minHeight: `${heightMm}mm`,
-        paddingTop: `${tpl.pageMarginTopMm}mm`,
-        paddingRight: `${tpl.pageMarginRightMm}mm`,
-        paddingBottom: tpl.showLetterFooter ? 0 : `${tpl.pageMarginBottomMm}mm`,
-        paddingLeft: `${tpl.pageMarginLeftMm}mm`,
+        paddingTop: insidePad(marginTopMm),
+        paddingRight: insidePad(marginRightMm),
+        paddingBottom: insidePad(marginBottomMm),
+        paddingLeft: insidePad(marginLeftMm),
         boxSizing: 'border-box',
       }}
     >
+      <div
+        aria-hidden
+        className="pointer-events-none absolute z-[3] border-[3px] border-double border-stone-900"
+        style={{
+          top: `${marginTopMm}mm`,
+          right: `${marginRightMm}mm`,
+          bottom: `${marginBottomMm}mm`,
+          left: `${marginLeftMm}mm`,
+        }}
+      />
       {tpl.showLetterHeader ? (
         <div
           className="flex w-full shrink-0 items-stretch justify-center overflow-hidden border-b border-black"
-          style={{
-            height: `${headerHeightMm}mm`,
-            marginLeft: tpl.alignWithPageMargin ? undefined : `-${tpl.pageMarginLeftMm}mm`,
-            marginRight: tpl.alignWithPageMargin ? undefined : `-${tpl.pageMarginRightMm}mm`,
-            width: tpl.alignWithPageMargin ? '100%' : `${widthMm}mm`,
-            maxWidth: tpl.alignWithPageMargin ? '100%' : `${widthMm}mm`,
-          }}
+          style={{ height: `${headerHeightMm}mm` }}
         >
           {assets.headerUrl ? (
             <img
               src={assets.headerUrl}
               alt="Letter Header"
-              className="h-full w-full object-fill object-center"
+              className="h-full w-full object-contain object-center"
               style={{
                 width: '100%',
                 height: `${headerHeightMm}mm`,
@@ -374,7 +388,7 @@ export function QuotationDocumentView({
         </div>
       ) : null}
 
-      <div className="flex min-h-0 w-full flex-1 flex-col">
+      <div className="flex w-full flex-1 flex-col">
         <div className="px-2 pb-2.5 pt-2 text-center text-lg font-bold uppercase tracking-wide text-stone-900">
           {tpl.documentTitle || 'Document'}
         </div>
@@ -483,51 +497,51 @@ export function QuotationDocumentView({
               <colgroup>
                 <col style={{ width: '7mm' }} />
                 <col />
-                {tpl.lineShowMake ? <col style={{ width: '9mm' }} /> : null}
-                {tpl.lineShowHsn ? <col style={{ width: '10mm' }} /> : null}
+                {tpl.lineShowMake ? <col style={{ width: '18mm' }} /> : null}
+                {tpl.lineShowHsn ? <col style={{ width: '16mm' }} /> : null}
                 {tpl.lineShowQty ? <col style={{ width: '8mm' }} /> : null}
                 {tpl.lineShowUnit ? <col style={{ width: '9mm' }} /> : null}
                 {tpl.lineShowRate ? <col style={{ width: '24mm' }} /> : null}
                 {tpl.lineShowAmount ? <col style={{ width: '26mm' }} /> : null}
               </colgroup>
               <thead>
-                <tr className="bg-gradient-to-b from-stone-700 to-stone-900">
-                  <th className="border border-amber-700/40 px-0.5 py-1.5 text-center text-[0.7em] font-bold tracking-wide text-amber-200">
+                <tr className="bg-[#f0f0f0]">
+                  <th className="border border-stone-300 px-0.5 py-1.5 text-center text-[0.7em] font-bold tracking-wide text-black">
                     <span className="inline-flex flex-col items-center leading-none">
                       <span>Sr.</span>
                       <span>No.</span>
                     </span>
                   </th>
-                  <th className="border border-amber-700/40 px-1 py-1.5 text-left text-[0.7em] font-bold uppercase tracking-wide text-amber-200">
+                  <th className="border border-stone-300 px-1 py-1.5 text-left text-[0.7em] font-bold uppercase tracking-wide text-black">
                     Description
                   </th>
                   {tpl.lineShowMake ? (
-                    <th className="border border-amber-700/40 px-1 py-1.5 text-center text-[0.7em] font-bold uppercase tracking-wide text-amber-200">
+                    <th className="border border-stone-300 px-1 py-1.5 text-center text-[0.7em] font-bold uppercase tracking-wide text-black">
                       Make
                     </th>
                   ) : null}
                   {tpl.lineShowHsn ? (
-                    <th className="border border-amber-700/40 px-1 py-1.5 text-center text-[0.7em] font-bold uppercase tracking-wide text-amber-200">
+                    <th className="border border-stone-300 px-1 py-1.5 text-center text-[0.7em] font-bold uppercase tracking-wide text-black">
                       HSN
                     </th>
                   ) : null}
                   {tpl.lineShowQty ? (
-                    <th className="border border-amber-700/40 px-1 py-1.5 text-center text-[0.7em] font-bold uppercase tracking-wide text-amber-200">
+                    <th className="border border-stone-300 px-1 py-1.5 text-center text-[0.7em] font-bold uppercase tracking-wide text-black">
                       Qty
                     </th>
                   ) : null}
                   {tpl.lineShowUnit ? (
-                    <th className="border border-amber-700/40 px-1 py-1.5 text-center text-[0.7em] font-bold uppercase tracking-wide text-amber-200">
+                    <th className="border border-stone-300 px-1 py-1.5 text-center text-[0.7em] font-bold uppercase tracking-wide text-black">
                       Unit
                     </th>
                   ) : null}
                   {tpl.lineShowRate ? (
-                    <th className="border border-amber-700/40 px-1 py-1.5 text-center text-[0.7em] font-bold uppercase tracking-wide text-amber-200">
+                    <th className="border border-stone-300 px-1 py-1.5 text-center text-[0.7em] font-bold uppercase tracking-wide text-black">
                       Rate
                     </th>
                   ) : null}
                   {tpl.lineShowAmount ? (
-                    <th className="border border-amber-700/40 px-1 py-1.5 text-right text-[0.7em] font-bold uppercase tracking-wide text-amber-200">
+                    <th className="border border-stone-300 px-1 py-1.5 text-right text-[0.7em] font-bold uppercase tracking-wide text-black">
                       Amount
                     </th>
                   ) : null}
@@ -565,7 +579,7 @@ export function QuotationDocumentView({
                         <td className="border border-stone-300 px-1 py-1 align-middle">
                           <div>{l.description || '—'}</div>
                           {l.details?.trim() ? (
-                            <div className="mt-0.5 text-[8px] text-stone-600">{l.details}</div>
+                            <div className="mt-0.5 text-[0.85em] text-stone-600">{l.details}</div>
                           ) : null}
                         </td>
                         {tpl.lineShowMake ? (
@@ -714,7 +728,7 @@ export function QuotationDocumentView({
                       ) : row.signature_text?.trim() ? (
                         <div
                           className="pointer-events-none absolute right-2 top-1/2 z-[2] -translate-y-1/2 text-[15px] italic opacity-90"
-                          style={{ fontFamily: '"Segoe Script", "Brush Script MT", cursive' }}
+                          style={{ fontFamily: QUOTATION_SIGNATURE_FONT_FAMILY }}
                         >
                           {row.signature_text.trim()}
                         </div>
@@ -734,19 +748,13 @@ export function QuotationDocumentView({
       {tpl.showLetterFooter ? (
         <div
           className="mt-auto flex w-full shrink-0 items-stretch justify-center overflow-hidden"
-          style={{
-            height: `${footerHeightMm}mm`,
-            marginLeft: tpl.alignWithPageMargin ? undefined : `-${tpl.pageMarginLeftMm}mm`,
-            marginRight: tpl.alignWithPageMargin ? undefined : `-${tpl.pageMarginRightMm}mm`,
-            width: tpl.alignWithPageMargin ? '100%' : `${widthMm}mm`,
-            maxWidth: tpl.alignWithPageMargin ? '100%' : `${widthMm}mm`,
-          }}
+          style={{ height: `${footerHeightMm}mm` }}
         >
           {assets.footerUrl ? (
             <img
               src={assets.footerUrl}
               alt="Letter Footer"
-              className="h-full w-full object-fill object-center"
+              className="h-full w-full object-contain object-center"
               style={{
                 width: '100%',
                 height: `${footerHeightMm}mm`,

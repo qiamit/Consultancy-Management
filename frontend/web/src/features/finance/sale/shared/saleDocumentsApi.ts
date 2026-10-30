@@ -1,9 +1,9 @@
 import { supabase } from '@/lib/supabaseClient'
 import type { DocumentTemplateKind } from '@/features/settings/lab-settings/documentTemplateTypes'
 import {
+  computeLineTaxBreakdowns,
   computeQuotationTotals,
   lineAmount,
-  lineTaxableAmount,
   nextQuotationNumber,
   normalizePaymentMethod,
   parseMoney,
@@ -16,6 +16,7 @@ import {
 import { setSaleDocumentCache } from './clientSaleBalance'
 import { allocateDocumentNumber } from './documentSeriesApi'
 import { gstSupplyMode, linesForDocumentKind, type GstSupplyMode } from './financeRules'
+import { todayLocalIso } from '@/lib/localDate'
 
 /** Sale modules persisted in Postgres through the finance_* tables / transactions. */
 export type SaleDocumentKind =
@@ -433,13 +434,17 @@ function buildLines(
   form: QuotationForm,
   parentFk: string,
   parentId: string,
+  supplyMode: GstSupplyMode,
 ): Array<Record<string, unknown>> {
+  // GST per line is on the value after this line's share of the header discount.
+  const breakdowns = computeLineTaxBreakdowns(form, supplyMode)
   return form.lines
-    .filter((l) => l.description.trim().length > 0)
-    .map((l, index) => {
-      const taxable = lineTaxableAmount(l)
-      const gstPercent = Math.max(0, parseMoney(l.gstPercent))
-      const tax = round2(taxable * (gstPercent / 100))
+    .map((l, lineIndex) => ({ l, b: breakdowns[lineIndex] }))
+    .filter(({ l }) => l.description.trim().length > 0)
+    .map(({ l, b }, index) => {
+      const taxable = b.taxableValue
+      const gstPercent = b.gstPercent
+      const tax = b.gstAmount
       return {
         id: crypto.randomUUID(),
         [parentFk]: parentId,
@@ -461,6 +466,8 @@ function buildLines(
           line_remarks: l.lineRemarks.trim() || null,
           delivery_period: l.deliveryPeriod.trim() || null,
           gross_amount: lineAmount(l),
+          line_taxable_before_header_discount: b.lineTaxable,
+          header_discount_share: b.headerDiscountShare,
         },
       }
     })
@@ -518,7 +525,7 @@ async function saveHeaderDocument(
       ? await resolveGstSupplyMode(companyGstin, form.clientGstNumber)
       : 'intra'
   const totals = computeQuotationTotals(prepared, supplyMode)
-  const date = form.quotationDate || new Date().toISOString().slice(0, 10)
+  const date = form.quotationDate || todayLocalIso()
   const id = editingId ?? crypto.randomUUID()
 
   const payload: Record<string, unknown> = {
@@ -560,7 +567,7 @@ async function saveHeaderDocument(
     if (error) throw error
   }
 
-  const lines = buildLines(prepared, cfg.parentFk, id)
+  const lines = buildLines(prepared, cfg.parentFk, id, supplyMode)
   if (lines.length > 0) {
     const { error } = await supabase.from(cfg.linesTable).insert(lines)
     if (error) throw error
@@ -591,7 +598,7 @@ async function saveReceipt(kind: SaleDocumentKind, form: QuotationForm, editingI
     client_id: form.clientId || null,
     amount,
     currency: 'INR',
-    txn_date: form.quotationDate || new Date().toISOString().slice(0, 10),
+    txn_date: form.quotationDate || todayLocalIso(),
     status: 'completed',
     mode_of_payment: MODE_TO_DB[method],
     bank_account_id: method === 'Bank' ? form.bankAccountId || null : null,

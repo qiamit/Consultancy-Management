@@ -28,6 +28,10 @@ export function ManakApplicationPanel({
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
   const dirty = useRef(false)
   const timer = useRef<number | null>(null)
+  /** The edit waiting on the debounce timer, so closing the panel can still save it. */
+  const pending = useRef<{ projectId: string; form: BisApplicationDetailsForm } | null>(null)
+  /** Bumped per save; only the newest save may mark the form clean. */
+  const saveSeq = useRef(0)
 
   // Follow the project when it reloads, unless the user has unsaved edits.
   useEffect(() => {
@@ -36,8 +40,18 @@ export function ManakApplicationPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectRaw, row?.id])
 
+  // Closing the dialog or changing step within the 700 ms debounce used to drop the last edit:
+  // flush it instead of just clearing the timer.
   useEffect(() => () => {
     if (timer.current) window.clearTimeout(timer.current)
+    timer.current = null
+    const last = pending.current
+    pending.current = null
+    if (last) {
+      void saveBisApplicationDetails(last.projectId, last.form).catch((err: unknown) => {
+        toast.error(err instanceof Error ? err.message : 'Could not save application details')
+      })
+    }
   }, [])
 
   if (!form || !projectId) return null
@@ -47,10 +61,16 @@ export function ManakApplicationPanel({
     dirty.current = true
     setStatus('saving')
     if (timer.current) window.clearTimeout(timer.current)
+    pending.current = { projectId, form: next }
     timer.current = window.setTimeout(() => {
       timer.current = null
+      pending.current = null
+      const seq = ++saveSeq.current
       void saveBisApplicationDetails(projectId, next)
         .then(() => {
+          // A newer edit is still waiting or saving: keep the form dirty so the reload triggered
+          // by onSaved does not overwrite what the user is typing.
+          if (seq !== saveSeq.current || timer.current) return
           dirty.current = false
           setStatus('saved')
           onSaved?.()

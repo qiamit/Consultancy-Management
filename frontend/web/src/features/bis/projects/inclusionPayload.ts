@@ -21,6 +21,7 @@ import {
   inclusionRequired,
   parseInclusionVarieties,
 } from './inclusionModel'
+import { requireManakCmL } from './manakExtensionBridge'
 import { buildMergedBisProjectFilesPdf } from './mergeBisProjectFilesPdf'
 import type { BisProjectRow } from './types'
 
@@ -89,6 +90,8 @@ async function additionsWorkbook(row: BisProjectRow, kind: BisPrintDocumentKind)
 }
 
 export async function buildManakInclusionPayload(row: BisProjectRow): Promise<ManakInclusionPayload> {
+  // Without a 10-digit CM/L the extension cannot tell this licence's row apart on Manak.
+  const cmlNo = requireManakCmL(row.cm_l_digits, 'Inclusion')
   const [details, components, machinery, equipment] = await Promise.all([
     fetchBisModulePayload(row.id, INCLUSION_DETAILS_KIND).catch(() => null),
     fetchBisModulePayload(row.id, INCLUSION_COMPONENTS_KIND).catch(() => null),
@@ -126,7 +129,7 @@ export async function buildManakInclusionPayload(row: BisProjectRow): Promise<Ma
   return {
     kind: 'QE_MANAK_INCLUSION_V1',
     projectId: row.id,
-    cmlNo: String(row.cm_l_digits ?? '').replace(/\D/g, ''),
+    cmlNo,
     firmName: String(row.client?.company_name ?? '').trim(),
     isNumber: String(row.is_code?.is_number ?? '').trim(),
     varieties: varieties.map((v) => ({

@@ -24,6 +24,7 @@ import {
 import QRCode from 'qrcode'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { useVoiceInput } from '../shared/useVoiceInput'
@@ -82,6 +83,7 @@ import {
   registerManakPdfInbox,
   subscribeManakQrImport,
   subscribeManakTestRequestResult,
+  ackManakTestRequestResult,
   type ManakTrResult,
 } from './manakExtensionBridge'
 import {
@@ -316,6 +318,7 @@ export function OslSampleRequirementsModuleFields({
   const rows = value.rows
   /** Without a QR code on any sample the QR code, sample code and conformity columns are not needed. */
   const showQrCols = !qrOnlyFields || rows.some((r) => r.qrCode.trim() !== '')
+  const [confirm, confirmDialog] = useConfirmDialog({ layer: 'top' })
   const [editIndex, setEditIndex] = useState<number | null>(null)
   const [draft, setDraft] = useState<OslSampleRequirementRow | null>(null)
   const [declaredValueUploadBusy, setDeclaredValueUploadBusy] = useState(false)
@@ -435,7 +438,12 @@ export function OslSampleRequirementsModuleFields({
     const isThisRun = Boolean(run) && (returnToken
       ? returnToken === run!.token
       : !result.filledAt || result.filledAt >= run!.startedAt)
-    if (!run || !isThisRun || run.done) return
+    if (!run || !isThisRun) return
+    if (run.done) {
+      // Already attached for this run: let the extension drop its stored copy (stops the replays).
+      ackManakTestRequestResult(row.id)
+      return
+    }
     // Claim before the upload, so a delivery arriving mid-upload is ignored too.
     run.done = true
     saveManakTrRuns(pid, runs)
@@ -468,6 +476,7 @@ export function OslSampleRequirementsModuleFields({
     )
     onChangeRef.current({ ...latest, rows: nextRows })
     setExtensionBusyId((prev) => (prev === row.id ? null : prev))
+    ackManakTestRequestResult(row.id)
     toast.success(`Test Request PDF attached${result.sample_code ? ` (${result.sample_code})` : ''}`)
   }
 
@@ -1745,7 +1754,7 @@ export function OslSampleRequirementsModuleFields({
         }}
         onDoubleClick={() => {
           window.clearTimeout(fileClickTimers.current[key])
-          if (window.confirm(`Delete the ${label}?`)) onDelete()
+          void confirm(`Delete the ${label}?`, { title: `Delete ${label}`, confirmLabel: 'Delete', destructive: true }).then((ok) => { if (ok) onDelete() })
         }}
       >
         <FileCheck2 size={14} aria-hidden />
@@ -1851,6 +1860,7 @@ export function OslSampleRequirementsModuleFields({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden rounded-none border border-stone-400 bg-[#fffcf7] p-2 sm:p-3">
+      {confirmDialog}
       <input
         ref={courierSlipInputRef}
         type="file"
@@ -2323,7 +2333,7 @@ export function OslSampleRequirementsModuleFields({
           </div>
 
           {courierDraft ? (
-            <div className="flex min-h-0 flex-1 overflow-hidden bg-stone-200/80">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-stone-200/80 sm:flex-row">
               <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 sm:px-6 [-webkit-overflow-scrolling:touch]">
                 <div
                   className={cn(
@@ -2556,7 +2566,7 @@ export function OslSampleRequirementsModuleFields({
               </div>
               </div>
 
-              <aside className="flex w-[9.5rem] shrink-0 flex-col gap-2 border-l border-stone-400 bg-stone-50 px-2.5 py-4 sm:w-[11rem] sm:px-3">
+              <aside className="flex max-h-[40dvh] w-full shrink-0 flex-col gap-2 overflow-y-auto border-t border-stone-400 bg-stone-50 px-2.5 py-4 sm:max-h-none sm:w-[11rem] sm:border-l sm:border-t-0 sm:px-3">
                 <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-stone-500">
                   Slip options
                 </p>
@@ -3306,7 +3316,7 @@ export function OslSampleRequirementsModuleFields({
                           }}
                           onDoubleClick={() => {
                             if (declaredValueClickTimer.current) window.clearTimeout(declaredValueClickTimer.current)
-                            if (window.confirm('Delete the Declared Value PDF?')) deleteDeclaredValueFile(draft)
+                            void confirm('Delete the Declared Value PDF?', { title: 'Delete Declared Value PDF', confirmLabel: 'Delete', destructive: true }).then((ok) => { if (ok) deleteDeclaredValueFile(draft) })
                           }}
                         >
                           <FileCheck2 size={14} aria-hidden />

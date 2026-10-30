@@ -23,9 +23,8 @@ import { cn } from '@/lib/utils'
 import { setTeamUserPassword } from './userFunctionsApi'
 import type { UserAccount } from './types'
 
-const sidebarCenteredOverlayClass = 'lg:inset-y-0 lg:left-[268px] lg:right-0 lg:w-auto'
 const sidebarCenteredDialogPositionClass =
-  'lg:left-[calc(268px+(100vw-268px)/2)] md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2'
+  'md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2'
 
 type SetPasswordDialogProps = {
   user: UserAccount | null
@@ -39,7 +38,6 @@ export function SetPasswordDialog(props: SetPasswordDialogProps) {
     <Dialog open={props.user != null} onOpenChange={props.onOpenChange}>
       <DialogContent
         persistOnFocusLoss
-        overlayClassName={sidebarCenteredOverlayClass}
         className={cn(limsDialogClass, 'max-w-md', sidebarCenteredDialogPositionClass)}
       >
         {/* Mounted only while open (and per user), so every opening starts with empty fields. */}

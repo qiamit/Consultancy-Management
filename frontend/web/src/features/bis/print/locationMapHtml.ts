@@ -79,7 +79,7 @@ function buildBody(data: LocationMapData): string {
     </div>
   </div>
 
-  <p class="pd-body">Respected / Sir,</p>
+  <p class="pd-body">Respected Sir,</p>
   <p class="pd-body">
     We hereby submit the location map / route sketch of our manufacturing unit for your kind
     reference in connection with our BIS licence application. The factory is situated at
