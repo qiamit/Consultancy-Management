@@ -1,0 +1,41 @@
+/*
+ * Dashboard chart colours. Series slots follow the validated categorical order (blue, orange, aqua);
+ * status colours are reserved for licence state and always appear with a text label.
+ * Single-series bars use the theme accent so Ocean / Forest / custom themes recolour them.
+ */
+.dash-root {
+  --dash-accent: rgb(var(--color-amber-600));
+  --dash-accent-soft: rgb(var(--color-amber-600) / 0.18);
+  --dash-series-1: #2a78d6;
+  --dash-series-2: #eb6834;
+  --dash-series-3: #1baf7a;
+  --dash-good: #0ca30c;
+  --dash-warning: #fab219;
+  --dash-serious: #ec835a;
+  --dash-critical: #d03b3b;
+  --dash-neutral: #a8a29e;
+  --dash-grid: hsl(var(--border));
+  --dash-axis: hsl(var(--muted-foreground));
+  --dash-surface: hsl(var(--card));
+}
+
+html.dark .dash-root {
+  --dash-accent: rgb(var(--color-amber-500));
+  --dash-accent-soft: rgb(var(--color-amber-500) / 0.22);
+  --dash-series-1: #3987e5;
+  --dash-series-2: #d95926;
+  --dash-series-3: #199e70;
+  --dash-neutral: #78716c;
+}
+
+/* Recharts focus ring: keep keyboard focus visible but square, matching the app. */
+.dash-root .recharts-surface:focus-visible,
+.dash-root .recharts-wrapper:focus-visible {
+  outline: 2px solid var(--dash-accent);
+  outline-offset: 2px;
+}
+
+.dash-root .recharts-wrapper:focus:not(:focus-visible),
+.dash-root .recharts-surface:focus:not(:focus-visible) {
+  outline: none;
+}
