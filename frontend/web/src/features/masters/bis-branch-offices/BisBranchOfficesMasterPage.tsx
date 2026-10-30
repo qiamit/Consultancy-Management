@@ -32,6 +32,7 @@ import {
   type BisBranchOfficeForm,
   type BisBranchOfficeRow,
 } from './bisBranchOfficesApi'
+import { parseCsv } from '@/lib/csv'
 
 const GRID_TABLE =
   'min-w-0 w-full table-fixed border-collapse font-jakarta [&_th]:border [&_td]:border [&_th]:border-stone-700 [&_td]:border-[#e7e0d4] [&_th]:p-[1mm] [&_td]:!p-[1mm] [&_th]:sticky [&_th]:top-0 [&_th]:z-[1] [&_td]:break-words'
@@ -402,38 +403,45 @@ export default function BisBranchOfficesMasterPage() {
           e.target.value = ''
           if (!file) return
           void file.text().then(async (text) => {
-            const lines = text.split(/\r?\n/).filter((line) => line.trim())
-            const header = (lines.shift() ?? '').split(',').map((cell) => cell.trim().replace(/^"|"$/g, '').toLowerCase())
+            // Quote-aware: exported addresses contain commas.
+            const lines = parseCsv(text)
+            const header = (lines.shift() ?? []).map((cell) => cell.toLowerCase())
             const index = (name: string) => header.indexOf(name)
+            // Code is unique: re-importing an export updates the office instead of failing on it.
+            const existingByCode = new Map(rows.map((row) => [String(row.code ?? '').trim().toUpperCase(), row]))
             let saved = 0
-            for (const line of lines) {
-              const cells = line.split(',').map((cell) => cell.trim().replace(/^"|"$/g, ''))
-              const name = cells[index('name')] ?? ''
-              const code = cells[index('code')] ?? ''
-              if (!name || !code) continue
-              await saveBisBranchOffice({
-                ...emptyBisBranchOfficeForm(),
-                code,
-                name,
-                officeType: cells[index('office_type')] || 'Branch Office',
-                region: cells[index('region')] ?? '',
-                address: cells[index('address')] ?? '',
-                pinCode: cells[index('pin_code')] ?? '',
-                city: cells[index('city')] ?? '',
-                state: cells[index('state')] ?? '',
-                country: cells[index('country')] || 'India',
-                contactName: cells[index('contact_name')] ?? '',
-                email: cells[index('email')] ?? '',
-                mobile: cells[index('mobile')] ?? '',
-                remark: cells[index('remark')] ?? '',
-                gstNumber: cells[index('gst_number')] ?? '',
-                longitude: cells[index('longitude')] ?? '',
-                latitude: cells[index('latitude')] ?? '',
-              }, null)
-              saved += 1
+            try {
+              for (const cells of lines) {
+                const name = cells[index('name')] ?? ''
+                const code = cells[index('code')] ?? ''
+                if (!name || !code) continue
+                // Columns the CSV does not carry keep their saved values.
+                const existing = existingByCode.get(code.trim().toUpperCase())
+                await saveBisBranchOffice({
+                  ...(existing ? rowToForm(existing) : emptyBisBranchOfficeForm()),
+                  code,
+                  name,
+                  officeType: cells[index('office_type')] || 'Branch Office',
+                  region: cells[index('region')] ?? '',
+                  address: cells[index('address')] ?? '',
+                  pinCode: cells[index('pin_code')] ?? '',
+                  city: cells[index('city')] ?? '',
+                  state: cells[index('state')] ?? '',
+                  country: cells[index('country')] || 'India',
+                  contactName: cells[index('contact_name')] ?? '',
+                  email: cells[index('email')] ?? '',
+                  mobile: cells[index('mobile')] ?? '',
+                  remark: cells[index('remark')] ?? '',
+                  gstNumber: cells[index('gst_number')] ?? '',
+                  longitude: cells[index('longitude')] ?? '',
+                  latitude: cells[index('latitude')] ?? '',
+                }, existing?.id ?? null)
+                saved += 1
+              }
+            } finally {
+              refresh()
             }
             setMessage(`Import saved (${saved}).`)
-            refresh()
           }).catch((err: unknown) => setMessage(err instanceof Error ? err.message : 'Import failed'))
         }} />
         <ClientsTableFooterBar

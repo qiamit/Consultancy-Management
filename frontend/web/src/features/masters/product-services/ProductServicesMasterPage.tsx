@@ -512,6 +512,19 @@ export default function ProductServicesMasterPage() {
 
         const idx = (name: string) => header.findIndex((h) => h === name)
 
+        // Rows without an S.No get consecutive numbers after every S.No already used (DB and file);
+        // one shared nextSNo(rows) gave them all the same number and the unique index failed the file.
+        const sNoIdx = idx('s_no')
+        let autoSNo = Math.max(
+          nextSNo(rows) - 1,
+          ...rowsData.map((r) => (sNoIdx >= 0 ? Number(r[sNoIdx]) || 0 : 0)),
+        )
+        const typeOfTest = (value: string): string | null => {
+          const v = value.trim().toLowerCase()
+          if (v === 'quantitative') return 'Quantitative'
+          if (v === 'qualitative') return 'Qualitative'
+          return null
+        }
         const payloads = rowsData.map((r) => {
           const get = (name: string) => {
             const i = idx(name)
@@ -519,16 +532,16 @@ export default function ProductServicesMasterPage() {
           }
 
           return {
-            s_no: Number(get('s_no')) || nextSNo(rows),
+            s_no: Number(get('s_no')) || ++autoSNo,
             discipline_group: get('discipline_group') || '',
             materials_products: get('materials_products') || '',
             component_parameter: get('component_parameter') || '',
             test_method_specification: get('test_method_specification') || '',
             permanent_testing: get('permanent_testing') || 'Permanent Testing',
             scope_status: normalizeNablScopeStatus(get('scope_status')),
-            type_of_test: get('type_of_test') || null,
-            range_minimum: parseOptionalNumber(get('range_minimum')),
-            range_maximum: parseOptionalNumber(get('range_maximum')),
+            type_of_test: typeOfTest(get('type_of_test')),
+            range_minimum: parseOptionalNumber(get('range_minimum').replace(/,/g, '')),
+            range_maximum: parseOptionalNumber(get('range_maximum').replace(/,/g, '')),
             unit: get('unit') || null,
             uncertainty: get('uncertainty') || null,
           }

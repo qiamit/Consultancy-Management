@@ -41,6 +41,7 @@ import {
   type TestParameterForm as TestParameterFormType,
   type TestParameterRow,
 } from './types'
+import { buildIsCodePayload } from '@/features/masters/is-codes/types'
 
 const formatSupabaseError = (err: unknown) => {
   if (!err || typeof err !== 'object') return 'Unknown error'
@@ -566,6 +567,11 @@ export default function TestParameterMasterPage() {
   }, [filteredRows, sortKey, sortDir])
 
   const pageCount = Math.max(1, Math.ceil(sortedRows.length / pageSize))
+  // Hiding archived rows or deleting the last rows can leave the page past the end (empty table,
+  // "Page 6 of 4"): step back to the last page. Skipped while nothing is loaded.
+  useEffect(() => {
+    if (rows.length > 0 && page > pageCount) setPage(pageCount)
+  }, [rows.length, page, pageCount])
 
   const pagedRows = useMemo(() => {
     const start = (page - 1) * pageSize
@@ -707,7 +713,11 @@ export default function TestParameterMasterPage() {
       setSaveMessage(null)
       setSaveLoading(true)
       try {
-        const payload = buildInsertPayload(form)
+        // The inline row edits only these columns: keep the saved MU and accreditation scope
+        // (the insert payload blanks them for new rows).
+        const { uncertainty_mu: _mu, under_accreditation_ids: _accreditation, ...payload } = buildInsertPayload(form)
+        void _mu
+        void _accreditation
         const { data, error } = await supabase
           .from('test_parameters')
           .update(payload)
@@ -938,20 +948,14 @@ export default function TestParameterMasterPage() {
       setSaveMessage(null)
       setIsCodeSaveLoading(true)
       try {
-        const payload = {
-          is_number: normalizeIsText(isCodeForm.isNumber),
-          revision_year: normalizeIsText(isCodeForm.revisionYear) || null,
-          reaffirmation_year: normalizeIsText(isCodeForm.reaffirmationYear) || null,
-          amendment_number: normalizeIsText(isCodeForm.amendmentNumber) || null,
-          title: normalizeIsText(isCodeForm.title),
-          aspect: isCodeForm.aspect,
-          testing_charges: isCodeForm.testingCharges ? Number(isCodeForm.testingCharges) : null,
-          remarks: normalizeIsText(isCodeForm.remarks) || null,
-        }
+        // Same columns as the IS Code Master (int years, canonical number, all form fields). A plain
+        // insert: the old upsert on (is_number, revision_year) overwrote an existing code with this
+        // partial data, or failed where that index no longer exists.
+        const payload = buildIsCodePayload(isCodeForm)
 
         const { data, error } = await supabase
           .from('is_codes')
-          .upsert(payload, { onConflict: 'is_number,revision_year' })
+          .insert(payload)
           .select('id, is_number, revision_year, part_no, section_no, standard_prefix, title')
           .single()
         if (error) throw error

@@ -687,6 +687,11 @@ export default function IsCodesMasterPage() {
   }, [rows, search, sortKey, sortDir, showArchived, licenceCounts])
 
   const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize))
+  // Hiding archived rows or deleting the last rows can leave the page past the end (empty table,
+  // "Page 6 of 4"): step back to the last page. Skipped while nothing is loaded.
+  useEffect(() => {
+    if (rows.length > 0 && page > pageCount) setPage(pageCount)
+  }, [rows.length, page, pageCount])
 
   const pagedRows = useMemo(() => {
     const start = (page - 1) * pageSize

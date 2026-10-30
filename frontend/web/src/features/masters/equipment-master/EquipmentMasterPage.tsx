@@ -199,7 +199,8 @@ export default function EquipmentMasterPage() {
   }, [])
 
   // Auto-numbering logic
-  const generateNextAssetCode = async (): Promise<string> => {
+  /** `alsoTaken`: codes already handed out in this batch (CSV import), which `rows` does not hold yet. */
+  const generateNextAssetCode = async (alsoTaken: readonly string[] = []): Promise<string> => {
     let prefix = 'EQ-'
     try {
       const { data } = await supabase
@@ -216,8 +217,7 @@ export default function EquipmentMasterPage() {
 
     // Parse existing asset codes to find max serial number for that prefix
     let maxSerial = 0
-    rows.forEach((r) => {
-      const code = r.asset_code || ''
+    ;[...rows.map((r) => r.asset_code || ''), ...alsoTaken].forEach((code) => {
       if (code.startsWith(prefix)) {
         const trailing = code.slice(prefix.length).replace(/\D/g, '')
         const num = parseInt(trailing, 10)
@@ -528,8 +528,9 @@ export default function EquipmentMasterPage() {
       maintenanceChecklist: parseMaintenanceChecklistFromDb(row.maintenance_checklist),
       maintenanceHistory: parseMaintenanceHistoryFromDb(row.maintenance_history),
       historyOfDamage: row.history_of_damage ?? '',
-      uploadCertificatePath: row.upload_certificate_path ?? '',
-      uploadManualSopPath: row.upload_manual_sop_path ?? '',
+      // A copy does not share the original's files: deleting the original removes them from storage.
+      uploadCertificatePath: '',
+      uploadManualSopPath: '',
       custodianEmployeeId: row.custodian_employee_id ?? '',
       certificateFile: null,
       manualSopFile: null,
@@ -564,6 +565,11 @@ export default function EquipmentMasterPage() {
   }, [rows, search, clientMap, employeeMap])
 
   const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize))
+  // Hiding archived rows or deleting the last rows can leave the page past the end (empty table,
+  // "Page 6 of 4"): step back to the last page. Skipped while nothing is loaded.
+  useEffect(() => {
+    if (rows.length > 0 && page > pageCount) setPage(pageCount)
+  }, [rows.length, page, pageCount])
 
   useEffect(() => {
     setPage(1)
@@ -659,12 +665,26 @@ export default function EquipmentMasterPage() {
       try {
         const ids = selectedRows.map((r) => r.id)
 
-        // Delete associated files from storage first
+        // Delete the rows first and only then their files: under view-only RLS the delete removes
+        // nothing (no error), and files still used by another row (older copies) must stay.
+        const { data: deleted, error } = await supabase.from('equipment_master').delete().in('id', ids).select('id')
+        if (error) throw error
+        const deletedIds = new Set((deleted ?? []).map((d) => (d as { id: string }).id))
+        if (deletedIds.size === 0) throw new Error('You do not have delete access for these records (view-only).')
+
+        const stillUsed = new Set(
+          rows
+            .filter((r) => !deletedIds.has(r.id))
+            .flatMap((r) => [r.upload_certificate_path, r.upload_manual_sop_path])
+            .filter(Boolean),
+        )
         const filePaths: string[] = []
-        selectedRows.forEach((r) => {
-          if (r.upload_certificate_path) filePaths.push(r.upload_certificate_path)
-          if (r.upload_manual_sop_path) filePaths.push(r.upload_manual_sop_path)
-        })
+        selectedRows
+          .filter((r) => deletedIds.has(r.id))
+          .forEach((r) => {
+            if (r.upload_certificate_path && !stillUsed.has(r.upload_certificate_path)) filePaths.push(r.upload_certificate_path)
+            if (r.upload_manual_sop_path && !stillUsed.has(r.upload_manual_sop_path)) filePaths.push(r.upload_manual_sop_path)
+          })
 
         if (filePaths.length > 0) {
           try {
@@ -673,9 +693,6 @@ export default function EquipmentMasterPage() {
             console.warn('Failed to delete storage files:', stErr)
           }
         }
-
-        const { error } = await supabase.from('equipment_master').delete().in('id', ids)
-        if (error) throw error
 
         setSaveMessage('Deleted successfully.')
         setSelectedIds(new Set())
@@ -833,7 +850,8 @@ export default function EquipmentMasterPage() {
           // Auto-calculate code if not provided
           let assetCode = get('asset_code').trim()
           if (!assetCode) {
-            assetCode = await generateNextAssetCode()
+            // Count codes already given to earlier rows of this file, or every blank row gets the same code.
+            assetCode = await generateNextAssetCode(payloads.map((p) => p.asset_code))
           }
 
           const lastCal = get('last_calibration_date')

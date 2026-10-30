@@ -1226,10 +1226,22 @@ export default function ClientsMasterPage() {
               email: form.email,
             }
           })
-          await saveClientSites(savedId, sites)
-          await saveClientContacts(savedId, contacts)
-          if (form.clearManakPassword) await setClientPortalPassword(savedId, null)
-          else if (form.manakPassword.trim()) await setClientPortalPassword(savedId, form.manakPassword)
+          try {
+            await saveClientSites(savedId, sites)
+            await saveClientContacts(savedId, contacts)
+            if (form.clearManakPassword) await setClientPortalPassword(savedId, null)
+            else if (form.manakPassword.trim()) await setClientPortalPassword(savedId, form.manakPassword)
+          } catch (childErr) {
+            // The client row exists now. Keep the form open on it as an edit, so the next Save updates
+            // it instead of failing with "firm name already taken".
+            if (!editingId) {
+              hydratedEditRef.current = savedId
+              originalCompanyNameRef.current = { id: savedId, name: form.companyName }
+              setEdit(savedId)
+              void loadClients()
+            }
+            throw childErr
+          }
         }
         invalidateClientsCache()
         void loadClientAddressDirectory().then(setAddressDirectory).catch(() => {})
