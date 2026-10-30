@@ -29,7 +29,7 @@ storage-api `v1.24.7` — इसलिए data जैसा का तैसा 
 | `scripts/deploy.sh` | Server पर: latest main, web build, containers, DB migrations |
 | `scripts/migrate-db.sh` | Railway DB → Oracle (Railway सिर्फ़ पढ़ा जाता है) + हर table की row गिनती मिलाना |
 | `scripts/migrate-storage.mjs` | Railway bucket की files → server disk (resume हो सकता है) + जाँच |
-| `scripts/backup.sh` | रोज़ रात DB backup (14 दिन), हर रविवार files snapshot (4 हफ़्ते) |
+| `scripts/backup.sh` | रोज़ रात DB backup (14 दिन), हर रविवार files snapshot (4 हफ़्ते), encrypted copy Object Storage में |
 | `.github/workflows/deploy-oracle.yml` | GitHub से deploy (cutover के बाद हर merge पर अपने-आप) |
 
 ## Phase 0 — आपका काम (Oracle account)
@@ -88,6 +88,26 @@ Renewal reminders यहाँ बंद रहते हैं (`RENEWAL_REMIND
 - कुछ नहीं। Security updates अपने-आप (unattended-upgrades), backups रोज़ 02:30 IST।
 - महीने में एक बार: `sudo apt upgrade` + `docker compose pull` (मैं कर दूँगा)।
 - Site बंद होने पर alert के लिए UptimeRobot (free) लगाएँ।
+
+## Backups (server के बाहर)
+
+- Bucket `qe-backups` (Hyderabad, Object Storage), rclone remote `ociqe:` (S3 Customer Secret Key) के ऊपर
+  encrypted remote `ociqe-crypt:` — bucket में नाम और data दोनों encrypted हैं। `.env`: `BACKUP_RCLONE_REMOTE=ociqe-crypt:qe`।
+- हर रात: DB dump + xattrs list → `qe/db/` (30 दिन)। Files → `qe/files/` (sync); बदली/हटाई files
+  `qe/files-old/<तारीख>/` में 60 दिन रहती हैं।
+- **Encryption passphrase** सिर्फ़ owner के पास (password manager) — उसके बिना off-site copy नहीं खुलेगी।
+  Server खो जाए तो: नए server पर `rclone config` से `ociqe` (नई Customer Secret Key) और `ociqe-crypt`
+  (वही passphrase) बनाएँ।
+
+Restore (नए / खाली server पर, app बंद करके):
+
+```bash
+rclone copy ociqe-crypt:qe/db/qe-<stamp>.dump /opt/qe/backups/db/
+docker compose exec -T db pg_restore -U supabase_admin -d postgres --clean --if-exists < /opt/qe/backups/db/qe-<stamp>.dump
+sudo rclone --config ~/.config/rclone/rclone.conf copy ociqe-crypt:qe/files /opt/qe/data/storage
+rclone cat ociqe-crypt:qe/db/xattrs-<stamp>.txt.gz | gunzip > /tmp/xattrs.txt
+cd /opt/qe/data && sudo setfattr --restore=/tmp/xattrs.txt
+```
 
 ## Two-Step Login break-glass (दोनों admins का phone खो जाए)
 
