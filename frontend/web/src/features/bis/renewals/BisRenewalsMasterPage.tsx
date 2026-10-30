@@ -123,6 +123,10 @@ export default function BisRenewalsMasterPage({ dialogOnly = false }: { dialogOn
   const editingId = editId && editId !== 'new' ? editId : null
   const handleFormOpenChange = useFormDialogOpenChange((open) => {
     if (!open) {
+      // The session draft only protects a refresh while the dialog is open. Left behind, it
+      // overrode the server copy the next time this renewal was opened (other users' edits,
+      // a new validity date or IS Code fees were hidden and then overwritten on Save).
+      removeRenewalDraft(editId)
       hydratedEditRef.current = null
       setEdit(null)
     }

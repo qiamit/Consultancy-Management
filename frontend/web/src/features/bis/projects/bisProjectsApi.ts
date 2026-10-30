@@ -623,7 +623,12 @@ export async function saveBisProject(
     licence_status_id: form.licenceStatusId || null,
     is_code_id: form.isCodeId || null,
     project_kind: projectKind,
-    title: form.title.trim() || buildBisProjectTitle(form),
+    // The title is not editable: rebuild it so a corrected client, IS Code or CM/L shows up in the
+    // renewal picker (it used to stay as created). Keep the stored one if the labels did not load.
+    title:
+      form.clientLabel.trim() && form.isCodeLabel.trim()
+        ? buildBisProjectTitle(form)
+        : form.title.trim() || buildBisProjectTitle(form),
     status: form.status || 'in_progress',
     // NOT NULL on production — never send null (overrides DB default).
     application_stage:

@@ -403,7 +403,8 @@ export async function createRenewalCalculationPdf(form: BisRenewalForm): Promise
   const quantity = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 })
   const unit = form.unitOfIs || 'unit'
   const total = (field: 'productionUnit' | 'productionValue' | 'coveredUnit' | 'coveredValue' | 'markingFee') =>
-    rows.reduce((sum, row) => sum + (Number.parseFloat(row[field]) || 0), 0)
+    // entered() strips Indian grouping: parseFloat('1,25,000') is 1.
+    rows.reduce((sum, row) => sum + (entered(row[field]) ?? 0), 0)
   const totalProduction = total('productionUnit')
   const totalProductionValue = total('productionValue')
   const totalCovered = total('coveredUnit')
@@ -416,18 +417,18 @@ export async function createRenewalCalculationPdf(form: BisRenewalForm): Promise
       ? `No ${fee.scale} scale minimum in IS Code Master — minimum not applied`
       : `${fee.scale} scale (IS Code Master): ₹ ${currency.format(fee.minimumPerYear)} per year${fee.years > 1 ? ` × ${fee.years} years` : ''} = ₹ ${currency.format(fee.minimumTotal)}`
   const coveredPercent = totalProduction > 0 ? (totalCovered / totalProduction) * 100 : 0
-  const feeEquation = rows.filter((row) => (Number.parseFloat(row.coveredUnit) || 0) > 0).map((row) => {
+  const feeEquation = rows.filter((row) => (entered(row.coveredUnit) ?? 0) > 0).map((row) => {
     const slab = renewalSlabForQuantity(row.coveredUnit, form.slabRates)
     return slab
-      ? `${quantity.format(Number.parseFloat(row.coveredUnit) || 0)} × ${currency.format(Number.parseFloat(slab.rate) || 0)}`
+      ? `${quantity.format(entered(row.coveredUnit) ?? 0)} × ${currency.format(entered(slab.rate) ?? 0)}`
       : 'No matching slab'
   }).join(' + ')
   const tableRows = rows.map((row) => {
     const values = [
       formatDisplayDate(row.periodFrom), formatDisplayDate(row.periodTo),
-      `${row.productionUnit || '—'} ${unit}`, `₹ ${currency.format(Number.parseFloat(row.productionValue) || 0)}`,
-      `${row.coveredUnit || '—'} ${unit}`, `₹ ${currency.format(Number.parseFloat(row.coveredValue) || 0)}`,
-      row.coveredPercent ? `${row.coveredPercent}%` : '—', `₹ ${currency.format(Number.parseFloat(row.markingFee) || 0)}`,
+      `${row.productionUnit || '—'} ${unit}`, `₹ ${currency.format(entered(row.productionValue) ?? 0)}`,
+      `${row.coveredUnit || '—'} ${unit}`, `₹ ${currency.format(entered(row.coveredValue) ?? 0)}`,
+      row.coveredPercent ? `${row.coveredPercent}%` : '—', `₹ ${currency.format(entered(row.markingFee) ?? 0)}`,
     ]
     return `<tr>${values.map((value) => `<td>${escapeHtml(value)}</td>`).join('')}</tr>`
   }).join('')
