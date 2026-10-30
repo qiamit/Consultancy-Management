@@ -41,6 +41,7 @@ export function renderLoginPage({ form, clientName, error = '', email = '' }) {
     <input type="hidden" name="form" value="${esc(form)}">
     <label>Email<input name="email" type="email" required autocomplete="username" value="${esc(email)}"></label>
     <label>Password<input name="password" type="password" required autocomplete="current-password"></label>
+    <label>Authenticator Code (Only if Two-Step Login Is On)<input name="code" type="text" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" placeholder="6-Digit Code"></label>
     <button type="submit">Sign in and allow</button>
   </form>
 </main>
