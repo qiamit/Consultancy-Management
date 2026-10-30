@@ -467,6 +467,50 @@ th * {
   .bis-branch-table-view td:nth-child(7) { width: 8%; }
 }
 
+/* Master list footer (Clients / Laboratories / BIS Branch Offices): always one line; its own width decides
+   when the buttons drop their labels and get smaller, so it works the same with or without the sidebar. */
+.lims-footer-bar {
+  container-name: lims-footer;
+  container-type: inline-size;
+}
+
+@container lims-footer (max-width: 1000px) {
+  .lims-footer-bar .laboratories-footer-label { display: none !important; }
+}
+
+@container lims-footer (max-width: 760px) {
+  .lims-footer-bar button,
+  .lims-footer-bar input {
+    height: 2rem !important;
+    min-height: 2rem !important;
+  }
+  .lims-footer-bar button {
+    gap: 0.25rem !important;
+    padding-inline: 0.4rem !important;
+    font-size: 0.7rem !important;
+  }
+  .lims-footer-bar button[class~='w-10'] { width: 2rem !important; }
+}
+
+@container lims-footer (max-width: 600px) {
+  .lims-footer-bar .lims-footer-selected,
+  .lims-footer-bar .lims-footer-jump,
+  .lims-footer-bar .lims-footer-page-word { display: none !important; }
+  .lims-footer-bar .lims-footer-page { min-width: 0 !important; }
+}
+
+@container lims-footer (max-width: 480px) {
+  .lims-footer-bar .lims-footer-message { display: none !important; }
+  .lims-footer-bar .lims-footer-page-input { width: 2.5rem !important; }
+  .lims-footer-bar button,
+  .lims-footer-bar input {
+    height: 1.75rem !important;
+    min-height: 1.75rem !important;
+  }
+  .lims-footer-bar button { padding-inline: 0.3rem !important; }
+  .lims-footer-bar button[class~='w-10'] { width: 1.75rem !important; }
+}
+
 /* Laboratory Master switches from its dense table to cards using the usable
    content width (after the sidebar), and never relies on horizontal scrolling. */
 .laboratories-page-container {
