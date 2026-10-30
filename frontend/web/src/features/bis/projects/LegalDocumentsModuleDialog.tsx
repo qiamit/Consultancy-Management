@@ -516,6 +516,7 @@ export function LegalDocumentsModuleDialog({
   const [flowImportOpen, setFlowImportOpen] = useState(false)
   const [flowAiOpen, setFlowAiOpen] = useState(false)
   const [plantLayoutAiOpen, setPlantLayoutAiOpen] = useState(false)
+  const [plantImportOpen, setPlantImportOpen] = useState(false)
   const [cmpf310, setCmpf310] = useState<Cmpf310ModulePayload>(() => emptyCmpf310Payload())
   const [rawMaterialReference, setRawMaterialReference] = useState<RawMaterialReferencePayload>(() => emptyRawMaterialReferencePayload())
   const [processFlow, setProcessFlow] = useState<ProcessFlowModulePayload>(() =>
@@ -1917,14 +1918,27 @@ export function LegalDocumentsModuleDialog({
               <Sparkles size={15} aria-hidden />
             </Button>
           ) : null}
+          {showPlantLayoutFields && row?.id ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={busy || saving}
+              className="absolute right-11 top-2 z-10 h-7 w-7 rounded-none border border-amber-500/60 bg-stone-800 p-0 text-amber-200 shadow-sm transition-colors hover:border-amber-400 hover:bg-amber-600 hover:text-white"
+              title="Import from Another Application"
+              aria-label="Import from Another Application"
+              onClick={() => setPlantImportOpen(true)}
+            >
+              <Import size={15} aria-hidden />
+            </Button>
+          ) : null}
           {showPlantLayoutAi ? (
-            // No Import button on this module, so the AI button takes the slot next to Close.
             <Button
               type="button"
               variant="ghost"
               size="sm"
               disabled={busy || saving || loading}
-              className="absolute right-11 top-2 z-10 h-7 w-7 rounded-none border border-amber-500/60 bg-stone-800 p-0 text-amber-200 shadow-sm transition-colors hover:border-amber-400 hover:bg-amber-600 hover:text-white"
+              className="absolute right-[4.75rem] top-2 z-10 h-7 w-7 rounded-none border border-amber-500/60 bg-stone-800 p-0 text-amber-200 shadow-sm transition-colors hover:border-amber-400 hover:bg-amber-600 hover:text-white"
               title="Draw Plant Layout with AI from a Photo or PDF"
               aria-label="Draw Plant Layout with AI from a Photo or PDF"
               onClick={() => setPlantLayoutAiOpen(true)}
@@ -2774,6 +2788,29 @@ export function LegalDocumentsModuleDialog({
             return
           setProcessFlow(source)
           toast.success('Process Flow Chart Imported', { description: 'Check the boxes and description, then click Save.' })
+        }}
+      />
+    ) : null}
+    {showPlantLayoutFields ? (
+      <BisModuleImportDialog
+        open={plantImportOpen}
+        onOpenChange={setPlantImportOpen}
+        targetRow={row}
+        kind="plant-layout"
+        onPickSource={async (sourceProjectId) => {
+          const source = parsePlantLayoutPayload(await fetchBisModulePayload(sourceProjectId, 'plant-layout'))
+          if (!source.boxes.length) throw new Error('The Selected Application Has No Plant Layout.')
+          if (
+            plantLayout.boxes.length > 0 &&
+            !(await confirmAction('Replace the Plant Layout Here with the Imported One?', {
+              title: 'Replace Plant Layout',
+              confirmLabel: 'Replace',
+              destructive: false,
+            }))
+          )
+            return
+          setPlantLayout(source)
+          toast.success('Plant Layout Imported', { description: 'Check the Boxes, Then Click Save.' })
         }}
       />
     ) : null}
