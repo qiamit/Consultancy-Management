@@ -11,11 +11,22 @@ import {
   firmNameTaken,
   isSameFirmName,
   loadClientAddressDirectory,
+  saveClientContacts,
+  saveClientSites,
   updateClientMasterOption,
   type ClientAddressDirectory,
   type SimilarClient,
 } from '@/features/masters/clients/clientsApi'
-import { emptyClientForm, isValidGst, toContinuousText, type ClientForm } from '@/features/masters/clients/types'
+import {
+  buildClientRowPayload,
+  CLIENT_OPTIONAL_COLUMNS,
+  clientFormIsValid,
+  clientSitesAndContactsForSave,
+  missingColumnError,
+  missingColumnName,
+  SIMILAR_CLIENT_WARNING_THRESHOLD,
+} from '@/features/masters/clients/clientSavePayload'
+import { emptyClientForm, toProperTitleCase, type ClientForm } from '@/features/masters/clients/types'
 import { setClientPortalPassword } from '@/features/masters/clients/clientPortalSecretApi'
 import { ClientsForm } from '@/features/masters/clients/ClientsForm'
 import {
@@ -32,6 +43,7 @@ export function useClientDialogState(open: boolean) {
   const [states, setStates] = useState<Array<{ id: string; label: string }>>([])
   const [countries, setCountries] = useState<Array<{ id: string; label: string }>>([])
   const [districts, setDistricts] = useState<Array<{ id: string; label: string }>>([])
+  const [cities, setCities] = useState<Array<{ id: string; label: string }>>([])
   const [pinCodes, setPinCodes] = useState<Array<{ id: string; label: string }>>([])
   const [countryCodes, setCountryCodes] = useState<Array<{ id: string; value: string; label: string }>>([])
   const [companyTypes, setCompanyTypes] = useState<Array<{ id: string; label: string }>>([])
@@ -51,6 +63,8 @@ export function useClientDialogState(open: boolean) {
   const [newCountryName, setNewCountryName] = useState('')
   const [districtDialogOpen, setDistrictDialogOpen] = useState(false)
   const [newDistrictName, setNewDistrictName] = useState('')
+  const [cityDialogOpen, setCityDialogOpen] = useState(false)
+  const [newCityName, setNewCityName] = useState('')
   const [pinCodeDialogOpen, setPinCodeDialogOpen] = useState(false)
   const [newPinCode, setNewPinCode] = useState('')
   const [countryCodeDialogOpen, setCountryCodeDialogOpen] = useState(false)
@@ -76,6 +90,7 @@ export function useClientDialogState(open: boolean) {
       setStates(by('state').map((r) => ({ id: r.id, label: r.label })).sort((a, b) => a.label.localeCompare(b.label)))
       setCountries(by('country').map((r) => ({ id: r.id, label: r.label })).sort((a, b) => a.label.localeCompare(b.label)))
       setDistricts(by('district').map((r) => ({ id: r.id, label: r.label })))
+      setCities(by('city').map((r) => ({ id: r.id, label: r.label })).sort((a, b) => a.label.localeCompare(b.label)))
       setPinCodes(by('pin_code').map((r) => ({ id: r.id, label: r.label })))
       setCountryCodes(
         by('country_code')
@@ -140,6 +155,21 @@ export function useClientDialogState(open: boolean) {
     setForm((prev) => ({ ...prev, district: name }))
     setNewDistrictName('')
     if (close) setDistrictDialogOpen(false)
+  }
+  const onAddCity = async (close = true) => {
+    const name = normalizeText(newCityName)
+    if (!name) return
+    const { data, error } = await supabase.from('client_master_options').insert({ category: 'city', label: name, value: name }).select('id').single()
+    if (error) return
+    const id = (data as { id: string } | null)?.id ?? `tmp-${name}`
+    setCities((prev) => {
+      const merged = [...prev, { id, label: name }]
+      const uniq = new Map(merged.map((x) => [x.label.toLowerCase(), x]))
+      return Array.from(uniq.values()).sort((a, b) => a.label.localeCompare(b.label))
+    })
+    setForm((prev) => ({ ...prev, city: name }))
+    setNewCityName('')
+    if (close) setCityDialogOpen(false)
   }
   const onAddPinCode = async (close = true) => {
     const name = newPinCode.trim().replace(/[^0-9]/g, '').slice(0, 6)
@@ -209,6 +239,7 @@ export function useClientDialogState(open: boolean) {
     if (category === 'state') return states.find((item) => item.id === id)?.label
     if (category === 'country') return countries.find((item) => item.id === id)?.label
     if (category === 'district') return districts.find((item) => item.id === id)?.label
+    if (category === 'city') return cities.find((item) => item.id === id)?.label
     if (category === 'pin_code') return pinCodes.find((item) => item.id === id)?.label
     if (category === 'country_code') return countryCodes.find((item) => item.id === id)?.value
     if (category === 'company_type') return companyTypes.find((item) => item.id === id)?.label
@@ -224,6 +255,7 @@ export function useClientDialogState(open: boolean) {
     if (category === 'state') setStates((prev) => sortByLabel(prev.map((item) => (item.id === id ? { ...item, label: name } : item))))
     if (category === 'country') setCountries((prev) => sortByLabel(prev.map((item) => (item.id === id ? { ...item, label: name } : item))))
     if (category === 'district') setDistricts((prev) => sortByLabel(prev.map((item) => (item.id === id ? { ...item, label: name } : item))))
+    if (category === 'city') setCities((prev) => sortByLabel(prev.map((item) => (item.id === id ? { ...item, label: name } : item))))
     if (category === 'pin_code') setPinCodes((prev) => sortByLabel(prev.map((item) => (item.id === id ? { ...item, label: name } : item))))
     if (category === 'country_code') setCountryCodes((prev) => prev.map((item) => (item.id === id ? { ...item, value: name, label: name } : item)))
     if (category === 'company_type') setCompanyTypes((prev) => sortByLabel(prev.map((item) => (item.id === id ? { ...item, label: name } : item))))
@@ -237,6 +269,7 @@ export function useClientDialogState(open: boolean) {
     if (category === 'state') setStates((prev) => prev.filter((item) => item.id !== id))
     if (category === 'country') setCountries((prev) => prev.filter((item) => item.id !== id))
     if (category === 'district') setDistricts((prev) => prev.filter((item) => item.id !== id))
+    if (category === 'city') setCities((prev) => prev.filter((item) => item.id !== id))
     if (category === 'pin_code') setPinCodes((prev) => prev.filter((item) => item.id !== id))
     if (category === 'country_code') setCountryCodes((prev) => prev.filter((item) => item.id !== id))
     if (category === 'company_type') setCompanyTypes((prev) => prev.filter((item) => item.id !== id))
@@ -255,6 +288,7 @@ export function useClientDialogState(open: boolean) {
           if (category === 'state' && prev.state === oldLabel) return { ...prev, state: name }
           if (category === 'country' && prev.country === oldLabel) return { ...prev, country: name }
           if (category === 'district' && prev.district === oldLabel) return { ...prev, district: name }
+          if (category === 'city' && prev.city === oldLabel) return { ...prev, city: name }
           if (category === 'pin_code' && prev.pinCode === oldLabel) return { ...prev, pinCode: name }
           if (category === 'country_code' && prev.countryCode === oldLabel) return { ...prev, countryCode: name }
           if (category === 'company_type' && prev.companyType === oldLabel) return { ...prev, companyType: name as ClientForm['companyType'] }
@@ -285,6 +319,7 @@ export function useClientDialogState(open: boolean) {
   const onUpdateState = (id: string) => renameOption('state', id, newStateName, () => setNewStateName(''))
   const onUpdateCountry = (id: string) => renameOption('country', id, newCountryName, () => setNewCountryName(''))
   const onUpdateDistrict = (id: string) => renameOption('district', id, newDistrictName, () => setNewDistrictName(''))
+  const onUpdateCity = (id: string) => renameOption('city', id, newCityName, () => setNewCityName(''))
   const onUpdatePinCode = (id: string) => renameOption('pin_code', id, newPinCode, () => setNewPinCode(''))
   const onUpdateCountryCode = (id: string) => renameOption('country_code', id, newCountryCode, () => setNewCountryCode(''))
   const onUpdateCompanyType = (id: string) => renameOption('company_type', id, newCompanyType, () => setNewCompanyType(''))
@@ -295,6 +330,7 @@ export function useClientDialogState(open: boolean) {
   const onDeleteState = (id: string) => removeOption('state', id)
   const onDeleteCountry = (id: string) => removeOption('country', id)
   const onDeleteDistrict = (id: string) => removeOption('district', id)
+  const onDeleteCity = (id: string) => removeOption('city', id)
   const onDeletePinCode = (id: string) => removeOption('pin_code', id)
   const onDeleteCountryCode = (id: string) => removeOption('country_code', id)
   const onDeleteCompanyType = (id: string) => removeOption('company_type', id)
@@ -338,6 +374,14 @@ export function useClientDialogState(open: boolean) {
     onAddDistrict,
     onUpdateDistrict,
     onDeleteDistrict,
+    cities,
+    cityDialogOpen,
+    setCityDialogOpen,
+    newCityName,
+    setNewCityName,
+    onAddCity,
+    onUpdateCity,
+    onDeleteCity,
     pinCodeDialogOpen,
     setPinCodeDialogOpen,
     newPinCode,
@@ -424,20 +468,21 @@ export function AddClientDialog({
     setSaveLoading(true)
     try {
       const form = state.form
-      const companyName = form.companyName.trim()
-      if (!isValidGst(form.gstNumber)) {
-        setSaveMessage('Invalid GST Number')
+      if (!clientFormIsValid(form)) {
+        setSaveMessage('Correct the Highlighted Fields Before Saving.')
         return
       }
+      const companyName = toProperTitleCase(form.companyName)
       if (await firmNameTaken(companyName)) {
         setDuplicates([])
         setSaveMessage(FIRM_NAME_TAKEN)
         return
       }
       if (!force && !allowDuplicate) {
+        // Same rule as the Client Master: ignore weak matches from shared legal suffixes.
         const hits = (await findSimilarClients(companyName, form.gstNumber)).filter((hit) => {
           if (isSameFirmName(hit.company_name ?? '', companyName)) return false
-          return hit.similarity < 1
+          return hit.similarity >= SIMILAR_CLIENT_WARNING_THRESHOLD && hit.similarity < 1
         })
         if (hits.length > 0) {
           setDuplicates(hits)
@@ -446,37 +491,32 @@ export function AddClientDialog({
       }
       setDuplicates([])
       setAllowDuplicate(false)
-      const payload = {
-        name: companyName,
-        gst_number: form.gstNumber.trim().toUpperCase() || null,
-        company_type: form.companyType,
-        company_scale: form.companyScale,
-        company_name: companyName,
-        contact_person_name: form.contactPersonName.trim() || null,
-        country_code: form.countryCode || null,
-        mobile: form.mobile.trim() || null,
-        email: form.email.trim() || null,
-        address: toContinuousText(form.address) || null,
-        pin_code: form.pinCode.trim() || null,
-        district: form.district.trim() || null,
-        state: form.state || null,
-        country: form.country || null,
-        opening_balance: form.openingBalance ? Number(form.openingBalance) : 0,
-        balance_type: form.balanceType,
-        payment_term: form.paymentTerm,
-        remark: form.remark.trim() || null,
-        manak_user_id: form.manakUserId.trim() || null,
+      // Same columns as the Client Master save (City, PAN, Nature of Firm, Sector, Landline,
+      // Contact Person as contact_person_name + ceo_name, coordinates …).
+      const row: Record<string, unknown> = buildClientRowPayload(form)
+      let id: string | null = null
+      for (let attempt = 0; attempt < CLIENT_OPTIONAL_COLUMNS.length + 1; attempt += 1) {
+        const inserted = await supabase.from('clients').insert(row).select('id').single()
+        if (!inserted.error) {
+          id = (inserted.data as { id: string } | null)?.id ?? null
+          break
+        }
+        const column = missingColumnName(inserted.error)
+        if (!missingColumnError(inserted.error) || !column || !CLIENT_OPTIONAL_COLUMNS.includes(column) || !(column in row)) {
+          throw inserted.error
+        }
+        delete row[column]
       }
-      let inserted = await supabase.from('clients').insert(payload).select('id').single()
-      if (inserted.error && /manak_user_id/i.test(inserted.error.message ?? '')) {
-        const withoutManak: Record<string, unknown> = { ...payload }
-        delete withoutManak.manak_user_id
-        inserted = await supabase.from('clients').insert(withoutManak).select('id').single()
-      }
-      if (inserted.error) throw inserted.error
       invalidateClientsCache()
-      const id = (inserted.data as { id: string } | null)?.id
       if (id) {
+        // Office / factory sites and the primary contact, as the Client Master stores them.
+        const { sites, contacts } = clientSitesAndContactsForSave(form)
+        try {
+          await saveClientSites(id, sites)
+          await saveClientContacts(id, contacts)
+        } catch {
+          // The client row is saved; sites / contacts can be completed from the Client Master.
+        }
         if (form.manakPassword.trim()) await setClientPortalPassword(id, form.manakPassword)
         onSaved(id)
         onOpenChange(false)
@@ -490,7 +530,7 @@ export function AddClientDialog({
     }
   }
 
-  const canSave = state.form.companyName.trim().length > 0 && isValidGst(state.form.gstNumber) && !saveLoading
+  const canSave = clientFormIsValid(state.form) && !saveLoading
 
   if (!open) return null
 
@@ -527,7 +567,7 @@ export function AddClientDialog({
               ))}
             </ul>
             <button type="button" className="mt-2 h-10 min-h-10 border border-stone-500 px-3" onClick={() => void handleSave(true)}>
-              Save anyway
+              Save Anyway
             </button>
           </div>
         ) : null}
@@ -577,6 +617,14 @@ export function AddClientDialog({
             onAddDistrict={state.onAddDistrict}
             onUpdateDistrict={state.onUpdateDistrict}
             onDeleteDistrict={state.onDeleteDistrict}
+            cities={state.cities}
+            cityDialogOpen={state.cityDialogOpen}
+            setCityDialogOpen={state.setCityDialogOpen}
+            newCityName={state.newCityName}
+            setNewCityName={state.setNewCityName}
+            onAddCity={(close?: boolean) => void state.onAddCity(close)}
+            onUpdateCity={state.onUpdateCity}
+            onDeleteCity={state.onDeleteCity}
             pinCodeDialogOpen={state.pinCodeDialogOpen}
             setPinCodeDialogOpen={state.setPinCodeDialogOpen}
             newPinCode={state.newPinCode}
@@ -631,7 +679,15 @@ export function AddClientDialog({
           />
         </div>
 
-        <DialogFooter className="shrink-0 border-t border-stone-200 bg-stone-50 px-4 py-3 sm:justify-end sm:px-5">
+        <DialogFooter className="shrink-0 border-t border-stone-200 bg-stone-50 px-4 py-3 sm:items-center sm:justify-end sm:px-5">
+          {state.form.panFromGstin ? <span className="mr-auto text-xs text-stone-600">PAN From GSTIN</span> : null}
+          {!canSave && !saveLoading ? (
+            <span className="text-xs text-red-700" role="status">
+              {!state.form.companyName.trim()
+                ? 'Company Name Is Required Before Saving.'
+                : 'Correct the Highlighted Fields Before Saving.'}
+            </span>
+          ) : null}
           {/* Single primary action — close via header X */}
           <Button
             type="button"

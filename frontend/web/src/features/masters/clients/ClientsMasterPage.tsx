@@ -39,6 +39,14 @@ import { ClientsHeaderBar } from './ClientsHeaderBar'
 import { ClientsTable, type ClientSortDir, type ClientSortKey } from './ClientsTable'
 import { clientPageShellClass } from './clientsFormUi'
 import { buildClientsAssistantContext } from './buildClientsAssistantContext'
+import {
+  buildClientRowPayload,
+  CLIENT_OPTIONAL_COLUMNS,
+  clientSitesAndContactsForSave,
+  missingColumnError,
+  missingColumnName,
+  SIMILAR_CLIENT_WARNING_THRESHOLD,
+} from './clientSavePayload'
 import { isValidGstin, isValidIndianMobile, isValidPan } from '@/lib/indiaValidators'
 import { limsDialogClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
@@ -59,7 +67,6 @@ import {
   isValidLatitude,
   isValidLongitude,
   PAYMENT_TERMS,
-  toContinuousText,
   toProperTitleCase,
   type BalanceType,
   type ClientForm as ClientFormType,
@@ -73,7 +80,6 @@ import { todayLocalIso } from '@/lib/localDate'
 const normalizeText = (value: string) => value.trim()
 
 const VIEW_ONLY_MSG = 'View-only access — ask the Laboratory Director for Edit access.'
-const SIMILAR_CLIENT_WARNING_THRESHOLD = 0.5
 
 type MasterDeleteResult = {
   deleted?: string[] | null
@@ -224,21 +230,6 @@ const CLIENT_FORM_COLUMNS_GEO = `${CLIENT_FORM_COLUMNS}, longitude, latitude`
 const CLIENT_FORM_COLUMNS_FLAGS = `${CLIENT_FORM_COLUMNS}, women_entrepreneur, startup_status`
 const CLIENT_FORM_COLUMNS_EXTRA = `${CLIENT_FORM_COLUMNS_GEO}, women_entrepreneur, startup_status`
 const CLIENT_FORM_COLUMNS_MANAK = `${CLIENT_FORM_COLUMNS_EXTRA}, manak_user_id, manak_password_set`
-
-function missingColumnName(error: { message?: string } | null) {
-  const message = error?.message ?? ''
-  return (
-    message.match(/'([a-z0-9_]+)' column/i)?.[1]
-    ?? message.match(/column (?:[a-z0-9_]+\.)?([a-z0-9_]+) does not exist/i)?.[1]
-    ?? message.match(/column "([a-z0-9_]+)"/i)?.[1]
-    ?? null
-  )
-}
-
-function missingColumnError(error: { code?: string; message?: string } | null) {
-  if (!error) return false
-  return error.code === '42703' || error.code === 'PGRST204' || /does not exist|schema cache/i.test(error.message ?? '')
-}
 
 async function loadClientForForm(id: string): Promise<ClientRow> {
   const selects = [CLIENT_FORM_COLUMNS_MANAK, CLIENT_FORM_COLUMNS_EXTRA, CLIENT_FORM_COLUMNS_FLAGS, CLIENT_FORM_COLUMNS_GEO, CLIENT_FORM_COLUMNS, CLIENT_FORM_COLUMNS_LEGACY]
@@ -1102,53 +1093,7 @@ export default function ClientsMasterPage() {
         setDuplicates([])
         setAllowDuplicateSave(false)
         allowDuplicateRef.current = false
-        // Contact Person and CEO / MD are one field: both columns carry the same name.
-        const personName = (form.contactPersonName || form.ceoName).trim() || null
-        const payload = {
-          // Production DB still has legacy NOT NULL `name` alongside `company_name`.
-          name: companyName,
-          gst_number: form.gstNumber.trim().toUpperCase() || null,
-          company_type: form.companyType,
-          company_scale: form.companyScale,
-          company_name: companyName,
-          contact_person_name: personName,
-          country_code: form.countryCode || null,
-          mobile: form.mobile.trim() || null,
-          email: form.email.trim() || null,
-          address: toContinuousText(toProperTitleCase(form.address)) || null,
-          pin_code: form.pinCode.trim() || null,
-          city: form.city.trim() || null,
-          district: form.district.trim() || null,
-          state: form.state || null,
-          country: form.country || null,
-          opening_balance: form.openingBalance ? Number(form.openingBalance) : 0,
-          balance_type: form.balanceType,
-          payment_term: form.paymentTerm,
-          longitude: form.longitude.trim() || null,
-          latitude: form.latitude.trim() || null,
-          manak_user_id: form.manakUserId.trim() || null,
-          remark: form.remark.trim() || null,
-          pan: form.pan.trim().toUpperCase() || null,
-          cin: form.cin.trim() || null,
-          llpin: form.llpin.trim() || null,
-          udyam_no: form.udyamNo.trim() || null,
-          msme_category: form.msmeCategory.trim() || null,
-          udyam_date: form.udyamDate || null,
-          constitution: form.constitution.trim() || null,
-          landline: form.landline.trim() || null,
-          ceo_name: personName,
-          sector: form.sector || null,
-          is_startup: form.startupStatus.trim().toLowerCase() === 'yes',
-          startup_status: form.startupStatus.trim() || 'No',
-          startup_dpiit_no: form.startupDpiitNo.trim() || null,
-          is_women_entrepreneur: form.womenEntrepreneur.trim().toLowerCase() === 'yes',
-          women_entrepreneur: form.womenEntrepreneur.trim() || 'No',
-          gst_registration_type: form.gstRegistrationType.trim() || null,
-          gst_state_code: form.gstStateCode.trim() || null,
-          client_status: form.clientStatus,
-          lead_source: form.leadSource.trim() || null,
-          referred_by: form.referredBy.trim() || null,
-        }
+        const payload = buildClientRowPayload(form)
 
         // Prefer insert/update over upsert — avoids 42P10 when the unique index
         // on company_name is missing on some environments.
@@ -1168,14 +1113,7 @@ export default function ClientsMasterPage() {
         let savedId: string | null = null
         // Coordinates are now part of the required client schema. Never retry a
         // save without them, or the form can close while silently losing values.
-        const optionalColumns = [
-          'women_entrepreneur',
-          'startup_status',
-          'manak_user_id',
-          'city',
-          'landline',
-          'ceo_name',
-        ]
+        const optionalColumns = CLIENT_OPTIONAL_COLUMNS
         const row: Record<string, unknown> = { ...payload }
         for (let attempt = 0; attempt < optionalColumns.length + 1; attempt += 1) {
           try {
@@ -1189,43 +1127,7 @@ export default function ClientsMasterPage() {
           }
         }
         if (savedId) {
-          const sites = (form.sites.length > 0 ? form.sites : emptyClientSites()).map((site, index) => {
-            const primaryOffice = site.siteRole === 'Registered Office' && (site.isPrimary || index === 0)
-            if (!primaryOffice) {
-              if (site.siteRole !== 'Factory') return { ...site, isPrimary: false }
-              // A factory that follows the office, or a new factory site, takes the office district / state / PIN.
-              const followOffice = form.factorySameAsOffice !== false || !site.id
-              return {
-                ...site,
-                isPrimary: false,
-                address: form.factorySameAsOffice !== false ? form.address : site.address,
-                district: followOffice ? form.district : site.district,
-                state: followOffice ? form.state : site.state,
-                pinCode: form.factorySameAsOffice !== false ? form.pinCode : site.pinCode,
-                country: form.factorySameAsOffice !== false ? '' : site.country,
-              }
-            }
-            return {
-              ...site,
-              isPrimary: true,
-              address: form.address,
-              district: form.district,
-              state: form.state,
-              pinCode: form.pinCode,
-              gstNumber: form.gstNumber,
-            }
-          })
-          const contacts = (form.contacts.length > 0 ? form.contacts : emptyClientContacts()).map((contact, index) => {
-            if (!(contact.isPrimary || index === 0)) return { ...contact, isPrimary: false }
-            return {
-              ...contact,
-              isPrimary: true,
-              contactRole: contact.contactRole === 'Other' ? 'Primary' as const : contact.contactRole,
-              name: form.contactPersonName || form.ceoName,
-              mobile: form.mobile,
-              email: form.email,
-            }
-          })
+          const { sites, contacts } = clientSitesAndContactsForSave(form)
           try {
             await saveClientSites(savedId, sites)
             await saveClientContacts(savedId, contacts)
