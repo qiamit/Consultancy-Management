@@ -6,11 +6,39 @@ import {
   type SaleDocumentKind,
 } from './saleDocumentsApi'
 import {
+  formatMoney,
   normalizePaymentMethod,
   rowToForm,
   type QuotationRow,
   type QuotationStatus,
 } from '../quotation/types'
+import { listInvoiceOutstanding } from './invoiceBalanceApi'
+import { withCurrencySymbol } from '@/lib/appCurrency'
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * Amount still due on a saved tax invoice, from the same `invoice_outstanding_for` RPC the
+ * invoice list uses: grand total − receipts against it (net of refunds) − credit notes
+ * + sales debit notes. Null when the invoice is not found (e.g. cancelled).
+ */
+async function savedInvoiceOutstanding(row: QuotationRow): Promise<number | null> {
+  let invoiceId = UUID_RE.test(row.id) ? row.id : ''
+  if (!invoiceId) {
+    // Converted straight after a first save: the row has no id yet, so find it by number.
+    let query = supabase
+      .from('finance_tax_invoices')
+      .select('id')
+      .eq('tax_invoice_number', row.quotation_number.trim())
+    if (row.client_id) query = query.eq('client_id', row.client_id)
+    const { data, error } = await query.limit(1).maybeSingle()
+    if (error) throw error
+    invoiceId = String((data as { id?: string } | null)?.id ?? '')
+  }
+  if (!invoiceId) return null
+  const [balance] = await listInvoiceOutstanding([invoiceId])
+  return balance ? balance.outstanding : null
+}
 
 export type QuotationConvertTarget = 'proformaInvoice' | 'invoice' | 'creditNote'
 
@@ -99,7 +127,10 @@ export async function convertInvoiceToCreditNoteIfNeeded(
   }
 }
 
-/** Invoice → Payment Receipt convert (creates a `transactions` receipt for the invoice total). */
+/**
+ * Invoice → Payment Receipt convert. Creates a `transactions` receipt for the amount still
+ * outstanding on the invoice (not its full total). A settled invoice gets no receipt.
+ */
 export async function convertInvoiceToPaymentReceiptIfNeeded(
   row: QuotationRow,
   status: QuotationStatus,
@@ -109,9 +140,14 @@ export async function convertInvoiceToPaymentReceiptIfNeeded(
     if (!row.client_id && !row.client_name?.trim()) {
       throw new Error('Client is required before converting this document.')
     }
-    const amount = Number(row.grand_total ?? 0)
-    if (!Number.isFinite(amount) || amount <= 0) {
+    const grandTotal = Number(row.grand_total ?? 0)
+    if (!Number.isFinite(grandTotal) || grandTotal <= 0) {
       throw new Error('Invoice grand total must be greater than 0 to create a payment receipt.')
+    }
+    const outstanding = await savedInvoiceOutstanding(row)
+    const amount = Math.round((outstanding ?? grandTotal) * 100) / 100
+    if (amount <= 0.009) {
+      return `Invoice ${row.quotation_number} is already fully settled (receipts / credit notes cover its total), so no Payment Receipt was created.`
     }
     const year = new Date().getFullYear()
     const documentNumber = await fetchNextSaleDocumentNumber('paymentReceipt', `PR-${year}-`)
@@ -124,7 +160,10 @@ export async function convertInvoiceToPaymentReceiptIfNeeded(
       subject: (row.subject ?? '').trim() || `Payment against ${row.quotation_number}`,
     }
     await saveSaleDocument('paymentReceipt', form, null)
-    return `Created Payment Receipt ${documentNumber} from ${row.quotation_number}.`
+    const partly = outstanding != null && amount < grandTotal - 0.009
+    return partly
+      ? `Created Payment Receipt ${documentNumber} for the outstanding ${withCurrencySymbol(formatMoney(amount))} on ${row.quotation_number}.`
+      : `Created Payment Receipt ${documentNumber} from ${row.quotation_number}.`
   } catch (err) {
     throw new Error(formatSaleApiError(err))
   }
