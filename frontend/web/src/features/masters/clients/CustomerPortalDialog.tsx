@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Loader2, Mail, Power, Send, Trash2 } from 'lucide-react'
+import { ClipboardList, Loader2, Mail, Power, Send, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -22,6 +22,7 @@ import {
   type PortalLicenceFile,
   type PortalLogin,
 } from './customerPortalAdminApi'
+import { PortalRecordsSetupDialog } from './PortalRecordsSetupDialog'
 
 const sectionTitle = 'bg-stone-800 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-amber-200'
 const checkCls = 'h-4 w-4 rounded-none border-stone-500 text-amber-700'
@@ -51,6 +52,7 @@ export function CustomerPortalDialog({
   const [email, setEmail] = useState('')
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const [filesFor, setFilesFor] = useState('')
+  const [recordsFor, setRecordsFor] = useState<{ id: string; label: string } | null>(null)
   // Files of one licence; shown only while they belong to the licence picked in the list.
   const [filesOf, setFilesOf] = useState<{ licenceId: string; list: PortalLicenceFile[] } | null>(null)
   const files = filesOf && filesOf.licenceId === filesFor ? filesOf.list : null
@@ -131,6 +133,7 @@ export function CustomerPortalDialog({
     <Dialog open={client != null} onOpenChange={onOpenChange}>
       <DialogContent aria-describedby={undefined} className={cn(limsDialogClass, 'flex max-h-[90dvh] w-[min(56rem,calc(100vw-1.5rem))] max-w-none flex-col gap-0 overflow-hidden bg-white p-0')}>
         {confirmDialog}
+        <PortalRecordsSetupDialog key={recordsFor?.id ?? 'none'} licence={recordsFor} onOpenChange={(open) => !open && setRecordsFor(null)} />
         <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white">
           <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={limsDarkBarGlowStyle} />
           <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
@@ -262,6 +265,21 @@ export function CustomerPortalDialog({
                   )}
                   <p className="text-[11px] text-stone-500">Ticked files appear under Documents in the customer's portal. Nothing is shared until you tick it.</p>
                 </div>
+              </section>
+
+              <section className="border border-stone-300 bg-white">
+                <h3 className={sectionTitle}>Records Service &amp; Formats</h3>
+                <ul className="divide-y divide-stone-200">
+                  {licences.map((l) => (
+                    <li key={l.id} className="flex flex-wrap items-center gap-2 px-3 py-2">
+                      <span className="min-w-0 flex-1 truncate text-sm text-stone-800">{l.label}</span>
+                      <Button type="button" variant="outline" className={smallBtn} onClick={() => setRecordsFor({ id: l.id, label: l.label })}>
+                        <ClipboardList size={14} aria-hidden /> Records Setup
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+                <p className="px-3 pb-3 text-[11px] text-stone-500">Switch on the paid records service (30-day free trial) and design the Raw Material, In-Process, Final Testing and Batch formats. Customers only enter data.</p>
               </section>
             </>
           )}
