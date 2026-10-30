@@ -1676,7 +1676,7 @@ export function QuotationFormView({
                         )}
                         {visibleLineColumns.taxableAmount ? (
                           <p className="text-xs font-semibold tabular-nums text-[#78716c]">
-                            Taxable: {getCurrencySymbol()} {formatMoney(lineTaxableAmount(line))}
+                            Taxable: {getCurrencySymbol()} {formatMoney(lineTaxBreakdowns[index]?.taxableValue ?? lineTaxableAmount(line))}
                           </p>
                         ) : null}
                         {visibleLineColumns.cgstAmount ||
@@ -2032,7 +2032,7 @@ export function QuotationFormView({
                         ) : null}
                         {visibleLineColumns.taxableAmount ? (
                           <td className="align-middle px-2 py-1.5 text-center tabular-nums font-medium text-stone-900">
-                            {getCurrencySymbol()} {formatMoney(lineTaxableAmount(line))}
+                            {getCurrencySymbol()} {formatMoney(lineTaxBreakdowns[index]?.taxableValue ?? lineTaxableAmount(line))}
                           </td>
                         ) : null}
                         {visibleLineColumns.gstPercent ? (
@@ -2155,7 +2155,7 @@ export function QuotationFormView({
                         ) : null}
                         {visibleLineColumns.taxableAmount ? (
                           <td className="align-middle px-2 py-1.5 text-center tabular-nums font-medium text-stone-900">
-                            {getCurrencySymbol()} {formatMoney(lineTaxableAmount(line))}
+                            {getCurrencySymbol()} {formatMoney(lineTaxBreakdowns[index]?.taxableValue ?? lineTaxableAmount(line))}
                           </td>
                         ) : null}
                         {visibleLineColumns.gstPercent ? (
@@ -2441,6 +2441,23 @@ export function QuotationFormView({
                 </button>
               </div>
             </div>
+          ) : null}
+
+          {showTransportRow || showPackagingRow || form.chargesGst ? (
+            <label className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-2 text-stone-600">
+                <input
+                  type="checkbox"
+                  checked={form.chargesGst}
+                  onChange={(e) => set('chargesGst', e.target.checked)}
+                  className="h-4 w-4 rounded-none border-stone-500 text-amber-700 focus:ring-amber-500/30"
+                />
+                GST on Charges{form.chargesGst ? ` @ ${totals.chargesGstPercent} %` : ''}
+              </span>
+              {form.chargesGst ? (
+                <span className="tabular-nums">{getCurrencySymbol()} {formatMoney(totals.chargesGstAmount)}</span>
+              ) : null}
+            </label>
           ) : null}
 
           {placeOfSupply ? (

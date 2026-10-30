@@ -64,6 +64,14 @@ echo "== Folders"
 sudo mkdir -p "$QE_ROOT"/data/{db,storage,web,caddy} "$QE_ROOT"/backups
 sudo chown -R "$USER":"$USER" "$QE_ROOT"
 
+echo "== Vault root key (read by the db container's postgres user, uid 100)"
+# Restoring onto a new server: put the key from the off-site backup (keys/pgsodium_root.key) here first.
+sudo mkdir -p "$QE_ROOT/secrets" && sudo chmod 711 "$QE_ROOT/secrets"
+if ! sudo test -f "$QE_ROOT/secrets/pgsodium_root.key"; then
+  head -c 32 /dev/urandom | od -A n -t x1 | tr -d ' \n' | sudo tee "$QE_ROOT/secrets/pgsodium_root.key" >/dev/null
+fi
+sudo chown 100:101 "$QE_ROOT/secrets/pgsodium_root.key" && sudo chmod 400 "$QE_ROOT/secrets/pgsodium_root.key"
+
 echo "== GitHub read-only deploy key"
 if [ ! -f ~/.ssh/github_deploy ]; then
   ssh-keygen -t ed25519 -f ~/.ssh/github_deploy -N "" -C "oracle-qe-deploy" -q

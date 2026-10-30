@@ -634,6 +634,7 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
         discount_amount: totals.discountAmount,
         transportation_charges: totals.transportationCharges,
         packaging_charges: totals.packagingCharges,
+        charges_gst: form.chargesGst,
         gst_percent: totals.effectiveGstPercent,
         gst_amount: totals.gstAmount,
         subtotal: totals.subtotal,

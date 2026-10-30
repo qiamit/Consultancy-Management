@@ -493,6 +493,7 @@ function buildOneQuotationHtml(
       discountPercent: String(row.discount_percent ?? 0),
       transportationCharges: String(row.transportation_charges ?? 0),
       packagingCharges: String(row.packaging_charges ?? 0),
+      chargesGst: row.charges_gst === true,
       gstPercent: '18',
     } as QuotationForm,
     gstMode,
