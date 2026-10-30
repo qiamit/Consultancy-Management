@@ -305,10 +305,10 @@ th * {
   }
 }
 
-@container bis-projects (max-width: 1120px) {
-  /* The app sidebar reduces the usable panel width before the viewport hits
-     Tailwind's lg breakpoint. Keep the search controls and filters on separate
-     rows so they cannot collide in the remaining desktop-width content area. */
+@container bis-projects (max-width: 1440px) {
+  /* The five filters alone need ~900px, so below ~1440px of panel width the title, search and buttons get
+     squeezed under them (search shrank to nothing and Add New License slid beneath the filters at 1158px).
+     Keep the search controls and the filters on separate rows. */
   .bis-projects-toolbar {
     flex-direction: column !important;
     align-items: stretch !important;
@@ -322,8 +322,6 @@ th * {
     width: 100%;
   }
 
-  .bis-projects-add-label,
-  .bis-projects-footer-track button > span:not(.sr-only) { display: none !important; }
   .bis-projects-toolbar-filters .bis-projects-filter-trigger {
     flex: 1 1 8rem;
     width: auto !important;
@@ -332,6 +330,11 @@ th * {
     padding-inline: 0.375rem !important;
     font-size: 0.75rem !important;
   }
+}
+
+@container bis-projects (max-width: 1120px) {
+  .bis-projects-add-label,
+  .bis-projects-footer-track button > span:not(.sr-only) { display: none !important; }
 
   @media (hover: hover) and (pointer: fine) {
     .bis-projects-table-view .bis-project-row-actions button {
