@@ -183,7 +183,8 @@ export function moneyToFormStr(n: number | null | undefined): string {
 }
 
 export function moneyFromFormStr(raw: string | null | undefined): number | null {
-  const v = String(raw ?? '').trim()
+  // Strip Indian grouping and the rupee sign ("₹1,25,000" from a CSV); Number('1,25,000') is NaN.
+  const v = String(raw ?? '').replace(/[,\s₹]/g, '')
   if (!v) return null
   const n = Number(v)
   return Number.isFinite(n) ? n : null
@@ -192,6 +193,58 @@ export function moneyFromFormStr(raw: string | null | undefined): number | null 
 /** DB columns are numeric NOT NULL — never send null for money fields. */
 export function moneyOrZero(raw: string | null | undefined): number {
   return moneyFromFormStr(raw) ?? 0
+}
+
+/**
+ * The is_codes columns for an IS Code form, as the IS Code Master saves them. Shared with the
+ * quick "Add IS Code" dialogs so they send the same thing: int years ("RA-" → null, never the
+ * literal), canonical "IS 1234", NOT NULL fees as 0, and every field the form shows.
+ * Throws when the IS number, revision year or title is missing/invalid.
+ */
+export function buildIsCodePayload(form: IsCodeForm) {
+  const f: IsCodeForm = { ...emptyIsCodeForm(), ...form }
+  const revisionYear = yearIntFromForm(f.revisionYear)
+  const isNumberDigits = isCodeNumberDigits(f.isNumber)
+  if (!isValidIsNumberDigits(isNumberDigits)) {
+    throw new Error('IS Number must be 1 to 5 digits.')
+  }
+  if (revisionYear == null) throw new Error('Revision Year is required (YYYY).')
+  if (!normalizeText(f.title)) throw new Error('Title of the IS Code is required.')
+  const title = toProperTitleCase(normalizeText(f.title))
+  const aspect = normalizeText(f.aspect) || 'Specification'
+  return {
+    is_number: canonicalIsNumber(isNumberDigits),
+    revision_year: revisionYear,
+    reaffirmation_year: yearIntFromForm(f.reaffirmationYear),
+    amendment_number:
+      amendmentToFormStr(f.amendmentNumber) === '00' ? null : amendmentToFormStr(f.amendmentNumber),
+    title,
+    is_code_title: title,
+    aspect,
+    aspect_of_is: aspect,
+    testing_charges: moneyOrZero(f.testingCharges),
+    remarks: normalizeText(f.remarks) || null,
+    product_manual_number: normalizeText(f.productManualNumber) || null,
+    unit_of_is: normalizeText(f.unitOfIs) || DEFAULT_IS_CODE_UNIT,
+    mmf_large_scale: moneyOrZero(f.mmfLargeScale),
+    mmf_medium_scale: moneyOrZero(f.mmfMediumScale),
+    mmf_small_scale: moneyOrZero(f.mmfSmallScale),
+    mmf_micro_scale: moneyOrZero(f.mmfMicroScale),
+    slab_1_quantity: normalizeText(f.slab1Quantity) || DEFAULT_SLAB_1_QTY,
+    slab_1_rate: moneyOrZero(f.slab1Rate),
+    slab_2_quantity: normalizeText(f.slab2Quantity) || DEFAULT_SLAB_2_QTY,
+    slab_2_rate: moneyOrZero(f.slab2Rate),
+    slab_3_quantity: normalizeText(f.slab3Quantity) || DEFAULT_SLAB_3_QTY,
+    slab_3_rate: moneyOrZero(f.slab3Rate),
+    standard_prefix: normalizeText(f.standardPrefix) || 'IS',
+    part_no: partToFormStr(f.partNo) === 'Part-0' ? null : partToFormStr(f.partNo),
+    section_no: sectionToFormStr(f.sectionNo) === 'Sec-0' ? null : sectionToFormStr(f.sectionNo),
+    technical_department: normalizeText(f.technicalDepartment) || null,
+    technical_committee: normalizeText(f.technicalCommittee) || null,
+    ics_code: normalizeText(f.icsCode) || null,
+    certification_category: f.certificationCategory || null,
+    standard_status: f.standardStatus || null,
+  }
 }
 
 /**

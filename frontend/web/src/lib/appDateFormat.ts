@@ -190,8 +190,12 @@ export function initAppDateTimeFormatFromStorage() {
 function parseDateParts(dateString: string | null | undefined): DateParts | null {
   if (!dateString?.trim()) return null
   const raw = dateString.trim()
+  // A bare date (or a date with a midnight-free "T…" we cannot place) uses its calendar parts as-is.
+  // A full timestamp (timestamptz "2026-10-29T20:00:00+00:00") is shown as its LOCAL day — slicing
+  // the first 10 characters would show the UTC day, a day early for India between 00:00 and 05:30.
+  const hasTime = raw.length > 10 && !Number.isNaN(Date.parse(raw))
   const iso = raw.slice(0, 10)
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
+  const m = hasTime ? null : /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
   if (m) {
     const yyyy = m[1]!
     const monthIdx = parseInt(m[2]!, 10) - 1

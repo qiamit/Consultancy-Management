@@ -206,17 +206,21 @@ export async function listLaboratories(includeArchived = false): Promise<Laborat
 
 export async function setLaboratoriesArchived(ids: string[], archived: boolean): Promise<void> {
   if (ids.length === 0) return
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('laboratories')
     .update({ archived_at: archived ? new Date().toISOString() : null })
     .in('id', ids)
+    .select('id')
   if (error) throw error
+  // RLS turns a view-only update into "0 rows, no error"; do not report success then.
+  if (!data?.length) throw new Error('You do not have edit access for these records (view-only).')
 }
 
 export async function deleteLaboratories(ids: string[]): Promise<void> {
   if (ids.length === 0) return
-  const { error } = await supabase.from('laboratories').delete().in('id', ids)
+  const { data, error } = await supabase.from('laboratories').delete().in('id', ids).select('id')
   if (error) throw error
+  if (!data?.length) throw new Error('You do not have delete access for these records (view-only).')
 }
 
 export async function saveLaboratory(form: LaboratoryForm, editingId: string | null): Promise<string> {

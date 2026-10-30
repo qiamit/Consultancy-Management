@@ -1079,6 +1079,7 @@ export default function LabSettingsPage() {
       if (parsed.designation) setSelectedDesignation(parsed.designation)
       if (parsed.state) setSelectedState(parsed.state)
       if (parsed.country) setSelectedCountry(parsed.country)
+      if (parsed.countryCode) setSelectedCountryCode(parsed.countryCode)
       if (parsed.currency) {
         setSelectedCurrency(parsed.currency)
       }
@@ -1231,11 +1232,17 @@ export default function LabSettingsPage() {
       const rowId = await resolveLabSettingsRowId(supabase)
       const fields = { ...partial }
       delete fields.id
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('lab_settings')
         .update(fields)
         .eq('id', rowId)
         .select('id')
+      // Databases without lab_settings.generate_report_enabled (migration 20261030200000 not yet
+      // applied) rejected the whole Settings tab save: retry without that one column.
+      if (error && 'generate_report_enabled' in fields && /generate_report_enabled/.test(error.message ?? '')) {
+        delete fields.generate_report_enabled
+        ;({ data, error } = await supabase.from('lab_settings').update(fields).eq('id', rowId).select('id'))
+      }
 
       if (error) throw error
       if (!Array.isArray(data) || data.length === 0) {
@@ -1267,6 +1274,7 @@ export default function LabSettingsPage() {
             district,
             state: selectedState,
             country: selectedCountry,
+            countryCode: selectedCountryCode,
             companyLogoPath,
             sealSignPath,
           }),

@@ -19,6 +19,7 @@ export function parseConsentLetterDateInput(value: string): Date | null {
   const mm = Number(m[2])
   const yyyy = Number(m[3])
   const d = new Date(yyyy, mm - 1, dd)
+  if (yyyy < 1900 || yyyy > 2100) return null
   if (d.getFullYear() !== yyyy || d.getMonth() !== mm - 1 || d.getDate() !== dd) return null
   return d
 }

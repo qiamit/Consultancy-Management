@@ -20,6 +20,7 @@ import {
   type ExpenseCategory,
   type ExpenseRow,
 } from '../books/booksApi'
+import { todayLocalIso } from '@/lib/localDate'
 
 export default function ExpensePage() {
   const [rows, setRows] = useState<ExpenseRow[]>([])
@@ -27,11 +28,12 @@ export default function ExpensePage() {
   const [message, setMessage] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
   const [number, setNumber] = useState('')
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [date, setDate] = useState(() => todayLocalIso())
   const [categoryId, setCategoryId] = useState('')
   const [amount, setAmount] = useState('')
   const [notes, setNotes] = useState('')
   const [newCategory, setNewCategory] = useState('')
+  const [saving, setSaving] = useState(false)
 
   const load = () => {
     void Promise.all([listExpenses(), listExpenseCategories()])
@@ -47,7 +49,7 @@ export default function ExpensePage() {
   }, [])
 
   const startNew = () => {
-    setDate(new Date().toISOString().slice(0, 10))
+    setDate(todayLocalIso())
     setAmount('')
     setNotes('')
     setCategoryId(categories[0]?.id ?? '')
@@ -56,11 +58,14 @@ export default function ExpensePage() {
   }
 
   const save = () => {
-    const value = Number(amount)
-    if (!number.trim() || !Number.isFinite(value) || value <= 0) {
+    if (saving) return
+    // Accept Indian grouping ("1,25,000").
+    const value = Number(amount.replace(/[,\s₹]/g, ''))
+    if (!number.trim() || !amount.trim() || !Number.isFinite(value) || value <= 0) {
       setMessage('Enter an expense number and an amount.')
       return
     }
+    setSaving(true)
     void saveExpense({ number, date, categoryId, amount: value, notes })
       .then(() => {
         setOpen(false)
@@ -68,6 +73,7 @@ export default function ExpensePage() {
         load()
       })
       .catch((err: unknown) => setMessage(err instanceof Error ? err.message : 'Save failed'))
+      .finally(() => setSaving(false))
   }
 
   const addCategory = () => {
@@ -152,7 +158,7 @@ export default function ExpensePage() {
               <Button type="button" variant="outline" className="min-h-10" onClick={addCategory}>Add Category</Button>
             </div>
             <div className="flex gap-2 sm:col-span-2">
-              <Button type="button" className="min-h-10" onClick={save}>Save Expense</Button>
+              <Button type="button" className="min-h-10" disabled={saving} onClick={save}>Save Expense</Button>
               <Button type="button" variant="outline" className="min-h-10" onClick={() => setOpen(false)}>Close</Button>
             </div>
           </div>

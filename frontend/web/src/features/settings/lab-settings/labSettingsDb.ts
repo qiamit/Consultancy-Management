@@ -57,6 +57,7 @@ export function parseLabSettingsRow(row: LabSettingsRow) {
     designation: String(row.designation ?? row.contact_designation ?? ''),
     state: String(row.state ?? ''),
     country: String(row.country ?? ''),
+    countryCode: String(row.country_code ?? '').trim(),
     currency: String(row.currency ?? ''),
     dateFormat: String(row.date_format ?? ''),
     timeFormat: String(row.time_format ?? ''),
@@ -96,6 +97,8 @@ export function labDetailsPayload(input: {
   district: string
   state: string
   country: string
+  /** Mobile country code (+91); omitted when not given so older callers do not clear it. */
+  countryCode?: string
   companyLogoPath: string | null
   sealSignPath: string | null
 }): LabSettingsRow {
@@ -115,6 +118,7 @@ export function labDetailsPayload(input: {
     district: input.district,
     state: input.state,
     country: input.country,
+    ...(input.countryCode ? { country_code: input.countryCode } : {}),
     logo_path: input.companyLogoPath,
     seal_sign_path: input.sealSignPath,
   }

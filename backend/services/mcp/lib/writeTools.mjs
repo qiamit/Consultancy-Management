@@ -14,9 +14,22 @@ const PENDING_TTL_SEC = 5 * 60
 const uuid = (what) =>
   z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, 'Expected a uuid').describe(`${what} id (uuid)`)
 const text = (max, what) => z.union([z.string().max(max), z.null()]).optional().describe(what)
+/** A real calendar date with a year between 1900 and 2100 (rejects 0027-05-12, 2026-02-30). */
+const isRealDate = (value) => {
+  const [y, m, d] = value.split('-').map(Number)
+  if (y < 1900 || y > 2100 || m < 1 || m > 12 || d < 1) return false
+  return d <= new Date(Date.UTC(y, m, 0)).getUTCDate()
+}
+
 const date = (what) =>
   z
-    .union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD'), z.null()])
+    .union([
+      z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD')
+        .refine(isRealDate, 'Use a real date with a year between 1900 and 2100'),
+      z.null(),
+    ])
     .optional()
     .describe(`${what} (YYYY-MM-DD, or null to clear)`)
 

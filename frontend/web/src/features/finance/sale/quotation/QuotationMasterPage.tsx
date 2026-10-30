@@ -514,7 +514,11 @@ export default function QuotationMasterPage() {
       }
 
       let quotationId = editingId
+      // Status before this save: re-saving a quotation already converted must not convert it again.
+      let previousStatus: string | null = null
       if (editingId) {
+        const { data: before } = await supabase.from('quotations').select('status').eq('id', editingId).maybeSingle()
+        previousStatus = (before as { status?: string | null } | null)?.status ?? null
         const { error } = await supabase.from('quotations').update(payload).eq('id', editingId)
         if (error) throw error
         const { error: delErr } = await supabase
@@ -607,7 +611,8 @@ export default function QuotationMasterPage() {
         })),
       }
 
-      const convertMsg = await convertQuotationIfNeeded(savedRow, form.status)
+      const convertMsg =
+        previousStatus === form.status ? null : await convertQuotationIfNeeded(savedRow, form.status)
       setSaveMessage(convertMsg ?? `Saved ${form.quotationNumber}.`)
       hydratedEditRef.current = null
       setEdit(null)

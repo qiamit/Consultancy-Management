@@ -10,6 +10,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { isValidGstin as isValidGst, isValidPan } from '@/lib/indiaValidators'
 import { ClientManageDialogContent } from './ClientManageDialogContent'
 import type { ClientCertificateFile, ClientCertificateInput } from './clientsApi'
+import { todayLocalIso } from '@/lib/localDate'
 
 type DraftDocument = {
   key: string
@@ -52,12 +53,7 @@ function sortDocumentNames(rows: NameOption[]): NameOption[] {
   return Array.from(uniq.values()).sort((a, b) => a.label.localeCompare(b.label))
 }
 
-function todayIsoDate() {
-  const now = new Date()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  return `${now.getFullYear()}-${month}-${day}`
-}
+const todayIsoDate = todayLocalIso
 
 function blankDraft(): DraftDocument {
   return { key: crypto.randomUUID(), name: '', title: '', issuedOn: todayIsoDate(), documentNumber: '' }

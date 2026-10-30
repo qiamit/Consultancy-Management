@@ -14,6 +14,7 @@ import {
   isMaintenanceApplicable,
   type EquipmentRow,
 } from './types'
+import { daysUntilIso } from '@/lib/localDate'
 
 const rowEvenClass = 'bg-[#f7f3eb] hover:bg-[#f3e9d8]'
 const rowOddClass = 'bg-[#fffcf7] hover:bg-[#f3e9d8]'
@@ -48,12 +49,8 @@ const scheduleStatusUi = {
 
 function scheduleTone(nextDue: string | null | undefined): 'overdue' | 'soon' | 'ok' | 'notSet' {
   if (!nextDue) return 'notSet'
-  const due = new Date(nextDue)
-  if (Number.isNaN(due.getTime())) return 'notSet'
-  const now = new Date()
-  now.setHours(0, 0, 0, 0)
-  due.setHours(0, 0, 0, 0)
-  const diffDays = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+  const diffDays = daysUntilIso(nextDue)
+  if (diffDays == null) return 'notSet'
   if (diffDays < 0) return 'overdue'
   if (diffDays <= 30) return 'soon'
   return 'ok'

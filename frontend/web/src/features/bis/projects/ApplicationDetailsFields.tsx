@@ -337,15 +337,10 @@ export function ApplicationDetailsFields({
                 productionValue: calculatedProductionValue(actualCapacity, form.productionRate),
               })
             }} onChange={(e) => {
-              const installed = sanitizeCapacity(e.target.value)
-              const actual = Number(form.actualCapacity)
-              const actualCapacity = installed && Number.isFinite(actual) && actual >= Number(installed) ? '' : !installed ? '' : form.actualCapacity
-              onChange({
-                ...form,
-                installedCapacity: installed,
-                actualCapacity,
-                productionValue: calculatedProductionValue(actualCapacity, form.productionRate),
-              })
+              // Only the typed value here: checking "actual must be below installed" per keystroke
+              // cleared Actual Capacity at the first digit ("1" < 800) and autosave stored the wipe.
+              // The check runs on blur, once the number is complete.
+              onChange({ ...form, installedCapacity: sanitizeCapacity(e.target.value) })
             }} />
           </div>
           <div className="min-w-0 space-y-0.5">

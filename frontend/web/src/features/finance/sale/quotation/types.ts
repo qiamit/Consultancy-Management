@@ -1,4 +1,5 @@
 /** Finance Management · Sale · Quotation types */
+import { addDaysIso, todayLocalIso } from '@/lib/localDate'
 
 export type QuotationStatus =
   | 'Draft'
@@ -220,21 +221,11 @@ export function normalizePaymentMethod(value: string | null | undefined): Paymen
 }
 
 export function todayIsoDate(): string {
-  const d = new Date()
-  const yyyy = d.getFullYear()
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  const dd = String(d.getDate()).padStart(2, '0')
-  return `${yyyy}-${mm}-${dd}`
+  return todayLocalIso()
 }
 
 export function defaultValidUntil(fromDate = todayIsoDate()): string {
-  const d = new Date(`${fromDate}T00:00:00`)
-  if (Number.isNaN(d.getTime())) return todayIsoDate()
-  d.setDate(d.getDate() + 30)
-  const yyyy = d.getFullYear()
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  const dd = String(d.getDate()).padStart(2, '0')
-  return `${yyyy}-${mm}-${dd}`
+  return addDaysIso(fromDate, 30) || addDaysIso(todayIsoDate(), 30)
 }
 
 export function newLineKey(): string {

@@ -32,6 +32,7 @@ import {
   type LaboratoryForm,
   type LaboratoryRow,
 } from './laboratoriesApi'
+import { parseCsv } from '@/lib/csv'
 
 const GRID_TABLE =
   'w-full min-w-0 table-fixed border-collapse font-jakarta [&_th]:break-words [&_td]:break-words [&_th]:border [&_td]:border [&_th]:border-stone-700 [&_td]:border-[#e7e0d4] [&_th]:p-[1mm] [&_td]:!p-[1mm] [&_th]:sticky [&_th]:top-0 [&_th]:z-[1]'
@@ -404,37 +405,44 @@ export default function LaboratoriesMasterPage() {
           e.target.value = ''
           if (!file) return
           void file.text().then(async (text) => {
-            const lines = text.split(/\r?\n/).filter((line) => line.trim())
-            const header = (lines.shift() ?? '').split(',').map((cell) => cell.trim().replace(/^"|"$/g, '').toLowerCase())
+            // Quote-aware: exported addresses contain commas.
+            const lines = parseCsv(text)
+            const header = (lines.shift() ?? []).map((cell) => cell.toLowerCase())
             const index = (name: string) => header.indexOf(name)
+            // Re-importing an export updates the matching lab (by name) instead of duplicating it.
+            const existingByName = new Map(rows.map((row) => [row.name.trim().toLowerCase(), row]))
             let saved = 0
-            for (const line of lines) {
-              const cells = line.split(',').map((cell) => cell.trim().replace(/^"|"$/g, ''))
-              const name = cells[index('name')] ?? ''
-              if (!name) continue
-              await saveLaboratory({
-                ...emptyLaboratoryForm(),
-                name,
-                labType: cells[index('lab_type')] || 'OSL',
-                oslCode: cells[index('osl_code')] ?? '',
-                address: cells[index('address')] ?? '',
-                pinCode: cells[index('pin_code')] ?? '',
-                district: cells[index('district')] ?? '',
-                state: cells[index('state')] ?? '',
-                country: cells[index('country')] || 'India',
-                gstNumber: cells[index('gst_number')] ?? '',
-                openingBalance: cells[index('opening_balance')] ?? '',
-                balanceType: cells[index('balance_type')] === 'Cr' ? 'Cr' : 'Dr',
-                paymentTerm: cells[index('payment_term')] || '100 % Advance',
-                remark: cells[index('remark')] ?? '',
-                contactName: cells[index('contact_name')] ?? '',
-                email: cells[index('email')] ?? '',
-                mobile: cells[index('mobile')] ?? '',
-              }, null)
-              saved += 1
+            try {
+              for (const cells of lines) {
+                const name = cells[index('name')] ?? ''
+                if (!name) continue
+                // Columns the CSV does not carry keep their saved values.
+                const existing = existingByName.get(name.trim().toLowerCase())
+                await saveLaboratory({
+                  ...(existing ? rowToForm(existing) : emptyLaboratoryForm()),
+                  name,
+                  labType: cells[index('lab_type')] || 'OSL',
+                  oslCode: cells[index('osl_code')] ?? '',
+                  address: cells[index('address')] ?? '',
+                  pinCode: cells[index('pin_code')] ?? '',
+                  district: cells[index('district')] ?? '',
+                  state: cells[index('state')] ?? '',
+                  country: cells[index('country')] || 'India',
+                  gstNumber: cells[index('gst_number')] ?? '',
+                  openingBalance: cells[index('opening_balance')] ?? '',
+                  balanceType: cells[index('balance_type')] === 'Cr' ? 'Cr' : 'Dr',
+                  paymentTerm: cells[index('payment_term')] || '100 % Advance',
+                  remark: cells[index('remark')] ?? '',
+                  contactName: cells[index('contact_name')] ?? '',
+                  email: cells[index('email')] ?? '',
+                  mobile: cells[index('mobile')] ?? '',
+                }, existing?.id ?? null)
+                saved += 1
+              }
+            } finally {
+              refresh()
             }
             setMessage(`Import saved (${saved}).`)
-            refresh()
           }).catch((err: unknown) => setMessage(err instanceof Error ? err.message : 'Import failed'))
         }} />
         <ClientsTableFooterBar

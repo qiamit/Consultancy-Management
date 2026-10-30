@@ -181,10 +181,9 @@ export function ManakApplicationFields({
         value={form.installedCapacity}
         disabled={disabled}
         onChange={(e) => {
-          const installed = sanitizeCapacity(e.target.value)
-          const actual = Number(form.actualCapacity)
-          const actualCapacity = installed && Number.isFinite(actual) && actual >= Number(installed) ? '' : !installed ? '' : form.actualCapacity
-          onChange({ ...form, installedCapacity: installed, actualCapacity, productionValue: calculatedProductionValue(actualCapacity, form.productionRate) })
+          // Only the typed value; the "actual below installed" check runs on blur (per keystroke it
+          // wiped Actual Capacity at the first digit and autosave stored it).
+          onChange({ ...form, installedCapacity: sanitizeCapacity(e.target.value) })
         }}
         onBlur={() => {
           const installedCapacity = formatCapacity(form.installedCapacity)

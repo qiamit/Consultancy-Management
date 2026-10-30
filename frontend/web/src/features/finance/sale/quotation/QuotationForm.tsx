@@ -412,7 +412,6 @@ export function QuotationFormView({
   const [manageTermsOpen, setManageTermsOpen] = useState(false)
   const [notes, setNotes] = useState<QuotationNoteRow[]>([])
   const [notesOpen, setNotesOpen] = useState(false)
-  const [convertedInvoiceTotal, setConvertedInvoiceTotal] = useState(0)
   const [ledgerVersion, setLedgerVersion] = useState(0)
   const [invoiceBalances, setInvoiceBalances] = useState<InvoiceBalance[]>([])
   const [settlements, setSettlements] = useState<InvoiceSettlement[]>([])
@@ -854,39 +853,6 @@ export function QuotationFormView({
   const selectedClientLabel =
     clientOptions.find((o) => o.id === form.clientId)?.label ?? form.clientName
 
-  useEffect(() => {
-    if (!isPaymentReceipt || (!form.clientId && !form.clientName.trim())) {
-      setConvertedInvoiceTotal(0)
-      return
-    }
-    let cancelled = false
-    void (async () => {
-      try {
-        let query = supabase
-          .from('quotations')
-          .select('grand_total, client_id, client_name, status')
-          .in('status', ['Invoice', 'Converted'])
-        if (form.clientId.trim()) {
-          query = query.eq('client_id', form.clientId.trim())
-        } else {
-          query = query.ilike('client_name', form.clientName.trim())
-        }
-        const { data, error } = await query
-        if (error) throw error
-        const total = (Array.isArray(data) ? data : []).reduce((sum, row) => {
-          const n = Number((row as { grand_total?: number }).grand_total)
-          return sum + (Number.isFinite(n) ? Math.max(0, n) : 0)
-        }, 0)
-        if (!cancelled) setConvertedInvoiceTotal(Math.round(total * 100) / 100)
-      } catch {
-        if (!cancelled) setConvertedInvoiceTotal(0)
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [form.clientId, form.clientName, isPaymentReceipt])
-
   const selectedClientBalance = useMemo(() => {
     const contact = form.clientId ? clientContactById[form.clientId] : undefined
     if (!form.clientId && !form.clientName.trim()) {
@@ -898,11 +864,9 @@ export function QuotationFormView({
       openingBalance: contact?.openingBalance ?? 0,
       openingType: contact?.balanceType === 'Cr' ? 'Cr' : 'Dr',
       excludeReceiptId,
-      extraDebit: convertedInvoiceTotal,
     })
   }, [
     clientContactById,
-    convertedInvoiceTotal,
     excludeReceiptId,
     form.clientId,
     form.clientName,
@@ -2395,8 +2359,8 @@ export function QuotationFormView({
                   title="Remove"
                   onClick={() => {
                     setShowDiscountRow(false)
-                    set('discountAmount', '0')
-                    set('discountPercent', '0')
+                    // One update: two set() calls both spread the same old form, so the second undid the first.
+                    onChange({ ...form, discountAmount: '0', discountPercent: '0' })
                   }}
                 >
                   <X size={14} aria-hidden />

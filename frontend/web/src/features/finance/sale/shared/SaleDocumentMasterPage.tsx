@@ -585,11 +585,12 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
       setSaveMessage(isVendorParty ? 'Select a vendor.' : 'Select a client.')
       return
     }
-    if (isPaymentReceipt && parseMoney(String(form.paymentAmount ?? '')) <= 0) {
+    // Payment Made and Refund are money forms too (no line items on screen).
+    if (isMoneyForm && parseMoney(String(form.paymentAmount ?? '')) <= 0) {
       setSaveMessage('Enter a payment amount greater than 0.')
       return
     }
-    if (!isPaymentReceipt && !form.lines.some((l) => l.description.trim().length > 0)) {
+    if (!isMoneyForm && !form.lines.some((l) => l.description.trim().length > 0)) {
       setSaveMessage('Add at least one line item.')
       return
     }
@@ -661,7 +662,8 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
         convertMsg =
           (await convertInvoiceToCreditNoteIfNeeded(convertSource, convertAction)) ??
           (await convertInvoiceToPaymentReceiptIfNeeded(convertSource, convertAction))
-      } else if (config.documentKind === 'proformaInvoice') {
+      } else if (config.documentKind === 'proformaInvoice' && convertAction === 'Invoice') {
+        // A proforma's own status is "Proforma"; only "Convert to Invoice" creates another document.
         convertMsg = await convertQuotationIfNeeded(convertSource, convertAction)
       }
       setMessage(convertMsg ?? `Saved ${form.quotationNumber.trim()}.`)
@@ -997,7 +999,7 @@ export function SaleDocumentMasterPage({ config }: { config: SaleDocumentModuleC
                 </p>
               ) : null}
               <QuotationFormView
-                key={editingId ?? `new-${form.quotationNumber}`}
+                key={editingId ?? 'new'}
                 form={form}
                 onChange={setForm}
                 clientOptions={clientOptions}

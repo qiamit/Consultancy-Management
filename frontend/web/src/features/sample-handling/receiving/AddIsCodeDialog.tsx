@@ -11,6 +11,7 @@ import {
   limsDialogWidthCapClass,
 } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
+import { buildIsCodePayload } from '@/features/masters/is-codes/types'
 
 function parseIsCodeLabelInput(label: string): Partial<IsCodeForm> {
   const raw = label.trim()
@@ -100,16 +101,9 @@ export function AddIsCodeDialog({
     setSaveMessage(null)
     setSaveLoading(true)
     try {
-      const payload = {
-        is_number: form.isNumber.trim(),
-        revision_year: form.revisionYear.trim() || null,
-        reaffirmation_year: form.reaffirmationYear.trim() || null,
-        amendment_number: form.amendmentNumber.trim() || null,
-        title: form.title.trim(),
-        aspect: form.aspect,
-        testing_charges: form.testingCharges ? Number(form.testingCharges) : null,
-        remarks: form.remarks.trim() || null,
-      }
+      // Same columns as the IS Code Master: the default "RA-" reaffirmation went to an int column
+      // (cast error on every save) and Part, Section, MMF, slabs etc. were dropped.
+      const payload = buildIsCodePayload(form)
       const { data, error } = await supabase.from('is_codes').insert(payload).select('id').single()
       if (error) throw error
       const id = (data as { id: string } | null)?.id

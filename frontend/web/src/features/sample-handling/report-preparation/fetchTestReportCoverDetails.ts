@@ -8,6 +8,7 @@ import type { ReportScopeKind } from './reportScope'
 import { buildTestReportPartBDetails, type TestReportPartBDetails } from './testReportPartB'
 import { resolveReferenceReportNo } from './testReportReferenceReportNo'
 import { formatIsCodeLabel } from '@/features/masters/is-codes/formatIsCodeLabel'
+import { todayLocalIso } from '@/lib/localDate'
 
 export type { TestReportPartBDetails }
 
@@ -367,7 +368,7 @@ export async function fetchTestReportCoverDetails(
       ? opts.dateOfReporting
       : issuedAt
         ? fmtDate(issuedAt)
-        : formatDateDmyMmm(new Date().toISOString().slice(0, 10))
+        : formatDateDmyMmm(todayLocalIso())
 
   const productTitle = productTitleFromIs ?? fmt(row.test_required as string)
   const customerName =

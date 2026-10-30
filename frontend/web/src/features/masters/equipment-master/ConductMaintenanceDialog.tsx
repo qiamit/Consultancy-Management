@@ -38,7 +38,8 @@ import {
   type MaintenanceHistoryRecord,
 } from './maintenanceHistory'
 import type { Frequency, MaintenanceChecklistItem } from './types'
-import { calculateNextDueDate, sanitizeDateStr } from './types'
+import { calculateNextDueDate } from './types'
+import { todayLocalIso } from '@/lib/localDate'
 
 export type { MaintenanceCheckpointRow, MaintenanceCheckpointStatus }
 export { REPAIR_DEFAULT_OK, REPAIR_DEFAULT_NOT_OK, defaultRepairForStatus } from './maintenanceChecklist'
@@ -163,7 +164,7 @@ export function ConductMaintenanceDialog({
       return
     }
 
-    const today = sanitizeDateStr(new Date().toISOString().split('T')[0])
+    const today = todayLocalIso()
     const nextDue = calculateNextDueDate(today, maintenanceScheduleFrequency ?? '') || ''
     const snap = snapshotRef.current
 

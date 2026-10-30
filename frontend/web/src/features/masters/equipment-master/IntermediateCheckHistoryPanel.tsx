@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { ChevronDown, ChevronRight, History, Thermometer, Droplets } from 'lucide-react'
-import { formatDate } from '@/lib/utils'
+import { formatDate, isCalibrationOverdue } from '@/lib/utils'
 import {
   filterIntermediateCheckHistoryLastYears,
   INTERMEDIATE_CHECK_HISTORY_YEARS,
@@ -56,7 +56,7 @@ function MasterSnapshotsPreview({ masters }: { masters: IntermediateCheckMasterS
       </p>
       {masters.map((master) => {
         const isOverdue =
-          master.nextCalibrationDue && new Date(master.nextCalibrationDue) < new Date()
+          !!master.nextCalibrationDue && isCalibrationOverdue(master.nextCalibrationDue)
         return (
           <div
             key={master.id}
