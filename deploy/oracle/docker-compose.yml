@@ -155,6 +155,9 @@ services:
       # Off until cutover, so Railway and Oracle never both send renewal reminders.
       RENEWAL_REMINDERS_DISABLED: ${RENEWAL_REMINDERS_DISABLED:-1}
       ALLOW_LOCALHOST_ORIGINS: ${ALLOW_LOCALHOST_ORIGINS:-1}
+      APP_URL: https://${APP_DOMAIN}
+      # Customer Portal invites stay off until the owner opens the portal (after Railway shutdown + secrets rotation).
+      CUSTOMER_PORTAL_INVITES: ${CUSTOMER_PORTAL_INVITES:-0}
 
   mcp:
     <<: *service

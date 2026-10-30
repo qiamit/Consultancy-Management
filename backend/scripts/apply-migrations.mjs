@@ -154,6 +154,17 @@ for (const file of files) {
   }
 }
 
+// Customer Portal: a table added by a later migration gets the customer lockout too (see 20261030235000).
+if (!failed) {
+  const lockout = await client.query(
+    "SELECT to_regprocedure('public.app_apply_customer_lockout()') IS NOT NULL AS present",
+  )
+  if (lockout.rows[0]?.present) {
+    const added = await client.query('SELECT public.app_apply_customer_lockout() AS n')
+    if (Number(added.rows[0]?.n) > 0) console.log('customer lockout added to', added.rows[0].n, 'table(s)')
+  }
+}
+
 const tables = await client.query(`
   SELECT tablename FROM pg_tables
   WHERE schemaname = 'public'

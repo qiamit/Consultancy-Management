@@ -991,6 +991,132 @@ function looksLikeReferenceError(message) {
   return m.includes('foreign key') || m.includes('violates') || m.includes('database error deleting user')
 }
 
+// ── Customer Portal invites ─────────────────────────────────────────────────────────────────────
+// Invite only: an admin picks a client, its licences and an email. The login gets role 'customer' (locked out of
+// every table; it reads only through the portal_* functions) and a set-password link by email. Off until
+// CUSTOMER_PORTAL_INVITES=1, so no customer can be invited before the portal is opened.
+const APP_URL = (process.env.APP_URL || 'https://www.qengineering.in').replace(/\/$/, '')
+const CUSTOMER_PORTAL_INVITES = String(process.env.CUSTOMER_PORTAL_INVITES ?? '0').trim() === '1'
+
+function httpError(status, message) {
+  const err = new Error(message)
+  err.statusCode = status
+  return err
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch])
+}
+
+/** One-time set-password link (GoTrue recovery link) that lands on the app's /auth/reset page. */
+async function customerSetPasswordLink(email) {
+  const result = await authAdmin('/admin/generate_link', {
+    method: 'POST',
+    body: JSON.stringify({ type: 'recovery', email, redirect_to: `${APP_URL}/auth/reset` }),
+  })
+  const link = result.data?.action_link ?? result.data?.properties?.action_link
+  if (!result.ok || !link) throw httpError(400, authErrorMessage(result.data, 'Could not create the invite link'))
+  return String(link)
+}
+
+async function sendCustomerInviteEmail({ email, name, companyName, link }) {
+  const hello = name ? `Dear ${escapeHtml(name)},` : 'Dear Sir / Madam,'
+  const html = `<div style="font-family:Arial,sans-serif;font-size:14px;color:#1c1917;line-height:1.55">
+<p>${hello}</p>
+<p>Q Engineering has opened a <b>Customer Portal</b> login for <b>${escapeHtml(companyName)}</b>. In the portal you can see your BIS licences, their validity, scope, plant &amp; machinery and the licence documents we share with you.</p>
+<p><a href="${escapeHtml(link)}" style="display:inline-block;background:#b45309;color:#fff;padding:10px 18px;text-decoration:none;font-weight:bold">Set Your Password</a></p>
+<p>After setting the password you will be asked to set up Two-Step Login with an authenticator app (Google Authenticator / Microsoft Authenticator). This keeps your licence data safe.</p>
+<p>The link works once and expires soon. If it has expired, ask us to send a new invite.</p>
+<p>Regards,<br/>Q Engineering<br/>info@qengineering.in</p>
+</div>`
+  await sendResendEmail({ to: email, subject: 'Your Q Engineering Customer Portal Login', html })
+}
+
+async function handleInviteCustomer(req, res) {
+  const caller = await requireFullAccess(req)
+  if (!CUSTOMER_PORTAL_INVITES) throw httpError(503, 'The Customer Portal is not open yet. Invites start after it is opened.')
+  const body = await readBody(req, 64 * 1024)
+  const email = String(body.email ?? '').trim().toLowerCase()
+  const fullName = String(body.full_name ?? '').trim().slice(0, 120)
+  const clientId = String(body.client_id ?? '').trim()
+  const projectIds = Array.isArray(body.project_ids) ? body.project_ids.map((v) => String(v).trim()) : []
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw httpError(400, 'Enter a valid email')
+  if (!UUID_RE.test(clientId)) throw httpError(400, 'Client is required')
+  if (projectIds.length === 0 || projectIds.some((id) => !UUID_RE.test(id))) throw httpError(400, 'Select at least one licence')
+
+  const clients = await rest(`/clients?id=eq.${clientId}&select=id,company_name`)
+  const client = Array.isArray(clients) ? clients[0] : null
+  if (!client) throw httpError(400, 'Client not found')
+  const licences = await rest(`/bis_projects?id=in.(${projectIds.join(',')})&client_id=eq.${clientId}&select=id`)
+  if (!Array.isArray(licences) || licences.length !== new Set(projectIds).size) {
+    throw httpError(400, 'Every licence must belong to this client')
+  }
+  const existing = await rest(`/user_profiles?email=eq.${encodeURIComponent(email)}&select=id,role`)
+  if (Array.isArray(existing) && existing.length > 0) {
+    throw httpError(400, existing[0].role === 'customer'
+      ? 'This email already has a customer login. Use Resend Invite.'
+      : 'This email belongs to a staff login and cannot be a customer.')
+  }
+
+  const callerId = String(caller?.id ?? '')
+  const created = await authAdmin('/admin/users', {
+    method: 'POST',
+    body: JSON.stringify({
+      email,
+      // Nobody knows this password; the customer sets their own through the emailed link.
+      password: crypto.randomBytes(36).toString('base64url'),
+      email_confirm: true,
+      user_metadata: { full_name: fullName, status: 'Active', created_by: callerId, portal: 'customer' },
+    }),
+  })
+  if (!created.ok) throw httpError(400, authErrorMessage(created.data, `Auth ${created.status}`))
+  const userId = String((created.data?.user ?? created.data)?.id ?? '')
+  if (!userId) throw httpError(500, 'Login was not created')
+
+  try {
+    await restAs(callerId, '/user_profiles?on_conflict=id', {
+      method: 'POST',
+      headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({ id: userId, email, full_name: fullName, status: 'Active', role: 'customer', must_change_password: false }),
+    })
+    await restAs(callerId, '/portal_customers', {
+      method: 'POST',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({ user_id: userId, client_id: clientId, invited_by: callerId }),
+    })
+    await restAs(callerId, '/portal_licence_access', {
+      method: 'POST',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify([...new Set(projectIds)].map((id) => ({ user_id: userId, project_id: id, granted_by: callerId }))),
+    })
+    const link = await customerSetPasswordLink(email)
+    await sendCustomerInviteEmail({ email, name: fullName, companyName: client.company_name, link })
+  } catch (err) {
+    // No half-made customer: remove the login (its profile and access rows go with it).
+    await authAdmin(`/admin/users/${encodeURIComponent(userId)}`, { method: 'DELETE' })
+    throw err
+  }
+  await auditUserEvent(callerId, userId, 'I', 'customer_invited', { email, client_id: clientId, licences: projectIds.length })
+  json(res, 200, { ok: true, user_id: userId })
+}
+
+async function handleResendCustomerInvite(req, res) {
+  const caller = await requireFullAccess(req)
+  if (!CUSTOMER_PORTAL_INVITES) throw httpError(503, 'The Customer Portal is not open yet.')
+  const body = await readBody(req, 16 * 1024)
+  const userId = String(body.user_id ?? '').trim()
+  if (!UUID_RE.test(userId)) throw httpError(400, 'Customer login is required')
+  const rows = await rest(`/portal_customers?user_id=eq.${userId}&select=user_id,client:clients(company_name)`)
+  const row = Array.isArray(rows) ? rows[0] : null
+  const profile = row ? await fetchProfile(userId) : null
+  if (!row || profile?.role !== 'customer') throw httpError(404, 'Customer login not found')
+  if (!isActiveStatus(profile.status)) throw httpError(400, 'This login is switched off. Switch it on first.')
+  const link = await customerSetPasswordLink(profile.email)
+  await sendCustomerInviteEmail({ email: profile.email, name: profile.full_name, companyName: row.client?.company_name, link })
+  await auditUserEvent(String(caller?.id ?? ''), userId, 'U', 'customer_invite_resent', {})
+  json(res, 200, { ok: true })
+}
+
 async function handleDeleteUser(req, res) {
   const caller = await requireFullAccess(req)
   const body = await readBody(req)
@@ -1174,6 +1300,8 @@ const routes = {
   'POST /delete-user': handleDeleteUser,
   'POST /set-user-password': handleSetUserPassword,
   'POST /reset-user-mfa': handleResetUserMfa,
+  'POST /portal-invite-customer': handleInviteCustomer,
+  'POST /portal-resend-invite': handleResendCustomerInvite,
   'POST /qi-assistant': handleQiAssistant,
   'OPTIONS /qi-assistant': handleQiAssistant,
   'GET /osl/manak-pdf': handleManakPdf,

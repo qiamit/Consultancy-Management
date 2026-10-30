@@ -7,10 +7,13 @@ import ResetPasswordPage from '@/features/auth/ResetPasswordPage'
 import PublicSiteLayout from '@/features/public-site/PublicSiteLayout'
 import PublicHomePage from '@/features/public-site/PublicHomePage'
 import FileViewPage from '@/features/file-view/FileViewPage'
+import PortalLicencesPage from '@/features/portal/PortalLicencesPage'
+import PortalLicenceDetailPage from '@/features/portal/PortalLicenceDetailPage'
 import {
   AiSettingsRoute,
   EmailLogRoute,
   AuthenticatedShell,
+  PortalShell,
   BisLicenseRenewalsRoute,
   BisNewApplicationsRoute,
   BisNewInclusionRoute,
@@ -72,6 +75,11 @@ export default function App() {
         <Route path="/view-file" element={<FileViewPage />} />
         <Route path="/auth" element={<AuthPage />} />
         <Route path="/auth/reset" element={<ResetPasswordPage />} />
+
+        <Route path="/portal" element={<PortalShell />}>
+          <Route index element={<PortalLicencesPage />} />
+          <Route path="licences/:id" element={<PortalLicenceDetailPage />} />
+        </Route>
 
         <Route element={<AuthenticatedShell />}>
           <Route index element={<DashboardPage />} />

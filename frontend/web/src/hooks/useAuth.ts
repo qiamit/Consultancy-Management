@@ -2,7 +2,7 @@ import { createContext, createElement, useCallback, useContext, useEffect, useMe
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabaseClient'
 
-export type AuthRole = 'admin' | 'staff' | 'viewer' | ''
+export type AuthRole = 'admin' | 'staff' | 'viewer' | 'customer' | ''
 
 interface AuthState {
   user: User | null
@@ -21,7 +21,7 @@ interface AuthState {
 
 function normalizeAuthRole(value: unknown): AuthRole {
   const role = String(value ?? '').trim().toLowerCase()
-  if (role === 'admin' || role === 'staff' || role === 'viewer') return role
+  if (role === 'admin' || role === 'staff' || role === 'viewer' || role === 'customer') return role
   return ''
 }
 

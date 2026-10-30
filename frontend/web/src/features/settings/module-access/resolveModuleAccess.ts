@@ -17,7 +17,7 @@ import type { ModuleAccessRuleRow } from './moduleAccessApi'
 export type ModuleAccessUserContext = UserAccessContext & {
   userId?: string | null
   division?: string
-  role?: 'admin' | 'staff' | 'viewer' | ''
+  role?: 'admin' | 'staff' | 'viewer' | 'customer' | ''
 }
 
 function withViewerCap(level: ModuleAccessLevel, ctx: ModuleAccessUserContext): ModuleAccessLevel {

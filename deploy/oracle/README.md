@@ -143,3 +143,17 @@ COMMIT;"
 फिर वह admin password से sign in करे → app खुद authenticator setup (QR) दिखाएगा → नया phone scan करें.
 उसके बाद वही admin दूसरे admin का **Reset Two-Step Login** app से करे.
 `role = 'admin'` या `app_is_admin()` को कभी न बदलें — सिर्फ़ factors हटाने हैं.
+
+## Customer Portal (licensee login)
+- Customers sign in at `/portal` (invite only) and see only the licences assigned to them, read-only. Admins manage
+  logins from Client Master → row button **Customer Portal**: invite, choose licences, switch off, and tick the files
+  shown to the customer.
+- The database locks a `customer` login out of every table (restrictive policy `customer_lockout`); customers read only
+  through the `portal_*` functions. A table added later gets the lockout automatically after `db:migrate`.
+- Invites stay off until `.env` has `CUSTOMER_PORTAL_INVITES=1`. Turn it on only after Railway is shut down and the
+  secrets are rotated, then `docker compose up -d functions`.
+- Isolation test (on a copy of the database, never needed on live): it makes two test customers in a transaction,
+  checks that neither can read anything else, and rolls back.
+  ```
+  docker compose --env-file .env exec -T db psql -U supabase_admin -d <copy> -v ON_ERROR_STOP=1 -f - < ../../backend/database/tests/portal_isolation.sql
+  ```
