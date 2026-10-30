@@ -32,6 +32,7 @@ export default function JournalPage() {
   const [creditAccount, setCreditAccount] = useState('')
   const [amount, setAmount] = useState('')
   const [message, setMessage] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
 
   const load = () => {
     void Promise.all([listAccounts(), listJournals()])
@@ -57,11 +58,14 @@ export default function JournalPage() {
   }
 
   const save = () => {
-    const value = Number(amount)
-    if (!debitAccount || !creditAccount || debitAccount === creditAccount || !Number.isFinite(value) || value <= 0) {
+    if (saving) return
+    // Accept Indian grouping ("1,25,000").
+    const value = Number(amount.replace(/[,\s₹]/g, ''))
+    if (!debitAccount || !creditAccount || debitAccount === creditAccount || !amount.trim() || !Number.isFinite(value) || value <= 0) {
       setMessage('Choose two different accounts and enter an amount.')
       return
     }
+    setSaving(true)
     void saveJournal({
       number,
       date,
@@ -77,6 +81,7 @@ export default function JournalPage() {
         load()
       })
       .catch((err: unknown) => setMessage(err instanceof Error ? err.message : 'Save failed'))
+      .finally(() => setSaving(false))
   }
 
   return (
@@ -132,7 +137,7 @@ export default function JournalPage() {
               <Input id="journal-amount" className="min-h-10" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
             </div>
             <div className="flex items-end gap-2">
-              <Button type="button" className="min-h-10" onClick={save}>Save Journal</Button>
+              <Button type="button" className="min-h-10" disabled={saving} onClick={save}>Save Journal</Button>
               <Button type="button" variant="outline" className="min-h-10" onClick={() => setOpen(false)}>Close</Button>
             </div>
           </div>
