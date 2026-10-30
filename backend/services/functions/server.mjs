@@ -996,6 +996,7 @@ function looksLikeReferenceError(message) {
 // every table; it reads only through the portal_* functions) and a set-password link by email. Off until
 // CUSTOMER_PORTAL_INVITES=1, so no customer can be invited before the portal is opened.
 const APP_URL = (process.env.APP_URL || 'https://www.qengineering.in').replace(/\/$/, '')
+const AUTH_PUBLIC_URL = (process.env.AUTH_PUBLIC_URL || 'https://api.qengineering.in/auth/v1').replace(/\/$/, '')
 const CUSTOMER_PORTAL_INVITES = String(process.env.CUSTOMER_PORTAL_INVITES ?? '0').trim() === '1'
 
 function httpError(status, message) {
@@ -1016,7 +1017,13 @@ async function customerSetPasswordLink(email) {
   })
   const link = result.data?.action_link ?? result.data?.properties?.action_link
   if (!result.ok || !link) throw httpError(400, authErrorMessage(result.data, 'Could not create the invite link'))
-  return String(link)
+  // GoTrue may build the link on the bare API host (https://api…/verify); the public path is behind /auth/v1.
+  const url = new URL(String(link))
+  const base = new URL(AUTH_PUBLIC_URL)
+  if (url.host === base.host && !url.pathname.startsWith(`${base.pathname}/`)) {
+    url.pathname = `${base.pathname}${url.pathname}`
+  }
+  return url.toString()
 }
 
 async function sendCustomerInviteEmail({ email, name, companyName, link }) {
