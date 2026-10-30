@@ -60,7 +60,7 @@ export function ApplicationDocumentsAutoTable({
     }
   }, [projectRow])
 
-  // In-app viewer: window.open is blocked in embedded browsers.
+  // View opens the PDF in a new tab on the app's own viewer.
   const [viewFile, viewer] = usePdfViewer()
 
   const open = async (r: Row) => {
@@ -69,7 +69,7 @@ export function ApplicationDocumentsAutoTable({
       let href = ''
       if (r.type === 'file') {
         const urls = await createBisProjectFileUrls(r.file.storage_path, r.file.file_name)
-        href = urls.viewUrl || urls.downloadUrl || ''
+        href = urls.viewUrl || ''
       } else {
         const settings = await loadBisProjectPrintPageSettings(projectRow.id).catch(() => DEFAULT_BIS_DOCUMENT_PRINT_PAGE_SETTINGS)
         href = URL.createObjectURL(await buildBisDocumentPdfBlob(projectRow, r.kind, settings))

@@ -3,6 +3,7 @@ import { ExternalLink } from 'lucide-react'
 import { fetchExistingLicenseScopesByCmL, type BisExistingLicenseScopeRecord } from './bisProjectsApi'
 import { listBisProjectFiles, type BisProjectViewFile } from './bisProjectFilesApi'
 import { parseBisNotesScope } from './types'
+import { fileViewHref } from '@/lib/fileViewer'
 
 type ExistingScopeRecord = BisExistingLicenseScopeRecord & { files: BisProjectViewFile[] }
 
@@ -91,7 +92,7 @@ export function ExistingLicenseScope({ cmLDigits }: { cmLDigits: string }) {
               <div className="mt-2 flex flex-wrap gap-2">
                 {record.files.map((file) => (
                   file.viewUrl ? (
-                    <a key={file.id} href={file.viewUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 border border-stone-400 bg-white px-2 py-1 text-xs font-medium text-stone-800 hover:bg-amber-50">
+                    <a key={file.id} href={fileViewHref(file.viewUrl, file.file_name)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 border border-stone-400 bg-white px-2 py-1 text-xs font-medium text-stone-800 hover:bg-amber-50">
                       {file.file_name}<ExternalLink size={12} aria-hidden />
                     </a>
                   ) : (

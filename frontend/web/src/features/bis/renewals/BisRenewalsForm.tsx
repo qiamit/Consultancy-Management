@@ -27,6 +27,7 @@ import {
 } from './renewalClientWorkflow'
 import { listBisProjectFiles, uploadBisProjectFile } from '../projects/bisProjectFilesApi'
 import { toast } from 'sonner'
+import { fileViewHref } from '@/lib/fileViewer'
 
 export function BisRenewalsForm({
   open,
@@ -438,7 +439,7 @@ export function BisRenewalsForm({
             </DropdownMenuContent>
           </DropdownMenu>
           <Button type="button" variant="outline" className="h-8 rounded-none border-stone-400" disabled={!hasClientData || workflowBusy !== null || saving} onClick={() => certificateInputRef.current?.click()}><FileCheck2 className="mr-1 size-4" /> {workflowBusy === 'certificate' ? 'Uploading…' : 'Attach CA Certificate'}</Button>
-          {form.projectId && certificateFile?.url ? <a className="truncate text-xs text-stone-700 underline" href={certificateFile.url} target="_blank" rel="noreferrer">{certificateFile.name}</a> : null}
+          {form.projectId && certificateFile?.url ? <a className="truncate text-xs text-stone-700 underline" href={fileViewHref(certificateFile.url, certificateFile.name)} target="_blank" rel="noreferrer">{certificateFile.name}</a> : null}
         </section>
 
         <div className="flex shrink-0 items-center justify-end gap-2 border-t-2 border-stone-500 bg-stone-100 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">

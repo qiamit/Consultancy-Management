@@ -25,6 +25,7 @@ import {
   SavedValueSuggestInput,
   uniqueSavedColumnValues,
 } from './SavedValueSuggestInput'
+import { fileViewHref } from '@/lib/fileViewer'
 
 const thClass =
   'bg-stone-800 text-center text-[10px] font-bold uppercase tracking-[0.12em] text-amber-200'
@@ -309,8 +310,8 @@ export function Cmpf306ModuleFields({
         return <div key={kind} className="flex flex-wrap items-center gap-2 text-xs">
           <span className="font-semibold text-stone-600">{label}:</span>
           {files.map((file) => <span key={file.id} className="inline-flex max-w-full items-center gap-1 border border-stone-300 bg-white px-2 py-1">
-            {file.viewUrl ? <a className="max-w-[220px] truncate text-amber-900 underline" href={file.viewUrl} target="_blank" rel="noreferrer">{file.file_name}</a> : <span className="max-w-[220px] truncate">{file.file_name}</span>}
-            <a className="inline-flex h-6 w-6 items-center justify-center" href={file.viewUrl} target="_blank" rel="noreferrer" aria-label={`View ${file.file_name}`}><Eye size={14} /></a>
+            {file.viewUrl ? <a className="max-w-[220px] truncate text-amber-900 underline" href={fileViewHref(file.viewUrl, file.file_name)} target="_blank" rel="noreferrer">{file.file_name}</a> : <span className="max-w-[220px] truncate">{file.file_name}</span>}
+            <a className="inline-flex h-6 w-6 items-center justify-center" href={file.viewUrl ? fileViewHref(file.viewUrl, file.file_name) : undefined} target="_blank" rel="noreferrer" aria-label={`View ${file.file_name}`}><Eye size={14} /></a>
             <button type="button" className="inline-flex h-6 w-6 items-center justify-center text-red-700 disabled:opacity-50" disabled={disabled || attachmentBusy !== null} onClick={() => void removeAttachment(kind, file)} aria-label={`Remove ${file.file_name}`}><Trash2 size={14} /></button>
           </span>)}
         </div>

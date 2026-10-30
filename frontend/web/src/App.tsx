@@ -6,6 +6,7 @@ import AuthPage from '@/features/auth/AuthPage'
 import ResetPasswordPage from '@/features/auth/ResetPasswordPage'
 import PublicSiteLayout from '@/features/public-site/PublicSiteLayout'
 import PublicHomePage from '@/features/public-site/PublicHomePage'
+import FileViewPage from '@/features/file-view/FileViewPage'
 import {
   AiSettingsRoute,
   EmailLogRoute,
@@ -67,6 +68,8 @@ export default function App() {
           <Route path="/home" element={<PublicHomePage />} />
         </Route>
 
+        {/* New-tab file viewer for every View button; the signed link in its hash is the only access it needs. */}
+        <Route path="/view-file" element={<FileViewPage />} />
         <Route path="/auth" element={<AuthPage />} />
         <Route path="/auth/reset" element={<ResetPasswordPage />} />
 

@@ -15,6 +15,7 @@ import {
   resolveIsCodeFileDocumentKind,
   setIsCodeFileDocumentKind,
 } from './types'
+import { fileViewHref } from '@/lib/fileViewer'
 
 const DOCUMENT_KIND_CATEGORY = 'document_kind'
 const DEFAULT_DOCUMENT_KIND = 'Specification'
@@ -380,7 +381,7 @@ export function IsCodeFilesTable({
         </Button>
         {viewHref ? (
           <a
-            href={viewHref}
+            href={fileViewHref(viewHref, file.file_name)}
             target="_blank"
             rel="noreferrer"
             className={cn(limsOutlineBtnClass, actionBtnClass)}

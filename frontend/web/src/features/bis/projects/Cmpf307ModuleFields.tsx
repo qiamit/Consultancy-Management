@@ -14,6 +14,7 @@ import {
   uploadBisProjectFile,
   type BisProjectViewFile,
 } from './bisProjectFilesApi'
+import { openFileInNewTab } from '@/lib/fileViewer'
 
 const inputClass = 'h-9 w-full border border-stone-400 bg-white px-2 text-sm text-stone-900 outline-none focus:border-amber-600 focus:ring-2 focus:ring-amber-500/20 disabled:opacity-60'
 const labelClass = 'flex flex-col gap-1 text-xs font-semibold text-stone-700'
@@ -83,7 +84,7 @@ export function Cmpf307ModuleFields({ value, onChange, disabled = false, project
     try {
       const urls = await createBisProjectFileUrls(file.storage_path, file.file_name)
       if (!urls.viewUrl) throw new Error('Unable to open this PDF.')
-      window.open(urls.viewUrl, '_blank', 'noopener,noreferrer')
+      openFileInNewTab(urls.viewUrl, file.file_name)
     } catch (error) { toast.error(formatBisProjectFilesError(error)) }
   }
 

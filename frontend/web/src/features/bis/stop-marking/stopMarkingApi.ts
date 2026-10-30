@@ -8,6 +8,7 @@ import { NOTICE_TYPE_OPTIONS, noticeHoldsMarking, type StopMarkingAddForm, type 
 const HOLDING_TYPES = NOTICE_TYPE_OPTIONS.filter((o) => o.holdsMarking).map((o) => o.value)
 
 import { formatBisApiError } from '../projects/bisProjectsApi'
+import { openFileInNewTab } from '@/lib/fileViewer'
 
 export { formatBisApiError }
 
@@ -214,10 +215,10 @@ export async function clearStopMarkingReport(caseId: string, existingPath: strin
   return data as unknown as StopMarkingRow
 }
 
-export async function openStopMarkingReport(path: string): Promise<void> {
+export async function openStopMarkingReport(path: string, fileName = ''): Promise<void> {
   const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(path.trim(), 60 * 10)
   if (error || !data?.signedUrl) throw error ?? new Error('Could not generate download link.')
-  window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
+  openFileInNewTab(data.signedUrl, fileName || path.split('/').pop() || '')
 }
 
 /** The stored BIS report as a File, so the AI can read it. */

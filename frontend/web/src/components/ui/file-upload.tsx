@@ -3,6 +3,7 @@ import { Upload, X, Eye } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from './button'
 import { supabase } from '@/lib/supabaseClient'
+import { openFileInNewTab } from '@/lib/fileViewer'
 
 interface FileUploadProps {
   label: string
@@ -123,9 +124,7 @@ export function FileUpload({
   }
 
   const handleView = () => {
-    if (fileUrl) {
-      window.open(fileUrl, '_blank')
-    }
+    openFileInNewTab(fileUrl ?? undefined, (value ?? '').split('/').pop() || label)
   }
 
   const buttonDisabled = !fileUrl

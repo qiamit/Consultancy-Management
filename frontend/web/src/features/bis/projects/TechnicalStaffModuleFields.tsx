@@ -61,6 +61,7 @@ import { BisDocumentPrintPreviewDialog } from './BisDocumentPrintPreviewDialog'
 import { MasterOptionFieldWithAdd } from './MasterOptionFieldWithAdd'
 import { removeSignatureImageBackground } from './removeSignatureBackground'
 import type { BisProjectRow } from './types'
+import { fileViewHref } from '@/lib/fileViewer'
 
 const DOC_APPOINTMENT = 'technical-staff-appointment'
 const DOC_EDUCATION_CERT = 'technical-staff-education-certificate'
@@ -558,7 +559,7 @@ export function TechnicalStaffModuleFields({
         </Button>
         {hasFile && urls?.viewUrl ? (
           <a
-            href={urls.viewUrl}
+            href={fileViewHref(urls.viewUrl, meta.fileName || meta.label)}
             target="_blank"
             rel="noreferrer"
             className={sigActionBtnClass}

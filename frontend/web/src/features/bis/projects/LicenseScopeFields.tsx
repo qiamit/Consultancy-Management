@@ -47,6 +47,7 @@ import {
   serializeBisNotesScope,
   setBisNotesScopeColumnCount,
 } from './types'
+import { openFileInNewTab } from '@/lib/fileViewer'
 
 function pickIsCodeFile(
   files: IsCodeFileLink[],
@@ -76,7 +77,7 @@ function openFileInBrowser(file: IsCodeFileLink | null, label: string) {
     )
     return
   }
-  window.open(url, '_blank', 'noopener,noreferrer')
+  openFileInNewTab(url, file?.file_name ?? label)
 }
 
 function AutoResizeScopeCell({
@@ -337,7 +338,7 @@ export function LicenseScopeFields({
       toast.error(scopeFile?.error || 'Manufacturing scope PDF is unavailable.')
       return
     }
-    window.open(url, '_blank', 'noopener,noreferrer')
+    openFileInNewTab(url, scopeFile?.file_name ?? 'Manufacturing Scope.pdf')
   }
 
   return (

@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabaseClient'
 import type { ClientContactForm, ClientSiteForm } from './types'
+import { openFileInNewTab } from '@/lib/fileViewer'
 
 export type SimilarClient = {
   id: string
@@ -413,7 +414,7 @@ export async function deleteClientCertificate(row: ClientCertificateFile): Promi
 export async function openClientCertificate(row: ClientCertificateFile): Promise<void> {
   const { data, error } = await supabase.storage.from(CERT_BUCKET).createSignedUrl(row.storage_path, 60)
   if (error || !data?.signedUrl) throw error ?? new Error('Unable to open the file.')
-  window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
+  openFileInNewTab(data.signedUrl, row.file_name)
 }
 
 export type PinPlace = { district: string; state: string; country: string }

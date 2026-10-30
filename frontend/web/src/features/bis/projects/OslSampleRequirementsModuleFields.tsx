@@ -120,6 +120,7 @@ import {
   findLaboratoryOslCodeByName,
   searchLaboratoryMasterOptions,
 } from '@/features/masters/laboratories/laboratoriesApi'
+import { openFileInNewTab } from '@/lib/fileViewer'
 
 const thClass =
   'bg-stone-800 text-center text-[10px] font-bold uppercase tracking-[0.12em] text-amber-200'
@@ -967,13 +968,10 @@ export function OslSampleRequirementsModuleFields({
       row.testRequestStoragePath,
       row.testRequestFileName || 'Test_Request.pdf',
     )
-      .then(({ viewUrl, downloadUrl }) => {
-        const href = viewUrl || downloadUrl
-        if (!href) {
+      .then(({ viewUrl }) => {
+        if (!openFileInNewTab(viewUrl, row.testRequestFileName || 'Test_Request.pdf')) {
           toast.error('Could Not Open Test Request PDF.')
-          return
         }
-        window.open(href, '_blank', 'noopener,noreferrer')
       })
       .catch((err) => {
         toast.error(err instanceof Error ? err.message : 'Could not open Test Request PDF.')
@@ -1456,13 +1454,10 @@ export function OslSampleRequirementsModuleFields({
       row.testReportStoragePath,
       row.testReportFileName || 'Test_Report.pdf',
     )
-      .then(({ viewUrl, downloadUrl }) => {
-        const href = viewUrl || downloadUrl
-        if (!href) {
+      .then(({ viewUrl }) => {
+        if (!openFileInNewTab(viewUrl, row.testReportFileName || 'Test_Report.pdf')) {
           toast.error('Could Not Open Test Report PDF.')
-          return
         }
-        window.open(href, '_blank', 'noopener,noreferrer')
       })
       .catch((err) => {
         toast.error(err instanceof Error ? err.message : 'Could not open Test Report PDF.')
@@ -1627,10 +1622,8 @@ export function OslSampleRequirementsModuleFields({
       row.declaredValueStoragePath,
       row.declaredValueFileName || 'Declared_Value.pdf',
     )
-      .then(({ viewUrl, downloadUrl }) => {
-        const url = viewUrl || downloadUrl
-        if (url) window.open(url, '_blank', 'noopener,noreferrer')
-        else toast.error('Could Not Open the Attached PDF.')
+      .then(({ viewUrl }) => {
+        if (!openFileInNewTab(viewUrl, row.declaredValueFileName || 'Declared_Value.pdf')) toast.error('Could Not Open the Attached PDF.')
       })
       .catch((err) => toast.error(err instanceof Error ? err.message : 'Could not open the PDF.'))
   }
