@@ -108,6 +108,7 @@ export function BisModuleImportDialog({
   bundle,
   onPickSource,
   onImported,
+  title,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -118,6 +119,8 @@ export function BisModuleImportDialog({
   /** Hand the chosen source application to the caller instead of copying data here (e.g. to fill an open form). */
   onPickSource?: (sourceProjectId: string) => Promise<void>
   onImported?: () => void
+  /** Heading for data that is not one module (e.g. Scope / Varieties picked through onPickSource). */
+  title?: string
 }) {
   const [step, setStep] = useState<StepKey>('client')
   const [isSearch, setIsSearch] = useState('')
@@ -134,7 +137,7 @@ export function BisModuleImportDialog({
   const [importing, setImporting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const label = bundle?.label ?? (kind ? BIS_PRINT_DOCUMENT_LABEL[kind] : 'Module')
+  const label = title ?? bundle?.label ?? (kind ?BIS_PRINT_DOCUMENT_LABEL[kind] : 'Module')
   const importable = Boolean(onPickSource) || Boolean(bundle?.kinds.length) || Boolean(kind && isImportableBisModuleKind(kind))
   const canImport = Boolean(targetRow?.id && importable && selectedId)
 
