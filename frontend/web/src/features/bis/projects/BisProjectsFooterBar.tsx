@@ -104,15 +104,15 @@ export function BisProjectsFooterBar({
       message.toLowerCase().includes('emailed'))
 
   return (
-    <div className={cn(limsPanelClass)}>
+    <div className={cn(limsPanelClass, 'lims-footer-bar')}>
       <div className="relative overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-2 py-1.5 text-white sm:px-3 sm:py-2 md:px-4">
         <div
           className="pointer-events-none absolute inset-0 opacity-[0.18]"
           style={limsDarkBarGlowStyle}
         />
         <div className="absolute top-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
-        <div className="bis-projects-footer-track relative flex min-w-0 flex-wrap items-center gap-1 overflow-hidden sm:gap-1.5 md:gap-2.5">
-        <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
+        <div className="bis-projects-footer-track relative flex min-w-0 flex-nowrap items-center gap-1 overflow-hidden sm:gap-1.5 md:gap-2.5">
+        <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-1 sm:gap-1.5">
           <LaboratoryDirectorOnly>
             <Button
               type="button"
@@ -312,17 +312,17 @@ export function BisProjectsFooterBar({
             </DropdownMenu>
           ) : null}
           {selectedCount > 0 ? (
-            <span className="hidden shrink-0 whitespace-nowrap text-[10px] text-stone-300 sm:inline sm:text-xs">
+            <span className="lims-footer-selected hidden shrink-0 whitespace-nowrap text-[10px] text-stone-300 sm:inline sm:text-xs">
               Selected: {selectedCount}
             </span>
           ) : null}
-          <span className="hidden shrink-0 whitespace-nowrap text-[10px] text-stone-300 md:inline sm:text-xs">
+          <span className="lims-footer-total hidden shrink-0 whitespace-nowrap text-[10px] text-stone-300 md:inline sm:text-xs">
             Total: {totalCount.toLocaleString('en-IN')}
           </span>
           {message ? (
             <p
               className={cn(
-                'min-w-0 max-w-[8rem] truncate text-[10px] sm:max-w-[12rem] sm:text-xs md:max-w-[16rem]',
+                'lims-footer-message min-w-0 max-w-[8rem] truncate text-[10px] sm:max-w-[12rem] sm:text-xs md:max-w-[16rem]',
                 isSuccess ? 'text-emerald-300' : 'text-red-300',
               )}
               title={message}
@@ -332,7 +332,7 @@ export function BisProjectsFooterBar({
           ) : null}
         </div>
 
-        <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5">
+        <div className="ml-auto flex shrink-0 flex-nowrap items-center gap-1 sm:gap-1.5">
           <Input
             aria-label="Jump to Page"
             placeholder="Page"
@@ -341,14 +341,14 @@ export function BisProjectsFooterBar({
             onKeyDown={(e) => {
               if (e.key === 'Enter') onJumpToGo()
             }}
-            className={cn(fieldClass, 'w-12 sm:w-14 md:w-16')}
+            className={cn(fieldClass, 'lims-footer-page-input w-12 sm:w-14 md:w-16')}
             inputMode="numeric"
           />
           <Button
             type="button"
             variant="outline"
             size="sm"
-            className={cn(actionBtnClass, 'hidden sm:inline-flex')}
+            className={cn(actionBtnClass, 'lims-footer-jump hidden sm:inline-flex')}
             onClick={onJumpToGo}
             disabled={loading}
           >
@@ -365,8 +365,8 @@ export function BisProjectsFooterBar({
             <ChevronLeft className="size-3.5 sm:size-4" />
             <span className="sr-only">Previous Page</span>
           </Button>
-          <span className="shrink-0 whitespace-nowrap text-center text-xs font-medium text-stone-300 sm:min-w-[5rem] md:min-w-[6.5rem]">
-            <span className="hidden sm:inline">Page </span>
+          <span className="lims-footer-page shrink-0 whitespace-nowrap text-center text-xs font-medium text-stone-300 sm:min-w-[5rem] md:min-w-[6.5rem]">
+            <span className="lims-footer-page-word hidden sm:inline">Page </span>
             {page}/{Math.max(pageCount, 1)}
           </span>
           <Button

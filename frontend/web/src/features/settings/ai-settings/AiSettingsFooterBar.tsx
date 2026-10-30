@@ -48,7 +48,7 @@ export function AiSettingsFooterBar({
   const to = Math.min(page * pageSize, totalCount)
 
   return (
-    <div className={cn(limsPanelClass)}>
+    <div className={cn(limsPanelClass, 'lims-footer-bar')}>
       <div className="relative overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-3 py-1.5 text-white sm:px-5 sm:py-2">
         <div
           className="pointer-events-none absolute inset-0 opacity-[0.18]"
@@ -58,13 +58,6 @@ export function AiSettingsFooterBar({
 
         <div className="relative flex min-w-0 flex-nowrap items-center justify-between gap-1.5 sm:gap-2 md:gap-3">
           <div className="flex min-w-0 flex-nowrap items-center gap-1 sm:gap-1.5">
-            <p className="shrink-0 whitespace-nowrap text-[10px] text-stone-300 sm:text-xs">
-              Showing{' '}
-              <span className="font-medium text-white">
-                {from}–{to}
-              </span>{' '}
-              of <span className="font-medium text-white">{totalCount}</span>
-            </p>
             <Select value={String(pageSize)} onValueChange={(v) => onPageSizeChange(Number(v))}>
               <SelectTrigger
                 className={cn(footerFieldClass, 'h-7 w-[6.5rem] shrink-0 text-[11px] sm:h-8 sm:text-xs')}
@@ -116,8 +109,11 @@ export function AiSettingsFooterBar({
               <ChevronLeft size={16} />
               <span className="sr-only">Previous Page</span>
             </Button>
-            <span className="shrink-0 whitespace-nowrap text-center text-[10px] font-medium text-stone-300 sm:min-w-[4.5rem] sm:text-xs md:min-w-[5.5rem]">
-              <span className="hidden sm:inline">Page </span>
+            <span
+              className="lims-footer-page shrink-0 whitespace-nowrap text-center text-[10px] font-medium text-stone-300 sm:min-w-[4.5rem] sm:text-xs md:min-w-[5.5rem]"
+              title={`Showing ${from}–${to} of ${totalCount}`}
+            >
+              <span className="lims-footer-page-word hidden sm:inline">Page </span>
               {page}/{pageCount}
             </span>
             <Button

@@ -10,7 +10,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { IsCodesHeaderBar } from './IsCodesHeaderBar'
 import { IsCodesForm } from './IsCodesForm'
 import { IsCodesTable, type IsCodeSortDir, type IsCodeSortKey } from './IsCodesTable'
-import { AuditHistoryDialog } from '@/components/lims/AuditHistoryDialog'
 import { IsCodesTableFooterBar } from './IsCodesFooterBar'
 import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { IsCodesFilesDialog, type IsCodeViewFile } from './IsCodesFilesDialog'
@@ -387,7 +386,6 @@ export default function IsCodesMasterPage() {
   const [saveLoading, setSaveLoading] = useState(false)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const canEdit = useCanEditCurrentModule()
-  const [showArchived, setShowArchived] = useState(false)
 
   const importInputRef = useRef<HTMLInputElement | null>(null)
   const filesDialogFileInputBusy = useRef(false)
@@ -416,7 +414,6 @@ export default function IsCodesMasterPage() {
   const [listError, setListError] = useState<string | null>(null)
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
-  const [historyOpen, setHistoryOpen] = useState(false)
   const [idsWithFiles, setIdsWithFiles] = useState<Set<string>>(() => new Set())
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
@@ -613,7 +610,7 @@ export default function IsCodesMasterPage() {
   }, [search, pageSize, sortKey, sortDir])
 
   const filteredRows = useMemo(() => {
-    const base = showArchived ? rows : rows.filter((r) => !r.archived_at)
+    const base = rows.filter((r) => !r.archived_at)
     const q = search.trim().toLowerCase()
     const list = !q
       ? [...base]
@@ -684,7 +681,7 @@ export default function IsCodesMasterPage() {
       if (primary !== 0) return primary
       return formatIsCodeLabel(a).localeCompare(formatIsCodeLabel(b), undefined, { sensitivity: 'base', numeric: true })
     })
-  }, [rows, search, sortKey, sortDir, showArchived, licenceCounts])
+  }, [rows, search, sortKey, sortDir, licenceCounts])
 
   const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize))
   // Hiding archived rows or deleting the last rows can leave the page past the end (empty table,
@@ -1406,74 +1403,6 @@ export default function IsCodesMasterPage() {
     })()
   }
 
-  const handleArchiveSelected = () => {
-    void (async () => {
-      if (selectedRows.length === 0) {
-        setSaveMessage('Select at least one IS code to archive.')
-        return
-      }
-      const ok = await confirmAction(`Archive ${selectedRows.length} Selected IS Code(s)?`, { title: 'Archive IS Codes', confirmLabel: 'Archive', destructive: false })
-      if (!ok) return
-      setSaveMessage(null)
-      setSaveLoading(true)
-      try {
-        const ids = selectedRows.map((r) => r.id)
-        const { data, error } = await supabase
-          .from('is_codes')
-          .update({ archived_at: new Date().toISOString() })
-          .in('id', ids)
-          .is('archived_at', null)
-          .select('id')
-        if (error) throw error
-        const n = Array.isArray(data) ? data.length : 0
-        if (n === 0) {
-          setSaveMessage('You do not have edit access (view-only).')
-          return
-        }
-        setSaveMessage(`Archived ${n}.`)
-        setSelectedIds(new Set())
-        await loadIsCodes()
-      } catch (err) {
-        setSaveMessage(formatSupabaseError(err))
-      } finally {
-        setSaveLoading(false)
-      }
-    })()
-  }
-
-  const handleRestoreSelected = () => {
-    void (async () => {
-      if (selectedRows.length === 0) {
-        setSaveMessage('Select at least one IS code to restore.')
-        return
-      }
-      setSaveMessage(null)
-      setSaveLoading(true)
-      try {
-        const ids = selectedRows.map((r) => r.id)
-        const { data, error } = await supabase
-          .from('is_codes')
-          .update({ archived_at: null })
-          .in('id', ids)
-          .not('archived_at', 'is', null)
-          .select('id')
-        if (error) throw error
-        const n = Array.isArray(data) ? data.length : 0
-        if (n === 0) {
-          setSaveMessage('You do not have edit access (view-only).')
-          return
-        }
-        setSaveMessage(`Restored ${n}.`)
-        setSelectedIds(new Set())
-        await loadIsCodes()
-      } catch (err) {
-        setSaveMessage(formatSupabaseError(err))
-      } finally {
-        setSaveLoading(false)
-      }
-    })()
-  }
-
   const handleDeleteSelected = () => {
     void (async () => {
       if (selectedRows.length === 0) return
@@ -1867,12 +1796,6 @@ export default function IsCodesMasterPage() {
           onExport={handleExport}
           onPrintSelected={handlePrintSelected}
           onDeleteSelected={handleDeleteSelected}
-          onHistory={() => setHistoryOpen(true)}
-          canEdit={canEdit}
-          showArchived={showArchived}
-          onToggleShowArchived={() => setShowArchived((v) => !v)}
-          onArchiveSelected={handleArchiveSelected}
-          onRestoreSelected={handleRestoreSelected}
           onPrevPage={() => setPage((p) => Math.max(1, p - 1))}
           onNextPage={() => setPage((p) => Math.min(pageCount, p + 1))}
           jumpTo={jumpTo}
@@ -1884,16 +1807,6 @@ export default function IsCodesMasterPage() {
           }}
         />
       </div>
-      <AuditHistoryDialog
-        open={historyOpen}
-        onOpenChange={setHistoryOpen}
-        table="is_codes"
-        rowId={selectedIds.size === 1 ? [...selectedIds][0] : null}
-        recordLabel={(() => {
-          const row = rows.find((item) => selectedIds.size === 1 && selectedIds.has(item.id))
-          return row ? formatIsCodeLabel(row) : 'IS code'
-        })()}
-      />
     </div>
   )
 }

@@ -467,7 +467,7 @@ th * {
   .bis-branch-table-view td:nth-child(7) { width: 8%; }
 }
 
-/* Master list footer (Clients / Laboratories / BIS Branch Offices): always one line; its own width decides
+/* List footers (masters, BIS lists, sale documents, settings): always one line; its own width decides
    when the buttons drop their labels and get smaller, so it works the same with or without the sidebar. */
 .lims-footer-bar {
   container-name: lims-footer;
@@ -475,7 +475,8 @@ th * {
 }
 
 @container lims-footer (max-width: 1000px) {
-  .lims-footer-bar .laboratories-footer-label { display: none !important; }
+  .lims-footer-bar .laboratories-footer-label,
+  .lims-footer-bar button > svg + span:not(.sr-only) { display: none !important; }
 }
 
 @container lims-footer (max-width: 760px) {
@@ -490,6 +491,10 @@ th * {
     font-size: 0.7rem !important;
   }
   .lims-footer-bar button[class~='w-10'] { width: 2rem !important; }
+}
+
+@container lims-footer (max-width: 760px) {
+  .lims-footer-bar .lims-footer-total { display: none !important; }
 }
 
 @container lims-footer (max-width: 600px) {
