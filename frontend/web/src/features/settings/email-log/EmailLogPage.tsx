@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Mail, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { DateInput } from '@/components/ui/date-input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import {
   limsDarkBarAccentClass,
@@ -137,15 +138,13 @@ export default function EmailLogPage() {
               </option>
             ))}
           </select>
-          <input
-            type="date"
+          <DateInput
             aria-label="From Date"
             className={cn(limsDarkBarFieldClass, 'px-2 text-sm')}
             value={filters.from}
             onChange={(e) => setFilter({ from: e.target.value })}
           />
-          <input
-            type="date"
+          <DateInput
             aria-label="To Date"
             className={cn(limsDarkBarFieldClass, 'px-2 text-sm')}
             value={filters.to}
