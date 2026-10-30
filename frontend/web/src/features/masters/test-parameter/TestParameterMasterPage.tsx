@@ -14,7 +14,6 @@ import {
   type TestParameterSortDir,
   type TestParameterSortKey,
 } from './TestParameterTable'
-import { AuditHistoryDialog } from '@/components/lims/AuditHistoryDialog'
 import { TestParameterTableFooterBar } from './TestParameterFooterBar'
 import { IsCodesForm } from '@/features/masters/is-codes/IsCodesForm'
 import { fetchDesignationAndDepartmentLabels } from '@/features/settings/lab-settings/labMasterOptions'
@@ -183,7 +182,6 @@ export default function TestParameterMasterPage() {
   const [saveLoading, setSaveLoading] = useState(false)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const canEdit = useCanEditCurrentModule()
-  const [showArchived, setShowArchived] = useState(false)
 
   const editingId = editId && editId !== 'new' ? editId : null
   const hydratedEditRef = useRef<string | null>(null)
@@ -204,7 +202,6 @@ export default function TestParameterMasterPage() {
   const [listError, setListError] = useState<string | null>(null)
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
-  const [historyOpen, setHistoryOpen] = useState(false)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [jumpTo, setJumpTo] = useState('')
@@ -506,7 +503,7 @@ export default function TestParameterMasterPage() {
   }, [rows, isCodes])
 
   const filteredRows = useMemo(() => {
-    const source = showArchived ? displayRows : displayRows.filter((r) => !r.archived_at)
+    const source = displayRows.filter((r) => !r.archived_at)
     const lockedId = (lockedIsCodeId ?? '').trim()
     if (lockedId) {
       return source.filter((r) => (r.is_code_id ?? '').trim() === lockedId)
@@ -531,7 +528,7 @@ export default function TestParameterMasterPage() {
 
       return blob.includes(q)
     })
-  }, [displayRows, search, lockedIsCodeId, showArchived])
+  }, [displayRows, search, lockedIsCodeId])
 
   const sortedRows = useMemo(() => {
     const sortValue = (r: TestParameterRow): string => {
@@ -1004,74 +1001,6 @@ export default function TestParameterMasterPage() {
     setIsCodeForm(emptyIsCodeForm())
   }
 
-  const handleArchiveSelected = () => {
-    void (async () => {
-      if (selectedRows.length === 0) {
-        setSaveMessage('Select at least one parameter to archive.')
-        return
-      }
-      const ok = await confirm(`Archive ${selectedRows.length} Selected Record(s)?`, { title: 'Archive Test Parameters', confirmLabel: 'Archive', destructive: false })
-      if (!ok) return
-      setSaveMessage(null)
-      setSaveLoading(true)
-      try {
-        const ids = selectedRows.map((r) => r.id)
-        const { data, error } = await supabase
-          .from('test_parameters')
-          .update({ archived_at: new Date().toISOString() })
-          .in('id', ids)
-          .is('archived_at', null)
-          .select('id')
-        if (error) throw error
-        const n = Array.isArray(data) ? data.length : 0
-        if (n === 0) {
-          setSaveMessage('You do not have edit access (view-only).')
-          return
-        }
-        setSaveMessage(`Archived ${n}.`)
-        setSelectedIds(new Set())
-        await loadRows()
-      } catch (err) {
-        setSaveMessage(err instanceof Error ? err.message : 'Unable to archive')
-      } finally {
-        setSaveLoading(false)
-      }
-    })()
-  }
-
-  const handleRestoreSelected = () => {
-    void (async () => {
-      if (selectedRows.length === 0) {
-        setSaveMessage('Select at least one parameter to restore.')
-        return
-      }
-      setSaveMessage(null)
-      setSaveLoading(true)
-      try {
-        const ids = selectedRows.map((r) => r.id)
-        const { data, error } = await supabase
-          .from('test_parameters')
-          .update({ archived_at: null })
-          .in('id', ids)
-          .not('archived_at', 'is', null)
-          .select('id')
-        if (error) throw error
-        const n = Array.isArray(data) ? data.length : 0
-        if (n === 0) {
-          setSaveMessage('You do not have edit access (view-only).')
-          return
-        }
-        setSaveMessage(`Restored ${n}.`)
-        setSelectedIds(new Set())
-        await loadRows()
-      } catch (err) {
-        setSaveMessage(err instanceof Error ? err.message : 'Unable to restore')
-      } finally {
-        setSaveLoading(false)
-      }
-    })()
-  }
-
   const handleDeleteSelected = () => {
     void (async () => {
       if (selectedRows.length === 0) return
@@ -1493,12 +1422,6 @@ export default function TestParameterMasterPage() {
           onExport={handleExport}
           onPrintSelected={handlePrintSelected}
           onDeleteSelected={handleDeleteSelected}
-          onHistory={() => setHistoryOpen(true)}
-          canEdit={canEdit}
-          showArchived={showArchived}
-          onToggleShowArchived={() => setShowArchived((v) => !v)}
-          onArchiveSelected={handleArchiveSelected}
-          onRestoreSelected={handleRestoreSelected}
           page={page}
           pageCount={pageCount}
           onPrevPage={() => setPage((p) => Math.max(1, p - 1))}
@@ -1512,16 +1435,6 @@ export default function TestParameterMasterPage() {
           }}
         />
       </div>
-      <AuditHistoryDialog
-        open={historyOpen}
-        onOpenChange={setHistoryOpen}
-        table="test_parameters"
-        rowId={selectedIds.size === 1 ? [...selectedIds][0] : null}
-        recordLabel={
-          rows.find((row) => selectedIds.size === 1 && selectedIds.has(row.id))?.item_name ??
-          'test parameter'
-        }
-      />
 
       <input
         ref={importInputRef}

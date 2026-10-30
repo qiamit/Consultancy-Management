@@ -6,7 +6,7 @@ import {
   limsDeleteBtnClass,
   limsPanelClass,
 } from '@/lib/limsThemeUi'
-import { Archive, ArchiveRestore, ChevronLeft, ChevronRight, Download, FileUp, History, Printer, Trash2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Download, FileUp, Printer, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { LaboratoryDirectorOnly } from '@/components/lims/LaboratoryDirectorOnly'
@@ -19,12 +19,6 @@ export function TestParameterTableFooterBar({
   onExport,
   onPrintSelected,
   onDeleteSelected,
-  onHistory,
-  canEdit,
-  showArchived,
-  onToggleShowArchived,
-  onArchiveSelected,
-  onRestoreSelected,
   page,
   pageCount,
   onPrevPage,
@@ -40,12 +34,6 @@ export function TestParameterTableFooterBar({
   onExport: () => void
   onPrintSelected: () => void
   onDeleteSelected: () => void
-  onHistory: () => void
-  canEdit?: boolean
-  showArchived?: boolean
-  onToggleShowArchived?: () => void
-  onArchiveSelected?: () => void
-  onRestoreSelected?: () => void
   page: number
   pageCount: number
   onPrevPage: () => void
@@ -58,61 +46,15 @@ export function TestParameterTableFooterBar({
   const actionBtnClass = cn('h-8 shrink-0 gap-1 px-2 text-xs sm:gap-1.5 sm:px-2.5', limsDarkBarBtnClass)
 
   return (
-    <div className={cn(limsPanelClass)}>
+    <div className={cn(limsPanelClass, 'lims-footer-bar')}>
       <div className="relative overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-2 py-2 text-white sm:px-4 md:px-5">
         <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={limsDarkBarGlowStyle} />
         <div className="absolute top-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
 
-        <div className="relative flex min-w-0 flex-wrap items-center gap-1 gap-y-1.5 overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch] sm:gap-1.5 md:gap-2.5">
-          <div className="flex min-w-0 flex-wrap items-center gap-1 sm:gap-1.5">
-            {onToggleShowArchived ? (
-              <label className="flex h-8 shrink-0 items-center gap-1 px-1 text-[10px] text-stone-200 sm:text-xs">
-                <input type="checkbox" checked={Boolean(showArchived)} onChange={() => onToggleShowArchived()} />
-                Show archived
-              </label>
-            ) : null}
-            {canEdit ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className={actionBtnClass}
-                onClick={onArchiveSelected}
-                disabled={loading || selectionDisabled}
-                title="Archive Selected"
-              >
-                <Archive size={14} />
-                <span className="hidden md:inline">Archive</span>
-              </Button>
-            ) : null}
-            {canEdit && showArchived ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className={actionBtnClass}
-                onClick={onRestoreSelected}
-                disabled={loading || selectionDisabled}
-                title="Restore Selected"
-              >
-                <ArchiveRestore size={14} />
-                <span className="hidden md:inline">Restore</span>
-              </Button>
-            ) : null}
+        {/* One line at every width: on a narrow footer the buttons shrink to icons (see .lims-footer-bar in index.css). */}
+        <div className="relative flex min-w-0 flex-nowrap items-center gap-1 sm:gap-1.5 md:gap-2.5">
+          <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-1 sm:gap-1.5">
             <LaboratoryDirectorOnly>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className={cn(actionBtnClass, 'h-10 min-h-10')}
-                onClick={onHistory}
-                disabled={loading || selectedCount !== 1}
-                aria-label="Change History"
-                title="Change History"
-              >
-                <History size={14} />
-                <span className="hidden sm:inline">History</span>
-              </Button>
               <Button
                 type="button"
                 variant="outline"
@@ -163,14 +105,14 @@ export function TestParameterTableFooterBar({
               </Button>
             </LaboratoryDirectorOnly>
             {selectedCount > 0 ? (
-              <span className="shrink-0 whitespace-nowrap text-[10px] text-stone-300 sm:text-xs">
+              <span className="lims-footer-selected shrink-0 whitespace-nowrap text-[10px] text-stone-300 sm:text-xs">
                 Selected: {selectedCount}
               </span>
             ) : null}
             {message ? (
               <p
                 className={cn(
-                  'min-w-0 max-w-[8rem] truncate text-[10px] sm:max-w-[12rem] sm:text-xs md:max-w-[16rem]',
+                  'lims-footer-message min-w-0 max-w-[8rem] truncate text-[10px] sm:max-w-[12rem] sm:text-xs md:max-w-[16rem]',
                   message.toLowerCase().includes('saved') ||
                     message.toLowerCase().includes('deleted') ||
                     message.toLowerCase().includes('archived') ||
@@ -186,7 +128,7 @@ export function TestParameterTableFooterBar({
             ) : null}
           </div>
 
-          <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5">
+          <div className="ml-auto flex shrink-0 flex-nowrap items-center gap-1 sm:gap-1.5">
             <Input
               aria-label="Jump to Page"
               placeholder="Page"
@@ -195,14 +137,14 @@ export function TestParameterTableFooterBar({
               onKeyDown={(e) => {
                 if (e.key === 'Enter') onJumpToGo()
               }}
-              className={cn(limsDarkBarFieldClass, 'h-8 w-12 shrink-0 text-xs sm:w-14')}
+              className={cn(limsDarkBarFieldClass, 'lims-footer-page-input h-8 w-12 shrink-0 text-xs sm:w-14')}
               inputMode="numeric"
             />
             <Button
               type="button"
               variant="outline"
               size="sm"
-              className={cn(actionBtnClass, 'hidden sm:inline-flex')}
+              className={cn(actionBtnClass, 'lims-footer-jump hidden sm:inline-flex')}
               onClick={onJumpToGo}
               disabled={loading}
             >
@@ -219,8 +161,8 @@ export function TestParameterTableFooterBar({
               <ChevronLeft size={16} />
               <span className="sr-only">Previous Page</span>
             </Button>
-            <span className="shrink-0 whitespace-nowrap text-center text-xs font-medium text-stone-300 sm:min-w-[5rem]">
-              <span className="hidden sm:inline">Page </span>
+            <span className="lims-footer-page shrink-0 whitespace-nowrap text-center text-xs font-medium text-stone-300 sm:min-w-[5rem]">
+              <span className="lims-footer-page-word hidden sm:inline">Page </span>
               {page}/{pageCount}
             </span>
             <Button

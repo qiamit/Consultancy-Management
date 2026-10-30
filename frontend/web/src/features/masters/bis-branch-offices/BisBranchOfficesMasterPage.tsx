@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Building2, Copy, Mail, MapPin, Pencil, Phone, Plus, Search } from 'lucide-react'
 import { QiAssistant } from '@/components/qi-assistant/QiAssistant'
-import { AuditHistoryDialog } from '@/components/lims/AuditHistoryDialog'
 import { Button } from '@/components/ui/button'
 import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -28,7 +27,6 @@ import {
   emptyBisBranchOfficeForm,
   listBisBranchOffices,
   saveBisBranchOffice,
-  setBisBranchOfficesArchived,
   type BisBranchOfficeForm,
   type BisBranchOfficeRow,
 } from './bisBranchOfficesApi'
@@ -87,19 +85,17 @@ export default function BisBranchOfficesMasterPage() {
   const [pageSize, setPageSize] = useState(10)
   const [page, setPage] = useState(1)
   const [jumpTo, setJumpTo] = useState('')
-  const [showArchived, setShowArchived] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [formOpen, setFormOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<BisBranchOfficeForm>(emptyBisBranchOfficeForm())
   const [saveLoading, setSaveLoading] = useState(false)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
-  const [historyId, setHistoryId] = useState<string | null>(null)
   const handleFormOpenChange = useFormDialogOpenChange(setFormOpen)
 
-  const refresh = (includeArchived = showArchived) => {
+  const refresh = () => {
     setLoading(true)
-    void listBisBranchOffices(includeArchived)
+    void listBisBranchOffices(false)
       .then((next) => {
         setRows(next)
         setError(null)
@@ -110,7 +106,7 @@ export default function BisBranchOfficesMasterPage() {
 
   useEffect(() => {
     let cancelled = false
-    void listBisBranchOffices(showArchived)
+    void listBisBranchOffices(false)
       .then((next) => {
         if (cancelled) return
         setRows(next)
@@ -126,7 +122,7 @@ export default function BisBranchOfficesMasterPage() {
     return () => {
       cancelled = true
     }
-  }, [showArchived])
+  }, [])
 
   const filtered = useMemo(
     () => rows.filter((row) => matchesSearch(row, search)).sort((a, b) => a.name.localeCompare(b.name)),
@@ -198,17 +194,6 @@ export default function BisBranchOfficesMasterPage() {
     setMessage('Exported.')
   }
 
-  const archiveSelected = (archived: boolean) => {
-    const ids = [...selectedIds]
-    if (ids.length === 0) return
-    void setBisBranchOfficesArchived(ids, archived)
-      .then(() => {
-        setSelectedIds(new Set())
-        setMessage(archived ? 'Archived.' : 'Restored.')
-        refresh()
-      })
-      .catch((err: unknown) => setMessage(err instanceof Error ? err.message : 'Update failed'))
-  }
 
   return (
     <div data-master-scroll="table" className={cn(clientPageShellClass, 'bis-branch-offices-page-container flex h-full min-h-0 flex-col overflow-hidden !space-y-0 gap-2 sm:gap-3 md:gap-3')}>
@@ -456,10 +441,6 @@ export default function BisBranchOfficesMasterPage() {
           page={safePage}
           pageCount={pageCount}
           canEdit={canEdit}
-          showArchived={showArchived}
-          onToggleShowArchived={() => setShowArchived((value) => !value)}
-          onArchiveSelected={() => archiveSelected(true)}
-          onRestoreSelected={() => archiveSelected(false)}
           onImport={() => fileRef.current?.click()}
           onExport={() => exportRows(rows.filter((row) => selectedIds.has(row.id)).length > 0 ? rows.filter((row) => selectedIds.has(row.id)) : filtered)}
           printTitle="Print selected BIS branch offices"
@@ -480,7 +461,6 @@ export default function BisBranchOfficesMasterPage() {
               .then(() => { setSelectedIds(new Set()); setMessage('Deleted.'); refresh() })
               .catch((err: unknown) => setMessage(err instanceof Error ? err.message : 'Delete failed'))
           }}
-          onHistory={() => setHistoryId([...selectedIds][0] ?? null)}
           onPrevPage={() => setPage((value) => Math.max(1, value - 1))}
           onNextPage={() => setPage((value) => Math.min(pageCount, value + 1))}
           jumpTo={jumpTo}
@@ -491,13 +471,6 @@ export default function BisBranchOfficesMasterPage() {
           }}
         />
       </div>
-      <AuditHistoryDialog
-        open={historyId != null}
-        onOpenChange={(open) => { if (!open) setHistoryId(null) }}
-        table="bis_offices"
-        rowId={historyId}
-        recordLabel={rows.find((row) => row.id === historyId)?.name ?? 'BIS Branch Office'}
-      />
     </div>
   )
 }

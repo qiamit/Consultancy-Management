@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Building2, Copy, Mail, MapPin, Pencil, Phone, Plus, Search } from 'lucide-react'
 import { QiAssistant } from '@/components/qi-assistant/QiAssistant'
-import { AuditHistoryDialog } from '@/components/lims/AuditHistoryDialog'
 import { Button } from '@/components/ui/button'
 import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -28,7 +27,6 @@ import {
   emptyLaboratoryForm,
   listLaboratories,
   saveLaboratory,
-  setLaboratoriesArchived,
   type LaboratoryForm,
   type LaboratoryRow,
 } from './laboratoriesApi'
@@ -121,19 +119,17 @@ export default function LaboratoriesMasterPage() {
   const [pageSize, setPageSize] = useState(10)
   const [page, setPage] = useState(1)
   const [jumpTo, setJumpTo] = useState('')
-  const [showArchived, setShowArchived] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [formOpen, setFormOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<LaboratoryForm>(emptyLaboratoryForm())
   const [saveLoading, setSaveLoading] = useState(false)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
-  const [historyId, setHistoryId] = useState<string | null>(null)
   const handleFormOpenChange = useFormDialogOpenChange(setFormOpen)
 
-  const refresh = (includeArchived = showArchived) => {
+  const refresh = () => {
     setLoading(true)
-    void listLaboratories(includeArchived)
+    void listLaboratories(false)
       .then((next) => {
         setRows(next)
         setError(null)
@@ -144,7 +140,7 @@ export default function LaboratoriesMasterPage() {
 
   useEffect(() => {
     let cancelled = false
-    void listLaboratories(showArchived)
+    void listLaboratories(false)
       .then((next) => {
         if (cancelled) return
         setRows(next)
@@ -160,7 +156,7 @@ export default function LaboratoriesMasterPage() {
     return () => {
       cancelled = true
     }
-  }, [showArchived])
+  }, [])
 
   const filtered = useMemo(
     () => rows.filter((row) => matchesSearch(row, search)).sort((a, b) => a.name.localeCompare(b.name)),
@@ -222,17 +218,6 @@ export default function LaboratoriesMasterPage() {
     setMessage('Exported.')
   }
 
-  const archiveSelected = (archived: boolean) => {
-    const ids = [...selectedIds]
-    if (ids.length === 0) return
-    void setLaboratoriesArchived(ids, archived)
-      .then(() => {
-        setSelectedIds(new Set())
-        setMessage(archived ? 'Archived.' : 'Restored.')
-        refresh()
-      })
-      .catch((err: unknown) => setMessage(err instanceof Error ? err.message : 'Update failed'))
-  }
 
   return (
     <div
@@ -456,10 +441,6 @@ export default function LaboratoriesMasterPage() {
           page={safePage}
           pageCount={pageCount}
           canEdit={canEdit}
-          showArchived={showArchived}
-          onToggleShowArchived={() => setShowArchived((value) => !value)}
-          onArchiveSelected={() => archiveSelected(true)}
-          onRestoreSelected={() => archiveSelected(false)}
           onImport={() => fileRef.current?.click()}
           onExport={() => exportRows(selectedRows.length > 0 ? selectedRows : filtered)}
           printTitle="Print selected laboratories"
@@ -479,7 +460,6 @@ export default function LaboratoriesMasterPage() {
               .then(() => { setSelectedIds(new Set()); setMessage('Deleted.'); refresh() })
               .catch((err: unknown) => setMessage(err instanceof Error ? err.message : 'Delete failed'))
           }}
-          onHistory={() => setHistoryId([...selectedIds][0] ?? null)}
           onPrevPage={() => setPage((value) => Math.max(1, value - 1))}
           onNextPage={() => setPage((value) => Math.min(pageCount, value + 1))}
           jumpTo={jumpTo}
@@ -490,13 +470,6 @@ export default function LaboratoriesMasterPage() {
           }}
         />
       </div>
-      <AuditHistoryDialog
-        open={historyId != null}
-        onOpenChange={(open) => { if (!open) setHistoryId(null) }}
-        table="laboratories"
-        rowId={historyId}
-        recordLabel={rows.find((row) => row.id === historyId)?.name ?? 'Laboratory'}
-      />
     </div>
   )
 }
