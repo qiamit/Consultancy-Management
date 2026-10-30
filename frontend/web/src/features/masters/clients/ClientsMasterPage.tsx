@@ -31,7 +31,6 @@ import { Button } from '@/components/ui/button'
 import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { AuditHistoryDialog } from '@/components/lims/AuditHistoryDialog'
 import { ClientsTableFooterBar } from './ClientsFooterBar'
 import { setClientPortalPassword } from './clientPortalSecretApi'
 import { ClientsForm } from './ClientsForm'
@@ -387,7 +386,6 @@ export default function ClientsMasterPage() {
   const [listError, setListError] = useState<string | null>(null)
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
-  const [historyOpen, setHistoryOpen] = useState(false)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [jumpTo, setJumpTo] = useState('')
@@ -1915,7 +1913,6 @@ export default function ClientsMasterPage() {
           onExport={handleExport}
           onPrintSelected={handlePrintSelected}
           onDeleteSelected={handleDeleteSelected}
-          onHistory={() => setHistoryOpen(true)}
           canEdit={canEdit}
           onPrevPage={() => setPage((p) => Math.max(1, p - 1))}
           onNextPage={() => setPage((p) => Math.min(pageCount, p + 1))}
@@ -1956,16 +1953,6 @@ export default function ClientsMasterPage() {
           </div>
         </DialogContent>
       </Dialog>
-      <AuditHistoryDialog
-        open={historyOpen}
-        onOpenChange={setHistoryOpen}
-        table="clients"
-        rowId={selectedIds.size === 1 ? [...selectedIds][0] : null}
-        recordLabel={
-          rows.find((row) => selectedIds.size === 1 && selectedIds.has(row.id))?.company_name ??
-          'client'
-        }
-      />
 
       <input
         ref={importInputRef}

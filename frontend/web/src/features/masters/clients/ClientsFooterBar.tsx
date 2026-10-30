@@ -52,7 +52,8 @@ export function ClientsTableFooterBar({
   onPrintSelected: () => void
   printTitle?: string
   onDeleteSelected: () => void
-  onHistory: () => void
+  /** Change History button; shown only when given (Clients has none). */
+  onHistory?: () => void
   canEdit?: boolean
   showArchived?: boolean
   onToggleShowArchived?: () => void
@@ -120,19 +121,21 @@ export function ClientsTableFooterBar({
               </Button>
             ) : null}
             <LaboratoryDirectorOnly>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className={cn(actionBtn, 'h-10 min-h-10')}
-                onClick={onHistory}
-                disabled={loading || selectedCount !== 1}
-                aria-label="Change History"
-                title="Change History"
-              >
-                <History size={14} />
-                <span className="laboratories-footer-label hidden md:inline">History</span>
-              </Button>
+              {onHistory ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className={cn(actionBtn, 'h-10 min-h-10')}
+                  onClick={onHistory}
+                  disabled={loading || selectedCount !== 1}
+                  aria-label="Change History"
+                  title="Change History"
+                >
+                  <History size={14} />
+                  <span className="laboratories-footer-label hidden md:inline">History</span>
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 variant="outline"
