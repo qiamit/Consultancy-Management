@@ -363,7 +363,6 @@ export default function ClientsMasterPage() {
   const [saveLoading, setSaveLoading] = useState(false)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const canEdit = useCanEditCurrentModule()
-  const [showArchived, setShowArchived] = useState(false)
 
   const importInputRef = useRef<HTMLInputElement | null>(null)
   const hydratedEditRef = useRef<string | null>(null)
@@ -492,7 +491,6 @@ export default function ClientsMasterPage() {
         search: debouncedSearch,
         limit: pageLimit,
         offset: (page - 1) * pageLimit,
-        includeArchived: showArchived,
       })
       if (seq !== loadSeq.current) return
       setTotal(nextTotal)
@@ -503,7 +501,7 @@ export default function ClientsMasterPage() {
     } finally {
       if (seq === loadSeq.current) setListLoading(false)
     }
-  }, [debouncedSearch, page, pageLimit, showArchived])
+  }, [debouncedSearch, page, pageLimit])
 
   const loadMasterOptions = async () => {
     try {
@@ -1271,7 +1269,7 @@ export default function ClientsMasterPage() {
   useEffect(() => {
     setPage(1)
     setJumpTo('')
-  }, [search, pageSize, showArchived])
+  }, [search, pageSize])
 
   const handleSort = (key: ClientSortKey) => {
     if (sortKey === key) {
@@ -1364,76 +1362,6 @@ export default function ClientsMasterPage() {
     }
     printHtmlInIframe(buildCourierSlipPrintHtml(selectedRows))
     setSaveMessage(`Print ready: ${selectedRows.length} courier slip(s) (half A4).`)
-  }
-
-  const handleArchiveSelected = () => {
-    void (async () => {
-      if (selectedRows.length === 0) {
-        setSaveMessage('Select at least one client to archive.')
-        return
-      }
-      const ok = await confirm(`Archive ${selectedRows.length} Selected Client(s)?`, { title: 'Archive Clients', confirmLabel: 'Archive', destructive: false })
-      if (!ok) return
-      setSaveMessage(null)
-      setSaveLoading(true)
-      try {
-        const ids = selectedRows.map((r) => r.id)
-        const { data, error } = await supabase
-          .from('clients')
-          .update({ archived_at: new Date().toISOString() })
-          .in('id', ids)
-          .is('archived_at', null)
-          .select('id')
-        if (error) throw error
-        const n = Array.isArray(data) ? data.length : 0
-        if (n === 0) {
-          setSaveMessage('You do not have edit access (view-only).')
-          return
-        }
-        invalidateClientsCache()
-        setSaveMessage(`Archived ${n}.`)
-        setSelectedIds(new Set())
-        await loadClients()
-      } catch (err) {
-        setSaveMessage(err instanceof Error ? err.message : 'Unable to archive clients')
-      } finally {
-        setSaveLoading(false)
-      }
-    })()
-  }
-
-  const handleRestoreSelected = () => {
-    void (async () => {
-      if (selectedRows.length === 0) {
-        setSaveMessage('Select at least one client to restore.')
-        return
-      }
-      setSaveMessage(null)
-      setSaveLoading(true)
-      try {
-        const ids = selectedRows.map((r) => r.id)
-        const { data, error } = await supabase
-          .from('clients')
-          .update({ archived_at: null })
-          .in('id', ids)
-          .not('archived_at', 'is', null)
-          .select('id')
-        if (error) throw error
-        const n = Array.isArray(data) ? data.length : 0
-        if (n === 0) {
-          setSaveMessage('You do not have edit access (view-only).')
-          return
-        }
-        invalidateClientsCache()
-        setSaveMessage(`Restored ${n}.`)
-        setSelectedIds(new Set())
-        await loadClients()
-      } catch (err) {
-        setSaveMessage(err instanceof Error ? err.message : 'Unable to restore clients')
-      } finally {
-        setSaveLoading(false)
-      }
-    })()
   }
 
   const handleDeleteSelected = () => {
@@ -1989,10 +1917,6 @@ export default function ClientsMasterPage() {
           onDeleteSelected={handleDeleteSelected}
           onHistory={() => setHistoryOpen(true)}
           canEdit={canEdit}
-          showArchived={showArchived}
-          onToggleShowArchived={() => setShowArchived((v) => !v)}
-          onArchiveSelected={handleArchiveSelected}
-          onRestoreSelected={handleRestoreSelected}
           onPrevPage={() => setPage((p) => Math.max(1, p - 1))}
           onNextPage={() => setPage((p) => Math.min(pageCount, p + 1))}
           jumpTo={jumpTo}

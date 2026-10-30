@@ -71,7 +71,7 @@ export function ClientsTableFooterBar({
   )
 
   return (
-    <div className={cn(clientPanelClass, responsiveWrap && 'laboratories-responsive-footer', responsiveClassName)}>
+    <div className={cn(clientPanelClass, 'lims-footer-bar', responsiveWrap && 'laboratories-responsive-footer', responsiveClassName)}>
       <div className="relative overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-2 py-2 text-white sm:px-4 md:px-5">
         <div
           className="pointer-events-none absolute inset-0 opacity-[0.18]"
@@ -82,18 +82,16 @@ export function ClientsTableFooterBar({
         />
         <div className="absolute top-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
 
-        <div className={cn(
-          'relative flex min-w-0 gap-1 sm:gap-1.5 md:gap-2.5',
-          responsiveWrap ? 'max-w-full flex-wrap items-center justify-between overflow-visible' : 'flex-nowrap items-center overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch]',
-        )}>
-          <div className={cn('flex items-center gap-1 sm:gap-1.5', responsiveWrap ? 'min-w-0 max-w-full flex-wrap' : 'shrink-0')}>
+        {/* One line at every width: on a narrow footer the buttons shrink to icons (see .lims-footer-bar in index.css). */}
+        <div className="relative flex min-w-0 flex-nowrap items-center gap-1 sm:gap-1.5 md:gap-2.5">
+          <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-1 sm:gap-1.5">
             {onToggleShowArchived ? (
               <label className="flex h-8 shrink-0 items-center gap-1 px-1 text-[10px] text-stone-200 sm:text-xs">
                 <input type="checkbox" checked={Boolean(showArchived)} onChange={() => onToggleShowArchived()} />
                 Show archived
               </label>
             ) : null}
-            {canEdit ? (
+            {canEdit && onArchiveSelected ? (
               <Button
                 type="button"
                 variant="outline"
@@ -107,7 +105,7 @@ export function ClientsTableFooterBar({
                 <span className="laboratories-footer-label hidden md:inline">Archive</span>
               </Button>
             ) : null}
-            {canEdit && showArchived ? (
+            {canEdit && showArchived && onRestoreSelected ? (
               <Button
                 type="button"
                 variant="outline"
@@ -133,7 +131,7 @@ export function ClientsTableFooterBar({
                 title="Change History"
               >
                 <History size={14} />
-                <span className="laboratories-footer-label hidden sm:inline">History</span>
+                <span className="laboratories-footer-label hidden md:inline">History</span>
               </Button>
               <Button
                 type="button"
@@ -185,14 +183,14 @@ export function ClientsTableFooterBar({
               </Button>
             </LaboratoryDirectorOnly>
             {selectedCount > 0 ? (
-              <span className="shrink-0 whitespace-nowrap text-[10px] text-stone-300 sm:text-xs">
+              <span className="lims-footer-selected shrink-0 whitespace-nowrap text-[10px] text-stone-300 sm:text-xs">
                 Selected: {selectedCount}
               </span>
             ) : null}
             {message ? (
               <p
                 className={cn(
-                  'min-w-0 max-w-[8rem] truncate text-[10px] sm:max-w-[12rem] sm:text-xs md:max-w-[16rem]',
+                  'lims-footer-message min-w-0 max-w-[8rem] truncate text-[10px] sm:max-w-[12rem] sm:text-xs md:max-w-[16rem]',
                   message.toLowerCase().includes('saved') ||
                     message.toLowerCase().includes('deleted') ||
                     message.toLowerCase().includes('archived') ||
@@ -208,10 +206,7 @@ export function ClientsTableFooterBar({
             ) : null}
           </div>
 
-          <div className={cn('flex items-center gap-1 sm:gap-1.5', responsiveWrap ? 'ml-auto max-w-full flex-wrap justify-end' : 'ml-auto shrink-0')}>
-            <span className="shrink-0 whitespace-nowrap text-[10px] font-medium text-stone-200 sm:text-xs">
-              {`Showing ${rangeFrom.toLocaleString('en-IN')}–${rangeTo.toLocaleString('en-IN')} of ${totalCount.toLocaleString('en-IN')}`}
-            </span>
+          <div className="ml-auto flex shrink-0 flex-nowrap items-center gap-1 sm:gap-1.5">
             <Input
               aria-label="Jump to Page"
               placeholder="Page"
@@ -220,14 +215,14 @@ export function ClientsTableFooterBar({
               onKeyDown={(e) => {
                 if (e.key === 'Enter') onJumpToGo()
               }}
-              className={cn(footerFieldClass, 'h-10 min-h-10 w-12 shrink-0 text-xs sm:w-14')}
+              className={cn(footerFieldClass, 'lims-footer-page-input h-10 min-h-10 w-12 shrink-0 text-xs sm:w-14')}
               inputMode="numeric"
             />
             <Button
               type="button"
               variant="outline"
               size="sm"
-              className={cn(actionBtn, 'hidden sm:inline-flex')}
+              className={cn(actionBtn, 'lims-footer-jump hidden sm:inline-flex')}
               onClick={onJumpToGo}
               disabled={loading}
             >
@@ -244,8 +239,11 @@ export function ClientsTableFooterBar({
               <ChevronLeft size={16} />
               <span className="sr-only">Previous Page</span>
             </Button>
-            <span className="shrink-0 whitespace-nowrap text-center text-xs font-medium text-stone-300 sm:min-w-[5rem]">
-              <span className="hidden sm:inline">Page </span>
+            <span
+              className="lims-footer-page shrink-0 whitespace-nowrap text-center text-xs font-medium text-stone-300 sm:min-w-[5rem]"
+              title={`Showing ${rangeFrom.toLocaleString('en-IN')}–${rangeTo.toLocaleString('en-IN')} of ${totalCount.toLocaleString('en-IN')}`}
+            >
+              <span className="lims-footer-page-word hidden sm:inline">Page </span>
               {page}/{pageCount}
             </span>
             <Button
