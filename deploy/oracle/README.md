@@ -88,3 +88,34 @@ Renewal reminders यहाँ बंद रहते हैं (`RENEWAL_REMIND
 - कुछ नहीं। Security updates अपने-आप (unattended-upgrades), backups रोज़ 02:30 IST।
 - महीने में एक बार: `sudo apt upgrade` + `docker compose pull` (मैं कर दूँगा)।
 - Site बंद होने पर alert के लिए UptimeRobot (free) लगाएँ।
+
+## Two-Step Login break-glass (दोनों admins का phone खो जाए)
+
+Admins को हर login पर password + authenticator app का 6-digit code चाहिए (migration
+`20261030120000_admin_mfa_aal2.sql`). एक admin का phone खोए तो दूसरा admin app में:
+Settings → User Management → उस user की row → **Reset Two-Step Login** (shield icon).
+
+दोनों admins के phone खो जाएँ, तभी यह करें (Mac से, server पर):
+
+```bash
+ssh -i ~/.ssh/qe_oracle ubuntu@129.225.118.1
+cd /opt/qe/app/deploy/oracle
+
+# 1) admin का user id देखें
+docker compose --env-file .env exec -T db psql -U supabase_admin -d postgres -c \
+  "select id, email from public.user_profiles where role = 'admin';"
+
+# 2) सिर्फ़ उसी एक admin के factors हटाएँ और उसे हर जगह से sign out करें (<ADMIN_ID> बदलें)
+docker compose --env-file .env exec -T db psql -v ON_ERROR_STOP=1 -U supabase_admin -d postgres -c "
+BEGIN;
+DELETE FROM auth.mfa_factors WHERE user_id = '<ADMIN_ID>';
+DELETE FROM auth.sessions    WHERE user_id = '<ADMIN_ID>';
+INSERT INTO public.audit_log (table_name, row_id, action, changed_via, new_data)
+VALUES ('auth.users', '<ADMIN_ID>', 'U', 'break-glass', jsonb_build_object('event', 'mfa_reset_break_glass'));
+COMMIT;"
+```
+
+(`auth.mfa_challenges` और `auth.mfa_amr_claims` cascade से हट जाते हैं.)
+फिर वह admin password से sign in करे → app खुद authenticator setup (QR) दिखाएगा → नया phone scan करें.
+उसके बाद वही admin दूसरे admin का **Reset Two-Step Login** app से करे.
+`role = 'admin'` या `app_is_admin()` को कभी न बदलें — सिर्फ़ factors हटाने हैं.

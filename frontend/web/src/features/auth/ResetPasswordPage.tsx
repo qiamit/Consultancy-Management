@@ -7,6 +7,8 @@ import { PasswordInput } from '@/components/auth/PasswordInput'
 import { newPasswordProblem, PASSWORD_MIN_LENGTH, setOwnPassword } from '@/features/auth/passwordApi'
 import { supabase } from '@/lib/supabaseClient'
 import { useAuth } from '@/hooks/useAuth'
+import { readTwoStepState } from '@/features/auth/mfaApi'
+import { TwoStepChallengePanel } from '@/components/auth/TwoStepLoginPanels'
 import {
   limsDarkBarAccentClass,
   limsDarkBarClass,
@@ -48,6 +50,8 @@ export default function ResetPasswordPage() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /** GoTrue refuses a new password on a password-only session once an authenticator is set up. */
+  const [needsCode, setNeedsCode] = useState(false)
 
   useEffect(() => {
     let canceled = false
@@ -55,6 +59,13 @@ export default function ResetPasswordPage() {
       if (canceled) return
       setEmail(sessionEmail ?? '')
       setPhase('ready')
+      void readTwoStepState()
+        .then((two) => {
+          if (!canceled) setNeedsCode(two.needsCode)
+        })
+        .catch(() => {
+          /* setOwnPassword reports the error if a code was needed */
+        })
     }
 
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
@@ -149,7 +160,14 @@ export default function ResetPasswordPage() {
               </>
             )}
 
-            {phase === 'ready' && (
+            {phase === 'ready' && needsCode && (
+              <TwoStepChallengePanel
+                intro="Your Account Uses Two-Step Login. Enter the 6-Digit Code From Your Authenticator App Before Setting a New Password. Lost Your Phone? Ask an Admin to Reset Your Two-Step Login First."
+                onVerified={() => setNeedsCode(false)}
+              />
+            )}
+
+            {phase === 'ready' && !needsCode && (
               <>
                 {email && <p className="text-sm text-stone-600">Account: {email}</p>}
                 {error && (

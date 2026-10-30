@@ -7,7 +7,7 @@ import { mcpAuthRouter, getOAuthProtectedResourceMetadataUrl } from '@modelconte
 import { requireBearerAuth } from '@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js'
 import { assertConfig, config } from './lib/config.mjs'
 import { verifyState } from './lib/crypto.mjs'
-import { gotruePassword, HttpError, svc, userRest } from './lib/backend.mjs'
+import { gotrueLogout, gotruePassword, gotrueVerifyTotp, HttpError, svc, userRest, verifiedTotpFactorId } from './lib/backend.mjs'
 import { createAuthorizationCode, provider, redirectAllowed, sessionFromGotrue, userJwtFor } from './lib/oauth.mjs'
 import { renderLoginPage } from './lib/loginPage.mjs'
 import { moduleLevels, TOOLS } from './lib/tools.mjs'
@@ -38,6 +38,7 @@ app.post('/login', express.urlencoded({ extended: false, limit: '8kb' }), async 
   const form = verifyState(req.body?.form)
   const email = String(req.body?.email || '').trim().toLowerCase().slice(0, 200)
   const password = String(req.body?.password || '')
+  const code = String(req.body?.code || '').replace(/\s+/g, '').slice(0, 12)
   const page = (error, status = 400) =>
     res.status(status).type('html').send(renderLoginPage({ form: req.body?.form, clientName: 'Claude', error, email }))
 
@@ -50,7 +51,23 @@ app.post('/login', express.urlencoded({ extended: false, limit: '8kb' }), async 
 
   let session
   try {
-    session = sessionFromGotrue(await gotruePassword(email, password))
+    let raw = await gotruePassword(email, password)
+    // Two-Step Login: an account with an authenticator needs its code, so the stored session is aal2
+    // (the database gives admins and authenticator users nothing on a password-only session).
+    const factorId = verifiedTotpFactorId(raw)
+    if (factorId) {
+      if (!/^\d{6}$/.test(code)) {
+        await gotrueLogout(String(raw?.access_token || ''))
+        return page('This account uses Two-Step Login. Enter the 6-digit code from your authenticator app.')
+      }
+      try {
+        raw = await gotrueVerifyTotp(String(raw?.access_token || ''), factorId, code)
+      } catch (err) {
+        await gotrueLogout(String(raw?.access_token || ''))
+        return page(err instanceof HttpError && err.status < 500 ? 'Wrong authenticator code. Enter the current 6-digit code.' : 'Sign-in failed. Try again in a moment.')
+      }
+    }
+    session = sessionFromGotrue(raw)
   } catch (err) {
     return page(err instanceof HttpError && err.status < 500 ? 'Wrong email or password.' : 'Sign-in failed. Try again in a moment.')
   }

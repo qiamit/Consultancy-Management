@@ -483,6 +483,24 @@ async function requireActiveUser(req) {
   return caller
 }
 
+/**
+ * The aal claim of a caller JWT. Only call after GoTrue /user accepted the token (signature and expiry
+ * are checked there); this just reads the payload.
+ */
+function jwtAal(token) {
+  try {
+    const part = String(token || '').split('.')[1] || ''
+    const payload = JSON.parse(Buffer.from(part, 'base64url').toString('utf8'))
+    return typeof payload?.aal === 'string' ? payload.aal : ''
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * Admin endpoints: active admin profile AND a session that passed Two-Step Login (JWT aal = aal2),
+ * same rule as public.app_is_admin().
+ */
 async function requireFullAccess(req) {
   const caller = await requireUser(req)
   const callerId = String(caller?.id ?? '')
@@ -508,6 +526,11 @@ async function requireFullAccess(req) {
   const active = found && (statusNorm === '' || statusNorm === 'active')
   if (!active || !isAdminRole(role)) {
     const err = new Error('Forbidden')
+    err.statusCode = 403
+    throw err
+  }
+  if (jwtAal(callerJwt(req)) !== 'aal2') {
+    const err = new Error('Admin Actions Need Two-Step Login. Log Out and Sign In Again With Your Authenticator Code.')
     err.statusCode = 403
     throw err
   }
@@ -1030,6 +1053,76 @@ async function handleDeleteUser(req, res) {
   json(res, 200, { ok: true })
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * Admin: "Reset Two-Step Login" for another user (lost or replaced phone). Removes every MFA factor of
+ * the user through the GoTrue admin API and signs them out everywhere; on the next sign-in they set up
+ * the authenticator again (admins are forced to). An admin manages their own factor from their profile.
+ */
+async function handleResetUserMfa(req, res) {
+  const caller = await requireFullAccess(req)
+  const body = await readBody(req)
+  const userId = String(body.user_id ?? '').trim()
+  const callerId = String(caller?.id ?? '')
+
+  if (!UUID_RE.test(userId)) {
+    json(res, 400, { error: 'user_id is required' })
+    return
+  }
+  if (userId === callerId) {
+    json(res, 400, { error: 'Manage Your Own Two-Step Login From Your Profile Menu.' })
+    return
+  }
+  const profile = await fetchProfile(userId)
+  if (!profile) {
+    json(res, 404, { error: 'User not found' })
+    return
+  }
+
+  const listed = await authAdmin(`/admin/users/${encodeURIComponent(userId)}/factors`)
+  if (!listed.ok) {
+    json(res, 400, { error: authErrorMessage(listed.data, `Auth ${listed.status}`) })
+    return
+  }
+  const factors = Array.isArray(listed.data) ? listed.data : []
+  let removed = 0
+  for (const factor of factors) {
+    const factorId = String(factor?.id ?? '')
+    if (!UUID_RE.test(factorId)) continue
+    const deleted = await authAdmin(
+      `/admin/users/${encodeURIComponent(userId)}/factors/${encodeURIComponent(factorId)}`,
+      { method: 'DELETE' },
+    )
+    if (!deleted.ok && deleted.status !== 404) {
+      json(res, 400, { error: authErrorMessage(deleted.data, `Auth ${deleted.status}`) })
+      return
+    }
+    removed += 1
+  }
+
+  let sessionsRevoked = 0
+  if (removed > 0) {
+    try {
+      const revoked = await rest('/rpc/app_revoke_user_sessions', {
+        method: 'POST',
+        body: JSON.stringify({ p_user_id: userId }),
+      })
+      sessionsRevoked = Number(revoked) || 0
+    } catch (err) {
+      console.error('[reset-user-mfa] session revoke failed', userId, err)
+    }
+  }
+
+  await auditUserEvent(callerId, userId, 'U', 'mfa_reset_by_admin', {
+    email: profile.email ?? '',
+    factors_removed: removed,
+    sessions_revoked: sessionsRevoked,
+  })
+
+  json(res, 200, { ok: true, factors_removed: removed })
+}
+
 const renewalReminders = createRenewalReminders({ rest, sendResendEmail, logEmail })
 const RENEWALS_PATH = '/bis/license-renewals'
 
@@ -1080,6 +1173,7 @@ const routes = {
   'POST /create-user': handleCreateUser,
   'POST /delete-user': handleDeleteUser,
   'POST /set-user-password': handleSetUserPassword,
+  'POST /reset-user-mfa': handleResetUserMfa,
   'POST /qi-assistant': handleQiAssistant,
   'OPTIONS /qi-assistant': handleQiAssistant,
   'GET /osl/manak-pdf': handleManakPdf,
