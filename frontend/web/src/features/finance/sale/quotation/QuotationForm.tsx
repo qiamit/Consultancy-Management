@@ -59,6 +59,7 @@ import {
   fetchDefaultSignatureForKind,
 } from './quotationSignatureStorage'
 import {
+  computeLineTaxBreakdowns,
   computeQuotationTotals,
   defaultValidUntil,
   emptyQuotationLine,
@@ -571,6 +572,8 @@ export function QuotationFormView({
   const showSgst = placeOfSupply ? supplyMode === 'intra' : showSgstRow
   const showIgst = placeOfSupply ? supplyMode === 'inter' : showIgstRow
   const totals = computeQuotationTotals(form, supplyMode)
+  // Per-line GST after each line's share of the header discount (adds up to the totals).
+  const lineTaxBreakdowns = computeLineTaxBreakdowns(form, supplyMode)
   const showGstBreakdown = showCgst || showSgst || showIgst
   const visibleInvoiceBalances = form.clientId ? invoiceBalances : []
   const matchedInvoiceBalance = visibleInvoiceBalances.find(
@@ -1314,7 +1317,7 @@ export function QuotationFormView({
             const descOpen = Boolean(descOpenByKey[line.key])
             const combined = joinLineItemText(line.description, line.details)
             const descValue = descOpen ? (descQueryByKey[line.key] ?? combined) : combined
-            const gstSplit = lineGstSplit(line, supplyMode)
+            const gstSplit = lineTaxBreakdowns[index] ?? lineGstSplit(line, supplyMode)
             return (
               <article
                 key={`card-${line.key}`}
@@ -1818,7 +1821,7 @@ export function QuotationFormView({
                 const descValue = descOpen ? (descQueryByKey[line.key] ?? combined) : combined
                 const cellTextClass =
                   'align-middle px-2 py-1.5 text-center text-sm text-stone-800'
-                const gstSplit = lineGstSplit(line, supplyMode)
+                const gstSplit = lineTaxBreakdowns[index] ?? lineGstSplit(line, supplyMode)
                 const moneyCellClass =
                   'align-middle px-2 py-1.5 text-center tabular-nums font-medium text-stone-900'
                 return (
@@ -2339,7 +2342,7 @@ export function QuotationFormView({
 
           {showDiscountRow ? (
             <div className="flex items-center justify-between gap-2">
-              <span className="text-stone-600">Discount</span>
+              <span className="text-stone-600">Less: Discount</span>
               <div className="flex items-center gap-1">
                 <span className="text-stone-500">{getCurrencySymbol()}</span>
                 <Input
@@ -2366,6 +2369,15 @@ export function QuotationFormView({
                   <X size={14} aria-hidden />
                 </button>
               </div>
+            </div>
+          ) : null}
+
+          {totals.discountAmount > 0 ? (
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-stone-600" title="GST Is Charged on This Value">
+                Taxable Value
+              </span>
+              <span className="tabular-nums">{getCurrencySymbol()} {formatMoney(totals.taxableValue)}</span>
             </div>
           ) : null}
 

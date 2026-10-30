@@ -246,8 +246,17 @@ export function QuotationDocumentView({
   if (tpl.showDiscount && totals.discountAmount > 0) {
     totalRows.push({
       key: 'disc',
-      label: 'Discount',
+      label: 'Less: Discount',
       value: `${getCurrencySymbol()} ${formatMoney(totals.discountAmount)}`,
+      bold: true,
+    })
+  }
+  if (totals.discountAmount > 0 && !isPaymentReceipt && (tpl.showDiscount || tpl.showBasicAmount)) {
+    // GST is charged on this value (Basic Amount − Discount).
+    totalRows.push({
+      key: 'taxable',
+      label: 'Taxable Value',
+      value: `${getCurrencySymbol()} ${formatMoney(totals.taxableValue)}`,
       bold: true,
     })
   }

@@ -568,7 +568,13 @@ function buildOneQuotationHtml(
   }
   if (tpl.showDiscount && totals.discountAmount > 0) {
     totalRows.push(
-      `<div class="tr"><span class="k">Discount</span><span class="sep">:</span><span class="v">${getCurrencySymbol()} ${esc(formatMoney(totals.discountAmount))}</span></div>`,
+      `<div class="tr"><span class="k">Less: Discount</span><span class="sep">:</span><span class="v">${getCurrencySymbol()} ${esc(formatMoney(totals.discountAmount))}</span></div>`,
+    )
+  }
+  if (totals.discountAmount > 0 && !isPaymentReceipt && (tpl.showDiscount || tpl.showBasicAmount)) {
+    // GST is charged on this value (Basic Amount − Discount).
+    totalRows.push(
+      `<div class="tr"><span class="k">Taxable Value</span><span class="sep">:</span><span class="v">${getCurrencySymbol()} ${esc(formatMoney(totals.taxableValue))}</span></div>`,
     )
   }
   if (tpl.showTransportationCharges && totals.transportationCharges > 0) {

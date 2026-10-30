@@ -1,9 +1,9 @@
 import { supabase } from '@/lib/supabaseClient'
 import type { DocumentTemplateKind } from '@/features/settings/lab-settings/documentTemplateTypes'
 import {
+  computeLineTaxBreakdowns,
   computeQuotationTotals,
   lineAmount,
-  lineTaxableAmount,
   nextQuotationNumber,
   normalizePaymentMethod,
   parseMoney,
@@ -434,13 +434,17 @@ function buildLines(
   form: QuotationForm,
   parentFk: string,
   parentId: string,
+  supplyMode: GstSupplyMode,
 ): Array<Record<string, unknown>> {
+  // GST per line is on the value after this line's share of the header discount.
+  const breakdowns = computeLineTaxBreakdowns(form, supplyMode)
   return form.lines
-    .filter((l) => l.description.trim().length > 0)
-    .map((l, index) => {
-      const taxable = lineTaxableAmount(l)
-      const gstPercent = Math.max(0, parseMoney(l.gstPercent))
-      const tax = round2(taxable * (gstPercent / 100))
+    .map((l, lineIndex) => ({ l, b: breakdowns[lineIndex] }))
+    .filter(({ l }) => l.description.trim().length > 0)
+    .map(({ l, b }, index) => {
+      const taxable = b.taxableValue
+      const gstPercent = b.gstPercent
+      const tax = b.gstAmount
       return {
         id: crypto.randomUUID(),
         [parentFk]: parentId,
@@ -462,6 +466,8 @@ function buildLines(
           line_remarks: l.lineRemarks.trim() || null,
           delivery_period: l.deliveryPeriod.trim() || null,
           gross_amount: lineAmount(l),
+          line_taxable_before_header_discount: b.lineTaxable,
+          header_discount_share: b.headerDiscountShare,
         },
       }
     })
@@ -561,7 +567,7 @@ async function saveHeaderDocument(
     if (error) throw error
   }
 
-  const lines = buildLines(prepared, cfg.parentFk, id)
+  const lines = buildLines(prepared, cfg.parentFk, id, supplyMode)
   if (lines.length > 0) {
     const { error } = await supabase.from(cfg.linesTable).insert(lines)
     if (error) throw error
