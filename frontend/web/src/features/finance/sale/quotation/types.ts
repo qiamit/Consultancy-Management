@@ -140,6 +140,8 @@ export type QuotationRow = {
   discount_amount: number
   transportation_charges?: number | null
   packaging_charges?: number | null
+  /** GST on transportation / packaging charges (at the highest line rate). Null / false = not taxed. */
+  charges_gst?: boolean | null
   gst_percent: number
   gst_amount: number
   subtotal: number
@@ -188,6 +190,8 @@ export type QuotationForm = {
   discountAmount: string
   transportationCharges: string
   packagingCharges: string
+  /** Charge GST on transportation / packaging charges, at the highest line GST rate. */
+  chargesGst: boolean
   discountPercent: string
   gstPercent: string
   /** Payment Receipt: amount received (₹). Unused on Quotation / Invoice forms. */
@@ -277,6 +281,7 @@ export function emptyQuotationForm(nextNumber = ''): QuotationForm {
     discountAmount: '0',
     transportationCharges: '0',
     packagingCharges: '0',
+    chargesGst: false,
     discountPercent: '0',
     gstPercent: '18',
     paymentAmount: '',
@@ -440,9 +445,15 @@ export function computeLineTaxBreakdowns(
   })
 }
 
+/** GST rate for transportation / packaging charges: the highest line rate (the principal supply's rate). */
+export function chargesGstPercent(form: Pick<QuotationForm, 'lines'>): number {
+  return form.lines.reduce((max, line) => Math.max(max, parseMoney(line.gstPercent)), 0)
+}
+
 /**
  * Document totals. GST is charged on the value after the header discount:
  * Basic Amount − Discount = Taxable Value; GST per line on its share of the Taxable Value.
+ * When `chargesGst` is on, transportation + packaging are taxed too, at the highest line rate.
  */
 export function computeQuotationTotals(
   form: QuotationForm,
@@ -454,6 +465,9 @@ export function computeQuotationTotals(
   taxableValue: number
   transportationCharges: number
   packagingCharges: number
+  /** GST on transportation + packaging (0 when chargesGst is off). Included in gstAmount and the splits. */
+  chargesGstAmount: number
+  chargesGstPercent: number
   gstAmount: number
   cgstAmount: number
   sgstAmount: number
@@ -477,15 +491,23 @@ export function computeQuotationTotals(
     sgstAmount += split.sgstAmount
     igstAmount += split.igstAmount
   }
+  const chargesTaxable = round2(transportationCharges + packagingCharges)
+  const chargesRate = form.chargesGst ? chargesGstPercent(form) : 0
+  const chargesSplit = gstSplitForTaxable(form.chargesGst ? chargesTaxable : 0, chargesRate, gstMode)
+  gstAmount += chargesSplit.gstAmount
+  cgstAmount += chargesSplit.cgstAmount
+  sgstAmount += chargesSplit.sgstAmount
+  igstAmount += chargesSplit.igstAmount
   gstAmount = round2(gstAmount)
   cgstAmount = round2(cgstAmount)
   sgstAmount = round2(sgstAmount)
   igstAmount = round2(igstAmount)
 
   const afterDiscount = Math.max(0, round2(subtotal - discountAmount))
+  const gstBase = afterDiscount + (form.chargesGst ? chargesTaxable : 0)
   const effectiveGstPercent =
-    afterDiscount > 0
-      ? Math.round((gstAmount / afterDiscount) * 10000) / 100
+    gstBase > 0
+      ? Math.round((gstAmount / gstBase) * 10000) / 100
       : parseMoney(form.gstPercent)
 
   const grandTotal = round2(afterDiscount + transportationCharges + packagingCharges + gstAmount)
@@ -496,6 +518,8 @@ export function computeQuotationTotals(
     taxableValue: afterDiscount,
     transportationCharges,
     packagingCharges,
+    chargesGstAmount: chargesSplit.gstAmount,
+    chargesGstPercent: chargesRate,
     gstAmount,
     cgstAmount,
     sgstAmount,
@@ -575,6 +599,7 @@ export function rowToForm(row: QuotationRow, asCopy = false, nextNumber = ''): Q
     discountAmount: String(row.discount_amount ?? 0),
     transportationCharges: String(row.transportation_charges ?? 0),
     packagingCharges: String(row.packaging_charges ?? 0),
+    chargesGst: row.charges_gst === true,
     discountPercent: String(row.discount_percent ?? 0),
     gstPercent: String(row.gst_percent ?? 18),
     paymentAmount: String(row.grand_total ?? 0),

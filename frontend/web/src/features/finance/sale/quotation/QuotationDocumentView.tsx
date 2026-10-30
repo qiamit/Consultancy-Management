@@ -204,6 +204,7 @@ export function QuotationDocumentView({
       discountPercent: String(row.discount_percent ?? 0),
       transportationCharges: String(row.transportation_charges ?? 0),
       packagingCharges: String(row.packaging_charges ?? 0),
+      chargesGst: row.charges_gst === true,
       gstPercent: DEFAULT_CONSULTANCY_GST,
     } as QuotationForm,
     gstMode,
