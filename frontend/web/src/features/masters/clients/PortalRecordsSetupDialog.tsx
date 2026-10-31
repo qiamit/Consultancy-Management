@@ -6,7 +6,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
-import { formatDisplayDate } from '@/features/bis/projects/types'
 import { formulaProblem } from '@/lib/recordFormula'
 import { limsDarkBarGlowStyle, limsDialogClass, limsOutlineBtnClass, limsPrimaryBtnClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
@@ -36,6 +35,7 @@ import {
   serviceStatus,
   type RecordsService,
 } from './portalRecordsAdminApi'
+import { CalendarDateField } from './CalendarDateField'
 
 const smallBtn = cn(limsOutlineBtnClass, 'h-8 gap-1 px-2 text-xs')
 const th = 'border border-stone-700 bg-stone-800 px-2 py-1.5 text-left text-[11px] font-bold uppercase tracking-[0.06em] text-amber-200'
@@ -303,36 +303,31 @@ export function PortalRecordsSetupDialog({
             <p className="flex items-center gap-2 text-sm text-stone-600"><Loader2 size={16} className="animate-spin" /> Loading…</p>
           ) : (
             <>
-              <section className="space-y-2 border border-stone-300 bg-white p-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="text-sm font-semibold text-stone-900">Records Service</h3>
-                  <span className={cn('border px-1.5 py-0.5 text-[11px] font-medium', status.tone)}>{status.text}</span>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className={cn(smallBtn, 'ml-auto')}
-                    disabled={busy != null}
-                    onClick={() =>
-                      void run('svc', () => setRecordsEnabled(licenceId, !service?.records_enabled, service), service?.records_enabled ? 'Service Switched Off' : 'Service Switched On')
-                    }
-                  >
-                    <Power size={14} /> {service?.records_enabled ? 'Switch Off' : `Switch On (${TRIAL_DAYS}-Day Free Trial)`}
-                  </Button>
-                </div>
+              <section className="flex flex-wrap items-center gap-2 border border-stone-300 bg-white p-3">
+                <h3 className="text-sm font-semibold text-stone-900">Records Service</h3>
+                <span className={cn('border px-1.5 py-0.5 text-[11px] font-medium', status.tone)}>{status.text}</span>
                 {service?.records_enabled ? (
-                  <div className="flex flex-wrap items-end gap-2">
-                    <div className="space-y-1">
-                      <Label htmlFor="paid-until">Paid Till</Label>
-                      <Input id="paid-until" type="date" className="h-8 w-[10rem]" value={paid} onChange={(e) => setPaid(e.target.value)} />
-                    </div>
-                    <Button type="button" className={cn(limsPrimaryBtnClass, 'h-8 text-xs')} disabled={busy != null} onClick={() => void run('paid', () => setPaidUntil(licenceId, paid || null), 'Paid Date Saved')}>
+                  <>
+                    <Label htmlFor="paid-until" className="ml-2 text-sm">Paid Till</Label>
+                    <CalendarDateField id="paid-until" label="Paid Till" className="w-[11.5rem]" value={paid} disabled={busy != null} onChange={setPaid} />
+                    <Button type="button" className={cn(limsPrimaryBtnClass, 'h-10 text-xs')} disabled={busy != null} onClick={() => void run('paid', () => setPaidUntil(licenceId, paid || null), 'Paid Date Saved')}>
                       Save Paid Date
                     </Button>
-                    <p className="text-[11px] text-stone-500">Trial ends {formatDisplayDate(service.trial_ends) || '—'}. After the trial and paid dates pass, the customer can only view and print.</p>
-                  </div>
-                ) : (
-                  <p className="text-[11px] text-stone-500">While the service is off the customer does not see the record sections. You can prepare the formats first.</p>
-                )}
+                  </>
+                ) : null}
+                <Button
+                  type="button"
+                  variant="outline"
+                  className={cn(limsOutlineBtnClass, 'ml-auto h-10 w-10 p-0', service?.records_enabled ? 'text-red-700' : 'text-emerald-700')}
+                  disabled={busy != null}
+                  title={service?.records_enabled ? 'Switch Off' : `Switch On (${TRIAL_DAYS}-Day Free Trial)`}
+                  aria-label={service?.records_enabled ? 'Switch Off Records Service' : 'Switch On Records Service'}
+                  onClick={() =>
+                    void run('svc', () => setRecordsEnabled(licenceId, !service?.records_enabled, service), service?.records_enabled ? 'Service Switched Off' : 'Service Switched On')
+                  }
+                >
+                  <Power size={17} aria-hidden />
+                </Button>
               </section>
 
               <section className="space-y-3 border border-stone-300 bg-white p-3">
