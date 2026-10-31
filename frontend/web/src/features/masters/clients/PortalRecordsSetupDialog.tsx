@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ArrowDown, ArrowUp, Download, FlaskConical, Loader2, Pencil, Plus, Power, Sparkles, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, Download, Save, FlaskConical, Loader2, Pencil, Plus, Power, Sparkles, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -461,38 +461,22 @@ export function PortalRecordsSetupDialog({
             <p className="flex items-center gap-2 text-sm text-stone-600"><Loader2 size={16} className="animate-spin" /> Loading…</p>
           ) : (
             <>
-              <section className="flex flex-wrap items-center gap-2 border border-stone-300 bg-white p-3">
-                <h3 className="text-sm font-semibold text-stone-900">Records Service</h3>
-                <span className={cn('border px-1.5 py-0.5 text-[11px] font-medium', status.tone)}>{status.text}</span>
-                {service?.records_enabled ? (
-                  <>
-                    <Label htmlFor="paid-until" className="ml-2 text-sm">Paid Till</Label>
-                    <CalendarDateField id="paid-until" label="Paid Till" className="w-[11.5rem]" value={paid} disabled={busy != null} onChange={setPaid} />
-                    <Button type="button" className={cn(limsPrimaryBtnClass, 'h-10 text-xs')} disabled={busy != null} onClick={() => void run('paid', () => setPaidUntil(licenceId, paid || null), 'Paid Date Saved')}>
-                      Save Paid Date
-                    </Button>
-                  </>
-                ) : null}
-                <Button
-                  type="button"
-                  variant="outline"
-                  className={cn(limsOutlineBtnClass, 'ml-auto h-10 w-10 p-0', service?.records_enabled ? 'text-red-700' : 'text-emerald-700')}
-                  disabled={busy != null}
-                  title={service?.records_enabled ? 'Switch Off' : `Switch On (${TRIAL_DAYS}-Day Free Trial)`}
-                  aria-label={service?.records_enabled ? 'Switch Off Records Service' : 'Switch On Records Service'}
-                  onClick={() =>
-                    void run('svc', () => setRecordsEnabled(licenceId, !service?.records_enabled, service), service?.records_enabled ? 'Service Switched Off' : 'Service Switched On')
-                  }
-                >
-                  <Power size={17} aria-hidden />
-                </Button>
-              </section>
-
               <section className="space-y-3 border border-stone-300 bg-white p-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Label htmlFor="records-section" className="text-sm font-semibold text-stone-900">Sections</Label>
+                  <span className={cn('border px-1.5 py-0.5 text-[11px] font-medium', status.tone)} title="Records Service">{status.text}</span>
+                  {service?.records_enabled ? (
+                    <>
+                      <Label htmlFor="paid-until" className="ml-1 text-sm">Paid Till</Label>
+                      <CalendarDateField id="paid-until" label="Paid Till" className="w-[10.5rem]" value={paid} disabled={busy != null} onChange={setPaid} />
+                      <Button type="button" className={cn(limsPrimaryBtnClass, 'h-10 w-10 p-0')} disabled={busy != null} title="Save Paid Date" aria-label="Save Paid Date"
+                        onClick={() => void run('paid', () => setPaidUntil(licenceId, paid || null), 'Paid Date Saved')}>
+                        <Save size={16} aria-hidden />
+                      </Button>
+                    </>
+                  ) : null}
+                  <Label htmlFor="records-section" className="ml-2 text-sm font-semibold text-stone-900">Sections</Label>
                   <LimsFieldWithAdd
-                    className="w-full sm:w-[20rem]"
+                    className="w-full sm:w-[14rem]"
                     addButton={<LimsFieldAddButton aria-label="Add, Rename or Delete Sections" title="Add, Rename or Delete Sections" disabled={busy != null} onClick={() => setAddingSection(true)} />}
                   >
                     <select
@@ -508,27 +492,41 @@ export function PortalRecordsSetupDialog({
                       ))}
                     </select>
                   </LimsFieldWithAdd>
-                  {sections.length === 0 ? (
-                    <Button type="button" className={cn(limsPrimaryBtnClass, 'h-10 gap-1 text-xs')} disabled={busy != null} onClick={() => void run('std', () => createStandardSections(licenceId, 0), 'Standard Sections Created')}>
-                      {busy === 'std' ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} Create Standard Sections
-                    </Button>
-                  ) : null}
-                  {active ? (
-                    <div className="ml-auto flex flex-wrap gap-2">
-                      {active.kind === 'final_test' ? (
-                        <Button type="button" variant="outline" className={cn(limsOutlineBtnClass, 'h-10 gap-1 px-3 text-xs')} disabled={busy != null}
-                          onClick={() => void run('tp', async () => {
-                            const n = await addTestParameterColumns(licenceId, active.id, active.columns.length, active.columns.map((c) => c.key))
-                            toast.success(n ? `${n} Columns Added` : 'No Test Parameters for This IS Code')
-                          })}>
-                          <FlaskConical size={13} /> Add From IS Test Parameters
-                        </Button>
-                      ) : null}
+                  <div className="ml-auto flex flex-wrap gap-2">
+                    {sections.length === 0 ? (
+                      <Button type="button" className={cn(limsPrimaryBtnClass, 'h-10 gap-1 text-xs')} disabled={busy != null} onClick={() => void run('std', () => createStandardSections(licenceId, 0), 'Standard Sections Created')}>
+                        {busy === 'std' ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} Create Standard Sections
+                      </Button>
+                    ) : null}
+                    {active?.kind === 'final_test' ? (
+                      <Button type="button" variant="outline" className={cn(limsOutlineBtnClass, 'h-10 w-10 p-0 text-amber-800')} disabled={busy != null}
+                        title="Add From IS Test Parameters" aria-label="Add From IS Test Parameters"
+                        onClick={() => void run('tp', async () => {
+                          const n = await addTestParameterColumns(licenceId, active.id, active.columns.length, active.columns.map((c) => c.key))
+                          toast.success(n ? `${n} Columns Added` : 'No Test Parameters for This IS Code')
+                        })}>
+                        <FlaskConical size={16} aria-hidden />
+                      </Button>
+                    ) : null}
+                    {active ? (
                       <Button type="button" className={cn(limsPrimaryBtnClass, 'h-10 gap-1 text-xs')} disabled={busy != null} onClick={() => setEditing(draftFrom())}>
                         <Plus size={14} /> Add Column
                       </Button>
-                    </div>
-                  ) : null}
+                    ) : null}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className={cn(limsOutlineBtnClass, 'h-10 w-10 p-0', service?.records_enabled ? 'text-red-700' : 'text-emerald-700')}
+                      disabled={busy != null}
+                      title={service?.records_enabled ? 'Switch Off Records Service' : `Switch On Records Service (${TRIAL_DAYS}-Day Free Trial)`}
+                      aria-label={service?.records_enabled ? 'Switch Off Records Service' : 'Switch On Records Service'}
+                      onClick={() =>
+                        void run('svc', () => setRecordsEnabled(licenceId, !service?.records_enabled, service), service?.records_enabled ? 'Service Switched Off' : 'Service Switched On')
+                      }
+                    >
+                      <Power size={17} aria-hidden />
+                    </Button>
+                  </div>
                 </div>
                 {sections.length === 0 ? (
                   <p className="text-sm text-stone-600">
