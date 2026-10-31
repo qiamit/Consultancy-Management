@@ -1,3 +1,4 @@
+import { parseRatePlans } from '@/lib/ratePlans'
 /** Maps LabSettingsPage fields ↔ public.lab_settings and related lab tables */
 
 import type { SupabaseClient } from '@/lib/supabaseClient'
@@ -50,7 +51,7 @@ export function parseLabSettingsRow(row: LabSettingsRow) {
     accountNumber: String(row.account_number ?? ''),
     ifsc: String(row.ifsc ?? ''),
     upi: String(row.upi ?? ''),
-    portalRecordsYearlyRate: row.portal_records_yearly_rate == null ? '' : String(row.portal_records_yearly_rate),
+    portalRecordsRates: parseRatePlans(row.portal_records_rates, row.portal_records_yearly_rate).map((p) => ({ frequency: p.frequency, amount: String(p.amount) })),
     chequeCopyPath: typeof row.cheque_copy_path === 'string' ? row.cheque_copy_path : null,
     qrCodePath: typeof row.qr_code_path === 'string' ? row.qr_code_path : null,
     labType: String(row.lab_type ?? row.laboratory_type ?? ''),
@@ -131,11 +132,14 @@ export function labBankPayload(input: {
   accountNumber: string
   ifsc: string
   upi: string
-  portalRecordsYearlyRate: string
+  portalRecordsRates: Array<{ frequency: string; amount: string }>
   chequeCopyPath: string | null
   qrCodePath: string | null
 }): LabSettingsRow {
-  const rate = Number(input.portalRecordsYearlyRate)
+  const rates = input.portalRecordsRates
+    .filter((r) => r.amount.trim() !== '' && Number.isFinite(Number(r.amount)) && Number(r.amount) >= 0)
+    .map((r) => ({ frequency: r.frequency, amount: Number(r.amount) }))
+  const yearly = rates.find((r) => r.frequency === 'yearly')
   return {
     id: LAB_SETTINGS_SINGLETON_ID,
     bank_name: input.bankName,
@@ -143,7 +147,8 @@ export function labBankPayload(input: {
     account_number: input.accountNumber,
     ifsc: input.ifsc,
     upi: input.upi,
-    portal_records_yearly_rate: input.portalRecordsYearlyRate.trim() && Number.isFinite(rate) && rate >= 0 ? rate : null,
+    portal_records_rates: rates,
+    portal_records_yearly_rate: yearly ? yearly.amount : null,
     cheque_copy_path: input.chequeCopyPath,
     qr_code_path: input.qrCodePath,
   }

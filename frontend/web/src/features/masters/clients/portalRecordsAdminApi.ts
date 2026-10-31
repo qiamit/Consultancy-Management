@@ -2,6 +2,7 @@ import QRCode from 'qrcode'
 import { supabase } from '@/lib/supabaseClient'
 import { todayLocalIso, addDaysIso } from '@/lib/localDate'
 import { sendAppEmail } from '@/lib/sendAppEmail'
+import { parseRatePlans, type RatePlan } from '@/lib/ratePlans'
 import { emptyQuotationForm } from '@/features/finance/sale/quotation/types'
 import { fetchNextSaleDocumentNumber, saveSaleDocument } from '@/features/finance/sale/shared/saleDocumentsApi'
 import { formatDisplayDate } from '@/features/bis/projects/types'
@@ -223,7 +224,8 @@ export async function copySectionsFrom(sourceProjectId: string, targetProjectId:
 // ── Payments ─────────────────────────────────────────────────────────────────────────────────────────
 
 export type PaymentSettings = {
-  rate: number | null
+  /** Amount per billing frequency (Lab Settings → Bank Details). */
+  rates: RatePlan[]
   payee: string
   upi: string
   bankName: string
@@ -253,15 +255,14 @@ export const PAYMENT_MODES = ['UPI', 'Bank', 'Cheque', 'Cash', 'Other'] as const
 export async function getPaymentSettings(): Promise<PaymentSettings> {
   const { data, error } = await supabase
     .from('lab_settings')
-    .select('lab_name, bank_name, branch_name, account_number, ifsc, upi, portal_records_yearly_rate')
+    .select('*')
     .limit(1)
     .maybeSingle()
   if (error) throw error
   const row = (data ?? {}) as Record<string, unknown>
   const text = (v: unknown) => String(v ?? '').trim()
-  const rate = row.portal_records_yearly_rate == null ? null : Number(row.portal_records_yearly_rate)
   return {
-    rate: rate != null && Number.isFinite(rate) ? rate : null,
+    rates: parseRatePlans(row.portal_records_rates, row.portal_records_yearly_rate),
     payee: text(row.lab_name) || 'Quality Engineering',
     upi: text(row.upi),
     bankName: text(row.bank_name),
@@ -285,11 +286,11 @@ export async function listServicePayments(projectId: string): Promise<ServicePay
   }))
 }
 
-/** The next paid year: from the day after a running paid period (or today) for one year. */
-export function nextPaidPeriod(service: RecordsService | null, today = todayLocalIso()): { from: string; to: string } {
+/** The next paid period: from the day after a running paid period (or today) for the given months (a year by default). */
+export function nextPaidPeriod(service: RecordsService | null, today = todayLocalIso(), months = 12): { from: string; to: string } {
   const from = service?.paid_until && service.paid_until >= today ? addDaysIso(service.paid_until, 1) : today
   const [y, m, d] = from.split('-').map(Number)
-  const end = new Date(Date.UTC(y! + 1, m! - 1, d!))
+  const end = new Date(Date.UTC(y!, m! - 1 + months, d!))
   end.setUTCDate(end.getUTCDate() - 1)
   return { from, to: end.toISOString().slice(0, 10) }
 }

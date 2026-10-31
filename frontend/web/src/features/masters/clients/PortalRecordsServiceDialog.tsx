@@ -24,6 +24,7 @@ import {
   type RecordsService,
   type ServicePayment,
 } from './portalRecordsAdminApi'
+import { rateFrequency } from '@/lib/ratePlans'
 import { CalendarDateField } from './CalendarDateField'
 
 type Action = 'trial' | 'request' | 'payment'
@@ -203,13 +204,31 @@ export function PortalRecordsServiceDialog({
   const [mode, setMode] = useState<(typeof PAYMENT_MODES)[number]>('UPI')
   const [reference, setReference] = useState('')
   // Service period: from today (or after a running paid period) for one year; both dates can be changed.
+  const [startFrom] = useState(period.from)
   const [periodFrom, setPeriodFrom] = useState(period.from)
   const [periodTo, setPeriodTo] = useState(period.to)
+  // The chosen plan (billing frequency) sets the amount and how long the period runs.
+  const [planFreq, setPlanFreq] = useState('')
+  const months = planFreq ? rateFrequency(planFreq).months : 12
   const changeFrom = (v: string) => {
     setPeriodFrom(v)
-    if (v) setPeriodTo(nextPaidPeriod(null, v).to)
+    if (v) setPeriodTo(nextPaidPeriod(null, v, months).to)
+  }
+  const changePlan = (f: string) => {
+    setPlanFreq(f)
+    const plan = settings?.rates.find((r) => r.frequency === f)
+    if (plan) setAmount(String(plan.amount))
+    if (periodFrom) setPeriodTo(nextPaidPeriod(null, periodFrom, rateFrequency(f).months).to)
   }
   const chosenPeriod = { from: periodFrom, to: periodTo }
+  const planSelect = (id: string) => (
+    <select id={id} className="h-10 w-full border border-stone-500 bg-stone-50 px-2 text-sm" value={planFreq} onChange={(e) => changePlan(e.target.value)}>
+      {settings?.rates.length ? null : <option value="">No Rates in Lab Settings</option>}
+      {(settings?.rates ?? []).map((r) => (
+        <option key={r.frequency} value={r.frequency}>{rateFrequency(r.frequency).label} · {money(r.amount)}</option>
+      ))}
+    </select>
+  )
   const periodProblem = !periodFrom || !periodTo ? 'Enter the Period From and To' : periodTo < periodFrom ? 'Period To must be after Period From' : ''
 
   const licenceId = licence?.id ?? ''
@@ -239,13 +258,18 @@ export function PortalRecordsServiceDialog({
         if (cancelled) return
         setSettings(s)
         setPayments(p)
-        if (s.rate != null) setAmount((prev) => prev || String(s.rate))
+        const plan = s.rates.find((r) => r.frequency === 'yearly') ?? s.rates[0]
+        if (plan) {
+          setPlanFreq(plan.frequency)
+          setAmount((prev) => prev || String(plan.amount))
+          setPeriodTo(nextPaidPeriod(null, startFrom, rateFrequency(plan.frequency).months).to)
+        }
       })
       .catch((err: unknown) => !cancelled && toast.error(errText(err, 'Could not load the records service')))
     return () => {
       cancelled = true
     }
-  }, [licenceId])
+  }, [licenceId, startFrom])
 
   const act = async (work: () => Promise<string | void>, done: string): Promise<boolean> => {
     setBusy(true)
@@ -305,7 +329,7 @@ export function PortalRecordsServiceDialog({
               { label: 'Status', value: <span className={cn('inline-block border px-2 py-0.5 text-sm font-bold', STATE.tone)}>{STATE.word}</span> },
               { label: 'Start Date', value: startDate ? formatDisplayDate(startDate) : '—' },
               { label: 'Paid Till', value: tillDate ? formatDisplayDate(tillDate) : '—' },
-              { label: 'Amount', value: settings == null ? '…' : settings.rate != null ? `${money(settings.rate)} / Year` : 'Not Set' },
+              { label: 'Amount', value: settings == null ? '…' : amountValue > 0 ? `${money(amountValue)} / ${rateFrequency(planFreq || 'yearly').per}` : 'Not Set' },
             ].map((t) => (
               <div key={t.label} className="min-w-[8.5rem] flex-1 border border-stone-200 bg-[#fffcf7] px-3 py-2 text-center">
                 <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-stone-500">{t.label}</p>
@@ -367,7 +391,11 @@ export function PortalRecordsServiceDialog({
                 {settings && !canPayUpi && !canPayBank ? (
                   <p className="border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-800">Add the UPI ID or bank account in Lab Settings → Bank Details first.</p>
                 ) : null}
-                <div className="grid gap-3 sm:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-4">
+                  <div className="space-y-1">
+                    <Label htmlFor="req-plan">Plan</Label>
+                    {planSelect('req-plan')}
+                  </div>
                   <div className="space-y-1">
                     <Label htmlFor="req-amount">Amount (₹)</Label>
                     <Input id="req-amount" className="h-10" type="number" inputMode="decimal" min={0} value={amount} placeholder="Yearly Amount" onChange={(e) => setAmount(e.target.value)} />
@@ -392,7 +420,11 @@ export function PortalRecordsServiceDialog({
 
             {action === 'payment' ? (
               <div className="space-y-3">
-                <div className="grid gap-3 sm:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-4">
+                  <div className="space-y-1">
+                    <Label htmlFor="pay-plan">Plan</Label>
+                    {planSelect('pay-plan')}
+                  </div>
                   <div className="space-y-1">
                     <Label htmlFor="pay-amount">Amount Received (₹)</Label>
                     <Input id="pay-amount" className="h-10" type="number" inputMode="decimal" min={0} value={amount} onChange={(e) => setAmount(e.target.value)} />
@@ -407,7 +439,7 @@ export function PortalRecordsServiceDialog({
                       {PAYMENT_MODES.map((m) => <option key={m} value={m}>{m}</option>)}
                     </select>
                   </div>
-                  <div className="space-y-1">
+                  <div className="space-y-1 sm:col-span-2">
                     <Label htmlFor="pay-ref">Transaction / UTR / Cheque No</Label>
                     <Input id="pay-ref" value={reference} placeholder="Reference" onChange={(e) => setReference(e.target.value)} />
                   </div>
