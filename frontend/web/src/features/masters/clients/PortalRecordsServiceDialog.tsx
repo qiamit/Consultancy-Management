@@ -40,22 +40,24 @@ function money(n: number) {
   return `₹ ${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
-function ActionCard({ active, icon, title, sub, disabled, onClick }: { active: boolean; icon: ReactNode; title: string; sub: string; disabled?: boolean; onClick: () => void }) {
+// Each action has its own colour: trial blue, payment link amber, payment received green.
+const TONES = {
+  sky: { on: 'border-sky-600 bg-sky-50 ring-1 ring-sky-600', off: 'border-sky-200 bg-white hover:border-sky-500 hover:bg-sky-50/60', iconOn: 'bg-sky-600 text-white', iconOff: 'bg-sky-100 text-sky-700', btn: 'bg-sky-700 hover:bg-sky-800' },
+  amber: { on: 'border-amber-600 bg-amber-50 ring-1 ring-amber-600', off: 'border-amber-200 bg-white hover:border-amber-500 hover:bg-amber-50/60', iconOn: 'bg-amber-600 text-white', iconOff: 'bg-amber-100 text-amber-800', btn: 'bg-amber-700 hover:bg-amber-800' },
+  emerald: { on: 'border-emerald-600 bg-emerald-50 ring-1 ring-emerald-600', off: 'border-emerald-200 bg-white hover:border-emerald-500 hover:bg-emerald-50/60', iconOn: 'bg-emerald-600 text-white', iconOff: 'bg-emerald-100 text-emerald-700', btn: 'bg-emerald-700 hover:bg-emerald-800' },
+} as const
+
+function ActionCard({ active, icon, title, tone, disabled, onClick }: { active: boolean; icon: ReactNode; title: string; tone: keyof typeof TONES; disabled?: boolean; onClick: () => void }) {
+  const t = TONES[tone]
   return (
     <button
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className={cn(
-        'flex min-w-0 items-start gap-2.5 border p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50',
-        active ? 'border-amber-600 bg-amber-50 ring-1 ring-amber-600' : 'border-stone-300 bg-white hover:border-amber-500 hover:bg-amber-50/50',
-      )}
+      className={cn('flex min-w-0 items-center gap-2.5 border p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50', active ? t.on : t.off)}
     >
-      <span className={cn('flex h-8 w-8 shrink-0 items-center justify-center', active ? 'bg-amber-600 text-white' : 'bg-stone-100 text-amber-800')}>{icon}</span>
-      <span className="min-w-0">
-        <span className="block text-sm font-semibold text-stone-900">{title}</span>
-        <span className="block text-[11px] leading-snug text-stone-500">{sub}</span>
-      </span>
+      <span className={cn('flex h-8 w-8 shrink-0 items-center justify-center', active ? t.iconOn : t.iconOff)}>{icon}</span>
+      <span className="min-w-0 text-sm font-semibold text-stone-900">{title}</span>
     </button>
   )
 }
@@ -201,9 +203,9 @@ export function PortalRecordsServiceDialog({
           </div>
 
           <div className="grid gap-2 sm:grid-cols-3">
-            <ActionCard active={action === 'trial'} icon={<Sparkles size={16} aria-hidden />} title="Start Free Trial" sub={service?.trial_ends ? 'Already Used' : `${TRIAL_DAYS} Days, Starts Today`} onClick={() => setAction('trial')} />
-            <ActionCard active={action === 'request'} icon={<Send size={16} aria-hidden />} title="Send Payment Link" sub="UPI Link, QR and Bank Details by Email" onClick={() => setAction('request')} />
-            <ActionCard active={action === 'payment'} icon={<BadgeCheck size={16} aria-hidden />} title="Payment Received" sub="Sets Paid Till and Makes the Receipt" onClick={() => setAction('payment')} />
+            <ActionCard active={action === 'trial'} icon={<Sparkles size={16} aria-hidden />} title="Start Free Trial" tone="sky" onClick={() => setAction('trial')} />
+            <ActionCard active={action === 'request'} icon={<Send size={16} aria-hidden />} title="Send Payment Link" tone="amber" onClick={() => setAction('request')} />
+            <ActionCard active={action === 'payment'} icon={<BadgeCheck size={16} aria-hidden />} title="Payment Received" tone="emerald" onClick={() => setAction('payment')} />
           </div>
 
           <section className="border border-stone-300 bg-white p-3 shadow-sm sm:p-4">
@@ -217,7 +219,7 @@ export function PortalRecordsServiceDialog({
                   <p className="text-sm text-stone-700">
                     The customer can use the records service free for {TRIAL_DAYS} days, from today till <strong>{formatDisplayDate(addDaysIso(today, TRIAL_DAYS))}</strong>.
                   </p>
-                  <Button type="button" disabled={busy} className={cn(limsPrimaryBtnClass, 'gap-1.5')} onClick={() => void act(() => startTrial(licenceId, service), 'Free Trial Started')}>
+                  <Button type="button" disabled={busy} className={cn(limsPrimaryBtnClass, TONES.sky.btn, 'gap-1.5')} onClick={() => void act(() => startTrial(licenceId, service), 'Free Trial Started')}>
                     {busy ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Sparkles size={15} aria-hidden />} Start Free Trial
                   </Button>
                 </div>
@@ -262,10 +264,7 @@ export function PortalRecordsServiceDialog({
                   <Input value={extraTo} placeholder="Other Emails (Comma Separated)" aria-label="Other Emails" onChange={(e) => setExtraTo(e.target.value)} />
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-3 border-t border-stone-200 pt-3">
-                  <p className="text-[11px] text-stone-500">
-                    The email has a Pay by UPI button{canPayUpi ? '' : ' (no UPI ID set)'}, a UPI QR with this amount, and the bank details{canPayBank ? '' : ' (no bank account set)'}.
-                  </p>
-                  <Button type="button" disabled={busy || !settings} className={cn(limsPrimaryBtnClass, 'gap-1.5')}
+                  <Button type="button" disabled={busy || !settings} className={cn(limsPrimaryBtnClass, TONES.amber.btn, 'ml-auto gap-1.5')}
                     onClick={() => periodProblem ? toast.warning(periodProblem) : void act(() => sendPaymentRequest({ projectId: licenceId, licence: licence?.label ?? '', company, to: recipients, amount: amountValue, period: chosenPeriod, settings: settings! }), 'Payment Link Sent')}>
                     {busy ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Send size={15} aria-hidden />} Send Payment Link
                   </Button>
@@ -307,7 +306,7 @@ export function PortalRecordsServiceDialog({
                   <p className="text-[11px] text-stone-500">
                     Service runs from {periodFrom ? formatDisplayDate(periodFrom) : '—'} to {periodTo ? formatDisplayDate(periodTo) : '—'}. A Payment Receipt is made in Finance → Payment Receipt.
                   </p>
-                  <Button type="button" disabled={busy} className={cn(limsPrimaryBtnClass, 'gap-1.5')}
+                  <Button type="button" disabled={busy} className={cn(limsPrimaryBtnClass, TONES.emerald.btn, 'gap-1.5')}
                     onClick={() => periodProblem ? toast.warning(periodProblem) : void act(
                       () => recordPayment({ projectId: licenceId, clientId, licence: licence?.label ?? '', amount: amountValue, paidOn, mode, reference, period: chosenPeriod, current: service }),
                       'Payment Saved, Receipt',
