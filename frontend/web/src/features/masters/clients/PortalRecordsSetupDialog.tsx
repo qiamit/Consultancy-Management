@@ -172,7 +172,7 @@ function ColumnEditor({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent aria-describedby={undefined} className={cn(limsDialogClass, d.col_type === 'formula' ? 'w-[min(48rem,calc(100vw-1rem))]' : 'w-[min(36rem,calc(100vw-1rem))]', 'max-w-none gap-0 overflow-hidden bg-white p-0')}>
+      <DialogContent aria-describedby={undefined} className={cn(limsDialogClass, 'w-[min(48rem,calc(100vw-1rem))]', 'max-w-none gap-0 overflow-hidden bg-white p-0')}>
         <div className="bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5">
           <DialogHeader className="pr-10 text-left">
             <DialogTitle className="text-base font-semibold text-white">{d.id ? 'Edit Column' : 'Add Column'} — {section.name}</DialogTitle>
@@ -180,9 +180,10 @@ function ColumnEditor({
         </div>
         <div className="max-h-[70dvh] space-y-3 overflow-y-auto bg-[#fffcf7] p-4">
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1 sm:col-span-2">
+            <div className="grid gap-3 sm:col-span-2 sm:grid-cols-[minmax(0,1.3fr)_minmax(0,1.3fr)_minmax(0,0.8fr)]">
+            <div className="space-y-1">
               <Label htmlFor="col-label">Column Name</Label>
-              <Input id="col-label" value={d.label} placeholder="Tensile Strength" onChange={(e) => set('label', e.target.value)} />
+              <Input id="col-label" className="h-9" value={d.label} placeholder="Tensile Strength" onChange={(e) => set('label', e.target.value)} />
               <p className="text-[11px] text-stone-500">Formula Name: <code className="bg-stone-100 px-1">{key}</code></p>
             </div>
             <div className="space-y-1">
@@ -209,7 +210,8 @@ function ColumnEditor({
             </div>
             <div className="space-y-1">
               <Label htmlFor="col-unit">Unit</Label>
-              <Input id="col-unit" value={d.unit} placeholder="MPa, %, mm" onChange={(e) => set('unit', e.target.value)} />
+              <Input id="col-unit" className="h-9" value={d.unit} placeholder="MPa, %, mm" onChange={(e) => set('unit', e.target.value)} />
+            </div>
             </div>
             {hasLimits ? (
               <>
