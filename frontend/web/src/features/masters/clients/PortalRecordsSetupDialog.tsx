@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { LimsFieldAddButton, LimsFieldWithAdd } from '@/components/lims/LimsFieldWithAdd'
 import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { formulaProblem } from '@/lib/recordFormula'
 import { limsDarkBarGlowStyle, limsDialogClass, limsOutlineBtnClass, limsPrimaryBtnClass } from '@/lib/limsThemeUi'
@@ -231,6 +232,57 @@ function ColumnEditor({
 }
 
 /** Admin: records service (trial / paid) and the record formats of one licence. Customers never edit formats. */
+/** New section: a type (for the customer's reference label and icon) and a name, e.g. Test Certificate. */
+function AddSectionDialog({ onClose, onSave }: { onClose: () => void; onSave: (kind: string, name: string) => Promise<void> }) {
+  const [kind, setKind] = useState('custom')
+  const [name, setName] = useState('')
+  const [saving, setSaving] = useState(false)
+  const finalName = name.trim() || (kind === 'custom' ? '' : SECTION_KIND_LABEL[kind] ?? '')
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent aria-describedby={undefined} className={cn(limsDialogClass, 'w-[min(28rem,calc(100vw-1rem))] max-w-none gap-0 overflow-hidden bg-white p-0')}>
+        <div className="bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5">
+          <DialogHeader className="pr-10 text-left">
+            <DialogTitle className="text-base font-semibold text-white">Add Section</DialogTitle>
+          </DialogHeader>
+        </div>
+        <div className="space-y-3 p-4">
+          <div className="space-y-1">
+            <Label htmlFor="new-section-kind">Type</Label>
+            <select id="new-section-kind" className="h-10 w-full border border-stone-500 bg-stone-50 px-2 text-sm" value={kind} onChange={(e) => setKind(e.target.value)}>
+              {Object.entries(SECTION_KIND_LABEL).map(([k, label]) => (
+                <option key={k} value={k}>{label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="new-section-name">Name</Label>
+            <Input id="new-section-name" value={name} placeholder={kind === 'custom' ? 'e.g. Test Certificate, Calibration' : SECTION_KIND_LABEL[kind]} onChange={(e) => setName(e.target.value)} />
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 border-t border-stone-200 bg-stone-50 px-4 py-3">
+          <Button type="button" variant="outline" className={cn(limsOutlineBtnClass, 'h-9')} onClick={onClose}>Cancel</Button>
+          <Button
+            type="button"
+            className={cn(limsPrimaryBtnClass, 'h-9 min-w-[6rem]')}
+            disabled={saving || !finalName}
+            onClick={() => void (async () => {
+              setSaving(true)
+              try {
+                await onSave(kind, finalName)
+              } finally {
+                setSaving(false)
+              }
+            })()}
+          >
+            {saving ? <Loader2 size={15} className="animate-spin" /> : 'Add'}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export function PortalRecordsSetupDialog({
   licence,
   onOpenChange,
@@ -245,6 +297,7 @@ export function PortalRecordsSetupDialog({
   const [paid, setPaid] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
   const [editing, setEditing] = useState<Draft | null>(null)
+  const [addingSection, setAddingSection] = useState(false)
   const licenceId = licence?.id ?? ''
 
   const load = useCallback(
@@ -280,16 +333,26 @@ export function PortalRecordsSetupDialog({
   const active = useMemo(() => sections?.find((s) => s.id === activeId) ?? null, [sections, activeId])
   const status = serviceStatus(service)
 
-  const addSection = async () => {
-    const name = window.prompt('Section Name (e.g. Calibration, Packing)')?.trim()
-    if (!name) return
-    await run('add-section', () => createSection(licenceId, 'custom', name, sections?.length ?? 0), 'Section Added')
-  }
-
   return (
     <Dialog open={licence != null} onOpenChange={onOpenChange}>
       <DialogContent aria-describedby={undefined} className={cn(limsDialogClass, 'flex max-h-[92dvh] w-[min(64rem,calc(100vw-1rem))] max-w-none flex-col gap-0 overflow-hidden bg-white p-0')}>
         {confirmDialog}
+        {addingSection ? (
+          <AddSectionDialog
+            onClose={() => setAddingSection(false)}
+            onSave={async (kind, name) => {
+              try {
+                const id = await createSection(licenceId, kind, name, sections?.length ?? 0)
+                toast.success('Section Added')
+                setAddingSection(false)
+                setActiveId(id)
+                await load()
+              } catch (err) {
+                toast.error(errText(err, 'Could not add the section'))
+              }
+            }}
+          />
+        ) : null}
         <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white">
           <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={limsDarkBarGlowStyle} />
           <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
@@ -332,15 +395,29 @@ export function PortalRecordsSetupDialog({
 
               <section className="space-y-3 border border-stone-300 bg-white p-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="text-sm font-semibold text-stone-900">Sections</h3>
+                  <Label htmlFor="records-section" className="text-sm font-semibold text-stone-900">Sections</Label>
+                  <LimsFieldWithAdd
+                    className="w-full sm:w-[20rem]"
+                    addButton={<LimsFieldAddButton aria-label="Add Section" title="Add Section" disabled={busy != null} onClick={() => setAddingSection(true)} />}
+                  >
+                    <select
+                      id="records-section"
+                      className="h-full w-full border-0 bg-stone-50 px-3 text-sm focus:outline-none"
+                      value={activeId}
+                      disabled={sections.length === 0}
+                      onChange={(e) => setActiveId(e.target.value)}
+                    >
+                      {sections.length === 0 ? <option value="">No Section Yet</option> : null}
+                      {sections.map((s) => (
+                        <option key={s.id} value={s.id}>{s.name} ({s.columns.length})</option>
+                      ))}
+                    </select>
+                  </LimsFieldWithAdd>
                   {sections.length === 0 ? (
-                    <Button type="button" className={cn(limsPrimaryBtnClass, 'h-8 gap-1 text-xs')} disabled={busy != null} onClick={() => void run('std', () => createStandardSections(licenceId, 0), 'Standard Sections Created')}>
+                    <Button type="button" className={cn(limsPrimaryBtnClass, 'h-10 gap-1 text-xs')} disabled={busy != null} onClick={() => void run('std', () => createStandardSections(licenceId, 0), 'Standard Sections Created')}>
                       {busy === 'std' ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} Create Standard Sections
                     </Button>
                   ) : null}
-                  <Button type="button" variant="outline" className={smallBtn} disabled={busy != null} onClick={() => void addSection()}>
-                    <Plus size={14} /> Add Section
-                  </Button>
                 </div>
                 {sections.length === 0 ? (
                   <p className="text-sm text-stone-600">
@@ -348,18 +425,6 @@ export function PortalRecordsSetupDialog({
                   </p>
                 ) : (
                   <>
-                    <div className="flex flex-wrap gap-1.5">
-                      {sections.map((s) => (
-                        <button
-                          key={s.id}
-                          type="button"
-                          onClick={() => setActiveId(s.id)}
-                          className={cn('border px-2.5 py-1.5 text-xs font-medium', s.id === activeId ? 'border-amber-600 bg-amber-600 text-white' : 'border-stone-300 bg-[#fffcf7] text-stone-800 hover:border-amber-600')}
-                        >
-                          {s.name} <span className="opacity-70">({s.columns.length})</span>
-                        </button>
-                      ))}
-                    </div>
                     {active ? (
                       <div className="space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
