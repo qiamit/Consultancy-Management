@@ -134,6 +134,7 @@ export default function LabSettingsPage() {
   const [accountNumber, setAccountNumber] = useState('')
   const [ifsc, setIfsc] = useState('')
   const [upi, setUpi] = useState('')
+  const [portalRecordsYearlyRate, setPortalRecordsYearlyRate] = useState('')
   const [chequeCopyPath, setChequeCopyPath] = useState<string | null>(null)
   const [qrCodePath, setQrCodePath] = useState<string | null>(null)
   const [labTypes, setLabTypes] = useState([
@@ -1072,6 +1073,7 @@ export default function LabSettingsPage() {
       setAccountNumber(parsed.accountNumber)
       setIfsc(parsed.ifsc)
       setUpi(parsed.upi)
+      setPortalRecordsYearlyRate(parsed.portalRecordsYearlyRate)
       setChequeCopyPath(parsed.chequeCopyPath)
       setQrCodePath(parsed.qrCodePath)
       if (parsed.labType) setSelectedLabType(parsed.labType)
@@ -1303,6 +1305,7 @@ export default function LabSettingsPage() {
             accountNumber,
             ifsc,
             upi,
+            portalRecordsYearlyRate,
             chequeCopyPath,
             qrCodePath,
           }),
@@ -1851,6 +1854,21 @@ export default function LabSettingsPage() {
                     pathPrefix="bank"
                     value={qrCodePath ?? undefined}
                     onChange={(_file, storagePath) => setQrCodePath(storagePath)}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
+                <div className="space-y-2">
+                  <Label htmlFor="portal-records-rate">Customer Portal Records Rate (₹ / Licence / Year)</Label>
+                  <Input
+                    id="portal-records-rate"
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    placeholder="Enter Yearly Rate"
+                    value={portalRecordsYearlyRate}
+                    onChange={(e) => setPortalRecordsYearlyRate(e.target.value)}
                   />
                 </div>
               </div>
