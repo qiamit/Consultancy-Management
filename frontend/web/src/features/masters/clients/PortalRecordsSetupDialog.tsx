@@ -231,7 +231,19 @@ function ColumnEditor({
 }
 
 /** Admin: records service (trial / paid) and the record formats of one licence. Customers never edit formats. */
-/** The + of Sections: add a section (type and name), rename or delete the existing ones. */
+/** Section type from its name: a standard name keeps its kind (for the customer's labels and icons), else custom. */
+function kindFromName(name: string): string {
+  const n = name.trim().toLowerCase()
+  const hit = Object.entries(SECTION_KIND_LABEL).find(([k, label]) => k !== 'custom' && label.toLowerCase() === n)
+  if (hit) return hit[0]
+  if (/^raw\s*material/.test(n)) return 'raw_material'
+  if (/^in[\s-]*process/.test(n)) return 'in_process'
+  if (/^final\s*test/.test(n)) return 'final_test'
+  if (/^(batch|lot)\b/.test(n)) return 'batch'
+  return 'custom'
+}
+
+/** The + of Sections: a table of sections; the first row adds one by name, other rows rename in place or delete. */
 function ManageSectionsDialog({
   sections,
   busy,
@@ -247,87 +259,81 @@ function ManageSectionsDialog({
   onRename: (section: AdminSection, name: string) => Promise<void>
   onDelete: (section: AdminSection) => Promise<void>
 }) {
-  const [kind, setKind] = useState('custom')
   const [name, setName] = useState('')
-  const finalName = name.trim() || (kind === 'custom' ? '' : SECTION_KIND_LABEL[kind] ?? '')
+  const add = () => {
+    const finalName = name.trim()
+    if (!finalName) return
+    void onAdd(kindFromName(finalName), finalName).then(() => setName(''))
+  }
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent aria-describedby={undefined} className={cn(limsDialogClass, 'flex max-h-[85dvh] w-[min(40rem,calc(100vw-1rem))] max-w-none flex-col gap-0 overflow-hidden bg-white p-0')}>
+      <DialogContent aria-describedby={undefined} className={cn(limsDialogClass, 'flex max-h-[85dvh] w-[min(34rem,calc(100vw-1rem))] max-w-none flex-col gap-0 overflow-hidden bg-white p-0')}>
         <div className="bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5">
           <DialogHeader className="pr-10 text-left">
             <DialogTitle className="text-base font-semibold text-white">Sections</DialogTitle>
           </DialogHeader>
         </div>
-        <div className="flex flex-wrap items-end gap-2 border-b border-stone-200 bg-stone-50 p-3">
-          <div className="space-y-1">
-            <Label htmlFor="new-section-kind">Type</Label>
-            <select id="new-section-kind" className="block h-10 w-[10rem] border border-stone-500 bg-white px-2 text-sm" value={kind} onChange={(e) => setKind(e.target.value)}>
-              {Object.entries(SECTION_KIND_LABEL).map(([k, label]) => (
-                <option key={k} value={k}>{label}</option>
-              ))}
-            </select>
-          </div>
-          <div className="min-w-[10rem] flex-1 space-y-1">
-            <Label htmlFor="new-section-name">Name</Label>
-            <Input id="new-section-name" value={name} placeholder={kind === 'custom' ? 'e.g. Test Certificate' : SECTION_KIND_LABEL[kind]} onChange={(e) => setName(e.target.value)} />
-          </div>
-          <Button
-            type="button"
-            className={cn(limsPrimaryBtnClass, 'gap-1')}
-            disabled={busy || !finalName}
-            onClick={() => void onAdd(kind, finalName).then(() => setName(''))}
-          >
-            <Plus size={15} /> Add
-          </Button>
-        </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
-          {sections.length === 0 ? (
-            <p className="py-6 text-center text-sm text-stone-500">No section yet.</p>
-          ) : (
-            <table className="w-full border-collapse">
-              <thead>
-                <tr>
-                  <th className={cn(th, 'w-10 text-center')}>#</th>
-                  <th className={th}>Name</th>
-                  <th className={cn(th, 'w-[8rem] text-center')}>Type</th>
-                  <th className={cn(th, 'w-[5.5rem] text-center')}>Columns</th>
-                  <th className={cn(th, 'w-[3.5rem] text-center')}>Delete</th>
+          <table className="w-full border-collapse">
+            <thead>
+              <tr>
+                <th className={cn(th, 'w-12 text-center')}>#</th>
+                <th className={th}>Name</th>
+                <th className={cn(th, 'w-[5.5rem] text-center')}>Columns</th>
+                <th className={cn(th, 'w-[4rem] text-center')}>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="bg-amber-50/70">
+                <td className={cn(td, 'text-center text-xs font-semibold text-amber-800')}>New</td>
+                <td className={td}>
+                  <Input
+                    value={name}
+                    placeholder="Section Name, e.g. Test Certificate"
+                    aria-label="New Section Name"
+                    className="h-8 min-h-8"
+                    onChange={(e) => setName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && add()}
+                  />
+                </td>
+                <td className={cn(td, 'text-center text-stone-400')}>—</td>
+                <td className={cn(td, 'text-center')}>
+                  <button type="button" className={cn(iconBtn, 'border-amber-600 bg-amber-600 text-white hover:bg-amber-700')} disabled={busy || !name.trim()} title="Add Section" aria-label="Add Section" onClick={add}>
+                    <Plus size={15} />
+                  </button>
+                </td>
+              </tr>
+              {sections.map((sec, i) => (
+                <tr key={sec.id} className={i % 2 ? 'bg-[#f7f3eb]' : 'bg-[#fffcf7]'}>
+                  <td className={cn(td, 'text-center text-xs text-stone-500')}>{i + 1}</td>
+                  <td className={td}>
+                    <Input
+                      key={sec.name}
+                      defaultValue={sec.name}
+                      aria-label={`Name of ${sec.name}`}
+                      disabled={busy}
+                      className="h-8 min-h-8 border-transparent bg-transparent hover:border-stone-300 focus-visible:bg-white"
+                      onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+                      onBlur={(e) => {
+                        const next = e.target.value.trim()
+                        if (!next) {
+                          e.target.value = sec.name
+                          return
+                        }
+                        if (next !== sec.name) void onRename(sec, next)
+                      }}
+                    />
+                  </td>
+                  <td className={cn(td, 'text-center')}>{sec.columns.length}</td>
+                  <td className={cn(td, 'text-center')}>
+                    <button type="button" className={cn(iconBtn, 'text-red-700 hover:bg-red-50')} disabled={busy} title="Delete Section" aria-label={`Delete ${sec.name}`} onClick={() => void onDelete(sec)}>
+                      <Trash2 size={14} />
+                    </button>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {sections.map((sec, i) => (
-                  <tr key={sec.id} className={i % 2 ? 'bg-[#f7f3eb]' : 'bg-[#fffcf7]'}>
-                    <td className={cn(td, 'text-center text-xs text-stone-500')}>{i + 1}</td>
-                    <td className={td}>
-                      <Input
-                        key={sec.name}
-                        defaultValue={sec.name}
-                        aria-label={`Name of ${sec.name}`}
-                        disabled={busy}
-                        className="h-8 min-h-8 border-transparent bg-transparent hover:border-stone-300 focus-visible:bg-white"
-                        onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
-                        onBlur={(e) => {
-                          const next = e.target.value.trim()
-                          if (!next) {
-                            e.target.value = sec.name
-                            return
-                          }
-                          if (next !== sec.name) void onRename(sec, next)
-                        }}
-                      />
-                    </td>
-                    <td className={cn(td, 'text-center text-xs')}>{SECTION_KIND_LABEL[sec.kind] ?? sec.kind}</td>
-                    <td className={cn(td, 'text-center')}>{sec.columns.length}</td>
-                    <td className={cn(td, 'text-center')}>
-                      <button type="button" className={cn(iconBtn, 'text-red-700 hover:bg-red-50')} disabled={busy} title="Delete Section" aria-label={`Delete ${sec.name}`} onClick={() => void onDelete(sec)}>
-                        <Trash2 size={14} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+              ))}
+            </tbody>
+          </table>
         </div>
         <div className="flex justify-end border-t border-stone-200 bg-stone-50 px-4 py-2.5">
           <Button type="button" className={cn(limsPrimaryBtnClass, 'h-9 min-h-9')} onClick={onClose}>Done</Button>
