@@ -256,9 +256,9 @@ th * {
 .bis-projects-table-view th,
 .bis-projects-table-view td { overflow-wrap: anywhere; }
 .bis-projects-action-column {
-  width: 12rem;
-  min-width: 12rem;
-  max-width: 12rem;
+  width: 15rem;
+  min-width: 15rem;
+  max-width: 15rem;
 }
 
 @container bis-projects (max-width: 1300px) {
@@ -287,9 +287,9 @@ th * {
   }
 
   .bis-projects-action-column {
-    width: 8.75rem !important;
-    min-width: 8.75rem !important;
-    max-width: 8.75rem !important;
+    width: 9.5rem !important;
+    min-width: 9.5rem !important;
+    max-width: 9.5rem !important;
   }
 
   .bis-projects-footer-track button,
