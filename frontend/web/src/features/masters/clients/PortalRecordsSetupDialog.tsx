@@ -546,9 +546,9 @@ export function PortalRecordsSetupDialog({
                               <tr>
                                 <th className={cn(th, 'w-10 text-center')}>#</th>
                                 <th className={th}>Column</th>
-                                <th className={th}>Type</th>
-                                <th className={th}>Unit / Limits</th>
-                                <th className={th}>Details</th>
+                                <th className={cn(th, 'text-center')}>Type</th>
+                                <th className={cn(th, 'text-center')}>Unit / Limits</th>
+                                <th className={cn(th, 'text-center')}>Details</th>
                                 <th className={cn(th, 'w-[1%] text-center')}>Action</th>
                               </tr>
                             </thead>
@@ -568,16 +568,16 @@ export function PortalRecordsSetupDialog({
                                       <span className="font-medium">{c.label}</span>{c.required ? <span className="text-red-600"> *</span> : null}
                                       <span className="block text-[11px] text-stone-500"><code>{c.key}</code></span>
                                     </td>
-                                    <td className={cn(td, 'text-xs')}>{COLUMN_TYPE_LABEL[c.col_type]}</td>
-                                    <td className={cn(td, 'text-xs')}>{limitsText(c) || c.unit || '—'}</td>
-                                    <td className={cn(td, 'max-w-[16rem] truncate text-xs text-stone-600')}>
+                                    <td className={cn(td, 'text-center text-xs')}>{COLUMN_TYPE_LABEL[c.col_type]}</td>
+                                    <td className={cn(td, 'text-center text-xs')}>{limitsText(c) || c.unit || '—'}</td>
+                                    <td className={cn(td, 'max-w-[16rem] truncate text-center text-xs text-stone-600')}>
                                       {c.col_type === 'formula' ? <code>= {c.config.formula}</code>
                                         : c.col_type === 'select' ? (c.config.options ?? []).join(', ')
                                           : c.col_type === 'link' ? `→ ${sections.find((s) => s.id === c.config.section_id)?.name ?? '?'}`
                                             : '—'}
                                     </td>
                                     <td className={cn(td, 'whitespace-nowrap')}>
-                                      <span className="flex gap-1">
+                                      <span className="flex justify-center gap-1">
                                         <button type="button" className={iconBtn} title="Move Up" aria-label="Move Up" disabled={busy != null || i === 0} onClick={() => void run('mv', () => moveColumn(active.columns, i, -1))}><ArrowUp size={13} /></button>
                                         <button type="button" className={iconBtn} title="Move Down" aria-label="Move Down" disabled={busy != null || i === active.columns.length - 1} onClick={() => void run('mv', () => moveColumn(active.columns, i, 1))}><ArrowDown size={13} /></button>
                                         <button type="button" className={iconBtn} title="Edit" aria-label={`Edit ${c.label}`} onClick={() => setEditing(draftFrom(c))}><Pencil size={13} /></button>
