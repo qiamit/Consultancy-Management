@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowDown, ArrowUp, Calculator, Download, Save, FlaskConical, Loader2, Pencil, Plus, Power, Sparkles, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -10,7 +10,7 @@ import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { BisModuleImportDialog } from '@/features/bis/projects/BisModuleImportDialog'
 import { fetchBisProjectById } from '@/features/bis/projects/bisProjectsApi'
 import type { BisProjectRow } from '@/features/bis/projects/types'
-import { FORMULA_FUNCTIONS, formulaProblem } from '@/lib/recordFormula'
+import { formulaProblem } from '@/lib/recordFormula'
 import { limsDarkBarBtnClass, limsDarkBarGlowStyle, limsDialogClass, limsOutlineBtnClass, limsPrimaryBtnClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import {
@@ -42,6 +42,7 @@ import {
   type RecordsService,
 } from './portalRecordsAdminApi'
 import { CalendarDateField } from './CalendarDateField'
+import { FormulaBuilder } from './FormulaBuilder'
 
 const th = 'border border-stone-700 bg-stone-800 px-2 py-1.5 text-left text-[11px] font-bold uppercase tracking-[0.06em] text-amber-200'
 const td = 'border border-stone-200 px-2 py-1.5 align-middle text-sm text-stone-800'
@@ -116,19 +117,6 @@ function ColumnEditor({
     ...linkedGroups.flatMap((g) => g.target.columns.filter((c) => c.col_type !== 'link').map((c) => `${g.link.key}.${c.key}`)),
   ]
   const problem = d.col_type === 'formula' ? formulaProblem(d.formula, formulaKeys) : ''
-  const formulaBox = useRef<HTMLTextAreaElement>(null)
-  // Puts text at the cursor of the formula box (or at the end) and keeps the cursor after it.
-  const insert = (text: string) => {
-    const box = formulaBox.current
-    const start = box?.selectionStart ?? d.formula.length
-    const end = box?.selectionEnd ?? d.formula.length
-    const next = d.formula.slice(0, start) + text + d.formula.slice(end)
-    set('formula', next)
-    requestAnimationFrame(() => {
-      box?.focus()
-      box?.setSelectionRange(start + text.length, start + text.length)
-    })
-  }
   const hasLimits = d.col_type === 'spec' || d.col_type === 'formula'
 
   const save = async () => {
@@ -182,7 +170,13 @@ function ColumnEditor({
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="grid gap-3 sm:col-span-2 sm:grid-cols-[minmax(0,1.3fr)_minmax(0,1.3fr)_minmax(0,0.8fr)]">
             <div className="space-y-1">
-              <Label htmlFor="col-label">Column Name</Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="col-label">Column Name</Label>
+                <label className="flex items-center gap-1 text-xs font-medium text-stone-700" title="Customer must fill it">
+                  <input type="checkbox" className="h-3.5 w-3.5" checked={d.required} onChange={(e) => set('required', e.target.checked)} />
+                  Required
+                </label>
+              </div>
               <Input id="col-label" className="h-9" value={d.label} placeholder="Tensile Strength" onChange={(e) => set('label', e.target.value)} />
               <p className="text-[11px] text-stone-500">Formula Name: <code className="bg-stone-100 px-1">{key}</code></p>
             </div>
@@ -199,10 +193,7 @@ function ColumnEditor({
                   className={cn('inline-flex h-9 w-9 shrink-0 items-center justify-center border', d.col_type === 'formula' ? 'border-amber-700 bg-amber-700 text-white' : 'border-stone-400 bg-white text-amber-800 hover:bg-amber-50')}
                   title="Formula Builder"
                   aria-label="Formula Builder"
-                  onClick={() => {
-                    set('col_type', 'formula')
-                    requestAnimationFrame(() => formulaBox.current?.focus())
-                  }}
+                  onClick={() => set('col_type', 'formula')}
                 >
                   <Calculator size={16} aria-hidden />
                 </button>
@@ -233,61 +224,16 @@ function ColumnEditor({
               </div>
             ) : null}
             {d.col_type === 'formula' ? (
-              <div className="space-y-2 border border-amber-300 bg-amber-50/40 p-3 sm:col-span-2">
-                <div className="flex items-center gap-2">
-                  <Calculator size={15} className="text-amber-800" aria-hidden />
-                  <Label htmlFor="col-formula" className="text-sm font-semibold">Formula Builder</Label>
-                  <span className={cn('ml-auto text-[11px] font-medium', problem ? 'text-red-700' : 'text-emerald-700')}>{problem || 'Formula OK'}</span>
-                </div>
-                <textarea
-                  id="col-formula"
-                  ref={formulaBox}
-                  rows={2}
-                  className="w-full border border-stone-400 bg-white p-2 font-mono text-sm"
-                  value={d.formula}
-                  placeholder="ROUND(load * 1000 / area, 1)"
-                  onChange={(e) => set('formula', e.target.value)}
-                />
-                <div className="space-y-1.5">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-600">Columns of {section.name}</p>
-                  <div className="flex flex-wrap gap-1">
-                    {ownColumns.filter((c) => c.col_type !== 'link').length ? ownColumns.filter((c) => c.col_type !== 'link').map((c) => (
-                      <button key={c.id} type="button" className="inline-flex items-center gap-1 border border-stone-300 bg-white px-1.5 py-0.5 text-xs text-stone-800 hover:border-amber-600 hover:bg-amber-50" title={`Insert ${c.key}`} onClick={() => insert(c.key)}>
-                        {c.label} <code className="text-[10px] text-stone-500">{c.key}</code>
-                      </button>
-                    )) : <span className="text-xs text-stone-500">No other column yet.</span>}
-                  </div>
-                  {linkedGroups.map((g) => (
-                    <div key={g.link.id} className="space-y-1">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-600">From {g.target.name} (Linked Through {g.link.label})</p>
-                      <div className="flex flex-wrap gap-1">
-                        {g.target.columns.filter((c) => c.col_type !== 'link').map((c) => (
-                          <button key={c.id} type="button" className="inline-flex items-center gap-1 border border-stone-300 bg-white px-1.5 py-0.5 text-xs text-stone-800 hover:border-amber-600 hover:bg-amber-50" title={`Insert ${g.link.key}.${c.key} (one value per linked entry; use SUM, AVG, … for several)`} onClick={() => insert(`${g.link.key}.${c.key}`)}>
-                            {c.label} <code className="text-[10px] text-stone-500">{g.link.key}.{c.key}</code>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                  <p className="pt-1 text-[11px] font-semibold uppercase tracking-wide text-stone-600">Operators</p>
-                  <div className="flex flex-wrap gap-1">
-                    {[['+', '+'], ['−', '-'], ['×', '*'], ['÷', '/'], ['^', '^'], ['(', '('], [')', ')'], [',', ', '], ['>', ' > '], ['<', ' < '], ['=', ' = '], ['≥', ' >= '], ['≤', ' <= ']].map(([label, text]) => (
-                      <button key={label} type="button" className="inline-flex h-7 min-w-7 items-center justify-center border border-stone-400 bg-white px-1.5 font-mono text-sm text-stone-900 hover:bg-amber-50" onClick={() => insert(text!)}>{label}</button>
-                    ))}
-                  </div>
-                  <p className="pt-1 text-[11px] font-semibold uppercase tracking-wide text-stone-600">Functions</p>
-                  <div className="flex flex-wrap gap-1">
-                    {FORMULA_FUNCTIONS.map((f) => (
-                      <button key={f.name} type="button" className="inline-flex h-7 items-center border border-amber-600/60 bg-white px-1.5 font-mono text-xs font-semibold text-amber-900 hover:bg-amber-50" title={f.help} onClick={() => insert(`${f.name}(`)}>{f.name}</button>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex flex-wrap items-center gap-2 border-t border-amber-200 pt-2">
-                  <Label htmlFor="col-decimals" className="shrink-0">Decimals</Label>
-                  <Input id="col-decimals" inputMode="numeric" className="h-8 w-20" value={d.decimals} onChange={(e) => set('decimals', e.target.value.replace(/\D/g, ''))} />
-                  <p className="text-[11px] text-stone-500">Works only inside this licence. A copy made with Import keeps its own formulas and links.</p>
-                </div>
-              </div>
+              <FormulaBuilder
+                formula={d.formula}
+                onFormula={(v) => set('formula', v)}
+                decimals={d.decimals}
+                onDecimals={(v) => set('decimals', v)}
+                problem={problem}
+                section={section}
+                sections={sections}
+                ownColumns={ownColumns}
+              />
             ) : null}
             {d.col_type === 'link' ? (
               <div className="space-y-1 sm:col-span-2">
@@ -301,10 +247,6 @@ function ColumnEditor({
                 <p className="text-[11px] text-stone-500">The customer picks one or more entries of that section (e.g. the raw material lots used in a batch). This builds the traceability.</p>
               </div>
             ) : null}
-            <label className="flex items-center gap-2 text-sm text-stone-800 sm:col-span-2">
-              <input type="checkbox" className="h-4 w-4" checked={d.required} onChange={(e) => set('required', e.target.checked)} />
-              Required (customer must fill it)
-            </label>
           </div>
         </div>
         <div className="flex justify-end gap-2 border-t border-stone-200 bg-stone-50 px-4 py-3">
