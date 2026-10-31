@@ -287,9 +287,9 @@ th * {
   }
 
   .bis-projects-action-column {
-    width: 9.5rem !important;
-    min-width: 9.5rem !important;
-    max-width: 9.5rem !important;
+    width: 10rem !important;
+    min-width: 10rem !important;
+    max-width: 10rem !important;
   }
 
   .bis-projects-footer-track button,
@@ -350,9 +350,9 @@ th * {
   }
 
   .bis-projects-action-column {
-    width: 5.75rem !important;
-    min-width: 5.75rem !important;
-    max-width: 5.75rem !important;
+    width: 9rem !important;
+    min-width: 9rem !important;
+    max-width: 9rem !important;
     padding-inline: 0.25rem !important;
   }
 }
