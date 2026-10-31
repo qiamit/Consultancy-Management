@@ -514,12 +514,7 @@ export function CustomerPortalDialog({
             </div>
           ) : (
             <div className="mx-auto max-w-[100rem] space-y-2">
-              <div className="flex flex-wrap items-end justify-between gap-2">
-                <h3 className="text-sm font-bold uppercase tracking-[0.12em] text-stone-800">Licences &amp; Records</h3>
-                <p className="text-[11px] text-stone-500">
-                  Records: paid service per licence, {TRIAL_DAYS}-day free trial. Q Engineering designs the formats; customers only enter data.
-                </p>
-              </div>
+              <h3 className="text-sm font-bold uppercase tracking-[0.12em] text-stone-800">Licences &amp; Records</h3>
               <div className="overflow-x-auto border border-stone-300 bg-white shadow-sm">
                 <table className="w-full min-w-[980px] border-collapse font-jakarta">
                   <thead>
@@ -603,9 +598,6 @@ export function CustomerPortalDialog({
                   </tbody>
                 </table>
               </div>
-              <p className="text-[11px] text-stone-500">
-                Documents: ticked files appear under Documents in the customer's portal. Logins: open Customer Logins at the top to invite, switch off or choose licences.
-              </p>
             </div>
           )}
         </div>
