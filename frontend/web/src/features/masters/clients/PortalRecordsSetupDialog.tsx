@@ -28,6 +28,7 @@ import {
   createStandardSections,
   deleteColumn,
   makeRoomForColumn,
+  moveSection,
   deleteSection,
   getRecordsService,
   listSections,
@@ -325,10 +326,14 @@ function ManageSectionsDialog({
   onRename,
   onDelete,
   onImport,
+  onMove,
+  onShow,
 }: {
   sections: AdminSection[]
   busy: boolean
   onImport: () => void
+  onMove: (index: number, dir: -1 | 1) => void
+  onShow: (section: AdminSection, show: boolean) => void
   onClose: () => void
   onAdd: (kind: string, name: string) => Promise<void>
   onRename: (section: AdminSection, name: string) => Promise<void>
@@ -344,7 +349,7 @@ function ManageSectionsDialog({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
         aria-describedby={undefined}
-        className={cn(limsDialogClass, '[&>button]:top-[10px] sm:[&>button]:top-[14px]', 'flex max-h-[85dvh] w-[min(34rem,calc(100vw-1rem))] max-w-none flex-col gap-0 overflow-hidden bg-white p-0')}
+        className={cn(limsDialogClass, '[&>button]:top-[10px] sm:[&>button]:top-[14px]', 'flex max-h-[85dvh] w-[min(42rem,calc(100vw-1rem))] max-w-none flex-col gap-0 overflow-hidden bg-white p-0')}
       >
         {/* 56px bar: the import button sits beside the dialog's Close button, same size and line. */}
         <div className="flex h-14 shrink-0 items-center bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4">
@@ -362,7 +367,8 @@ function ManageSectionsDialog({
                 <th className={cn(th, 'w-12 text-center')}>#</th>
                 <th className={th}>Name</th>
                 <th className={cn(th, 'w-[5.5rem] text-center')}>Columns</th>
-                <th className={cn(th, 'w-[4rem] text-center')}>Action</th>
+                <th className={cn(th, 'w-[6.5rem] text-center')}>Show to Customer</th>
+                <th className={cn(th, 'w-[7.5rem] text-center')}>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -378,6 +384,7 @@ function ManageSectionsDialog({
                     onKeyDown={(e) => e.key === 'Enter' && add()}
                   />
                 </td>
+                <td className={cn(td, 'text-center text-stone-400')}>—</td>
                 <td className={cn(td, 'text-center text-stone-400')}>—</td>
                 <td className={cn(td, 'text-center')}>
                   <button type="button" className={cn(iconBtn, 'border-amber-600 bg-amber-600 text-white hover:bg-amber-700')} disabled={busy || !name.trim()} title="Add Section" aria-label="Add Section" onClick={add}>
@@ -408,9 +415,27 @@ function ManageSectionsDialog({
                   </td>
                   <td className={cn(td, 'text-center')}>{sec.columns.length}</td>
                   <td className={cn(td, 'text-center')}>
-                    <button type="button" className={cn(iconBtn, 'text-red-700 hover:bg-red-50')} disabled={busy} title="Delete Section" aria-label={`Delete ${sec.name}`} onClick={() => void onDelete(sec)}>
-                      <Trash2 size={14} />
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={!sec.hidden}
+                      aria-label={`Show ${sec.name} to Customer`}
+                      title={sec.hidden ? 'Hidden from the customer' : 'Shown to the customer'}
+                      disabled={busy}
+                      onClick={() => onShow(sec, Boolean(sec.hidden))}
+                      className={cn('relative inline-flex h-6 w-11 items-center rounded-full border transition-colors disabled:opacity-60', sec.hidden ? 'border-red-700 bg-red-500' : 'border-emerald-700 bg-emerald-600')}
+                    >
+                      <span className={cn('inline-block h-5 w-5 rounded-full bg-white shadow transition-transform', sec.hidden ? 'translate-x-0.5' : 'translate-x-5')} />
                     </button>
+                  </td>
+                  <td className={cn(td, 'text-center')}>
+                    <span className="flex justify-center gap-1">
+                      <button type="button" className={iconBtn} disabled={busy || i === 0} title="Move Up" aria-label={`Move ${sec.name} Up`} onClick={() => onMove(i, -1)}><ArrowUp size={13} /></button>
+                      <button type="button" className={iconBtn} disabled={busy || i === sections.length - 1} title="Move Down" aria-label={`Move ${sec.name} Down`} onClick={() => onMove(i, 1)}><ArrowDown size={13} /></button>
+                      <button type="button" className={cn(iconBtn, 'text-red-700 hover:bg-red-50')} disabled={busy} title="Delete Section" aria-label={`Delete ${sec.name}`} onClick={() => void onDelete(sec)}>
+                        <Trash2 size={14} />
+                      </button>
+                    </span>
                   </td>
                 </tr>
               ))}
@@ -515,6 +540,8 @@ export function PortalRecordsSetupDialog({
               .then((row) => (row ? setImportTarget(row) : toast.error('Licence not found')))
               .catch((err: unknown) => toast.error(errText(err, 'Could not open the import')))}
             onRename={(sec, name) => run('rename', () => updateSection(sec.id, { name }), 'Section Renamed')}
+            onMove={(index, dir) => void run('move-section', () => moveSection(sections, index, dir))}
+            onShow={(sec, show) => void run('show-section', () => updateSection(sec.id, { hidden: !show }), show ? 'Shown to Customer' : 'Hidden from Customer')}
             onDelete={async (sec) => {
               if (!(await confirm(`Delete the section "${sec.name}" with all its columns and the customer's entries in it?`, { title: 'Delete Section', confirmLabel: 'Delete', destructive: true }))) return
               await run('del-section', () => deleteSection(sec.id), 'Section Deleted')

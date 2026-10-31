@@ -19,7 +19,7 @@ export type RecordsService = {
   notes: string | null
 }
 
-export type AdminSection = { id: string; project_id: string; kind: string; name: string; sort_order: number; columns: AdminColumn[] }
+export type AdminSection = { id: string; project_id: string; kind: string; name: string; sort_order: number; hidden?: boolean; columns: AdminColumn[] }
 export type AdminColumn = RecordColumn & { section_id: string; sort_order: number }
 
 export async function getRecordsService(projectId: string): Promise<RecordsService | null> {
@@ -71,7 +71,7 @@ export async function setPaidUntil(projectId: string, paidUntil: string | null):
 export async function listSections(projectId: string): Promise<AdminSection[]> {
   const { data, error } = await supabase
     .from('portal_rec_sections')
-    .select('id, project_id, kind, name, sort_order, columns:portal_rec_columns(*)')
+    .select('*, columns:portal_rec_columns(*)')
     .eq('project_id', projectId)
     .order('sort_order')
   if (error) throw error
@@ -91,9 +91,22 @@ export async function createSection(projectId: string, kind: string, name: strin
   return String(data.id)
 }
 
-export async function updateSection(id: string, patch: { name?: string; sort_order?: number }): Promise<void> {
+export async function updateSection(id: string, patch: { name?: string; sort_order?: number; hidden?: boolean }): Promise<void> {
   const { error } = await supabase.from('portal_rec_sections').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id)
   if (error) throw error
+}
+
+/** Moves a section one place up or down; all sections get the order 0, 1, 2… */
+export async function moveSection(sections: AdminSection[], index: number, dir: -1 | 1): Promise<void> {
+  const j = index + dir
+  if (j < 0 || j >= sections.length) return
+  const list = [...sections]
+  ;[list[index], list[j]] = [list[j]!, list[index]!]
+  const results = await Promise.all(
+    list.map((s, i) => (s.sort_order === i ? null : supabase.from('portal_rec_sections').update({ sort_order: i }).eq('id', s.id))),
+  )
+  const failed = results.find((r) => r?.error)
+  if (failed?.error) throw failed.error
 }
 
 export async function deleteSection(id: string): Promise<void> {
