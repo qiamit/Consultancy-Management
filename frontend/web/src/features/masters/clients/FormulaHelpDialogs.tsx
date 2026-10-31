@@ -103,7 +103,7 @@ export function OperatorsDialog({ open, onClose, onPick }: { open: boolean; onCl
         <table className="w-full min-w-[36rem] border-collapse font-jakarta">
           <thead>
             <tr>
-              <th className={cn(th, 'w-[6rem]')}>Operator</th>
+              <th className={cn(th, 'w-[6rem] text-left')}>Operator</th>
               <th className={cn(th, 'w-[8rem]')}>Type</th>
               <th className={cn(th, 'w-[10rem]')}>Example</th>
               <th className={th}>What It Does</th>
@@ -120,7 +120,7 @@ export function OperatorsDialog({ open, onClose, onPick }: { open: boolean; onCl
                   onClose()
                 }}
               >
-                <td className={cn(td, 'text-center font-mono text-base font-bold text-amber-900')}>{o.symbol}</td>
+                <td className={cn(td, 'pl-3 font-mono text-base font-bold text-amber-900')}>{o.symbol}</td>
                 <td className={cn(td, 'text-center text-xs')}>{o.category}</td>
                 <td className={cn(td, 'text-center font-mono text-xs')}>{o.example}</td>
                 <td className={td}>{o.help}</td>
