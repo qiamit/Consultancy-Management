@@ -1,5 +1,9 @@
+import QRCode from 'qrcode'
 import { supabase } from '@/lib/supabaseClient'
 import { todayLocalIso, addDaysIso } from '@/lib/localDate'
+import { sendAppEmail } from '@/lib/sendAppEmail'
+import { emptyQuotationForm } from '@/features/finance/sale/quotation/types'
+import { fetchNextSaleDocumentNumber, saveSaleDocument } from '@/features/finance/sale/shared/saleDocumentsApi'
 import { formatDisplayDate } from '@/features/bis/projects/types'
 import { columnKeyFrom, type RecordColumn, type RecordColumnType } from '@/features/portal/recordLogic'
 
@@ -143,6 +147,241 @@ export async function moveColumn(columns: AdminColumn[], index: number, dir: -1 
   ])
   const failed = results.find((r) => r.error)
   if (failed?.error) throw failed.error
+}
+
+// ── Payments ─────────────────────────────────────────────────────────────────────────────────────────
+
+export type PaymentSettings = {
+  rate: number | null
+  payee: string
+  upi: string
+  bankName: string
+  branchName: string
+  accountNumber: string
+  ifsc: string
+}
+
+export type ServicePayment = {
+  id: string
+  kind: 'request' | 'payment'
+  amount: number
+  paid_on: string | null
+  period_from: string | null
+  period_to: string | null
+  mode: string | null
+  reference: string | null
+  receipt_id: string | null
+  sent_to: string | null
+  created_at: string
+  receipt_number?: string | null
+}
+
+export const PAYMENT_MODES = ['UPI', 'Bank', 'Cheque', 'Cash', 'Other'] as const
+
+/** Rate and the company's bank / UPI details, all from Lab Settings. */
+export async function getPaymentSettings(): Promise<PaymentSettings> {
+  const { data, error } = await supabase
+    .from('lab_settings')
+    .select('lab_name, bank_name, branch_name, account_number, ifsc, upi, portal_records_yearly_rate')
+    .limit(1)
+    .maybeSingle()
+  if (error) throw error
+  const row = (data ?? {}) as Record<string, unknown>
+  const text = (v: unknown) => String(v ?? '').trim()
+  const rate = row.portal_records_yearly_rate == null ? null : Number(row.portal_records_yearly_rate)
+  return {
+    rate: rate != null && Number.isFinite(rate) ? rate : null,
+    payee: text(row.lab_name) || 'Quality Engineering',
+    upi: text(row.upi),
+    bankName: text(row.bank_name),
+    branchName: text(row.branch_name),
+    accountNumber: text(row.account_number),
+    ifsc: text(row.ifsc),
+  }
+}
+
+export async function listServicePayments(projectId: string): Promise<ServicePayment[]> {
+  const { data, error } = await supabase
+    .from('portal_service_payments')
+    .select('id, kind, amount, paid_on, period_from, period_to, mode, reference, receipt_id, sent_to, created_at, receipt:transactions(receipt_number)')
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return ((data ?? []) as unknown as Array<ServicePayment & { receipt?: { receipt_number?: string | null } | null }>).map(({ receipt, ...p }) => ({
+    ...p,
+    amount: Number(p.amount),
+    receipt_number: receipt?.receipt_number ?? null,
+  }))
+}
+
+/** The next paid year: from the day after a running paid period (or today) for one year. */
+export function nextPaidPeriod(service: RecordsService | null, today = todayLocalIso()): { from: string; to: string } {
+  const from = service?.paid_until && service.paid_until >= today ? addDaysIso(service.paid_until, 1) : today
+  const [y, m, d] = from.split('-').map(Number)
+  const end = new Date(Date.UTC(y! + 1, m! - 1, d!))
+  end.setUTCDate(end.getUTCDate() - 1)
+  return { from, to: end.toISOString().slice(0, 10) }
+}
+
+/** Starts the 30-day free trial (only once per licence). */
+export async function startTrial(projectId: string, current: RecordsService | null): Promise<void> {
+  if (current?.trial_ends) throw new Error('The free trial of this licence was already used')
+  await setRecordsEnabled(projectId, true, current)
+}
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
+}
+
+function rupees(amount: number) {
+  return `₹ ${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
+function dmy(iso: string) {
+  const [y, m, d] = iso.split('-')
+  return `${d}/${m}/${y}`
+}
+
+/** Emails the customer the amount for the next paid year with a UPI link, a UPI QR (with the amount) and bank details. */
+export async function sendPaymentRequest(input: {
+  projectId: string
+  licence: string
+  company: string
+  to: string[]
+  amount: number
+  period: { from: string; to: string }
+  settings: PaymentSettings
+}): Promise<void> {
+  const { settings, amount, period } = input
+  if (input.to.length === 0) throw new Error('Select at Least One Email')
+  if (!(amount > 0)) throw new Error('Enter the Amount')
+  if (!settings.upi && !settings.accountNumber) throw new Error('Add the UPI ID or Bank Account in Lab Settings → Bank Details First')
+  const note = `Records Service ${input.licence}`.slice(0, 60)
+  const upiLink = settings.upi
+    ? `upi://pay?pa=${encodeURIComponent(settings.upi)}&pn=${encodeURIComponent(settings.payee)}&am=${amount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(note)}`
+    : ''
+  const attachments = upiLink
+    ? [{ filename: 'UPI-Payment-QR.png', content: (await QRCode.toDataURL(upiLink, { width: 480, margin: 2 })).split(',')[1]!, contentType: 'image/png' }]
+    : []
+  const row = (label: string, value: string) =>
+    value ? `<tr><td style="padding:6px 10px;border:1px solid #e7e5e4;color:#57534e;">${label}</td><td style="padding:6px 10px;border:1px solid #e7e5e4;font-weight:600;">${escapeHtml(value)}</td></tr>` : ''
+  const html = `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;line-height:1.55;color:#292524;max-width:560px;">
+<p>Dear Sir/Madam,</p>
+<p>Please pay for the <strong>Customer Portal Records Service</strong> of licence <strong>${escapeHtml(input.licence)}</strong> (${escapeHtml(input.company)}).</p>
+<table style="border-collapse:collapse;margin:12px 0;">
+${row('Amount', rupees(amount))}
+${row('Period', `${dmy(period.from)} to ${dmy(period.to)}`)}
+</table>
+${upiLink ? `<p><a href="${upiLink}" style="display:inline-block;background:#b45309;color:#fff;text-decoration:none;padding:10px 18px;font-weight:600;">Pay ${rupees(amount)} by UPI</a></p>
+<p style="color:#57534e;">The button opens a UPI app on the phone. On a computer, scan the attached QR (UPI-Payment-QR.png) with GPay, PhonePe, Paytm or a bank app. UPI ID: <strong>${escapeHtml(settings.upi)}</strong></p>` : ''}
+${settings.accountNumber ? `<p style="margin-top:16px;font-weight:600;">Or Pay by Bank Transfer (NEFT / RTGS / IMPS)</p>
+<table style="border-collapse:collapse;">
+${row('Account Name', settings.payee)}
+${row('Account No', settings.accountNumber)}
+${row('IFSC', settings.ifsc)}
+${row('Bank', [settings.bankName, settings.branchName].filter(Boolean).join(', '))}
+</table>` : ''}
+<p style="margin-top:16px;">After paying, please reply to this email with the transaction / UTR number.</p>
+<p>Thanking you,<br/>${escapeHtml(settings.payee)}</p>
+</div>`
+  await sendAppEmail({
+    to: input.to,
+    subject: `Payment for Records Service: ${input.licence}`,
+    html,
+    text: `Please pay ${rupees(amount)} for the Records Service of ${input.licence} (${dmy(period.from)} to ${dmy(period.to)}).${settings.upi ? ` UPI ID: ${settings.upi}.` : ''}`,
+    attachments,
+  })
+  const { error } = await supabase.from('portal_service_payments').insert({
+    project_id: input.projectId,
+    kind: 'request',
+    amount,
+    period_from: period.from,
+    period_to: period.to,
+    sent_to: input.to.join(', '),
+  })
+  if (error) throw error
+}
+
+/**
+ * Records a received payment: makes the Payment Receipt in Finance, switches the service on with the new
+ * paid date, and keeps the payment in the licence's history. Returns the receipt number.
+ */
+export async function recordPayment(input: {
+  projectId: string
+  clientId: string
+  licence: string
+  amount: number
+  paidOn: string
+  mode: (typeof PAYMENT_MODES)[number]
+  reference: string
+  period: { from: string; to: string }
+  current: RecordsService | null
+}): Promise<string> {
+  const { amount, period } = input
+  if (!(amount > 0)) throw new Error('Enter the Amount Received')
+  if (!input.paidOn) throw new Error('Enter the Date Received')
+  if (!period.to || period.to < period.from) throw new Error('Paid Till must be after the start of the period')
+
+  const { data: client, error: clientError } = await supabase
+    .from('clients')
+    .select('company_name, email, mobile, address, gst_number')
+    .eq('id', input.clientId)
+    .single()
+  if (clientError) throw clientError
+
+  // Same numbering as Finance → Payment Receipt (PR-<year>-0001 unless a series is set up).
+  const number = await fetchNextSaleDocumentNumber('paymentReceipt', `PR-${new Date().getFullYear()}-`)
+  const form = emptyQuotationForm(number)
+  form.quotationDate = input.paidOn
+  form.clientId = input.clientId
+  form.clientName = String(client.company_name ?? '')
+  form.contactEmail = String(client.email ?? '')
+  form.contactMobile = String(client.mobile ?? '')
+  form.clientAddress = String(client.address ?? '')
+  form.clientGstNumber = String(client.gst_number ?? '')
+  form.paymentAmount = String(amount)
+  form.paymentMethod = input.mode
+  form.subject = `Customer Portal Records Service: ${input.licence} (${dmy(period.from)} to ${dmy(period.to)})`
+  form.remarks = input.reference.trim() ? `Ref / UTR: ${input.reference.trim()}` : ''
+  await saveSaleDocument('paymentReceipt', form, null)
+
+  const { data: receipt } = await supabase
+    .from('transactions')
+    .select('id')
+    .eq('receipt_number', number)
+    .eq('payment_flow', 'in')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  const { data: auth } = await supabase.auth.getUser()
+  const { error: svcError } = await supabase.from('portal_services').upsert(
+    {
+      project_id: input.projectId,
+      records_enabled: true,
+      trial_ends: input.current?.trial_ends ?? null,
+      paid_until: period.to,
+      enabled_at: input.current?.records_enabled ? undefined : new Date().toISOString(),
+      enabled_by: input.current?.records_enabled ? undefined : auth.user?.id ?? null,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'project_id' },
+  )
+  if (svcError) throw svcError
+
+  const { error } = await supabase.from('portal_service_payments').insert({
+    project_id: input.projectId,
+    kind: 'payment',
+    amount,
+    paid_on: input.paidOn,
+    period_from: period.from,
+    period_to: period.to,
+    mode: input.mode,
+    reference: input.reference.trim() || null,
+    receipt_id: (receipt as { id?: string } | null)?.id ?? null,
+  })
+  if (error) throw error
+  return number
 }
 
 // ── Standard formats ─────────────────────────────────────────────────────────────────────────────────

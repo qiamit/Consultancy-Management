@@ -33,7 +33,8 @@ import {
   type PortalLicenceFile,
   type PortalLogin,
 } from './customerPortalAdminApi'
-import { TRIAL_DAYS, listRecordsServices, serviceStatus, setPaidUntil, setRecordsEnabled, type RecordsService } from './portalRecordsAdminApi'
+import { listRecordsServices, serviceStatus, setPaidUntil, type RecordsService } from './portalRecordsAdminApi'
+import { PortalRecordsServiceDialog } from './PortalRecordsServiceDialog'
 import { PortalRecordsSetupDialog } from './PortalRecordsSetupDialog'
 
 const checkCls = 'h-4 w-4 shrink-0 rounded-none border-stone-500 text-amber-700'
@@ -440,7 +441,6 @@ export function CustomerPortalDialog({
   client: { id: string; company_name: string } | null
   onOpenChange: (open: boolean) => void
 }) {
-  const [confirm, confirmDialog] = useConfirmDialog()
   const [licences, setLicences] = useState<PortalClientLicence[]>([])
   const [logins, setLogins] = useState<PortalLogin[]>([])
   const [services, setServices] = useState<Map<string, RecordsService>>(new Map())
@@ -450,6 +450,7 @@ export function CustomerPortalDialog({
   const [loginsOpen, setLoginsOpen] = useState(false)
   const [docsFor, setDocsFor] = useState<string | null>(null)
   const [recordsFor, setRecordsFor] = useState<{ id: string; label: string } | null>(null)
+  const [serviceFor, setServiceFor] = useState<{ id: string; label: string } | null>(null)
 
   const clientId = client?.id ?? ''
   const today = todayLocalIso()
@@ -508,18 +509,6 @@ export function CustomerPortalDialog({
     }
   }
 
-  const switchRecords = async (l: PortalClientLicence, service: RecordsService | null) => {
-    const on = !service?.records_enabled
-    const [cml] = splitLabel(l.label)
-    const message = on
-      ? service?.trial_ends
-        ? `Switch the records service on again for ${cml}? The earlier trial and paid dates are kept.`
-        : `Switch the records service on for ${cml}? The ${TRIAL_DAYS}-day free trial starts today.`
-      : `Switch the records service off for ${cml}? The customer no longer sees the record sections; nothing is deleted.`
-    if (!(await confirm(message, { title: on ? 'Switch On Records' : 'Switch Off Records', confirmLabel: on ? 'Switch On' : 'Switch Off', destructive: !on }))) return
-    await run(`svc:${l.id}`, () => setRecordsEnabled(l.id, on, service), on ? 'Records Switched On' : 'Records Switched Off')
-  }
-
   const activeLogins = logins.filter((u) => u.active).length
   const recordsOn = licences.filter((l) => services.get(l.id)?.records_enabled).length
   const docsLicence = licences.find((l) => l.id === docsFor) ?? null
@@ -535,7 +524,16 @@ export function CustomerPortalDialog({
           closeInHeader,
         )}
       >
-        {confirmDialog}
+        <PortalRecordsServiceDialog
+          key={serviceFor?.id ?? 'none'}
+          licence={serviceFor}
+          clientId={clientId}
+          company={client?.company_name ?? ''}
+          service={serviceFor ? services.get(serviceFor.id) ?? null : null}
+          emails={serviceFor ? logins.filter((u) => u.active && u.licence_ids.includes(serviceFor.id)).map((u) => u.email) : []}
+          onClose={() => setServiceFor(null)}
+          onChanged={() => void load()}
+        />
         <PortalRecordsSetupDialog
           key={recordsFor?.id ?? 'none'}
           licence={recordsFor}
@@ -625,10 +623,10 @@ export function CustomerPortalDialog({
                             <OnOffSwitch
                               on={Boolean(service?.records_enabled)}
                               label={`Records Service for ${cml}`}
-                              title={service?.records_enabled ? `${status.text} · Click to Switch Off` : `Off · Click to Switch On (${TRIAL_DAYS}-Day Free Trial)`}
+                              title={`${status.text} · Click for Trial, Payment Link or Payment`}
                               disabled={busy != null}
                               busy={busy === `svc:${l.id}`}
-                              onChange={() => void switchRecords(l, service)}
+                              onChange={() => setServiceFor({ id: l.id, label: l.label })}
                             />
                             {service?.records_enabled && status.text.startsWith('Expired') ? (
                               <span className="block text-[10px] font-semibold uppercase tracking-wide text-red-700">Expired</span>
