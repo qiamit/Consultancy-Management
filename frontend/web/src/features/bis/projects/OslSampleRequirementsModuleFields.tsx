@@ -9,6 +9,7 @@ import {
   FileText,
   FolderInput,
   Globe,
+  Import,
   Loader2,
   Mic,
   MicOff,
@@ -55,6 +56,8 @@ import { RemoteLookupCombobox } from '@/features/bis/shared/RemoteLookupCombobox
 import { MasterOptionFieldWithAdd } from './MasterOptionFieldWithAdd'
 import { fetchBisProjectById, fetchIsCodeTestingCharges, fetchTestingLaboratoryAddressByName } from './bisProjectsApi'
 import { fetchBisModulePayload, resolveTechnicalStaffForTestedBy } from './bisModuleDataApi'
+import { BisModuleImportDialog } from './BisModuleImportDialog'
+import type { BisProjectRow } from './types'
 import {
   applySampleToFactoryTestReport,
   emptyFactoryTestReportEntry,
@@ -109,6 +112,7 @@ import {
   emptyOslSampleRequirementRow,
   normalizeImportedQrCodes,
   oslSampleRowHasContent,
+  parseOslSampleRequirementsPayload,
   oslSampleRowStatusTone,
   sampleForLabel,
   type OslSampleConformity,
@@ -343,6 +347,9 @@ export function OslSampleRequirementsModuleFields({
   const [qrSourcesLoading, setQrSourcesLoading] = useState(false)
   const [selectedSourceId, setSelectedSourceId] = useState('')
   const [transferBusy, setTransferBusy] = useState(false)
+  // Fill the sample form from a sample of another application (all fields except sample code and QR code).
+  const [sampleImportTarget, setSampleImportTarget] = useState<BisProjectRow | null>(null)
+  const [sourceSamples, setSourceSamples] = useState<OslSampleRequirementRow[] | null>(null)
   const [courierFormOpen, setCourierFormOpen] = useState(false)
   const [courierDraft, setCourierDraft] = useState<OslSampleRequirementRow | null>(null)
   const [courierIncludeBlv, setCourierIncludeBlv] = useState(true)
@@ -2960,18 +2967,38 @@ export function OslSampleRequirementsModuleFields({
           className={cn(
             limsDialogClass,
             'flex !flex-col gap-0 overflow-hidden bg-white p-0',
+            // Close button in the middle of the 64px header bar, in line with the import button.
+            '[&>button]:top-[14px] sm:[&>button]:top-[18px]',
             '!fixed left-[var(--app-dialog-overlay-left,0px)] right-0 top-0 bottom-0',
             'h-[100dvh] max-h-[100dvh] w-[calc(100vw-var(--app-dialog-overlay-left,0px))] max-w-none',
             'translate-x-0 translate-y-0 rounded-none border-0 shadow-none sm:rounded-none',
           )}
         >
-          <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-3 text-white">
+          <div className="relative flex h-16 shrink-0 items-center overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 text-white">
             <div
               className="pointer-events-none absolute inset-0 opacity-[0.18]"
               style={limsDarkBarGlowStyle}
             />
             <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
-            <DialogHeader className="relative pr-10 text-left">
+            {projectId && draft ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={disabled}
+                className="absolute right-11 top-1/2 z-10 h-7 w-7 -translate-y-1/2 rounded-none border border-amber-500/60 bg-stone-800 p-0 text-amber-200 shadow-sm transition-colors hover:border-amber-400 hover:bg-amber-600 hover:text-white"
+                title="Fill from a Sample of Another Application"
+                aria-label="Fill from a Sample of Another Application"
+                onClick={() =>
+                  void fetchBisProjectById(projectId)
+                    .then((r) => (r ? setSampleImportTarget(r) : toast.error('Application not found')))
+                    .catch((err: unknown) => toast.error(err instanceof Error ? err.message : 'Could not open the import'))
+                }
+              >
+                <Import size={15} aria-hidden />
+              </Button>
+            ) : null}
+            <DialogHeader className="relative min-w-0 flex-1 pr-20 text-left">
               <DialogTitle className="text-base font-semibold tracking-tight text-white">
                 {editIndex != null &&
                 editIndex < rows.length &&
@@ -2981,6 +3008,88 @@ export function OslSampleRequirementsModuleFields({
               </DialogTitle>
             </DialogHeader>
           </div>
+
+          <BisModuleImportDialog
+            open={sampleImportTarget != null}
+            onOpenChange={(o) => !o && setSampleImportTarget(null)}
+            targetRow={sampleImportTarget}
+            kind="osl-sample-requirements"
+            title="Sample from Another Application"
+            onPickSource={async (sourceProjectId) => {
+              const samples = parseOslSampleRequirementsPayload(await fetchBisModulePayload(sourceProjectId, 'osl-sample-requirements')).rows.filter(oslSampleRowHasContent)
+              if (samples.length === 0) throw new Error('The Selected Application Has No Samples.')
+              setSourceSamples(samples)
+            }}
+          />
+          <Dialog open={sourceSamples != null} onOpenChange={(o) => !o && setSourceSamples(null)}>
+            <DialogContent
+              layer="top"
+              aria-describedby={undefined}
+              className={cn(limsDialogClass, '[&>button]:top-[10px] sm:[&>button]:top-[14px]', 'flex max-h-[85dvh] w-[min(60rem,calc(100vw-1rem))] max-w-none flex-col gap-0 overflow-hidden bg-white p-0')}
+            >
+              <div className="flex h-14 shrink-0 items-center bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4">
+                <DialogHeader className="pr-10 text-left">
+                  <DialogTitle className="text-base font-semibold text-white">Choose a Sample</DialogTitle>
+                </DialogHeader>
+              </div>
+              <div className="min-h-0 flex-1 overflow-auto p-3">
+                <table className="w-full min-w-[48rem] border-collapse text-sm">
+                  <thead>
+                    <tr className="bg-stone-800 text-[11px] font-bold uppercase tracking-[0.08em] text-amber-200">
+                      {['#', 'Sample For', 'Grade / Type / Variety', 'Sample Code', 'Sample Type', 'Batch Quantity', 'Test Required'].map((h) => (
+                        <th key={h} className="border border-stone-700 px-2 py-1.5 text-center">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(sourceSamples ?? []).map((src, i) => (
+                      <tr
+                        key={src.id || i}
+                        className={cn('cursor-pointer hover:bg-amber-100/70', i % 2 ? 'bg-[#f7f3eb]' : 'bg-[#fffcf7]')}
+                        title="Click to fill the form with this sample"
+                        onClick={() => {
+                          // Everything except the sample code, QR code, attached files and test result of the source sample.
+                          setDraft((prev) =>
+                            prev
+                              ? {
+                                  ...src,
+                                  id: prev.id,
+                                  sampleCode: prev.sampleCode,
+                                  qrCode: prev.qrCode,
+                                  declaredValueFileId: prev.declaredValueFileId,
+                                  declaredValueFileName: prev.declaredValueFileName,
+                                  declaredValueStoragePath: prev.declaredValueStoragePath,
+                                  testRequestFileId: prev.testRequestFileId,
+                                  testRequestFileName: prev.testRequestFileName,
+                                  testRequestStoragePath: prev.testRequestStoragePath,
+                                  courierSlipFileId: prev.courierSlipFileId,
+                                  courierSlipFileName: prev.courierSlipFileName,
+                                  courierSlipStoragePath: prev.courierSlipStoragePath,
+                                  testReportFileId: prev.testReportFileId,
+                                  testReportFileName: prev.testReportFileName,
+                                  testReportStoragePath: prev.testReportStoragePath,
+                                  conformity: prev.conformity,
+                                }
+                              : prev,
+                          )
+                          setSourceSamples(null)
+                          toast.success('Sample Details Filled', { description: 'Sample Code and QR Code are kept; change anything else, then save.' })
+                        }}
+                      >
+                        <td className="border border-[#e7e0d4] px-2 py-1.5 text-center text-xs text-stone-500">{i + 1}</td>
+                        <td className="border border-[#e7e0d4] px-2 py-1.5 text-center">{sampleForLabel(src.sampleFor)}</td>
+                        <td className="border border-[#e7e0d4] px-2 py-1.5">{src.gradeTypeVariety || '—'}</td>
+                        <td className="border border-[#e7e0d4] px-2 py-1.5 text-center font-mono text-xs">{src.sampleCode || '—'}</td>
+                        <td className="border border-[#e7e0d4] px-2 py-1.5 text-center">{src.sampleType || '—'}</td>
+                        <td className="border border-[#e7e0d4] px-2 py-1.5 text-center">{src.batchQuantity || '—'}</td>
+                        <td className="border border-[#e7e0d4] px-2 py-1.5">{src.testRequired || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </DialogContent>
+          </Dialog>
 
           {draft ? (
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain bg-gradient-to-b from-stone-100/90 to-white px-4 py-4 [-webkit-overflow-scrolling:touch]">
