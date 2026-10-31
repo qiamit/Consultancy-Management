@@ -304,10 +304,6 @@ function CustomerLoginsDialog({
               </tbody>
             </table>
           </div>
-          <p className="mt-2 text-[11px] text-stone-500">
-            The customer gets an email to set a password, then sets up Two-Step Login. Each login sees only the licences ticked for it and can only view;
-            nothing about the licence can be changed from the portal.
-          </p>
         </div>
       </DialogContent>
     </Dialog>
