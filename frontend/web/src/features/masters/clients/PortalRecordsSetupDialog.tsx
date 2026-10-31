@@ -170,7 +170,7 @@ function ColumnEditor({
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="grid gap-3 sm:col-span-2 sm:grid-cols-[minmax(0,1.3fr)_minmax(0,1.3fr)_minmax(0,0.8fr)]">
             <div className="space-y-1">
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex h-5 items-center justify-between gap-2">
                 <Label htmlFor="col-label">Column Name</Label>
                 <label className="flex items-center gap-1 text-xs font-medium text-stone-700" title="Customer must fill it">
                   <input type="checkbox" className="h-3.5 w-3.5" checked={d.required} onChange={(e) => set('required', e.target.checked)} />
@@ -178,19 +178,18 @@ function ColumnEditor({
                 </label>
               </div>
               <Input id="col-label" className="h-9" value={d.label} placeholder="Tensile Strength" onChange={(e) => set('label', e.target.value)} />
-              <p className="text-[11px] text-stone-500">Formula Name: <code className="bg-stone-100 px-1">{key}</code></p>
             </div>
             <div className="space-y-1">
-              <Label htmlFor="col-type">Type</Label>
+              <div className="flex h-5 items-center"><Label htmlFor="col-type">Type</Label></div>
               <div className="flex gap-1.5">
-                <select id="col-type" className="h-9 min-w-0 flex-1 border border-stone-400 bg-white px-2 text-sm" value={d.col_type} onChange={(e) => set('col_type', e.target.value as RecordColumnType)}>
+                <select id="col-type" className="h-9 min-w-0 flex-1 border border-input bg-stone-50 px-2 text-sm" value={d.col_type} onChange={(e) => set('col_type', e.target.value as RecordColumnType)}>
                   {EDITABLE_TYPES.map((t) => (
                     <option key={t} value={t}>{COLUMN_TYPE_LABEL[t]}</option>
                   ))}
                 </select>
                 <button
                   type="button"
-                  className={cn('inline-flex h-9 w-9 shrink-0 items-center justify-center border', d.col_type === 'formula' ? 'border-amber-700 bg-amber-700 text-white' : 'border-stone-400 bg-white text-amber-800 hover:bg-amber-50')}
+                  className={cn('inline-flex h-9 w-9 shrink-0 items-center justify-center border', d.col_type === 'formula' ? 'border-amber-700 bg-amber-700 text-white' : 'border-input bg-stone-50 text-amber-800 hover:bg-amber-50')}
                   title="Formula Builder"
                   aria-label="Formula Builder"
                   onClick={() => set('col_type', 'formula')}
@@ -200,7 +199,7 @@ function ColumnEditor({
               </div>
             </div>
             <div className="space-y-1">
-              <Label htmlFor="col-unit">Unit</Label>
+              <div className="flex h-5 items-center"><Label htmlFor="col-unit">Unit</Label></div>
               <Input id="col-unit" className="h-9" value={d.unit} placeholder="MPa, %, mm" onChange={(e) => set('unit', e.target.value)} />
             </div>
             </div>
