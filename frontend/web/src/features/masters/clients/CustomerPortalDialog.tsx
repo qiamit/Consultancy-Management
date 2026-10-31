@@ -42,6 +42,8 @@ const th = 'border border-stone-700 bg-stone-800 px-2 py-2 text-left text-[11px]
 const td = 'border border-[#e7e0d4] px-2 py-2 align-middle text-sm text-stone-800'
 const rowTone = (i: number) => (i % 2 ? 'bg-[#f7f3eb]' : 'bg-[#fffcf7]')
 const iconBtn = 'h-8 w-8 min-h-8 rounded-none p-0 text-[#92400e] hover:bg-[#f3e9d8] hover:text-[#78350f]'
+// The dialog's Close button sits in the middle of the 64px DarkHeader, in line with the header's buttons.
+const closeInHeader = '[&>button]:top-[14px] sm:[&>button]:top-[18px]'
 const badge = 'inline-block whitespace-nowrap border px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide'
 
 const MOBILE_RE = /^\+?[0-9][0-9 -]{6,18}$/
@@ -58,10 +60,10 @@ function splitLabel(label: string): [string, string] {
 
 function DarkHeader({ eyebrow, title, children }: { eyebrow?: string; title: ReactNode; children?: ReactNode }) {
   return (
-    <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-3 text-white sm:px-5">
+    <div className="relative flex min-h-16 shrink-0 items-center overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2 text-white sm:px-5">
       <div className="pointer-events-none absolute inset-0 opacity-[0.2]" style={limsDarkBarGlowStyle} />
       <div className="absolute bottom-0 left-0 h-[3px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
-      <div className="relative flex flex-wrap items-center gap-x-5 gap-y-2 pr-10">
+      <div className="relative flex w-full flex-wrap items-center gap-x-5 gap-y-2 pr-10">
         <DialogHeader className="min-w-0 flex-1 space-y-0.5 text-left">
           {eyebrow ? <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300">{eyebrow}</p> : null}
           <DialogTitle className="truncate text-lg font-semibold tracking-tight text-white">{title}</DialogTitle>
@@ -124,7 +126,7 @@ function LicencePickerDialog({
   const allTicked = licences.length > 0 && licences.every((l) => ticked.has(l.id))
   return (
     <Dialog open={title != null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent layer="stacked" aria-describedby={undefined} className={cn(limsDialogClass, 'flex max-h-[85dvh] w-[min(42rem,calc(100vw-1rem))] max-w-none flex-col gap-0 overflow-hidden bg-white p-0')}>
+      <DialogContent layer="stacked" aria-describedby={undefined} className={cn(limsDialogClass, closeInHeader, 'flex max-h-[85dvh] w-[min(42rem,calc(100vw-1rem))] max-w-none flex-col gap-0 overflow-hidden bg-white p-0')}>
         <DarkHeader title="Licences This Login Can See" />
         <div className="min-h-0 flex-1 overflow-auto p-3">
           <table className="w-full min-w-[30rem] border-collapse font-jakarta">
@@ -242,7 +244,7 @@ function CustomerLoginsDialog({
       <DialogContent
         layer="nested"
         aria-describedby={undefined}
-        className={cn(limsDialogClass, limsDialogWidthCapClass['72rem'], 'flex max-h-[92dvh] flex-col gap-0 overflow-hidden bg-white p-0')}
+        className={cn(limsDialogClass, closeInHeader, limsDialogWidthCapClass['72rem'], 'flex max-h-[92dvh] flex-col gap-0 overflow-hidden bg-white p-0')}
       >
         {confirmDialog}
         <LicencePickerDialog
@@ -395,7 +397,7 @@ function DocumentsDialog({
   const shared = files.filter((f) => f.customer_visible).length
   return (
     <Dialog open={licence != null} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent layer="nested" aria-describedby={undefined} className={cn(limsDialogClass, 'flex max-h-[85dvh] w-[min(40rem,calc(100vw-1rem))] max-w-none flex-col gap-0 overflow-hidden bg-white p-0')}>
+      <DialogContent layer="nested" aria-describedby={undefined} className={cn(limsDialogClass, closeInHeader, 'flex max-h-[85dvh] w-[min(40rem,calc(100vw-1rem))] max-w-none flex-col gap-0 overflow-hidden bg-white p-0')}>
         <DarkHeader eyebrow="Documents Shown to the Customer" title={licence?.label} />
         <div className="flex items-center gap-2 border-b border-stone-200 bg-stone-50 px-4 py-2 text-xs text-stone-600">
           <span className="font-semibold text-stone-800">{shared} of {files.length} Shared</span>
@@ -530,6 +532,7 @@ export function CustomerPortalDialog({
           '!flex h-[100dvh] max-h-[100dvh] max-w-none flex-col gap-0 overflow-hidden rounded-none border-0 bg-[#fffcf7] p-0 shadow-none sm:rounded-none',
           limsFullscreenDialogClass,
           'border-stone-600 ring-1 ring-amber-700/20',
+          closeInHeader,
         )}
       >
         {confirmDialog}
