@@ -6,6 +6,7 @@ import {
   Calendar,
   ExternalLink,
   FileText,
+  LogIn,
   Mail,
   Pencil,
   RefreshCw,
@@ -121,6 +122,31 @@ const LICENSE_STATE_STYLES: Record<LicenseValidityState, { label: string; classN
 const actionGhostBtnClass =
   'h-[2.3rem] w-[2.3rem] rounded-none border border-stone-400 bg-white/70 p-0 text-amber-800 shadow-sm hover:border-amber-600 hover:bg-amber-50 hover:text-amber-950 focus-visible:ring-2 focus-visible:ring-amber-500/40'
 
+/** Manak Login only: the extension fills User ID / Password, the user types the captcha; nothing else runs after login. */
+function ManakLoginButton({ row, client }: { row: BisProjectRow; client: string }) {
+  const fmcs = isFmcsProject(row)
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant="ghost"
+      className={actionGhostBtnClass}
+      aria-label={`Manak Login for ${client}`}
+      title={fmcs ? 'Manak Login — FMCS Portal' : 'Manak Login'}
+      onClick={() => {
+        void openManakEbisAssist({ portalUserId: manakLoginFromProject(row).userId, projectId: row.id, fmcs })
+          .then(({ extensionUsed }) => {
+            if (extensionUsed) toast.success('Opening Manak Login — Type the Captcha and Click Login')
+            else toast.warning('Extension Not Detected — Opened the Manak Login in a New Tab', { description: EXTENSION_MISSING_MSG })
+          })
+          .catch((err: unknown) => toast.error(err instanceof Error ? err.message : 'Could Not Open Manak'))
+      }}
+    >
+      <LogIn size={16} />
+    </Button>
+  )
+}
+
 function RowActions({
   row,
   client,
@@ -161,6 +187,7 @@ function RowActions({
           >
             <RefreshCw size={16} />
           </Button>
+          <ManakLoginButton row={row} client={client} />
           <Button
             type="button"
             size="sm"
@@ -222,6 +249,7 @@ function RowActions({
       >
         <FileText size={16} />
       </Button>
+      <ManakLoginButton row={row} client={client} />
       <Button
         type="button"
         size="sm"
