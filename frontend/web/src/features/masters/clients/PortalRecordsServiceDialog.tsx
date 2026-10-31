@@ -94,7 +94,15 @@ export function PortalRecordsServiceDialog({
   const [paidOn, setPaidOn] = useState(today)
   const [mode, setMode] = useState<(typeof PAYMENT_MODES)[number]>('UPI')
   const [reference, setReference] = useState('')
-  const [paidTill, setPaidTill] = useState(period.to)
+  // Service period: from today (or after a running paid period) for one year; both dates can be changed.
+  const [periodFrom, setPeriodFrom] = useState(period.from)
+  const [periodTo, setPeriodTo] = useState(period.to)
+  const changeFrom = (v: string) => {
+    setPeriodFrom(v)
+    if (v) setPeriodTo(nextPaidPeriod(null, v).to)
+  }
+  const chosenPeriod = { from: periodFrom, to: periodTo }
+  const periodProblem = !periodFrom || !periodTo ? 'Enter the Period From and To' : periodTo < periodFrom ? 'Period To must be after Period From' : ''
 
   const licenceId = licence?.id ?? ''
   const status = serviceStatus(service)
@@ -221,14 +229,18 @@ export function PortalRecordsServiceDialog({
                 {settings && !canPayUpi && !canPayBank ? (
                   <p className="border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-800">Add the UPI ID or bank account in Lab Settings → Bank Details first.</p>
                 ) : null}
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-3">
                   <div className="space-y-1">
                     <Label htmlFor="req-amount">Amount (₹)</Label>
                     <Input id="req-amount" type="number" inputMode="decimal" min={0} value={amount} placeholder="Yearly Amount" onChange={(e) => setAmount(e.target.value)} />
                   </div>
                   <div className="space-y-1">
-                    <Label>Period</Label>
-                    <p className="flex h-10 items-center border border-stone-200 bg-stone-50 px-3 text-sm text-stone-700">{formatDisplayDate(period.from)} to {formatDisplayDate(period.to)}</p>
+                    <Label htmlFor="req-from">Period From</Label>
+                    <CalendarDateField id="req-from" label="Period From" value={periodFrom} onChange={changeFrom} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="req-to">Period To</Label>
+                    <CalendarDateField id="req-to" label="Period To" value={periodTo} onChange={setPeriodTo} />
                   </div>
                 </div>
                 <div className="space-y-1.5">
@@ -254,7 +266,7 @@ export function PortalRecordsServiceDialog({
                     The email has a Pay by UPI button{canPayUpi ? '' : ' (no UPI ID set)'}, a UPI QR with this amount, and the bank details{canPayBank ? '' : ' (no bank account set)'}.
                   </p>
                   <Button type="button" disabled={busy || !settings} className={cn(limsPrimaryBtnClass, 'gap-1.5')}
-                    onClick={() => void act(() => sendPaymentRequest({ projectId: licenceId, licence: licence?.label ?? '', company, to: recipients, amount: amountValue, period, settings: settings! }), 'Payment Link Sent')}>
+                    onClick={() => periodProblem ? toast.warning(periodProblem) : void act(() => sendPaymentRequest({ projectId: licenceId, licence: licence?.label ?? '', company, to: recipients, amount: amountValue, period: chosenPeriod, settings: settings! }), 'Payment Link Sent')}>
                     {busy ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Send size={15} aria-hidden />} Send Payment Link
                   </Button>
                 </div>
@@ -278,22 +290,26 @@ export function PortalRecordsServiceDialog({
                       {PAYMENT_MODES.map((m) => <option key={m} value={m}>{m}</option>)}
                     </select>
                   </div>
-                  <div className="space-y-1 sm:col-span-2">
+                  <div className="space-y-1">
                     <Label htmlFor="pay-ref">Transaction / UTR / Cheque No</Label>
                     <Input id="pay-ref" value={reference} placeholder="Reference" onChange={(e) => setReference(e.target.value)} />
                   </div>
                   <div className="space-y-1">
+                    <Label htmlFor="pay-from">Period From</Label>
+                    <CalendarDateField id="pay-from" label="Period From" value={periodFrom} onChange={changeFrom} />
+                  </div>
+                  <div className="space-y-1">
                     <Label htmlFor="pay-till">Paid Till</Label>
-                    <CalendarDateField id="pay-till" label="Paid Till" value={paidTill} onChange={setPaidTill} />
+                    <CalendarDateField id="pay-till" label="Paid Till" value={periodTo} onChange={setPeriodTo} />
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-3 border-t border-stone-200 pt-3">
                   <p className="text-[11px] text-stone-500">
-                    Service runs from {formatDisplayDate(period.from)} to {paidTill ? formatDisplayDate(paidTill) : '—'}. A Payment Receipt is made in Finance → Payment Receipt.
+                    Service runs from {periodFrom ? formatDisplayDate(periodFrom) : '—'} to {periodTo ? formatDisplayDate(periodTo) : '—'}. A Payment Receipt is made in Finance → Payment Receipt.
                   </p>
                   <Button type="button" disabled={busy} className={cn(limsPrimaryBtnClass, 'gap-1.5')}
-                    onClick={() => void act(
-                      () => recordPayment({ projectId: licenceId, clientId, licence: licence?.label ?? '', amount: amountValue, paidOn, mode, reference, period: { from: period.from, to: paidTill }, current: service }),
+                    onClick={() => periodProblem ? toast.warning(periodProblem) : void act(
+                      () => recordPayment({ projectId: licenceId, clientId, licence: licence?.label ?? '', amount: amountValue, paidOn, mode, reference, period: chosenPeriod, current: service }),
                       'Payment Saved, Receipt',
                     )}>
                     {busy ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <IndianRupee size={15} aria-hidden />} Save Payment
