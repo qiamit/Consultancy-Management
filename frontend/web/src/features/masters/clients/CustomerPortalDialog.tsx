@@ -265,7 +265,7 @@ function CustomerLoginsDialog({
 
         <div className="min-h-0 flex-1 overflow-auto bg-[#fffcf7] p-3 sm:p-4">
           <div className="overflow-x-auto border border-stone-300 bg-white shadow-sm">
-            <table className="w-full min-w-[1040px] border-collapse font-jakarta">
+            <table className="w-full min-w-[960px] border-collapse font-jakarta">
               <thead>
                 <tr>
                   <th className={cn(th, 'w-10 text-center')}>#</th>
@@ -273,8 +273,7 @@ function CustomerLoginsDialog({
                   <th className={cn(th, 'min-w-[14rem] text-center')}>Email</th>
                   <th className={cn(th, 'w-[8.5rem] text-center')}>Mobile No</th>
                   <th className={cn(th, 'w-[6.5rem] text-center')}>Licences</th>
-                  <th className={cn(th, 'w-[6.5rem] text-center')}>Status</th>
-                  <th className={cn(th, 'w-[6.5rem] text-center')}>Invited</th>
+                  <th className={cn(th, 'w-[8.5rem] text-center')}>Status</th>
                   <th className={cn(th, 'w-[7.5rem] text-center')}>Actions</th>
                 </tr>
               </thead>
@@ -292,8 +291,7 @@ function CustomerLoginsDialog({
                       <Input type="tel" inputMode="tel" value={d.mobile} placeholder="Mobile No" aria-label="Mobile No" className="h-8 min-h-8 text-center text-sm" onChange={(e) => patchDraft(d.key, { mobile: e.target.value })} />
                     </td>
                     <td className={cn(td, 'text-center')}>{licencesButton(d.licences.length, () => setPickFor({ draftKey: d.key }))}</td>
-                    <td className={cn(td, 'text-center')}><span className={cn(badge, 'border-amber-300 bg-amber-100 text-amber-900')}>Not Sent</span></td>
-                    <td className={cn(td, 'text-center text-xs text-stone-400')}>—</td>
+                    <td className={cn(td, 'text-center')}><span className={cn(badge, 'border-amber-300 bg-amber-100 py-1 text-amber-900')}>Not Sent</span></td>
                     <td className={td}>
                       <div className="flex items-center justify-center gap-1">
                         <Button type="button" className={cn(limsPrimaryBtnClass, 'h-8 min-h-8 gap-1 px-2.5 text-xs')} disabled={busy != null} onClick={() => void sendInvite(d)}>
@@ -336,11 +334,14 @@ function CustomerLoginsDialog({
                     </td>
                     <td className={cn(td, 'text-center')}>{licencesButton(u.licence_ids.length, () => setPickFor({ userId: u.user_id }))}</td>
                     <td className={cn(td, 'text-center')}>
-                      <span className={cn(badge, u.active ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-stone-300 bg-stone-100 text-stone-600')}>
-                        {u.active ? 'Active' : 'Switched Off'}
+                      <span
+                        className={cn('inline-flex flex-col items-center border px-2 py-0.5 leading-tight', u.active ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-stone-300 bg-stone-100 text-stone-600')}
+                        title={u.invited_at ? `Invited ${formatDisplayDate(u.invited_at.slice(0, 10))}` : undefined}
+                      >
+                        <span className="text-[10px] font-semibold uppercase tracking-wide">{u.active ? 'Active' : 'Switched Off'}</span>
+                        {u.invited_at ? <span className="text-[10px] font-medium opacity-80">Invited {formatDisplayDate(u.invited_at.slice(0, 10))}</span> : null}
                       </span>
                     </td>
-                    <td className={cn(td, 'text-center text-xs text-stone-600')}>{u.invited_at ? formatDisplayDate(u.invited_at.slice(0, 10)) : '—'}</td>
                     <td className={td}>
                       <div className="flex items-center justify-center gap-0.5">
                         <Button type="button" variant="ghost" className={iconBtn} disabled={busy != null || !u.active} title="Resend Invite" aria-label={`Resend Invite to ${u.email}`}
@@ -365,7 +366,7 @@ function CustomerLoginsDialog({
                 ))}
                 {logins.length === 0 && drafts.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className={cn(td, 'py-8 text-center text-stone-500')}>No login yet. Click "Invite New Login" to add one.</td>
+                    <td colSpan={7} className={cn(td, 'py-8 text-center text-stone-500')}>No login yet. Click "Invite New Login" to add one.</td>
                   </tr>
                 ) : null}
               </tbody>
