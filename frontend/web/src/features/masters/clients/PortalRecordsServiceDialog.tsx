@@ -173,18 +173,21 @@ export function PortalRecordsServiceDialog({
                 type="button"
                 variant="outline"
                 disabled={busy}
-                className={cn(limsOutlineBtnClass, 'ml-auto h-9 min-h-9 gap-1.5 text-red-700')}
+                className={cn(limsOutlineBtnClass, 'ml-auto h-10 w-10 p-0 text-red-700')}
+                title="Switch Off Records Service"
+                aria-label="Switch Off Records Service"
                 onClick={() => void (async () => {
                   if (!(await confirm('Switch the records service off? The customer no longer sees the record sections; nothing is deleted.', { title: 'Switch Off Records', confirmLabel: 'Switch Off', destructive: true }))) return
                   await act(() => setRecordsEnabled(licenceId, false, service), 'Records Switched Off')
                 })()}
               >
-                <Power size={15} aria-hidden /> Switch Off
+                <Power size={17} aria-hidden />
               </Button>
             ) : service?.trial_ends ? (
-              <Button type="button" variant="outline" disabled={busy} className={cn(limsOutlineBtnClass, 'ml-auto h-9 min-h-9 gap-1.5 text-emerald-700')}
+              <Button type="button" variant="outline" disabled={busy} className={cn(limsOutlineBtnClass, 'ml-auto h-10 w-10 p-0 text-emerald-700')}
+                title="Switch On Records Service Again" aria-label="Switch On Records Service Again"
                 onClick={() => void act(() => setRecordsEnabled(licenceId, true, service), 'Records Switched On')}>
-                <Power size={15} aria-hidden /> Switch On Again
+                <Power size={17} aria-hidden />
               </Button>
             ) : null}
           </div>
