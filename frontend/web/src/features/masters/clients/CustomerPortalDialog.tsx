@@ -229,8 +229,8 @@ function CustomerLoginsDialog({
   const pickSelected = pickLogin?.licence_ids ?? pickDraft?.licences ?? []
 
   const licencesButton = (count: number, onClick: () => void, disabled?: boolean) => (
-    <Button type="button" variant="outline" className={cn(smallBtn, 'w-full justify-between')} disabled={disabled} onClick={onClick}>
-      <span className="inline-flex items-center gap-1"><FileBadge2 size={14} aria-hidden /> View Licences</span>
+    <Button type="button" variant="outline" className={cn(smallBtn, 'gap-1.5 px-2')} disabled={disabled} title="View Licences" aria-label={`View Licences (${count} of ${licences.length})`} onClick={onClick}>
+      <FileBadge2 size={15} aria-hidden />
       <span className={cn('border px-1 text-[11px] font-semibold', count ? 'border-amber-500 bg-amber-50 text-amber-900' : 'border-red-300 bg-red-50 text-red-700')}>
         {count}/{licences.length}
       </span>
@@ -272,7 +272,7 @@ function CustomerLoginsDialog({
                   <th className={cn(th, 'min-w-[10rem]')}>Name</th>
                   <th className={cn(th, 'min-w-[14rem] text-center')}>Email</th>
                   <th className={cn(th, 'w-[8.5rem] text-center')}>Mobile No</th>
-                  <th className={cn(th, 'w-[10.5rem]')}>Licences</th>
+                  <th className={cn(th, 'w-[6.5rem] text-center')}>Licences</th>
                   <th className={cn(th, 'w-[6.5rem] text-center')}>Status</th>
                   <th className={cn(th, 'w-[6.5rem] text-center')}>Invited</th>
                   <th className={cn(th, 'w-[7.5rem] text-center')}>Actions</th>
@@ -291,7 +291,7 @@ function CustomerLoginsDialog({
                     <td className={td}>
                       <Input type="tel" inputMode="tel" value={d.mobile} placeholder="Mobile No" aria-label="Mobile No" className="h-8 min-h-8 text-center text-sm" onChange={(e) => patchDraft(d.key, { mobile: e.target.value })} />
                     </td>
-                    <td className={td}>{licencesButton(d.licences.length, () => setPickFor({ draftKey: d.key }))}</td>
+                    <td className={cn(td, 'text-center')}>{licencesButton(d.licences.length, () => setPickFor({ draftKey: d.key }))}</td>
                     <td className={cn(td, 'text-center')}><span className={cn(badge, 'border-amber-300 bg-amber-100 text-amber-900')}>Not Sent</span></td>
                     <td className={cn(td, 'text-center text-xs text-stone-400')}>—</td>
                     <td className={td}>
@@ -334,7 +334,7 @@ function CustomerLoginsDialog({
                         }}
                       />
                     </td>
-                    <td className={td}>{licencesButton(u.licence_ids.length, () => setPickFor({ userId: u.user_id }))}</td>
+                    <td className={cn(td, 'text-center')}>{licencesButton(u.licence_ids.length, () => setPickFor({ userId: u.user_id }))}</td>
                     <td className={cn(td, 'text-center')}>
                       <span className={cn(badge, u.active ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-stone-300 bg-stone-100 text-stone-600')}>
                         {u.active ? 'Active' : 'Switched Off'}
