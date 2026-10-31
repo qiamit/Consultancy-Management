@@ -273,12 +273,16 @@ function ManageSectionsDialog({
   }
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent aria-describedby={undefined} className={cn(limsDialogClass, 'flex max-h-[85dvh] w-[min(34rem,calc(100vw-1rem))] max-w-none flex-col gap-0 overflow-hidden bg-white p-0')}>
-        <div className="bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5">
-          <DialogHeader className="flex-row items-center gap-3 space-y-0 pr-10 text-left">
+      <DialogContent
+        aria-describedby={undefined}
+        className={cn(limsDialogClass, '[&>button]:top-[10px] sm:[&>button]:top-[14px]', 'flex max-h-[85dvh] w-[min(34rem,calc(100vw-1rem))] max-w-none flex-col gap-0 overflow-hidden bg-white p-0')}
+      >
+        {/* 56px bar: the import button sits beside the dialog's Close button, same size and line. */}
+        <div className="flex h-14 shrink-0 items-center bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4">
+          <DialogHeader className="flex-1 flex-row items-center gap-2 space-y-0 pr-10 text-left">
             <DialogTitle className="flex-1 text-base font-semibold text-white">Sections</DialogTitle>
-            <Button type="button" variant="outline" className={cn(limsDarkBarBtnClass, 'h-9 min-h-9 w-9 p-0')} disabled={busy} title="Import From Another Licence" aria-label="Import From Another Licence" onClick={onImport}>
-              <Download size={16} aria-hidden />
+            <Button type="button" variant="outline" className={cn(limsDarkBarBtnClass, 'h-9 min-h-9 w-9 p-0 sm:h-7 sm:min-h-7 sm:w-7')} disabled={busy} title="Import From Another Licence" aria-label="Import From Another Licence" onClick={onImport}>
+              <Download size={14} aria-hidden />
             </Button>
           </DialogHeader>
         </div>
@@ -488,7 +492,7 @@ export function PortalRecordsSetupDialog({
                     >
                       {sections.length === 0 ? <option value="">No Section Yet</option> : null}
                       {sections.map((s) => (
-                        <option key={s.id} value={s.id}>{s.name} ({s.columns.length})</option>
+                        <option key={s.id} value={s.id}>{s.name}</option>
                       ))}
                     </select>
                   </LimsFieldWithAdd>
