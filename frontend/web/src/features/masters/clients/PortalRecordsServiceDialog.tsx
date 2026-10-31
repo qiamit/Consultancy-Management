@@ -18,7 +18,6 @@ import {
   nextPaidPeriod,
   recordPayment,
   sendPaymentRequest,
-  serviceStatus,
   setRecordsEnabled,
   startTrial,
   type PaymentSettings,
@@ -107,7 +106,23 @@ export function PortalRecordsServiceDialog({
   const periodProblem = !periodFrom || !periodTo ? 'Enter the Period From and To' : periodTo < periodFrom ? 'Period To must be after Period From' : ''
 
   const licenceId = licence?.id ?? ''
-  const status = serviceStatus(service)
+  // Current state of the service: status word, when it started and till when it runs.
+  const lastPaid = (payments ?? []).find((p) => p.kind === 'payment')
+  const paidActive = Boolean(service?.records_enabled && service.paid_until && service.paid_until >= today)
+  const trialActive = Boolean(service?.records_enabled && !paidActive && service.trial_ends && service.trial_ends >= today)
+  const state = !service?.records_enabled ? 'off' : paidActive ? 'paid' : trialActive ? 'trial' : 'expired'
+  const STATE = {
+    off: { word: 'Off', tone: 'border-stone-300 bg-stone-100 text-stone-700', bar: 'from-stone-400' },
+    trial: { word: 'Free Trial', tone: 'border-sky-300 bg-sky-50 text-sky-800', bar: 'from-sky-500' },
+    paid: { word: 'Paid', tone: 'border-emerald-300 bg-emerald-50 text-emerald-800', bar: 'from-emerald-500' },
+    expired: { word: 'Expired', tone: 'border-red-300 bg-red-50 text-red-800', bar: 'from-red-500' },
+  }[state]
+  const startDate = paidActive
+    ? lastPaid?.period_from ?? null
+    : service?.trial_ends
+      ? addDaysIso(service.trial_ends, -TRIAL_DAYS)
+      : null
+  const tillDate = paidActive ? service?.paid_until ?? null : service?.trial_ends ?? service?.paid_until ?? null
 
   useEffect(() => {
     if (!licenceId) return
@@ -161,29 +176,26 @@ export function PortalRecordsServiceDialog({
         </div>
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-[#fffcf7] p-3 sm:p-4">
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border border-stone-300 bg-white px-4 py-3 shadow-sm">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-500">Status</p>
-              <span className={cn('mt-0.5 inline-block border px-2 py-0.5 text-xs font-semibold', status.tone)}>{status.text}</span>
-            </div>
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-500">Trial</p>
-              <p className="text-sm text-stone-800">{service?.trial_ends ? `Till ${formatDisplayDate(service.trial_ends)}` : 'Not Used'}</p>
-            </div>
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-500">Paid Till</p>
-              <p className="text-sm text-stone-800">{service?.paid_until ? formatDisplayDate(service.paid_until) : '—'}</p>
-            </div>
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-500">Rate</p>
-              <p className="text-sm text-stone-800">{settings == null ? '…' : settings.rate != null ? `${money(settings.rate)} / Year` : 'Not Set'}</p>
-            </div>
+          <div className="relative flex flex-wrap items-stretch gap-2 overflow-hidden border border-stone-300 bg-white p-2 shadow-sm">
+            <div className={cn('absolute left-0 top-0 h-full w-1 bg-gradient-to-b to-transparent', STATE.bar)} />
+            {[
+              { label: 'Status', value: <span className={cn('inline-block border px-2 py-0.5 text-sm font-bold', STATE.tone)}>{STATE.word}</span> },
+              { label: 'Start Date', value: startDate ? formatDisplayDate(startDate) : '—' },
+              { label: 'Paid Till', value: tillDate ? formatDisplayDate(tillDate) : '—' },
+              { label: 'Amount', value: settings == null ? '…' : settings.rate != null ? `${money(settings.rate)} / Year` : 'Not Set' },
+            ].map((t) => (
+              <div key={t.label} className="min-w-[8.5rem] flex-1 border border-stone-200 bg-[#fffcf7] px-3 py-2">
+                <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-stone-500">{t.label}</p>
+                <div className="mt-1 text-sm font-semibold text-stone-900">{t.value}</div>
+              </div>
+            ))}
+            <div className="flex items-center px-1">
             {service?.records_enabled ? (
               <Button
                 type="button"
                 variant="outline"
                 disabled={busy}
-                className={cn(limsOutlineBtnClass, 'ml-auto h-10 w-10 p-0 text-red-700')}
+                className={cn(limsOutlineBtnClass, 'h-10 w-10 p-0 text-red-700')}
                 title="Switch Off Records Service"
                 aria-label="Switch Off Records Service"
                 onClick={() => void (async () => {
@@ -194,12 +206,13 @@ export function PortalRecordsServiceDialog({
                 <Power size={17} aria-hidden />
               </Button>
             ) : service?.trial_ends ? (
-              <Button type="button" variant="outline" disabled={busy} className={cn(limsOutlineBtnClass, 'ml-auto h-10 w-10 p-0 text-emerald-700')}
+              <Button type="button" variant="outline" disabled={busy} className={cn(limsOutlineBtnClass, 'h-10 w-10 p-0 text-emerald-700')}
                 title="Switch On Records Service Again" aria-label="Switch On Records Service Again"
                 onClick={() => void act(() => setRecordsEnabled(licenceId, true, service), 'Records Switched On')}>
                 <Power size={17} aria-hidden />
               </Button>
             ) : null}
+            </div>
           </div>
 
           <div className="grid gap-2 sm:grid-cols-3">
