@@ -38,7 +38,6 @@ import {
 } from './portalRecordsAdminApi'
 import { CalendarDateField } from './CalendarDateField'
 
-const smallBtn = cn(limsOutlineBtnClass, 'h-8 gap-1 px-2 text-xs')
 const th = 'border border-stone-700 bg-stone-800 px-2 py-1.5 text-left text-[11px] font-bold uppercase tracking-[0.06em] text-amber-200'
 const td = 'border border-stone-200 px-2 py-1.5 align-middle text-sm text-stone-800'
 const iconBtn = 'inline-flex h-7 w-7 items-center justify-center border border-stone-300 bg-white text-amber-800 hover:bg-amber-50 disabled:opacity-40'
@@ -232,51 +231,106 @@ function ColumnEditor({
 }
 
 /** Admin: records service (trial / paid) and the record formats of one licence. Customers never edit formats. */
-/** New section: a type (for the customer's reference label and icon) and a name, e.g. Test Certificate. */
-function AddSectionDialog({ onClose, onSave }: { onClose: () => void; onSave: (kind: string, name: string) => Promise<void> }) {
+/** The + of Sections: add a section (type and name), rename or delete the existing ones. */
+function ManageSectionsDialog({
+  sections,
+  busy,
+  onClose,
+  onAdd,
+  onRename,
+  onDelete,
+}: {
+  sections: AdminSection[]
+  busy: boolean
+  onClose: () => void
+  onAdd: (kind: string, name: string) => Promise<void>
+  onRename: (section: AdminSection, name: string) => Promise<void>
+  onDelete: (section: AdminSection) => Promise<void>
+}) {
   const [kind, setKind] = useState('custom')
   const [name, setName] = useState('')
-  const [saving, setSaving] = useState(false)
   const finalName = name.trim() || (kind === 'custom' ? '' : SECTION_KIND_LABEL[kind] ?? '')
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent aria-describedby={undefined} className={cn(limsDialogClass, 'w-[min(28rem,calc(100vw-1rem))] max-w-none gap-0 overflow-hidden bg-white p-0')}>
+      <DialogContent aria-describedby={undefined} className={cn(limsDialogClass, 'flex max-h-[85dvh] w-[min(40rem,calc(100vw-1rem))] max-w-none flex-col gap-0 overflow-hidden bg-white p-0')}>
         <div className="bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5">
           <DialogHeader className="pr-10 text-left">
-            <DialogTitle className="text-base font-semibold text-white">Add Section</DialogTitle>
+            <DialogTitle className="text-base font-semibold text-white">Sections</DialogTitle>
           </DialogHeader>
         </div>
-        <div className="space-y-3 p-4">
+        <div className="flex flex-wrap items-end gap-2 border-b border-stone-200 bg-stone-50 p-3">
           <div className="space-y-1">
             <Label htmlFor="new-section-kind">Type</Label>
-            <select id="new-section-kind" className="h-10 w-full border border-stone-500 bg-stone-50 px-2 text-sm" value={kind} onChange={(e) => setKind(e.target.value)}>
+            <select id="new-section-kind" className="h-10 w-[10rem] border border-stone-500 bg-white px-2 text-sm" value={kind} onChange={(e) => setKind(e.target.value)}>
               {Object.entries(SECTION_KIND_LABEL).map(([k, label]) => (
                 <option key={k} value={k}>{label}</option>
               ))}
             </select>
           </div>
-          <div className="space-y-1">
+          <div className="min-w-[10rem] flex-1 space-y-1">
             <Label htmlFor="new-section-name">Name</Label>
-            <Input id="new-section-name" value={name} placeholder={kind === 'custom' ? 'e.g. Test Certificate, Calibration' : SECTION_KIND_LABEL[kind]} onChange={(e) => setName(e.target.value)} />
+            <Input id="new-section-name" value={name} placeholder={kind === 'custom' ? 'e.g. Test Certificate' : SECTION_KIND_LABEL[kind]} onChange={(e) => setName(e.target.value)} />
           </div>
-        </div>
-        <div className="flex justify-end gap-2 border-t border-stone-200 bg-stone-50 px-4 py-3">
-          <Button type="button" variant="outline" className={cn(limsOutlineBtnClass, 'h-9')} onClick={onClose}>Cancel</Button>
           <Button
             type="button"
-            className={cn(limsPrimaryBtnClass, 'h-9 min-w-[6rem]')}
-            disabled={saving || !finalName}
-            onClick={() => void (async () => {
-              setSaving(true)
-              try {
-                await onSave(kind, finalName)
-              } finally {
-                setSaving(false)
-              }
-            })()}
+            className={cn(limsPrimaryBtnClass, 'gap-1')}
+            disabled={busy || !finalName}
+            onClick={() => void onAdd(kind, finalName).then(() => setName(''))}
           >
-            {saving ? <Loader2 size={15} className="animate-spin" /> : 'Add'}
+            <Plus size={15} /> Add
           </Button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-3">
+          {sections.length === 0 ? (
+            <p className="py-6 text-center text-sm text-stone-500">No section yet.</p>
+          ) : (
+            <table className="w-full border-collapse">
+              <thead>
+                <tr>
+                  <th className={cn(th, 'w-10 text-center')}>#</th>
+                  <th className={th}>Name</th>
+                  <th className={cn(th, 'w-[8rem] text-center')}>Type</th>
+                  <th className={cn(th, 'w-[5.5rem] text-center')}>Columns</th>
+                  <th className={cn(th, 'w-[3.5rem] text-center')}>Delete</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sections.map((sec, i) => (
+                  <tr key={sec.id} className={i % 2 ? 'bg-[#f7f3eb]' : 'bg-[#fffcf7]'}>
+                    <td className={cn(td, 'text-center text-xs text-stone-500')}>{i + 1}</td>
+                    <td className={td}>
+                      <Input
+                        key={sec.name}
+                        defaultValue={sec.name}
+                        aria-label={`Name of ${sec.name}`}
+                        disabled={busy}
+                        className="h-8 min-h-8 border-transparent bg-transparent hover:border-stone-300 focus-visible:bg-white"
+                        onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+                        onBlur={(e) => {
+                          const next = e.target.value.trim()
+                          if (!next) {
+                            e.target.value = sec.name
+                            return
+                          }
+                          if (next !== sec.name) void onRename(sec, next)
+                        }}
+                      />
+                    </td>
+                    <td className={cn(td, 'text-center text-xs')}>{SECTION_KIND_LABEL[sec.kind] ?? sec.kind}</td>
+                    <td className={cn(td, 'text-center')}>{sec.columns.length}</td>
+                    <td className={cn(td, 'text-center')}>
+                      <button type="button" className={cn(iconBtn, 'text-red-700 hover:bg-red-50')} disabled={busy} title="Delete Section" aria-label={`Delete ${sec.name}`} onClick={() => void onDelete(sec)}>
+                        <Trash2 size={14} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+        <div className="flex justify-end border-t border-stone-200 bg-stone-50 px-4 py-2.5">
+          <Button type="button" className={cn(limsPrimaryBtnClass, 'h-9 min-h-9')} onClick={onClose}>Done</Button>
         </div>
       </DialogContent>
     </Dialog>
@@ -337,19 +391,28 @@ export function PortalRecordsSetupDialog({
     <Dialog open={licence != null} onOpenChange={onOpenChange}>
       <DialogContent aria-describedby={undefined} className={cn(limsDialogClass, 'flex max-h-[92dvh] w-[min(64rem,calc(100vw-1rem))] max-w-none flex-col gap-0 overflow-hidden bg-white p-0')}>
         {confirmDialog}
-        {addingSection ? (
-          <AddSectionDialog
+        {addingSection && sections ? (
+          <ManageSectionsDialog
+            sections={sections}
+            busy={busy != null}
             onClose={() => setAddingSection(false)}
-            onSave={async (kind, name) => {
+            onAdd={async (kind, name) => {
+              setBusy('add-section')
               try {
-                const id = await createSection(licenceId, kind, name, sections?.length ?? 0)
+                const id = await createSection(licenceId, kind, name, sections.length)
                 toast.success('Section Added')
-                setAddingSection(false)
                 setActiveId(id)
                 await load()
               } catch (err) {
                 toast.error(errText(err, 'Could not add the section'))
+              } finally {
+                setBusy(null)
               }
+            }}
+            onRename={(sec, name) => run('rename', () => updateSection(sec.id, { name }), 'Section Renamed')}
+            onDelete={async (sec) => {
+              if (!(await confirm(`Delete the section "${sec.name}" with all its columns and the customer's entries in it?`, { title: 'Delete Section', confirmLabel: 'Delete', destructive: true }))) return
+              await run('del-section', () => deleteSection(sec.id), 'Section Deleted')
             }}
           />
         ) : null}
@@ -398,7 +461,7 @@ export function PortalRecordsSetupDialog({
                   <Label htmlFor="records-section" className="text-sm font-semibold text-stone-900">Sections</Label>
                   <LimsFieldWithAdd
                     className="w-full sm:w-[20rem]"
-                    addButton={<LimsFieldAddButton aria-label="Add Section" title="Add Section" disabled={busy != null} onClick={() => setAddingSection(true)} />}
+                    addButton={<LimsFieldAddButton aria-label="Add, Rename or Delete Sections" title="Add, Rename or Delete Sections" disabled={busy != null} onClick={() => setAddingSection(true)} />}
                   >
                     <select
                       id="records-section"
@@ -418,6 +481,22 @@ export function PortalRecordsSetupDialog({
                       {busy === 'std' ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} Create Standard Sections
                     </Button>
                   ) : null}
+                  {active ? (
+                    <div className="ml-auto flex flex-wrap gap-2">
+                      {active.kind === 'final_test' ? (
+                        <Button type="button" variant="outline" className={cn(limsOutlineBtnClass, 'h-10 gap-1 px-3 text-xs')} disabled={busy != null}
+                          onClick={() => void run('tp', async () => {
+                            const n = await addTestParameterColumns(licenceId, active.id, active.columns.length, active.columns.map((c) => c.key))
+                            toast.success(n ? `${n} Columns Added` : 'No Test Parameters for This IS Code')
+                          })}>
+                          <FlaskConical size={13} /> Add From IS Test Parameters
+                        </Button>
+                      ) : null}
+                      <Button type="button" className={cn(limsPrimaryBtnClass, 'h-10 gap-1 text-xs')} disabled={busy != null} onClick={() => setEditing(draftFrom())}>
+                        <Plus size={14} /> Add Column
+                      </Button>
+                    </div>
+                  ) : null}
                 </div>
                 {sections.length === 0 ? (
                   <p className="text-sm text-stone-600">
@@ -427,37 +506,6 @@ export function PortalRecordsSetupDialog({
                   <>
                     {active ? (
                       <div className="space-y-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-xs text-stone-500">{SECTION_KIND_LABEL[active.kind] ?? active.kind}</span>
-                          <Button type="button" variant="outline" className={smallBtn} disabled={busy != null}
-                            onClick={() => {
-                              const name = window.prompt('Section Name', active.name)?.trim()
-                              if (name && name !== active.name) void run('rename', () => updateSection(active.id, { name }), 'Section Renamed')
-                            }}>
-                            <Pencil size={13} /> Rename
-                          </Button>
-                          <Button type="button" variant="outline" className={cn(smallBtn, 'text-red-700')} disabled={busy != null}
-                            onClick={() => void (async () => {
-                              if (!(await confirm(`Delete the section "${active.name}" with all its columns and the customer's entries in it?`, { title: 'Delete Section', confirmLabel: 'Delete', destructive: true }))) return
-                              await run('del-section', () => deleteSection(active.id), 'Section Deleted')
-                            })()}>
-                            <Trash2 size={13} /> Delete Section
-                          </Button>
-                          <div className="ml-auto flex flex-wrap gap-2">
-                            {active.kind === 'final_test' ? (
-                              <Button type="button" variant="outline" className={smallBtn} disabled={busy != null}
-                                onClick={() => void run('tp', async () => {
-                                  const n = await addTestParameterColumns(licenceId, active.id, active.columns.length, active.columns.map((c) => c.key))
-                                  toast.success(n ? `${n} Columns Added` : 'No Test Parameters for This IS Code')
-                                })}>
-                                <FlaskConical size={13} /> Add From IS Test Parameters
-                              </Button>
-                            ) : null}
-                            <Button type="button" className={cn(limsPrimaryBtnClass, 'h-8 gap-1 text-xs')} disabled={busy != null} onClick={() => setEditing(draftFrom())}>
-                              <Plus size={14} /> Add Column
-                            </Button>
-                          </div>
-                        </div>
                         <div className="overflow-x-auto">
                           <table className="w-full border-collapse">
                             <thead>
