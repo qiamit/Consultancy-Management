@@ -12,7 +12,20 @@ export type RecordColumn = {
   unit: string | null
   spec_min: number | null
   spec_max: number | null
-  config: { options?: string[]; formula?: string; section_id?: string; decimals?: number }
+  config: {
+    options?: string[]
+    /** Dropdown: preselected for a new entry. */
+    default?: string
+    /** Dropdown: choosing one of these makes the entry Fail. */
+    fail_options?: string[]
+    /** Dropdown: several choices at once (stored as a list). */
+    multiple?: boolean
+    /** Dropdown: the customer may also type a value that is not in the list. */
+    allow_other?: boolean
+    formula?: string
+    section_id?: string
+    decimals?: number
+  }
   required: boolean
 }
 
@@ -103,6 +116,13 @@ export function computeEntry(
         checked = true
         if (!ok) failed = true
       }
+    } else if (col.col_type === 'select' && col.config.fail_options?.length) {
+      const v = values[col.key]
+      const picked = (Array.isArray(v) ? v : v == null || v === '' ? [] : [v]).map(String)
+      if (picked.length) {
+        checked = true
+        if (picked.some((p) => col.config.fail_options!.includes(p))) failed = true
+      }
     } else if (col.col_type === 'pass_fail') {
       const v = String(values[col.key] ?? '').toLowerCase()
       if (v === 'pass' || v === 'fail') {
@@ -112,6 +132,15 @@ export function computeEntry(
     }
   }
   return { values, result: failed ? 'fail' : checked ? 'pass' : null, formulaErrors }
+}
+
+/** Starting values of a new entry: each dropdown's default. */
+export function defaultEntryValues(columns: RecordColumn[]): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const c of columns) {
+    if (c.col_type === 'select' && c.config.default) out[c.key] = c.config.multiple ? [c.config.default] : c.config.default
+  }
+  return out
 }
 
 export function limitsText(col: Pick<RecordColumn, 'spec_min' | 'spec_max' | 'unit'>): string {

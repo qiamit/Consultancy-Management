@@ -42,6 +42,7 @@ import {
   type RecordsService,
 } from './portalRecordsAdminApi'
 import { CalendarDateField } from './CalendarDateField'
+import { DropdownOptionsEditor, type DropdownSettings } from './DropdownOptionsEditor'
 import { FormulaBuilder } from './FormulaBuilder'
 
 const th = 'border border-stone-700 bg-stone-800 px-2 py-1.5 text-left text-[11px] font-bold uppercase tracking-[0.06em] text-amber-200'
@@ -62,7 +63,7 @@ type Draft = {
   unit: string
   spec_min: string
   spec_max: string
-  options: string
+  dropdown: DropdownSettings
   formula: string
   decimals: string
   link_section: string
@@ -80,7 +81,13 @@ function draftFrom(c?: AdminColumn): Draft {
     unit: c?.unit ?? '',
     spec_min: c?.spec_min != null ? String(c.spec_min) : '',
     spec_max: c?.spec_max != null ? String(c.spec_max) : '',
-    options: (c?.config.options ?? []).join('\n'),
+    dropdown: {
+      options: c?.config.options ?? [],
+      defaultOption: c?.config.default ?? '',
+      failOptions: c?.config.fail_options ?? [],
+      multiple: Boolean(c?.config.multiple),
+      allowOther: Boolean(c?.config.allow_other),
+    },
     formula: c?.config.formula ?? '',
     decimals: c?.config.decimals != null ? String(c.config.decimals) : '',
     link_section: c?.config.section_id ?? '',
@@ -122,7 +129,8 @@ function ColumnEditor({
   const save = async () => {
     if (!d.label.trim()) return toast.warning('Enter the Column Name')
     if (problem) return toast.warning(problem)
-    if (d.col_type === 'select' && !d.options.trim()) return toast.warning('Enter the Dropdown Options')
+    const dropdownOptions = d.dropdown.options.map((o) => o.trim()).filter(Boolean)
+    if (d.col_type === 'select' && dropdownOptions.length === 0) return toast.warning('Add the Dropdown Options')
     if (d.col_type === 'link' && !d.link_section) return toast.warning('Choose the Section to Link')
     const num = (s: string) => (s.trim() === '' ? null : Number(s))
     if ([d.spec_min, d.spec_max].some((s) => s.trim() !== '' && !Number.isFinite(Number(s)))) return toast.warning('Limits Must Be Numbers')
@@ -140,7 +148,13 @@ function ColumnEditor({
         spec_max: hasLimits ? num(d.spec_max) : null,
         config:
           d.col_type === 'select'
-            ? { options: d.options.split(/\n|,/).map((o) => o.trim()).filter(Boolean) }
+            ? {
+                options: dropdownOptions,
+                ...(d.dropdown.defaultOption && dropdownOptions.includes(d.dropdown.defaultOption) ? { default: d.dropdown.defaultOption } : {}),
+                ...(d.dropdown.failOptions.length ? { fail_options: d.dropdown.failOptions.filter((f) => dropdownOptions.includes(f)) } : {}),
+                ...(d.dropdown.multiple ? { multiple: true } : {}),
+                ...(d.dropdown.allowOther ? { allow_other: true } : {}),
+              }
             : d.col_type === 'formula'
               ? { formula: d.formula.trim(), ...(d.decimals.trim() ? { decimals: Number(d.decimals) } : {}) }
               : d.col_type === 'link'
@@ -215,12 +229,7 @@ function ColumnEditor({
                 </div>
               </>
             ) : null}
-            {d.col_type === 'select' ? (
-              <div className="space-y-1 sm:col-span-2">
-                <Label htmlFor="col-options">Dropdown Options (One per Line)</Label>
-                <textarea id="col-options" rows={4} className="w-full border border-stone-400 bg-white p-2 text-sm" value={d.options} onChange={(e) => set('options', e.target.value)} />
-              </div>
-            ) : null}
+            {d.col_type === 'select' ? <DropdownOptionsEditor value={d.dropdown} onChange={(v) => set('dropdown', v)} /> : null}
             {d.col_type === 'formula' ? (
               <FormulaBuilder
                 formula={d.formula}

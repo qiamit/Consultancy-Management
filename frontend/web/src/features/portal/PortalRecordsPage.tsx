@@ -23,7 +23,7 @@ import {
   type PortalSection,
 } from './portalApi'
 import { usePortalData } from './portalDataContext'
-import { computeEntry, limitsText, toNumber, withinLimits, type RecordColumn } from './recordLogic'
+import { computeEntry, defaultEntryValues, limitsText, toNumber, withinLimits, type RecordColumn } from './recordLogic'
 
 const REF_LABEL: Record<string, string> = {
   raw_material: 'Lot / Heat No',
@@ -49,6 +49,7 @@ function cellText(col: RecordColumn, v: unknown, links: Record<string, PortalLin
     const opts = links[col.config.section_id ?? ''] ?? []
     return ids.map((id) => linkLabel(opts.find((o) => o.id === id))).join(', ')
   }
+  if (col.col_type === 'select' && Array.isArray(v)) return v.map(String).join(', ')
   if (col.col_type === 'pass_fail') return String(v).toLowerCase() === 'fail' ? 'Fail' : String(v).toLowerCase() === 'pass' ? 'Pass' : String(v)
   if (typeof v === 'boolean') return v ? 'Yes' : 'No'
   const n = typeof v === 'number' ? v : null
@@ -77,7 +78,7 @@ function EntryDialog({
   const existing = entry === 'new' ? null : entry
   const [entryDate, setEntryDate] = useState(existing?.entry_date ?? todayLocalIso())
   const [refNo, setRefNo] = useState(existing?.ref_no ?? '')
-  const [input, setInput] = useState<Record<string, unknown>>(existing?.data ?? {})
+  const [input, setInput] = useState<Record<string, unknown>>(existing?.data ?? defaultEntryValues(section.columns))
   const [saving, setSaving] = useState(false)
   // Values of the entries picked in each link column, for formulas like SUM(rm_lots.quantity).
   const linked = useMemo(() => {
@@ -95,7 +96,7 @@ function EntryDialog({
   const set = (key: string, v: unknown) => setInput((prev) => ({ ...prev, [key]: v }))
 
   const save = async () => {
-    const missing = section.columns.filter((c) => c.required && c.col_type !== 'formula' && (computed.values[c.key] == null || computed.values[c.key] === ''))
+    const missing = section.columns.filter((c) => c.required && c.col_type !== 'formula' && (computed.values[c.key] == null || computed.values[c.key] === '' || (Array.isArray(computed.values[c.key]) && (computed.values[c.key] as unknown[]).length === 0)))
     if (missing.length) {
       toast.warning(`Fill ${missing.map((c) => c.label).join(', ')}`)
       return
@@ -156,6 +157,46 @@ function EntryDialog({
                   <div className={cn('flex h-9 items-center border px-2 text-sm', ok === false ? 'border-red-400 bg-red-50 text-red-800' : ok ? 'border-emerald-300 bg-emerald-50 text-emerald-900' : 'border-stone-300 bg-stone-100 text-stone-800')}>
                     {computed.formulaErrors[col.key] ? <span className="text-xs text-red-700">{computed.formulaErrors[col.key]}</span> : cellText(col, v, links) || '—'}
                   </div>
+                )
+              } else if (col.col_type === 'select' && col.config.multiple) {
+                // Several choices: a tick per option (and a box for another value when allowed).
+                const picked = Array.isArray(v) ? v.map(String) : v ? [String(v)] : []
+                const options = col.config.options ?? []
+                const others = picked.filter((p) => !options.includes(p))
+                field = (
+                  <div className="space-y-1.5 border border-stone-300 bg-white p-2">
+                    <div className="flex flex-wrap gap-x-3 gap-y-1">
+                      {options.map((o) => (
+                        <label key={o} className="inline-flex items-center gap-1.5 text-sm text-stone-800">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4"
+                            checked={picked.includes(o)}
+                            onChange={(e) => set(col.key, e.target.checked ? [...picked, o] : picked.filter((p) => p !== o))}
+                          />
+                          {o}
+                        </label>
+                      ))}
+                    </div>
+                    {col.config.allow_other ? (
+                      <Input
+                        className="h-8"
+                        placeholder="Other (Comma Separated)"
+                        value={others.join(', ')}
+                        onChange={(e) => set(col.key, [...picked.filter((p) => options.includes(p)), ...e.target.value.split(',').map((x) => x.trim()).filter(Boolean)])}
+                      />
+                    ) : null}
+                  </div>
+                )
+              } else if (col.col_type === 'select' && col.config.allow_other) {
+                // One choice from the list, or a value typed by the customer.
+                field = (
+                  <>
+                    <Input id={id} list={`${id}-options`} value={String(v ?? '')} placeholder="Pick or Type" onChange={(e) => set(col.key, e.target.value)} />
+                    <datalist id={`${id}-options`}>
+                      {(col.config.options ?? []).map((o) => <option key={o} value={o} />)}
+                    </datalist>
+                  </>
                 )
               } else if (col.col_type === 'select' || col.col_type === 'pass_fail') {
                 const options = col.col_type === 'pass_fail' ? ['Pass', 'Fail'] : col.config.options ?? []
