@@ -591,7 +591,7 @@ export function CustomerPortalDialog({
                       <th className={cn(th, 'w-[7.5rem] text-center')}>Valid Till</th>
                       <th className={cn(th, 'w-[6rem] text-center')}>Logins</th>
                       <th className={cn(th, 'w-[9rem] text-center')}>Records Service</th>
-                      <th className={cn(th, 'w-[10.5rem]')}>Paid Till</th>
+                      <th className={cn(th, 'w-[10.5rem] text-center')}>Paid Till</th>
                       <th className={cn(th, 'w-[9rem] text-center')}>Documents</th>
                       <th className={cn(th, 'w-[9.5rem] text-center')}>Formats</th>
                     </tr>
@@ -634,11 +634,11 @@ export function CustomerPortalDialog({
                               <span className="block text-[10px] font-semibold uppercase tracking-wide text-red-700">Expired</span>
                             ) : null}
                           </td>
-                          <td className={td}>
+                          <td className={cn(td, 'text-center')}>
                             {service?.records_enabled ? (
                               <DateInput
                                 aria-label={`Paid Till for ${cml}`}
-                                className="h-8 min-h-8 w-full text-sm"
+                                className="h-8 min-h-8 w-full text-center text-sm"
                                 value={service.paid_until ?? ''}
                                 disabled={busy != null}
                                 onChange={(e) => {
