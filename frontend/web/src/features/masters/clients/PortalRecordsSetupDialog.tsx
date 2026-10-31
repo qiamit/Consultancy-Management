@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ArrowDown, ArrowUp, Download, Save, FlaskConical, Loader2, Pencil, Plus, Power, Sparkles, Trash2 } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ArrowDown, ArrowUp, Calculator, Download, Save, FlaskConical, Loader2, Pencil, Plus, Power, Sparkles, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -10,7 +10,7 @@ import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { BisModuleImportDialog } from '@/features/bis/projects/BisModuleImportDialog'
 import { fetchBisProjectById } from '@/features/bis/projects/bisProjectsApi'
 import type { BisProjectRow } from '@/features/bis/projects/types'
-import { formulaProblem } from '@/lib/recordFormula'
+import { FORMULA_FUNCTIONS, formulaProblem } from '@/lib/recordFormula'
 import { limsDarkBarBtnClass, limsDarkBarGlowStyle, limsDialogClass, limsOutlineBtnClass, limsPrimaryBtnClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import {
@@ -105,9 +105,30 @@ function ColumnEditor({
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setD((prev) => ({ ...prev, [k]: v }))
   const otherKeys = section.columns.filter((c) => c.id !== d.id).map((c) => c.key)
   const key = d.key ?? columnKeyFrom(d.label || 'column', otherKeys)
-  // A formula may use the columns before it (they are calculated in order).
-  const formulaKeys = section.columns.filter((c) => c.id !== d.id).map((c) => c.key)
+  const ownColumns = section.columns.filter((c) => c.id !== d.id)
+  // Columns of other sections reached through this section's link columns: <link key>.<column key>.
+  const linkedGroups = ownColumns
+    .filter((c) => c.col_type === 'link' && c.config.section_id)
+    .map((link) => ({ link, target: sections.find((s) => s.id === link.config.section_id) }))
+    .filter((g): g is { link: AdminColumn; target: AdminSection } => Boolean(g.target))
+  const formulaKeys = [
+    ...ownColumns.map((c) => c.key),
+    ...linkedGroups.flatMap((g) => g.target.columns.filter((c) => c.col_type !== 'link').map((c) => `${g.link.key}.${c.key}`)),
+  ]
   const problem = d.col_type === 'formula' ? formulaProblem(d.formula, formulaKeys) : ''
+  const formulaBox = useRef<HTMLTextAreaElement>(null)
+  // Puts text at the cursor of the formula box (or at the end) and keeps the cursor after it.
+  const insert = (text: string) => {
+    const box = formulaBox.current
+    const start = box?.selectionStart ?? d.formula.length
+    const end = box?.selectionEnd ?? d.formula.length
+    const next = d.formula.slice(0, start) + text + d.formula.slice(end)
+    set('formula', next)
+    requestAnimationFrame(() => {
+      box?.focus()
+      box?.setSelectionRange(start + text.length, start + text.length)
+    })
+  }
   const hasLimits = d.col_type === 'spec' || d.col_type === 'formula'
 
   const save = async () => {
@@ -151,7 +172,7 @@ function ColumnEditor({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent aria-describedby={undefined} className={cn(limsDialogClass, 'w-[min(36rem,calc(100vw-1rem))] max-w-none gap-0 overflow-hidden bg-white p-0')}>
+      <DialogContent aria-describedby={undefined} className={cn(limsDialogClass, d.col_type === 'formula' ? 'w-[min(48rem,calc(100vw-1rem))]' : 'w-[min(36rem,calc(100vw-1rem))]', 'max-w-none gap-0 overflow-hidden bg-white p-0')}>
         <div className="bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5">
           <DialogHeader className="pr-10 text-left">
             <DialogTitle className="text-base font-semibold text-white">{d.id ? 'Edit Column' : 'Add Column'} — {section.name}</DialogTitle>
@@ -166,11 +187,25 @@ function ColumnEditor({
             </div>
             <div className="space-y-1">
               <Label htmlFor="col-type">Type</Label>
-              <select id="col-type" className="h-9 w-full border border-stone-400 bg-white px-2 text-sm" value={d.col_type} onChange={(e) => set('col_type', e.target.value as RecordColumnType)}>
-                {EDITABLE_TYPES.map((t) => (
-                  <option key={t} value={t}>{COLUMN_TYPE_LABEL[t]}</option>
-                ))}
-              </select>
+              <div className="flex gap-1.5">
+                <select id="col-type" className="h-9 min-w-0 flex-1 border border-stone-400 bg-white px-2 text-sm" value={d.col_type} onChange={(e) => set('col_type', e.target.value as RecordColumnType)}>
+                  {EDITABLE_TYPES.map((t) => (
+                    <option key={t} value={t}>{COLUMN_TYPE_LABEL[t]}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className={cn('inline-flex h-9 w-9 shrink-0 items-center justify-center border', d.col_type === 'formula' ? 'border-amber-700 bg-amber-700 text-white' : 'border-stone-400 bg-white text-amber-800 hover:bg-amber-50')}
+                  title="Formula Builder"
+                  aria-label="Formula Builder"
+                  onClick={() => {
+                    set('col_type', 'formula')
+                    requestAnimationFrame(() => formulaBox.current?.focus())
+                  }}
+                >
+                  <Calculator size={16} aria-hidden />
+                </button>
+              </div>
             </div>
             <div className="space-y-1">
               <Label htmlFor="col-unit">Unit</Label>
@@ -196,17 +231,59 @@ function ColumnEditor({
               </div>
             ) : null}
             {d.col_type === 'formula' ? (
-              <div className="space-y-1 sm:col-span-2">
-                <Label htmlFor="col-formula">Formula</Label>
-                <Input id="col-formula" className="font-mono" value={d.formula} placeholder="ROUND(load * 1000 / area, 1)" onChange={(e) => set('formula', e.target.value)} />
-                <p className={cn('text-[11px]', problem ? 'text-red-700' : 'text-emerald-700')}>{problem || 'Formula OK'}</p>
-                <p className="text-[11px] text-stone-500">
-                  Columns: {formulaKeys.length ? formulaKeys.map((k) => <code key={k} className="mr-1 bg-stone-100 px-1">{k}</code>) : 'none yet'}
-                  <br />Functions: SUM, AVG, MIN, MAX, ROUND(x, digits), ABS, SQRT, IF(condition, a, b), AND, OR, NOT · Operators + − × (*) ÷ (/) ^ and &gt; &lt; =
-                </p>
-                <div className="flex items-center gap-2 pt-1">
+              <div className="space-y-2 border border-amber-300 bg-amber-50/40 p-3 sm:col-span-2">
+                <div className="flex items-center gap-2">
+                  <Calculator size={15} className="text-amber-800" aria-hidden />
+                  <Label htmlFor="col-formula" className="text-sm font-semibold">Formula Builder</Label>
+                  <span className={cn('ml-auto text-[11px] font-medium', problem ? 'text-red-700' : 'text-emerald-700')}>{problem || 'Formula OK'}</span>
+                </div>
+                <textarea
+                  id="col-formula"
+                  ref={formulaBox}
+                  rows={2}
+                  className="w-full border border-stone-400 bg-white p-2 font-mono text-sm"
+                  value={d.formula}
+                  placeholder="ROUND(load * 1000 / area, 1)"
+                  onChange={(e) => set('formula', e.target.value)}
+                />
+                <div className="space-y-1.5">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-600">Columns of {section.name}</p>
+                  <div className="flex flex-wrap gap-1">
+                    {ownColumns.filter((c) => c.col_type !== 'link').length ? ownColumns.filter((c) => c.col_type !== 'link').map((c) => (
+                      <button key={c.id} type="button" className="inline-flex items-center gap-1 border border-stone-300 bg-white px-1.5 py-0.5 text-xs text-stone-800 hover:border-amber-600 hover:bg-amber-50" title={`Insert ${c.key}`} onClick={() => insert(c.key)}>
+                        {c.label} <code className="text-[10px] text-stone-500">{c.key}</code>
+                      </button>
+                    )) : <span className="text-xs text-stone-500">No other column yet.</span>}
+                  </div>
+                  {linkedGroups.map((g) => (
+                    <div key={g.link.id} className="space-y-1">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-600">From {g.target.name} (Linked Through {g.link.label})</p>
+                      <div className="flex flex-wrap gap-1">
+                        {g.target.columns.filter((c) => c.col_type !== 'link').map((c) => (
+                          <button key={c.id} type="button" className="inline-flex items-center gap-1 border border-stone-300 bg-white px-1.5 py-0.5 text-xs text-stone-800 hover:border-amber-600 hover:bg-amber-50" title={`Insert ${g.link.key}.${c.key} (one value per linked entry; use SUM, AVG, … for several)`} onClick={() => insert(`${g.link.key}.${c.key}`)}>
+                            {c.label} <code className="text-[10px] text-stone-500">{g.link.key}.{c.key}</code>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                  <p className="pt-1 text-[11px] font-semibold uppercase tracking-wide text-stone-600">Operators</p>
+                  <div className="flex flex-wrap gap-1">
+                    {[['+', '+'], ['−', '-'], ['×', '*'], ['÷', '/'], ['^', '^'], ['(', '('], [')', ')'], [',', ', '], ['>', ' > '], ['<', ' < '], ['=', ' = '], ['≥', ' >= '], ['≤', ' <= ']].map(([label, text]) => (
+                      <button key={label} type="button" className="inline-flex h-7 min-w-7 items-center justify-center border border-stone-400 bg-white px-1.5 font-mono text-sm text-stone-900 hover:bg-amber-50" onClick={() => insert(text!)}>{label}</button>
+                    ))}
+                  </div>
+                  <p className="pt-1 text-[11px] font-semibold uppercase tracking-wide text-stone-600">Functions</p>
+                  <div className="flex flex-wrap gap-1">
+                    {FORMULA_FUNCTIONS.map((f) => (
+                      <button key={f.name} type="button" className="inline-flex h-7 items-center border border-amber-600/60 bg-white px-1.5 font-mono text-xs font-semibold text-amber-900 hover:bg-amber-50" title={f.help} onClick={() => insert(`${f.name}(`)}>{f.name}</button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 border-t border-amber-200 pt-2">
                   <Label htmlFor="col-decimals" className="shrink-0">Decimals</Label>
                   <Input id="col-decimals" inputMode="numeric" className="h-8 w-20" value={d.decimals} onChange={(e) => set('decimals', e.target.value.replace(/\D/g, ''))} />
+                  <p className="text-[11px] text-stone-500">Works only inside this licence. A copy made with Import keeps its own formulas and links.</p>
                 </div>
               </div>
             ) : null}

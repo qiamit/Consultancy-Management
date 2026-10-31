@@ -1,4 +1,4 @@
-import { evaluateFormula, type FormulaValue } from '@/lib/recordFormula'
+import { evaluateFormula, type FormulaScalar, type FormulaValue } from '@/lib/recordFormula'
 
 /* Customer Portal records: column definitions (designed by Q Engineering) and the calculation of one entry. */
 
@@ -63,18 +63,29 @@ export function withinLimits(col: Pick<RecordColumn, 'spec_min' | 'spec_max'>, v
 /**
  * Fills the formula columns (in column order, so a formula may use an earlier formula) and works out the result:
  * fail when any limit is broken or a Pass / Fail column says fail; pass when something was checked and all passed.
+ * `linked` gives, per link column key, the stored values of the entries picked in it (same licence only), so a
+ * formula can use <link column>.<column> (one value per picked entry).
  */
-export function computeEntry(columns: RecordColumn[], input: Record<string, unknown>): {
+export function computeEntry(
+  columns: RecordColumn[],
+  input: Record<string, unknown>,
+  linked: Record<string, Array<Record<string, unknown>>> = {},
+): {
   values: Record<string, unknown>
   result: 'pass' | 'fail' | null
   formulaErrors: Record<string, string>
 } {
   const values: Record<string, unknown> = { ...input }
   const formulaErrors: Record<string, string> = {}
+  const linkedScope: Record<string, FormulaValue> = {}
+  for (const [linkKey, rows] of Object.entries(linked)) {
+    const keys = new Set(rows.flatMap((r) => Object.keys(r)))
+    for (const k of keys) linkedScope[`${linkKey}.${k}`] = rows.map((r) => (r[k] ?? null) as FormulaScalar)
+  }
   for (const col of columns) {
     if (col.col_type !== 'formula') continue
     try {
-      const out = evaluateFormula(col.config.formula ?? '', values as Record<string, FormulaValue>)
+      const out = evaluateFormula(col.config.formula ?? '', { ...linkedScope, ...(values as Record<string, FormulaValue>) })
       const decimals = col.config.decimals
       values[col.key] =
         typeof out === 'number' && decimals != null ? Math.round(out * 10 ** decimals) / 10 ** decimals : out

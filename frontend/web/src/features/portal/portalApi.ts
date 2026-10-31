@@ -168,7 +168,14 @@ export type PortalEntry = {
   updated_at: string
 }
 
-export type PortalLinkOption = { id: string; entry_date: string; ref_no: string | null; result: 'pass' | 'fail' | null }
+export type PortalLinkOption = {
+  id: string
+  entry_date: string
+  ref_no: string | null
+  result: 'pass' | 'fail' | null
+  /** The entry's stored values, for formulas that use linked entries. */
+  data?: Record<string, unknown> | null
+}
 
 function notAvailable(error: { code?: string; message: string }): Error {
   return new Error(error.code === '42501' ? error.message.replace(/^Not found$/, 'This section is not available.') : error.message)

@@ -79,7 +79,19 @@ function EntryDialog({
   const [refNo, setRefNo] = useState(existing?.ref_no ?? '')
   const [input, setInput] = useState<Record<string, unknown>>(existing?.data ?? {})
   const [saving, setSaving] = useState(false)
-  const computed = useMemo(() => computeEntry(section.columns, input), [section.columns, input])
+  // Values of the entries picked in each link column, for formulas like SUM(rm_lots.quantity).
+  const linked = useMemo(() => {
+    const out: Record<string, Array<Record<string, unknown>>> = {}
+    for (const c of section.columns) {
+      if (c.col_type !== 'link') continue
+      const picked = input[c.key]
+      const ids = Array.isArray(picked) ? picked.map(String) : picked ? [String(picked)] : []
+      const opts = links[c.config.section_id ?? ''] ?? []
+      out[c.key] = opts.filter((o) => ids.includes(o.id)).map((o) => o.data ?? {})
+    }
+    return out
+  }, [section.columns, input, links])
+  const computed = useMemo(() => computeEntry(section.columns, input, linked), [section.columns, input, linked])
   const set = (key: string, v: unknown) => setInput((prev) => ({ ...prev, [key]: v }))
 
   const save = async () => {

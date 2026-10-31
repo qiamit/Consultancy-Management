@@ -1,12 +1,15 @@
 /**
  * Excel-like formulas for Customer Portal record columns, evaluated without eval().
- * Operands: numbers, column keys (e.g. load, area_mm2), "text".
+ * Operands: numbers, column keys (e.g. load, area_mm2), "text", and values of linked entries in another section of
+ * the same licence as <link column>.<column> (e.g. rm_lots.quantity: one value per linked entry).
  * Operators: + - * / ^, comparisons = <> != < <= > >=, & (join text), parentheses.
- * Functions: SUM, AVG, MIN, MAX, ROUND(x[, digits]), ABS, SQRT, IF(cond, a, b), AND, OR, NOT.
- * Example: = ROUND(load * 1000 / area, 1)
+ * Functions: SUM, AVG, MIN, MAX, COUNT, MEDIAN, STDEV (sample), STDEVP, ROUND(x[, digits]), ABS, SQRT,
+ * IF(cond, a, b), AND, OR, NOT. SUM / AVG / MIN / MAX / COUNT / MEDIAN / STDEV take lists of linked values too.
+ * Example: = ROUND(load * 1000 / area, 1)   = SUM(rm_lots.quantity)   = STDEV(t1, t2, t3)
  */
 
-export type FormulaValue = number | string | boolean | null
+export type FormulaScalar = number | string | boolean | null
+export type FormulaValue = FormulaScalar | FormulaScalar[]
 
 type Token =
   | { t: 'num'; v: number }
@@ -33,7 +36,7 @@ function tokenize(src: string): Token[] {
       out.push({ t: 'num', v: Number(m[0]) })
       i += m[0].length
     } else if (/[A-Za-z_]/.test(c)) {
-      const m = /^[A-Za-z_][A-Za-z0-9_]*/.exec(s.slice(i))!
+      const m = /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?/.exec(s.slice(i))!
       out.push({ t: 'id', v: m[0] })
       i += m[0].length
     } else if (c === '"') {
@@ -68,7 +71,28 @@ type Node =
   | { k: 'bin'; op: string; a: Node; b: Node }
   | { k: 'call'; fn: string; args: Node[] }
 
-const FUNCS = new Set(['SUM', 'AVG', 'AVERAGE', 'MIN', 'MAX', 'ROUND', 'ABS', 'SQRT', 'IF', 'AND', 'OR', 'NOT'])
+const FUNCS = new Set(['SUM', 'AVG', 'AVERAGE', 'MIN', 'MAX', 'COUNT', 'MEDIAN', 'STDEV', 'STDEVP', 'ROUND', 'ABS', 'SQRT', 'IF', 'AND', 'OR', 'NOT'])
+/** Functions that take a whole list (several linked values) as one argument. */
+const LIST_FUNCS = new Set(['SUM', 'AVG', 'AVERAGE', 'MIN', 'MAX', 'COUNT', 'MEDIAN', 'STDEV', 'STDEVP'])
+
+/** Formula functions with a short help line, for the formula builder. */
+export const FORMULA_FUNCTIONS: Array<{ name: string; help: string }> = [
+  { name: 'SUM', help: 'Total' },
+  { name: 'AVG', help: 'Average' },
+  { name: 'MIN', help: 'Smallest' },
+  { name: 'MAX', help: 'Largest' },
+  { name: 'COUNT', help: 'How many values' },
+  { name: 'MEDIAN', help: 'Middle value' },
+  { name: 'STDEV', help: 'Standard deviation (sample)' },
+  { name: 'STDEVP', help: 'Standard deviation (population)' },
+  { name: 'ROUND', help: 'ROUND(x, digits)' },
+  { name: 'ABS', help: 'Without minus sign' },
+  { name: 'SQRT', help: 'Square root' },
+  { name: 'IF', help: 'IF(condition, then, else)' },
+  { name: 'AND', help: 'All true' },
+  { name: 'OR', help: 'Any true' },
+  { name: 'NOT', help: 'Opposite' },
+]
 
 function parse(tokens: Token[]): Node {
   let p = 0
@@ -181,11 +205,23 @@ export function formulaRefs(src: string): string[] {
   return [...refs]
 }
 
+/** A list in a place that needs one value: one item is fine, more must go through SUM, AVG, … */
+function scalar(v: FormulaValue, label: string): FormulaScalar {
+  if (!Array.isArray(v)) return v
+  if (v.length <= 1) return v[0] ?? null
+  throw new FormulaError(`${label} has ${v.length} values; use SUM, AVG, MIN, MAX or COUNT`)
+}
+
 function num(v: FormulaValue): number | null {
+  if (Array.isArray(v)) return num(scalar(v, 'A linked column'))
   if (v == null || v === '') return null
   if (typeof v === 'boolean') return v ? 1 : 0
   const n = typeof v === 'number' ? v : Number(String(v).replace(/,/g, ''))
   return Number.isFinite(n) ? n : null
+}
+
+function refLabel(n: Node): string {
+  return n.k === 'ref' ? n.v : 'A value'
 }
 
 /** Evaluates a formula; empty inputs give null (blank cell) instead of an error. */
@@ -203,8 +239,8 @@ export function evaluateFormula(src: string, values: Record<string, FormulaValue
         return a == null ? null : -a
       }
       case 'bin': {
-        const av = ev(n.a)
-        const bv = ev(n.b)
+        const av = scalar(ev(n.a), refLabel(n.a))
+        const bv = scalar(ev(n.b), refLabel(n.b))
         if (n.op === '&') return `${av ?? ''}${bv ?? ''}`
         if (['=', '<>', '<', '<=', '>', '>='].includes(n.op)) {
           const an = num(av)
@@ -231,9 +267,21 @@ export function evaluateFormula(src: string, values: Record<string, FormulaValue
         }
       }
       case 'call': {
-        const args = n.args.map(ev)
+        const raw = n.args.map(ev)
+        const args: FormulaScalar[] = LIST_FUNCS.has(n.fn) ? raw.flat() : raw.map((a, i) => scalar(a, refLabel(n.args[i]!)))
         const nums = args.map(num).filter((x): x is number => x != null)
+        const mean = nums.length ? nums.reduce((s, x) => s + x, 0) / nums.length : 0
+        const sq = nums.reduce((s, x) => s + (x - mean) ** 2, 0)
         switch (n.fn) {
+          case 'COUNT': return nums.length
+          case 'MEDIAN': {
+            if (!nums.length) return null
+            const sorted = [...nums].sort((a, b) => a - b)
+            const mid = Math.floor(sorted.length / 2)
+            return sorted.length % 2 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2
+          }
+          case 'STDEV': return nums.length > 1 ? Math.sqrt(sq / (nums.length - 1)) : null
+          case 'STDEVP': return nums.length ? Math.sqrt(sq / nums.length) : null
           case 'SUM': return nums.length ? nums.reduce((s, x) => s + x, 0) : null
           case 'AVG':
           case 'AVERAGE': return nums.length ? nums.reduce((s, x) => s + x, 0) / nums.length : null
