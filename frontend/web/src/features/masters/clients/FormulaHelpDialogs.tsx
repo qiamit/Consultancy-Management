@@ -62,7 +62,7 @@ export function FunctionsDialog({ open, onClose, onPick }: { open: boolean; onCl
         <table className="w-full min-w-[42rem] border-collapse font-jakarta">
           <thead>
             <tr>
-              <th className={cn(th, 'w-[9rem]')}>Function</th>
+              <th className={cn(th, 'w-[9rem] text-left')}>Function</th>
               <th className={cn(th, 'w-[7rem]')}>Type</th>
               <th className={cn(th, 'w-[16rem]')}>How to Write</th>
               <th className={th}>What It Does</th>
@@ -79,7 +79,7 @@ export function FunctionsDialog({ open, onClose, onPick }: { open: boolean; onCl
                   onClose()
                 }}
               >
-                <td className={cn(td, 'text-center font-mono font-bold text-amber-900')}>{f.name}</td>
+                <td className={cn(td, 'font-mono font-bold text-amber-900')}>{f.name}</td>
                 <td className={cn(td, 'text-center text-xs')}>{f.category}</td>
                 <td className={cn(td, 'text-center font-mono text-xs')}>{f.syntax}</td>
                 <td className={td}>{f.help}{f.list ? <span className="ml-1 text-[11px] text-sky-700">(Takes linked lists)</span> : null}</td>
