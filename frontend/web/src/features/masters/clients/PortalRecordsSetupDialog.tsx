@@ -213,7 +213,6 @@ function ColumnEditor({
                   <Label htmlFor="col-max">Maximum</Label>
                   <Input id="col-max" inputMode="decimal" value={d.spec_max} onChange={(e) => set('spec_max', e.target.value)} />
                 </div>
-                <p className="text-[11px] text-stone-500 sm:col-span-2">A value outside the limits marks the entry as Fail. Leave both empty for no check.</p>
               </>
             ) : null}
             {d.col_type === 'select' ? (
