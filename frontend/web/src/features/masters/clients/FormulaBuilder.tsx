@@ -139,7 +139,7 @@ export function FormulaBuilder({
             Functions
           </button>
           <button type="button" className={cn(toggleBtn, panel === 'operators' ? 'border-amber-700 bg-amber-700 text-white' : 'border-amber-600/60 bg-white text-amber-900 hover:bg-amber-50')} onClick={() => setPanel((p) => (p === 'operators' ? null : 'operators'))}>
-            + − × ÷ Operators
+            Operators
           </button>
           <label htmlFor="col-decimals" className="text-xs font-semibold text-stone-700">Decimals</label>
           <Input id="col-decimals" inputMode="numeric" className="h-7 min-h-7 w-12 px-2 text-center text-xs" value={decimals} onChange={(e) => onDecimals(e.target.value.replace(/\D/g, ''))} />
