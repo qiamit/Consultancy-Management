@@ -307,7 +307,7 @@ export function PortalRecordsServiceDialog({
               { label: 'Paid Till', value: tillDate ? formatDisplayDate(tillDate) : '—' },
               { label: 'Amount', value: settings == null ? '…' : settings.rate != null ? `${money(settings.rate)} / Year` : 'Not Set' },
             ].map((t) => (
-              <div key={t.label} className="min-w-[8.5rem] flex-1 border border-stone-200 bg-[#fffcf7] px-3 py-2">
+              <div key={t.label} className="min-w-[8.5rem] flex-1 border border-stone-200 bg-[#fffcf7] px-3 py-2 text-center">
                 <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-stone-500">{t.label}</p>
                 <div className="mt-1 text-sm font-semibold text-stone-900">{t.value}</div>
               </div>
