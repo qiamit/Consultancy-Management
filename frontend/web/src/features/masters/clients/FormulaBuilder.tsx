@@ -3,14 +3,11 @@ import { Calculator } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { FORMULA_FUNCTIONS, evaluateFormula, formulaRefs, type FormulaScalar, type FormulaValue } from '@/lib/recordFormula'
 import { cn } from '@/lib/utils'
+import { FunctionsDialog, OperatorsDialog } from './FormulaHelpDialogs'
 import type { AdminColumn, AdminSection } from './portalRecordsAdminApi'
 
 type Suggestion = { key: string; label: string; insert: string; detail: string; kind: 'col' | 'fn' | 'blocked' }
 
-const OPERATORS: Array<[string, string]> = [
-  ['+', ' + '], ['−', ' - '], ['×', ' * '], ['÷', ' / '], ['^', '^'], ['(', '('], [')', ')'], [',', ', '],
-  ['>', ' > '], ['<', ' < '], ['=', ' = '], ['≥', ' >= '], ['≤', ' <= '], ['≠', ' <> '], ['&', ' & '],
-]
 
 const toggleBtn = 'inline-flex h-7 items-center border px-2 text-xs font-semibold'
 
@@ -66,7 +63,7 @@ export function FormulaBuilder({
         }
       }
     }
-    for (const f of FORMULA_FUNCTIONS) out.push({ key: `fn:${f.name}`, label: f.name, insert: `${f.name}(`, detail: f.help, kind: 'fn' })
+    for (const f of FORMULA_FUNCTIONS) out.push({ key: `fn:${f.name}`, label: f.name, insert: `${f.name}(`, detail: `${f.syntax} · ${f.help}`, kind: 'fn' })
     return out
   }, [ownColumns, sections, section.id, section.name])
 
@@ -135,10 +132,10 @@ export function FormulaBuilder({
         <label htmlFor="col-formula" className="text-sm font-semibold text-stone-900">Formula Builder</label>
         <span className={cn('text-[11px] font-medium', problem ? 'text-red-700' : 'text-emerald-700')}>{problem || 'Formula OK'}</span>
         <div className="ml-auto flex flex-wrap items-center gap-1.5">
-          <button type="button" className={cn(toggleBtn, panel === 'functions' ? 'border-amber-700 bg-amber-700 text-white' : 'border-amber-600/60 bg-white text-amber-900 hover:bg-amber-50')} onClick={() => setPanel((p) => (p === 'functions' ? null : 'functions'))}>
+          <button type="button" className={cn(toggleBtn, panel === 'functions' ? 'border-amber-700 bg-amber-700 text-white' : 'border-amber-600/60 bg-white text-amber-900 hover:bg-amber-50')} onClick={() => setPanel('functions')}>
             Functions
           </button>
-          <button type="button" className={cn(toggleBtn, panel === 'operators' ? 'border-amber-700 bg-amber-700 text-white' : 'border-amber-600/60 bg-white text-amber-900 hover:bg-amber-50')} onClick={() => setPanel((p) => (p === 'operators' ? null : 'operators'))}>
+          <button type="button" className={cn(toggleBtn, panel === 'operators' ? 'border-amber-700 bg-amber-700 text-white' : 'border-amber-600/60 bg-white text-amber-900 hover:bg-amber-50')} onClick={() => setPanel('operators')}>
             Operators
           </button>
           <label htmlFor="col-decimals" className="text-xs font-semibold text-stone-700">Decimals</label>
@@ -146,24 +143,8 @@ export function FormulaBuilder({
         </div>
       </div>
 
-      {panel === 'functions' ? (
-        <div className="flex flex-wrap gap-1 border border-amber-200 bg-white p-2">
-          {FORMULA_FUNCTIONS.map((f) => (
-            <button key={f.name} type="button" className="inline-flex h-7 items-center border border-amber-600/60 bg-white px-1.5 font-mono text-xs font-semibold text-amber-900 hover:bg-amber-50" title={f.help} onClick={() => put(`${f.name}(`)}>
-              {f.name}
-            </button>
-          ))}
-        </div>
-      ) : null}
-      {panel === 'operators' ? (
-        <div className="flex flex-wrap gap-1 border border-amber-200 bg-white p-2">
-          {OPERATORS.map(([label, text]) => (
-            <button key={label} type="button" className="inline-flex h-7 min-w-7 items-center justify-center border border-stone-400 bg-white px-1.5 font-mono text-sm text-stone-900 hover:bg-amber-50" onClick={() => put(text)}>
-              {label}
-            </button>
-          ))}
-        </div>
-      ) : null}
+      <FunctionsDialog open={panel === 'functions'} onClose={() => setPanel(null)} onPick={(t) => put(t)} />
+      <OperatorsDialog open={panel === 'operators'} onClose={() => setPanel(null)} onPick={(t) => put(t)} />
 
       <div className="relative">
         <textarea
@@ -174,7 +155,7 @@ export function FormulaBuilder({
           spellCheck={false}
           className="w-full border border-stone-400 bg-white p-2 font-mono text-sm"
           value={formula}
-          placeholder="Type = then a column or function, e.g. =ROUND(load * 1000 / area, 1)"
+          placeholder="Formula Builder"
           onChange={(e) => {
             onFormula(e.target.value)
             setCaret(e.target.selectionStart)
