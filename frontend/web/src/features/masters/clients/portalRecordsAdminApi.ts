@@ -136,6 +136,18 @@ export async function deleteColumn(id: string): Promise<void> {
   if (error) throw error
 }
 
+/** Renumbers a section's columns 0, 1, 2… leaving a gap at `at` for a new column. */
+export async function makeRoomForColumn(columns: AdminColumn[], at: number): Promise<void> {
+  const results = await Promise.all(
+    columns.map((c, i) => {
+      const order = i < at ? i : i + 1
+      return order === c.sort_order ? null : supabase.from('portal_rec_columns').update({ sort_order: order }).eq('id', c.id)
+    }),
+  )
+  const failed = results.find((r) => r?.error)
+  if (failed?.error) throw failed.error
+}
+
 export async function moveColumn(columns: AdminColumn[], index: number, dir: -1 | 1): Promise<void> {
   const j = index + dir
   if (j < 0 || j >= columns.length) return

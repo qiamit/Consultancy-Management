@@ -27,6 +27,7 @@ import {
   createSection,
   createStandardSections,
   deleteColumn,
+  makeRoomForColumn,
   deleteSection,
   getRecordsService,
   listSections,
@@ -65,6 +66,8 @@ type Draft = {
   decimals: string
   link_section: string
   required: boolean
+  /** New column only: its place in the list (0 = first); missing = at the end. */
+  insertAt?: number
 }
 
 function draftFrom(c?: AdminColumn): Draft {
@@ -116,6 +119,8 @@ function ColumnEditor({
     if ([d.spec_min, d.spec_max].some((s) => s.trim() !== '' && !Number.isFinite(Number(s)))) return toast.warning('Limits Must Be Numbers')
     setSaving(true)
     try {
+      const at = d.id || d.insertAt == null ? section.columns.length : Math.min(d.insertAt, section.columns.length)
+      if (!d.id && at < section.columns.length) await makeRoomForColumn(section.columns, at)
       await saveColumn(section.id, {
         id: d.id,
         key,
@@ -133,7 +138,7 @@ function ColumnEditor({
                 ? { section_id: d.link_section }
                 : {},
         required: d.required,
-        sort_order: d.id ? section.columns.find((c) => c.id === d.id)?.sort_order ?? 0 : section.columns.length,
+        sort_order: d.id ? section.columns.find((c) => c.id === d.id)?.sort_order ?? 0 : at,
       })
       toast.success('Column Saved')
       onSaved()
@@ -512,11 +517,6 @@ export function PortalRecordsSetupDialog({
                         <FlaskConical size={16} aria-hidden />
                       </Button>
                     ) : null}
-                    {active ? (
-                      <Button type="button" className={cn(limsPrimaryBtnClass, 'h-10 gap-1 text-xs')} disabled={busy != null} onClick={() => setEditing(draftFrom())}>
-                        <Plus size={14} /> Add Column
-                      </Button>
-                    ) : null}
                     <Button
                       type="button"
                       variant="outline"
@@ -549,12 +549,17 @@ export function PortalRecordsSetupDialog({
                                 <th className={th}>Type</th>
                                 <th className={th}>Unit / Limits</th>
                                 <th className={th}>Details</th>
-                                <th className={cn(th, 'w-[1%]')} />
+                                <th className={cn(th, 'w-[1%] text-center')}>Action</th>
                               </tr>
                             </thead>
                             <tbody>
                               {active.columns.length === 0 ? (
-                                <tr><td colSpan={6} className={cn(td, 'py-4 text-center text-stone-500')}>No columns yet.</td></tr>
+                                <tr>
+                                  <td colSpan={5} className={cn(td, 'py-4 text-center text-stone-500')}>No columns yet.</td>
+                                  <td className={cn(td, 'text-center')}>
+                                    <button type="button" className={cn(iconBtn, 'text-emerald-700')} title="Add Column" aria-label="Add Column" disabled={busy != null} onClick={() => setEditing({ ...draftFrom(), insertAt: 0 })}><Plus size={13} /></button>
+                                  </td>
+                                </tr>
                               ) : (
                                 active.columns.map((c, i) => (
                                   <tr key={c.id} className={i % 2 ? 'bg-[#faf7f1]' : 'bg-white'}>
@@ -576,6 +581,7 @@ export function PortalRecordsSetupDialog({
                                         <button type="button" className={iconBtn} title="Move Up" aria-label="Move Up" disabled={busy != null || i === 0} onClick={() => void run('mv', () => moveColumn(active.columns, i, -1))}><ArrowUp size={13} /></button>
                                         <button type="button" className={iconBtn} title="Move Down" aria-label="Move Down" disabled={busy != null || i === active.columns.length - 1} onClick={() => void run('mv', () => moveColumn(active.columns, i, 1))}><ArrowDown size={13} /></button>
                                         <button type="button" className={iconBtn} title="Edit" aria-label={`Edit ${c.label}`} onClick={() => setEditing(draftFrom(c))}><Pencil size={13} /></button>
+                                        <button type="button" className={cn(iconBtn, 'text-emerald-700')} title="Add Column Below" aria-label={`Add Column Below ${c.label}`} disabled={busy != null} onClick={() => setEditing({ ...draftFrom(), insertAt: i + 1 })}><Plus size={13} /></button>
                                         <button type="button" className={cn(iconBtn, 'text-red-700')} title="Delete" aria-label={`Delete ${c.label}`} disabled={busy != null}
                                           onClick={() => void (async () => {
                                             if (!(await confirm(`Delete the column "${c.label}"? Values already entered in it stay in old entries but are no longer shown.`, { title: 'Delete Column', confirmLabel: 'Delete', destructive: true }))) return
