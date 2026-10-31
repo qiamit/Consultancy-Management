@@ -81,7 +81,7 @@ export function FunctionsDialog({ open, onClose, onPick }: { open: boolean; onCl
               >
                 <td className={cn(td, 'text-center font-mono font-bold text-amber-900')}>{f.name}</td>
                 <td className={cn(td, 'text-center text-xs')}>{f.category}</td>
-                <td className={cn(td, 'font-mono text-xs')}>{f.syntax}</td>
+                <td className={cn(td, 'text-center font-mono text-xs')}>{f.syntax}</td>
                 <td className={td}>{f.help}{f.list ? <span className="ml-1 text-[11px] text-sky-700">(Takes linked lists)</span> : null}</td>
               </tr>
             ))}
