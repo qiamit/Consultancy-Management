@@ -277,8 +277,8 @@ function ManageSectionsDialog({
         <div className="bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5">
           <DialogHeader className="flex-row items-center gap-3 space-y-0 pr-10 text-left">
             <DialogTitle className="flex-1 text-base font-semibold text-white">Sections</DialogTitle>
-            <Button type="button" variant="outline" className={cn(limsDarkBarBtnClass, 'h-9 min-h-9 gap-1.5 px-3 text-xs')} disabled={busy} onClick={onImport}>
-              <Download size={14} aria-hidden /> Import From Another Licence
+            <Button type="button" variant="outline" className={cn(limsDarkBarBtnClass, 'h-9 min-h-9 w-9 p-0')} disabled={busy} title="Import From Another Licence" aria-label="Import From Another Licence" onClick={onImport}>
+              <Download size={16} aria-hidden />
             </Button>
           </DialogHeader>
         </div>
