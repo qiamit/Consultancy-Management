@@ -261,7 +261,7 @@ function ManageSectionsDialog({
         <div className="flex flex-wrap items-end gap-2 border-b border-stone-200 bg-stone-50 p-3">
           <div className="space-y-1">
             <Label htmlFor="new-section-kind">Type</Label>
-            <select id="new-section-kind" className="h-10 w-[10rem] border border-stone-500 bg-white px-2 text-sm" value={kind} onChange={(e) => setKind(e.target.value)}>
+            <select id="new-section-kind" className="block h-10 w-[10rem] border border-stone-500 bg-white px-2 text-sm" value={kind} onChange={(e) => setKind(e.target.value)}>
               {Object.entries(SECTION_KIND_LABEL).map(([k, label]) => (
                 <option key={k} value={k}>{label}</option>
               ))}
