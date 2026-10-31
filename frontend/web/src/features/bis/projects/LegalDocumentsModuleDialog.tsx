@@ -514,6 +514,7 @@ export function LegalDocumentsModuleDialog({
   const [cmpf311, setCmpf311] = useState<Cmpf311ModulePayload>(() => emptyCmpf311Payload())
   const [cmpf307, setCmpf307] = useState<Cmpf307ModulePayload>(() => emptyCmpf307Payload())
   const [brandImportOpen, setBrandImportOpen] = useState(false)
+  const [sitImportOpen, setSitImportOpen] = useState(false)
   const [flowImportOpen, setFlowImportOpen] = useState(false)
   const [flowAiOpen, setFlowAiOpen] = useState(false)
   const [plantLayoutAiOpen, setPlantLayoutAiOpen] = useState(false)
@@ -1843,6 +1844,8 @@ export function LegalDocumentsModuleDialog({
         className={cn(
           // Override DialogContent base `grid gap-4` so height follows children.
           'flex !flex-col gap-0 overflow-hidden p-0',
+          // Close button in the middle of the 64px header bar, in line with its buttons.
+          '[&>button]:top-[14px] sm:[&>button]:top-[18px]',
           fullPageModule
             ? cn(
                 '!flex h-[100dvh] max-h-[100dvh] translate-x-0 translate-y-0 rounded-none border-0 bg-stone-100 shadow-none sm:rounded-none',
@@ -1863,17 +1866,17 @@ export function LegalDocumentsModuleDialog({
               ),
         )}
       >
-        <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white">
+        <div className="relative flex h-16 shrink-0 items-center overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 text-white">
           <div
             className="pointer-events-none absolute inset-0 opacity-[0.18]"
             style={limsDarkBarGlowStyle}
           />
           <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
-          <DialogHeader className={cn('relative text-left', showFlowChartAi ? 'pr-24' : showPlantLayoutAi ? 'pr-20' : 'pr-10')}>
+          <DialogHeader className={cn('relative min-w-0 flex-1 space-y-0 text-left', showFlowChartAi ? 'pr-24' : showPlantLayoutAi || showCmpf311Fields ? 'pr-20' : 'pr-10')}>
             <DialogTitle className="text-base font-semibold tracking-tight text-white">
               {title}
             </DialogTitle>
-            <p className="mt-0.5 line-clamp-2 break-words text-xs text-stone-300" title={subtitle}>
+            <p className="mt-0.5 truncate text-xs text-stone-300" title={subtitle}>
               {subtitle}
             </p>
           </DialogHeader>
@@ -1883,10 +1886,24 @@ export function LegalDocumentsModuleDialog({
               variant="ghost"
               size="sm"
               disabled={busy || saving}
-              className="absolute right-11 top-2 z-10 h-7 w-7 rounded-none border border-amber-500/60 bg-stone-800 p-0 text-amber-200 shadow-sm transition-colors hover:border-amber-400 hover:bg-amber-600 hover:text-white"
+              className="absolute right-11 top-1/2 z-10 -translate-y-1/2 h-7 w-7 rounded-none border border-amber-500/60 bg-stone-800 p-0 text-amber-200 shadow-sm transition-colors hover:border-amber-400 hover:bg-amber-600 hover:text-white"
               title="Import from Another Application"
               aria-label="Import from Another Application"
               onClick={() => setBrandImportOpen(true)}
+            >
+              <Import size={15} aria-hidden />
+            </Button>
+          ) : null}
+          {showCmpf311Fields && row?.id ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={busy || saving}
+              className="absolute right-11 top-1/2 z-10 -translate-y-1/2 h-7 w-7 rounded-none border border-amber-500/60 bg-stone-800 p-0 text-amber-200 shadow-sm transition-colors hover:border-amber-400 hover:bg-amber-600 hover:text-white"
+              title="Import SIT from Another Application or Licence"
+              aria-label="Import SIT from Another Application or Licence"
+              onClick={() => setSitImportOpen(true)}
             >
               <Import size={15} aria-hidden />
             </Button>
@@ -1897,7 +1914,7 @@ export function LegalDocumentsModuleDialog({
               variant="ghost"
               size="sm"
               disabled={busy || saving}
-              className="absolute right-11 top-2 z-10 h-7 w-7 rounded-none border border-amber-500/60 bg-stone-800 p-0 text-amber-200 shadow-sm transition-colors hover:border-amber-400 hover:bg-amber-600 hover:text-white"
+              className="absolute right-11 top-1/2 z-10 -translate-y-1/2 h-7 w-7 rounded-none border border-amber-500/60 bg-stone-800 p-0 text-amber-200 shadow-sm transition-colors hover:border-amber-400 hover:bg-amber-600 hover:text-white"
               title="Import from Another Application"
               aria-label="Import from Another Application"
               onClick={() => setFlowImportOpen(true)}
@@ -1911,7 +1928,7 @@ export function LegalDocumentsModuleDialog({
               variant="ghost"
               size="sm"
               disabled={busy || saving || loading}
-              className="absolute right-[4.75rem] top-2 z-10 h-7 w-7 rounded-none border border-amber-500/60 bg-stone-800 p-0 text-amber-200 shadow-sm transition-colors hover:border-amber-400 hover:bg-amber-600 hover:text-white"
+              className="absolute right-[4.75rem] top-1/2 z-10 -translate-y-1/2 h-7 w-7 rounded-none border border-amber-500/60 bg-stone-800 p-0 text-amber-200 shadow-sm transition-colors hover:border-amber-400 hover:bg-amber-600 hover:text-white"
               title="Generate Process Flow Chart with AI"
               aria-label="Generate Process Flow Chart with AI"
               onClick={() => setFlowAiOpen(true)}
@@ -1925,7 +1942,7 @@ export function LegalDocumentsModuleDialog({
               variant="ghost"
               size="sm"
               disabled={busy || saving}
-              className="absolute right-11 top-2 z-10 h-7 w-7 rounded-none border border-amber-500/60 bg-stone-800 p-0 text-amber-200 shadow-sm transition-colors hover:border-amber-400 hover:bg-amber-600 hover:text-white"
+              className="absolute right-11 top-1/2 z-10 -translate-y-1/2 h-7 w-7 rounded-none border border-amber-500/60 bg-stone-800 p-0 text-amber-200 shadow-sm transition-colors hover:border-amber-400 hover:bg-amber-600 hover:text-white"
               title="Import from Another Application"
               aria-label="Import from Another Application"
               onClick={() => setPlantImportOpen(true)}
@@ -1939,7 +1956,7 @@ export function LegalDocumentsModuleDialog({
               variant="ghost"
               size="sm"
               disabled={busy || saving || loading}
-              className="absolute right-[4.75rem] top-2 z-10 h-7 w-7 rounded-none border border-amber-500/60 bg-stone-800 p-0 text-amber-200 shadow-sm transition-colors hover:border-amber-400 hover:bg-amber-600 hover:text-white"
+              className="absolute right-[4.75rem] top-1/2 z-10 -translate-y-1/2 h-7 w-7 rounded-none border border-amber-500/60 bg-stone-800 p-0 text-amber-200 shadow-sm transition-colors hover:border-amber-400 hover:bg-amber-600 hover:text-white"
               title="Draw Plant Layout with AI from a Photo or PDF"
               aria-label="Draw Plant Layout with AI from a Photo or PDF"
               onClick={() => setPlantLayoutAiOpen(true)}
@@ -2812,6 +2829,43 @@ export function LegalDocumentsModuleDialog({
             return
           setPlantLayout(source)
           toast.success('Plant Layout Imported', { description: 'Check the Boxes, Then Click Save.' })
+        }}
+      />
+    ) : null}
+    {showCmpf311Fields ? (
+      <BisModuleImportDialog
+        open={sitImportOpen}
+        onOpenChange={setSitImportOpen}
+        targetRow={row}
+        kind="cmpf-311"
+        title="Acceptance of SIT (Annexure, SIT Table and Notes)"
+        onPickSource={async (sourceProjectId) => {
+          const source = parseCmpf311Payload(await fetchBisModulePayload(sourceProjectId, 'cmpf-311'))
+          if (!source.annexureSections.length && !source.testRows.length && !source.notes.length) {
+            throw new Error('The Selected Application Has No SIT.')
+          }
+          const hasCurrent = cmpf311.annexureSections.length > 0 || cmpf311.testRows.length > 0 || cmpf311.notes.length > 0
+          if (
+            hasCurrent &&
+            !(await confirmAction('Replace the Annexure, SIT Table and Notes Here with the Imported Ones?', {
+              title: 'Replace SIT',
+              confirmLabel: 'Replace',
+              destructive: false,
+            }))
+          )
+            return
+          // This application keeps its own reference letter; the SIT content comes from the source.
+          setCmpf311({
+            ...cmpf311,
+            mode: source.mode,
+            productManualNumber: cmpf311.productManualNumber || source.productManualNumber,
+            annexureSections: source.annexureSections,
+            testRows: source.testRows,
+            notes: source.notes,
+            subcontractedLaboratoryId: source.subcontractedLaboratoryId,
+            subcontractedLaboratoryName: source.subcontractedLaboratoryName,
+          })
+          toast.success('SIT Imported', { description: 'Check the Annexure, SIT Table and Notes, then click Save.' })
         }}
       />
     ) : null}
