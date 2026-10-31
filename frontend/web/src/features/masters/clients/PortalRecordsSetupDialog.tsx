@@ -9,7 +9,6 @@ import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { formatDisplayDate } from '@/features/bis/projects/types'
 import { formulaProblem } from '@/lib/recordFormula'
 import { limsDarkBarGlowStyle, limsDialogClass, limsOutlineBtnClass, limsPrimaryBtnClass } from '@/lib/limsThemeUi'
-import { todayLocalIso } from '@/lib/localDate'
 import { cn } from '@/lib/utils'
 import {
   COLUMN_TYPE_LABEL,
@@ -34,6 +33,7 @@ import {
   updateSection,
   type AdminColumn,
   type AdminSection,
+  serviceStatus,
   type RecordsService,
 } from './portalRecordsAdminApi'
 
@@ -46,14 +46,6 @@ const EDITABLE_TYPES: RecordColumnType[] = ['text', 'number', 'spec', 'date', 's
 
 function errText(err: unknown, fallback: string) {
   return err instanceof Error ? err.message : fallback
-}
-
-function serviceStatus(s: RecordsService | null): { text: string; tone: string } {
-  const today = todayLocalIso()
-  if (!s?.records_enabled) return { text: 'Off', tone: 'border-stone-300 bg-stone-100 text-stone-700' }
-  if (s.paid_until && s.paid_until >= today) return { text: `Paid · Valid Till ${formatDisplayDate(s.paid_until)}`, tone: 'border-emerald-300 bg-emerald-50 text-emerald-800' }
-  if (s.trial_ends && s.trial_ends >= today) return { text: `Free Trial · Till ${formatDisplayDate(s.trial_ends)}`, tone: 'border-sky-300 bg-sky-50 text-sky-800' }
-  return { text: 'Expired · Customer Can Only View', tone: 'border-red-300 bg-red-50 text-red-800' }
 }
 
 type Draft = {

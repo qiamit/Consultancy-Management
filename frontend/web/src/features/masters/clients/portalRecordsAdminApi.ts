@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabaseClient'
 import { todayLocalIso, addDaysIso } from '@/lib/localDate'
+import { formatDisplayDate } from '@/features/bis/projects/types'
 import { columnKeyFrom, type RecordColumn, type RecordColumnType } from '@/features/portal/recordLogic'
 
 /* Admin side of Customer Portal records: the paid service of a licence and the formats (sections + columns). */
@@ -24,6 +25,22 @@ export async function getRecordsService(projectId: string): Promise<RecordsServi
 }
 
 /** Switching on starts the 30-day trial the first time; later switch-ons keep the dates. */
+/** Services of several licences, keyed by licence id (licences never switched on are missing). */
+export async function listRecordsServices(projectIds: string[]): Promise<Map<string, RecordsService>> {
+  if (projectIds.length === 0) return new Map()
+  const { data, error } = await supabase.from('portal_services').select('*').in('project_id', projectIds)
+  if (error) throw error
+  return new Map(((data ?? []) as RecordsService[]).map((s) => [s.project_id, s]))
+}
+
+export function serviceStatus(s: RecordsService | null): { text: string; tone: string } {
+  const today = todayLocalIso()
+  if (!s?.records_enabled) return { text: 'Off', tone: 'border-stone-300 bg-stone-100 text-stone-700' }
+  if (s.paid_until && s.paid_until >= today) return { text: `Paid · Valid Till ${formatDisplayDate(s.paid_until)}`, tone: 'border-emerald-300 bg-emerald-50 text-emerald-800' }
+  if (s.trial_ends && s.trial_ends >= today) return { text: `Free Trial · Till ${formatDisplayDate(s.trial_ends)}`, tone: 'border-sky-300 bg-sky-50 text-sky-800' }
+  return { text: 'Expired · Customer Can Only View', tone: 'border-red-300 bg-red-50 text-red-800' }
+}
+
 export async function setRecordsEnabled(projectId: string, enabled: boolean, current: RecordsService | null): Promise<void> {
   const { data: auth } = await supabase.auth.getUser()
   const row = {
