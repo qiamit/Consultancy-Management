@@ -2,7 +2,6 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { BadgeCheck, CalendarClock, IndianRupee, Loader2, Power, Send, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { DateInput } from '@/components/ui/date-input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -26,6 +25,7 @@ import {
   type RecordsService,
   type ServicePayment,
 } from './portalRecordsAdminApi'
+import { CalendarDateField } from './CalendarDateField'
 
 type Action = 'trial' | 'request' | 'payment'
 
@@ -267,7 +267,7 @@ export function PortalRecordsServiceDialog({
                   </div>
                   <div className="space-y-1">
                     <Label htmlFor="pay-date">Received On</Label>
-                    <DateInput className="h-10 w-full border border-stone-500 bg-stone-50 px-3 text-sm" id="pay-date" value={paidOn} onChange={(e) => setPaidOn(e.target.value)} />
+                    <CalendarDateField id="pay-date" label="Received On" value={paidOn} onChange={setPaidOn} />
                   </div>
                   <div className="space-y-1">
                     <Label htmlFor="pay-mode">Mode</Label>
@@ -281,7 +281,7 @@ export function PortalRecordsServiceDialog({
                   </div>
                   <div className="space-y-1">
                     <Label htmlFor="pay-till">Paid Till</Label>
-                    <DateInput className="h-10 w-full border border-stone-500 bg-stone-50 px-3 text-sm" id="pay-till" value={paidTill} onChange={(e) => setPaidTill(e.target.value)} />
+                    <CalendarDateField id="pay-till" label="Paid Till" value={paidTill} onChange={setPaidTill} />
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-3 border-t border-stone-200 pt-3">

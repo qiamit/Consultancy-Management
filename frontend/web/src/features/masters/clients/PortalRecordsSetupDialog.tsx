@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ArrowDown, ArrowUp, FlaskConical, Loader2, Pencil, Plus, Power, Sparkles, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, Calculator, Download, Save, FlaskConical, Loader2, Pencil, Plus, Power, Sparkles, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { LimsFieldAddButton, LimsFieldWithAdd } from '@/components/lims/LimsFieldWithAdd'
 import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
-import { formatDisplayDate } from '@/features/bis/projects/types'
+import { BisModuleImportDialog } from '@/features/bis/projects/BisModuleImportDialog'
+import { fetchBisProjectById } from '@/features/bis/projects/bisProjectsApi'
+import type { BisProjectRow } from '@/features/bis/projects/types'
 import { formulaProblem } from '@/lib/recordFormula'
-import { limsDarkBarGlowStyle, limsDialogClass, limsOutlineBtnClass, limsPrimaryBtnClass } from '@/lib/limsThemeUi'
+import { limsDarkBarBtnClass, limsDarkBarGlowStyle, limsDialogClass, limsOutlineBtnClass, limsPrimaryBtnClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import {
   COLUMN_TYPE_LABEL,
@@ -20,9 +23,12 @@ import {
 import {
   TRIAL_DAYS,
   addTestParameterColumns,
+  copySectionsFrom,
   createSection,
   createStandardSections,
   deleteColumn,
+  makeRoomForColumn,
+  moveSection,
   deleteSection,
   getRecordsService,
   listSections,
@@ -36,13 +42,46 @@ import {
   serviceStatus,
   type RecordsService,
 } from './portalRecordsAdminApi'
+import { CalendarDateField } from './CalendarDateField'
+import { ColumnTypeSettings, type ColumnSettings } from './ColumnTypeSettings'
+import { DropdownOptionsEditor, type DropdownSettings } from './DropdownOptionsEditor'
+import { FormulaBuilder } from './FormulaBuilder'
 
-const smallBtn = cn(limsOutlineBtnClass, 'h-8 gap-1 px-2 text-xs')
 const th = 'border border-stone-700 bg-stone-800 px-2 py-1.5 text-left text-[11px] font-bold uppercase tracking-[0.06em] text-amber-200'
 const td = 'border border-stone-200 px-2 py-1.5 align-middle text-sm text-stone-800'
 const iconBtn = 'inline-flex h-7 w-7 items-center justify-center border border-stone-300 bg-white text-amber-800 hover:bg-amber-50 disabled:opacity-40'
 // Attachments need customer file uploads, which come with the reports step.
-const EDITABLE_TYPES: RecordColumnType[] = ['text', 'number', 'spec', 'date', 'select', 'formula', 'link', 'pass_fail']
+// Number covers Number With Limits too (its Check Limits setting saves it as 'spec').
+// Alphanumeric is a Text column with a pattern (saved as 'text' with config.alphanumeric).
+type EditorType = RecordColumnType | 'alnum'
+const EDITABLE_TYPES: EditorType[] = ['text', 'alnum', 'number', 'date', 'select', 'formula', 'link', 'pass_fail']
+const TYPE_LABEL: Record<string, string> = { ...COLUMN_TYPE_LABEL, number: 'Number', alnum: 'Alphanumeric (Pattern)' }
+
+// Settings each type keeps in its config (the rest of the settings table is dropped on save).
+const TYPE_KEYS: Partial<Record<EditorType, string[]>> = {
+  text: ['long', 'max_length', 'letter_case', 'placeholder', 'default_text', 'min_length', 'allowed_chars', 'error_message'],
+  alnum: ['mask', 'letter_case', 'placeholder', 'default_text', 'min_length', 'max_length', 'regex', 'error_message'],
+  number: ['format', 'thousands', 'decimals', 'no_negative', 'default_number', 'range_min', 'range_max', 'whole_only', 'error_message'],
+  date: ['date_format', 'include_time', 'default_today', 'no_future', 'no_past', 'not_before', 'not_after', 'error_message'],
+  formula: ['format', 'thousands'],
+  link: ['section_id', 'single', 'link_label', 'only_passed', 'min_pick'],
+  pass_fail: ['preset', 'pass_label', 'fail_label', 'default_pf', 'no_fail_effect'],
+}
+const NUMERIC_KEYS = new Set(['max_length', 'min_length', 'decimals', 'default_number', 'range_min', 'range_max', 'min_pick'])
+
+/** The type's settings, without empty or switched-off ones; number settings stored as numbers. */
+function pickSettings(type: EditorType, s: ColumnSettings): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const k of TYPE_KEYS[type] ?? []) {
+    const v = s[k]
+    if (v == null || v === '' || v === false) continue
+    if (NUMERIC_KEYS.has(k)) {
+      const n = Number(v)
+      if (Number.isFinite(n)) out[k] = n
+    } else out[k] = v
+  }
+  return out
+}
 
 function errText(err: unknown, fallback: string) {
   return err instanceof Error ? err.message : fallback
@@ -52,30 +91,40 @@ type Draft = {
   id?: string
   key?: string
   label: string
-  col_type: RecordColumnType
+  col_type: EditorType
   unit: string
   spec_min: string
   spec_max: string
-  options: string
+  dropdown: DropdownSettings
   formula: string
   decimals: string
-  link_section: string
+  /** Options of the chosen type (see ColumnTypeSettings). */
+  settings: ColumnSettings
   required: boolean
+  /** New column only: its place in the list (0 = first); missing = at the end. */
+  insertAt?: number
 }
 
 function draftFrom(c?: AdminColumn): Draft {
+  const spec = c?.col_type === 'spec'
   return {
     id: c?.id,
     key: c?.key,
     label: c?.label ?? '',
-    col_type: c?.col_type ?? 'text',
+    col_type: spec ? 'number' : c?.col_type === 'text' && c.config.alphanumeric ? 'alnum' : c?.col_type ?? 'text',
     unit: c?.unit ?? '',
     spec_min: c?.spec_min != null ? String(c.spec_min) : '',
     spec_max: c?.spec_max != null ? String(c.spec_max) : '',
-    options: (c?.config.options ?? []).join('\n'),
+    dropdown: {
+      options: c?.config.options ?? [],
+      defaultOption: c?.config.default ?? '',
+      failOptions: c?.config.fail_options ?? [],
+      multiple: Boolean(c?.config.multiple),
+      allowOther: Boolean(c?.config.allow_other),
+    },
     formula: c?.config.formula ?? '',
     decimals: c?.config.decimals != null ? String(c.config.decimals) : '',
-    link_section: c?.config.section_id ?? '',
+    settings: { ...(c?.config ?? {}), ...(spec ? { check_limits: true } : {}) },
     required: Boolean(c?.required),
   }
 }
@@ -98,38 +147,62 @@ function ColumnEditor({
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setD((prev) => ({ ...prev, [k]: v }))
   const otherKeys = section.columns.filter((c) => c.id !== d.id).map((c) => c.key)
   const key = d.key ?? columnKeyFrom(d.label || 'column', otherKeys)
-  // A formula may use the columns before it (they are calculated in order).
-  const formulaKeys = section.columns.filter((c) => c.id !== d.id).map((c) => c.key)
+  const ownColumns = section.columns.filter((c) => c.id !== d.id)
+  // Columns of other sections reached through this section's link columns: <link key>.<column key>.
+  const linkedGroups = ownColumns
+    .filter((c) => c.col_type === 'link' && c.config.section_id)
+    .map((link) => ({ link, target: sections.find((s) => s.id === link.config.section_id) }))
+    .filter((g): g is { link: AdminColumn; target: AdminSection } => Boolean(g.target))
+  const formulaKeys = [
+    ...ownColumns.map((c) => c.key),
+    ...linkedGroups.flatMap((g) => g.target.columns.filter((c) => c.col_type !== 'link').map((c) => `${g.link.key}.${c.key}`)),
+  ]
   const problem = d.col_type === 'formula' ? formulaProblem(d.formula, formulaKeys) : ''
-  const hasLimits = d.col_type === 'spec' || d.col_type === 'formula'
+  const hasLimits = (d.col_type === 'number' && Boolean(d.settings.check_limits)) || d.col_type === 'formula'
 
   const save = async () => {
     if (!d.label.trim()) return toast.warning('Enter the Column Name')
     if (problem) return toast.warning(problem)
-    if (d.col_type === 'select' && !d.options.trim()) return toast.warning('Enter the Dropdown Options')
-    if (d.col_type === 'link' && !d.link_section) return toast.warning('Choose the Section to Link')
+    const dropdownOptions = d.dropdown.options.map((o) => o.trim()).filter(Boolean)
+    if (d.col_type === 'select' && dropdownOptions.length === 0) return toast.warning('Add the Dropdown Options')
+    if (d.col_type === 'link' && !d.settings.section_id) return toast.warning('Choose the Section to Link')
+    if (d.col_type === 'alnum' && d.settings.regex) {
+      try {
+        new RegExp(String(d.settings.regex))
+      } catch {
+        return toast.warning('The Custom Rule Is Not a Valid Pattern')
+      }
+    }
     const num = (s: string) => (s.trim() === '' ? null : Number(s))
     if ([d.spec_min, d.spec_max].some((s) => s.trim() !== '' && !Number.isFinite(Number(s)))) return toast.warning('Limits Must Be Numbers')
     setSaving(true)
     try {
+      const at = d.id || d.insertAt == null ? section.columns.length : Math.min(d.insertAt, section.columns.length)
+      if (!d.id && at < section.columns.length) await makeRoomForColumn(section.columns, at)
       await saveColumn(section.id, {
         id: d.id,
         key,
         label: d.label,
-        col_type: d.col_type,
+        col_type: d.col_type === 'alnum' ? 'text' : d.col_type === 'number' && d.settings.check_limits ? 'spec' : d.col_type,
         unit: d.unit,
         spec_min: hasLimits ? num(d.spec_min) : null,
         spec_max: hasLimits ? num(d.spec_max) : null,
         config:
           d.col_type === 'select'
-            ? { options: d.options.split(/\n|,/).map((o) => o.trim()).filter(Boolean) }
+            ? {
+                options: dropdownOptions,
+                ...(d.dropdown.defaultOption && dropdownOptions.includes(d.dropdown.defaultOption) ? { default: d.dropdown.defaultOption } : {}),
+                ...(d.dropdown.failOptions.length ? { fail_options: d.dropdown.failOptions.filter((f) => dropdownOptions.includes(f)) } : {}),
+                ...(d.dropdown.multiple ? { multiple: true } : {}),
+                ...(d.dropdown.allowOther ? { allow_other: true } : {}),
+              }
             : d.col_type === 'formula'
-              ? { formula: d.formula.trim(), ...(d.decimals.trim() ? { decimals: Number(d.decimals) } : {}) }
-              : d.col_type === 'link'
-                ? { section_id: d.link_section }
-                : {},
+              ? { formula: d.formula.trim(), ...(d.decimals.trim() ? { decimals: Number(d.decimals) } : {}), ...pickSettings('formula', d.settings) }
+              : d.col_type === 'alnum'
+                ? { letter_case: 'upper', ...pickSettings('alnum', d.settings), alphanumeric: true }
+                : pickSettings(d.col_type, d.settings),
         required: d.required,
-        sort_order: d.id ? section.columns.find((c) => c.id === d.id)?.sort_order ?? 0 : section.columns.length,
+        sort_order: d.id ? section.columns.find((c) => c.id === d.id)?.sort_order ?? 0 : at,
       })
       toast.success('Column Saved')
       onSaved()
@@ -142,7 +215,7 @@ function ColumnEditor({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent aria-describedby={undefined} className={cn(limsDialogClass, 'w-[min(36rem,calc(100vw-1rem))] max-w-none gap-0 overflow-hidden bg-white p-0')}>
+      <DialogContent aria-describedby={undefined} className={cn(limsDialogClass, 'w-[min(48rem,calc(100vw-1rem))]', 'max-w-none gap-0 overflow-hidden bg-white p-0')}>
         <div className="bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5">
           <DialogHeader className="pr-10 text-left">
             <DialogTitle className="text-base font-semibold text-white">{d.id ? 'Edit Column' : 'Add Column'} — {section.name}</DialogTitle>
@@ -150,22 +223,40 @@ function ColumnEditor({
         </div>
         <div className="max-h-[70dvh] space-y-3 overflow-y-auto bg-[#fffcf7] p-4">
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1 sm:col-span-2">
-              <Label htmlFor="col-label">Column Name</Label>
-              <Input id="col-label" value={d.label} placeholder="Tensile Strength" onChange={(e) => set('label', e.target.value)} />
-              <p className="text-[11px] text-stone-500">Formula Name: <code className="bg-stone-100 px-1">{key}</code></p>
+            <div className="grid gap-3 sm:col-span-2 sm:grid-cols-[minmax(0,1.3fr)_minmax(0,1.3fr)_minmax(0,0.8fr)]">
+            <div className="space-y-1">
+              <div className="flex h-5 items-center justify-between gap-2">
+                <Label htmlFor="col-label">Column Name</Label>
+                <label className="flex items-center gap-1 text-xs font-medium text-stone-700" title="Customer must fill it">
+                  <input type="checkbox" className="h-3.5 w-3.5" checked={d.required} onChange={(e) => set('required', e.target.checked)} />
+                  Required
+                </label>
+              </div>
+              <Input id="col-label" className="h-9" value={d.label} placeholder="Tensile Strength" onChange={(e) => set('label', e.target.value)} />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="col-type">Type</Label>
-              <select id="col-type" className="h-9 w-full border border-stone-400 bg-white px-2 text-sm" value={d.col_type} onChange={(e) => set('col_type', e.target.value as RecordColumnType)}>
-                {EDITABLE_TYPES.map((t) => (
-                  <option key={t} value={t}>{COLUMN_TYPE_LABEL[t]}</option>
-                ))}
-              </select>
+              <div className="flex h-5 items-center"><Label htmlFor="col-type">Type</Label></div>
+              <div className="flex gap-1.5">
+                <select id="col-type" className="h-9 min-w-0 flex-1 border border-input bg-stone-50 px-2 text-sm" value={d.col_type} onChange={(e) => set('col_type', e.target.value as EditorType)}>
+                  {EDITABLE_TYPES.map((t) => (
+                    <option key={t} value={t}>{TYPE_LABEL[t]}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className={cn('inline-flex h-9 w-9 shrink-0 items-center justify-center border', d.col_type === 'formula' ? 'border-amber-700 bg-amber-700 text-white' : 'border-input bg-stone-50 text-amber-800 hover:bg-amber-50')}
+                  title="Formula Builder"
+                  aria-label="Formula Builder"
+                  onClick={() => set('col_type', 'formula')}
+                >
+                  <Calculator size={16} aria-hidden />
+                </button>
+              </div>
             </div>
             <div className="space-y-1">
-              <Label htmlFor="col-unit">Unit</Label>
-              <Input id="col-unit" value={d.unit} placeholder="MPa, %, mm" onChange={(e) => set('unit', e.target.value)} />
+              <div className="flex h-5 items-center"><Label htmlFor="col-unit">Unit</Label></div>
+              <Input id="col-unit" className="h-9" value={d.unit} placeholder="MPa, %, mm" onChange={(e) => set('unit', e.target.value)} />
+            </div>
             </div>
             {hasLimits ? (
               <>
@@ -177,46 +268,29 @@ function ColumnEditor({
                   <Label htmlFor="col-max">Maximum</Label>
                   <Input id="col-max" inputMode="decimal" value={d.spec_max} onChange={(e) => set('spec_max', e.target.value)} />
                 </div>
-                <p className="text-[11px] text-stone-500 sm:col-span-2">A value outside the limits marks the entry as Fail. Leave both empty for no check.</p>
               </>
             ) : null}
-            {d.col_type === 'select' ? (
-              <div className="space-y-1 sm:col-span-2">
-                <Label htmlFor="col-options">Dropdown Options (One per Line)</Label>
-                <textarea id="col-options" rows={4} className="w-full border border-stone-400 bg-white p-2 text-sm" value={d.options} onChange={(e) => set('options', e.target.value)} />
-              </div>
-            ) : null}
+            {d.col_type === 'select' ? <DropdownOptionsEditor value={d.dropdown} onChange={(v) => set('dropdown', v)} /> : null}
             {d.col_type === 'formula' ? (
-              <div className="space-y-1 sm:col-span-2">
-                <Label htmlFor="col-formula">Formula</Label>
-                <Input id="col-formula" className="font-mono" value={d.formula} placeholder="ROUND(load * 1000 / area, 1)" onChange={(e) => set('formula', e.target.value)} />
-                <p className={cn('text-[11px]', problem ? 'text-red-700' : 'text-emerald-700')}>{problem || 'Formula OK'}</p>
-                <p className="text-[11px] text-stone-500">
-                  Columns: {formulaKeys.length ? formulaKeys.map((k) => <code key={k} className="mr-1 bg-stone-100 px-1">{k}</code>) : 'none yet'}
-                  <br />Functions: SUM, AVG, MIN, MAX, ROUND(x, digits), ABS, SQRT, IF(condition, a, b), AND, OR, NOT · Operators + − × (*) ÷ (/) ^ and &gt; &lt; =
-                </p>
-                <div className="flex items-center gap-2 pt-1">
-                  <Label htmlFor="col-decimals" className="shrink-0">Decimals</Label>
-                  <Input id="col-decimals" inputMode="numeric" className="h-8 w-20" value={d.decimals} onChange={(e) => set('decimals', e.target.value.replace(/\D/g, ''))} />
-                </div>
-              </div>
+              <FormulaBuilder
+                formula={d.formula}
+                onFormula={(v) => set('formula', v)}
+                decimals={d.decimals}
+                onDecimals={(v) => set('decimals', v)}
+                problem={problem}
+                section={section}
+                sections={sections}
+                ownColumns={ownColumns}
+              />
             ) : null}
-            {d.col_type === 'link' ? (
-              <div className="space-y-1 sm:col-span-2">
-                <Label htmlFor="col-link">Link to Entries of</Label>
-                <select id="col-link" className="h-9 w-full border border-stone-400 bg-white px-2 text-sm" value={d.link_section} onChange={(e) => set('link_section', e.target.value)}>
-                  <option value="">— Choose Section —</option>
-                  {sections.filter((s) => s.id !== section.id).map((s) => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
-                <p className="text-[11px] text-stone-500">The customer picks one or more entries of that section (e.g. the raw material lots used in a batch). This builds the traceability.</p>
-              </div>
+            {d.col_type !== 'select' ? (
+              <ColumnTypeSettings
+                type={d.col_type}
+                value={d.settings}
+                onChange={(v) => set('settings', v)}
+                linkOptions={sections.filter((x) => x.id !== section.id).map((x) => [x.id, x.name])}
+              />
             ) : null}
-            <label className="flex items-center gap-2 text-sm text-stone-800 sm:col-span-2">
-              <input type="checkbox" className="h-4 w-4" checked={d.required} onChange={(e) => set('required', e.target.checked)} />
-              Required (customer must fill it)
-            </label>
           </div>
         </div>
         <div className="flex justify-end gap-2 border-t border-stone-200 bg-stone-50 px-4 py-3">
@@ -231,6 +305,151 @@ function ColumnEditor({
 }
 
 /** Admin: records service (trial / paid) and the record formats of one licence. Customers never edit formats. */
+/** Section type from its name: a standard name keeps its kind (for the customer's labels and icons), else custom. */
+function kindFromName(name: string): string {
+  const n = name.trim().toLowerCase()
+  const hit = Object.entries(SECTION_KIND_LABEL).find(([k, label]) => k !== 'custom' && label.toLowerCase() === n)
+  if (hit) return hit[0]
+  if (/^raw\s*material/.test(n)) return 'raw_material'
+  if (/^in[\s-]*process/.test(n)) return 'in_process'
+  if (/^final\s*test/.test(n)) return 'final_test'
+  if (/^(batch|lot)\b/.test(n)) return 'batch'
+  return 'custom'
+}
+
+/** The + of Sections: a table of sections; the first row adds one by name, other rows rename in place or delete. */
+function ManageSectionsDialog({
+  sections,
+  busy,
+  onClose,
+  onAdd,
+  onRename,
+  onDelete,
+  onImport,
+  onMove,
+  onShow,
+}: {
+  sections: AdminSection[]
+  busy: boolean
+  onImport: () => void
+  onMove: (index: number, dir: -1 | 1) => void
+  onShow: (section: AdminSection, show: boolean) => void
+  onClose: () => void
+  onAdd: (kind: string, name: string) => Promise<void>
+  onRename: (section: AdminSection, name: string) => Promise<void>
+  onDelete: (section: AdminSection) => Promise<void>
+}) {
+  const [name, setName] = useState('')
+  const add = () => {
+    const finalName = name.trim()
+    if (!finalName) return
+    void onAdd(kindFromName(finalName), finalName).then(() => setName(''))
+  }
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent
+        aria-describedby={undefined}
+        className={cn(limsDialogClass, '[&>button]:top-[10px] sm:[&>button]:top-[14px]', 'flex max-h-[85dvh] w-[min(42rem,calc(100vw-1rem))] max-w-none flex-col gap-0 overflow-hidden bg-white p-0')}
+      >
+        {/* 56px bar: the import button sits beside the dialog's Close button, same size and line. */}
+        <div className="flex h-14 shrink-0 items-center bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4">
+          <DialogHeader className="flex-1 flex-row items-center gap-2 space-y-0 pr-10 text-left">
+            <DialogTitle className="flex-1 text-base font-semibold text-white">Sections</DialogTitle>
+            <Button type="button" variant="outline" className={cn(limsDarkBarBtnClass, 'h-9 min-h-9 w-9 p-0 sm:h-7 sm:min-h-7 sm:w-7')} disabled={busy} title="Import From Another Licence" aria-label="Import From Another Licence" onClick={onImport}>
+              <Download size={14} aria-hidden />
+            </Button>
+          </DialogHeader>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-3">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr>
+                <th className={cn(th, 'w-12 text-center')}>#</th>
+                <th className={th}>Name</th>
+                <th className={cn(th, 'w-[5.5rem] text-center')}>Columns</th>
+                <th className={cn(th, 'w-[6.5rem] text-center')}>Show to Customer</th>
+                <th className={cn(th, 'w-[7.5rem] text-center')}>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="bg-amber-50/70">
+                <td className={cn(td, 'text-center text-xs font-semibold text-amber-800')}>New</td>
+                <td className={td}>
+                  <Input
+                    value={name}
+                    placeholder="Section Name, e.g. Test Certificate"
+                    aria-label="New Section Name"
+                    className="h-8 min-h-8"
+                    onChange={(e) => setName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && add()}
+                  />
+                </td>
+                <td className={cn(td, 'text-center text-stone-400')}>—</td>
+                <td className={cn(td, 'text-center text-stone-400')}>—</td>
+                <td className={cn(td, 'text-center')}>
+                  <button type="button" className={cn(iconBtn, 'border-amber-600 bg-amber-600 text-white hover:bg-amber-700')} disabled={busy || !name.trim()} title="Add Section" aria-label="Add Section" onClick={add}>
+                    <Plus size={15} />
+                  </button>
+                </td>
+              </tr>
+              {sections.map((sec, i) => (
+                <tr key={sec.id} className={i % 2 ? 'bg-[#f7f3eb]' : 'bg-[#fffcf7]'}>
+                  <td className={cn(td, 'text-center text-xs text-stone-500')}>{i + 1}</td>
+                  <td className={td}>
+                    <Input
+                      key={sec.name}
+                      defaultValue={sec.name}
+                      aria-label={`Name of ${sec.name}`}
+                      disabled={busy}
+                      className="h-8 min-h-8 border-transparent bg-transparent hover:border-stone-300 focus-visible:bg-white"
+                      onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+                      onBlur={(e) => {
+                        const next = e.target.value.trim()
+                        if (!next) {
+                          e.target.value = sec.name
+                          return
+                        }
+                        if (next !== sec.name) void onRename(sec, next)
+                      }}
+                    />
+                  </td>
+                  <td className={cn(td, 'text-center')}>{sec.columns.length}</td>
+                  <td className={cn(td, 'text-center')}>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={!sec.hidden}
+                      aria-label={`Show ${sec.name} to Customer`}
+                      title={sec.hidden ? 'Hidden from the customer' : 'Shown to the customer'}
+                      disabled={busy}
+                      onClick={() => onShow(sec, Boolean(sec.hidden))}
+                      className={cn('relative inline-flex h-6 w-11 items-center rounded-full border transition-colors disabled:opacity-60', sec.hidden ? 'border-red-700 bg-red-500' : 'border-emerald-700 bg-emerald-600')}
+                    >
+                      <span className={cn('inline-block h-5 w-5 rounded-full bg-white shadow transition-transform', sec.hidden ? 'translate-x-0.5' : 'translate-x-5')} />
+                    </button>
+                  </td>
+                  <td className={cn(td, 'text-center')}>
+                    <span className="flex justify-center gap-1">
+                      <button type="button" className={iconBtn} disabled={busy || i === 0} title="Move Up" aria-label={`Move ${sec.name} Up`} onClick={() => onMove(i, -1)}><ArrowUp size={13} /></button>
+                      <button type="button" className={iconBtn} disabled={busy || i === sections.length - 1} title="Move Down" aria-label={`Move ${sec.name} Down`} onClick={() => onMove(i, 1)}><ArrowDown size={13} /></button>
+                      <button type="button" className={cn(iconBtn, 'text-red-700 hover:bg-red-50')} disabled={busy} title="Delete Section" aria-label={`Delete ${sec.name}`} onClick={() => void onDelete(sec)}>
+                        <Trash2 size={14} />
+                      </button>
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="flex justify-end border-t border-stone-200 bg-stone-50 px-4 py-2.5">
+          <Button type="button" className={cn(limsPrimaryBtnClass, 'h-9 min-h-9')} onClick={onClose}>Done</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export function PortalRecordsSetupDialog({
   licence,
   onOpenChange,
@@ -245,6 +464,8 @@ export function PortalRecordsSetupDialog({
   const [paid, setPaid] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
   const [editing, setEditing] = useState<Draft | null>(null)
+  const [addingSection, setAddingSection] = useState(false)
+  const [importTarget, setImportTarget] = useState<BisProjectRow | null>(null)
   const licenceId = licence?.id ?? ''
 
   const load = useCallback(
@@ -280,16 +501,53 @@ export function PortalRecordsSetupDialog({
   const active = useMemo(() => sections?.find((s) => s.id === activeId) ?? null, [sections, activeId])
   const status = serviceStatus(service)
 
-  const addSection = async () => {
-    const name = window.prompt('Section Name (e.g. Calibration, Packing)')?.trim()
-    if (!name) return
-    await run('add-section', () => createSection(licenceId, 'custom', name, sections?.length ?? 0), 'Section Added')
-  }
-
   return (
     <Dialog open={licence != null} onOpenChange={onOpenChange}>
       <DialogContent aria-describedby={undefined} className={cn(limsDialogClass, 'flex max-h-[92dvh] w-[min(64rem,calc(100vw-1rem))] max-w-none flex-col gap-0 overflow-hidden bg-white p-0')}>
         {confirmDialog}
+        <BisModuleImportDialog
+          open={importTarget != null}
+          onOpenChange={(open) => !open && setImportTarget(null)}
+          targetRow={importTarget}
+          kind={null}
+          title="Record Sections"
+          onPickSource={async (sourceId) => {
+            const n = await copySectionsFrom(sourceId, licenceId)
+            if (n === 0) throw new Error('That licence has no record sections')
+            toast.success(n === 1 ? '1 Section Imported' : `${n} Sections Imported`)
+            await load()
+          }}
+        />
+        {addingSection && sections ? (
+          <ManageSectionsDialog
+            sections={sections}
+            busy={busy != null}
+            onClose={() => setAddingSection(false)}
+            onAdd={async (kind, name) => {
+              setBusy('add-section')
+              try {
+                const id = await createSection(licenceId, kind, name, sections.length)
+                toast.success('Section Added')
+                setActiveId(id)
+                await load()
+              } catch (err) {
+                toast.error(errText(err, 'Could not add the section'))
+              } finally {
+                setBusy(null)
+              }
+            }}
+            onImport={() => void fetchBisProjectById(licenceId)
+              .then((row) => (row ? setImportTarget(row) : toast.error('Licence not found')))
+              .catch((err: unknown) => toast.error(errText(err, 'Could not open the import')))}
+            onRename={(sec, name) => run('rename', () => updateSection(sec.id, { name }), 'Section Renamed')}
+            onMove={(index, dir) => void run('move-section', () => moveSection(sections, index, dir))}
+            onShow={(sec, show) => void run('show-section', () => updateSection(sec.id, { hidden: !show }), show ? 'Shown to Customer' : 'Hidden from Customer')}
+            onDelete={async (sec) => {
+              if (!(await confirm(`Delete the section "${sec.name}" with all its columns and the customer's entries in it?`, { title: 'Delete Section', confirmLabel: 'Delete', destructive: true }))) return
+              await run('del-section', () => deleteSection(sec.id), 'Section Deleted')
+            }}
+          />
+        ) : null}
         <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white">
           <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={limsDarkBarGlowStyle} />
           <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
@@ -303,49 +561,67 @@ export function PortalRecordsSetupDialog({
             <p className="flex items-center gap-2 text-sm text-stone-600"><Loader2 size={16} className="animate-spin" /> Loading…</p>
           ) : (
             <>
-              <section className="space-y-2 border border-stone-300 bg-white p-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="text-sm font-semibold text-stone-900">Records Service</h3>
-                  <span className={cn('border px-1.5 py-0.5 text-[11px] font-medium', status.tone)}>{status.text}</span>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className={cn(smallBtn, 'ml-auto')}
-                    disabled={busy != null}
-                    onClick={() =>
-                      void run('svc', () => setRecordsEnabled(licenceId, !service?.records_enabled, service), service?.records_enabled ? 'Service Switched Off' : 'Service Switched On')
-                    }
-                  >
-                    <Power size={14} /> {service?.records_enabled ? 'Switch Off' : `Switch On (${TRIAL_DAYS}-Day Free Trial)`}
-                  </Button>
-                </div>
-                {service?.records_enabled ? (
-                  <div className="flex flex-wrap items-end gap-2">
-                    <div className="space-y-1">
-                      <Label htmlFor="paid-until">Paid Till</Label>
-                      <Input id="paid-until" type="date" className="h-8 w-[10rem]" value={paid} onChange={(e) => setPaid(e.target.value)} />
-                    </div>
-                    <Button type="button" className={cn(limsPrimaryBtnClass, 'h-8 text-xs')} disabled={busy != null} onClick={() => void run('paid', () => setPaidUntil(licenceId, paid || null), 'Paid Date Saved')}>
-                      Save Paid Date
-                    </Button>
-                    <p className="text-[11px] text-stone-500">Trial ends {formatDisplayDate(service.trial_ends) || '—'}. After the trial and paid dates pass, the customer can only view and print.</p>
-                  </div>
-                ) : (
-                  <p className="text-[11px] text-stone-500">While the service is off the customer does not see the record sections. You can prepare the formats first.</p>
-                )}
-              </section>
-
               <section className="space-y-3 border border-stone-300 bg-white p-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="text-sm font-semibold text-stone-900">Sections</h3>
-                  {sections.length === 0 ? (
-                    <Button type="button" className={cn(limsPrimaryBtnClass, 'h-8 gap-1 text-xs')} disabled={busy != null} onClick={() => void run('std', () => createStandardSections(licenceId, 0), 'Standard Sections Created')}>
-                      {busy === 'std' ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} Create Standard Sections
-                    </Button>
+                  <span className={cn('border px-1.5 py-0.5 text-[11px] font-medium', status.tone)} title="Records Service">{status.text}</span>
+                  {service?.records_enabled ? (
+                    <>
+                      <Label htmlFor="paid-until" className="ml-1 text-sm">Paid Till</Label>
+                      <CalendarDateField id="paid-until" label="Paid Till" className="w-[10.5rem]" value={paid} disabled={busy != null} onChange={setPaid} />
+                      <Button type="button" className={cn(limsPrimaryBtnClass, 'h-10 w-10 p-0')} disabled={busy != null} title="Save Paid Date" aria-label="Save Paid Date"
+                        onClick={() => void run('paid', () => setPaidUntil(licenceId, paid || null), 'Paid Date Saved')}>
+                        <Save size={16} aria-hidden />
+                      </Button>
+                    </>
                   ) : null}
-                  <Button type="button" variant="outline" className={smallBtn} disabled={busy != null} onClick={() => void addSection()}>
-                    <Plus size={14} /> Add Section
-                  </Button>
+                  <Label htmlFor="records-section" className="ml-2 text-sm font-semibold text-stone-900">Sections</Label>
+                  <LimsFieldWithAdd
+                    className="w-full sm:w-[14rem]"
+                    addButton={<LimsFieldAddButton aria-label="Add, Rename or Delete Sections" title="Add, Rename or Delete Sections" disabled={busy != null} onClick={() => setAddingSection(true)} />}
+                  >
+                    <select
+                      id="records-section"
+                      className="h-full w-full border-0 bg-stone-50 px-3 text-sm focus:outline-none"
+                      value={activeId}
+                      disabled={sections.length === 0}
+                      onChange={(e) => setActiveId(e.target.value)}
+                    >
+                      {sections.length === 0 ? <option value="">No Section Yet</option> : null}
+                      {sections.map((s) => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                  </LimsFieldWithAdd>
+                  <div className="ml-auto flex flex-wrap gap-2">
+                    {sections.length === 0 ? (
+                      <Button type="button" className={cn(limsPrimaryBtnClass, 'h-10 gap-1 text-xs')} disabled={busy != null} onClick={() => void run('std', () => createStandardSections(licenceId, 0), 'Standard Sections Created')}>
+                        {busy === 'std' ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} Create Standard Sections
+                      </Button>
+                    ) : null}
+                    {active?.kind === 'final_test' ? (
+                      <Button type="button" variant="outline" className={cn(limsOutlineBtnClass, 'h-10 w-10 p-0 text-amber-800')} disabled={busy != null}
+                        title="Add From IS Test Parameters" aria-label="Add From IS Test Parameters"
+                        onClick={() => void run('tp', async () => {
+                          const n = await addTestParameterColumns(licenceId, active.id, active.columns.length, active.columns.map((c) => c.key))
+                          toast.success(n ? `${n} Columns Added` : 'No Test Parameters for This IS Code')
+                        })}>
+                        <FlaskConical size={16} aria-hidden />
+                      </Button>
+                    ) : null}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className={cn(limsOutlineBtnClass, 'h-10 w-10 p-0', service?.records_enabled ? 'text-red-700' : 'text-emerald-700')}
+                      disabled={busy != null}
+                      title={service?.records_enabled ? 'Switch Off Records Service' : `Switch On Records Service (${TRIAL_DAYS}-Day Free Trial)`}
+                      aria-label={service?.records_enabled ? 'Switch Off Records Service' : 'Switch On Records Service'}
+                      onClick={() =>
+                        void run('svc', () => setRecordsEnabled(licenceId, !service?.records_enabled, service), service?.records_enabled ? 'Service Switched Off' : 'Service Switched On')
+                      }
+                    >
+                      <Power size={17} aria-hidden />
+                    </Button>
+                  </div>
                 </div>
                 {sections.length === 0 ? (
                   <p className="text-sm text-stone-600">
@@ -353,66 +629,28 @@ export function PortalRecordsSetupDialog({
                   </p>
                 ) : (
                   <>
-                    <div className="flex flex-wrap gap-1.5">
-                      {sections.map((s) => (
-                        <button
-                          key={s.id}
-                          type="button"
-                          onClick={() => setActiveId(s.id)}
-                          className={cn('border px-2.5 py-1.5 text-xs font-medium', s.id === activeId ? 'border-amber-600 bg-amber-600 text-white' : 'border-stone-300 bg-[#fffcf7] text-stone-800 hover:border-amber-600')}
-                        >
-                          {s.name} <span className="opacity-70">({s.columns.length})</span>
-                        </button>
-                      ))}
-                    </div>
                     {active ? (
                       <div className="space-y-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-xs text-stone-500">{SECTION_KIND_LABEL[active.kind] ?? active.kind}</span>
-                          <Button type="button" variant="outline" className={smallBtn} disabled={busy != null}
-                            onClick={() => {
-                              const name = window.prompt('Section Name', active.name)?.trim()
-                              if (name && name !== active.name) void run('rename', () => updateSection(active.id, { name }), 'Section Renamed')
-                            }}>
-                            <Pencil size={13} /> Rename
-                          </Button>
-                          <Button type="button" variant="outline" className={cn(smallBtn, 'text-red-700')} disabled={busy != null}
-                            onClick={() => void (async () => {
-                              if (!(await confirm(`Delete the section "${active.name}" with all its columns and the customer's entries in it?`, { title: 'Delete Section', confirmLabel: 'Delete', destructive: true }))) return
-                              await run('del-section', () => deleteSection(active.id), 'Section Deleted')
-                            })()}>
-                            <Trash2 size={13} /> Delete Section
-                          </Button>
-                          <div className="ml-auto flex flex-wrap gap-2">
-                            {active.kind === 'final_test' ? (
-                              <Button type="button" variant="outline" className={smallBtn} disabled={busy != null}
-                                onClick={() => void run('tp', async () => {
-                                  const n = await addTestParameterColumns(licenceId, active.id, active.columns.length, active.columns.map((c) => c.key))
-                                  toast.success(n ? `${n} Columns Added` : 'No Test Parameters for This IS Code')
-                                })}>
-                                <FlaskConical size={13} /> Add From IS Test Parameters
-                              </Button>
-                            ) : null}
-                            <Button type="button" className={cn(limsPrimaryBtnClass, 'h-8 gap-1 text-xs')} disabled={busy != null} onClick={() => setEditing(draftFrom())}>
-                              <Plus size={14} /> Add Column
-                            </Button>
-                          </div>
-                        </div>
                         <div className="overflow-x-auto">
                           <table className="w-full border-collapse">
                             <thead>
                               <tr>
                                 <th className={cn(th, 'w-10 text-center')}>#</th>
                                 <th className={th}>Column</th>
-                                <th className={th}>Type</th>
-                                <th className={th}>Unit / Limits</th>
-                                <th className={th}>Details</th>
-                                <th className={cn(th, 'w-[1%]')} />
+                                <th className={cn(th, 'text-center')}>Type</th>
+                                <th className={cn(th, 'text-center')}>Unit / Limits</th>
+                                <th className={cn(th, 'text-center')}>Details</th>
+                                <th className={cn(th, 'w-[1%] text-center')}>Action</th>
                               </tr>
                             </thead>
                             <tbody>
                               {active.columns.length === 0 ? (
-                                <tr><td colSpan={6} className={cn(td, 'py-4 text-center text-stone-500')}>No columns yet.</td></tr>
+                                <tr>
+                                  <td colSpan={5} className={cn(td, 'py-4 text-center text-stone-500')}>No columns yet.</td>
+                                  <td className={cn(td, 'text-center')}>
+                                    <button type="button" className={cn(iconBtn, 'text-emerald-700')} title="Add Column" aria-label="Add Column" disabled={busy != null} onClick={() => setEditing({ ...draftFrom(), insertAt: 0 })}><Plus size={13} /></button>
+                                  </td>
+                                </tr>
                               ) : (
                                 active.columns.map((c, i) => (
                                   <tr key={c.id} className={i % 2 ? 'bg-[#faf7f1]' : 'bg-white'}>
@@ -421,19 +659,20 @@ export function PortalRecordsSetupDialog({
                                       <span className="font-medium">{c.label}</span>{c.required ? <span className="text-red-600"> *</span> : null}
                                       <span className="block text-[11px] text-stone-500"><code>{c.key}</code></span>
                                     </td>
-                                    <td className={cn(td, 'text-xs')}>{COLUMN_TYPE_LABEL[c.col_type]}</td>
-                                    <td className={cn(td, 'text-xs')}>{limitsText(c) || c.unit || '—'}</td>
-                                    <td className={cn(td, 'max-w-[16rem] truncate text-xs text-stone-600')}>
+                                    <td className={cn(td, 'text-center text-xs')}>{COLUMN_TYPE_LABEL[c.col_type]}</td>
+                                    <td className={cn(td, 'text-center text-xs')}>{limitsText(c) || c.unit || '—'}</td>
+                                    <td className={cn(td, 'max-w-[16rem] truncate text-center text-xs text-stone-600')}>
                                       {c.col_type === 'formula' ? <code>= {c.config.formula}</code>
                                         : c.col_type === 'select' ? (c.config.options ?? []).join(', ')
                                           : c.col_type === 'link' ? `→ ${sections.find((s) => s.id === c.config.section_id)?.name ?? '?'}`
                                             : '—'}
                                     </td>
                                     <td className={cn(td, 'whitespace-nowrap')}>
-                                      <span className="flex gap-1">
+                                      <span className="flex justify-center gap-1">
                                         <button type="button" className={iconBtn} title="Move Up" aria-label="Move Up" disabled={busy != null || i === 0} onClick={() => void run('mv', () => moveColumn(active.columns, i, -1))}><ArrowUp size={13} /></button>
                                         <button type="button" className={iconBtn} title="Move Down" aria-label="Move Down" disabled={busy != null || i === active.columns.length - 1} onClick={() => void run('mv', () => moveColumn(active.columns, i, 1))}><ArrowDown size={13} /></button>
                                         <button type="button" className={iconBtn} title="Edit" aria-label={`Edit ${c.label}`} onClick={() => setEditing(draftFrom(c))}><Pencil size={13} /></button>
+                                        <button type="button" className={cn(iconBtn, 'text-emerald-700')} title="Add Column Below" aria-label={`Add Column Below ${c.label}`} disabled={busy != null} onClick={() => setEditing({ ...draftFrom(), insertAt: i + 1 })}><Plus size={13} /></button>
                                         <button type="button" className={cn(iconBtn, 'text-red-700')} title="Delete" aria-label={`Delete ${c.label}`} disabled={busy != null}
                                           onClick={() => void (async () => {
                                             if (!(await confirm(`Delete the column "${c.label}"? Values already entered in it stay in old entries but are no longer shown.`, { title: 'Delete Column', confirmLabel: 'Delete', destructive: true }))) return

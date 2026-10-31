@@ -1,4 +1,4 @@
-import { evaluateFormula, type FormulaValue } from '@/lib/recordFormula'
+import { evaluateFormula, type FormulaScalar, type FormulaValue } from '@/lib/recordFormula'
 
 /* Customer Portal records: column definitions (designed by Q Engineering) and the calculation of one entry. */
 
@@ -12,7 +12,22 @@ export type RecordColumn = {
   unit: string | null
   spec_min: number | null
   spec_max: number | null
-  config: { options?: string[]; formula?: string; section_id?: string; decimals?: number }
+  config: {
+    options?: string[]
+    /** Dropdown: preselected for a new entry. */
+    default?: string
+    /** Dropdown: choosing one of these makes the entry Fail. */
+    fail_options?: string[]
+    /** Dropdown: several choices at once (stored as a list). */
+    multiple?: boolean
+    /** Dropdown: the customer may also type a value that is not in the list. */
+    allow_other?: boolean
+    formula?: string
+    section_id?: string
+    decimals?: number
+    /** Other per-type settings (text, number, date, link, pass / fail); see ColumnTypeSettings. */
+    [setting: string]: unknown
+  }
   required: boolean
 }
 
@@ -63,18 +78,29 @@ export function withinLimits(col: Pick<RecordColumn, 'spec_min' | 'spec_max'>, v
 /**
  * Fills the formula columns (in column order, so a formula may use an earlier formula) and works out the result:
  * fail when any limit is broken or a Pass / Fail column says fail; pass when something was checked and all passed.
+ * `linked` gives, per link column key, the stored values of the entries picked in it (same licence only), so a
+ * formula can use <link column>.<column> (one value per picked entry).
  */
-export function computeEntry(columns: RecordColumn[], input: Record<string, unknown>): {
+export function computeEntry(
+  columns: RecordColumn[],
+  input: Record<string, unknown>,
+  linked: Record<string, Array<Record<string, unknown>>> = {},
+): {
   values: Record<string, unknown>
   result: 'pass' | 'fail' | null
   formulaErrors: Record<string, string>
 } {
   const values: Record<string, unknown> = { ...input }
   const formulaErrors: Record<string, string> = {}
+  const linkedScope: Record<string, FormulaValue> = {}
+  for (const [linkKey, rows] of Object.entries(linked)) {
+    const keys = new Set(rows.flatMap((r) => Object.keys(r)))
+    for (const k of keys) linkedScope[`${linkKey}.${k}`] = rows.map((r) => (r[k] ?? null) as FormulaScalar)
+  }
   for (const col of columns) {
     if (col.col_type !== 'formula') continue
     try {
-      const out = evaluateFormula(col.config.formula ?? '', values as Record<string, FormulaValue>)
+      const out = evaluateFormula(col.config.formula ?? '', { ...linkedScope, ...(values as Record<string, FormulaValue>) })
       const decimals = col.config.decimals
       values[col.key] =
         typeof out === 'number' && decimals != null ? Math.round(out * 10 ** decimals) / 10 ** decimals : out
@@ -92,7 +118,14 @@ export function computeEntry(columns: RecordColumn[], input: Record<string, unkn
         checked = true
         if (!ok) failed = true
       }
-    } else if (col.col_type === 'pass_fail') {
+    } else if (col.col_type === 'select' && col.config.fail_options?.length) {
+      const v = values[col.key]
+      const picked = (Array.isArray(v) ? v : v == null || v === '' ? [] : [v]).map(String)
+      if (picked.length) {
+        checked = true
+        if (picked.some((p) => col.config.fail_options!.includes(p))) failed = true
+      }
+    } else if (col.col_type === 'pass_fail' && !col.config.no_fail_effect) {
       const v = String(values[col.key] ?? '').toLowerCase()
       if (v === 'pass' || v === 'fail') {
         checked = true
@@ -101,6 +134,123 @@ export function computeEntry(columns: RecordColumn[], input: Record<string, unkn
     }
   }
   return { values, result: failed ? 'fail' : checked ? 'pass' : null, formulaErrors }
+}
+
+/** Starting values of a new entry: the defaults set on each column. */
+export function defaultEntryValues(columns: RecordColumn[], now = new Date()): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+  for (const c of columns) {
+    const cfg = c.config
+    if (c.col_type === 'select' && cfg.default) out[c.key] = cfg.multiple ? [cfg.default] : cfg.default
+    else if (c.col_type === 'text' && cfg.default_text) out[c.key] = String(cfg.default_text)
+    else if ((c.col_type === 'number' || c.col_type === 'spec') && cfg.default_number != null) out[c.key] = Number(cfg.default_number)
+    else if (c.col_type === 'date' && cfg.default_today) out[c.key] = cfg.include_time ? `${today}T${pad(now.getHours())}:${pad(now.getMinutes())}` : today
+    else if (c.col_type === 'pass_fail' && cfg.default_pf) out[c.key] = String(cfg.default_pf)
+  }
+  return out
+}
+
+/** "AA-9999-X" → a check: A = letter, 9 = digit, X = letter or digit, other characters as typed. */
+export function maskToRegex(mask: string): RegExp {
+  const body = [...mask]
+    .map((c) => (c === 'A' ? '[A-Za-z]' : c === '9' ? '\\d' : c === 'X' ? '[A-Za-z0-9]' : c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+    .join('')
+  return new RegExp(`^${body}$`)
+}
+
+const CHARSETS: Record<string, [RegExp, string]> = {
+  letters: [/^[A-Za-z]*$/, 'letters only'],
+  digits: [/^\d*$/, 'digits only'],
+  alnum: [/^[A-Za-z0-9]*$/, 'letters and digits only'],
+  alnum_space: [/^[A-Za-z0-9 ]*$/, 'letters, digits and spaces only'],
+}
+
+/** The column's own rules (not Required): a message when the value breaks one, else null. Empty values pass. */
+export function validateValue(col: RecordColumn, v: unknown, today = new Date().toISOString().slice(0, 10)): string | null {
+  if (v == null || v === '' || (Array.isArray(v) && v.length === 0 && col.col_type !== 'link')) return null
+  const cfg = col.config
+  const custom = cfg.error_message ? String(cfg.error_message) : null
+  const fail = (msg: string) => custom ?? `${col.label}: ${msg}`
+  if (col.col_type === 'text') {
+    const t = String(v)
+    if (cfg.alphanumeric && cfg.regex) {
+      try {
+        if (!new RegExp(String(cfg.regex)).test(t)) return fail('does not match the required format')
+      } catch {
+        /* a broken rule is ignored */
+      }
+    } else if (cfg.alphanumeric && cfg.mask) {
+      if (!maskToRegex(String(cfg.mask)).test(t)) return fail(`format must be ${String(cfg.mask)}`)
+    }
+    if (cfg.min_length != null && t.length < Number(cfg.min_length)) return fail(`at least ${String(cfg.min_length)} characters`)
+    if (cfg.max_length != null && t.length > Number(cfg.max_length)) return fail(`at most ${String(cfg.max_length)} characters`)
+    const set = CHARSETS[String(cfg.allowed_chars ?? '')]
+    if (set && !set[0].test(t)) return fail(set[1])
+  } else if (col.col_type === 'number' || col.col_type === 'spec') {
+    const n = toNumber(v)
+    if (n == null) return fail('enter a number')
+    if (cfg.whole_only && !Number.isInteger(n)) return fail('whole numbers only')
+    if (cfg.no_negative && n < 0) return fail('no negative values')
+    if (cfg.range_min != null && n < Number(cfg.range_min)) return fail(`not below ${String(cfg.range_min)}`)
+    if (cfg.range_max != null && n > Number(cfg.range_max)) return fail(`not above ${String(cfg.range_max)}`)
+  } else if (col.col_type === 'date') {
+    const d = String(v).slice(0, 10)
+    if (cfg.no_future && d > today) return fail('no future dates')
+    if (cfg.no_past && d < today) return fail('no past dates')
+    if (cfg.not_before && d < String(cfg.not_before)) return fail(`not before ${formatDateValue(col, String(cfg.not_before))}`)
+    if (cfg.not_after && d > String(cfg.not_after)) return fail(`not after ${formatDateValue(col, String(cfg.not_after))}`)
+  } else if (col.col_type === 'link' && cfg.min_pick != null) {
+    const picked = Array.isArray(v) ? v.length : 1
+    if (picked < Number(cfg.min_pick)) return fail(`pick at least ${String(cfg.min_pick)}`)
+  }
+  return null
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/** A date (or date-time) value in the column's chosen format. */
+export function formatDateValue(col: Pick<RecordColumn, 'config'>, v: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/.exec(v)
+  if (!m) return v
+  const [, y, mo, d, hh, mi] = m
+  const mon = MONTHS[Number(mo) - 1] ?? mo
+  const f = String(col.config.date_format ?? '')
+  const date =
+    f === 'dd-mm-yyyy' ? `${d}-${mo}-${y}`
+      : f === 'dd mmm yyyy' ? `${d} ${mon} ${y}`
+        : f === 'mmm dd, yyyy' ? `${mon} ${d}, ${y}`
+          : f === 'yyyy-mm-dd' ? `${y}-${mo}-${d}`
+            : `${d}/${mo}/${y}`
+  return hh != null ? `${date} ${hh}:${mi}` : date
+}
+
+/** A number in the column's format: decimals, thousands separator, ₹ or %. */
+export function formatNumberValue(col: Pick<RecordColumn, 'config'>, n: number): string {
+  const cfg = col.config
+  const dec = cfg.decimals != null && Number.isFinite(Number(cfg.decimals)) ? Number(cfg.decimals) : null
+  const text = cfg.thousands
+    ? n.toLocaleString('en-IN', dec != null ? { minimumFractionDigits: dec, maximumFractionDigits: dec } : { maximumFractionDigits: 6 })
+    : dec != null ? n.toFixed(dec) : String(Math.round(n * 1e6) / 1e6)
+  return cfg.format === 'currency' ? `₹ ${text}` : cfg.format === 'percent' ? `${text} %` : text
+}
+
+export const PASS_FAIL_PRESETS: Array<[string, string, string]> = [
+  ['Pass / Fail', 'Pass', 'Fail'],
+  ['OK / Not OK', 'OK', 'Not OK'],
+  ['Yes / No', 'Yes', 'No'],
+  ['Confirm / Not Confirm', 'Confirm', 'Not Confirm'],
+  ['Accepted / Rejected', 'Accepted', 'Rejected'],
+  ['Conforming / Non-Conforming', 'Conforming', 'Non-Conforming'],
+  ['Satisfactory / Unsatisfactory', 'Satisfactory', 'Unsatisfactory'],
+]
+
+/** Words a Pass / Fail column shows for pass and fail (values stay 'pass' / 'fail'). */
+export function passFailWords(config: Record<string, unknown>): [string, string] {
+  if (config.preset === 'custom') return [String(config.pass_label || 'Pass'), String(config.fail_label || 'Fail')]
+  const p = PASS_FAIL_PRESETS.find(([n]) => n === config.preset)
+  return p ? [p[1], p[2]] : ['Pass', 'Fail']
 }
 
 export function limitsText(col: Pick<RecordColumn, 'spec_min' | 'spec_max' | 'unit'>): string {

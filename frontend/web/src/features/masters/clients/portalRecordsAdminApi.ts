@@ -19,7 +19,7 @@ export type RecordsService = {
   notes: string | null
 }
 
-export type AdminSection = { id: string; project_id: string; kind: string; name: string; sort_order: number; columns: AdminColumn[] }
+export type AdminSection = { id: string; project_id: string; kind: string; name: string; sort_order: number; hidden?: boolean; columns: AdminColumn[] }
 export type AdminColumn = RecordColumn & { section_id: string; sort_order: number }
 
 export async function getRecordsService(projectId: string): Promise<RecordsService | null> {
@@ -71,7 +71,7 @@ export async function setPaidUntil(projectId: string, paidUntil: string | null):
 export async function listSections(projectId: string): Promise<AdminSection[]> {
   const { data, error } = await supabase
     .from('portal_rec_sections')
-    .select('id, project_id, kind, name, sort_order, columns:portal_rec_columns(*)')
+    .select('*, columns:portal_rec_columns(*)')
     .eq('project_id', projectId)
     .order('sort_order')
   if (error) throw error
@@ -91,9 +91,22 @@ export async function createSection(projectId: string, kind: string, name: strin
   return String(data.id)
 }
 
-export async function updateSection(id: string, patch: { name?: string; sort_order?: number }): Promise<void> {
+export async function updateSection(id: string, patch: { name?: string; sort_order?: number; hidden?: boolean }): Promise<void> {
   const { error } = await supabase.from('portal_rec_sections').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id)
   if (error) throw error
+}
+
+/** Moves a section one place up or down; all sections get the order 0, 1, 2… */
+export async function moveSection(sections: AdminSection[], index: number, dir: -1 | 1): Promise<void> {
+  const j = index + dir
+  if (j < 0 || j >= sections.length) return
+  const list = [...sections]
+  ;[list[index], list[j]] = [list[j]!, list[index]!]
+  const results = await Promise.all(
+    list.map((s, i) => (s.sort_order === i ? null : supabase.from('portal_rec_sections').update({ sort_order: i }).eq('id', s.id))),
+  )
+  const failed = results.find((r) => r?.error)
+  if (failed?.error) throw failed.error
 }
 
 export async function deleteSection(id: string): Promise<void> {
@@ -136,6 +149,18 @@ export async function deleteColumn(id: string): Promise<void> {
   if (error) throw error
 }
 
+/** Renumbers a section's columns 0, 1, 2… leaving a gap at `at` for a new column. */
+export async function makeRoomForColumn(columns: AdminColumn[], at: number): Promise<void> {
+  const results = await Promise.all(
+    columns.map((c, i) => {
+      const order = i < at ? i : i + 1
+      return order === c.sort_order ? null : supabase.from('portal_rec_columns').update({ sort_order: order }).eq('id', c.id)
+    }),
+  )
+  const failed = results.find((r) => r?.error)
+  if (failed?.error) throw failed.error
+}
+
 export async function moveColumn(columns: AdminColumn[], index: number, dir: -1 | 1): Promise<void> {
   const j = index + dir
   if (j < 0 || j >= columns.length) return
@@ -147,6 +172,52 @@ export async function moveColumn(columns: AdminColumn[], index: number, dir: -1 
   ])
   const failed = results.find((r) => r.error)
   if (failed?.error) throw failed.error
+}
+
+/**
+ * Copies every section of another licence, with all its columns (types, limits, options, formulas, links),
+ * after this licence's sections. Links between copied sections point at the new copies; entries are not copied.
+ * Returns how many sections were added.
+ */
+export async function copySectionsFrom(sourceProjectId: string, targetProjectId: string): Promise<number> {
+  const [source, target] = await Promise.all([listSections(sourceProjectId), listSections(targetProjectId)])
+  if (source.length === 0) return 0
+  const taken = new Set(target.map((s) => s.name.trim().toLowerCase()))
+  const newIds = new Map<string, string>()
+  let order = target.length
+  for (const sec of source) {
+    let name = sec.name
+    for (let n = 2; taken.has(name.trim().toLowerCase()); n++) name = `${sec.name} ${n}`
+    taken.add(name.trim().toLowerCase())
+    newIds.set(sec.id, await createSection(targetProjectId, sec.kind, name, order++))
+  }
+  const rows = source.flatMap((sec) =>
+    sec.columns.map((c) => {
+      const config = { ...(c.config ?? {}) } as Record<string, unknown>
+      if (typeof config.section_id === 'string') {
+        const mapped = newIds.get(config.section_id)
+        if (mapped) config.section_id = mapped
+        else delete config.section_id
+      }
+      return {
+        section_id: newIds.get(sec.id)!,
+        key: c.key,
+        label: c.label,
+        col_type: c.col_type,
+        unit: c.unit ?? null,
+        spec_min: c.spec_min ?? null,
+        spec_max: c.spec_max ?? null,
+        config,
+        required: Boolean(c.required),
+        sort_order: c.sort_order,
+      }
+    }),
+  )
+  if (rows.length) {
+    const { error } = await supabase.from('portal_rec_columns').insert(rows)
+    if (error) throw error
+  }
+  return source.length
 }
 
 // ── Payments ─────────────────────────────────────────────────────────────────────────────────────────

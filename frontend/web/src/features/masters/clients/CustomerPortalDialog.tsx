@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { ClipboardList, FileBadge2, FileText, Loader2, Mail, Plus, Power, Send, Trash2, Users, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { DateInput } from '@/components/ui/date-input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
@@ -34,6 +33,7 @@ import {
   type PortalLogin,
 } from './customerPortalAdminApi'
 import { listRecordsServices, serviceStatus, setPaidUntil, type RecordsService } from './portalRecordsAdminApi'
+import { CalendarDateField } from './CalendarDateField'
 import { PortalRecordsServiceDialog } from './PortalRecordsServiceDialog'
 import { PortalRecordsSetupDialog } from './PortalRecordsSetupDialog'
 
@@ -634,13 +634,13 @@ export function CustomerPortalDialog({
                           </td>
                           <td className={cn(td, 'text-center')}>
                             {service?.records_enabled ? (
-                              <DateInput
-                                aria-label={`Paid Till for ${cml}`}
-                                className="h-8 min-h-8 w-full text-center text-sm"
+                              <CalendarDateField
+                                label={`Paid Till for ${cml}`}
+                                className="h-8 min-h-8 w-full"
                                 value={service.paid_until ?? ''}
                                 disabled={busy != null}
-                                onChange={(e) => {
-                                  const next = e.target.value || null
+                                onChange={(value) => {
+                                  const next = value || null
                                   if (next !== (service.paid_until ?? null)) void run(`paid:${l.id}`, () => setPaidUntil(l.id, next), next ? 'Paid Date Saved' : 'Paid Date Cleared')
                                 }}
                               />
