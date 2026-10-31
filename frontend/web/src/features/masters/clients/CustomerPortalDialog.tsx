@@ -547,7 +547,7 @@ export function CustomerPortalDialog({
                         <tr key={l.id} className={rowTone(i)}>
                           <td className={cn(td, 'text-center text-xs text-stone-500')}>{i + 1}</td>
                           <td className={td}>
-                            <p className="font-semibold text-stone-900">{cml}</p>
+                            <p className="whitespace-nowrap font-semibold text-stone-900">{cml}</p>
                             {is ? <p className="text-xs text-stone-600">{is}</p> : null}
                           </td>
                           <td className={cn(td, 'text-center text-[13px]', expired && 'font-semibold text-red-700')}>
