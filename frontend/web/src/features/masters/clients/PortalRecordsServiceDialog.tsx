@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { BadgeCheck, CalendarClock, IndianRupee, Loader2, Power, Send, Sparkles } from 'lucide-react'
+import { BadgeCheck, CalendarClock, IndianRupee, Loader2, Plus, Power, Send, Sparkles, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -61,6 +61,113 @@ function ActionCard({ active, icon, title, tone, disabled, onClick }: { active: 
   )
 }
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+/** Who gets the payment link: the licence's logins ticked by default, more people can be added. */
+function SendLinkDialog({
+  people,
+  amount,
+  period,
+  busy,
+  onClose,
+  onSend,
+}: {
+  people: Array<{ name: string; email: string }>
+  amount: number
+  period: { from: string; to: string }
+  busy: boolean
+  onClose: () => void
+  onSend: (emails: string[]) => Promise<void>
+}) {
+  const [rows, setRows] = useState(people.map((p) => ({ ...p, on: true, added: false })))
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const emailOk = EMAIL_RE.test(email.trim())
+  const exists = rows.some((r) => r.email.toLowerCase() === email.trim().toLowerCase())
+  const add = () => {
+    if (!emailOk || exists) return
+    setRows((prev) => [...prev, { name: name.trim(), email: email.trim(), on: true, added: true }])
+    setName('')
+    setEmail('')
+  }
+  const chosen = rows.filter((r) => r.on).map((r) => r.email)
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent
+        layer="stacked"
+        aria-describedby={undefined}
+        className={cn(limsDialogClass, '[&>button]:top-[10px] sm:[&>button]:top-[14px]', 'flex max-h-[85dvh] w-[min(40rem,calc(100vw-1rem))] max-w-none flex-col gap-0 overflow-hidden bg-white p-0')}
+      >
+        <div className="flex h-14 shrink-0 items-center bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4">
+          <DialogHeader className="pr-10 text-left">
+            <DialogTitle className="text-base font-semibold text-white">Send Payment Link</DialogTitle>
+          </DialogHeader>
+        </div>
+        <div className="flex flex-wrap gap-2 border-b border-amber-200 bg-amber-50/60 px-4 py-2 text-sm">
+          <span className="font-semibold text-amber-900">{money(amount)}</span>
+          <span className="text-stone-600">·</span>
+          <span className="text-stone-700">{formatDisplayDate(period.from)} to {formatDisplayDate(period.to)}</span>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-3">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr>
+                <th className={cn(th, 'w-12')}>Send</th>
+                <th className={cn(th, 'text-left')}>Name</th>
+                <th className={cn(th, 'text-left')}>Email</th>
+                <th className={cn(th, 'w-14')}>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={r.email} className={i % 2 ? 'bg-[#f7f3eb]' : 'bg-[#fffcf7]'}>
+                  <td className={td}>
+                    <input type="checkbox" className="h-4 w-4" aria-label={`Send to ${r.email}`} checked={r.on}
+                      onChange={(e) => setRows((prev) => prev.map((x) => (x.email === r.email ? { ...x, on: e.target.checked } : x)))} />
+                  </td>
+                  <td className={cn(td, 'text-left font-medium')}>{r.name || '—'}</td>
+                  <td className={cn(td, 'text-left')}>{r.email}</td>
+                  <td className={td}>
+                    {r.added ? (
+                      <button type="button" className="inline-flex h-7 w-7 items-center justify-center border border-stone-300 bg-white text-red-700 hover:bg-red-50" title="Remove" aria-label={`Remove ${r.email}`}
+                        onClick={() => setRows((prev) => prev.filter((x) => x.email !== r.email))}>
+                        <Trash2 size={13} />
+                      </button>
+                    ) : <span className="text-[10px] font-semibold uppercase text-stone-400">Login</span>}
+                  </td>
+                </tr>
+              ))}
+              <tr className="bg-amber-50/70">
+                <td className={cn(td, 'text-xs font-semibold text-amber-800')}>New</td>
+                <td className={td}>
+                  <Input className="h-8 min-h-8" value={name} placeholder="Name" aria-label="New Name" onChange={(e) => setName(e.target.value)} />
+                </td>
+                <td className={td}>
+                  <Input className={cn('h-8 min-h-8', email && (!emailOk || exists) && 'border-red-400')} type="email" value={email} placeholder="Email" aria-label="New Email"
+                    onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} />
+                </td>
+                <td className={td}>
+                  <button type="button" className="inline-flex h-7 w-7 items-center justify-center border border-amber-600 bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-40"
+                    disabled={!emailOk || exists} title={exists ? 'Already in the list' : 'Add Email'} aria-label="Add Email" onClick={add}>
+                    <Plus size={14} />
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div className="flex items-center gap-2 border-t border-stone-200 bg-stone-50 px-4 py-2.5">
+          <span className="text-xs text-stone-600">{chosen.length} Selected</span>
+          <Button type="button" variant="outline" className={cn(limsOutlineBtnClass, 'ml-auto h-9 min-h-9')} onClick={onClose}>Cancel</Button>
+          <Button type="button" disabled={busy || chosen.length === 0} className={cn(limsPrimaryBtnClass, TONES.amber.btn, 'h-9 min-h-9 gap-1.5')} onClick={() => void onSend(chosen)}>
+            {busy ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Send size={15} aria-hidden />} Send
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 /**
  * The records service of one licence: start the free trial, email a payment request (UPI link + QR + bank
  * details), or record a payment (makes the Finance Payment Receipt and sets Paid Till). History below.
@@ -70,7 +177,7 @@ export function PortalRecordsServiceDialog({
   clientId,
   company,
   service,
-  emails,
+  recipients: people,
   onClose,
   onChanged,
 }: {
@@ -78,7 +185,8 @@ export function PortalRecordsServiceDialog({
   clientId: string
   company: string
   service: RecordsService | null
-  emails: string[]
+  /** Default recipients of a payment link: the licence's active portal logins. */
+  recipients: Array<{ name: string; email: string }>
   onClose: () => void
   onChanged: () => void
 }) {
@@ -90,8 +198,7 @@ export function PortalRecordsServiceDialog({
   const [action, setAction] = useState<Action>(service?.trial_ends ? 'request' : 'trial')
   const [busy, setBusy] = useState(false)
   const [amount, setAmount] = useState('')
-  const [to, setTo] = useState<string[]>(emails)
-  const [extraTo, setExtraTo] = useState('')
+  const [sendOpen, setSendOpen] = useState(false)
   const [paidOn, setPaidOn] = useState(today)
   const [mode, setMode] = useState<(typeof PAYMENT_MODES)[number]>('UPI')
   const [reference, setReference] = useState('')
@@ -140,21 +247,21 @@ export function PortalRecordsServiceDialog({
     }
   }, [licenceId])
 
-  const act = async (work: () => Promise<string | void>, done: string) => {
+  const act = async (work: () => Promise<string | void>, done: string): Promise<boolean> => {
     setBusy(true)
     try {
       const extra = await work()
       toast.success(extra ? `${done}: ${extra}` : done)
       onChanged()
       setPayments(await listServicePayments(licenceId))
+      return true
     } catch (err) {
       toast.error(errText(err, 'Action failed'))
+      return false
     } finally {
       setBusy(false)
     }
   }
-
-  const recipients = [...new Set([...to, ...extraTo.split(/[,;\s]+/).map((e) => e.trim()).filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))])]
   const amountValue = Number(amount)
   const canPayUpi = Boolean(settings?.upi)
   const canPayBank = Boolean(settings?.accountNumber)
@@ -167,6 +274,22 @@ export function PortalRecordsServiceDialog({
         className={cn(limsDialogClass, '[&>button]:top-[14px] sm:[&>button]:top-[18px]', 'flex max-h-[92dvh] w-[min(52rem,calc(100vw-1rem))] max-w-none flex-col gap-0 overflow-hidden bg-white p-0')}
       >
         {confirmDialog}
+        {sendOpen && settings ? (
+          <SendLinkDialog
+            people={people}
+            amount={amountValue}
+            period={chosenPeriod}
+            busy={busy}
+            onClose={() => setSendOpen(false)}
+            onSend={async (emails) => {
+              const ok = await act(
+                () => sendPaymentRequest({ projectId: licenceId, licence: licence?.label ?? '', company, to: emails, amount: amountValue, period: chosenPeriod, settings }),
+                'Payment Link Sent',
+              )
+              if (ok) setSendOpen(false)
+            }}
+          />
+        ) : null}
         <div className="relative flex min-h-16 shrink-0 items-center overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2 text-white sm:px-5">
           <div className="pointer-events-none absolute inset-0 opacity-[0.2]" style={limsDarkBarGlowStyle} />
           <div className="absolute bottom-0 left-0 h-[3px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
@@ -247,7 +370,7 @@ export function PortalRecordsServiceDialog({
                 <div className="grid gap-3 sm:grid-cols-3">
                   <div className="space-y-1">
                     <Label htmlFor="req-amount">Amount (₹)</Label>
-                    <Input id="req-amount" type="number" inputMode="decimal" min={0} value={amount} placeholder="Yearly Amount" onChange={(e) => setAmount(e.target.value)} />
+                    <Input id="req-amount" className="h-10" type="number" inputMode="decimal" min={0} value={amount} placeholder="Yearly Amount" onChange={(e) => setAmount(e.target.value)} />
                   </div>
                   <div className="space-y-1">
                     <Label htmlFor="req-from">Period From</Label>
@@ -258,27 +381,9 @@ export function PortalRecordsServiceDialog({
                     <CalendarDateField id="req-to" label="Period To" value={periodTo} onChange={setPeriodTo} />
                   </div>
                 </div>
-                <div className="space-y-1.5">
-                  <Label>Send To</Label>
-                  {emails.length ? (
-                    <div className="flex flex-wrap gap-1.5">
-                      {emails.map((e) => {
-                        const on = to.includes(e)
-                        return (
-                          <label key={e} className={cn('inline-flex cursor-pointer items-center gap-1.5 border px-2 py-1 text-xs', on ? 'border-amber-600 bg-amber-50 text-amber-950' : 'border-stone-300 bg-white text-stone-600')}>
-                            <input type="checkbox" className="h-4 w-4 rounded-none border-stone-500 text-amber-700" checked={on}
-                              onChange={(ev) => setTo((prev) => (ev.target.checked ? [...prev, e] : prev.filter((x) => x !== e)))} />
-                            {e}
-                          </label>
-                        )
-                      })}
-                    </div>
-                  ) : null}
-                  <Input value={extraTo} placeholder="Other Emails (Comma Separated)" aria-label="Other Emails" onChange={(e) => setExtraTo(e.target.value)} />
-                </div>
                 <div className="flex flex-wrap items-center justify-between gap-3 border-t border-stone-200 pt-3">
                   <Button type="button" disabled={busy || !settings} className={cn(limsPrimaryBtnClass, TONES.amber.btn, 'ml-auto gap-1.5')}
-                    onClick={() => periodProblem ? toast.warning(periodProblem) : void act(() => sendPaymentRequest({ projectId: licenceId, licence: licence?.label ?? '', company, to: recipients, amount: amountValue, period: chosenPeriod, settings: settings! }), 'Payment Link Sent')}>
+                    onClick={() => (periodProblem ? toast.warning(periodProblem) : !(amountValue > 0) ? toast.warning('Enter the Amount') : setSendOpen(true))}>
                     {busy ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Send size={15} aria-hidden />} Send Payment Link
                   </Button>
                 </div>
@@ -290,7 +395,7 @@ export function PortalRecordsServiceDialog({
                 <div className="grid gap-3 sm:grid-cols-3">
                   <div className="space-y-1">
                     <Label htmlFor="pay-amount">Amount Received (₹)</Label>
-                    <Input id="pay-amount" type="number" inputMode="decimal" min={0} value={amount} onChange={(e) => setAmount(e.target.value)} />
+                    <Input id="pay-amount" className="h-10" type="number" inputMode="decimal" min={0} value={amount} onChange={(e) => setAmount(e.target.value)} />
                   </div>
                   <div className="space-y-1">
                     <Label htmlFor="pay-date">Received On</Label>
