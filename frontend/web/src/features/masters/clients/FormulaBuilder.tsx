@@ -136,7 +136,7 @@ export function FormulaBuilder({
         <span className={cn('text-[11px] font-medium', problem ? 'text-red-700' : 'text-emerald-700')}>{problem || 'Formula OK'}</span>
         <div className="ml-auto flex flex-wrap items-center gap-1.5">
           <button type="button" className={cn(toggleBtn, panel === 'functions' ? 'border-amber-700 bg-amber-700 text-white' : 'border-amber-600/60 bg-white text-amber-900 hover:bg-amber-50')} onClick={() => setPanel((p) => (p === 'functions' ? null : 'functions'))}>
-            fx Functions
+            Functions
           </button>
           <button type="button" className={cn(toggleBtn, panel === 'operators' ? 'border-amber-700 bg-amber-700 text-white' : 'border-amber-600/60 bg-white text-amber-900 hover:bg-amber-50')} onClick={() => setPanel((p) => (p === 'operators' ? null : 'operators'))}>
             + − × ÷ Operators
