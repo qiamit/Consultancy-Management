@@ -267,17 +267,17 @@ function CustomerLoginsDialog({
 
         <div className="min-h-0 flex-1 overflow-auto bg-[#fffcf7] p-3 sm:p-4">
           <div className="overflow-x-auto border border-stone-300 bg-white shadow-sm">
-            <table className="w-full min-w-[940px] border-collapse font-jakarta">
+            <table className="w-full min-w-[1040px] border-collapse font-jakarta">
               <thead>
                 <tr>
                   <th className={cn(th, 'w-10 text-center')}>#</th>
-                  <th className={th}>Name</th>
-                  <th className={cn(th, 'text-center')}>Email</th>
-                  <th className={cn(th, 'w-[9.5rem] text-center')}>Mobile No</th>
-                  <th className={cn(th, 'w-[11rem]')}>Licences</th>
-                  <th className={cn(th, 'w-[7rem] text-center')}>Status</th>
-                  <th className={cn(th, 'w-[7rem] text-center')}>Invited</th>
-                  <th className={cn(th, 'w-[8.5rem] text-center')}>Actions</th>
+                  <th className={cn(th, 'min-w-[10rem]')}>Name</th>
+                  <th className={cn(th, 'min-w-[14rem] text-center')}>Email</th>
+                  <th className={cn(th, 'w-[8.5rem] text-center')}>Mobile No</th>
+                  <th className={cn(th, 'w-[10.5rem]')}>Licences</th>
+                  <th className={cn(th, 'w-[6.5rem] text-center')}>Status</th>
+                  <th className={cn(th, 'w-[6.5rem] text-center')}>Invited</th>
+                  <th className={cn(th, 'w-[7.5rem] text-center')}>Actions</th>
                 </tr>
               </thead>
               <tbody>
