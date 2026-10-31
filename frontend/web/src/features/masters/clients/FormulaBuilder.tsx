@@ -227,7 +227,6 @@ export function FormulaBuilder({
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs font-semibold uppercase tracking-wide text-stone-700">Output</span>
           <span className={cn('min-w-[5rem] border px-2 py-0.5 font-mono text-sm', outputOk && !problem ? 'border-emerald-300 bg-emerald-50 text-emerald-900' : 'border-red-300 bg-red-50 text-red-800')}>{output}</span>
-          <span className="text-[11px] text-stone-500">Try the formula with test values. Works only inside this licence.</span>
         </div>
         {refs.length ? (
           <div className="flex flex-wrap gap-2">
