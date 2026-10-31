@@ -83,7 +83,7 @@ function Stat({ value, label }: { value: number; label: string }) {
   )
 }
 
-/** Small sliding on / off switch (green when on). */
+/** Small sliding on / off switch: green when on, red when off. */
 function OnOffSwitch({ on, label, title, disabled, busy, onChange }: { on: boolean; label: string; title?: string; disabled?: boolean; busy?: boolean; onChange: (on: boolean) => void }) {
   return (
     <button
@@ -96,7 +96,7 @@ function OnOffSwitch({ on, label, title, disabled, busy, onChange }: { on: boole
       onClick={() => onChange(!on)}
       className={cn(
         'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40 disabled:opacity-60',
-        on ? 'border-emerald-700 bg-emerald-600' : 'border-stone-400 bg-stone-300',
+        on ? 'border-emerald-700 bg-emerald-600' : 'border-red-700 bg-red-500',
       )}
     >
       <span className={cn('flex h-5 w-5 items-center justify-center rounded-full bg-white shadow transition-transform', on ? 'translate-x-5' : 'translate-x-0.5')}>
@@ -590,7 +590,7 @@ export function CustomerPortalDialog({
                       <th className={th}>Licence</th>
                       <th className={cn(th, 'w-[7.5rem] text-center')}>Valid Till</th>
                       <th className={cn(th, 'w-[6rem] text-center')}>Logins</th>
-                      <th className={cn(th, 'w-[13rem]')}>Records Service</th>
+                      <th className={cn(th, 'w-[9rem] text-center')}>Records Service</th>
                       <th className={cn(th, 'w-[10.5rem]')}>Paid Till</th>
                       <th className={cn(th, 'w-[9rem] text-center')}>Documents</th>
                       <th className={cn(th, 'w-[9.5rem] text-center')}>Formats</th>
@@ -621,18 +621,18 @@ export function CustomerPortalDialog({
                               {seenBy.length}
                             </button>
                           </td>
-                          <td className={td}>
-                            <div className="flex items-center gap-2">
-                              <OnOffSwitch
-                                on={Boolean(service?.records_enabled)}
-                                label={`Records Service for ${cml}`}
-                                title={service?.records_enabled ? 'Switch Off' : `Switch On (${TRIAL_DAYS}-Day Free Trial)`}
-                                disabled={busy != null}
-                                busy={busy === `svc:${l.id}`}
-                                onChange={() => void switchRecords(l, service)}
-                              />
-                              <span className={cn(badge, 'min-w-0 truncate normal-case tracking-normal', status.tone)} title={status.text}>{status.text}</span>
-                            </div>
+                          <td className={cn(td, 'text-center')}>
+                            <OnOffSwitch
+                              on={Boolean(service?.records_enabled)}
+                              label={`Records Service for ${cml}`}
+                              title={service?.records_enabled ? `${status.text} · Click to Switch Off` : `Off · Click to Switch On (${TRIAL_DAYS}-Day Free Trial)`}
+                              disabled={busy != null}
+                              busy={busy === `svc:${l.id}`}
+                              onChange={() => void switchRecords(l, service)}
+                            />
+                            {service?.records_enabled && status.text.startsWith('Expired') ? (
+                              <span className="block text-[10px] font-semibold uppercase tracking-wide text-red-700">Expired</span>
+                            ) : null}
                           </td>
                           <td className={td}>
                             {service?.records_enabled ? (
