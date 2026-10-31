@@ -555,15 +555,25 @@ export function CustomerPortalDialog({
                             </button>
                           </td>
                           <td className={td}>
-                            <div className="flex items-center gap-1.5">
-                              <span className={cn(badge, 'min-w-0 flex-1 truncate normal-case tracking-normal', status.tone)} title={status.text}>{status.text}</span>
-                              <Button type="button" variant="outline" disabled={busy != null}
-                                className={cn(smallBtn, 'shrink-0 px-2', service?.records_enabled ? 'text-red-700' : 'text-emerald-700')}
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                role="switch"
+                                aria-checked={Boolean(service?.records_enabled)}
+                                aria-label={`Records Service for ${cml}`}
                                 title={service?.records_enabled ? 'Switch Off' : `Switch On (${TRIAL_DAYS}-Day Free Trial)`}
-                                onClick={() => void switchRecords(l, service)}>
-                                {busy === `svc:${l.id}` ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Power size={14} aria-hidden />}
-                                {service?.records_enabled ? 'Off' : 'On'}
-                              </Button>
+                                disabled={busy != null}
+                                onClick={() => void switchRecords(l, service)}
+                                className={cn(
+                                  'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40 disabled:opacity-60',
+                                  service?.records_enabled ? 'border-emerald-700 bg-emerald-600' : 'border-stone-400 bg-stone-300',
+                                )}
+                              >
+                                <span className={cn('flex h-5 w-5 items-center justify-center rounded-full bg-white shadow transition-transform', service?.records_enabled ? 'translate-x-5' : 'translate-x-0.5')}>
+                                  {busy === `svc:${l.id}` ? <Loader2 size={12} className="animate-spin text-stone-500" aria-hidden /> : null}
+                                </span>
+                              </button>
+                              <span className={cn(badge, 'min-w-0 truncate normal-case tracking-normal', status.tone)} title={status.text}>{status.text}</span>
                             </div>
                           </td>
                           <td className={td}>
