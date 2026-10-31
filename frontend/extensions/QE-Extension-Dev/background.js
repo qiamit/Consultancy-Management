@@ -165,8 +165,25 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
       "qeManakNewApp",
       "qeManakInclusion",
       "qeManakRenewal",
+      "qeManakLoginOnly",
+      "qeManakLoginTabId",
     ],
     (data) => {
+      // Manak Login only: keep filling User ID / Password while that tab is on a login page; once it has
+      // signed in, switch off — nothing else runs on Manak after a login-only open.
+      if (data && data.qeManakLoginOnly === true && Number(data.qeManakLoginTabId) === tabId) {
+        if (isManakLoginPageUrl(url)) {
+          const userId = lastPortal.userId || (data.qeManakPortal && data.qeManakPortal.userId) || "";
+          if (userId || lastPortal.password) scheduleLoginFill(tabId, userId, lastPortal.password);
+        } else if (changeInfo.status === "complete") {
+          void tabSession(tabId).then((session) => {
+            if (!session || !session.loggedIn) return;
+            clearRememberedPortal();
+            void chrome.storage.local.set({ qeManakLoginOnly: false, qeManakLoginTabId: 0 });
+          });
+        }
+        return;
+      }
       const importArmed = data && data.qeManakImportQr === true;
       // Inclusion and Renewal stay armed across their pages like New Application.
       const newAppArmed =
@@ -761,6 +778,8 @@ function armOnly(section, extra) {
     renewalFill: null,
     renewalLog: null,
     renewalStage: null,
+    qeManakLoginOnly: false,
+    qeManakLoginTabId: 0,
   };
   if (section !== "tr") state.qeManakReturn = null;
   return { ...state, ...(extra || {}) };
@@ -886,6 +905,11 @@ function queryManakTabs() {
 
 function tabSession(tabId) {
   return safeSendTab(tabId, { type: "QE_MANAK_SESSION" }).then((res) => res || null);
+}
+
+/** eBIS / FMCS / applicant login pages, where a login-only open fills User ID / Password. */
+function isManakLoginPageUrl(url) {
+  return /ebislogin/i.test(String(url || "")) || /manakonline\.in\/(MANAK|FMCS)\/login\/?($|\?|#)/i.test(String(url || ""));
 }
 
 function isManakApplicantLoginUrl(url) {
@@ -1341,10 +1365,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return;
       }
       if (message.loginOnly) {
-        // Sign-in only (e.g. FMCS): every section stays OFF — no Test Request without a sample.
-        await chrome.storage.local.set(armOnly("login", portal));
-        const created = await safeTabCreate({ url: loginUrl });
+        // Manak Login only: every section stays OFF (nothing armed) — fill User ID / Password, the user types
+        // the captcha and clicks Login, then the extension forgets the password and does nothing more.
+        await chrome.storage.local.set(armOnly("login", { ...portal, qeManakArmed: false }));
+        const reused = await findConfirmedLoggedInManakTab();
+        if (
+          reused &&
+          reused.tab.id &&
+          portalUserIdsMatch(portalUserId, reused.session.userIds?.length ? reused.session.userIds : [reused.session.userId])
+        ) {
+          clearRememberedPortal();
+          await safeTabUpdate(reused.tab.id, { active: true });
+          sendResponse({ ok: true, message: "Already signed in to Manak with this User ID." });
+          return;
+        }
+        const created = await safeTabCreate({ url: loginUrl, active: true });
         if (created && created.id) {
+          await chrome.storage.local.set({ qeManakLoginOnly: true, qeManakLoginTabId: created.id });
           scheduleLoginFill(created.id, portalUserId, portalPassword);
         }
         sendResponse({
