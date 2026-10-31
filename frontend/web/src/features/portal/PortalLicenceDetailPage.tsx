@@ -113,7 +113,7 @@ function LicenceDetail({ id }: { id: string }) {
   }, [id])
 
   const back = (
-    <Link to="/portal" className="inline-flex items-center gap-1 text-sm font-medium text-amber-800 hover:underline">
+    <Link to="/portal/licences" className="inline-flex items-center gap-1 text-sm font-medium text-amber-800 hover:underline">
       <ArrowLeft size={15} aria-hidden /> My Licences
     </Link>
   )

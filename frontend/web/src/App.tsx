@@ -9,6 +9,8 @@ import PublicHomePage from '@/features/public-site/PublicHomePage'
 import FileViewPage from '@/features/file-view/FileViewPage'
 import PortalLicencesPage from '@/features/portal/PortalLicencesPage'
 import PortalLicenceDetailPage from '@/features/portal/PortalLicenceDetailPage'
+import PortalDashboardPage from '@/features/portal/PortalDashboardPage'
+import PortalRecordsPage from '@/features/portal/PortalRecordsPage'
 import {
   AiSettingsRoute,
   EmailLogRoute,
@@ -77,8 +79,10 @@ export default function App() {
         <Route path="/auth/reset" element={<ResetPasswordPage />} />
 
         <Route path="/portal" element={<PortalShell />}>
-          <Route index element={<PortalLicencesPage />} />
+          <Route index element={<PortalDashboardPage />} />
+          <Route path="licences" element={<PortalLicencesPage />} />
           <Route path="licences/:id" element={<PortalLicenceDetailPage />} />
+          <Route path="licences/:id/records/:sectionId" element={<PortalRecordsPage />} />
         </Route>
 
         <Route element={<AuthenticatedShell />}>

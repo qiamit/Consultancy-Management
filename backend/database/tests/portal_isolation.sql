@@ -60,6 +60,20 @@ BEGIN
   -- Share one file of licence A.
   UPDATE public.bis_project_files SET customer_visible = true
    WHERE id = (SELECT id FROM public.bis_project_files WHERE bis_project_id = r.project_a ORDER BY created_at LIMIT 1);
+  -- Records (Phase 2): one section per licence, both in the free trial.
+  IF to_regclass('public.portal_rec_sections') IS NOT NULL THEN
+    INSERT INTO public.portal_services (project_id, records_enabled, trial_ends)
+    VALUES (r.project_a, true, current_date + 30), (r.project_b, true, current_date + 30)
+    ON CONFLICT (project_id) DO UPDATE SET records_enabled = true, trial_ends = current_date + 30;
+    INSERT INTO public.portal_rec_sections (id, project_id, kind, name)
+    VALUES ('00000000-0000-4000-8000-00000000aa01', r.project_a, 'raw_material', 'Test RM A'),
+           ('00000000-0000-4000-8000-00000000bb01', r.project_b, 'raw_material', 'Test RM B');
+    INSERT INTO public.portal_rec_columns (section_id, key, label, col_type)
+    VALUES ('00000000-0000-4000-8000-00000000aa01', 'qty', 'Qty', 'number'),
+           ('00000000-0000-4000-8000-00000000bb01', 'qty', 'Qty', 'number');
+    INSERT INTO public.portal_rec_entries (section_id, project_id, data)
+    VALUES ('00000000-0000-4000-8000-00000000bb01', r.project_b, '{"qty": 9}');
+  END IF;
   -- A licence of another client cannot be given to customer A.
   BEGIN
     INSERT INTO public.portal_licence_access (user_id, project_id) VALUES (r.user_a, r.project_b);
@@ -121,6 +135,32 @@ BEGIN
   EXCEPTION WHEN insufficient_privilege THEN
     RAISE NOTICE 'PASS: portal functions return only customer A''s licence';
   END;
+
+  IF to_regclass('public.portal_rec_sections') IS NOT NULL THEN
+    PERFORM public.portal_entry_save('00000000-0000-4000-8000-00000000aa01', NULL, current_date, 'LOT-1', '{"qty": 5}', 'pass');
+    IF (SELECT count(*) FROM public.portal_entries('00000000-0000-4000-8000-00000000aa01')) <> 1 THEN
+      RAISE EXCEPTION 'FAIL: customer A could not save / read its own entry';
+    END IF;
+    IF jsonb_array_length(public.portal_dashboard() -> 'licences') <> 1 THEN
+      RAISE EXCEPTION 'FAIL: dashboard shows another licence';
+    END IF;
+    BEGIN
+      PERFORM public.portal_entries('00000000-0000-4000-8000-00000000bb01');
+      RAISE EXCEPTION 'FAIL: customer A read the records of another client';
+    EXCEPTION WHEN insufficient_privilege THEN NULL;
+    END;
+    BEGIN
+      PERFORM public.portal_entry_save('00000000-0000-4000-8000-00000000bb01', NULL, current_date, 'X', '{}', NULL);
+      RAISE EXCEPTION 'FAIL: customer A wrote into another client''s records';
+    EXCEPTION WHEN insufficient_privilege THEN NULL;
+    END;
+    BEGIN
+      PERFORM public.portal_section('00000000-0000-4000-8000-00000000bb01');
+      RAISE EXCEPTION 'FAIL: customer A opened another client''s section';
+    EXCEPTION WHEN insufficient_privilege THEN NULL;
+    END;
+    RAISE NOTICE 'PASS: records are separated per customer (own entry saved, other client blocked)';
+  END IF;
 
   IF public.app_module_level('/') <> 'none' OR public.app_can_view('/bis/projects') THEN
     RAISE EXCEPTION 'FAIL: customer A has module access';
