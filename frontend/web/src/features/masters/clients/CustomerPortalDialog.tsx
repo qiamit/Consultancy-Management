@@ -243,7 +243,7 @@ export function CustomerPortalDialog({
               <p className="mt-1 text-sm text-stone-600">Add a licence for this client first; then logins can be invited here.</p>
             </div>
           ) : (
-            <div className="mx-auto grid max-w-[100rem] items-start gap-4 xl:grid-cols-2 xl:gap-5">
+            <div className="mx-auto grid max-w-[100rem] items-start gap-4 xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] xl:gap-5">
               <div className="min-w-0 space-y-4 xl:space-y-5">
                 <Panel icon={<Users size={17} aria-hidden />} title="Customer Logins" count={logins.length} hint="Each login sees only the licences ticked for it.">
                   {logins.length === 0 ? (
