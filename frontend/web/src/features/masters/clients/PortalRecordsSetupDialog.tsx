@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ArrowDown, ArrowUp, FlaskConical, Loader2, Pencil, Plus, Power, Sparkles, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, Download, FlaskConical, Loader2, Pencil, Plus, Power, Sparkles, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -7,8 +7,11 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { LimsFieldAddButton, LimsFieldWithAdd } from '@/components/lims/LimsFieldWithAdd'
 import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
+import { BisModuleImportDialog } from '@/features/bis/projects/BisModuleImportDialog'
+import { fetchBisProjectById } from '@/features/bis/projects/bisProjectsApi'
+import type { BisProjectRow } from '@/features/bis/projects/types'
 import { formulaProblem } from '@/lib/recordFormula'
-import { limsDarkBarGlowStyle, limsDialogClass, limsOutlineBtnClass, limsPrimaryBtnClass } from '@/lib/limsThemeUi'
+import { limsDarkBarBtnClass, limsDarkBarGlowStyle, limsDialogClass, limsOutlineBtnClass, limsPrimaryBtnClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import {
   COLUMN_TYPE_LABEL,
@@ -20,6 +23,7 @@ import {
 import {
   TRIAL_DAYS,
   addTestParameterColumns,
+  copySectionsFrom,
   createSection,
   createStandardSections,
   deleteColumn,
@@ -251,9 +255,11 @@ function ManageSectionsDialog({
   onAdd,
   onRename,
   onDelete,
+  onImport,
 }: {
   sections: AdminSection[]
   busy: boolean
+  onImport: () => void
   onClose: () => void
   onAdd: (kind: string, name: string) => Promise<void>
   onRename: (section: AdminSection, name: string) => Promise<void>
@@ -269,8 +275,11 @@ function ManageSectionsDialog({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent aria-describedby={undefined} className={cn(limsDialogClass, 'flex max-h-[85dvh] w-[min(34rem,calc(100vw-1rem))] max-w-none flex-col gap-0 overflow-hidden bg-white p-0')}>
         <div className="bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5">
-          <DialogHeader className="pr-10 text-left">
-            <DialogTitle className="text-base font-semibold text-white">Sections</DialogTitle>
+          <DialogHeader className="flex-row items-center gap-3 space-y-0 pr-10 text-left">
+            <DialogTitle className="flex-1 text-base font-semibold text-white">Sections</DialogTitle>
+            <Button type="button" variant="outline" className={cn(limsDarkBarBtnClass, 'h-9 min-h-9 gap-1.5 px-3 text-xs')} disabled={busy} onClick={onImport}>
+              <Download size={14} aria-hidden /> Import From Another Licence
+            </Button>
           </DialogHeader>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
@@ -358,6 +367,7 @@ export function PortalRecordsSetupDialog({
   const [busy, setBusy] = useState<string | null>(null)
   const [editing, setEditing] = useState<Draft | null>(null)
   const [addingSection, setAddingSection] = useState(false)
+  const [importTarget, setImportTarget] = useState<BisProjectRow | null>(null)
   const licenceId = licence?.id ?? ''
 
   const load = useCallback(
@@ -397,6 +407,19 @@ export function PortalRecordsSetupDialog({
     <Dialog open={licence != null} onOpenChange={onOpenChange}>
       <DialogContent aria-describedby={undefined} className={cn(limsDialogClass, 'flex max-h-[92dvh] w-[min(64rem,calc(100vw-1rem))] max-w-none flex-col gap-0 overflow-hidden bg-white p-0')}>
         {confirmDialog}
+        <BisModuleImportDialog
+          open={importTarget != null}
+          onOpenChange={(open) => !open && setImportTarget(null)}
+          targetRow={importTarget}
+          kind={null}
+          title="Record Sections"
+          onPickSource={async (sourceId) => {
+            const n = await copySectionsFrom(sourceId, licenceId)
+            if (n === 0) throw new Error('That licence has no record sections')
+            toast.success(n === 1 ? '1 Section Imported' : `${n} Sections Imported`)
+            await load()
+          }}
+        />
         {addingSection && sections ? (
           <ManageSectionsDialog
             sections={sections}
@@ -415,6 +438,9 @@ export function PortalRecordsSetupDialog({
                 setBusy(null)
               }
             }}
+            onImport={() => void fetchBisProjectById(licenceId)
+              .then((row) => (row ? setImportTarget(row) : toast.error('Licence not found')))
+              .catch((err: unknown) => toast.error(errText(err, 'Could not open the import')))}
             onRename={(sec, name) => run('rename', () => updateSection(sec.id, { name }), 'Section Renamed')}
             onDelete={async (sec) => {
               if (!(await confirm(`Delete the section "${sec.name}" with all its columns and the customer's entries in it?`, { title: 'Delete Section', confirmLabel: 'Delete', destructive: true }))) return

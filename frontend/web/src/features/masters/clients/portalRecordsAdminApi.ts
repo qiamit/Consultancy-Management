@@ -149,6 +149,52 @@ export async function moveColumn(columns: AdminColumn[], index: number, dir: -1 
   if (failed?.error) throw failed.error
 }
 
+/**
+ * Copies every section of another licence, with all its columns (types, limits, options, formulas, links),
+ * after this licence's sections. Links between copied sections point at the new copies; entries are not copied.
+ * Returns how many sections were added.
+ */
+export async function copySectionsFrom(sourceProjectId: string, targetProjectId: string): Promise<number> {
+  const [source, target] = await Promise.all([listSections(sourceProjectId), listSections(targetProjectId)])
+  if (source.length === 0) return 0
+  const taken = new Set(target.map((s) => s.name.trim().toLowerCase()))
+  const newIds = new Map<string, string>()
+  let order = target.length
+  for (const sec of source) {
+    let name = sec.name
+    for (let n = 2; taken.has(name.trim().toLowerCase()); n++) name = `${sec.name} ${n}`
+    taken.add(name.trim().toLowerCase())
+    newIds.set(sec.id, await createSection(targetProjectId, sec.kind, name, order++))
+  }
+  const rows = source.flatMap((sec) =>
+    sec.columns.map((c) => {
+      const config = { ...(c.config ?? {}) } as Record<string, unknown>
+      if (typeof config.section_id === 'string') {
+        const mapped = newIds.get(config.section_id)
+        if (mapped) config.section_id = mapped
+        else delete config.section_id
+      }
+      return {
+        section_id: newIds.get(sec.id)!,
+        key: c.key,
+        label: c.label,
+        col_type: c.col_type,
+        unit: c.unit ?? null,
+        spec_min: c.spec_min ?? null,
+        spec_max: c.spec_max ?? null,
+        config,
+        required: Boolean(c.required),
+        sort_order: c.sort_order,
+      }
+    }),
+  )
+  if (rows.length) {
+    const { error } = await supabase.from('portal_rec_columns').insert(rows)
+    if (error) throw error
+  }
+  return source.length
+}
+
 // ── Payments ─────────────────────────────────────────────────────────────────────────────────────────
 
 export type PaymentSettings = {
