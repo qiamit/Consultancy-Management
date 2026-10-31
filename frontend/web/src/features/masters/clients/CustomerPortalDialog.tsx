@@ -78,14 +78,36 @@ function Stat({ value, label }: { value: number; label: string }) {
   )
 }
 
-/** Tick list of the client's licences; used for a saved login (saves each tick) and for a new invite row. */
+/** Small sliding on / off switch (green when on). */
+function OnOffSwitch({ on, label, title, disabled, busy, onChange }: { on: boolean; label: string; title?: string; disabled?: boolean; busy?: boolean; onChange: (on: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      title={title ?? (on ? 'On' : 'Off')}
+      disabled={disabled}
+      onClick={() => onChange(!on)}
+      className={cn(
+        'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40 disabled:opacity-60',
+        on ? 'border-emerald-700 bg-emerald-600' : 'border-stone-400 bg-stone-300',
+      )}
+    >
+      <span className={cn('flex h-5 w-5 items-center justify-center rounded-full bg-white shadow transition-transform', on ? 'translate-x-5' : 'translate-x-0.5')}>
+        {busy ? <Loader2 size={12} className="animate-spin text-stone-500" aria-hidden /> : null}
+      </span>
+    </button>
+  )
+}
+
+/** The client's licences for one login: a switch per licence turns its access on or off (saved logins save at once). */
 function LicencePickerDialog({
   title,
   licences,
   selected,
   disabled,
   onToggle,
-  onAll,
   onClose,
 }: {
   title: string | null
@@ -93,37 +115,60 @@ function LicencePickerDialog({
   selected: string[]
   disabled?: boolean
   onToggle: (licenceId: string, on: boolean) => void
-  onAll: (on: boolean) => void
   onClose: () => void
 }) {
+  const [ticked, setTicked] = useState<Set<string>>(new Set())
+  const allTicked = licences.length > 0 && licences.every((l) => ticked.has(l.id))
   return (
     <Dialog open={title != null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent layer="stacked" aria-describedby={undefined} className={cn(limsDialogClass, 'w-[min(30rem,calc(100vw-1rem))] max-w-none gap-0 overflow-hidden bg-white p-0')}>
+      <DialogContent layer="stacked" aria-describedby={undefined} className={cn(limsDialogClass, 'flex max-h-[85dvh] w-[min(42rem,calc(100vw-1rem))] max-w-none flex-col gap-0 overflow-hidden bg-white p-0')}>
         <DarkHeader eyebrow="Licences This Login Can See" title={title} />
-        <div className="flex items-center gap-3 border-b border-stone-200 bg-stone-50 px-4 py-2 text-xs">
-          <span className="font-semibold text-stone-700">{selected.length} of {licences.length} Selected</span>
-          <button type="button" disabled={disabled} className="ml-auto font-medium text-amber-800 hover:underline disabled:opacity-50" onClick={() => onAll(true)}>Select All</button>
-          <button type="button" disabled={disabled} className="font-medium text-amber-800 hover:underline disabled:opacity-50" onClick={() => onAll(false)}>Clear</button>
+        <div className="flex items-center gap-2 border-b border-stone-200 bg-stone-50 px-4 py-2 text-xs">
+          <span className="font-semibold text-stone-700">{selected.length} of {licences.length} Licences On</span>
+          {disabled ? <Loader2 size={14} className="ml-auto animate-spin text-stone-500" aria-hidden /> : null}
         </div>
-        <ul className="max-h-[55dvh] divide-y divide-stone-200 overflow-y-auto">
-          {licences.map((l) => {
-            const [cml, is] = splitLabel(l.label)
-            const on = selected.includes(l.id)
-            return (
-              <li key={l.id}>
-                <label className={cn('flex cursor-pointer items-center gap-3 px-4 py-2.5 hover:bg-amber-50/60', on && 'bg-amber-50/80')}>
-                  <input type="checkbox" className={checkCls} checked={on} disabled={disabled} onChange={(e) => onToggle(l.id, e.target.checked)} />
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-semibold text-stone-900">{cml}</span>
-                    <span className="block text-xs text-stone-600">{is}{l.validity ? ` · Valid Till ${formatDisplayDate(l.validity)}` : ''}</span>
-                  </span>
-                </label>
-              </li>
-            )
-          })}
-        </ul>
+        <div className="min-h-0 flex-1 overflow-auto p-3">
+          <table className="w-full min-w-[30rem] border-collapse font-jakarta">
+            <thead>
+              <tr>
+                <th className={cn(th, 'w-10 text-center')}>
+                  <input type="checkbox" className={checkCls} aria-label="Select All Rows" checked={allTicked}
+                    onChange={(e) => setTicked(e.target.checked ? new Set(licences.map((l) => l.id)) : new Set())} />
+                </th>
+                <th className={th}>CM/L No</th>
+                <th className={th}>IS No</th>
+                <th className={cn(th, 'w-[7.5rem] text-center')}>Valid Till</th>
+                <th className={cn(th, 'w-[5.5rem] text-center')}>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {licences.map((l, i) => {
+                const [cml, is] = splitLabel(l.label)
+                const on = selected.includes(l.id)
+                return (
+                  <tr key={l.id} className={ticked.has(l.id) ? 'bg-[#fde68a]/60' : rowTone(i)}>
+                    <td className={cn(td, 'text-center')}>
+                      <input type="checkbox" className={checkCls} aria-label={`Select ${cml}`} checked={ticked.has(l.id)}
+                        onChange={(e) => setTicked((prev) => {
+                          const next = new Set(prev)
+                          if (e.target.checked) next.add(l.id)
+                          else next.delete(l.id)
+                          return next
+                        })} />
+                    </td>
+                    <td className={cn(td, 'whitespace-nowrap font-semibold text-stone-900')}>{cml}</td>
+                    <td className={cn(td, 'text-[13px]')}>{is || '—'}</td>
+                    <td className={cn(td, 'text-center text-[13px]')}>{l.validity ? formatDisplayDate(l.validity) : '—'}</td>
+                    <td className={cn(td, 'text-center')}>
+                      <OnOffSwitch on={on} label={`${cml} for this login`} title={on ? 'Can See: Switch Off' : 'Cannot See: Switch On'} disabled={disabled} onChange={(next) => onToggle(l.id, next)} />
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
         <div className="flex items-center justify-end gap-2 border-t border-stone-200 bg-stone-50 px-4 py-2.5">
-          {disabled ? <Loader2 size={15} className="animate-spin text-stone-500" aria-hidden /> : null}
           <Button type="button" className={cn(limsPrimaryBtnClass, 'h-9 min-h-9')} onClick={onClose}>Done</Button>
         </div>
       </DialogContent>
@@ -199,6 +244,7 @@ function CustomerLoginsDialog({
       >
         {confirmDialog}
         <LicencePickerDialog
+          key={pickLogin?.user_id ?? pickDraft?.key ?? 'none'}
           title={pickTitle}
           licences={licences}
           selected={pickSelected}
@@ -207,14 +253,6 @@ function CustomerLoginsDialog({
           onToggle={(id, on) => {
             if (pickLogin) void run(`lic:${pickLogin.user_id}:${id}`, () => setLicenceAccess(pickLogin.user_id, id, on))
             else if (pickDraft) patchDraft(pickDraft.key, { licences: on ? [...pickDraft.licences, id] : pickDraft.licences.filter((x) => x !== id) })
-          }}
-          onAll={(on) => {
-            if (pickLogin) {
-              const change = licences.filter((l) => pickLogin.licence_ids.includes(l.id) !== on)
-              void run(`lic:${pickLogin.user_id}:all`, async () => {
-                for (const l of change) await setLicenceAccess(pickLogin.user_id, l.id, on)
-              })
-            } else if (pickDraft) patchDraft(pickDraft.key, { licences: on ? allIds : [] })
           }}
         />
         <DarkHeader eyebrow="Customer Logins" title={company}>
@@ -552,23 +590,14 @@ export function CustomerPortalDialog({
                           </td>
                           <td className={td}>
                             <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                role="switch"
-                                aria-checked={Boolean(service?.records_enabled)}
-                                aria-label={`Records Service for ${cml}`}
+                              <OnOffSwitch
+                                on={Boolean(service?.records_enabled)}
+                                label={`Records Service for ${cml}`}
                                 title={service?.records_enabled ? 'Switch Off' : `Switch On (${TRIAL_DAYS}-Day Free Trial)`}
                                 disabled={busy != null}
-                                onClick={() => void switchRecords(l, service)}
-                                className={cn(
-                                  'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40 disabled:opacity-60',
-                                  service?.records_enabled ? 'border-emerald-700 bg-emerald-600' : 'border-stone-400 bg-stone-300',
-                                )}
-                              >
-                                <span className={cn('flex h-5 w-5 items-center justify-center rounded-full bg-white shadow transition-transform', service?.records_enabled ? 'translate-x-5' : 'translate-x-0.5')}>
-                                  {busy === `svc:${l.id}` ? <Loader2 size={12} className="animate-spin text-stone-500" aria-hidden /> : null}
-                                </span>
-                              </button>
+                                busy={busy === `svc:${l.id}`}
+                                onChange={() => void switchRecords(l, service)}
+                              />
                               <span className={cn(badge, 'min-w-0 truncate normal-case tracking-normal', status.tone)} title={status.text}>{status.text}</span>
                             </div>
                           </td>
