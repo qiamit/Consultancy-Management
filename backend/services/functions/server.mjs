@@ -1045,9 +1045,11 @@ async function handleInviteCustomer(req, res) {
   const body = await readBody(req, 64 * 1024)
   const email = String(body.email ?? '').trim().toLowerCase()
   const fullName = String(body.full_name ?? '').trim().slice(0, 120)
+  const mobile = String(body.mobile ?? '').trim()
   const clientId = String(body.client_id ?? '').trim()
   const projectIds = Array.isArray(body.project_ids) ? body.project_ids.map((v) => String(v).trim()) : []
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw httpError(400, 'Enter a valid email')
+  if (!/^\+?[0-9][0-9 -]{6,18}$/.test(mobile)) throw httpError(400, 'Enter a valid mobile number')
   if (!UUID_RE.test(clientId)) throw httpError(400, 'Client is required')
   if (projectIds.length === 0 || projectIds.some((id) => !UUID_RE.test(id))) throw httpError(400, 'Select at least one licence')
 
@@ -1073,7 +1075,7 @@ async function handleInviteCustomer(req, res) {
       // Nobody knows this password; the customer sets their own through the emailed link.
       password: crypto.randomBytes(36).toString('base64url'),
       email_confirm: true,
-      user_metadata: { full_name: fullName, status: 'Active', created_by: callerId, portal: 'customer' },
+      user_metadata: { full_name: fullName, mobile, status: 'Active', created_by: callerId, portal: 'customer' },
     }),
   })
   if (!created.ok) throw httpError(400, authErrorMessage(created.data, `Auth ${created.status}`))
@@ -1084,7 +1086,7 @@ async function handleInviteCustomer(req, res) {
     await restAs(callerId, '/user_profiles?on_conflict=id', {
       method: 'POST',
       headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-      body: JSON.stringify({ id: userId, email, full_name: fullName, status: 'Active', role: 'customer', must_change_password: false }),
+      body: JSON.stringify({ id: userId, email, full_name: fullName, mobile, status: 'Active', role: 'customer', must_change_password: false }),
     })
     await restAs(callerId, '/portal_customers', {
       method: 'POST',

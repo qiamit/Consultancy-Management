@@ -9,6 +9,7 @@ export type PortalLogin = {
   user_id: string
   email: string
   full_name: string
+  mobile: string
   active: boolean
   invited_at: string
   licence_ids: string[]
@@ -47,7 +48,7 @@ export async function listPortalLogins(clientId: string): Promise<PortalLogin[]>
   const ids = (links ?? []).map((l) => String(l.user_id))
   if (ids.length === 0) return []
   const [profiles, access] = await Promise.all([
-    supabase.from('user_profiles').select('id, email, full_name, status').in('id', ids),
+    supabase.from('user_profiles').select('id, email, full_name, mobile, status').in('id', ids),
     supabase.from('portal_licence_access').select('user_id, project_id').in('user_id', ids),
   ])
   if (profiles.error) throw profiles.error
@@ -58,6 +59,7 @@ export async function listPortalLogins(clientId: string): Promise<PortalLogin[]>
       user_id: String(l.user_id),
       email: String(p?.email ?? ''),
       full_name: String(p?.full_name ?? ''),
+      mobile: String(p?.mobile ?? ''),
       active: ['', 'active'].includes(String(p?.status ?? '').trim().toLowerCase()),
       invited_at: String(l.invited_at),
       licence_ids: (access.data ?? []).filter((a) => a.user_id === l.user_id).map((a) => String(a.project_id)),
@@ -82,7 +84,7 @@ async function callPortalFunction(name: string, body: Record<string, unknown>): 
   }
 }
 
-export function inviteCustomer(input: { email: string; full_name: string; client_id: string; project_ids: string[] }) {
+export function inviteCustomer(input: { email: string; full_name: string; mobile: string; client_id: string; project_ids: string[] }) {
   return callPortalFunction('portal-invite-customer', input)
 }
 
@@ -104,6 +106,11 @@ export async function setLicenceAccess(userId: string, projectId: string, allowe
 
 export async function setLoginActive(userId: string, active: boolean): Promise<void> {
   const { error } = await supabase.from('user_profiles').update({ status: active ? 'Active' : 'Inactive' }).eq('id', userId)
+  if (error) throw error
+}
+
+export async function setLoginMobile(userId: string, mobile: string): Promise<void> {
+  const { error } = await supabase.from('user_profiles').update({ mobile: mobile.trim() || null }).eq('id', userId)
   if (error) throw error
 }
 

@@ -28,6 +28,7 @@ import {
   setFileShared,
   setLicenceAccess,
   setLoginActive,
+  setLoginMobile,
   type PortalClientLicence,
   type PortalLicenceFile,
   type PortalLogin,
@@ -42,6 +43,8 @@ const td = 'border border-[#e7e0d4] px-2 py-2 align-middle text-sm text-stone-80
 const rowTone = (i: number) => (i % 2 ? 'bg-[#f7f3eb]' : 'bg-[#fffcf7]')
 const iconBtn = 'h-8 w-8 min-h-8 rounded-none p-0 text-[#92400e] hover:bg-[#f3e9d8] hover:text-[#78350f]'
 const badge = 'inline-block whitespace-nowrap border px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide'
+
+const MOBILE_RE = /^\+?[0-9][0-9 -]{6,18}$/
 
 function errText(err: unknown, fallback: string) {
   return err instanceof Error ? err.message : fallback
@@ -176,7 +179,7 @@ function LicencePickerDialog({
   )
 }
 
-type Draft = { key: string; name: string; email: string; licences: string[] }
+type Draft = { key: string; name: string; email: string; mobile: string; licences: string[] }
 type PickFor = { userId: string } | { draftKey: string } | null
 
 /** Logins of the client in one table: saved logins with their actions, plus new invite rows added with "Invite New Login". */
@@ -204,7 +207,7 @@ function CustomerLoginsDialog({
   const [pickFor, setPickFor] = useState<PickFor>(null)
 
   const allIds = licences.map((l) => l.id)
-  const addDraft = () => setDrafts((prev) => [{ key: `${Date.now()}-${prev.length}`, name: '', email: '', licences: allIds }, ...prev])
+  const addDraft = () => setDrafts((prev) => [{ key: `${Date.now()}-${prev.length}`, name: '', email: '', mobile: '', licences: allIds }, ...prev])
   const patchDraft = (key: string, patch: Partial<Draft>) => setDrafts((prev) => prev.map((d) => (d.key === key ? { ...d, ...patch } : d)))
   const dropDraft = (key: string) => setDrafts((prev) => prev.filter((d) => d.key !== key))
 
@@ -213,8 +216,9 @@ function CustomerLoginsDialog({
       `invite:${d.key}`,
       async () => {
         if (!d.email.trim()) throw new Error('Enter the Email')
+        if (!MOBILE_RE.test(d.mobile.trim())) throw new Error('Enter a Valid Mobile No')
         if (d.licences.length === 0) throw new Error('Select at Least One Licence')
-        await inviteCustomer({ email: d.email.trim(), full_name: d.name.trim(), client_id: clientId, project_ids: d.licences })
+        await inviteCustomer({ email: d.email.trim(), full_name: d.name.trim(), mobile: d.mobile.trim(), client_id: clientId, project_ids: d.licences })
       },
       'Invite Sent',
     )
@@ -263,12 +267,13 @@ function CustomerLoginsDialog({
 
         <div className="min-h-0 flex-1 overflow-auto bg-[#fffcf7] p-3 sm:p-4">
           <div className="overflow-x-auto border border-stone-300 bg-white shadow-sm">
-            <table className="w-full min-w-[820px] border-collapse font-jakarta">
+            <table className="w-full min-w-[940px] border-collapse font-jakarta">
               <thead>
                 <tr>
                   <th className={cn(th, 'w-10 text-center')}>#</th>
                   <th className={th}>Name</th>
-                  <th className={th}>Email</th>
+                  <th className={cn(th, 'text-center')}>Email</th>
+                  <th className={cn(th, 'w-[9.5rem] text-center')}>Mobile No</th>
                   <th className={cn(th, 'w-[11rem]')}>Licences</th>
                   <th className={cn(th, 'w-[7rem] text-center')}>Status</th>
                   <th className={cn(th, 'w-[7rem] text-center')}>Invited</th>
@@ -284,6 +289,9 @@ function CustomerLoginsDialog({
                     </td>
                     <td className={td}>
                       <Input type="email" value={d.email} placeholder="Email for Login" aria-label="Email" className="h-8 min-h-8 text-sm" onChange={(e) => patchDraft(d.key, { email: e.target.value })} />
+                    </td>
+                    <td className={td}>
+                      <Input type="tel" inputMode="tel" value={d.mobile} placeholder="Mobile No" aria-label="Mobile No" className="h-8 min-h-8 text-center text-sm" onChange={(e) => patchDraft(d.key, { mobile: e.target.value })} />
                     </td>
                     <td className={td}>{licencesButton(d.licences.length, () => setPickFor({ draftKey: d.key }))}</td>
                     <td className={cn(td, 'text-center')}><span className={cn(badge, 'border-amber-300 bg-amber-100 text-amber-900')}>Not Sent</span></td>
@@ -304,7 +312,30 @@ function CustomerLoginsDialog({
                   <tr key={u.user_id} className={cn(rowTone(i), !u.active && 'text-stone-500')}>
                     <td className={cn(td, 'text-center text-xs text-stone-500')}>{i + 1}</td>
                     <td className={cn(td, 'font-semibold text-stone-900')}>{u.full_name || '—'}</td>
-                    <td className={cn(td, 'break-all text-[13px]')}>{u.email}</td>
+                    <td className={cn(td, 'break-all text-center text-[13px]')}>{u.email}</td>
+                    <td className={td}>
+                      <Input
+                        key={u.mobile}
+                        type="tel"
+                        inputMode="tel"
+                        defaultValue={u.mobile}
+                        placeholder="Add Mobile No"
+                        aria-label={`Mobile No of ${u.email}`}
+                        disabled={busy != null}
+                        className="h-8 min-h-8 border-transparent bg-transparent text-center text-[13px] hover:border-stone-300 focus-visible:bg-white"
+                        onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+                        onBlur={(e) => {
+                          const next = e.target.value.trim()
+                          if (next === u.mobile.trim()) return
+                          if (next && !MOBILE_RE.test(next)) {
+                            toast.error('Enter a Valid Mobile No')
+                            e.target.value = u.mobile
+                            return
+                          }
+                          void run(`mobile:${u.user_id}`, () => setLoginMobile(u.user_id, next), 'Mobile No Saved')
+                        }}
+                      />
+                    </td>
                     <td className={td}>{licencesButton(u.licence_ids.length, () => setPickFor({ userId: u.user_id }))}</td>
                     <td className={cn(td, 'text-center')}>
                       <span className={cn(badge, u.active ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-stone-300 bg-stone-100 text-stone-600')}>
@@ -336,7 +367,7 @@ function CustomerLoginsDialog({
                 ))}
                 {logins.length === 0 && drafts.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className={cn(td, 'py-8 text-center text-stone-500')}>No login yet. Click "Invite New Login" to add one.</td>
+                    <td colSpan={8} className={cn(td, 'py-8 text-center text-stone-500')}>No login yet. Click "Invite New Login" to add one.</td>
                   </tr>
                 ) : null}
               </tbody>
