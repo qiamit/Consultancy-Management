@@ -1,19 +1,27 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import { ClipboardList, FileBadge2, FileText, Loader2, Mail, Power, Send, Trash2, UserPlus, Users } from 'lucide-react'
+import { ClipboardList, FileBadge2, FileText, Loader2, Mail, Plus, Power, Send, Trash2, Users, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { DateInput } from '@/components/ui/date-input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { formatDisplayDate } from '@/features/bis/projects/types'
-import { limsDarkBarGlowStyle, limsFullscreenDialogClass, limsOutlineBtnClass, limsPrimaryBtnClass } from '@/lib/limsThemeUi'
+import {
+  limsDarkBarBtnClass,
+  limsDarkBarGlowStyle,
+  limsDialogClass,
+  limsDialogWidthCapClass,
+  limsFullscreenDialogClass,
+  limsOutlineBtnClass,
+  limsPrimaryBtnClass,
+} from '@/lib/limsThemeUi'
 import { todayLocalIso } from '@/lib/localDate'
 import { cn } from '@/lib/utils'
 import {
   inviteCustomer,
   listClientLicences,
-  listLicenceFiles,
+  listFilesForLicences,
   listPortalLogins,
   removeCustomerLogin,
   resendCustomerInvite,
@@ -24,11 +32,16 @@ import {
   type PortalLicenceFile,
   type PortalLogin,
 } from './customerPortalAdminApi'
-import { listRecordsServices, serviceStatus, type RecordsService } from './portalRecordsAdminApi'
+import { TRIAL_DAYS, listRecordsServices, serviceStatus, setPaidUntil, setRecordsEnabled, type RecordsService } from './portalRecordsAdminApi'
 import { PortalRecordsSetupDialog } from './PortalRecordsSetupDialog'
 
 const checkCls = 'h-4 w-4 shrink-0 rounded-none border-stone-500 text-amber-700'
-const smallBtn = cn(limsOutlineBtnClass, 'h-8 gap-1 px-2 text-xs')
+const smallBtn = cn(limsOutlineBtnClass, 'h-8 min-h-8 gap-1 px-2 text-xs')
+const th = 'border border-stone-700 bg-stone-800 px-2 py-2 text-left text-[11px] font-bold uppercase tracking-[0.1em] text-amber-200'
+const td = 'border border-[#e7e0d4] px-2 py-2 align-middle text-sm text-stone-800'
+const rowTone = (i: number) => (i % 2 ? 'bg-[#f7f3eb]' : 'bg-[#fffcf7]')
+const iconBtn = 'h-8 w-8 min-h-8 rounded-none p-0 text-[#92400e] hover:bg-[#f3e9d8] hover:text-[#78350f]'
+const badge = 'inline-block whitespace-nowrap border px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide'
 
 function errText(err: unknown, fallback: string) {
   return err instanceof Error ? err.message : fallback
@@ -40,60 +53,319 @@ function splitLabel(label: string): [string, string] {
   return at < 0 ? [label, ''] : [label.slice(0, at), label.slice(at + 3)]
 }
 
-function initials(text: string) {
-  const parts = text.replace(/@.*/, '').split(/[\s._-]+/).filter(Boolean)
-  return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase() || '?'
-}
-
-function Panel({ icon, title, count, hint, children }: { icon: ReactNode; title: string; count?: number; hint?: string; children: ReactNode }) {
+function DarkHeader({ eyebrow, title, children }: { eyebrow: string; title: ReactNode; children?: ReactNode }) {
   return (
-    <section className="min-w-0 border border-stone-300 bg-white shadow-sm">
-      <header className="flex items-center gap-2.5 border-b border-stone-200 bg-gradient-to-r from-stone-50 to-white px-3 py-2.5 sm:px-4">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center bg-amber-100 text-amber-800">{icon}</span>
-        <span className="min-w-0 flex-1">
-          <span className="flex items-center gap-2">
-            <h3 className="text-sm font-bold uppercase tracking-[0.1em] text-stone-800">{title}</h3>
-            {count != null ? <span className="border border-stone-300 bg-white px-1.5 text-[11px] font-semibold text-stone-600">{count}</span> : null}
-          </span>
-          {hint ? <span className="block text-[11px] leading-snug text-stone-500">{hint}</span> : null}
-        </span>
-      </header>
-      {children}
-    </section>
-  )
-}
-
-/** A licence as a tick chip: CM/L number in bold, IS Code beside it. */
-function LicenceChip({ label, checked, disabled, onChange }: { label: string; checked: boolean; disabled?: boolean; onChange: (checked: boolean) => void }) {
-  const [cml, is] = splitLabel(label)
-  return (
-    <label
-      className={cn(
-        'inline-flex min-w-0 cursor-pointer items-center gap-1.5 border px-2 py-1 text-xs transition-colors',
-        checked ? 'border-amber-600 bg-amber-50 text-amber-950' : 'border-stone-300 bg-white text-stone-600 hover:border-stone-500',
-        disabled && 'cursor-not-allowed opacity-60',
-      )}
-    >
-      <input type="checkbox" className={checkCls} checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
-      <span className="font-semibold">{cml}</span>
-      {is ? <span className="truncate text-stone-500">{is}</span> : null}
-    </label>
+    <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-3 text-white sm:px-5">
+      <div className="pointer-events-none absolute inset-0 opacity-[0.2]" style={limsDarkBarGlowStyle} />
+      <div className="absolute bottom-0 left-0 h-[3px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
+      <div className="relative flex flex-wrap items-center gap-x-5 gap-y-2 pr-10">
+        <DialogHeader className="min-w-0 flex-1 space-y-0.5 text-left">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300">{eyebrow}</p>
+          <DialogTitle className="truncate text-lg font-semibold tracking-tight text-white">{title}</DialogTitle>
+        </DialogHeader>
+        {children}
+      </div>
+    </div>
   )
 }
 
 function Stat({ value, label }: { value: number; label: string }) {
   return (
-    <span className="flex items-baseline gap-1.5 border border-white/15 bg-white/5 px-2.5 py-1">
+    <span className="flex h-10 items-baseline gap-1.5 border border-white/15 bg-white/5 px-2.5 pt-2">
       <span className="text-base font-bold text-amber-200">{value}</span>
       <span className="text-[11px] uppercase tracking-[0.08em] text-stone-300">{label}</span>
     </span>
   )
 }
 
+/** Tick list of the client's licences; used for a saved login (saves each tick) and for a new invite row. */
+function LicencePickerDialog({
+  title,
+  licences,
+  selected,
+  disabled,
+  onToggle,
+  onAll,
+  onClose,
+}: {
+  title: string | null
+  licences: PortalClientLicence[]
+  selected: string[]
+  disabled?: boolean
+  onToggle: (licenceId: string, on: boolean) => void
+  onAll: (on: boolean) => void
+  onClose: () => void
+}) {
+  return (
+    <Dialog open={title != null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent layer="stacked" aria-describedby={undefined} className={cn(limsDialogClass, 'w-[min(30rem,calc(100vw-1rem))] max-w-none gap-0 overflow-hidden bg-white p-0')}>
+        <DarkHeader eyebrow="Licences This Login Can See" title={title} />
+        <div className="flex items-center gap-3 border-b border-stone-200 bg-stone-50 px-4 py-2 text-xs">
+          <span className="font-semibold text-stone-700">{selected.length} of {licences.length} Selected</span>
+          <button type="button" disabled={disabled} className="ml-auto font-medium text-amber-800 hover:underline disabled:opacity-50" onClick={() => onAll(true)}>Select All</button>
+          <button type="button" disabled={disabled} className="font-medium text-amber-800 hover:underline disabled:opacity-50" onClick={() => onAll(false)}>Clear</button>
+        </div>
+        <ul className="max-h-[55dvh] divide-y divide-stone-200 overflow-y-auto">
+          {licences.map((l) => {
+            const [cml, is] = splitLabel(l.label)
+            const on = selected.includes(l.id)
+            return (
+              <li key={l.id}>
+                <label className={cn('flex cursor-pointer items-center gap-3 px-4 py-2.5 hover:bg-amber-50/60', on && 'bg-amber-50/80')}>
+                  <input type="checkbox" className={checkCls} checked={on} disabled={disabled} onChange={(e) => onToggle(l.id, e.target.checked)} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold text-stone-900">{cml}</span>
+                    <span className="block text-xs text-stone-600">{is}{l.validity ? ` · Valid Till ${formatDisplayDate(l.validity)}` : ''}</span>
+                  </span>
+                </label>
+              </li>
+            )
+          })}
+        </ul>
+        <div className="flex items-center justify-end gap-2 border-t border-stone-200 bg-stone-50 px-4 py-2.5">
+          {disabled ? <Loader2 size={15} className="animate-spin text-stone-500" aria-hidden /> : null}
+          <Button type="button" className={cn(limsPrimaryBtnClass, 'h-9 min-h-9')} onClick={onClose}>Done</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+type Draft = { key: string; name: string; email: string; licences: string[] }
+type PickFor = { userId: string } | { draftKey: string } | null
+
+/** Logins of the client in one table: saved logins with their actions, plus new invite rows added with "Invite New Login". */
+function CustomerLoginsDialog({
+  open,
+  clientId,
+  company,
+  licences,
+  logins,
+  busy,
+  run,
+  onClose,
+}: {
+  open: boolean
+  clientId: string
+  company: string
+  licences: PortalClientLicence[]
+  logins: PortalLogin[]
+  busy: string | null
+  run: (key: string, action: () => Promise<void>, done?: string) => Promise<boolean>
+  onClose: () => void
+}) {
+  const [confirm, confirmDialog] = useConfirmDialog({ layer: 'top' })
+  const [drafts, setDrafts] = useState<Draft[]>([])
+  const [pickFor, setPickFor] = useState<PickFor>(null)
+
+  const allIds = licences.map((l) => l.id)
+  const addDraft = () => setDrafts((prev) => [{ key: `${Date.now()}-${prev.length}`, name: '', email: '', licences: allIds }, ...prev])
+  const patchDraft = (key: string, patch: Partial<Draft>) => setDrafts((prev) => prev.map((d) => (d.key === key ? { ...d, ...patch } : d)))
+  const dropDraft = (key: string) => setDrafts((prev) => prev.filter((d) => d.key !== key))
+
+  const sendInvite = async (d: Draft) => {
+    const ok = await run(
+      `invite:${d.key}`,
+      async () => {
+        if (!d.email.trim()) throw new Error('Enter the Email')
+        if (d.licences.length === 0) throw new Error('Select at Least One Licence')
+        await inviteCustomer({ email: d.email.trim(), full_name: d.name.trim(), client_id: clientId, project_ids: d.licences })
+      },
+      'Invite Sent',
+    )
+    if (ok) dropDraft(d.key)
+  }
+
+  const pickLogin = pickFor && 'userId' in pickFor ? logins.find((u) => u.user_id === pickFor.userId) : undefined
+  const pickDraft = pickFor && 'draftKey' in pickFor ? drafts.find((d) => d.key === pickFor.draftKey) : undefined
+  const pickTitle = pickLogin ? pickLogin.full_name || pickLogin.email : pickDraft ? pickDraft.name || pickDraft.email || 'New Login' : null
+  const pickSelected = pickLogin?.licence_ids ?? pickDraft?.licences ?? []
+
+  const licencesButton = (count: number, onClick: () => void, disabled?: boolean) => (
+    <Button type="button" variant="outline" className={cn(smallBtn, 'w-full justify-between')} disabled={disabled} onClick={onClick}>
+      <span className="inline-flex items-center gap-1"><FileBadge2 size={14} aria-hidden /> View Licences</span>
+      <span className={cn('border px-1 text-[11px] font-semibold', count ? 'border-amber-500 bg-amber-50 text-amber-900' : 'border-red-300 bg-red-50 text-red-700')}>
+        {count}/{licences.length}
+      </span>
+    </Button>
+  )
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent
+        layer="nested"
+        aria-describedby={undefined}
+        className={cn(limsDialogClass, limsDialogWidthCapClass['72rem'], 'flex max-h-[92dvh] flex-col gap-0 overflow-hidden bg-white p-0')}
+      >
+        {confirmDialog}
+        <LicencePickerDialog
+          title={pickTitle}
+          licences={licences}
+          selected={pickSelected}
+          disabled={pickLogin ? busy != null : false}
+          onClose={() => setPickFor(null)}
+          onToggle={(id, on) => {
+            if (pickLogin) void run(`lic:${pickLogin.user_id}:${id}`, () => setLicenceAccess(pickLogin.user_id, id, on))
+            else if (pickDraft) patchDraft(pickDraft.key, { licences: on ? [...pickDraft.licences, id] : pickDraft.licences.filter((x) => x !== id) })
+          }}
+          onAll={(on) => {
+            if (pickLogin) {
+              const change = licences.filter((l) => pickLogin.licence_ids.includes(l.id) !== on)
+              void run(`lic:${pickLogin.user_id}:all`, async () => {
+                for (const l of change) await setLicenceAccess(pickLogin.user_id, l.id, on)
+              })
+            } else if (pickDraft) patchDraft(pickDraft.key, { licences: on ? allIds : [] })
+          }}
+        />
+        <DarkHeader eyebrow="Customer Logins" title={company}>
+          <Button type="button" className={cn(limsPrimaryBtnClass, 'gap-1.5')} onClick={addDraft}>
+            <Plus size={16} aria-hidden /> Invite New Login
+          </Button>
+        </DarkHeader>
+
+        <div className="min-h-0 flex-1 overflow-auto bg-[#fffcf7] p-3 sm:p-4">
+          <div className="overflow-x-auto border border-stone-300 bg-white shadow-sm">
+            <table className="w-full min-w-[820px] border-collapse font-jakarta">
+              <thead>
+                <tr>
+                  <th className={cn(th, 'w-10 text-center')}>#</th>
+                  <th className={th}>Name</th>
+                  <th className={th}>Email</th>
+                  <th className={cn(th, 'w-[11rem]')}>Licences</th>
+                  <th className={cn(th, 'w-[7rem] text-center')}>Status</th>
+                  <th className={cn(th, 'w-[7rem] text-center')}>Invited</th>
+                  <th className={cn(th, 'w-[8.5rem] text-center')}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {drafts.map((d) => (
+                  <tr key={d.key} className="bg-amber-50/70">
+                    <td className={cn(td, 'text-center text-xs font-semibold text-amber-800')}>New</td>
+                    <td className={td}>
+                      <Input value={d.name} placeholder="Contact Person" aria-label="Name" className="h-8 min-h-8 text-sm" onChange={(e) => patchDraft(d.key, { name: e.target.value })} />
+                    </td>
+                    <td className={td}>
+                      <Input type="email" value={d.email} placeholder="Email for Login" aria-label="Email" className="h-8 min-h-8 text-sm" onChange={(e) => patchDraft(d.key, { email: e.target.value })} />
+                    </td>
+                    <td className={td}>{licencesButton(d.licences.length, () => setPickFor({ draftKey: d.key }))}</td>
+                    <td className={cn(td, 'text-center')}><span className={cn(badge, 'border-amber-300 bg-amber-100 text-amber-900')}>Not Sent</span></td>
+                    <td className={cn(td, 'text-center text-xs text-stone-400')}>—</td>
+                    <td className={td}>
+                      <div className="flex items-center justify-center gap-1">
+                        <Button type="button" className={cn(limsPrimaryBtnClass, 'h-8 min-h-8 gap-1 px-2.5 text-xs')} disabled={busy != null} onClick={() => void sendInvite(d)}>
+                          {busy === `invite:${d.key}` ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Send size={14} aria-hidden />} Send
+                        </Button>
+                        <Button type="button" variant="ghost" className={iconBtn} title="Cancel" aria-label="Cancel New Login" onClick={() => dropDraft(d.key)}>
+                          <X size={16} aria-hidden />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {logins.map((u, i) => (
+                  <tr key={u.user_id} className={cn(rowTone(i), !u.active && 'text-stone-500')}>
+                    <td className={cn(td, 'text-center text-xs text-stone-500')}>{i + 1}</td>
+                    <td className={cn(td, 'font-semibold text-stone-900')}>{u.full_name || '—'}</td>
+                    <td className={cn(td, 'break-all text-[13px]')}>{u.email}</td>
+                    <td className={td}>{licencesButton(u.licence_ids.length, () => setPickFor({ userId: u.user_id }))}</td>
+                    <td className={cn(td, 'text-center')}>
+                      <span className={cn(badge, u.active ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-stone-300 bg-stone-100 text-stone-600')}>
+                        {u.active ? 'Active' : 'Switched Off'}
+                      </span>
+                    </td>
+                    <td className={cn(td, 'text-center text-xs text-stone-600')}>{u.invited_at ? formatDisplayDate(u.invited_at.slice(0, 10)) : '—'}</td>
+                    <td className={td}>
+                      <div className="flex items-center justify-center gap-0.5">
+                        <Button type="button" variant="ghost" className={iconBtn} disabled={busy != null || !u.active} title="Resend Invite" aria-label={`Resend Invite to ${u.email}`}
+                          onClick={() => void run(`resend:${u.user_id}`, () => resendCustomerInvite(u.user_id), 'Invite Sent Again')}>
+                          {busy === `resend:${u.user_id}` ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Mail size={16} aria-hidden />}
+                        </Button>
+                        <Button type="button" variant="ghost" className={cn(iconBtn, u.active ? '' : 'text-emerald-700')} disabled={busy != null}
+                          title={u.active ? 'Switch Off' : 'Switch On'} aria-label={`${u.active ? 'Switch Off' : 'Switch On'} ${u.email}`}
+                          onClick={() => void run(`power:${u.user_id}`, () => setLoginActive(u.user_id, !u.active), u.active ? 'Login Switched Off' : 'Login Switched On')}>
+                          <Power size={16} aria-hidden />
+                        </Button>
+                        <Button type="button" variant="ghost" className={cn(iconBtn, 'text-red-700 hover:bg-red-50 hover:text-red-800')} disabled={busy != null} title="Remove" aria-label={`Remove ${u.email}`}
+                          onClick={() => void (async () => {
+                            if (!(await confirm(`Remove the login ${u.email}? The customer can no longer sign in.`, { title: 'Remove Login', confirmLabel: 'Remove', destructive: true }))) return
+                            await run(`remove:${u.user_id}`, () => removeCustomerLogin(u.user_id), 'Login Removed')
+                          })()}>
+                          <Trash2 size={16} aria-hidden />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {logins.length === 0 && drafts.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className={cn(td, 'py-8 text-center text-stone-500')}>No login yet. Click "Invite New Login" to add one.</td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-2 text-[11px] text-stone-500">
+            The customer gets an email to set a password, then sets up Two-Step Login. Each login sees only the licences ticked for it and can only view;
+            nothing about the licence can be changed from the portal.
+          </p>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/** Files of one licence with a tick for each file shown in the customer's portal. */
+function DocumentsDialog({
+  licence,
+  files,
+  busy,
+  onToggle,
+  onClose,
+}: {
+  licence: PortalClientLicence | null
+  files: PortalLicenceFile[]
+  busy: string | null
+  onToggle: (file: PortalLicenceFile) => void
+  onClose: () => void
+}) {
+  const shared = files.filter((f) => f.customer_visible).length
+  return (
+    <Dialog open={licence != null} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent layer="nested" aria-describedby={undefined} className={cn(limsDialogClass, 'flex max-h-[85dvh] w-[min(40rem,calc(100vw-1rem))] max-w-none flex-col gap-0 overflow-hidden bg-white p-0')}>
+        <DarkHeader eyebrow="Documents Shown to the Customer" title={licence?.label} />
+        <div className="flex items-center gap-2 border-b border-stone-200 bg-stone-50 px-4 py-2 text-xs text-stone-600">
+          <span className="font-semibold text-stone-800">{shared} of {files.length} Shared</span>
+          <span className="ml-auto">Nothing is shared until you tick it.</span>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {files.length === 0 ? (
+            <p className="px-4 py-10 text-center text-sm text-stone-500">No files on this licence yet.</p>
+          ) : (
+            <ul className="divide-y divide-stone-200">
+              {files.map((f) => (
+                <li key={f.id}>
+                  <label className={cn('flex cursor-pointer items-center gap-3 px-4 py-2.5 text-sm text-stone-800 hover:bg-amber-50/60', f.customer_visible && 'bg-amber-50/80')}>
+                    <input type="checkbox" className={checkCls} checked={f.customer_visible} disabled={busy === `file:${f.id}`} onChange={() => onToggle(f)} />
+                    <span className="min-w-0 flex-1 truncate" title={f.file_name}>{f.file_name}</span>
+                    <span className="shrink-0 border border-stone-200 bg-stone-50 px-1.5 text-[11px] text-stone-600">{f.doc_kind}</span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div className="flex justify-end border-t border-stone-200 bg-stone-50 px-4 py-2.5">
+          <Button type="button" className={cn(limsPrimaryBtnClass, 'h-9 min-h-9')} onClick={onClose}>Done</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 /**
- * Customer Portal for one client (admin only): invite logins, choose the licences each login sees, switch logins
- * off, choose which licence files are shown to the customer, and open the records setup of each licence.
- * Customers only ever view their licences; nothing here lets them edit one.
+ * Customer Portal for one client (admin only), on one page: every licence with its records service, paid date,
+ * shared documents and records setup; customer logins open from the header. Customers only ever view their
+ * licences; nothing here lets them edit one.
  */
 export function CustomerPortalDialog({
   client,
@@ -106,16 +378,12 @@ export function CustomerPortalDialog({
   const [licences, setLicences] = useState<PortalClientLicence[]>([])
   const [logins, setLogins] = useState<PortalLogin[]>([])
   const [services, setServices] = useState<Map<string, RecordsService>>(new Map())
+  const [files, setFiles] = useState<Map<string, PortalLicenceFile[]>>(new Map())
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<string | null>(null)
-  const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
-  const [picked, setPicked] = useState<Set<string>>(new Set())
-  const [filesFor, setFilesFor] = useState('')
+  const [loginsOpen, setLoginsOpen] = useState(false)
+  const [docsFor, setDocsFor] = useState<string | null>(null)
   const [recordsFor, setRecordsFor] = useState<{ id: string; label: string } | null>(null)
-  // Files of one licence; shown only while they belong to the licence picked in the list.
-  const [filesOf, setFilesOf] = useState<{ licenceId: string; list: PortalLicenceFile[] } | null>(null)
-  const files = filesOf && filesOf.licenceId === filesFor ? filesOf.list : null
 
   const clientId = client?.id ?? ''
   const today = todayLocalIso()
@@ -124,32 +392,22 @@ export function CustomerPortalDialog({
     () =>
       Promise.all([listClientLicences(clientId), listPortalLogins(clientId)])
         .then(async ([l, u]) => {
+          const ids = l.map((x) => x.id)
+          const [svc, fl] = await Promise.all([listRecordsServices(ids), listFilesForLicences(ids)])
           setLicences(l)
           setLogins(u)
-          setPicked((prev) => (prev.size ? prev : new Set(l.map((x) => x.id))))
-          setFilesFor((prev) => prev || l[0]?.id || '')
-          setServices(await listRecordsServices(l.map((x) => x.id)))
+          setServices(svc)
+          setFiles(fl)
         })
         .catch((err: unknown) => toast.error(errText(err, 'Could not load the Customer Portal settings')))
         .finally(() => setLoading(false)),
     [clientId],
   )
 
-  // The dialog is keyed by client, so its fields start empty for every client.
+  // The dialog is keyed by client, so its state starts empty for every client.
   useEffect(() => {
     if (clientId) void load()
   }, [clientId, load])
-
-  useEffect(() => {
-    if (!filesFor) return
-    let cancelled = false
-    void listLicenceFiles(filesFor)
-      .then((list) => !cancelled && setFilesOf({ licenceId: filesFor, list }))
-      .catch((err: unknown) => !cancelled && toast.error(errText(err, 'Could not load the files')))
-    return () => {
-      cancelled = true
-    }
-  }, [filesFor])
 
   const run = async (key: string, action: () => Promise<void>, done?: string) => {
     setBusy(key)
@@ -157,33 +415,26 @@ export function CustomerPortalDialog({
       await action()
       if (done) toast.success(done)
       await load()
+      return true
     } catch (err) {
       toast.error(errText(err, 'Action failed'))
+      return false
     } finally {
       setBusy(null)
     }
   }
 
-  const sendInvite = () =>
-    run(
-      'invite',
-      async () => {
-        if (!email.trim()) throw new Error('Enter the Email')
-        if (picked.size === 0) throw new Error('Select at Least One Licence')
-        await inviteCustomer({ email: email.trim(), full_name: name.trim(), client_id: clientId, project_ids: [...picked] })
-        setName('')
-        setEmail('')
-      },
-      'Invite Sent',
-    )
-
   const toggleFile = async (file: PortalLicenceFile) => {
     setBusy(`file:${file.id}`)
     try {
       await setFileShared(file.id, !file.customer_visible)
-      setFilesOf((prev) =>
-        prev ? { ...prev, list: prev.list.map((f) => (f.id === file.id ? { ...f, customer_visible: !f.customer_visible } : f)) } : prev,
-      )
+      setFiles((prev) => {
+        const next = new Map(prev)
+        for (const [id, list] of next) {
+          if (list.some((f) => f.id === file.id)) next.set(id, list.map((f) => (f.id === file.id ? { ...f, customer_visible: !f.customer_visible } : f)))
+        }
+        return next
+      })
     } catch (err) {
       toast.error(errText(err, 'Could not update the file'))
     } finally {
@@ -191,9 +442,21 @@ export function CustomerPortalDialog({
     }
   }
 
+  const switchRecords = async (l: PortalClientLicence, service: RecordsService | null) => {
+    const on = !service?.records_enabled
+    const [cml] = splitLabel(l.label)
+    const message = on
+      ? service?.trial_ends
+        ? `Switch the records service on again for ${cml}? The earlier trial and paid dates are kept.`
+        : `Switch the records service on for ${cml}? The ${TRIAL_DAYS}-day free trial starts today.`
+      : `Switch the records service off for ${cml}? The customer no longer sees the record sections; nothing is deleted.`
+    if (!(await confirm(message, { title: on ? 'Switch On Records' : 'Switch Off Records', confirmLabel: on ? 'Switch On' : 'Switch Off', destructive: !on }))) return
+    await run(`svc:${l.id}`, () => setRecordsEnabled(l.id, on, service), on ? 'Records Switched On' : 'Records Switched Off')
+  }
+
   const activeLogins = logins.filter((u) => u.active).length
   const recordsOn = licences.filter((l) => services.get(l.id)?.records_enabled).length
-  const sharedCount = files?.filter((f) => f.customer_visible).length ?? 0
+  const docsLicence = licences.find((l) => l.id === docsFor) ?? null
 
   return (
     <Dialog open={client != null} onOpenChange={onOpenChange}>
@@ -215,23 +478,30 @@ export function CustomerPortalDialog({
             void load()
           }}
         />
-        <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-3 text-white sm:px-6 sm:py-4">
-          <div className="pointer-events-none absolute inset-0 opacity-[0.2]" style={limsDarkBarGlowStyle} />
-          <div className="absolute bottom-0 left-0 h-[3px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
-          <div className="relative flex flex-wrap items-end gap-x-6 gap-y-2 pr-10">
-            <DialogHeader className="min-w-0 flex-1 space-y-0.5 text-left">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300">Customer Portal</p>
-              <DialogTitle className="truncate text-lg font-semibold tracking-tight text-white sm:text-xl">{client?.company_name}</DialogTitle>
-            </DialogHeader>
-            {licences.length ? (
-              <div className="flex flex-wrap gap-2">
-                <Stat value={licences.length} label="Licences" />
-                <Stat value={activeLogins} label="Active Logins" />
-                <Stat value={recordsOn} label="Records On" />
-              </div>
-            ) : null}
-          </div>
-        </div>
+        <CustomerLoginsDialog
+          open={loginsOpen}
+          clientId={clientId}
+          company={client?.company_name ?? ''}
+          licences={licences}
+          logins={logins}
+          busy={busy}
+          run={run}
+          onClose={() => setLoginsOpen(false)}
+        />
+        <DocumentsDialog licence={docsLicence} files={docsFor ? files.get(docsFor) ?? [] : []} busy={busy} onToggle={(f) => void toggleFile(f)} onClose={() => setDocsFor(null)} />
+
+        <DarkHeader eyebrow="Customer Portal" title={client?.company_name}>
+          {licences.length ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Stat value={licences.length} label="Licences" />
+              <Stat value={recordsOn} label="Records On" />
+              <Button type="button" variant="outline" className={cn(limsDarkBarBtnClass, 'gap-1.5 px-3')} onClick={() => setLoginsOpen(true)}>
+                <Users size={16} aria-hidden /> Customer Logins
+                <span className="border border-amber-400/50 bg-amber-500/20 px-1.5 text-xs font-bold text-amber-100">{activeLogins}/{logins.length}</span>
+              </Button>
+            </div>
+          ) : null}
+        </DarkHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5">
           {loading && licences.length === 0 ? (
@@ -243,178 +513,99 @@ export function CustomerPortalDialog({
               <p className="mt-1 text-sm text-stone-600">Add a licence for this client first; then logins can be invited here.</p>
             </div>
           ) : (
-            <div className="mx-auto grid max-w-[100rem] items-start gap-4 xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] xl:gap-5">
-              <div className="min-w-0 space-y-4 xl:space-y-5">
-                <Panel icon={<Users size={17} aria-hidden />} title="Customer Logins" count={logins.length} hint="Each login sees only the licences ticked for it.">
-                  {logins.length === 0 ? (
-                    <p className="px-4 py-6 text-center text-sm text-stone-600">No login yet. Invite one below.</p>
-                  ) : (
-                    <ul className="divide-y divide-stone-200">
-                      {logins.map((u) => (
-                        <li key={u.user_id} className={cn('space-y-2.5 px-3 py-3 sm:px-4', !u.active && 'bg-stone-50')}>
-                          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                            <span className={cn('flex h-10 w-10 shrink-0 items-center justify-center text-sm font-bold', u.active ? 'bg-amber-600 text-white' : 'bg-stone-300 text-stone-600')}>
-                              {initials(u.full_name || u.email)}
-                            </span>
-                            <div className="min-w-0 flex-1">
-                              <p className="flex items-center gap-2">
-                                <span className="truncate text-sm font-semibold text-stone-900">{u.full_name || u.email}</span>
-                                <span className={cn('shrink-0 border px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide', u.active ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-stone-300 bg-stone-100 text-stone-600')}>
-                                  {u.active ? 'Active' : 'Switched Off'}
-                                </span>
-                              </p>
-                              <p className="truncate text-xs text-stone-600">
-                                {u.email}
-                                {u.invited_at ? <span className="text-stone-400"> · Invited {formatDisplayDate(u.invited_at.slice(0, 10))}</span> : null}
-                              </p>
-                            </div>
-                            <div className="flex flex-wrap gap-1.5">
-                              <Button type="button" variant="outline" className={smallBtn} disabled={busy != null || !u.active} title="Send a new set-password link"
-                                onClick={() => void run(`resend:${u.user_id}`, () => resendCustomerInvite(u.user_id), 'Invite Sent Again')}>
-                                <Mail size={14} aria-hidden /> Resend Invite
-                              </Button>
-                              <Button type="button" variant="outline" className={smallBtn} disabled={busy != null}
-                                onClick={() => void run(`power:${u.user_id}`, () => setLoginActive(u.user_id, !u.active), u.active ? 'Login Switched Off' : 'Login Switched On')}>
-                                <Power size={14} aria-hidden /> {u.active ? 'Switch Off' : 'Switch On'}
-                              </Button>
-                              <Button type="button" variant="outline" className={cn(smallBtn, 'text-red-700')} disabled={busy != null}
-                                onClick={() => void (async () => {
-                                  if (!(await confirm(`Remove the login ${u.email}? The customer can no longer sign in.`, { title: 'Remove Login', confirmLabel: 'Remove', destructive: true }))) return
-                                  await run(`remove:${u.user_id}`, () => removeCustomerLogin(u.user_id), 'Login Removed')
-                                })()}>
-                                <Trash2 size={14} aria-hidden /> Remove
-                              </Button>
-                            </div>
-                          </div>
-                          <div className="flex flex-wrap gap-1.5 sm:pl-[3.25rem]">
-                            {licences.map((l) => (
-                              <LicenceChip key={l.id} label={l.label} disabled={busy != null} checked={u.licence_ids.includes(l.id)}
-                                onChange={(on) => void run(`lic:${u.user_id}:${l.id}`, () => setLicenceAccess(u.user_id, l.id, on))} />
-                            ))}
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </Panel>
-
-                <Panel icon={<UserPlus size={17} aria-hidden />} title="Invite a New Login" hint="The customer gets an email to set a password, then sets up Two-Step Login.">
-                  <div className="space-y-3.5 p-3 sm:p-4">
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="space-y-1">
-                        <Label htmlFor="portal-invite-name">Name</Label>
-                        <Input id="portal-invite-name" value={name} placeholder="Contact Person" onChange={(e) => setName(e.target.value)} />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="portal-invite-email">Email</Label>
-                        <Input id="portal-invite-email" type="email" value={email} placeholder="Email for Login" onChange={(e) => setEmail(e.target.value)} />
-                      </div>
-                    </div>
-                    <div className="space-y-1.5">
-                      <div className="flex items-center gap-3">
-                        <p className="text-xs font-semibold text-stone-700">Licences This Login Can See</p>
-                        <button type="button" className="text-[11px] font-medium text-amber-800 hover:underline" onClick={() => setPicked(new Set(licences.map((l) => l.id)))}>Select All</button>
-                        <button type="button" className="text-[11px] font-medium text-amber-800 hover:underline" onClick={() => setPicked(new Set())}>Clear</button>
-                      </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {licences.map((l) => (
-                          <LicenceChip key={l.id} label={l.label} checked={picked.has(l.id)}
-                            onChange={(on) => setPicked((prev) => {
-                              const next = new Set(prev)
-                              if (on) next.add(l.id)
-                              else next.delete(l.id)
-                              return next
-                            })} />
-                        ))}
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-stone-200 pt-3">
-                      <p className="max-w-md text-[11px] text-stone-500">They can only view; nothing about the licence can be changed from the portal.</p>
-                      <Button type="button" className={cn(limsPrimaryBtnClass, 'h-9 gap-1.5')} disabled={busy != null} onClick={() => void sendInvite()}>
-                        {busy === 'invite' ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Send size={15} aria-hidden />} Send Invite
-                      </Button>
-                    </div>
-                  </div>
-                </Panel>
+            <div className="mx-auto max-w-[100rem] space-y-2">
+              <div className="flex flex-wrap items-end justify-between gap-2">
+                <h3 className="text-sm font-bold uppercase tracking-[0.12em] text-stone-800">Licences &amp; Records</h3>
+                <p className="text-[11px] text-stone-500">
+                  Records: paid service per licence, {TRIAL_DAYS}-day free trial. Q Engineering designs the formats; customers only enter data.
+                </p>
               </div>
-
-              <div className="min-w-0 space-y-4 xl:space-y-5">
-                <Panel icon={<ClipboardList size={17} aria-hidden />} title="Licences & Records" count={licences.length} hint="Paid records service per licence (30-day free trial). Q Engineering designs the formats; customers only enter data.">
-                  <ul className="divide-y divide-stone-200">
-                    {licences.map((l) => {
+              <div className="overflow-x-auto border border-stone-300 bg-white shadow-sm">
+                <table className="w-full min-w-[980px] border-collapse font-jakarta">
+                  <thead>
+                    <tr>
+                      <th className={cn(th, 'w-10 text-center')}>#</th>
+                      <th className={th}>Licence</th>
+                      <th className={cn(th, 'w-[7.5rem] text-center')}>Valid Till</th>
+                      <th className={cn(th, 'w-[6rem] text-center')}>Logins</th>
+                      <th className={cn(th, 'w-[13rem]')}>Records Service</th>
+                      <th className={cn(th, 'w-[10.5rem]')}>Paid Till</th>
+                      <th className={cn(th, 'w-[9rem] text-center')}>Documents</th>
+                      <th className={cn(th, 'w-[9.5rem] text-center')}>Formats</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {licences.map((l, i) => {
                       const [cml, is] = splitLabel(l.label)
-                      const status = serviceStatus(services.get(l.id) ?? null)
+                      const service = services.get(l.id) ?? null
+                      const status = serviceStatus(service)
                       const expired = l.validity != null && l.validity < today
-                      const seenBy = logins.filter((u) => u.licence_ids.includes(l.id)).length
+                      const seenBy = logins.filter((u) => u.licence_ids.includes(l.id))
+                      const list = files.get(l.id) ?? []
+                      const shared = list.filter((f) => f.customer_visible).length
                       return (
-                        <li key={l.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2.5 sm:px-4">
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm">
-                              <span className="font-semibold text-stone-900">{cml}</span>
-                              {is ? <span className="text-stone-600"> · {is}</span> : null}
-                            </p>
-                            <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-stone-500">
-                              <span className={cn(expired && 'font-semibold text-red-700')}>{l.validity ? `Valid Till ${formatDisplayDate(l.validity)}` : 'Validity Not Set'}</span>
-                              <span>· {seenBy === 1 ? '1 Login' : `${seenBy} Logins`}</span>
-                              <span className={cn('border px-1.5 py-px text-[10px] font-semibold', status.tone)}>Records: {status.text}</span>
-                            </p>
-                          </div>
-                          <Button type="button" variant="outline" className={smallBtn} onClick={() => setRecordsFor({ id: l.id, label: l.label })}>
-                            <ClipboardList size={14} aria-hidden /> Records Setup
-                          </Button>
-                        </li>
+                        <tr key={l.id} className={rowTone(i)}>
+                          <td className={cn(td, 'text-center text-xs text-stone-500')}>{i + 1}</td>
+                          <td className={td}>
+                            <p className="font-semibold text-stone-900">{cml}</p>
+                            {is ? <p className="text-xs text-stone-600">{is}</p> : null}
+                          </td>
+                          <td className={cn(td, 'text-center text-[13px]', expired && 'font-semibold text-red-700')}>
+                            {l.validity ? formatDisplayDate(l.validity) : '—'}
+                            {expired ? <span className="block text-[10px] uppercase tracking-wide">Expired</span> : null}
+                          </td>
+                          <td className={cn(td, 'text-center')}>
+                            <button type="button" className="text-[13px] font-semibold text-amber-800 hover:underline" title={seenBy.map((u) => u.full_name || u.email).join(', ') || 'No login yet'} onClick={() => setLoginsOpen(true)}>
+                              {seenBy.length}
+                            </button>
+                          </td>
+                          <td className={td}>
+                            <div className="flex items-center gap-1.5">
+                              <span className={cn(badge, 'min-w-0 flex-1 truncate normal-case tracking-normal', status.tone)} title={status.text}>{status.text}</span>
+                              <Button type="button" variant="outline" disabled={busy != null}
+                                className={cn(smallBtn, 'shrink-0 px-2', service?.records_enabled ? 'text-red-700' : 'text-emerald-700')}
+                                title={service?.records_enabled ? 'Switch Off' : `Switch On (${TRIAL_DAYS}-Day Free Trial)`}
+                                onClick={() => void switchRecords(l, service)}>
+                                {busy === `svc:${l.id}` ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Power size={14} aria-hidden />}
+                                {service?.records_enabled ? 'Off' : 'On'}
+                              </Button>
+                            </div>
+                          </td>
+                          <td className={td}>
+                            {service?.records_enabled ? (
+                              <DateInput
+                                aria-label={`Paid Till for ${cml}`}
+                                className="h-8 min-h-8 w-full text-sm"
+                                value={service.paid_until ?? ''}
+                                disabled={busy != null}
+                                onChange={(e) => {
+                                  const next = e.target.value || null
+                                  if (next !== (service.paid_until ?? null)) void run(`paid:${l.id}`, () => setPaidUntil(l.id, next), next ? 'Paid Date Saved' : 'Paid Date Cleared')
+                                }}
+                              />
+                            ) : (
+                              <span className="text-xs text-stone-400">Switch On First</span>
+                            )}
+                          </td>
+                          <td className={cn(td, 'text-center')}>
+                            <Button type="button" variant="outline" className={cn(smallBtn, 'w-full')} onClick={() => setDocsFor(l.id)}>
+                              <FileText size={14} aria-hidden /> {shared}/{list.length} Shared
+                            </Button>
+                          </td>
+                          <td className={cn(td, 'text-center')}>
+                            <Button type="button" variant="outline" className={cn(smallBtn, 'w-full')} onClick={() => setRecordsFor({ id: l.id, label: l.label })}>
+                              <ClipboardList size={14} aria-hidden /> Records Setup
+                            </Button>
+                          </td>
+                        </tr>
                       )
                     })}
-                  </ul>
-                </Panel>
-
-                <Panel icon={<FileText size={17} aria-hidden />} title="Documents Shown to the Customer" hint="Ticked files appear under Documents in the customer's portal. Nothing is shared until you tick it.">
-                  <div className="space-y-3 p-3 sm:p-4">
-                    <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Licence">
-                      {licences.map((l) => {
-                        const [cml] = splitLabel(l.label)
-                        const on = l.id === filesFor
-                        return (
-                          <button
-                            key={l.id}
-                            type="button"
-                            role="tab"
-                            aria-selected={on}
-                            title={l.label}
-                            onClick={() => setFilesFor(l.id)}
-                            className={cn(
-                              'border px-2.5 py-1 text-xs font-semibold transition-colors',
-                              on ? 'border-stone-800 bg-stone-800 text-amber-200' : 'border-stone-300 bg-white text-stone-700 hover:border-stone-500',
-                            )}
-                          >
-                            {cml}
-                          </button>
-                        )
-                      })}
-                    </div>
-                    {files == null ? (
-                      <p className="flex items-center gap-2 text-sm text-stone-600"><Loader2 size={15} className="animate-spin" aria-hidden /> Loading…</p>
-                    ) : files.length === 0 ? (
-                      <p className="border border-dashed border-stone-300 px-3 py-5 text-center text-sm text-stone-500">No files on this licence yet.</p>
-                    ) : (
-                      <>
-                        <p className="text-[11px] font-medium text-stone-600">{sharedCount} of {files.length} Shared</p>
-                        <ul className="divide-y divide-stone-200 border border-stone-200">
-                          {files.map((f) => (
-                            <li key={f.id}>
-                              <label className={cn('flex cursor-pointer items-center gap-2 px-2.5 py-2 text-sm text-stone-800 hover:bg-amber-50/50', f.customer_visible && 'bg-amber-50/70')}>
-                                <input type="checkbox" className={checkCls} checked={f.customer_visible} disabled={busy === `file:${f.id}`} onChange={() => void toggleFile(f)} />
-                                <span className="min-w-0 flex-1 truncate" title={f.file_name}>{f.file_name}</span>
-                                <span className="shrink-0 border border-stone-200 bg-stone-50 px-1.5 text-[11px] text-stone-600">{f.doc_kind}</span>
-                              </label>
-                            </li>
-                          ))}
-                        </ul>
-                      </>
-                    )}
-                  </div>
-                </Panel>
+                  </tbody>
+                </table>
               </div>
+              <p className="text-[11px] text-stone-500">
+                Documents: ticked files appear under Documents in the customer's portal. Logins: open Customer Logins at the top to invite, switch off or choose licences.
+              </p>
             </div>
           )}
         </div>

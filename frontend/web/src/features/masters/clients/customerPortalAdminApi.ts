@@ -107,14 +107,21 @@ export async function setLoginActive(userId: string, active: boolean): Promise<v
   if (error) throw error
 }
 
-export async function listLicenceFiles(projectId: string): Promise<PortalLicenceFile[]> {
+/** Files of several licences in one query, grouped by licence (newest first). */
+export async function listFilesForLicences(projectIds: string[]): Promise<Map<string, PortalLicenceFile[]>> {
+  const out = new Map<string, PortalLicenceFile[]>(projectIds.map((id) => [id, []]))
+  if (projectIds.length === 0) return out
   const { data, error } = await supabase
     .from('bis_project_files')
-    .select('id, file_name, doc_kind, customer_visible')
-    .eq('bis_project_id', projectId)
+    .select('id, bis_project_id, file_name, doc_kind, customer_visible')
+    .in('bis_project_id', projectIds)
     .order('created_at', { ascending: false })
   if (error) throw error
-  return (data ?? []) as PortalLicenceFile[]
+  for (const row of (data ?? []) as Array<PortalLicenceFile & { bis_project_id: string }>) {
+    const { bis_project_id, ...file } = row
+    out.get(bis_project_id)?.push(file)
+  }
+  return out
 }
 
 export async function setFileShared(fileId: string, shared: boolean): Promise<void> {
