@@ -51,21 +51,25 @@ const td = 'border border-stone-200 px-2 py-1.5 align-middle text-sm text-stone-
 const iconBtn = 'inline-flex h-7 w-7 items-center justify-center border border-stone-300 bg-white text-amber-800 hover:bg-amber-50 disabled:opacity-40'
 // Attachments need customer file uploads, which come with the reports step.
 // Number covers Number With Limits too (its Check Limits setting saves it as 'spec').
-const EDITABLE_TYPES: RecordColumnType[] = ['text', 'number', 'date', 'select', 'formula', 'link', 'pass_fail']
+// Alphanumeric is a Text column with a pattern (saved as 'text' with config.alphanumeric).
+type EditorType = RecordColumnType | 'alnum'
+const EDITABLE_TYPES: EditorType[] = ['text', 'alnum', 'number', 'date', 'select', 'formula', 'link', 'pass_fail']
+const TYPE_LABEL: Record<string, string> = { ...COLUMN_TYPE_LABEL, number: 'Number', alnum: 'Alphanumeric (Pattern)' }
 
 // Settings each type keeps in its config (the rest of the settings table is dropped on save).
-const TYPE_KEYS: Partial<Record<RecordColumnType, string[]>> = {
-  text: ['long', 'max_length', 'letter_case', 'placeholder', 'default_text'],
-  number: ['format', 'thousands', 'decimals', 'no_negative', 'default_number'],
-  date: ['date_format', 'include_time', 'default_today', 'no_future', 'no_past'],
+const TYPE_KEYS: Partial<Record<EditorType, string[]>> = {
+  text: ['long', 'max_length', 'letter_case', 'placeholder', 'default_text', 'min_length', 'allowed_chars', 'error_message'],
+  alnum: ['mask', 'letter_case', 'placeholder', 'default_text', 'min_length', 'max_length', 'regex', 'error_message'],
+  number: ['format', 'thousands', 'decimals', 'no_negative', 'default_number', 'range_min', 'range_max', 'whole_only', 'error_message'],
+  date: ['date_format', 'include_time', 'default_today', 'no_future', 'no_past', 'not_before', 'not_after', 'error_message'],
   formula: ['format', 'thousands'],
-  link: ['section_id', 'single', 'link_label', 'only_passed'],
+  link: ['section_id', 'single', 'link_label', 'only_passed', 'min_pick'],
   pass_fail: ['preset', 'pass_label', 'fail_label', 'default_pf', 'no_fail_effect'],
 }
-const NUMERIC_KEYS = new Set(['max_length', 'decimals', 'default_number'])
+const NUMERIC_KEYS = new Set(['max_length', 'min_length', 'decimals', 'default_number', 'range_min', 'range_max', 'min_pick'])
 
 /** The type's settings, without empty or switched-off ones; number settings stored as numbers. */
-function pickSettings(type: RecordColumnType, s: ColumnSettings): Record<string, unknown> {
+function pickSettings(type: EditorType, s: ColumnSettings): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const k of TYPE_KEYS[type] ?? []) {
     const v = s[k]
@@ -86,7 +90,7 @@ type Draft = {
   id?: string
   key?: string
   label: string
-  col_type: RecordColumnType
+  col_type: EditorType
   unit: string
   spec_min: string
   spec_max: string
@@ -106,7 +110,7 @@ function draftFrom(c?: AdminColumn): Draft {
     id: c?.id,
     key: c?.key,
     label: c?.label ?? '',
-    col_type: spec ? 'number' : c?.col_type ?? 'text',
+    col_type: spec ? 'number' : c?.col_type === 'text' && c.config.alphanumeric ? 'alnum' : c?.col_type ?? 'text',
     unit: c?.unit ?? '',
     spec_min: c?.spec_min != null ? String(c.spec_min) : '',
     spec_max: c?.spec_max != null ? String(c.spec_max) : '',
@@ -161,6 +165,13 @@ function ColumnEditor({
     const dropdownOptions = d.dropdown.options.map((o) => o.trim()).filter(Boolean)
     if (d.col_type === 'select' && dropdownOptions.length === 0) return toast.warning('Add the Dropdown Options')
     if (d.col_type === 'link' && !d.settings.section_id) return toast.warning('Choose the Section to Link')
+    if (d.col_type === 'alnum' && d.settings.regex) {
+      try {
+        new RegExp(String(d.settings.regex))
+      } catch {
+        return toast.warning('The Custom Rule Is Not a Valid Pattern')
+      }
+    }
     const num = (s: string) => (s.trim() === '' ? null : Number(s))
     if ([d.spec_min, d.spec_max].some((s) => s.trim() !== '' && !Number.isFinite(Number(s)))) return toast.warning('Limits Must Be Numbers')
     setSaving(true)
@@ -171,7 +182,7 @@ function ColumnEditor({
         id: d.id,
         key,
         label: d.label,
-        col_type: d.col_type === 'number' && d.settings.check_limits ? 'spec' : d.col_type,
+        col_type: d.col_type === 'alnum' ? 'text' : d.col_type === 'number' && d.settings.check_limits ? 'spec' : d.col_type,
         unit: d.unit,
         spec_min: hasLimits ? num(d.spec_min) : null,
         spec_max: hasLimits ? num(d.spec_max) : null,
@@ -186,7 +197,9 @@ function ColumnEditor({
               }
             : d.col_type === 'formula'
               ? { formula: d.formula.trim(), ...(d.decimals.trim() ? { decimals: Number(d.decimals) } : {}), ...pickSettings('formula', d.settings) }
-              : pickSettings(d.col_type, d.settings),
+              : d.col_type === 'alnum'
+                ? { letter_case: 'upper', ...pickSettings('alnum', d.settings), alphanumeric: true }
+                : pickSettings(d.col_type, d.settings),
         required: d.required,
         sort_order: d.id ? section.columns.find((c) => c.id === d.id)?.sort_order ?? 0 : at,
       })
@@ -223,9 +236,9 @@ function ColumnEditor({
             <div className="space-y-1">
               <div className="flex h-5 items-center"><Label htmlFor="col-type">Type</Label></div>
               <div className="flex gap-1.5">
-                <select id="col-type" className="h-9 min-w-0 flex-1 border border-input bg-stone-50 px-2 text-sm" value={d.col_type} onChange={(e) => set('col_type', e.target.value as RecordColumnType)}>
+                <select id="col-type" className="h-9 min-w-0 flex-1 border border-input bg-stone-50 px-2 text-sm" value={d.col_type} onChange={(e) => set('col_type', e.target.value as EditorType)}>
                   {EDITABLE_TYPES.map((t) => (
-                    <option key={t} value={t}>{COLUMN_TYPE_LABEL[t]}</option>
+                    <option key={t} value={t}>{TYPE_LABEL[t]}</option>
                   ))}
                 </select>
                 <button

@@ -152,6 +152,62 @@ export function defaultEntryValues(columns: RecordColumn[], now = new Date()): R
   return out
 }
 
+/** "AA-9999-X" → a check: A = letter, 9 = digit, X = letter or digit, other characters as typed. */
+export function maskToRegex(mask: string): RegExp {
+  const body = [...mask]
+    .map((c) => (c === 'A' ? '[A-Za-z]' : c === '9' ? '\\d' : c === 'X' ? '[A-Za-z0-9]' : c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+    .join('')
+  return new RegExp(`^${body}$`)
+}
+
+const CHARSETS: Record<string, [RegExp, string]> = {
+  letters: [/^[A-Za-z]*$/, 'letters only'],
+  digits: [/^\d*$/, 'digits only'],
+  alnum: [/^[A-Za-z0-9]*$/, 'letters and digits only'],
+  alnum_space: [/^[A-Za-z0-9 ]*$/, 'letters, digits and spaces only'],
+}
+
+/** The column's own rules (not Required): a message when the value breaks one, else null. Empty values pass. */
+export function validateValue(col: RecordColumn, v: unknown, today = new Date().toISOString().slice(0, 10)): string | null {
+  if (v == null || v === '' || (Array.isArray(v) && v.length === 0 && col.col_type !== 'link')) return null
+  const cfg = col.config
+  const custom = cfg.error_message ? String(cfg.error_message) : null
+  const fail = (msg: string) => custom ?? `${col.label}: ${msg}`
+  if (col.col_type === 'text') {
+    const t = String(v)
+    if (cfg.alphanumeric && cfg.regex) {
+      try {
+        if (!new RegExp(String(cfg.regex)).test(t)) return fail('does not match the required format')
+      } catch {
+        /* a broken rule is ignored */
+      }
+    } else if (cfg.alphanumeric && cfg.mask) {
+      if (!maskToRegex(String(cfg.mask)).test(t)) return fail(`format must be ${String(cfg.mask)}`)
+    }
+    if (cfg.min_length != null && t.length < Number(cfg.min_length)) return fail(`at least ${String(cfg.min_length)} characters`)
+    if (cfg.max_length != null && t.length > Number(cfg.max_length)) return fail(`at most ${String(cfg.max_length)} characters`)
+    const set = CHARSETS[String(cfg.allowed_chars ?? '')]
+    if (set && !set[0].test(t)) return fail(set[1])
+  } else if (col.col_type === 'number' || col.col_type === 'spec') {
+    const n = toNumber(v)
+    if (n == null) return fail('enter a number')
+    if (cfg.whole_only && !Number.isInteger(n)) return fail('whole numbers only')
+    if (cfg.no_negative && n < 0) return fail('no negative values')
+    if (cfg.range_min != null && n < Number(cfg.range_min)) return fail(`not below ${String(cfg.range_min)}`)
+    if (cfg.range_max != null && n > Number(cfg.range_max)) return fail(`not above ${String(cfg.range_max)}`)
+  } else if (col.col_type === 'date') {
+    const d = String(v).slice(0, 10)
+    if (cfg.no_future && d > today) return fail('no future dates')
+    if (cfg.no_past && d < today) return fail('no past dates')
+    if (cfg.not_before && d < String(cfg.not_before)) return fail(`not before ${formatDateValue(col, String(cfg.not_before))}`)
+    if (cfg.not_after && d > String(cfg.not_after)) return fail(`not after ${formatDateValue(col, String(cfg.not_after))}`)
+  } else if (col.col_type === 'link' && cfg.min_pick != null) {
+    const picked = Array.isArray(v) ? v.length : 1
+    if (picked < Number(cfg.min_pick)) return fail(`pick at least ${String(cfg.min_pick)}`)
+  }
+  return null
+}
+
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 /** A date (or date-time) value in the column's chosen format. */

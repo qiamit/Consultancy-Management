@@ -31,6 +31,7 @@ import {
   limitsText,
   passFailWords,
   toNumber,
+  validateValue,
   withinLimits,
   type RecordColumn,
 } from './recordLogic'
@@ -109,12 +110,26 @@ function EntryDialog({
     return out
   }, [section.columns, input, links])
   const computed = useMemo(() => computeEntry(section.columns, input, linked), [section.columns, input, linked])
+  // Each column's own rules (format, length, range, dates, picks); Required is checked on save.
+  const ruleErrors = useMemo(() => {
+    const out: Record<string, string> = {}
+    for (const c of section.columns) {
+      const msg = validateValue(c, computed.values[c.key])
+      if (msg) out[c.key] = msg
+    }
+    return out
+  }, [section.columns, computed.values])
   const set = (key: string, v: unknown) => setInput((prev) => ({ ...prev, [key]: v }))
 
   const save = async () => {
     const missing = section.columns.filter((c) => c.required && c.col_type !== 'formula' && (computed.values[c.key] == null || computed.values[c.key] === '' || (Array.isArray(computed.values[c.key]) && (computed.values[c.key] as unknown[]).length === 0)))
     if (missing.length) {
       toast.warning(`Fill ${missing.map((c) => c.label).join(', ')}`)
+      return
+    }
+    const wrong = Object.values(ruleErrors)
+    if (wrong.length) {
+      toast.warning(wrong[0]!)
       return
     }
     setSaving(true)
@@ -254,16 +269,17 @@ function EntryDialog({
                 )
               } else if (col.col_type === 'text') {
                 const cfg = col.config
-                const max = cfg.max_length != null ? Number(cfg.max_length) : undefined
+                const max = cfg.max_length != null ? Number(cfg.max_length) : cfg.alphanumeric && cfg.mask && !cfg.regex ? String(cfg.mask).length : undefined
+                const hint = cfg.placeholder ? String(cfg.placeholder) : cfg.alphanumeric && cfg.mask ? String(cfg.mask) : undefined
                 const fix = (t: string) =>
-                  cfg.letter_case === 'upper' ? t.toUpperCase()
+                  cfg.letter_case === 'upper' || (cfg.alphanumeric && cfg.letter_case == null) ? t.toUpperCase()
                     : cfg.letter_case === 'lower' ? t.toLowerCase()
                       : cfg.letter_case === 'title' ? t.replace(/(^|\s)([a-z])/g, (_m, sp: string, c: string) => sp + c.toUpperCase())
                         : t
                 field = cfg.long ? (
-                  <textarea id={id} rows={3} maxLength={max} placeholder={cfg.placeholder ? String(cfg.placeholder) : undefined} className="w-full border border-stone-400 bg-white p-2 text-sm" value={String(v ?? '')} onChange={(e) => set(col.key, fix(e.target.value))} />
+                  <textarea id={id} rows={3} maxLength={max} placeholder={hint} className="w-full border border-stone-400 bg-white p-2 text-sm" value={String(v ?? '')} onChange={(e) => set(col.key, fix(e.target.value))} />
                 ) : (
-                  <Input id={id} maxLength={max} placeholder={cfg.placeholder ? String(cfg.placeholder) : undefined} value={String(v ?? '')} onChange={(e) => set(col.key, fix(e.target.value))} />
+                  <Input id={id} maxLength={max} placeholder={hint} className={cn(ruleErrors[col.key] && 'border-red-400 bg-red-50', Boolean(cfg.alphanumeric) && 'font-mono tracking-wide')} value={String(v ?? '')} onChange={(e) => set(col.key, fix(e.target.value))} />
                 )
               } else if (col.col_type === 'date') {
                 const cfg = col.config
@@ -299,6 +315,7 @@ function EntryDialog({
                 <div key={col.id} className={cn('space-y-1', col.col_type === 'link' && 'sm:col-span-2')}>
                   {label}
                   {field}
+                  {ruleErrors[col.key] ? <p className="text-[11px] font-medium text-red-700">{ruleErrors[col.key]}</p> : null}
                   {col.col_type === 'link' && !col.config.single ? <p className="text-[11px] text-stone-500">Hold Ctrl / Cmd to select more than one.</p> : null}
                 </div>
               )
