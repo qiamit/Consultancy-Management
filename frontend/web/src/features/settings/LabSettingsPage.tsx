@@ -1,4 +1,5 @@
 import { useEffect, useState, type Dispatch, type SetStateAction } from 'react'
+import { RatePlansEditor, type RatePlanDraft } from './lab-settings/RatePlansEditor'
 import { limsPageShellClass } from '@/lib/limsThemeUi'
 import { getThemeSelectOptions, normalizeAppThemeId } from '@/lib/appTheme'
 import { useAppTheme } from '@/lib/AppThemeProvider'
@@ -134,7 +135,7 @@ export default function LabSettingsPage() {
   const [accountNumber, setAccountNumber] = useState('')
   const [ifsc, setIfsc] = useState('')
   const [upi, setUpi] = useState('')
-  const [portalRecordsYearlyRate, setPortalRecordsYearlyRate] = useState('')
+  const [portalRecordsRates, setPortalRecordsRates] = useState<RatePlanDraft[]>([])
   const [chequeCopyPath, setChequeCopyPath] = useState<string | null>(null)
   const [qrCodePath, setQrCodePath] = useState<string | null>(null)
   const [labTypes, setLabTypes] = useState([
@@ -1073,7 +1074,7 @@ export default function LabSettingsPage() {
       setAccountNumber(parsed.accountNumber)
       setIfsc(parsed.ifsc)
       setUpi(parsed.upi)
-      setPortalRecordsYearlyRate(parsed.portalRecordsYearlyRate)
+      setPortalRecordsRates(parsed.portalRecordsRates)
       setChequeCopyPath(parsed.chequeCopyPath)
       setQrCodePath(parsed.qrCodePath)
       if (parsed.labType) setSelectedLabType(parsed.labType)
@@ -1305,7 +1306,7 @@ export default function LabSettingsPage() {
             accountNumber,
             ifsc,
             upi,
-            portalRecordsYearlyRate,
+            portalRecordsRates,
             chequeCopyPath,
             qrCodePath,
           }),
@@ -1858,20 +1859,7 @@ export default function LabSettingsPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
-                <div className="space-y-2">
-                  <Label htmlFor="portal-records-rate">Customer Portal Records Rate (₹ / Licence / Year)</Label>
-                  <Input
-                    id="portal-records-rate"
-                    type="number"
-                    inputMode="decimal"
-                    min={0}
-                    placeholder="Enter Yearly Rate"
-                    value={portalRecordsYearlyRate}
-                    onChange={(e) => setPortalRecordsYearlyRate(e.target.value)}
-                  />
-                </div>
-              </div>
+              <RatePlansEditor value={portalRecordsRates} onChange={setPortalRecordsRates} />
           </LabSettingsPanel>
         </TabsContent>
 

@@ -530,7 +530,7 @@ export function CustomerPortalDialog({
           clientId={clientId}
           company={client?.company_name ?? ''}
           service={serviceFor ? services.get(serviceFor.id) ?? null : null}
-          emails={serviceFor ? logins.filter((u) => u.active && u.licence_ids.includes(serviceFor.id)).map((u) => u.email) : []}
+          recipients={serviceFor ? logins.filter((u) => u.active && u.licence_ids.includes(serviceFor.id)).map((u) => ({ name: u.full_name, email: u.email })) : []}
           onClose={() => setServiceFor(null)}
           onChanged={() => void load()}
         />
