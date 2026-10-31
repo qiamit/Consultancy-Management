@@ -11,7 +11,13 @@ export const RATE_FREQUENCIES: RateFrequency[] = [
   { value: 'three_years', label: '3 Years', months: 36, per: '3 Years' },
 ]
 
-export type RatePlan = { frequency: string; amount: number }
+export type RatePlan = { frequency: string; amount: number; discount: number }
+
+/** Amount after the plan's discount (percent), to the paisa. */
+export function planFinal(amount: number, discount: number): number {
+  const d = Number.isFinite(discount) ? Math.min(100, Math.max(0, discount)) : 0
+  return Math.round(amount * (100 - d)) / 100
+}
 
 export function rateFrequency(value: string): RateFrequency {
   return RATE_FREQUENCIES.find((f) => f.value === value) ?? RATE_FREQUENCIES[3]!
@@ -21,9 +27,13 @@ export function rateFrequency(value: string): RateFrequency {
 export function parseRatePlans(raw: unknown, yearly?: unknown): RatePlan[] {
   const list = Array.isArray(raw)
     ? raw
-        .map((r) => ({ frequency: String((r as RatePlan)?.frequency ?? ''), amount: Number((r as RatePlan)?.amount) }))
+        .map((r) => ({
+          frequency: String((r as RatePlan)?.frequency ?? ''),
+          amount: Number((r as RatePlan)?.amount),
+          discount: Number((r as RatePlan)?.discount ?? 0) || 0,
+        }))
         .filter((r) => RATE_FREQUENCIES.some((f) => f.value === r.frequency) && Number.isFinite(r.amount) && r.amount >= 0)
     : []
-  if (list.length === 0 && yearly != null && yearly !== '' && Number.isFinite(Number(yearly))) list.push({ frequency: 'yearly', amount: Number(yearly) })
+  if (list.length === 0 && yearly != null && yearly !== '' && Number.isFinite(Number(yearly))) list.push({ frequency: 'yearly', amount: Number(yearly), discount: 0 })
   return list.sort((a, b) => rateFrequency(a.frequency).months - rateFrequency(b.frequency).months)
 }

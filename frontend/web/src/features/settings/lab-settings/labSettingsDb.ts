@@ -51,7 +51,11 @@ export function parseLabSettingsRow(row: LabSettingsRow) {
     accountNumber: String(row.account_number ?? ''),
     ifsc: String(row.ifsc ?? ''),
     upi: String(row.upi ?? ''),
-    portalRecordsRates: parseRatePlans(row.portal_records_rates, row.portal_records_yearly_rate).map((p) => ({ frequency: p.frequency, amount: String(p.amount) })),
+    portalRecordsRates: parseRatePlans(row.portal_records_rates, row.portal_records_yearly_rate).map((p) => ({
+      frequency: p.frequency,
+      amount: String(p.amount),
+      discount: p.discount ? String(p.discount) : '',
+    })),
     chequeCopyPath: typeof row.cheque_copy_path === 'string' ? row.cheque_copy_path : null,
     qrCodePath: typeof row.qr_code_path === 'string' ? row.qr_code_path : null,
     labType: String(row.lab_type ?? row.laboratory_type ?? ''),
@@ -132,13 +136,13 @@ export function labBankPayload(input: {
   accountNumber: string
   ifsc: string
   upi: string
-  portalRecordsRates: Array<{ frequency: string; amount: string }>
+  portalRecordsRates: Array<{ frequency: string; amount: string; discount: string }>
   chequeCopyPath: string | null
   qrCodePath: string | null
 }): LabSettingsRow {
   const rates = input.portalRecordsRates
     .filter((r) => r.amount.trim() !== '' && Number.isFinite(Number(r.amount)) && Number(r.amount) >= 0)
-    .map((r) => ({ frequency: r.frequency, amount: Number(r.amount) }))
+    .map((r) => ({ frequency: r.frequency, amount: Number(r.amount), discount: Math.min(100, Math.max(0, Number(r.discount) || 0)) }))
   const yearly = rates.find((r) => r.frequency === 'yearly')
   return {
     id: LAB_SETTINGS_SINGLETON_ID,

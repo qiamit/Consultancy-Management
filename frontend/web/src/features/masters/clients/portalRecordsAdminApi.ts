@@ -323,6 +323,8 @@ export async function sendPaymentRequest(input: {
   amount: number
   period: { from: string; to: string }
   settings: PaymentSettings
+  /** Plan amount and discount when a discount applies (shown in the email). */
+  discount?: { base: number; percent: number }
 }): Promise<void> {
   const { settings, amount, period } = input
   if (input.to.length === 0) throw new Error('Select at Least One Email')
@@ -341,7 +343,9 @@ export async function sendPaymentRequest(input: {
 <p>Dear Sir/Madam,</p>
 <p>Please pay for the <strong>Customer Portal Records Service</strong> of licence <strong>${escapeHtml(input.licence)}</strong> (${escapeHtml(input.company)}).</p>
 <table style="border-collapse:collapse;margin:12px 0;">
-${row('Amount', rupees(amount))}
+${input.discount ? row('Plan Amount', rupees(input.discount.base)) : ''}
+${input.discount ? row('Discount', `${input.discount.percent}% (${rupees(input.discount.base - amount)})`) : ''}
+${row('Amount to Pay', rupees(amount))}
 ${row('Period', `${dmy(period.from)} to ${dmy(period.to)}`)}
 </table>
 ${upiLink ? `<p><a href="${upiLink}" style="display:inline-block;background:#b45309;color:#fff;text-decoration:none;padding:10px 18px;font-weight:600;">Pay ${rupees(amount)} by UPI</a></p>

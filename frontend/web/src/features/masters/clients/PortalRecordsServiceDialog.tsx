@@ -24,7 +24,7 @@ import {
   type RecordsService,
   type ServicePayment,
 } from './portalRecordsAdminApi'
-import { rateFrequency } from '@/lib/ratePlans'
+import { planFinal, rateFrequency } from '@/lib/ratePlans'
 import { CalendarDateField } from './CalendarDateField'
 
 type Action = 'trial' | 'request' | 'payment'
@@ -199,6 +199,9 @@ export function PortalRecordsServiceDialog({
   const [action, setAction] = useState<Action>(service?.trial_ends ? 'request' : 'trial')
   const [busy, setBusy] = useState(false)
   const [amount, setAmount] = useState('')
+  // Payment link: plan amount, its discount and the amount to pay after the discount.
+  const [base, setBase] = useState('')
+  const [discount, setDiscount] = useState('')
   const [sendOpen, setSendOpen] = useState(false)
   const [paidOn, setPaidOn] = useState(today)
   const [mode, setMode] = useState<(typeof PAYMENT_MODES)[number]>('UPI')
@@ -217,7 +220,11 @@ export function PortalRecordsServiceDialog({
   const changePlan = (f: string) => {
     setPlanFreq(f)
     const plan = settings?.rates.find((r) => r.frequency === f)
-    if (plan) setAmount(String(plan.amount))
+    if (plan) {
+      setBase(String(plan.amount))
+      setDiscount(plan.discount ? String(plan.discount) : '')
+      setAmount(String(planFinal(plan.amount, plan.discount)))
+    }
     if (periodFrom) setPeriodTo(nextPaidPeriod(null, periodFrom, rateFrequency(f).months).to)
   }
   const chosenPeriod = { from: periodFrom, to: periodTo }
@@ -225,7 +232,9 @@ export function PortalRecordsServiceDialog({
     <select id={id} className="h-10 w-full border border-stone-500 bg-stone-50 px-2 text-sm" value={planFreq} onChange={(e) => changePlan(e.target.value)}>
       {settings?.rates.length ? null : <option value="">No Rates in Lab Settings</option>}
       {(settings?.rates ?? []).map((r) => (
-        <option key={r.frequency} value={r.frequency}>{rateFrequency(r.frequency).label} · {money(r.amount)}</option>
+        <option key={r.frequency} value={r.frequency}>
+          {rateFrequency(r.frequency).label} · {money(planFinal(r.amount, r.discount))}{r.discount ? ` (${r.discount}% Off)` : ''}
+        </option>
       ))}
     </select>
   )
@@ -261,7 +270,9 @@ export function PortalRecordsServiceDialog({
         const plan = s.rates.find((r) => r.frequency === 'yearly') ?? s.rates[0]
         if (plan) {
           setPlanFreq(plan.frequency)
-          setAmount((prev) => prev || String(plan.amount))
+          setBase((prev) => prev || String(plan.amount))
+          setDiscount((prev) => prev || (plan.discount ? String(plan.discount) : ''))
+          setAmount((prev) => prev || String(planFinal(plan.amount, plan.discount)))
           setPeriodTo(nextPaidPeriod(null, startFrom, rateFrequency(plan.frequency).months).to)
         }
       })
@@ -287,6 +298,9 @@ export function PortalRecordsServiceDialog({
     }
   }
   const amountValue = Number(amount)
+  const baseValue = Number(base)
+  const discountValue = Math.min(100, Math.max(0, Number(discount) || 0))
+  const payable = base.trim() !== '' && Number.isFinite(baseValue) ? planFinal(baseValue, discountValue) : 0
   const canPayUpi = Boolean(settings?.upi)
   const canPayBank = Boolean(settings?.accountNumber)
 
@@ -301,13 +315,13 @@ export function PortalRecordsServiceDialog({
         {sendOpen && settings ? (
           <SendLinkDialog
             people={people}
-            amount={amountValue}
+            amount={payable}
             period={chosenPeriod}
             busy={busy}
             onClose={() => setSendOpen(false)}
             onSend={async (emails) => {
               const ok = await act(
-                () => sendPaymentRequest({ projectId: licenceId, licence: licence?.label ?? '', company, to: emails, amount: amountValue, period: chosenPeriod, settings }),
+                () => sendPaymentRequest({ projectId: licenceId, licence: licence?.label ?? '', company, to: emails, amount: payable, period: chosenPeriod, settings, ...(discountValue > 0 ? { discount: { base: baseValue, percent: discountValue } } : {}) }),
                 'Payment Link Sent',
               )
               if (ok) setSendOpen(false)
@@ -329,7 +343,7 @@ export function PortalRecordsServiceDialog({
               { label: 'Status', value: <span className={cn('inline-block border px-2 py-0.5 text-sm font-bold', STATE.tone)}>{STATE.word}</span> },
               { label: 'Start Date', value: startDate ? formatDisplayDate(startDate) : '—' },
               { label: 'Paid Till', value: tillDate ? formatDisplayDate(tillDate) : '—' },
-              { label: 'Amount', value: settings == null ? '…' : amountValue > 0 ? `${money(amountValue)} / ${rateFrequency(planFreq || 'yearly').per}` : 'Not Set' },
+              { label: 'Amount', value: settings == null ? '…' : payable > 0 ? `${money(payable)} / ${rateFrequency(planFreq || 'yearly').per}` : 'Not Set' },
             ].map((t) => (
               <div key={t.label} className="min-w-[8.5rem] flex-1 border border-stone-200 bg-[#fffcf7] px-3 py-2 text-center">
                 <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-stone-500">{t.label}</p>
@@ -391,14 +405,29 @@ export function PortalRecordsServiceDialog({
                 {settings && !canPayUpi && !canPayBank ? (
                   <p className="border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-800">Add the UPI ID or bank account in Lab Settings → Bank Details first.</p>
                 ) : null}
-                <div className="grid gap-3 sm:grid-cols-4">
+                <div className="grid gap-3 sm:grid-cols-3">
                   <div className="space-y-1">
                     <Label htmlFor="req-plan">Plan</Label>
                     {planSelect('req-plan')}
                   </div>
                   <div className="space-y-1">
                     <Label htmlFor="req-amount">Amount (₹)</Label>
-                    <Input id="req-amount" className="h-10" type="number" inputMode="decimal" min={0} value={amount} placeholder="Yearly Amount" onChange={(e) => setAmount(e.target.value)} />
+                    <Input id="req-amount" className="h-10" type="number" inputMode="decimal" min={0} value={base} placeholder="Plan Amount" onChange={(e) => setBase(e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="req-discount">Discount (%)</Label>
+                    <Input id="req-discount" className="h-10" inputMode="decimal" value={discount} placeholder="0"
+                      onChange={(e) => {
+                        const t = e.target.value.replace(/[^\d.]/g, '')
+                        setDiscount(t !== '' && Number(t) > 100 ? '100' : t)
+                      }} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Amount to Pay</Label>
+                    <p className="flex h-10 items-center justify-between border border-emerald-300 bg-emerald-50 px-3 text-sm font-semibold text-emerald-900">
+                      {payable > 0 ? money(payable) : '—'}
+                      {discountValue > 0 && baseValue > 0 ? <span className="text-xs font-medium text-emerald-700">You Save {money(baseValue - payable)}</span> : null}
+                    </p>
                   </div>
                   <div className="space-y-1">
                     <Label htmlFor="req-from">Period From</Label>
@@ -411,7 +440,7 @@ export function PortalRecordsServiceDialog({
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-3 border-t border-stone-200 pt-3">
                   <Button type="button" disabled={busy || !settings} className={cn(limsPrimaryBtnClass, TONES.amber.btn, 'ml-auto gap-1.5')}
-                    onClick={() => (periodProblem ? toast.warning(periodProblem) : !(amountValue > 0) ? toast.warning('Enter the Amount') : setSendOpen(true))}>
+                    onClick={() => (periodProblem ? toast.warning(periodProblem) : !(payable > 0) ? toast.warning('Enter the Amount') : setSendOpen(true))}>
                     {busy ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Send size={15} aria-hidden />} Send Payment Link
                   </Button>
                 </div>
