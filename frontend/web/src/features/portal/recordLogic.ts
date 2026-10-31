@@ -25,6 +25,8 @@ export type RecordColumn = {
     formula?: string
     section_id?: string
     decimals?: number
+    /** Other per-type settings (text, number, date, link, pass / fail); see ColumnTypeSettings. */
+    [setting: string]: unknown
   }
   required: boolean
 }
@@ -123,7 +125,7 @@ export function computeEntry(
         checked = true
         if (picked.some((p) => col.config.fail_options!.includes(p))) failed = true
       }
-    } else if (col.col_type === 'pass_fail') {
+    } else if (col.col_type === 'pass_fail' && !col.config.no_fail_effect) {
       const v = String(values[col.key] ?? '').toLowerCase()
       if (v === 'pass' || v === 'fail') {
         checked = true
@@ -134,13 +136,65 @@ export function computeEntry(
   return { values, result: failed ? 'fail' : checked ? 'pass' : null, formulaErrors }
 }
 
-/** Starting values of a new entry: each dropdown's default. */
-export function defaultEntryValues(columns: RecordColumn[]): Record<string, unknown> {
+/** Starting values of a new entry: the defaults set on each column. */
+export function defaultEntryValues(columns: RecordColumn[], now = new Date()): Record<string, unknown> {
   const out: Record<string, unknown> = {}
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
   for (const c of columns) {
-    if (c.col_type === 'select' && c.config.default) out[c.key] = c.config.multiple ? [c.config.default] : c.config.default
+    const cfg = c.config
+    if (c.col_type === 'select' && cfg.default) out[c.key] = cfg.multiple ? [cfg.default] : cfg.default
+    else if (c.col_type === 'text' && cfg.default_text) out[c.key] = String(cfg.default_text)
+    else if ((c.col_type === 'number' || c.col_type === 'spec') && cfg.default_number != null) out[c.key] = Number(cfg.default_number)
+    else if (c.col_type === 'date' && cfg.default_today) out[c.key] = cfg.include_time ? `${today}T${pad(now.getHours())}:${pad(now.getMinutes())}` : today
+    else if (c.col_type === 'pass_fail' && cfg.default_pf) out[c.key] = String(cfg.default_pf)
   }
   return out
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/** A date (or date-time) value in the column's chosen format. */
+export function formatDateValue(col: Pick<RecordColumn, 'config'>, v: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/.exec(v)
+  if (!m) return v
+  const [, y, mo, d, hh, mi] = m
+  const mon = MONTHS[Number(mo) - 1] ?? mo
+  const f = String(col.config.date_format ?? '')
+  const date =
+    f === 'dd-mm-yyyy' ? `${d}-${mo}-${y}`
+      : f === 'dd mmm yyyy' ? `${d} ${mon} ${y}`
+        : f === 'mmm dd, yyyy' ? `${mon} ${d}, ${y}`
+          : f === 'yyyy-mm-dd' ? `${y}-${mo}-${d}`
+            : `${d}/${mo}/${y}`
+  return hh != null ? `${date} ${hh}:${mi}` : date
+}
+
+/** A number in the column's format: decimals, thousands separator, ₹ or %. */
+export function formatNumberValue(col: Pick<RecordColumn, 'config'>, n: number): string {
+  const cfg = col.config
+  const dec = cfg.decimals != null && Number.isFinite(Number(cfg.decimals)) ? Number(cfg.decimals) : null
+  const text = cfg.thousands
+    ? n.toLocaleString('en-IN', dec != null ? { minimumFractionDigits: dec, maximumFractionDigits: dec } : { maximumFractionDigits: 6 })
+    : dec != null ? n.toFixed(dec) : String(Math.round(n * 1e6) / 1e6)
+  return cfg.format === 'currency' ? `₹ ${text}` : cfg.format === 'percent' ? `${text} %` : text
+}
+
+export const PASS_FAIL_PRESETS: Array<[string, string, string]> = [
+  ['Pass / Fail', 'Pass', 'Fail'],
+  ['OK / Not OK', 'OK', 'Not OK'],
+  ['Yes / No', 'Yes', 'No'],
+  ['Confirm / Not Confirm', 'Confirm', 'Not Confirm'],
+  ['Accepted / Rejected', 'Accepted', 'Rejected'],
+  ['Conforming / Non-Conforming', 'Conforming', 'Non-Conforming'],
+  ['Satisfactory / Unsatisfactory', 'Satisfactory', 'Unsatisfactory'],
+]
+
+/** Words a Pass / Fail column shows for pass and fail (values stay 'pass' / 'fail'). */
+export function passFailWords(config: Record<string, unknown>): [string, string] {
+  if (config.preset === 'custom') return [String(config.pass_label || 'Pass'), String(config.fail_label || 'Fail')]
+  const p = PASS_FAIL_PRESETS.find(([n]) => n === config.preset)
+  return p ? [p[1], p[2]] : ['Pass', 'Fail']
 }
 
 export function limitsText(col: Pick<RecordColumn, 'spec_min' | 'spec_max' | 'unit'>): string {

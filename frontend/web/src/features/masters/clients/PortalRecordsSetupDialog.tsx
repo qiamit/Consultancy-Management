@@ -42,6 +42,7 @@ import {
   type RecordsService,
 } from './portalRecordsAdminApi'
 import { CalendarDateField } from './CalendarDateField'
+import { ColumnTypeSettings, type ColumnSettings } from './ColumnTypeSettings'
 import { DropdownOptionsEditor, type DropdownSettings } from './DropdownOptionsEditor'
 import { FormulaBuilder } from './FormulaBuilder'
 
@@ -49,7 +50,33 @@ const th = 'border border-stone-700 bg-stone-800 px-2 py-1.5 text-left text-[11p
 const td = 'border border-stone-200 px-2 py-1.5 align-middle text-sm text-stone-800'
 const iconBtn = 'inline-flex h-7 w-7 items-center justify-center border border-stone-300 bg-white text-amber-800 hover:bg-amber-50 disabled:opacity-40'
 // Attachments need customer file uploads, which come with the reports step.
-const EDITABLE_TYPES: RecordColumnType[] = ['text', 'number', 'spec', 'date', 'select', 'formula', 'link', 'pass_fail']
+// Number covers Number With Limits too (its Check Limits setting saves it as 'spec').
+const EDITABLE_TYPES: RecordColumnType[] = ['text', 'number', 'date', 'select', 'formula', 'link', 'pass_fail']
+
+// Settings each type keeps in its config (the rest of the settings table is dropped on save).
+const TYPE_KEYS: Partial<Record<RecordColumnType, string[]>> = {
+  text: ['long', 'max_length', 'letter_case', 'placeholder', 'default_text'],
+  number: ['format', 'thousands', 'decimals', 'no_negative', 'default_number'],
+  date: ['date_format', 'include_time', 'default_today', 'no_future', 'no_past'],
+  formula: ['format', 'thousands'],
+  link: ['section_id', 'single', 'link_label', 'only_passed'],
+  pass_fail: ['preset', 'pass_label', 'fail_label', 'default_pf', 'no_fail_effect'],
+}
+const NUMERIC_KEYS = new Set(['max_length', 'decimals', 'default_number'])
+
+/** The type's settings, without empty or switched-off ones; number settings stored as numbers. */
+function pickSettings(type: RecordColumnType, s: ColumnSettings): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const k of TYPE_KEYS[type] ?? []) {
+    const v = s[k]
+    if (v == null || v === '' || v === false) continue
+    if (NUMERIC_KEYS.has(k)) {
+      const n = Number(v)
+      if (Number.isFinite(n)) out[k] = n
+    } else out[k] = v
+  }
+  return out
+}
 
 function errText(err: unknown, fallback: string) {
   return err instanceof Error ? err.message : fallback
@@ -66,18 +93,20 @@ type Draft = {
   dropdown: DropdownSettings
   formula: string
   decimals: string
-  link_section: string
+  /** Options of the chosen type (see ColumnTypeSettings). */
+  settings: ColumnSettings
   required: boolean
   /** New column only: its place in the list (0 = first); missing = at the end. */
   insertAt?: number
 }
 
 function draftFrom(c?: AdminColumn): Draft {
+  const spec = c?.col_type === 'spec'
   return {
     id: c?.id,
     key: c?.key,
     label: c?.label ?? '',
-    col_type: c?.col_type ?? 'text',
+    col_type: spec ? 'number' : c?.col_type ?? 'text',
     unit: c?.unit ?? '',
     spec_min: c?.spec_min != null ? String(c.spec_min) : '',
     spec_max: c?.spec_max != null ? String(c.spec_max) : '',
@@ -90,7 +119,7 @@ function draftFrom(c?: AdminColumn): Draft {
     },
     formula: c?.config.formula ?? '',
     decimals: c?.config.decimals != null ? String(c.config.decimals) : '',
-    link_section: c?.config.section_id ?? '',
+    settings: { ...(c?.config ?? {}), ...(spec ? { check_limits: true } : {}) },
     required: Boolean(c?.required),
   }
 }
@@ -124,14 +153,14 @@ function ColumnEditor({
     ...linkedGroups.flatMap((g) => g.target.columns.filter((c) => c.col_type !== 'link').map((c) => `${g.link.key}.${c.key}`)),
   ]
   const problem = d.col_type === 'formula' ? formulaProblem(d.formula, formulaKeys) : ''
-  const hasLimits = d.col_type === 'spec' || d.col_type === 'formula'
+  const hasLimits = (d.col_type === 'number' && Boolean(d.settings.check_limits)) || d.col_type === 'formula'
 
   const save = async () => {
     if (!d.label.trim()) return toast.warning('Enter the Column Name')
     if (problem) return toast.warning(problem)
     const dropdownOptions = d.dropdown.options.map((o) => o.trim()).filter(Boolean)
     if (d.col_type === 'select' && dropdownOptions.length === 0) return toast.warning('Add the Dropdown Options')
-    if (d.col_type === 'link' && !d.link_section) return toast.warning('Choose the Section to Link')
+    if (d.col_type === 'link' && !d.settings.section_id) return toast.warning('Choose the Section to Link')
     const num = (s: string) => (s.trim() === '' ? null : Number(s))
     if ([d.spec_min, d.spec_max].some((s) => s.trim() !== '' && !Number.isFinite(Number(s)))) return toast.warning('Limits Must Be Numbers')
     setSaving(true)
@@ -142,7 +171,7 @@ function ColumnEditor({
         id: d.id,
         key,
         label: d.label,
-        col_type: d.col_type,
+        col_type: d.col_type === 'number' && d.settings.check_limits ? 'spec' : d.col_type,
         unit: d.unit,
         spec_min: hasLimits ? num(d.spec_min) : null,
         spec_max: hasLimits ? num(d.spec_max) : null,
@@ -156,10 +185,8 @@ function ColumnEditor({
                 ...(d.dropdown.allowOther ? { allow_other: true } : {}),
               }
             : d.col_type === 'formula'
-              ? { formula: d.formula.trim(), ...(d.decimals.trim() ? { decimals: Number(d.decimals) } : {}) }
-              : d.col_type === 'link'
-                ? { section_id: d.link_section }
-                : {},
+              ? { formula: d.formula.trim(), ...(d.decimals.trim() ? { decimals: Number(d.decimals) } : {}), ...pickSettings('formula', d.settings) }
+              : pickSettings(d.col_type, d.settings),
         required: d.required,
         sort_order: d.id ? section.columns.find((c) => c.id === d.id)?.sort_order ?? 0 : at,
       })
@@ -242,17 +269,13 @@ function ColumnEditor({
                 ownColumns={ownColumns}
               />
             ) : null}
-            {d.col_type === 'link' ? (
-              <div className="space-y-1 sm:col-span-2">
-                <Label htmlFor="col-link">Link to Entries of</Label>
-                <select id="col-link" className="h-9 w-full border border-stone-400 bg-white px-2 text-sm" value={d.link_section} onChange={(e) => set('link_section', e.target.value)}>
-                  <option value="">— Choose Section —</option>
-                  {sections.filter((s) => s.id !== section.id).map((s) => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
-                <p className="text-[11px] text-stone-500">The customer picks one or more entries of that section (e.g. the raw material lots used in a batch). This builds the traceability.</p>
-              </div>
+            {d.col_type !== 'select' ? (
+              <ColumnTypeSettings
+                type={d.col_type}
+                value={d.settings}
+                onChange={(v) => set('settings', v)}
+                linkOptions={sections.filter((x) => x.id !== section.id).map((x) => [x.id, x.name])}
+              />
             ) : null}
           </div>
         </div>

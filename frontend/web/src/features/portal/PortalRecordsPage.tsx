@@ -23,7 +23,17 @@ import {
   type PortalSection,
 } from './portalApi'
 import { usePortalData } from './portalDataContext'
-import { computeEntry, defaultEntryValues, limitsText, toNumber, withinLimits, type RecordColumn } from './recordLogic'
+import {
+  computeEntry,
+  defaultEntryValues,
+  formatDateValue,
+  formatNumberValue,
+  limitsText,
+  passFailWords,
+  toNumber,
+  withinLimits,
+  type RecordColumn,
+} from './recordLogic'
 
 const REF_LABEL: Record<string, string> = {
   raw_material: 'Lot / Heat No',
@@ -36,24 +46,30 @@ const th = 'border border-stone-700 bg-stone-800 px-2 py-1.5 text-left text-[11p
 const td = 'border border-stone-200 px-2 py-1.5 align-top text-sm text-stone-800'
 const iconBtn = 'inline-flex h-7 w-7 items-center justify-center border border-stone-300 bg-white text-amber-800 hover:bg-amber-50 disabled:opacity-40'
 
-function linkLabel(o: PortalLinkOption | undefined): string {
+function linkLabel(o: PortalLinkOption | undefined, col?: RecordColumn): string {
   if (!o) return '—'
+  const how = String(col?.config.link_label ?? '')
+  if (how === 'ref') return o.ref_no || formatDisplayDate(o.entry_date)
+  if (how === 'date') return formatDisplayDate(o.entry_date)
   return [o.ref_no, formatDisplayDate(o.entry_date)].filter(Boolean).join(' · ')
 }
 
 function cellText(col: RecordColumn, v: unknown, links: Record<string, PortalLinkOption[]>): string {
   if (v == null || v === '') return ''
-  if (col.col_type === 'date') return formatDisplayDate(String(v))
+  if (col.col_type === 'date') return formatDateValue(col, String(v))
   if (col.col_type === 'link') {
     const ids = Array.isArray(v) ? v.map(String) : [String(v)]
     const opts = links[col.config.section_id ?? ''] ?? []
-    return ids.map((id) => linkLabel(opts.find((o) => o.id === id))).join(', ')
+    return ids.map((id) => linkLabel(opts.find((o) => o.id === id), col)).join(', ')
   }
   if (col.col_type === 'select' && Array.isArray(v)) return v.map(String).join(', ')
-  if (col.col_type === 'pass_fail') return String(v).toLowerCase() === 'fail' ? 'Fail' : String(v).toLowerCase() === 'pass' ? 'Pass' : String(v)
+  if (col.col_type === 'pass_fail') {
+    const [good, bad] = passFailWords(col.config)
+    return String(v).toLowerCase() === 'fail' ? bad : String(v).toLowerCase() === 'pass' ? good : String(v)
+  }
   if (typeof v === 'boolean') return v ? 'Yes' : 'No'
-  const n = typeof v === 'number' ? v : null
-  return n != null ? n.toLocaleString('en-IN', { maximumFractionDigits: 6 }) : String(v)
+  const n = typeof v === 'number' ? v : (col.col_type === 'number' || col.col_type === 'spec') ? toNumber(v) : null
+  return n != null ? formatNumberValue(col, n) : String(v)
 }
 
 function ResultBadge({ result }: { result: 'pass' | 'fail' | null }) {
@@ -199,19 +215,31 @@ function EntryDialog({
                   </>
                 )
               } else if (col.col_type === 'select' || col.col_type === 'pass_fail') {
-                const options = col.col_type === 'pass_fail' ? ['Pass', 'Fail'] : col.config.options ?? []
+                const words = passFailWords(col.config)
+                const options: Array<[string, string]> = col.col_type === 'pass_fail'
+                  ? [['pass', words[0]], ['fail', words[1]]]
+                  : (col.config.options ?? []).map((o) => [o, o])
                 field = (
                   <select id={id} className="h-9 w-full border border-stone-400 bg-white px-2 text-sm" value={String(v ?? '')} onChange={(e) => set(col.key, e.target.value)}>
                     <option value="">—</option>
-                    {options.map((o) => (
-                      <option key={o} value={col.col_type === 'pass_fail' ? o.toLowerCase() : o}>{o}</option>
+                    {options.map(([val, label]) => (
+                      <option key={val} value={val}>{label}</option>
                     ))}
                   </select>
                 )
               } else if (col.col_type === 'link') {
-                const opts = links[col.config.section_id ?? ''] ?? []
+                const all = links[col.config.section_id ?? ''] ?? []
                 const selected = Array.isArray(v) ? v.map(String) : v ? [String(v)] : []
-                field = (
+                // Only passed entries when asked, but keep ones already picked so they still show.
+                const opts = col.config.only_passed ? all.filter((o) => o.result !== 'fail' || selected.includes(o.id)) : all
+                field = col.config.single ? (
+                  <select id={id} className="h-9 w-full border border-stone-400 bg-white px-2 text-sm" value={selected[0] ?? ''} onChange={(e) => set(col.key, e.target.value ? [e.target.value] : [])}>
+                    <option value="">—</option>
+                    {opts.map((o) => (
+                      <option key={o.id} value={o.id}>{linkLabel(o, col)}{o.result === 'fail' ? ' (Fail)' : ''}</option>
+                    ))}
+                  </select>
+                ) : (
                   <select
                     id={id}
                     multiple
@@ -220,20 +248,50 @@ function EntryDialog({
                     onChange={(e) => set(col.key, Array.from(e.target.selectedOptions).map((o) => o.value))}
                   >
                     {opts.map((o) => (
-                      <option key={o.id} value={o.id}>{linkLabel(o)}{o.result === 'fail' ? ' (Fail)' : ''}</option>
+                      <option key={o.id} value={o.id}>{linkLabel(o, col)}{o.result === 'fail' ? ' (Fail)' : ''}</option>
                     ))}
                   </select>
+                )
+              } else if (col.col_type === 'text') {
+                const cfg = col.config
+                const max = cfg.max_length != null ? Number(cfg.max_length) : undefined
+                const fix = (t: string) =>
+                  cfg.letter_case === 'upper' ? t.toUpperCase()
+                    : cfg.letter_case === 'lower' ? t.toLowerCase()
+                      : cfg.letter_case === 'title' ? t.replace(/(^|\s)([a-z])/g, (_m, sp: string, c: string) => sp + c.toUpperCase())
+                        : t
+                field = cfg.long ? (
+                  <textarea id={id} rows={3} maxLength={max} placeholder={cfg.placeholder ? String(cfg.placeholder) : undefined} className="w-full border border-stone-400 bg-white p-2 text-sm" value={String(v ?? '')} onChange={(e) => set(col.key, fix(e.target.value))} />
+                ) : (
+                  <Input id={id} maxLength={max} placeholder={cfg.placeholder ? String(cfg.placeholder) : undefined} value={String(v ?? '')} onChange={(e) => set(col.key, fix(e.target.value))} />
+                )
+              } else if (col.col_type === 'date') {
+                const cfg = col.config
+                const today = todayLocalIso()
+                const time = Boolean(cfg.include_time)
+                field = (
+                  <Input
+                    id={id}
+                    type={time ? 'datetime-local' : 'date'}
+                    min={cfg.no_past ? (time ? `${today}T00:00` : today) : undefined}
+                    max={cfg.no_future ? (time ? `${today}T23:59` : today) : undefined}
+                    value={String(v ?? '')}
+                    onChange={(e) => set(col.key, e.target.value)}
+                  />
                 )
               } else {
                 const numeric = col.col_type === 'number' || col.col_type === 'spec'
                 field = (
                   <Input
                     id={id}
-                    type={col.col_type === 'date' ? 'date' : 'text'}
+                    type="text"
                     inputMode={numeric ? 'decimal' : undefined}
                     className={cn(ok === false && 'border-red-400 bg-red-50', ok === true && 'border-emerald-300')}
                     value={String(v ?? '')}
-                    onChange={(e) => set(col.key, numeric ? (e.target.value === '' ? '' : toNumber(e.target.value) ?? e.target.value) : e.target.value)}
+                    onChange={(e) => {
+                      const raw = numeric && col.config.no_negative ? e.target.value.replace(/-/g, '') : e.target.value
+                      set(col.key, numeric ? (raw === '' ? '' : toNumber(raw) ?? raw) : raw)
+                    }}
                   />
                 )
               }
@@ -241,7 +299,7 @@ function EntryDialog({
                 <div key={col.id} className={cn('space-y-1', col.col_type === 'link' && 'sm:col-span-2')}>
                   {label}
                   {field}
-                  {col.col_type === 'link' ? <p className="text-[11px] text-stone-500">Hold Ctrl / Cmd to select more than one.</p> : null}
+                  {col.col_type === 'link' && !col.config.single ? <p className="text-[11px] text-stone-500">Hold Ctrl / Cmd to select more than one.</p> : null}
                 </div>
               )
             })}
