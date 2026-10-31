@@ -56,14 +56,14 @@ function splitLabel(label: string): [string, string] {
   return at < 0 ? [label, ''] : [label.slice(0, at), label.slice(at + 3)]
 }
 
-function DarkHeader({ eyebrow, title, children }: { eyebrow: string; title: ReactNode; children?: ReactNode }) {
+function DarkHeader({ eyebrow, title, children }: { eyebrow?: string; title: ReactNode; children?: ReactNode }) {
   return (
     <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-3 text-white sm:px-5">
       <div className="pointer-events-none absolute inset-0 opacity-[0.2]" style={limsDarkBarGlowStyle} />
       <div className="absolute bottom-0 left-0 h-[3px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
       <div className="relative flex flex-wrap items-center gap-x-5 gap-y-2 pr-10">
         <DialogHeader className="min-w-0 flex-1 space-y-0.5 text-left">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300">{eyebrow}</p>
+          {eyebrow ? <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300">{eyebrow}</p> : null}
           <DialogTitle className="truncate text-lg font-semibold tracking-tight text-white">{title}</DialogTitle>
         </DialogHeader>
         {children}
@@ -125,11 +125,7 @@ function LicencePickerDialog({
   return (
     <Dialog open={title != null} onOpenChange={(open) => !open && onClose()}>
       <DialogContent layer="stacked" aria-describedby={undefined} className={cn(limsDialogClass, 'flex max-h-[85dvh] w-[min(42rem,calc(100vw-1rem))] max-w-none flex-col gap-0 overflow-hidden bg-white p-0')}>
-        <DarkHeader eyebrow="Licences This Login Can See" title={title} />
-        <div className="flex items-center gap-2 border-b border-stone-200 bg-stone-50 px-4 py-2 text-xs">
-          <span className="font-semibold text-stone-700">{selected.length} of {licences.length} Licences On</span>
-          {disabled ? <Loader2 size={14} className="ml-auto animate-spin text-stone-500" aria-hidden /> : null}
-        </div>
+        <DarkHeader title="Licences This Login Can See" />
         <div className="min-h-0 flex-1 overflow-auto p-3">
           <table className="w-full min-w-[30rem] border-collapse font-jakarta">
             <thead>
@@ -139,7 +135,7 @@ function LicencePickerDialog({
                     onChange={(e) => setTicked(e.target.checked ? new Set(licences.map((l) => l.id)) : new Set())} />
                 </th>
                 <th className={th}>CM/L No</th>
-                <th className={th}>IS No</th>
+                <th className={cn(th, 'text-center')}>IS No</th>
                 <th className={cn(th, 'w-[7.5rem] text-center')}>Valid Till</th>
                 <th className={cn(th, 'w-[5.5rem] text-center')}>Action</th>
               </tr>
@@ -160,7 +156,7 @@ function LicencePickerDialog({
                         })} />
                     </td>
                     <td className={cn(td, 'whitespace-nowrap font-semibold text-stone-900')}>{cml}</td>
-                    <td className={cn(td, 'text-[13px]')}>{is || '—'}</td>
+                    <td className={cn(td, 'text-center text-[13px]')}>{is || '—'}</td>
                     <td className={cn(td, 'text-center text-[13px]')}>{l.validity ? formatDisplayDate(l.validity) : '—'}</td>
                     <td className={cn(td, 'text-center')}>
                       <OnOffSwitch on={on} label={`${cml} for this login`} title={on ? 'Can See: Switch Off' : 'Cannot See: Switch On'} disabled={disabled} onChange={(next) => onToggle(l.id, next)} />
@@ -171,8 +167,10 @@ function LicencePickerDialog({
             </tbody>
           </table>
         </div>
-        <div className="flex items-center justify-end gap-2 border-t border-stone-200 bg-stone-50 px-4 py-2.5">
-          <Button type="button" className={cn(limsPrimaryBtnClass, 'h-9 min-h-9')} onClick={onClose}>Done</Button>
+        <div className="flex items-center gap-2 border-t border-stone-200 bg-stone-50 px-4 py-2.5">
+          <span className="text-xs font-semibold text-stone-700">{selected.length} of {licences.length} Licences On</span>
+          {disabled ? <Loader2 size={14} className="animate-spin text-stone-500" aria-hidden /> : null}
+          <Button type="button" className={cn(limsPrimaryBtnClass, 'ml-auto h-9 min-h-9')} onClick={onClose}>Done</Button>
         </div>
       </DialogContent>
     </Dialog>
@@ -259,7 +257,7 @@ function CustomerLoginsDialog({
             else if (pickDraft) patchDraft(pickDraft.key, { licences: on ? [...pickDraft.licences, id] : pickDraft.licences.filter((x) => x !== id) })
           }}
         />
-        <DarkHeader eyebrow="Customer Logins" title={company}>
+        <DarkHeader title={`Customer Logins of ${company}`}>
           <Button type="button" className={cn(limsPrimaryBtnClass, 'gap-1.5')} onClick={addDraft}>
             <Plus size={16} aria-hidden /> Invite New Login
           </Button>
