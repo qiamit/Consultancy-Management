@@ -2,15 +2,15 @@ import { loadPdfjs } from '@/lib/pdfjsLoader'
 import { loadIsCodeFileLinks, type IsCodeFileLink } from '@/features/masters/is-codes/loadIsCodeFileLinks'
 import { sendQiAssistantMessage } from '@/components/qi-assistant/qiAssistantApi'
 import { pdfFileToAiPages } from '@/components/qi-assistant/aiImages'
-import { ocrPdfText } from '@/lib/ocrPdf'
+import { ocrPdfPages } from '@/lib/ocrPdf'
 import { createBisProjectFileUrls } from './bisProjectFilesApi'
 import { parseOslConformityCheck, type OslConformityCheck, type OslSampleRequirementRow } from './oslSampleRequirementsModel'
 
 /** Text budget per document (characters), so the whole check fits the AI model's context (~60k tokens in all). */
 const LIMITS = { request: 12_000, report: 70_000, standard: 100_000, manual: 35_000 }
 const MAX_PAGES = 120
-/** Less selectable text than this means a scanned PDF: it is read with OCR. */
-const SCANNED_BELOW = 300
+/** A page with less selectable text than this is a picture (scanned): it is read with OCR. */
+const SCANNED_PAGE_BELOW = 60
 /** Scanned pages read by OCR per document (a few seconds each). */
 const OCR_PAGES = { request: 4, report: 30, standard: 25, manual: 20 }
 /** Page pictures sent along for a vision AI model (the server accepts 8). */
@@ -35,55 +35,101 @@ async function storedFile(storagePath: string, name: string): Promise<File> {
   return fetchFile(viewUrl, name)
 }
 
-/** Selectable text of a PDF, or its OCR text when it is scanned. */
+type PdfRead = { text: string; ocr: boolean }
+
+const cut = (text: string, max: number) => (text.length > max ? `${text.slice(0, max)}\n… (cut)` : text)
+
+/** Manak / eLIMS summary pages list the tests with "Test Report Attached" in place of the values. */
+const isManakSummaryPage = (text: string) => /test\s*report\s*attached/i.test(text)
+
+/**
+ * Text of every page: the selectable text where a page has it, OCR where the page is a scan. Page by page, because
+ * a Manak Test Report is mixed — Manak's own pages are text, the laboratory's attached report is scanned. For the
+ * Test Report the laboratory's pages (with the values) come first and the Manak summary pages are labelled, so the
+ * AI never takes "Test Report Attached" for a result.
+ */
 async function readPdf(
   file: File,
   kind: keyof typeof LIMITS,
   label: string,
   onStep?: (step: string) => void,
-): Promise<{ text: string; ocr: boolean }> {
-  const text = await pdfText(file, LIMITS[kind])
-  if (text.replace(/\[Page \d+\]/g, '').trim().length >= SCANNED_BELOW) return { text, ocr: false }
-  const ocr = await ocrPdfText(file, {
-    maxPages: OCR_PAGES[kind],
-    onPage: (page, total) => onStep?.(`Reading the Scanned ${label} (OCR) — Page ${page} of ${total}…`),
+): Promise<PdfRead> {
+  const texts = await pdfPageTexts(file)
+  const scanned = texts
+    .map((text, i) => (text.replace(/\s/g, '').length < SCANNED_PAGE_BELOW ? i + 1 : 0))
+    .filter((n) => n > 0)
+    .slice(0, OCR_PAGES[kind])
+  const ocr = await ocrPdfPages(file, {
+    pages: scanned,
+    onPage: (done, total, page) => onStep?.(`Reading the Scanned ${label} (OCR) — Page ${page} (${done} of ${total})…`),
   })
-  return { text: ocr.length > LIMITS[kind] ? `${ocr.slice(0, LIMITS[kind])}\n… (cut)` : ocr, ocr: true }
+  const pages = texts
+    .map((text, i) => {
+      const reads = ocr.get(i + 1)
+      const body = reads
+        ? reads.length > 1
+          ? reads.map((r, k) => `(OCR read ${k + 1})\n${r}`).join('\n')
+          : `(OCR)\n${reads[0]}`
+        : text
+      return { n: i + 1, text: body }
+    })
+    .filter((page) => page.text.trim())
+  const block = (list: typeof pages) => list.map((page) => `[Page ${page.n}] ${page.text}`).join('\n')
+  let text = block(pages)
+  if (kind === 'report') {
+    const lab = pages.filter((page) => !isManakSummaryPage(page.text))
+    const summary = pages.filter((page) => isManakSummaryPage(page.text))
+    text = [
+      lab.length ? `--- LABORATORY REPORT PAGES (take every result value from here) ---\n${block(lab)}` : '',
+      summary.length
+        ? `--- MANAK SUMMARY PAGES (they only list the tests; "Test Report Attached" is NOT a result — find the value on the laboratory pages) ---\n${block(summary)}`
+        : '',
+    ]
+      .filter(Boolean)
+      .join('\n\n')
+  }
+  return { text: cut(text, LIMITS[kind]), ocr: ocr.size > 0 }
 }
 
 const VISION_MISSING = /vision ai model|reading photos needs/i
 
-/** All selectable text of a PDF (page markers kept, so the AI can cite pages), cut to `max` characters. */
-async function pdfText(file: File, max: number): Promise<string> {
+/** Selectable text of each page ('' for a page that is a picture), up to MAX_PAGES pages. */
+async function pdfPageTexts(file: File): Promise<string[]> {
   const { getDocument } = await loadPdfjs()
   const task = getDocument({ data: new Uint8Array(await file.arrayBuffer()) })
   const pdf = await task.promise
   try {
-    const parts: string[] = []
-    let total = 0
-    for (let n = 1; n <= Math.min(pdf.numPages, MAX_PAGES) && total < max; n += 1) {
+    const texts: string[] = []
+    for (let n = 1; n <= Math.min(pdf.numPages, MAX_PAGES); n += 1) {
       const page = await pdf.getPage(n)
       const content = await page.getTextContent()
-      const text = content.items
-        .map((item) => ('str' in item ? String(item.str ?? '') : ''))
-        .join(' ')
-        .replace(/\s+/g, ' ')
-        .trim()
+      texts.push(
+        content.items
+          .map((item) => ('str' in item ? String(item.str ?? '') : ''))
+          .join(' ')
+          .replace(/\s+/g, ' ')
+          .trim(),
+      )
       page.cleanup()
-      if (text) {
-        parts.push(`[Page ${n}] ${text}`)
-        total += text.length
-      }
     }
-    const all = parts.join('\n')
-    return all.length > max ? `${all.slice(0, max)}\n… (cut)` : all
+    return texts
   } finally {
     void task.destroy()
   }
 }
 
+/**
+ * An SS sample (sample code like 10125009/2026/SS/10) is drawn for grant-of-licence testing: there is no licence yet,
+ * so the Marking clause (Standard Mark / licence marking) does not apply, whatever the laboratory wrote.
+ */
+export const isSsSample = (row: OslSampleRequirementRow) => row.sampleCode.toUpperCase().split(/[\s/_-]+/).includes('SS')
+
+const MARKING = /\bmark(?:ing|ed)?\b/i
+const SS_MARKING_REQUIREMENT = 'Not Applicable — SS Sample (No Licence Yet)'
+
 function sampleFacts(row: OslSampleRequirementRow): string {
   return [
+    ['Sample Stage', isSsSample(row) ? 'SS — sample for grant of licence testing; no licence yet, so the Marking clause is NOT applicable (always Pass)' : ''],
     ['Sample Code', row.sampleCode],
     ['QR Code', row.qrCode],
     ['Grade / Type / Variety / Size', row.gradeTypeVariety],
@@ -108,8 +154,9 @@ const INSTRUCTIONS = `ROLE: You are a BIS product certification reviewer. Decide
 METHOD (follow every step):
 1. Identify the sample from the Test Report (Part A / particulars) and the Test Request: description (type, grade, size), declared values, batch number, date of manufacture.
 2. From the Indian Standard (with its amendments — an amendment replaces the clause it names) and the Product Manual, find every requirement that applies to THIS sample's type / grade / size, and work out the actual limit (tables, formulas, tolerances on declared or nominal values).
-3. Go through the Test Report and take EVERY test it reports, in the report's order, one row each (the same test reported twice is one row). Compare the reported value with the limit from step 2 yourself; never rely on the lab's own "conforms" remark. The report's own "specified requirement" column is a cross-check: where your limit differs from it, re-read the Standard's table row for this grade (for example Table 4 gives tensile strength, yield stress and elongation as separate columns) and say in notes which is right.
+3. Go through the LABORATORY REPORT PAGES and take EVERY test with its observed value, in the laboratory's order, one row each (the same test reported twice is one row). The Manak summary pages only list tests with "Test Report Attached": that text is never a result — take the value from the laboratory pages (chemical results may be on a separate laboratory page from the mechanical / dimensional ones; read all of them). Compare the reported value with the limit from step 2 yourself; never rely on the lab's own "conforms" remark. The report's own "specified requirement" column is a cross-check: where your limit differs from it, re-read the Standard's table row for this grade (for example Table 4 gives tensile strength, yield stress and elongation as separate columns) and say in notes which is right.
 4. Missing tests: tests the Product Manual / Standard require the LABORATORY to do on this sample that are not in the report. Tests the Product Manual leaves to the factory (for example on every pipe during production) are not missing.
+4a. Sample Stage "SS": the Marking clause is not applicable — give the Marking row requirement "Not Applicable — SS Sample (No Licence Yet)", verdict "Pass", never list Marking as missing or as a failure.
 5. Verdict: "Yes" = every result passes and no test is missing. "No" = any result fails or any required test is missing. "Undecided" = a deciding value cannot be read at all.
 
 SCANNED REPORTS: the text was read by OCR twice per page and may confuse digits (0↔8, 0↔6, 1↔7, 5↔S). Read 1 has the more reliable digits. When reads differ or a value is impossible for its unit or limit, take the plausible reading. Put any such reading in "notes", never in "result". Use "Not Clear" only when no plausible reading exists.
@@ -125,6 +172,8 @@ FIELD FORMATS (keep each cell short, no sentences in the table):
 - notes: the observations, one short sentence each: whether the sample matches the Test Request, every failure with its reason, missing tests, disagreement with the lab's remark, anything else the reviewer must know. OCR corrections: ONE note listing only the values you changed.
 Before answering, re-check every row: for "≥ X" the result must be at least X; for "≤ X" at most X. Compare the numbers, not the words.
 - sample: values as written in the report ("" when not given).
+
+SELF-CHECK before answering: no result is "Test Report Attached"; every laboratory test appears once; each "≥ X" result is at least X and each "≤ X" at most X; the verdict follows step 5.
 
 ANSWER: JSON only, no other text, exactly these keys. Example of the format (values are only an example):
 {"sample":{"description":"ERW, Black, Fe 410, 168.3 mm OD × 4.5 mm","declared_values":"Silicon killed","batch_number":"B-12","date_of_manufacture":"12-10-2026"},"verdict":"No","summary":"Does not conform: Yield Strength 231 MPa is below the 235 MPa minimum.","results":[{"parameter":"Carbon","clause":"8.1, Table 2","requirement":"≤ 0.25 %","result":"0.18 %","verdict":"Pass"},{"parameter":"Yield Strength","clause":"9.1, Table 4","requirement":"≥ 235 MPa","result":"231 MPa","verdict":"Fail"}],"missing_tests":["Flattening Test (Clause 9.2.1)"],"notes":["Sample details match the Test Request.","Yield Strength 231 MPa is below the 235 MPa minimum of Table 4.","Flattening Test required by the Product Manual is not reported."]}`
@@ -154,22 +203,33 @@ function numericVerdict(r: CheckResult): 'Pass' | 'Fail' | null {
  * Makes the answer consistent whatever model wrote it: numeric limits are re-checked, and the overall verdict follows
  * the fixed rule (any Fail or missing test = No; otherwise Undecided when the AI could not decide; else Yes).
  */
-function settleCheck(check: OslConformityCheck): OslConformityCheck {
+function settleCheck(check: OslConformityCheck, row: OslSampleRequirementRow): OslConformityCheck {
   const corrections: string[] = []
+  const ss = isSsSample(row)
   const results = check.results.map((r) => {
+    if (ss && MARKING.test(r.parameter)) return { ...r, requirement: SS_MARKING_REQUIREMENT, verdict: 'Pass' as const }
+    if (/test\s*report\s*attached/i.test(r.result)) return { ...r, verdict: 'Not Clear' as const }
     const computed = numericVerdict(r)
     if (!computed || computed === r.verdict || r.verdict === 'Not Clear') return r
     corrections.push(`${r.parameter}: ${r.result} against ${r.requirement} is ${computed === 'Pass' ? 'within' : 'outside'} the limit — verdict corrected to ${computed}.`)
     return { ...r, verdict: computed }
   })
-  const failed = results.some((r) => r.verdict === 'Fail') || check.missingTests.length > 0
-  const verdict = failed ? 'No' : check.verdict === 'Undecided' ? 'Undecided' : 'Yes'
-  const notes = corrections.length ? [...check.notes, ...corrections] : check.notes
+  const missingTests = ss ? check.missingTests.filter((t) => !MARKING.test(t)) : check.missingTests
+  const failed = results.some((r) => r.verdict === 'Fail') || missingTests.length > 0
+  // Not Clear rows keep an AI "No" (given for them) from turning into "Yes".
+  const unclear = results.some((r) => r.verdict === 'Not Clear')
+  const verdict = failed ? 'No' : check.verdict === 'Undecided' || (unclear && check.verdict !== 'Yes') ? 'Undecided' : 'Yes'
+  const ssNote =
+    ss && check.results.some((r) => MARKING.test(r.parameter))
+      ? ['Marking is not applicable to an SS sample (no licence yet), so it is taken as Pass.']
+      : []
+  const notes = (ss ? check.notes.filter((n) => !MARKING.test(n)) : check.notes).concat(ssNote, corrections)
+  const reasons = [...ssNote, ...corrections]
   const summary =
-    corrections.length && verdict !== check.verdict
-      ? `${verdict === 'Yes' ? 'Conforms' : 'Does not conform'} after re-checking the figures: ${corrections.join(' ')}`
+    reasons.length && verdict !== check.verdict
+      ? `${verdict === 'Yes' ? 'Conforms' : verdict === 'No' ? 'Does not conform' : 'Undecided'} after the app's re-check: ${reasons.join(' ')}`
       : check.summary
-  return { ...check, results, verdict, notes, summary }
+  return { ...check, results, missingTests, verdict, notes, summary }
 }
 
 /**
@@ -279,5 +339,5 @@ export async function checkSampleConformity(input: {
       manufactureDate: parsed.sample.manufactureDate,
     },
   }
-  return settleCheck(check)
+  return settleCheck(check, row)
 }
