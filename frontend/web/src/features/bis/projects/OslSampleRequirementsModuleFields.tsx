@@ -116,6 +116,7 @@ import {
   availableImportedQrCodes,
   emptyOslSampleRequirementRow,
   normalizeImportedQrCodes,
+  oslConformityDecided,
   oslSampleRowHasContent,
   parseOslSampleRequirementsPayload,
   oslSampleRowStatusTone,
@@ -1621,12 +1622,23 @@ export function OslSampleRequirementsModuleFields({
     return row?.conformityCheck ? { row, check: row.conformityCheck } : null
   }, [conformityLogId, rows])
 
-  /** Checks the selected samples (or every sample with a Test Report) and sets Conformity from the AI verdict. */
-  const runConformityCheck = async () => {
-    const pool = selectedIds.size ? rows.filter((r) => selectedIds.has(r.id)) : rows
-    const targets = pool.filter((r) => r.testReportStoragePath.trim())
+  /**
+   * AI Check. Without a selection: only samples that have a Test Report and no decision yet (no current AI check, and
+   * Conformity not set by hand); decided samples are skipped, and a sample whose Test Report was replaced is checked
+   * again. With ticked samples (or `onlyIds`, from Re-Check in the log): exactly those are re-checked.
+   */
+  const runConformityCheck = async (onlyIds?: string[]) => {
+    const chosen = onlyIds ?? (selectedIds.size ? [...selectedIds] : null)
+    const withReport = (chosen ? rows.filter((r) => chosen.includes(r.id)) : rows).filter((r) => r.testReportStoragePath.trim())
+    const targets = chosen ? withReport : withReport.filter((r) => !oslConformityDecided(r))
+    const skipped = withReport.length - targets.length
     if (!targets.length) {
-      toast.error(selectedIds.size ? 'The Selected Samples Have No Test Report Attached.' : 'Attach the Test Report of at Least One Sample First.')
+      if (chosen) toast.error('The Selected Samples Have No Test Report Attached.')
+      else if (skipped) {
+        toast.message('All Samples With a Test Report Are Already Decided.', {
+          description: 'To Check Again, Tick the Samples and Click AI Check, or Use Re-Check in the Sample’s Log.',
+        })
+      } else toast.error('Attach the Test Report of at Least One Sample First.')
       return
     }
     const tally = { Yes: 0, No: 0, Undecided: 0, failed: 0 }
@@ -1658,6 +1670,7 @@ export function OslSampleRequirementsModuleFields({
     setConformityBusy(null)
     toast.success(
       `AI Conformity Check Done — ${tally.Yes} Yes, ${tally.No} No${tally.Undecided ? `, ${tally.Undecided} Undecided` : ''}${tally.failed ? `, ${tally.failed} Failed` : ''}. Click Save to Keep.`,
+      skipped ? { description: `${skipped} Already Decided ${skipped === 1 ? 'Sample Was' : 'Samples Were'} Skipped — Tick Them to Re-Check.` } : undefined,
     )
   }
 
@@ -2063,8 +2076,8 @@ export function OslSampleRequirementsModuleFields({
             disabled={disabled || conformityBusy !== null}
             title={
               selectedCount
-                ? 'AI Conformity Check of the Selected Samples: Reads the Test Request, Test Report, Standard and Product Manual, Checks Every Result and Missing Tests, and Sets Conformity'
-                : 'AI Conformity Check of All Samples With a Test Report: Reads the Test Request, Test Report, Standard and Product Manual, Checks Every Result and Missing Tests, and Sets Conformity'
+                ? 'AI Re-Check of the Selected Samples (Even if Already Decided): Reads the Test Request, Test Report, Standard and Product Manual and Sets Conformity'
+                : 'AI Conformity Check of the Samples Not Decided Yet (With a Test Report): Reads the Test Request, Test Report, Standard and Product Manual and Sets Conformity. Decided Samples Are Skipped — Tick Them to Re-Check'
             }
             aria-label="AI Conformity Check"
             onClick={() => void runConformityCheck()}
@@ -3076,30 +3089,54 @@ export function OslSampleRequirementsModuleFields({
                 <span className="text-xs text-stone-500">
                   Checked {new Date(conformityLog.check.checkedAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
                 </span>
+                {conformityLog.check.reportPath && conformityLog.check.reportPath !== conformityLog.row.testReportStoragePath ? (
+                  <span className="border border-amber-500 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                    Out of Date — The Test Report Was Changed. Click Re-Check.
+                  </span>
+                ) : null}
               </div>
-              {conformityLog.check.summary ? <p className="leading-relaxed">{conformityLog.check.summary}</p> : null}
+              <div className="space-y-1.5">
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-stone-600">Sample Details</p>
+                <dl className="grid gap-x-6 gap-y-1.5 border border-stone-300 bg-stone-50 px-3 py-2.5 sm:grid-cols-2">
+                  {(
+                    [
+                      ['Sample Description', conformityLog.check.sample.description || conformityLog.row.sampleDescription || conformityLog.row.gradeTypeVariety],
+                      ['Declared Values', conformityLog.check.sample.declaredValues || conformityLog.row.declaredValue],
+                      ['Batch Number', conformityLog.check.sample.batchNumber || conformityLog.row.batchNumber],
+                      ['Date of Manufacturing', conformityLog.check.sample.manufactureDate],
+                    ] as const
+                  ).map(([label, text]) => (
+                    <div key={label} className="min-w-0">
+                      <dt className="text-[11px] font-semibold text-stone-500">{label}</dt>
+                      <dd className="break-words text-stone-900">{text?.trim() || '—'}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
 
               <div className="space-y-1.5">
                 <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-stone-600">Test Results vs Requirements</p>
                 {conformityLog.check.results.length ? (
                   <div className="overflow-x-auto border border-stone-300">
                     <table className="w-full min-w-[640px] border-collapse text-xs">
-                      <thead className="bg-stone-100 text-left text-stone-700">
+                      <thead className="bg-stone-100 text-stone-700">
                         <tr>
-                          {['Parameter', 'Clause', 'Requirement', 'Result', 'Verdict'].map((h) => (
-                            <th key={h} className="border-b border-stone-300 px-2 py-1.5 font-semibold">
-                              {h}
-                            </th>
-                          ))}
+                          <th className="w-10 border-b border-stone-300 px-2 py-1.5 text-center font-semibold">S. No.</th>
+                          <th className="border-b border-stone-300 px-2 py-1.5 text-left font-semibold">Parameter</th>
+                          <th className="border-b border-stone-300 px-2 py-1.5 text-center font-semibold">Clause</th>
+                          <th className="border-b border-stone-300 px-2 py-1.5 text-center font-semibold">Requirement</th>
+                          <th className="border-b border-stone-300 px-2 py-1.5 text-center font-semibold">Result</th>
+                          <th className="border-b border-stone-300 px-2 py-1.5 text-left font-semibold">Verdict</th>
                         </tr>
                       </thead>
                       <tbody>
                         {conformityLog.check.results.map((r, i) => (
-                          <tr key={i} className="align-top odd:bg-white even:bg-stone-50">
-                            <td className="border-b border-stone-200 px-2 py-1.5 font-medium">{r.parameter}</td>
-                            <td className="border-b border-stone-200 px-2 py-1.5">{r.clause}</td>
-                            <td className="border-b border-stone-200 px-2 py-1.5">{r.requirement}</td>
-                            <td className="border-b border-stone-200 px-2 py-1.5">{r.result}</td>
+                          <tr key={i} className="align-middle odd:bg-white even:bg-stone-50">
+                            <td className="border-b border-stone-200 px-2 py-1.5 text-center text-stone-500">{i + 1}</td>
+                            <td className="border-b border-stone-200 px-2 py-1.5 text-left font-medium">{r.parameter}</td>
+                            <td className="border-b border-stone-200 px-2 py-1.5 text-center">{r.clause}</td>
+                            <td className="border-b border-stone-200 px-2 py-1.5 text-center">{r.requirement}</td>
+                            <td className="border-b border-stone-200 px-2 py-1.5 text-center">{r.result}</td>
                             <td
                               className={cn(
                                 'border-b border-stone-200 px-2 py-1.5 font-semibold',
@@ -3131,10 +3168,11 @@ export function OslSampleRequirementsModuleFields({
                 )}
               </div>
 
-              {conformityLog.check.notes.length ? (
+              {conformityLog.check.summary || conformityLog.check.notes.length ? (
                 <div className="space-y-1.5">
                   <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-stone-600">Observations</p>
-                  <ul className="list-disc space-y-0.5 pl-5">
+                  <ul className="list-disc space-y-1 pl-5 leading-relaxed">
+                    {conformityLog.check.summary ? <li className="font-semibold">{conformityLog.check.summary}</li> : null}
                     {conformityLog.check.notes.map((n, i) => (
                       <li key={i}>{n}</li>
                     ))}
@@ -3142,20 +3180,24 @@ export function OslSampleRequirementsModuleFields({
                 </div>
               ) : null}
 
-              {conformityLog.check.sources.length ? (
-                <div className="space-y-1.5">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-stone-600">Documents Checked</p>
-                  <ul className="list-disc space-y-0.5 pl-5 text-xs text-stone-600">
-                    {conformityLog.check.sources.map((n, i) => (
-                      <li key={i}>{n}</li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
               <p className="text-[11px] text-stone-500">AI Check Is a Review Aid — Confirm Against the Documents Before Final Use.</p>
             </div>
           ) : null}
-          <DialogFooter className="shrink-0 gap-2 border-t border-stone-300 bg-stone-100 px-4 py-3 sm:justify-end">
+          <DialogFooter className="shrink-0 gap-2 border-t border-stone-300 bg-stone-100 px-4 py-3 sm:justify-between">
+            <Button
+              type="button"
+              variant="outline"
+              className={cn(limsOutlineBtnClass, 'gap-1.5')}
+              disabled={disabled || conformityBusy !== null || !conformityLog?.row.testReportStoragePath.trim()}
+              title="Run the AI Conformity Check Again for This Sample"
+              onClick={() => {
+                const id = conformityLog?.row.id
+                setConformityLogId(null)
+                if (id) void runConformityCheck([id])
+              }}
+            >
+              <Sparkles size={14} aria-hidden /> Re-Check
+            </Button>
             <Button type="button" variant="outline" className={limsOutlineBtnClass} onClick={() => setConformityLogId(null)}>
               Close
             </Button>

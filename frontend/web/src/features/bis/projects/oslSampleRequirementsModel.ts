@@ -10,12 +10,23 @@ export type OslSampleConformity = '' | 'Yes' | 'No'
 export type OslConformityCheck = {
   checkedAt: string
   verdict: 'Yes' | 'No' | 'Undecided'
+  /** The sample as identified from the Test Report / Test Request. */
+  sample: OslConformitySample
   summary: string
   results: { parameter: string; clause: string; requirement: string; result: string; verdict: 'Pass' | 'Fail' | 'Not Clear' }[]
   missingTests: string[]
   notes: string[]
   /** Documents the check read (names). */
   sources: string[]
+  /** The Test Report file that was checked: a different file later makes the check out of date. */
+  reportPath: string
+}
+
+export type OslConformitySample = {
+  description: string
+  declaredValues: string
+  batchNumber: string
+  manufactureDate: string
 }
 
 export type OslSampleRequirementRow = {
@@ -286,15 +297,31 @@ export function parseOslConformityCheck(raw: unknown): OslConformityCheck | null
       result: str(x.result),
       verdict: (x.verdict === 'Pass' || x.verdict === 'Fail' ? x.verdict : 'Not Clear') as 'Pass' | 'Fail' | 'Not Clear',
     }))
+  const sample = r.sample && typeof r.sample === 'object' && !Array.isArray(r.sample) ? (r.sample as Record<string, unknown>) : {}
   return {
     checkedAt: str(r.checkedAt),
     verdict,
+    sample: {
+      description: str(sample.description),
+      declaredValues: str(sample.declaredValues ?? sample.declared_values),
+      batchNumber: str(sample.batchNumber ?? sample.batch_number),
+      manufactureDate: str(sample.manufactureDate ?? sample.date_of_manufacture),
+    },
     summary: str(r.summary),
     results,
     missingTests: strList(r.missingTests),
     notes: strList(r.notes),
     sources: strList(r.sources),
+    reportPath: str(r.reportPath),
   }
+}
+
+/** The sample already has a decision: a current AI check, or Conformity set to Yes / No by hand. */
+export function oslConformityDecided(row: OslSampleRequirementRow): boolean {
+  const check = row.conformityCheck
+  // Checks saved before reportPath existed count as current.
+  if (check && (!check.reportPath || check.reportPath === row.testReportStoragePath)) return true
+  return !check && (row.conformity === 'Yes' || row.conformity === 'No')
 }
 
 /** Row highlight for Sample Requirements list (Sample Code + Test Request status). */

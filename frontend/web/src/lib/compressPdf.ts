@@ -29,13 +29,25 @@ async function resave(data: ArrayBuffer): Promise<Uint8Array | null> {
   }
 }
 
-/** Every page drawn as a JPEG at ~130 DPI into a new PDF of the same page sizes (scans shrink a lot). */
+/** Selectable text on the first pages: such a PDF keeps its text (the AI check and search read it). */
+const TEXT_PDF_MIN_CHARS = 200
+
+/**
+ * Every page drawn as a JPEG at ~130 DPI into a new PDF of the same page sizes (scans shrink a lot). Only for scanned
+ * PDFs: a PDF with selectable text is never turned into pictures.
+ */
 async function imageCopy(data: ArrayBuffer): Promise<Uint8Array | null> {
   const { getDocument } = await loadPdfjs()
   const task = getDocument({ data: new Uint8Array(data.slice(0)) })
   const pdf = await task.promise
   try {
     if (pdf.numPages > MAX_RENDER_PAGES) return null
+    let chars = 0
+    for (let n = 1; n <= Math.min(pdf.numPages, 3) && chars < TEXT_PDF_MIN_CHARS; n += 1) {
+      const content = await (await pdf.getPage(n)).getTextContent()
+      chars += content.items.reduce((sum, item) => sum + ('str' in item ? String(item.str ?? '').trim().length : 0), 0)
+    }
+    if (chars >= TEXT_PDF_MIN_CHARS) return null
     const out = await PDFDocument.create()
     for (let n = 1; n <= pdf.numPages; n += 1) {
       const page = await pdf.getPage(n)
@@ -64,8 +76,8 @@ async function imageCopy(data: ArrayBuffer): Promise<Uint8Array | null> {
 }
 
 /**
- * Makes a PDF as small as it can be while staying readable, before it is uploaded: a lossless re-save, and an
- * image copy at ~130 DPI that is used only when it is at least 30 % smaller. Anything that fails, or does not
+ * Makes a PDF as small as it can be while staying readable, before it is uploaded: a lossless re-save, and (scanned
+ * PDFs only) an image copy at ~130 DPI that is used only when it is at least 30 % smaller. Anything that fails, or does not
  * shrink, keeps the original file. Non-PDF files are returned unchanged.
  */
 export async function compressPdfForUpload(file: File): Promise<CompressedPdf> {
