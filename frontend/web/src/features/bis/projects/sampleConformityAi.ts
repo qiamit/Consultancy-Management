@@ -7,7 +7,7 @@ import { createBisProjectFileUrls } from './bisProjectFilesApi'
 import { parseOslConformityCheck, type OslConformityCheck, type OslSampleRequirementRow } from './oslSampleRequirementsModel'
 
 /** Text budget per document (characters), so the whole check fits the AI model's context (~60k tokens in all). */
-const LIMITS = { request: 12_000, report: 45_000, standard: 100_000, manual: 35_000 }
+const LIMITS = { request: 12_000, report: 70_000, standard: 100_000, manual: 35_000 }
 const MAX_PAGES = 120
 /** Less selectable text than this means a scanned PDF: it is read with OCR. */
 const SCANNED_BELOW = 300
@@ -173,7 +173,7 @@ export async function checkSampleConformity(input: {
     INSTRUCTIONS,
     `=== SAMPLE (${input.isLabel}) ===\n${sampleFacts(row)}`,
     requestText ? `=== TEST REQUEST ===\n${requestText}` : '',
-    `=== TEST REPORT${report.ocr ? ' (scanned, read by OCR — figures may have OCR mistakes; prefer the page pictures when attached)' : ''} ===\n${report.text || '(scanned — see the attached page pictures)'}`,
+    `=== TEST REPORT${report.ocr ? ' (scanned, read by OCR twice per page — figures may have OCR mistakes such as 0↔8, 0↔6, 1↔I: compare both reads, take the one that fits the units and limits, and prefer the page pictures when attached)' : ''} ===\n${report.text || '(scanned — see the attached page pictures)'}`,
     standardText ? `=== INDIAN STANDARD ===\n${standardText}` : '',
     manualText ? `=== PRODUCT MANUAL ===\n${manualText}` : '',
   ]
