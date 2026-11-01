@@ -10,12 +10,21 @@ export type OslSampleConformity = '' | 'Yes' | 'No'
 export type OslConformityCheck = {
   checkedAt: string
   verdict: 'Yes' | 'No' | 'Undecided'
+  /** The sample as identified from the Test Report / Test Request. */
+  sample: OslConformitySample
   summary: string
   results: { parameter: string; clause: string; requirement: string; result: string; verdict: 'Pass' | 'Fail' | 'Not Clear' }[]
   missingTests: string[]
   notes: string[]
   /** Documents the check read (names). */
   sources: string[]
+}
+
+export type OslConformitySample = {
+  description: string
+  declaredValues: string
+  batchNumber: string
+  manufactureDate: string
 }
 
 export type OslSampleRequirementRow = {
@@ -286,9 +295,16 @@ export function parseOslConformityCheck(raw: unknown): OslConformityCheck | null
       result: str(x.result),
       verdict: (x.verdict === 'Pass' || x.verdict === 'Fail' ? x.verdict : 'Not Clear') as 'Pass' | 'Fail' | 'Not Clear',
     }))
+  const sample = r.sample && typeof r.sample === 'object' && !Array.isArray(r.sample) ? (r.sample as Record<string, unknown>) : {}
   return {
     checkedAt: str(r.checkedAt),
     verdict,
+    sample: {
+      description: str(sample.description),
+      declaredValues: str(sample.declaredValues ?? sample.declared_values),
+      batchNumber: str(sample.batchNumber ?? sample.batch_number),
+      manufactureDate: str(sample.manufactureDate ?? sample.date_of_manufacture),
+    },
     summary: str(r.summary),
     results,
     missingTests: strList(r.missingTests),

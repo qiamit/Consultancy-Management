@@ -3077,29 +3077,48 @@ export function OslSampleRequirementsModuleFields({
                   Checked {new Date(conformityLog.check.checkedAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
                 </span>
               </div>
-              {conformityLog.check.summary ? <p className="leading-relaxed">{conformityLog.check.summary}</p> : null}
+              <div className="space-y-1.5">
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-stone-600">Sample Details</p>
+                <dl className="grid gap-x-6 gap-y-1.5 border border-stone-300 bg-stone-50 px-3 py-2.5 sm:grid-cols-2">
+                  {(
+                    [
+                      ['Sample Description', conformityLog.check.sample.description || conformityLog.row.sampleDescription || conformityLog.row.gradeTypeVariety],
+                      ['Declared Values', conformityLog.check.sample.declaredValues || conformityLog.row.declaredValue],
+                      ['Batch Number', conformityLog.check.sample.batchNumber || conformityLog.row.batchNumber],
+                      ['Date of Manufacturing', conformityLog.check.sample.manufactureDate],
+                    ] as const
+                  ).map(([label, text]) => (
+                    <div key={label} className="min-w-0">
+                      <dt className="text-[11px] font-semibold text-stone-500">{label}</dt>
+                      <dd className="break-words text-stone-900">{text?.trim() || '—'}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
 
               <div className="space-y-1.5">
                 <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-stone-600">Test Results vs Requirements</p>
                 {conformityLog.check.results.length ? (
                   <div className="overflow-x-auto border border-stone-300">
                     <table className="w-full min-w-[640px] border-collapse text-xs">
-                      <thead className="bg-stone-100 text-left text-stone-700">
+                      <thead className="bg-stone-100 text-stone-700">
                         <tr>
-                          {['Parameter', 'Clause', 'Requirement', 'Result', 'Verdict'].map((h) => (
-                            <th key={h} className="border-b border-stone-300 px-2 py-1.5 font-semibold">
-                              {h}
-                            </th>
-                          ))}
+                          <th className="w-10 border-b border-stone-300 px-2 py-1.5 text-center font-semibold">S. No.</th>
+                          <th className="border-b border-stone-300 px-2 py-1.5 text-left font-semibold">Parameter</th>
+                          <th className="border-b border-stone-300 px-2 py-1.5 text-center font-semibold">Clause</th>
+                          <th className="border-b border-stone-300 px-2 py-1.5 text-center font-semibold">Requirement</th>
+                          <th className="border-b border-stone-300 px-2 py-1.5 text-center font-semibold">Result</th>
+                          <th className="border-b border-stone-300 px-2 py-1.5 text-left font-semibold">Verdict</th>
                         </tr>
                       </thead>
                       <tbody>
                         {conformityLog.check.results.map((r, i) => (
-                          <tr key={i} className="align-top odd:bg-white even:bg-stone-50">
-                            <td className="border-b border-stone-200 px-2 py-1.5 font-medium">{r.parameter}</td>
-                            <td className="border-b border-stone-200 px-2 py-1.5">{r.clause}</td>
-                            <td className="border-b border-stone-200 px-2 py-1.5">{r.requirement}</td>
-                            <td className="border-b border-stone-200 px-2 py-1.5">{r.result}</td>
+                          <tr key={i} className="align-middle odd:bg-white even:bg-stone-50">
+                            <td className="border-b border-stone-200 px-2 py-1.5 text-center text-stone-500">{i + 1}</td>
+                            <td className="border-b border-stone-200 px-2 py-1.5 text-left font-medium">{r.parameter}</td>
+                            <td className="border-b border-stone-200 px-2 py-1.5 text-center">{r.clause}</td>
+                            <td className="border-b border-stone-200 px-2 py-1.5 text-center">{r.requirement}</td>
+                            <td className="border-b border-stone-200 px-2 py-1.5 text-center">{r.result}</td>
                             <td
                               className={cn(
                                 'border-b border-stone-200 px-2 py-1.5 font-semibold',
@@ -3131,10 +3150,11 @@ export function OslSampleRequirementsModuleFields({
                 )}
               </div>
 
-              {conformityLog.check.notes.length ? (
+              {conformityLog.check.summary || conformityLog.check.notes.length ? (
                 <div className="space-y-1.5">
                   <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-stone-600">Observations</p>
-                  <ul className="list-disc space-y-0.5 pl-5">
+                  <ul className="list-disc space-y-1 pl-5 leading-relaxed">
+                    {conformityLog.check.summary ? <li className="font-semibold">{conformityLog.check.summary}</li> : null}
                     {conformityLog.check.notes.map((n, i) => (
                       <li key={i}>{n}</li>
                     ))}
@@ -3142,16 +3162,6 @@ export function OslSampleRequirementsModuleFields({
                 </div>
               ) : null}
 
-              {conformityLog.check.sources.length ? (
-                <div className="space-y-1.5">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-stone-600">Documents Checked</p>
-                  <ul className="list-disc space-y-0.5 pl-5 text-xs text-stone-600">
-                    {conformityLog.check.sources.map((n, i) => (
-                      <li key={i}>{n}</li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
               <p className="text-[11px] text-stone-500">AI Check Is a Review Aid — Confirm Against the Documents Before Final Use.</p>
             </div>
           ) : null}

@@ -99,17 +99,34 @@ function sampleFacts(row: OslSampleRequirementRow): string {
     .join('\n')
 }
 
-const INSTRUCTIONS = `You are a BIS product certification reviewer checking one sample's Test Report.
-Use ONLY the documents below. Work in this order:
-1. Identify the exact sample (grade / type / size / class / declared values) from the Test Request and the sample details.
-2. From the Indian Standard and the Product Manual (scheme of testing), list every test / requirement that applies to THIS sample, with clause numbers and limits (including tolerances on declared values). Amendments printed with the Standard replace the clauses they name: use the amended text.
-3. For each test in the Test Report, compare the reported result with the applicable requirement: Pass or Fail. Work out the limit for this sample's size / grade yourself (tables, formulas, tolerances); do not just copy the lab's own remark.
-4. List the required tests that are missing from the Test Report. Which tests the laboratory must do comes from the Product Manual (tests on the sample drawn for independent testing / "Test Required"); tests the Product Manual leaves to the factory (for example a test on every pipe during production) are not missing from a lab report.
-5. Verdict: "Yes" when every applicable result passes and no required test is missing; "No" when any applicable result fails (even if the lab wrote "conforms") or a required test is missing; "Undecided" only when a deciding figure cannot be read at all (say which in notes).
-Scanned reports are read by OCR, which confuses digits (0↔8, 0↔6, 1↔7, 5↔S). When the two reads differ, or a figure is impossible for its unit or limit (8.26 for a ratio whose limit is 0.45; 16.660 kg/m for 10.60 nominal), take the plausible reading, judge it, and say so in the result. Use "Not Clear" only when no plausible reading exists.
-Do not invent values. Quote results and limits as written. Keep wording short.
-Reply with JSON only:
-{"verdict":"Yes|No|Undecided","summary":"one or two sentences","results":[{"parameter":"","clause":"","requirement":"","result":"","verdict":"Pass|Fail|Not Clear"}],"missing_tests":["test (clause)"],"notes":["…"]}`
+/**
+ * The review method and answer format. Written for any chat model (DeepSeek, Gemini, GPT, Claude…): fixed steps,
+ * fixed field formats and one example, so every model answers the same way.
+ */
+const INSTRUCTIONS = `ROLE: You are a BIS product certification reviewer. Decide whether ONE sample conforms, by checking its Test Report against the Indian Standard and the Product Manual below. Use ONLY these documents.
+
+METHOD (follow every step):
+1. Identify the sample from the Test Report (Part A / particulars) and the Test Request: description (type, grade, size), declared values, batch number, date of manufacture.
+2. From the Indian Standard (with its amendments — an amendment replaces the clause it names) and the Product Manual, find every requirement that applies to THIS sample's type / grade / size, and work out the actual limit (tables, formulas, tolerances on declared or nominal values).
+3. Go through the Test Report and take EVERY test it reports, in the report's order, one row each (the same test reported twice is one row). Compare the reported value with the limit from step 2 yourself; never rely on the lab's own "conforms" remark.
+4. Missing tests: tests the Product Manual / Standard require the LABORATORY to do on this sample that are not in the report. Tests the Product Manual leaves to the factory (for example on every pipe during production) are not missing.
+5. Verdict: "Yes" = every result passes and no test is missing. "No" = any result fails or any required test is missing. "Undecided" = a deciding value cannot be read at all.
+
+SCANNED REPORTS: the text was read by OCR twice per page and may confuse digits (0↔8, 0↔6, 1↔7, 5↔S). Read 1 has the more reliable digits. When reads differ or a value is impossible for its unit or limit, take the plausible reading. Put any such reading in "notes", never in "result". Use "Not Clear" only when no plausible reading exists.
+
+FIELD FORMATS (keep each cell short, no sentences in the table):
+- parameter: the test name in Title Case, without method or standard numbers ("Ultimate Tensile Strength").
+- clause: the IS clause / table only ("9.1, Table 4"); add "Amd 6" when an amendment sets it.
+- requirement: the limit for this sample with unit ("≤ 0.25 %", "≥ 450 MPa", "168.30 ± 0.75 % (167.04 – 169.56 mm)", "No Crack").
+- result: the reported value with unit, exactly as the report gives it ("0.20 %", "486.90 MPa", "Satisfactory").
+- verdict: "Pass", "Fail" or "Not Clear".
+- missing_tests: "Test Name (Clause x)".
+- summary: one sentence with the verdict and the deciding reason.
+- notes: the observations, one short sentence each: whether the sample matches the Test Request, every failure with its reason, OCR readings you corrected, missing tests, disagreement with the lab's remark, anything else the reviewer must know.
+- sample: values as written in the report ("" when not given).
+
+ANSWER: JSON only, no other text, exactly these keys. Example of the format (values are only an example):
+{"sample":{"description":"ERW, Black, Fe 410, 168.3 mm OD × 4.5 mm","declared_values":"Silicon killed","batch_number":"B-12","date_of_manufacture":"12-10-2026"},"verdict":"No","summary":"Does not conform: Yield Strength 231 MPa is below the 235 MPa minimum.","results":[{"parameter":"Carbon","clause":"8.1, Table 2","requirement":"≤ 0.25 %","result":"0.18 %","verdict":"Pass"},{"parameter":"Yield Strength","clause":"9.1, Table 4","requirement":"≥ 235 MPa","result":"231 MPa","verdict":"Fail"}],"missing_tests":["Flattening Test (Clause 9.2.1)"],"notes":["Sample details match the Test Request.","Yield Strength 231 MPa is below the 235 MPa minimum of Table 4.","Flattening Test required by the Product Manual is not reported."]}`
 
 /**
  * AI conformity check of one sample: reads the Test Request, the Test Report (text; OCR and page pictures when scanned),
@@ -200,13 +217,23 @@ export async function checkSampleConformity(input: {
   } catch {
     throw new Error('The AI answer could not be read. Try again.')
   }
-  const check = parseOslConformityCheck({
+  const parsed = parseOslConformityCheck({
     ...raw,
     missingTests: raw.missing_tests ?? raw.missingTests,
     checkedAt: new Date().toISOString(),
     sources,
   })
-  if (!check) throw new Error('The AI answer could not be read. Try again.')
+  if (!parsed) throw new Error('The AI answer could not be read. Try again.')
+  // Sample details the AI could not read come from the sample row.
+  const check = {
+    ...parsed,
+    sample: {
+      description: parsed.sample.description || row.sampleDescription || row.gradeTypeVariety,
+      declaredValues: parsed.sample.declaredValues || row.declaredValue,
+      batchNumber: parsed.sample.batchNumber || row.batchNumber,
+      manufactureDate: parsed.sample.manufactureDate,
+    },
+  }
   // A failed result or a missing test can never leave the sample at "Yes".
   if (check.verdict === 'Yes' && (check.results.some((r) => r.verdict === 'Fail') || check.missingTests.length)) {
     return { ...check, verdict: 'No' }
