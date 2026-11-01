@@ -1174,16 +1174,6 @@ export function QiAssistant({
                 <Send size={18} />
               </Button>
             </div>
-            <p className="px-0.5 text-[10px] font-medium tracking-wide text-stone-500">
-              <span className="text-amber-800">/</span> skills
-              {(enableImageImport || enablePdfImport) && (
-                <>
-                  {' · '}
-                  <span className="text-amber-800">@</span> attach from computer
-                </>
-              )}
-              {voiceSupported ? ' · mic to speak' : ''}
-            </p>
           </div>
         </div>
       </DialogContent>
