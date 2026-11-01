@@ -111,10 +111,9 @@ export function KpiTile({ label, value, icon: Icon, tone = 'neutral', href, spar
 
 export function KpiTileSkeleton() {
   return (
-    <div className={cn(limsPanelClass, 'min-h-[7.25rem] space-y-3 p-3 pl-4')} aria-hidden="true">
+    <div className={cn(limsPanelClass, 'min-h-[5.25rem] space-y-3 py-2 pl-4 pr-3')} aria-hidden="true">
       <Skeleton className="h-3 w-24" />
       <Skeleton className="h-7 w-20" />
-      <Skeleton className="h-3 w-32" />
     </div>
   )
 }
