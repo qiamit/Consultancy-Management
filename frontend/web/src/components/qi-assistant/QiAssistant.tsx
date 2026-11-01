@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Brain, CalendarClock, Maximize2, Minus, FileText, FileUp, FolderUp, History, ImagePlus, Loader2, MessageSquare, Mic, MicOff, Paperclip, Pause, Play, Plug, Plus, RotateCcw, Send, ShieldCheck, Sparkles, Trash2, X, Zap } from 'lucide-react'
+import { Bell, Brain, CalendarClock, Maximize2, Minus, FileText, FileUp, FolderUp, History, ImagePlus, Loader2, MessageSquare, Mic, MicOff, Paperclip, Pause, Play, Plug, Plus, RotateCcw, Send, ShieldCheck, Sparkles, Trash2, X, Zap } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
@@ -22,6 +22,8 @@ import { AgentProposals, AgentSteps } from './QiAgentParts'
 import { splitQuote, withQuote } from './chatQuote'
 import { MessageActions, ReplyQuoteBar, SelectionPopup, type ChatActionHandlers } from './QiChatActions'
 import { readAttachments, toAttachments, type ChatAttachment } from './chatAttachments'
+import { useAssistantNotices, type AssistantNotice } from './assistantNotices'
+import { QiNoticesPanel } from './QiNoticesPanel'
 import {
   createConversation,
   deleteConversation,
@@ -31,7 +33,6 @@ import {
   listMemories,
   loadConversationMessages,
   saveMessage,
-  countUnseenRuns,
   deleteTask,
   listTaskRuns,
   listTasks,
@@ -355,11 +356,9 @@ export function QiAssistant({
   const [activeChatId, setActiveChatId] = useState<string | null>(null)
   // Admin Agent panel folded to a small bar (chat kept).
   const [minimized, setMinimized] = useState(false)
-  const [agentView, setAgentView] = useState<'chat' | 'history' | 'memory' | 'tasks' | 'connectors'>('chat')
+  const [agentView, setAgentView] = useState<'chat' | 'history' | 'memory' | 'tasks' | 'connectors' | 'notifications'>('chat')
   const [tasks, setTasks] = useState<AssistantTask[]>([])
   const [runs, setRuns] = useState<AssistantTaskRun[]>([])
-  // Scheduled-task results not looked at yet (badge on the assistant button and the Tasks button).
-  const [unseenRuns, setUnseenRuns] = useState(0)
   const [conversations, setConversations] = useState<AssistantConversation[]>([])
   const [memories, setMemories] = useState<AssistantMemory[]>([])
   const [viewLoading, setViewLoading] = useState(false)
@@ -400,6 +399,20 @@ export function QiAssistant({
   const wantListeningRef = useRef(false)
   const filesInputRef = useRef<HTMLInputElement>(null)
   const folderInputRef = useRef<HTMLInputElement | null>(null)
+
+  const openNotices = useCallback(() => {
+    setOpen(true)
+    setMinimized(false)
+    setAgentView('notifications')
+  }, [])
+  const { notices, refresh: refreshNotices, addChatNotice, clearChatNotices, dismiss: dismissNotice, clearAll: clearAllNotices } = useAssistantNotices(agentMode, openNotices)
+  // Is the admin looking at the chat right now? Read when an answer arrives, which can be minutes after asking.
+  const chatVisibleRef = useRef(false)
+  const chatInView = () => chatVisibleRef.current && document.visibilityState === 'visible'
+  useEffect(() => {
+    chatVisibleRef.current = open && !minimized && agentView === 'chat'
+    if (chatVisibleRef.current) clearChatNotices()
+  }, [open, minimized, agentView, clearChatNotices])
 
   const skillTrigger = useMemo(
     () => (skillPickerOpen ? parseSkillTrigger(input, caretPos) : null),
@@ -553,7 +566,18 @@ export function QiAssistant({
     showIsCodePicker,
   ])
 
+  /** Tells the admin what the AI said when they are not looking at the chat (it can run for minutes). */
+  const noticeChatReply = (reply: string, agent?: QiAgentResult) => {
+    if (!agentMode || chatInView()) return
+    const waiting = agent?.proposals.length ?? 0
+    const short = reply.replace(/[*#|`]/g, ' ').replace(/\s+/g, ' ').trim()
+    if (waiting) addChatNotice({ kind: 'confirm', title: 'AI Needs Your Confirmation', detail: `${waiting} Change${waiting === 1 ? '' : 's'} Waiting. ${short}` })
+    else if (/[?？]/.test(short.slice(-200))) addChatNotice({ kind: 'question', title: 'AI Has a Question', detail: short.slice(-200) })
+    else addChatNotice({ kind: 'reply', title: 'AI Has Replied', detail: short })
+  }
+
   const appendAssistantResult = (reply: string, actionsExecuted?: QiAssistantActionResult[], agent?: QiAgentResult) => {
+    noticeChatReply(reply, agent)
     // Admin Agent: open the page it chose (the panel stays open beside it).
     const target = agent?.navigation.at(-1)
     if (target?.path) navigate(target.path)
@@ -596,14 +620,14 @@ export function QiAssistant({
     setAgentView('chat')
   }
 
-  const openAgentView = (view: 'history' | 'memory' | 'tasks' | 'connectors') => {
+  const openAgentView = (view: 'history' | 'memory' | 'tasks' | 'connectors' | 'notifications') => {
     if (agentView === view) {
       setAgentView('chat')
       return
     }
     setAgentView(view)
-    // The Connectors view loads its own data.
-    if (view === 'connectors') return
+    // The Connectors view loads its own data; notifications are already here.
+    if (view === 'connectors' || view === 'notifications') return
     setViewLoading(true)
     const load =
       view === 'history'
@@ -613,29 +637,13 @@ export function QiAssistant({
           : Promise.all([listTasks(), listTaskRuns()]).then(([t, r]) => {
               setTasks(t)
               setRuns(r)
-              setUnseenRuns(0)
               return markRunsSeen(r.filter((x) => !x.seen && x.status !== 'running').map((x) => x.id))
             })
+            .then(() => refreshNotices())
     void load
       .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Could Not Load.'))
       .finally(() => setViewLoading(false))
   }
-
-  useEffect(() => {
-    if (!agentMode) return
-    let cancelled = false
-    const check = () => {
-      void countUnseenRuns().then((n) => {
-        if (!cancelled) setUnseenRuns(n)
-      })
-    }
-    check()
-    const timer = window.setInterval(check, 3 * 60 * 1000)
-    return () => {
-      cancelled = true
-      window.clearInterval(timer)
-    }
-  }, [agentMode])
 
   const updateTask = (task: AssistantTask, action: 'pause' | 'resume' | 'run' | 'delete') => {
     const work =
@@ -666,6 +674,18 @@ export function QiAssistant({
       })
       .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Could Not Open the Chat.'))
       .finally(() => setViewLoading(false))
+  }
+
+  /** What a notification's button does: a mail is read by the AI, the rest open where it needs the admin. */
+  const actOnNotice = (notice: AssistantNotice) => {
+    dismissNotice(notice)
+    setMinimized(false)
+    if (notice.mailId) {
+      setAgentView('chat')
+      void sendMessage(`Read the mail with id ${notice.mailId} (“${notice.title}”) and tell me what it needs from me.`)
+    } else if (notice.runId) openAgentView('tasks')
+    else if (notice.kind === 'mailbox') openAgentView('connectors')
+    else setAgentView('chat')
   }
 
   const stripTriggerFromInput = (trigger: SkillTriggerMatch | null) => {
@@ -952,6 +972,7 @@ export function QiAssistant({
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Unable to get a response'
         setError(msg)
+        if (agentMode && !chatInView()) addChatNotice({ kind: 'failed', title: 'AI Could Not Answer', detail: msg })
         setMessages((prev) => [
           ...prev,
           { id: newId(), role: 'assistant', content: `Sorry, I could not answer that. ${msg}` },
@@ -962,6 +983,7 @@ export function QiAssistant({
       }
     },
     [
+      addChatNotice,
       activeRecordId,
       activeRecordTable,
       attachedImage,
@@ -1102,13 +1124,18 @@ export function QiAssistant({
             variant="outline"
             size="sm"
             className={cn(
-              'rounded-none border-amber-500/45 bg-stone-800/80 text-amber-200 shadow-none hover:bg-amber-500/20 hover:text-amber-100',
+              'relative rounded-none border-amber-500/45 bg-stone-800/80 text-amber-200 shadow-none hover:bg-amber-500/20 hover:text-amber-100',
               triggerClassName,
             )}
             title={`QE Assistant — ${pageTitle}`}
             aria-label={`Open QE Assistant (${pageTitle})`}
           >
             <Sparkles size={14} className="text-current" />
+            {agentMode && notices.length > 0 ? (
+              <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-0.5 text-[9px] font-bold text-white" aria-hidden>
+                {notices.length > 99 ? '99+' : notices.length}
+              </span>
+            ) : null}
           </Button>
         ) : (
           <Button
@@ -1123,9 +1150,9 @@ export function QiAssistant({
           >
             <Sparkles size={16} className="text-amber-300" />
             QE Assistant
-            {agentMode && unseenRuns > 0 ? (
-              <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white" title={`${unseenRuns} New Scheduled Task Result${unseenRuns === 1 ? '' : 's'}`}>
-                {unseenRuns}
+            {agentMode && notices.length > 0 ? (
+              <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white" title={`${notices.length} New Notification${notices.length === 1 ? '' : 's'}`}>
+                {notices.length}
               </span>
             ) : null}
           </Button>
@@ -1167,12 +1194,31 @@ export function QiAssistant({
                 {agentMode ? 'QE Assistant' : assistantDialogTitle(activeRecordTable, effectiveIsCodeId, page)}
               </span>
               {agentMode && !minimized ? (
-                <span className="inline-flex shrink-0 items-center gap-1 border border-emerald-400/50 bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-200">
+                <span className="hidden shrink-0 items-center gap-1 border border-emerald-400/50 bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-200 sm:inline-flex">
                   <ShieldCheck size={12} aria-hidden /> Admin Agent
                 </span>
               ) : null}
               {agentMode ? (
                 <span className="ml-auto flex shrink-0 items-center gap-1">
+                  <button
+                    type="button"
+                    className={cn(headerToolClass(agentView === 'notifications'), 'relative')}
+                    title="Notifications"
+                    aria-label={`Notifications (${notices.length})`}
+                    onClick={() => {
+                      if (minimized) {
+                        setMinimized(false)
+                        setAgentView('notifications')
+                      } else openAgentView('notifications')
+                    }}
+                  >
+                    <Bell size={14} aria-hidden />
+                    {notices.length > 0 ? (
+                      <span className="absolute -right-1.5 -top-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-0.5 text-[9px] font-bold text-white" aria-hidden>
+                        {notices.length > 99 ? '99+' : notices.length}
+                      </span>
+                    ) : null}
+                  </button>
                   {minimized ? null : (
                   <>
                   <button type="button" className={headerToolClass(agentView === 'history')} title="Saved Chats" aria-label="Saved Chats" disabled={loading} onClick={() => openAgentView('history')}>
@@ -1183,7 +1229,7 @@ export function QiAssistant({
                   </button>
                   <button type="button" className={cn(headerToolClass(agentView === 'tasks'), 'relative')} title="Scheduled Tasks" aria-label="Scheduled Tasks" disabled={loading} onClick={() => openAgentView('tasks')}>
                     <CalendarClock size={14} aria-hidden />
-                    {unseenRuns > 0 ? <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-red-600" aria-hidden /> : null}
+                    {notices.some((n) => n.runId) ? <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-red-600" aria-hidden /> : null}
                   </button>
                   <button type="button" className={headerToolClass(agentView === 'connectors')} title="Connectors (Mail)" aria-label="Connectors" disabled={loading} onClick={() => openAgentView('connectors')}>
                     <Plug size={14} aria-hidden />
@@ -1235,10 +1281,14 @@ export function QiAssistant({
                     ? 'Scheduled Tasks'
                     : agentView === 'connectors'
                       ? 'Connectors'
-                      : 'Memory — Facts and Standing Instructions'}
+                      : agentView === 'notifications'
+                        ? 'Notifications'
+                        : 'Memory — Facts and Standing Instructions'}
               </p>
               {agentView === 'connectors' ? (
                 <MailConnectorPanel />
+              ) : agentView === 'notifications' ? (
+                <QiNoticesPanel notices={notices} busy={loading} onAct={actOnNotice} onDismiss={dismissNotice} onClearAll={clearAllNotices} />
               ) : viewLoading ? (
                 <p className="flex items-center gap-2 text-sm text-stone-500"><Loader2 size={14} className="animate-spin" /> Loading…</p>
               ) : agentView === 'tasks' ? (
