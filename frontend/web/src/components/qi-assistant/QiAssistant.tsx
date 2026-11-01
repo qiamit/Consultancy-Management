@@ -936,6 +936,7 @@ export function QiAssistant({
       }
     },
     [
+      addChatNotice,
       activeRecordId,
       activeRecordTable,
       attachedImage,
@@ -949,7 +950,6 @@ export function QiAssistant({
       page,
       agentMode,
       agentRoutes,
-      addChatNotice,
       selectedSkill,
       showIsCodePicker,
       stopListening,
