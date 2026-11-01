@@ -11,6 +11,7 @@ import { createAssistantMail } from './assistantMail.mjs'
 const PORT = Number(process.env.PORT || 8080)
 const MANAK_TTL_MS = 45 * 60 * 1000
 const REST_URL = (process.env.REST_URL || 'http://rest.railway.internal:3000').replace(/\/$/, '')
+const STORAGE_URL = (process.env.STORAGE_URL || 'http://storage:5000').replace(/\/$/, '')
 const AUTH_URL = (process.env.AUTH_URL || 'http://auth.railway.internal:9999').replace(/\/$/, '')
 const SERVICE_ROLE_KEY = process.env.SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 const RESEND_API_KEY = process.env.RESEND_API_KEY || ''
@@ -348,10 +349,24 @@ const handleQiAssistant = createQiAssistantHandler({
   requireUser: requireActiveUser,
   requireAdmin: requireFullAccess,
   userRestFor: (req) => userRestFor(callerJwt(req)),
+  storageFor: (req) => storageReaderFor(callerJwt(req)),
   rest,
   readBody,
   corsJson,
 })
+
+/** Reads a stored file as the caller (their own JWT, so storage policies apply). Returns its bytes. */
+function storageReaderFor(jwt) {
+  return async function readStorage(bucket, path) {
+    const objectPath = String(path).split('/').map(encodeURIComponent).join('/')
+    const res = await fetch(`${STORAGE_URL}/object/authenticated/${encodeURIComponent(bucket)}/${objectPath}`, {
+      signal: AbortSignal.timeout(60_000),
+      headers: { Authorization: `Bearer ${jwt}` },
+    })
+    if (!res.ok) throw new Error(`The file could not be read from storage (${res.status}).`)
+    return res.arrayBuffer()
+  }
+}
 
 /** PostgREST as the caller (their own JWT, so RLS applies). Returns { data, total } (total with Prefer count=exact). */
 function userRestFor(jwt) {

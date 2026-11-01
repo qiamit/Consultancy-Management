@@ -188,7 +188,7 @@ function extractAiError(payload, status) {
  */
 /** Chat completions with tools (OpenAI-compatible); returns the provider's choice.message. */
 export function createToolCaller({ apiBase, apiKey, modelId, provider, maxTokens, temperature, reasoning = false }) {
-  return async (messages, tools) => {
+  return async (messages, tools, { final = false } = {}) => {
     const r = await fetch(`${apiBase}/chat/completions`, {
       method: 'POST',
       redirect: 'error',
@@ -198,7 +198,7 @@ export function createToolCaller({ apiBase, apiKey, modelId, provider, maxTokens
         model: modelId,
         messages,
         tools,
-        tool_choice: 'auto',
+        tool_choice: final ? 'none' : 'auto',
         ...(reasoning ? { max_completion_tokens: maxTokens } : { temperature, max_tokens: maxTokens }),
       }),
     })
@@ -238,7 +238,6 @@ export async function loadAgentModel(rest) {
   }
   if (!String(model.api_key || '').trim()) throw new Error('The default AI model has no API key.')
   const provider = String(model.provider ?? 'openai')
-  if (provider === 'anthropic') throw new Error('Scheduled tasks need an OpenAI-compatible AI model (not "anthropic").')
   const apiBase = resolveApiBase(provider, model.api_base_url ? String(model.api_base_url) : null)
   if (String(model.api_base_url ?? '').trim()) await assertPublicHttpsBase(apiBase)
   const maxTokens = Number(model.max_tokens)
@@ -256,7 +255,7 @@ export async function loadAgentModel(rest) {
 }
 
 export function createQiAssistantHandler(deps) {
-  const { requireUser, requireAdmin, userRestFor, rest, readBody, corsJson } = deps
+  const { requireUser, requireAdmin, userRestFor, storageFor, rest, readBody, corsJson } = deps
 
   return async function handleQiAssistant(req, res) {
     if (req.method === 'OPTIONS') {
@@ -412,8 +411,8 @@ export function createQiAssistantHandler(deps) {
     }
 
     const provider = String(model.provider ?? 'openai')
-    // Text chat stays on the providers it always used; picture requests may use Anthropic's OpenAI-compatible endpoint.
-    if (provider === 'anthropic' && images.length === 0) {
+    // Text chat stays on the providers it always used; picture requests and the Admin Agent may use Anthropic's OpenAI-compatible endpoint.
+    if (provider === 'anthropic' && images.length === 0 && !agentMode) {
       corsJson(res, 400, {
         error:
           'Provider "anthropic" is not yet supported in QE Assistant. Use Google Gemini, OpenAI, DeepSeek, OpenRouter, or Custom with an OpenAI-compatible base URL.',
@@ -561,7 +560,7 @@ export function createQiAssistantHandler(deps) {
     // Sample conformity is a judgement over long documents: DeepSeek reasons first (its reasoning counts towards
     // max_tokens, so the budget is larger), at a low temperature, with more time.
     const reasonedCheck = body.page === 'bis/sample-conformity' && provider === 'deepseek'
-    const chatMaxTokens = reasonedCheck ? 32768 : isLongExtraction ? 8192 : Number.isFinite(maxTokens) ? Math.min(maxTokens, 8192) : 4096
+    const chatMaxTokens = reasonedCheck ? 32768 : isLongExtraction || agentMode ? 8192 : Number.isFinite(maxTokens) ? Math.min(maxTokens, 8192) : 4096
     // Drawing a layout from a sketch wants faithful positions, not creative variety.
     const chatTemperature = body.page === 'bis/plant-layout' || body.page === 'bis/sample-conformity'
       ? 0.2
@@ -608,6 +607,7 @@ export function createQiAssistantHandler(deps) {
           routes: body.routes,
           userEmail: String(caller?.email ?? ''),
           ownerId: userId,
+          readStorage: storageFor(req),
         })
         corsJson(res, 200, {
           reply: result.reply,
