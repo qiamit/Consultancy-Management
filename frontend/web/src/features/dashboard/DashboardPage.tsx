@@ -41,7 +41,6 @@ import {
   formatCount,
   formatInr,
   formatInrCompact,
-  formatSignedCount,
   relativeTimeLabel,
 } from './dashboardFormat'
 import {
@@ -275,10 +274,7 @@ export default function DashboardPage() {
       <div className={limsDarkBarAccentClass} aria-hidden="true" />
       <div className="relative flex min-w-0 flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300">
-            Quality Engineering · Dashboard
-          </p>
-          <h1 className="mt-1 break-words font-jakarta text-xl font-bold tracking-tight text-white sm:text-2xl">
+          <h1 className="break-words font-jakarta text-xl font-bold tracking-tight text-white sm:text-2xl">
             Welcome{greetingName ? `, ${greetingName}` : ''}
           </h1>
           <p className="mt-0.5 text-xs text-white/70 sm:text-sm">{todayLabel}</p>
@@ -401,16 +397,13 @@ function DashboardBody({
 
   // ---------------------------------------------------------------- KPI tiles
   const kpis: KpiTileProps[] = []
-  const failed = 'Could Not Load'
   if (lic) {
     const s = lic.data?.status
     const granted = lic.data?.granted ?? []
-    const grantedNow = granted[granted.length - 1]?.count ?? 0
     kpis.push(
       {
         label: 'Active Licences',
         value: s ? formatCount(s.operative + s.renewal) : '—',
-        detail: s ? `${formatSignedCount(grantedNow)} Granted This Month` : failed,
         icon: BadgeCheck,
         tone: 'good',
         href: href('licences'),
@@ -419,7 +412,6 @@ function DashboardBody({
       {
         label: 'Due Soon (≤ 90 Days)',
         value: s ? formatCount(s.renewal) : '—',
-        detail: lic.data ? `${formatCount(lic.data.dueNext30)} in Next 30 Days` : failed,
         icon: CalendarClock,
         tone: 'warning',
         href: renewalsHref,
@@ -428,7 +420,6 @@ function DashboardBody({
       {
         label: 'Deferred (Late Fee)',
         value: s ? formatCount(s.deferred) : '—',
-        detail: s ? 'Renewable With ₹5,000 Late Fee' : failed,
         icon: Hourglass,
         tone: 'serious',
         href: renewalsHref,
@@ -436,7 +427,6 @@ function DashboardBody({
       {
         label: 'Expired',
         value: s ? formatCount(s.expired) : '—',
-        detail: s ? 'Past the 90-Day Deferred Window' : failed,
         icon: CalendarX2,
         tone: 'critical',
         href: href('expired') ?? href('licences'),
@@ -447,7 +437,6 @@ function DashboardBody({
     kpis.push({
       label: 'Applications In Progress',
       value: apps.data ? formatCount(apps.data.inProgress) : '—',
-      detail: apps.data ? `${formatCount(apps.data.updatedLast7Days)} Updated in Last 7 Days` : failed,
       icon: FilePlus2,
       href: href('applications'),
       spark: apps.data && apps.data.filed.some((f) => f.count) ? apps.data.filed.map((f) => f.count) : undefined,
@@ -458,7 +447,6 @@ function DashboardBody({
     kpis.push({
       label: 'Inclusions In Progress',
       value: n != null ? formatCount(n) : '—',
-      detail: n != null ? 'Scope Additions Being Prepared' : failed,
       icon: Layers,
       href: href('inclusions'),
     })
@@ -468,7 +456,6 @@ function DashboardBody({
     kpis.push({
       label: 'Open Non-Conformity',
       value: d ? formatCount(d.total) : '—',
-      detail: d ? (d.overdue ? `${formatCount(d.overdue)} Past BIS Deadline` : 'None Past BIS Deadline') : failed,
       icon: d && d.overdue ? AlertTriangle : Ban,
       tone: !d ? 'neutral' : d.total > 0 ? 'critical' : 'good',
       href: href('nonConformity'),
@@ -480,7 +467,6 @@ function DashboardBody({
       kpis.push({
         label: 'Receipts This Month',
         value: f ? formatInrCompact(f.receiptsThisMonth) : '—',
-        detail: f ? `Last Month ${formatInrCompact(f.receiptsLastMonth)}` : failed,
         icon: Wallet,
         href: href('receipts'),
         spark: f?.months.map((m) => m.receipts),
@@ -490,7 +476,6 @@ function DashboardBody({
       kpis.push({
         label: 'Quotations (12 Months)',
         value: formatInrCompact(f.quotations12m),
-        detail: `${formatCount(f.quotationsCount12m)} Quotations`,
         icon: Wallet,
         href: href('quotations'),
         spark: f.months.map((m) => m.quotations),
@@ -536,7 +521,7 @@ function DashboardBody({
     const total = data.dueSoon.data?.total ?? 0
     listCards.push(
       <DashCard key="due">
-        <CardHeader title="Due in Next 30 Days" subtitle="Validity Ends Soon — Start the Renewal" href={renewalsHref} linkLabel="Renewals" />
+        <CardHeader title="Due in Next 30 Days" href={renewalsHref} linkLabel="Renewals" />
         <ListBody
           section={data.dueSoon}
           items={dueItems}
@@ -551,7 +536,7 @@ function DashboardBody({
   if (data.recentApplications) {
     listCards.push(
       <DashCard key="recent">
-        <CardHeader title="Recently Edited Applications" subtitle="Latest Changes to New Applications" href={href('applications')} />
+        <CardHeader title="Recently Edited Applications" href={href('applications')} />
         <ListBody
           section={data.recentApplications}
           items={recentItems}
@@ -566,7 +551,7 @@ function DashboardBody({
     const total = nc.data?.total ?? 0
     listCards.push(
       <DashCard key="nc">
-        <CardHeader title="Open Non-Conformity / Stop Marking" subtitle="BIS Notices Not Yet Closed" href={href('nonConformity')} />
+        <CardHeader title="Open Non-Conformity / Stop Marking" href={href('nonConformity')} />
         <ListBody
           section={nc}
           items={ncItems}
@@ -612,15 +597,6 @@ function DashboardBody({
     fin?.data?.months.some((m) => m.quotations || m.invoices || m.receipts),
   )
   const showFinance = Boolean(fin && (fin.error || financeHasValues))
-  const financeSubtitle = fin?.data
-    ? financeSeries
-        .map((key) => {
-          const total = fin.data!.months.reduce((a, m) => a + m[key], 0)
-          const verb = key === 'quotations' ? 'Quoted' : key === 'invoices' ? 'Invoiced' : 'Received'
-          return `${verb} ${formatInrCompact(total)}`
-        })
-        .join(' · ')
-    : undefined
 
   const stageRows = apps?.data?.byStage ?? []
   const isRows = licData?.topIsCodes ?? []
@@ -653,7 +629,6 @@ function DashboardBody({
             <DashCard className={cn('md:col-span-2', XL_SPAN[8])}>
               <CardHeader
                 title="Renewal Pipeline — Next 12 Months"
-                subtitle={licData ? `${formatCount(pipelineTotal)} QE-Managed Licences Reach Validity · Click a Bar to Open Renewals` : undefined}
                 href={renewalsHref}
                 linkLabel="Renewals"
               />
@@ -672,7 +647,7 @@ function DashboardBody({
             </DashCard>
 
             <DashCard className={cn('md:col-span-1', XL_SPAN[4])}>
-              <CardHeader title="Licence Status" subtitle="By Validity Date (QE-Managed)" href={href('licences')} />
+              <CardHeader title="Licence Status" href={href('licences')} />
               <ChartBody
                 section={lic}
                 height={200}
@@ -733,7 +708,7 @@ function DashboardBody({
 
         {apps ? (
           <DashCard className={cn('md:col-span-1', XL_SPAN[lic ? 6 : 12])}>
-            <CardHeader title="Applications by Stage" subtitle={apps.data ? `${formatCount(apps.data.inProgress)} Open Applications` : undefined} href={href('applications')} />
+            <CardHeader title="Applications by Stage" href={href('applications')} />
             <ChartBody
               section={apps}
               height={barHeight}
@@ -756,7 +731,7 @@ function DashboardBody({
 
         {lic ? (
           <DashCard className={cn('md:col-span-1', XL_SPAN[apps ? 6 : 12])}>
-            <CardHeader title="Top 10 IS Codes" subtitle="Licences per Indian Standard" href={href('licences')} linkLabel="Licences" />
+            <CardHeader title="Top 10 IS Codes" href={href('licences')} linkLabel="Licences" />
             <ChartBody
               section={lic}
               height={barHeight}
@@ -781,7 +756,6 @@ function DashboardBody({
           <DashCard className={cn('md:col-span-2', XL_SPAN[showFinance ? 6 : 12])}>
             <CardHeader
               title={filedAny ? 'Licences Granted & Applications Filed' : 'Licences Granted per Month'}
-              subtitle={licData ? `Last 12 Months · ${formatCount(grantedTotal)} Granted` : undefined}
               href={href('licences')}
             />
             <ChartBody
@@ -809,7 +783,6 @@ function DashboardBody({
           <DashCard className={cn('md:col-span-2', XL_SPAN[lic ? 6 : 12])}>
             <CardHeader
               title="Finance — Last 12 Months"
-              subtitle={financeSubtitle}
               href={href('quotations') ?? href('invoices') ?? href('receipts')}
             />
             <ChartBody

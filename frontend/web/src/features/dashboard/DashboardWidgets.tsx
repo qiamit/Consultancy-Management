@@ -60,7 +60,6 @@ export function Sparkline({ values, className }: { values: number[]; className?:
 export type KpiTileProps = {
   label: string
   value: string
-  detail?: ReactNode
   icon: ElementType
   tone?: Tone
   href?: string | null
@@ -68,7 +67,7 @@ export type KpiTileProps = {
   ariaLabel?: string
 }
 
-export function KpiTile({ label, value, detail, icon: Icon, tone = 'neutral', href, spark, ariaLabel }: KpiTileProps) {
+export function KpiTile({ label, value, icon: Icon, tone = 'neutral', href, spark, ariaLabel }: KpiTileProps) {
   const body = (
     <>
       <span aria-hidden="true" className={cn('absolute inset-y-0 left-0 w-1', TONE_BAR[tone])} />
@@ -89,7 +88,6 @@ export function KpiTile({ label, value, detail, icon: Icon, tone = 'neutral', hr
         </p>
         {spark ? <Sparkline values={spark} className="mb-1" /> : null}
       </div>
-      {detail ? <p className="mt-0.5 min-w-0 truncate text-xs text-muted-foreground">{detail}</p> : null}
     </>
   )
   const cls = cn(
@@ -158,13 +156,11 @@ export function SrDataTable({ table }: { table: SrTable }) {
 
 export function CardHeader({
   title,
-  subtitle,
   href,
   linkLabel = 'Open',
   right,
 }: {
   title: string
-  subtitle?: ReactNode
   href?: string | null
   linkLabel?: string
   right?: ReactNode
@@ -173,7 +169,6 @@ export function CardHeader({
     <div className="flex min-w-0 flex-wrap items-start justify-between gap-x-3 gap-y-1 border-b border-[rgb(var(--lims-paper-border))] px-4 py-3">
       <div className="min-w-0">
         <h2 className="font-jakarta text-sm font-bold text-foreground sm:text-base">{title}</h2>
-        {subtitle ? <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p> : null}
       </div>
       <div className="flex shrink-0 items-center gap-2">
         {right}
