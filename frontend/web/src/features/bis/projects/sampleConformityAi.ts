@@ -122,11 +122,55 @@ FIELD FORMATS (keep each cell short, no sentences in the table):
 - verdict: "Pass", "Fail" or "Not Clear".
 - missing_tests: "Test Name (Clause x)".
 - summary: one sentence with the verdict and the deciding reason.
-- notes: the observations, one short sentence each: whether the sample matches the Test Request, every failure with its reason, OCR readings you corrected, missing tests, disagreement with the lab's remark, anything else the reviewer must know.
+- notes: the observations, one short sentence each: whether the sample matches the Test Request, every failure with its reason, missing tests, disagreement with the lab's remark, anything else the reviewer must know. OCR corrections: ONE note listing only the values you changed.
+Before answering, re-check every row: for "≥ X" the result must be at least X; for "≤ X" at most X. Compare the numbers, not the words.
 - sample: values as written in the report ("" when not given).
 
 ANSWER: JSON only, no other text, exactly these keys. Example of the format (values are only an example):
 {"sample":{"description":"ERW, Black, Fe 410, 168.3 mm OD × 4.5 mm","declared_values":"Silicon killed","batch_number":"B-12","date_of_manufacture":"12-10-2026"},"verdict":"No","summary":"Does not conform: Yield Strength 231 MPa is below the 235 MPa minimum.","results":[{"parameter":"Carbon","clause":"8.1, Table 2","requirement":"≤ 0.25 %","result":"0.18 %","verdict":"Pass"},{"parameter":"Yield Strength","clause":"9.1, Table 4","requirement":"≥ 235 MPa","result":"231 MPa","verdict":"Fail"}],"missing_tests":["Flattening Test (Clause 9.2.1)"],"notes":["Sample details match the Test Request.","Yield Strength 231 MPa is below the 235 MPa minimum of Table 4.","Flattening Test required by the Product Manual is not reported."]}`
+
+type CheckResult = OslConformityCheck['results'][number]
+
+const NUMBER = /-?\d+(?:\.\d+)?/g
+
+/**
+ * Re-does the arithmetic of a one-sided numeric limit ("≥ 450 MPa", "≤ 0.25 %", "450 Minimum", "Max 0.040") against
+ * the reported value(s) — every number of a range such as "2.61 - 2.65 mm" must meet it. Returns the verdict the
+ * numbers give, or null when the requirement or result is not a simple numeric limit.
+ */
+function numericVerdict(r: CheckResult): 'Pass' | 'Fail' | null {
+  const req = r.requirement.replace(/,/g, '')
+  const min = /≥|>=|\bmin(?:imum)?\b|\bnot less than\b|\bat least\b/i.test(req)
+  const max = /≤|<=|\bmax(?:imum)?\b|\bnot more than\b|\bup to\b/i.test(req)
+  if (min === max || /±|%\s*of|of\s+(?:od|thickness|length)|\(|\bor\b/i.test(req)) return null
+  const limits = req.match(NUMBER) ?? []
+  const values = (r.result.replace(/,/g, '').match(NUMBER) ?? []).map(Number)
+  if (limits.length !== 1 || !values.length || values.length > 2) return null
+  const limit = Number(limits[0])
+  return values.every((v) => (min ? v >= limit : v <= limit)) ? 'Pass' : 'Fail'
+}
+
+/**
+ * Makes the answer consistent whatever model wrote it: numeric limits are re-checked, and the overall verdict follows
+ * the fixed rule (any Fail or missing test = No; otherwise Undecided when the AI could not decide; else Yes).
+ */
+function settleCheck(check: OslConformityCheck): OslConformityCheck {
+  const corrections: string[] = []
+  const results = check.results.map((r) => {
+    const computed = numericVerdict(r)
+    if (!computed || computed === r.verdict || r.verdict === 'Not Clear') return r
+    corrections.push(`${r.parameter}: ${r.result} against ${r.requirement} is ${computed === 'Pass' ? 'within' : 'outside'} the limit — verdict corrected to ${computed}.`)
+    return { ...r, verdict: computed }
+  })
+  const failed = results.some((r) => r.verdict === 'Fail') || check.missingTests.length > 0
+  const verdict = failed ? 'No' : check.verdict === 'Undecided' ? 'Undecided' : 'Yes'
+  const notes = corrections.length ? [...check.notes, ...corrections] : check.notes
+  const summary =
+    corrections.length && verdict !== check.verdict
+      ? `${verdict === 'Yes' ? 'Conforms' : 'Does not conform'} after re-checking the figures: ${corrections.join(' ')}`
+      : check.summary
+  return { ...check, results, verdict, notes, summary }
+}
 
 /**
  * AI conformity check of one sample: reads the Test Request, the Test Report (text; OCR and page pictures when scanned),
@@ -234,9 +278,5 @@ export async function checkSampleConformity(input: {
       manufactureDate: parsed.sample.manufactureDate,
     },
   }
-  // A failed result or a missing test can never leave the sample at "Yes".
-  if (check.verdict === 'Yes' && (check.results.some((r) => r.verdict === 'Fail') || check.missingTests.length)) {
-    return { ...check, verdict: 'No' }
-  }
-  return check
+  return settleCheck(check)
 }
