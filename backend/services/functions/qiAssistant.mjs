@@ -604,6 +604,7 @@ export function createQiAssistantHandler(deps) {
           userRest: userRestFor(req),
           routes: body.routes,
           userEmail: String(caller?.email ?? ''),
+          ownerId: userId,
         })
         corsJson(res, 200, {
           reply: result.reply,

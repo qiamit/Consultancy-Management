@@ -159,3 +159,77 @@ export async function saveRunAgent(runId: string, agent: AssistantTaskRun['agent
   const { error } = await supabase.from('assistant_task_runs').update({ agent }).eq('id', runId)
   if (error) throw new Error(error.message)
 }
+
+/** The admin's connected mailbox (Zoho Mail by default). The app password is set once and never read back. */
+export type AssistantMailAccount = {
+  id: string
+  email: string
+  username: string
+  imap_host: string
+  imap_port: number
+  smtp_host: string
+  smtp_port: number
+  enabled: boolean
+  password_set: boolean
+  last_sync_at: string | null
+  last_error: string | null
+}
+
+export async function getMailAccount(): Promise<AssistantMailAccount | null> {
+  const { data, error } = await supabase
+    .from('assistant_mail_accounts')
+    .select('id, email, username, imap_host, imap_port, smtp_host, smtp_port, enabled, password_set, last_sync_at, last_error')
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  return (data as AssistantMailAccount | null) ?? null
+}
+
+export async function countMailMessages(): Promise<number> {
+  const { count } = await supabase.from('assistant_mail_messages').select('id', { count: 'exact', head: true })
+  return count ?? 0
+}
+
+export async function saveMailAccount(
+  existing: AssistantMailAccount | null,
+  fields: Pick<AssistantMailAccount, 'email' | 'username' | 'imap_host' | 'imap_port' | 'smtp_host' | 'smtp_port' | 'enabled'>,
+  password: string,
+): Promise<void> {
+  const write = existing
+    ? supabase.from('assistant_mail_accounts').update({ ...fields, updated_at: new Date().toISOString() }).eq('id', existing.id)
+    : supabase.from('assistant_mail_accounts').insert(fields)
+  const { error } = await write
+  if (error) throw new Error(error.message)
+  if (password) {
+    const { error: pwError } = await supabase.rpc('assistant_mail_password_set', { p_password: password })
+    if (pwError) throw new Error(pwError.message)
+  }
+}
+
+export async function disconnectMailAccount(id: string): Promise<void> {
+  const { error } = await supabase.from('assistant_mail_accounts').delete().eq('id', id)
+  if (error) throw new Error(error.message)
+}
+
+/** Functions service call as the signed-in admin (same headers as QE Assistant). */
+async function callFunction<T>(path: string, body: Record<string, unknown>): Promise<T> {
+  const { data } = await supabase.auth.getSession()
+  const token = data.session?.access_token
+  if (!token) throw new Error('Session Expired. Please Log In Again.')
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
+  const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${path}`, {
+    method: 'POST',
+    headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}`, 'x-user-jwt': token, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  const payload = (await res.json().catch(() => null)) as (T & { error?: string }) | null
+  if (!res.ok) throw new Error(String(payload?.error || `Request Failed (${res.status})`))
+  return payload as T
+}
+
+export function syncMailNow(): Promise<{ added: number }> {
+  return callFunction('assistant-mail/sync', {})
+}
+
+export function sendAssistantMail(values: Record<string, unknown>): Promise<{ sent: boolean; to: string[] }> {
+  return callFunction('assistant-mail/send', values)
+}

@@ -9,6 +9,7 @@ import { describeSchedule, nextRunAt } from './assistantSchedule.mjs'
 import { loadAgentModel } from './qiAssistant.mjs'
 
 const TICK_MS = 60 * 1000
+const MAIL_TICK_MS = 60 * 1000
 const MAX_PER_TICK = 3
 
 function escapeHtml(text) {
@@ -77,6 +78,7 @@ export function createAssistantTaskRunner({ rest, serviceRest, sendEmail }) {
         userRest: serviceRest,
         routes: [],
         allowedTools: SCHEDULED_RUN_TOOLS,
+        ownerId: task.user_id,
         schemaKey: 'scheduled',
         messages: [
           {
@@ -154,5 +156,20 @@ export function startAssistantScheduler(deps) {
   const { tick } = createAssistantTaskRunner(deps)
   setTimeout(() => void tick(), 30 * 1000)
   setInterval(() => void tick(), TICK_MS)
+  // Connected mailboxes: fetch new mail every 5 minutes (each account checks its own last sync time).
+  if (deps.syncMail) {
+    let syncing = false
+    setInterval(() => {
+      if (syncing) return
+      syncing = true
+      void deps.syncMail()
+        .catch((err) => {
+          if (!/assistant_mail/.test(String(err?.message ?? ''))) console.error('[assistant-mail] sync failed', err)
+        })
+        .finally(() => {
+          syncing = false
+        })
+    }, MAIL_TICK_MS)
+  }
   console.log('[assistant-tasks] scheduler started')
 }

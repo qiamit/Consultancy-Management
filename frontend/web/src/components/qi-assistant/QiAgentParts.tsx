@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Check, CircleAlert, Database, ExternalLink, Loader2, Search, Table2, Trash2, X } from 'lucide-react'
+import { Check, CircleAlert, Database, ExternalLink, Loader2, Mail, Search, Send, Table2, Trash2, X } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
+import { sendAssistantMail } from './assistantStore'
 import { cn } from '@/lib/utils'
 import type { QiAgentProposal, QiAgentStep } from './qiAssistantApi'
 
@@ -8,6 +9,7 @@ const ACTION_STYLE: Record<QiAgentProposal['action'], { label: string; cls: stri
   create: { label: 'Create', cls: 'border-emerald-700 bg-emerald-50 text-emerald-800' },
   update: { label: 'Update', cls: 'border-amber-700 bg-amber-50 text-amber-900' },
   delete: { label: 'Delete', cls: 'border-red-700 bg-red-50 text-red-700' },
+  send_email: { label: 'Email', cls: 'border-sky-700 bg-sky-50 text-sky-800' },
 }
 
 function show(value: unknown): string {
@@ -22,7 +24,17 @@ export function AgentSteps({ steps }: { steps: QiAgentStep[] }) {
   return (
     <ul className="mt-2 space-y-0.5 border-t border-stone-200 pt-1.5">
       {steps.map((s, i) => {
-        const Icon = s.error ? CircleAlert : s.tool === 'open_page' ? ExternalLink : s.tool === 'propose_changes' ? Database : s.tool === 'query_rows' ? Search : Table2
+        const Icon = s.error
+          ? CircleAlert
+          : s.tool === 'open_page'
+            ? ExternalLink
+            : s.tool === 'propose_changes'
+              ? Database
+              : /mail/.test(s.tool)
+                ? Mail
+                : s.tool === 'query_rows'
+                  ? Search
+                  : Table2
         return (
           <li key={i} className={cn('flex items-start gap-1.5 text-[11px] leading-snug', s.error ? 'text-red-700' : 'text-stone-500')}>
             <Icon className="mt-px h-3 w-3 shrink-0" aria-hidden />
@@ -38,6 +50,10 @@ type ApplyState = { status: 'pending' | 'saving' | 'saved' | 'cancelled' | 'erro
 
 /** Performs one confirmed change with the admin's own session (RLS applies). Returns a short result line. */
 async function applyProposal(p: QiAgentProposal): Promise<string> {
+  if (p.action === 'send_email') {
+    const result = await sendAssistantMail(p.values)
+    return `Sent to ${result.to.join(', ')}`
+  }
   const table = supabase.from(p.table)
   const { data, error } =
     p.action === 'create'
@@ -48,7 +64,7 @@ async function applyProposal(p: QiAgentProposal): Promise<string> {
   if (error) throw new Error(error.message)
   if (!Array.isArray(data) || data.length === 0) throw new Error('Not Saved — No Access to This Record, or It No Longer Exists.')
   const id = (data[0] as { id?: unknown }).id
-  return `${ACTION_STYLE[p.action].label}d ${p.table}${id ? ` (${String(id)})` : ''}`
+  return `${p.action === 'create' ? 'Created' : p.action === 'update' ? 'Updated' : 'Deleted'} ${p.table}${id ? ` (${String(id)})` : ''}`
 }
 
 /**
@@ -101,7 +117,9 @@ export function AgentProposals({
       {proposals.map((p) => {
         const st = state[p.key] ?? { status: 'pending' as const }
         const style = ACTION_STYLE[p.action]
-        const cols = p.action === 'delete' ? Object.keys(p.before ?? {}).slice(0, 8) : Object.keys(p.values)
+        const cols = p.action === 'delete' ? Object.keys(p.before ?? {}).slice(0, 8) : Object.keys(p.values).filter((c) => c !== 'reply_to_mail_id')
+        const hasBefore = p.action === 'update' || p.action === 'delete'
+        const hasAfter = p.action !== 'delete'
         return (
           <div key={p.key} className={cn('border bg-white text-xs', st.status === 'saved' ? 'border-emerald-600' : st.status === 'error' ? 'border-red-500' : 'border-stone-400')}>
             <div className="flex items-center gap-2 border-b border-stone-200 bg-stone-50 px-2 py-1.5">
@@ -114,16 +132,16 @@ export function AgentProposals({
                 <thead>
                   <tr className="text-[10px] uppercase tracking-wide text-stone-500">
                     <th className="px-2 py-1 text-left font-semibold">Field</th>
-                    {p.action !== 'create' ? <th className="px-2 py-1 text-left font-semibold">{p.action === 'delete' ? 'Value' : 'Before'}</th> : null}
-                    {p.action !== 'delete' ? <th className="px-2 py-1 text-left font-semibold">{p.action === 'create' ? 'Value' : 'After'}</th> : null}
+                    {hasBefore ? <th className="px-2 py-1 text-left font-semibold">{p.action === 'delete' ? 'Value' : 'Before'}</th> : null}
+                    {hasAfter ? <th className="px-2 py-1 text-left font-semibold">{p.action === 'update' ? 'After' : 'Value'}</th> : null}
                   </tr>
                 </thead>
                 <tbody>
                   {cols.map((c) => (
                     <tr key={c} className="border-t border-stone-100 align-top">
                       <td className="px-2 py-1 font-mono text-[11px] text-stone-600">{c}</td>
-                      {p.action !== 'create' ? <td className="break-all px-2 py-1 text-stone-500 line-through decoration-stone-300">{show(p.before?.[c])}</td> : null}
-                      {p.action !== 'delete' ? <td className="break-all px-2 py-1 font-medium text-stone-900">{show(p.values[c])}</td> : null}
+                      {hasBefore ? <td className="break-all px-2 py-1 text-stone-500 line-through decoration-stone-300">{show(p.before?.[c])}</td> : null}
+                      {hasAfter ? <td className={cn('break-words px-2 py-1 font-medium text-stone-900', p.action === 'send_email' && c === 'body' && 'whitespace-pre-wrap font-normal')}>{show(p.values[c])}</td> : null}
                     </tr>
                   ))}
                 </tbody>
@@ -142,7 +160,8 @@ export function AgentProposals({
                     className={cn('inline-flex h-7 items-center gap-1 border px-2 font-semibold text-white', p.action === 'delete' ? 'border-red-700 bg-red-600 hover:bg-red-700' : 'border-amber-800 bg-amber-700 hover:bg-amber-800')}
                     onClick={() => void run([p])}
                   >
-                    {p.action === 'delete' ? <Trash2 className="h-3.5 w-3.5" aria-hidden /> : <Check className="h-3.5 w-3.5" aria-hidden />} Confirm
+                    {p.action === 'delete' ? <Trash2 className="h-3.5 w-3.5" aria-hidden /> : p.action === 'send_email' ? <Send className="h-3.5 w-3.5" aria-hidden /> : <Check className="h-3.5 w-3.5" aria-hidden />}
+                    {p.action === 'send_email' ? 'Send' : 'Confirm'}
                   </button>
                 </>
               ) : st.status === 'saving' ? (
