@@ -186,6 +186,75 @@ function extractAiError(payload, status) {
  *   corsJson: (res: import('node:http').ServerResponse, status: number, body: unknown) => void
  * }} deps
  */
+/** Chat completions with tools (OpenAI-compatible); returns the provider's choice.message. */
+export function createToolCaller({ apiBase, apiKey, modelId, provider, maxTokens, temperature, reasoning = false }) {
+  return async (messages, tools) => {
+    const r = await fetch(`${apiBase}/chat/completions`, {
+      method: 'POST',
+      redirect: 'error',
+      signal: AbortSignal.timeout(180_000),
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: modelId,
+        messages,
+        tools,
+        tool_choice: 'auto',
+        ...(reasoning ? { max_completion_tokens: maxTokens } : { temperature, max_tokens: maxTokens }),
+      }),
+    })
+    const payload = await r.json().catch(() => ({}))
+    if (!r.ok) {
+      console.warn(
+        `[qi-assistant] agent provider error ${r.status} (provider ${provider}, model ${modelId}): ${extractAiError(payload, r.status).slice(0, 500)}`,
+      )
+      const err = new Error(providerErrorMessage(r.status))
+      err.statusCode = 400
+      throw err
+    }
+    return payload?.choices?.[0]?.message ?? {}
+  }
+}
+
+/**
+ * The default active AI model with its key, ready for createToolCaller (scheduled runs). Throws when none is set up
+ * or the provider is not OpenAI-compatible for text.
+ */
+export async function loadAgentModel(rest) {
+  const settingsRows = await rest(`/ai_settings?id=eq.${AI_SETTINGS_ID}&select=*`)
+  const settings = Array.isArray(settingsRows) && settingsRows[0] ? settingsRows[0] : null
+  let model = null
+  if (settings?.default_model_id) {
+    const rows = await rest(`/ai_models?id=eq.${encodeURIComponent(String(settings.default_model_id))}&is_active=eq.true&select=*`)
+    model = Array.isArray(rows) && rows[0] ? rows[0] : null
+  }
+  if (!model) {
+    const rows = await rest('/ai_models?is_active=eq.true&select=*&order=is_default.desc,created_at.asc&limit=1')
+    model = Array.isArray(rows) && rows[0] ? rows[0] : null
+  }
+  if (!model) throw new Error('No active AI model. Add one in Settings → AI Settings → AI Models.')
+  if (!String(model.api_key || '').trim() && model.api_key_set) {
+    const key = await rest('/rpc/ai_model_key_for_service', { method: 'POST', body: JSON.stringify({ p_model_id: model.id }) })
+    model = { ...model, api_key: typeof key === 'string' ? key : '' }
+  }
+  if (!String(model.api_key || '').trim()) throw new Error('The default AI model has no API key.')
+  const provider = String(model.provider ?? 'openai')
+  if (provider === 'anthropic') throw new Error('Scheduled tasks need an OpenAI-compatible AI model (not "anthropic").')
+  const apiBase = resolveApiBase(provider, model.api_base_url ? String(model.api_base_url) : null)
+  if (String(model.api_base_url ?? '').trim()) await assertPublicHttpsBase(apiBase)
+  const maxTokens = Number(model.max_tokens)
+  return {
+    settings,
+    callModel: createToolCaller({
+      apiBase,
+      apiKey: String(model.api_key).trim(),
+      modelId: normalizeModelId(provider, String(model.model_id || '')),
+      provider,
+      maxTokens: Number.isFinite(maxTokens) ? Math.min(maxTokens, 8192) : 4096,
+      temperature: 0.2,
+    }),
+  }
+}
+
 export function createQiAssistantHandler(deps) {
   const { requireUser, requireAdmin, userRestFor, rest, readBody, corsJson } = deps
 
@@ -519,38 +588,23 @@ export function createQiAssistantHandler(deps) {
     })
 
     if (agentMode) {
-      const callModel = async (messages, tools) => {
-        const r = await fetch(`${apiBase}/chat/completions`, {
-          method: 'POST',
-          redirect: 'error',
-          signal: AbortSignal.timeout(180_000),
-          headers: {
-            Authorization: `Bearer ${String(model.api_key).trim()}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: modelId,
-            messages,
-            tools,
-            tool_choice: 'auto',
-            ...(openAiReasoning
-              ? { max_completion_tokens: chatMaxTokens }
-              : { temperature: Math.min(chatTemperature, 0.3), max_tokens: chatMaxTokens }),
-          }),
-        })
-        const payload = await r.json().catch(() => ({}))
-        if (!r.ok) {
-          console.warn(
-            `[qi-assistant] agent provider error ${r.status} (provider ${provider}, model ${modelId}): ${extractAiError(payload, r.status).slice(0, 500)}`,
-          )
-          const err = new Error(providerErrorMessage(r.status))
-          err.statusCode = 400
-          throw err
-        }
-        return payload?.choices?.[0]?.message ?? {}
-      }
+      const callModel = createToolCaller({
+        apiBase,
+        apiKey: String(model.api_key).trim(),
+        modelId,
+        provider,
+        maxTokens: chatMaxTokens,
+        temperature: Math.min(chatTemperature, 0.3),
+        reasoning: openAiReasoning,
+      })
       try {
-        const result = await runAgent({ callModel, messages: chatMessages, userRest: userRestFor(req), routes: body.routes })
+        const result = await runAgent({
+          callModel,
+          messages: chatMessages,
+          userRest: userRestFor(req),
+          routes: body.routes,
+          userEmail: String(caller?.email ?? ''),
+        })
         corsJson(res, 200, {
           reply: result.reply,
           agent: { steps: result.steps, proposals: result.proposals, navigation: result.navigation },

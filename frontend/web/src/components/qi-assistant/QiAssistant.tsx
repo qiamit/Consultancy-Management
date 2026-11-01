@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Brain, FileText, FileUp, FolderUp, History, ImagePlus, Loader2, MessageSquare, Mic, MicOff, Paperclip, Plus, RotateCcw, Send, ShieldCheck, Sparkles, Trash2, X } from 'lucide-react'
+import { Brain, CalendarClock, FileText, FileUp, FolderUp, History, ImagePlus, Loader2, MessageSquare, Mic, MicOff, Paperclip, Pause, Play, Plus, RotateCcw, Send, ShieldCheck, Sparkles, Trash2, X, Zap } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
@@ -28,9 +28,20 @@ import {
   listMemories,
   loadConversationMessages,
   saveMessage,
+  countUnseenRuns,
+  deleteTask,
+  listTaskRuns,
+  listTasks,
+  markRunsSeen,
+  runTaskNow,
+  saveRunAgent,
+  setTaskEnabled,
   type AssistantConversation,
   type AssistantMemory,
+  type AssistantTask,
+  type AssistantTaskRun,
 } from './assistantStore'
+import { describeSchedule, formatIst } from './assistantSchedule'
 import {
   sendQiAssistantMessage,
   validateAssistantImageFile,
@@ -217,7 +228,11 @@ export function QiAssistant({
   const conversationIdRef = useRef<string | null>(null)
   // Same id for rendering (refs are not read during render).
   const [activeChatId, setActiveChatId] = useState<string | null>(null)
-  const [agentView, setAgentView] = useState<'chat' | 'history' | 'memory'>('chat')
+  const [agentView, setAgentView] = useState<'chat' | 'history' | 'memory' | 'tasks'>('chat')
+  const [tasks, setTasks] = useState<AssistantTask[]>([])
+  const [runs, setRuns] = useState<AssistantTaskRun[]>([])
+  // Scheduled-task results not looked at yet (badge on the assistant button and the Tasks button).
+  const [unseenRuns, setUnseenRuns] = useState(0)
   const [conversations, setConversations] = useState<AssistantConversation[]>([])
   const [memories, setMemories] = useState<AssistantMemory[]>([])
   const [viewLoading, setViewLoading] = useState(false)
@@ -453,17 +468,61 @@ export function QiAssistant({
     setAgentView('chat')
   }
 
-  const openAgentView = (view: 'history' | 'memory') => {
+  const openAgentView = (view: 'history' | 'memory' | 'tasks') => {
     if (agentView === view) {
       setAgentView('chat')
       return
     }
     setAgentView(view)
     setViewLoading(true)
-    const load = view === 'history' ? listConversations().then(setConversations) : listMemories().then(setMemories)
+    const load =
+      view === 'history'
+        ? listConversations().then(setConversations)
+        : view === 'memory'
+          ? listMemories().then(setMemories)
+          : Promise.all([listTasks(), listTaskRuns()]).then(([t, r]) => {
+              setTasks(t)
+              setRuns(r)
+              setUnseenRuns(0)
+              return markRunsSeen(r.filter((x) => !x.seen && x.status !== 'running').map((x) => x.id))
+            })
     void load
       .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Could Not Load.'))
       .finally(() => setViewLoading(false))
+  }
+
+  useEffect(() => {
+    if (!agentMode) return
+    let cancelled = false
+    const check = () => {
+      void countUnseenRuns().then((n) => {
+        if (!cancelled) setUnseenRuns(n)
+      })
+    }
+    check()
+    const timer = window.setInterval(check, 3 * 60 * 1000)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [agentMode])
+
+  const updateTask = (task: AssistantTask, action: 'pause' | 'resume' | 'run' | 'delete') => {
+    const work =
+      action === 'delete'
+        ? deleteTask(task.id).then(() => setTasks((prev) => prev.filter((t) => t.id !== task.id)))
+        : (action === 'run' ? runTaskNow(task) : setTaskEnabled(task, action === 'resume')).then((next) =>
+            setTasks((prev) => prev.map((t) => (t.id === task.id ? next : t))),
+          )
+    void work.catch((err: unknown) => setError(err instanceof Error ? err.message : 'Could Not Update the Task.'))
+  }
+
+  /** A change from a scheduled run was confirmed: remember it on the run so it is not offered again. */
+  const recordRunChange = (run: AssistantTaskRun, key: string, line: string) => {
+    if (!run.agent) return
+    const agent = { ...run.agent, applied: { ...(run.agent.applied ?? {}), [key]: line } }
+    setRuns((prev) => prev.map((r) => (r.id === run.id ? { ...r, agent } : r)))
+    void saveRunAgent(run.id, agent).catch(() => undefined)
   }
 
   const openConversation = (id: string) => {
@@ -892,6 +951,11 @@ export function QiAssistant({
           >
             <Sparkles size={16} className="text-amber-300" />
             QE Assistant
+            {agentMode && unseenRuns > 0 ? (
+              <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white" title={`${unseenRuns} New Scheduled Task Result${unseenRuns === 1 ? '' : 's'}`}>
+                {unseenRuns}
+              </span>
+            ) : null}
           </Button>
         )}
       </DialogTrigger>
@@ -939,6 +1003,10 @@ export function QiAssistant({
                   <button type="button" className={headerToolClass(agentView === 'memory')} title="Memory" aria-label="Memory" disabled={loading} onClick={() => openAgentView('memory')}>
                     <Brain size={14} aria-hidden />
                   </button>
+                  <button type="button" className={cn(headerToolClass(agentView === 'tasks'), 'relative')} title="Scheduled Tasks" aria-label="Scheduled Tasks" disabled={loading} onClick={() => openAgentView('tasks')}>
+                    <CalendarClock size={14} aria-hidden />
+                    {unseenRuns > 0 ? <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-red-600" aria-hidden /> : null}
+                  </button>
                   <button type="button" className={headerToolClass(false)} title="New Chat" aria-label="New Chat" disabled={loading} onClick={() => resetChat()}>
                     <RotateCcw size={14} aria-hidden />
                   </button>
@@ -958,10 +1026,72 @@ export function QiAssistant({
           {agentMode && agentView !== 'chat' ? (
             <div className="space-y-2">
               <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-amber-800">
-                {agentView === 'history' ? 'Saved Chats' : 'Memory — Facts and Standing Instructions'}
+                {agentView === 'history' ? 'Saved Chats' : agentView === 'tasks' ? 'Scheduled Tasks' : 'Memory — Facts and Standing Instructions'}
               </p>
               {viewLoading ? (
                 <p className="flex items-center gap-2 text-sm text-stone-500"><Loader2 size={14} className="animate-spin" /> Loading…</p>
+              ) : agentView === 'tasks' ? (
+                <div className="space-y-3">
+                  {tasks.length ? (
+                    tasks.map((t) => (
+                      <div key={t.id} className={cn('border bg-white px-2.5 py-2', t.enabled ? 'border-stone-300' : 'border-stone-200 opacity-70')}>
+                        <div className="flex items-start gap-2">
+                          <CalendarClock size={14} className="mt-0.5 shrink-0 text-amber-700" aria-hidden />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-semibold text-stone-800" title={t.instruction}>{t.title}</p>
+                            <p className="text-[11px] text-stone-500">
+                              {describeSchedule(t)} · {t.enabled ? `Next ${formatIst(t.next_run_at)}` : 'Paused'}
+                              {t.last_status ? ` · Last ${t.last_status === 'ok' ? 'Done' : t.last_status === 'error' ? 'Failed' : 'Running'}` : ''}
+                              {t.notify_email ? ' · Emailed' : ''}
+                            </p>
+                          </div>
+                          <button type="button" className="inline-flex h-6 w-6 shrink-0 items-center justify-center text-stone-500 hover:bg-amber-50 hover:text-amber-800" title="Run Now (Within a Minute)" aria-label={`Run ${t.title} Now`} onClick={() => updateTask(t, 'run')}>
+                            <Zap size={13} />
+                          </button>
+                          <button type="button" className="inline-flex h-6 w-6 shrink-0 items-center justify-center text-stone-500 hover:bg-amber-50 hover:text-amber-800" title={t.enabled ? 'Pause' : 'Resume'} aria-label={t.enabled ? `Pause ${t.title}` : `Resume ${t.title}`} onClick={() => updateTask(t, t.enabled ? 'pause' : 'resume')}>
+                            {t.enabled ? <Pause size={13} /> : <Play size={13} />}
+                          </button>
+                          <button type="button" className="inline-flex h-6 w-6 shrink-0 items-center justify-center text-stone-400 hover:bg-red-50 hover:text-red-700" title="Delete Task" aria-label={`Delete ${t.title}`} onClick={() => updateTask(t, 'delete')}>
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-stone-500">No Scheduled Tasks. Tell Me in the Chat, e.g. “Every Morning at 9, List the Licences Due This Week”.</p>
+                  )}
+                  {runs.length ? (
+                    <>
+                      <p className="pt-1 text-[11px] font-bold uppercase tracking-[0.12em] text-amber-800">Recent Results</p>
+                      {runs.map((r) => (
+                        <div key={r.id} className={cn('border bg-white px-3 py-2 text-sm', r.status === 'error' ? 'border-red-300' : 'border-stone-300')}>
+                          <p className="mb-1 flex items-center gap-2 text-[11px] text-stone-500">
+                            <span className="font-semibold text-stone-700">{tasks.find((t) => t.id === r.task_id)?.title ?? 'Task'}</span>
+                            <span>{formatIst(r.started_at)}</span>
+                            <span className={cn('ml-auto border px-1 text-[9px] font-bold uppercase', r.status === 'ok' ? 'border-emerald-600 text-emerald-700' : r.status === 'error' ? 'border-red-600 text-red-700' : 'border-stone-400 text-stone-500')}>
+                              {r.status === 'ok' ? 'Done' : r.status === 'error' ? 'Failed' : 'Running'}
+                            </span>
+                          </p>
+                          {r.output ? <AssistantMessage content={r.output} /> : null}
+                          {r.agent ? (
+                            <>
+                              <AgentSteps steps={r.agent.steps} />
+                              <AgentProposals
+                                proposals={r.agent.proposals}
+                                done={r.agent.applied}
+                                onSaved={(key, line) => recordRunChange(r, key, line)}
+                                onApplied={() => {
+                                  void queryClient.invalidateQueries()
+                                  onDataChanged?.()
+                                }}
+                              />
+                            </>
+                          ) : null}
+                        </div>
+                      ))}
+                    </>
+                  ) : null}
+                </div>
               ) : agentView === 'history' ? (
                 conversations.length ? (
                   conversations.map((c) => (
