@@ -34,7 +34,8 @@
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "strict-origin-when-cross-origin"
 		X-Frame-Options "DENY"
-		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+		# microphone=(self): QE Assistant voice typing (speech recognition) on this site only.
+		Permissions-Policy "camera=(), microphone=(self), geolocation=(), payment=(), usb=()"
 		# Report-only for now (browser console shows what an enforcing policy would block). Built from what the
 		# app loads: API (auth/rest/storage/functions — AI calls go through it too) and PDF service; Wikipedia API
 		# (process flow chart web reference); OSRM routing (location map); Google map tiles mt0-3.google.com and
@@ -78,7 +79,7 @@
 		Vary "Origin"
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "strict-origin-when-cross-origin"
-		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		Permissions-Policy "camera=(), microphone=(self), geolocation=()"
 		X-Frame-Options "DENY"
 		Content-Security-Policy "frame-ancestors 'none'"
 		-Server
