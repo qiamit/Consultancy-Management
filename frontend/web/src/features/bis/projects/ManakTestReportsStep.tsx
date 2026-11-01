@@ -115,7 +115,7 @@ function FactoryTestReportsList({
             <th className={cn(th, 'w-12 text-center')}>S.No.</th>
             <th className={cn(th, 'text-center')}>Grade / Type / Variety</th>
             <th className={cn(th, 'text-center')}>Declared Value</th>
-            <th className={cn(th, 'w-[1%] text-center')}>
+            <th className={cn(th, 'w-[1%] whitespace-nowrap text-center')}>
               Sample Code
               <br />
               QR Code
