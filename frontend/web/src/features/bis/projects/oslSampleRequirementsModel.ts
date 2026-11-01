@@ -18,6 +18,8 @@ export type OslConformityCheck = {
   notes: string[]
   /** Documents the check read (names). */
   sources: string[]
+  /** The Test Report file that was checked: a different file later makes the check out of date. */
+  reportPath: string
 }
 
 export type OslConformitySample = {
@@ -310,7 +312,16 @@ export function parseOslConformityCheck(raw: unknown): OslConformityCheck | null
     missingTests: strList(r.missingTests),
     notes: strList(r.notes),
     sources: strList(r.sources),
+    reportPath: str(r.reportPath),
   }
+}
+
+/** The sample already has a decision: a current AI check, or Conformity set to Yes / No by hand. */
+export function oslConformityDecided(row: OslSampleRequirementRow): boolean {
+  const check = row.conformityCheck
+  // Checks saved before reportPath existed count as current.
+  if (check && (!check.reportPath || check.reportPath === row.testReportStoragePath)) return true
+  return !check && (row.conformity === 'Yes' || row.conformity === 'No')
 }
 
 /** Row highlight for Sample Requirements list (Sample Code + Test Request status). */

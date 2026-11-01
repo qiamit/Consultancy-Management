@@ -116,6 +116,7 @@ import {
   availableImportedQrCodes,
   emptyOslSampleRequirementRow,
   normalizeImportedQrCodes,
+  oslConformityDecided,
   oslSampleRowHasContent,
   parseOslSampleRequirementsPayload,
   oslSampleRowStatusTone,
@@ -1621,12 +1622,23 @@ export function OslSampleRequirementsModuleFields({
     return row?.conformityCheck ? { row, check: row.conformityCheck } : null
   }, [conformityLogId, rows])
 
-  /** Checks the selected samples (or every sample with a Test Report) and sets Conformity from the AI verdict. */
-  const runConformityCheck = async () => {
-    const pool = selectedIds.size ? rows.filter((r) => selectedIds.has(r.id)) : rows
-    const targets = pool.filter((r) => r.testReportStoragePath.trim())
+  /**
+   * AI Check. Without a selection: only samples that have a Test Report and no decision yet (no current AI check, and
+   * Conformity not set by hand); decided samples are skipped, and a sample whose Test Report was replaced is checked
+   * again. With ticked samples (or `onlyIds`, from Re-Check in the log): exactly those are re-checked.
+   */
+  const runConformityCheck = async (onlyIds?: string[]) => {
+    const chosen = onlyIds ?? (selectedIds.size ? [...selectedIds] : null)
+    const withReport = (chosen ? rows.filter((r) => chosen.includes(r.id)) : rows).filter((r) => r.testReportStoragePath.trim())
+    const targets = chosen ? withReport : withReport.filter((r) => !oslConformityDecided(r))
+    const skipped = withReport.length - targets.length
     if (!targets.length) {
-      toast.error(selectedIds.size ? 'The Selected Samples Have No Test Report Attached.' : 'Attach the Test Report of at Least One Sample First.')
+      if (chosen) toast.error('The Selected Samples Have No Test Report Attached.')
+      else if (skipped) {
+        toast.message('All Samples With a Test Report Are Already Decided.', {
+          description: 'To Check Again, Tick the Samples and Click AI Check, or Use Re-Check in the Sample’s Log.',
+        })
+      } else toast.error('Attach the Test Report of at Least One Sample First.')
       return
     }
     const tally = { Yes: 0, No: 0, Undecided: 0, failed: 0 }
@@ -1658,6 +1670,7 @@ export function OslSampleRequirementsModuleFields({
     setConformityBusy(null)
     toast.success(
       `AI Conformity Check Done — ${tally.Yes} Yes, ${tally.No} No${tally.Undecided ? `, ${tally.Undecided} Undecided` : ''}${tally.failed ? `, ${tally.failed} Failed` : ''}. Click Save to Keep.`,
+      skipped ? { description: `${skipped} Already Decided ${skipped === 1 ? 'Sample Was' : 'Samples Were'} Skipped — Tick Them to Re-Check.` } : undefined,
     )
   }
 
@@ -2063,8 +2076,8 @@ export function OslSampleRequirementsModuleFields({
             disabled={disabled || conformityBusy !== null}
             title={
               selectedCount
-                ? 'AI Conformity Check of the Selected Samples: Reads the Test Request, Test Report, Standard and Product Manual, Checks Every Result and Missing Tests, and Sets Conformity'
-                : 'AI Conformity Check of All Samples With a Test Report: Reads the Test Request, Test Report, Standard and Product Manual, Checks Every Result and Missing Tests, and Sets Conformity'
+                ? 'AI Re-Check of the Selected Samples (Even if Already Decided): Reads the Test Request, Test Report, Standard and Product Manual and Sets Conformity'
+                : 'AI Conformity Check of the Samples Not Decided Yet (With a Test Report): Reads the Test Request, Test Report, Standard and Product Manual and Sets Conformity. Decided Samples Are Skipped — Tick Them to Re-Check'
             }
             aria-label="AI Conformity Check"
             onClick={() => void runConformityCheck()}
@@ -3076,6 +3089,11 @@ export function OslSampleRequirementsModuleFields({
                 <span className="text-xs text-stone-500">
                   Checked {new Date(conformityLog.check.checkedAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
                 </span>
+                {conformityLog.check.reportPath && conformityLog.check.reportPath !== conformityLog.row.testReportStoragePath ? (
+                  <span className="border border-amber-500 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                    Out of Date — The Test Report Was Changed. Click Re-Check.
+                  </span>
+                ) : null}
               </div>
               <div className="space-y-1.5">
                 <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-stone-600">Sample Details</p>
@@ -3165,7 +3183,21 @@ export function OslSampleRequirementsModuleFields({
               <p className="text-[11px] text-stone-500">AI Check Is a Review Aid — Confirm Against the Documents Before Final Use.</p>
             </div>
           ) : null}
-          <DialogFooter className="shrink-0 gap-2 border-t border-stone-300 bg-stone-100 px-4 py-3 sm:justify-end">
+          <DialogFooter className="shrink-0 gap-2 border-t border-stone-300 bg-stone-100 px-4 py-3 sm:justify-between">
+            <Button
+              type="button"
+              variant="outline"
+              className={cn(limsOutlineBtnClass, 'gap-1.5')}
+              disabled={disabled || conformityBusy !== null || !conformityLog?.row.testReportStoragePath.trim()}
+              title="Run the AI Conformity Check Again for This Sample"
+              onClick={() => {
+                const id = conformityLog?.row.id
+                setConformityLogId(null)
+                if (id) void runConformityCheck([id])
+              }}
+            >
+              <Sparkles size={14} aria-hidden /> Re-Check
+            </Button>
             <Button type="button" variant="outline" className={limsOutlineBtnClass} onClick={() => setConformityLogId(null)}>
               Close
             </Button>

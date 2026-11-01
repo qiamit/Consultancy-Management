@@ -266,6 +266,7 @@ export async function checkSampleConformity(input: {
     missingTests: raw.missing_tests ?? raw.missingTests,
     checkedAt: new Date().toISOString(),
     sources,
+    reportPath: row.testReportStoragePath,
   })
   if (!parsed) throw new Error('The AI answer could not be read. Try again.')
   // Sample details the AI could not read come from the sample row.
