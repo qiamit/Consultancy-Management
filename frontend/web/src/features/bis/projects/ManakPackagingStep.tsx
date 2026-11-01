@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { BisContextQuickTools } from '../shared/BisQuickTools'
 import { limsDialogClass, limsOutlineBtnClass, limsPrimaryBtnClass } from '@/lib/limsThemeUi'
 import type { BisPrintDocumentKind } from '../print/printBisDocument'
 import { PACKAGING_MARKING_DEFAULTS } from '../print/manufacturingStepDocumentsHtml'
@@ -164,7 +165,8 @@ function PackagingMarkingDialog({
           className={cn(limsDialogClass, 'flex max-h-[90dvh] w-[min(64rem,calc(100vw_-_var(--app-dialog-overlay-left,0px)_-_1.5rem))] max-w-5xl flex-col p-0')}
         >
           <DialogHeader className="flex-row items-center justify-between gap-2 space-y-0 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 py-1.5 pl-4 pr-12 text-left">
-            <DialogTitle className="text-base font-semibold tracking-tight text-white">Packaging and Marking</DialogTitle>
+            <DialogTitle className="min-w-0 flex-1 text-base font-semibold tracking-tight text-white">Packaging and Marking</DialogTitle>
+            <BisContextQuickTools />
             <Button
               type="button"
               variant="ghost"

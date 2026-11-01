@@ -3,6 +3,7 @@ import { FileDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { BisContextQuickTools } from '../shared/BisQuickTools'
 import { limsDarkBarGlowStyle, limsOutlineBtnClass, limsPrimaryBtnClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { downloadPdfViaPlaywright } from '@/lib/playwrightPdfClient'
@@ -382,11 +383,14 @@ export function FactoryTestReportGenerateDialog({
               style={limsDarkBarGlowStyle}
             />
             <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
-            <DialogHeader className="relative pr-10 text-left">
-              <DialogTitle className="text-base font-semibold tracking-tight text-white">
-                Generate Test Report
-              </DialogTitle>
-            </DialogHeader>
+            <div className="relative flex min-w-0 items-center gap-2 pr-10">
+              <DialogHeader className="min-w-0 flex-1 text-left">
+                <DialogTitle className="text-base font-semibold tracking-tight text-white">
+                  Generate Test Report
+                </DialogTitle>
+              </DialogHeader>
+              <BisContextQuickTools />
+            </div>
           </div>
 
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">

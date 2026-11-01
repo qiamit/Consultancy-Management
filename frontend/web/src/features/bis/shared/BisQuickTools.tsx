@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { BookOpen, ExternalLink, FileText, Globe, KeyRound, LogIn } from 'lucide-react'
 import { toast } from 'sonner'
 import { loadIsCodeFileLinks, type IsCodeFileLink } from '@/features/masters/is-codes/loadIsCodeFileLinks'
@@ -219,4 +219,20 @@ export function BisQuickTools({
       {viewer}
     </div>
   )
+}
+
+type BisQuickToolsTarget = { projectId?: string | null; isCodeId?: string | null; isNumber?: string | null }
+
+const BisQuickToolsContext = createContext<BisQuickToolsTarget | null>(null)
+
+/** The licence / application whose tools every popup inside this window shows (see BisContextQuickTools). */
+export function BisQuickToolsProvider({ value, children }: { value: BisQuickToolsTarget; children: ReactNode }) {
+  return <BisQuickToolsContext.Provider value={value}>{children}</BisQuickToolsContext.Provider>
+}
+
+/** BisQuickTools for the licence of the surrounding window (BisQuickToolsProvider); nothing outside one. */
+export function BisContextQuickTools({ className }: { className?: string }) {
+  const target = useContext(BisQuickToolsContext)
+  if (!target) return null
+  return <BisQuickTools {...target} className={cn('hidden sm:flex', className)} />
 }

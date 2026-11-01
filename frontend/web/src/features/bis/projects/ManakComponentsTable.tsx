@@ -4,6 +4,7 @@ import { FileSpreadsheet, Import } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { BisContextQuickTools } from '../shared/BisQuickTools'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { limsDialogClass, limsPrimaryBtnClass } from '@/lib/limsThemeUi'
 import type { BisPrintDocumentKind } from '../print/printBisDocument'
@@ -331,6 +332,7 @@ export function ManakComponentsTable({
           <DialogHeader className="flex-row items-center justify-between gap-2 space-y-0 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 py-1.5 pl-4 pr-12 text-left">
             <DialogTitle className="text-base font-semibold tracking-tight text-white">{popup?.popupTitle ?? popup?.label}</DialogTitle>
             <div className="flex shrink-0 items-center gap-1.5">
+              <BisContextQuickTools />
               {popup?.excel ? (
                 <>
                   <input

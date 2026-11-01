@@ -5,7 +5,7 @@ import { LimsDatePicker } from '@/components/lims/LimsDatePicker'
 import { Button } from '@/components/ui/button'
 import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { BisQuickTools } from '../shared/BisQuickTools'
+import { BisQuickTools, BisQuickToolsProvider } from '../shared/BisQuickTools'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { limsDarkBarBtnClass, limsDarkBarGlowStyle, limsPageShellClass, limsPanelClass, limsPrimaryBtnClass } from '@/lib/limsThemeUi'
@@ -211,7 +211,7 @@ export function StopMarkingModuleDialog({
   ]
 
   return (
-    <>
+    <BisQuickToolsProvider value={{ projectId: row.bis_project_id, isCodeId: row.is_code_id, isNumber: row.is_code?.is_number }}>
       {confirmDialog}
       <Dialog open onOpenChange={(open) => (open ? onOpenChange(true) : requestClose())}>
         <DialogContent
@@ -636,6 +636,6 @@ export function StopMarkingModuleDialog({
         generatedHtml={previewHtml}
         editable={{ format: 'word', onDownload: () => void run('word', () => downloadStopMarkingReplyWord(live())) }}
       />
-    </>
+    </BisQuickToolsProvider>
   )
 }

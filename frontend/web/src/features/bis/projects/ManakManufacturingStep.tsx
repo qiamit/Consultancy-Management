@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { FileSpreadsheet, Import, Loader2, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { BisContextQuickTools } from '../shared/BisQuickTools'
 import { limsDialogClass, limsPrimaryBtnClass } from '@/lib/limsThemeUi'
 import type { BisPrintDocumentKind } from '../print/printBisDocument'
 import { fetchBisModulePayload, saveBisModulePayload } from './bisModuleDataApi'
@@ -498,6 +499,7 @@ export function ManakManufacturingStep({
           <DialogHeader className="flex-row items-center justify-between gap-2 space-y-0 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 py-1.5 pl-4 pr-12 text-left">
             <DialogTitle className="text-base font-semibold tracking-tight text-white">{popup?.label}</DialogTitle>
             <div className="flex shrink-0 items-center gap-1.5">
+              <BisContextQuickTools />
             {popup && EXCEL_IMPORTS[popup.key] ? (
               <>
                 <input
