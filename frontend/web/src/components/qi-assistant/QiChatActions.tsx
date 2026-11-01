@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
-import { Brain, Check, Copy, CornerUpLeft, HelpCircle, Mail, MoreHorizontal, Pencil, RotateCcw, X } from 'lucide-react'
+import { Brain, Check, Copy, CornerUpLeft, HelpCircle, Mail, Pencil, RotateCcw, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const POPUP_WIDTH_PX = 300
@@ -31,20 +31,23 @@ async function copyToClipboard(text: string, html?: string): Promise<boolean> {
 }
 
 const actionClass =
-  'inline-flex h-6 items-center gap-1 border border-transparent px-1.5 text-[11px] font-semibold text-stone-600 hover:border-stone-300 hover:bg-white hover:text-amber-800 disabled:opacity-40'
+  'inline-flex h-6 shrink-0 items-center gap-1 whitespace-nowrap border border-transparent px-1.5 text-[11px] font-semibold text-stone-600 hover:border-stone-300 hover:bg-white hover:text-amber-800 disabled:opacity-40'
 
 function ActionButton({ icon, label, onClick, disabled, className }: { icon: ReactNode; label: string; onClick: () => void; disabled?: boolean; className?: string }) {
   return (
     <button
       type="button"
       className={cn(actionClass, className)}
+      title={label}
+      aria-label={label}
       disabled={disabled}
       // Keeps the text selection while the button is pressed.
       onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
     >
       {icon}
-      {label}
+      {/* On a phone the row holds icons only, so it stays on one line. */}
+      <span className="hidden sm:inline">{label}</span>
     </button>
   )
 }
@@ -101,31 +104,20 @@ function RememberButton({ text, onRemember, busy }: { text: () => string; onReme
   )
 }
 
-/** Reply, Copy and More under one message. The text comes from what is on screen (no Markdown marks). */
+/** All the options of one message, always open, on one line. The text comes from what is on screen (no Markdown marks). */
 export function MessageActions({ role, handlers, bodyRef }: { role: 'user' | 'assistant'; handlers: ChatActionHandlers; bodyRef: RefObject<HTMLDivElement | null> }) {
-  const [more, setMore] = useState(false)
   const copier = useCopy()
   const shownText = () => bodyRef.current?.innerText.trim() ?? ''
   return (
-    <div
-      className={cn(
-        'mt-0.5 flex flex-wrap items-center gap-0.5',
-        role === 'user' && 'justify-end',
-      )}
-    >
+    <div className={cn('mt-0.5 flex flex-nowrap items-center gap-0.5', role === 'user' && 'justify-end')}>
       <ActionButton icon={<CornerUpLeft size={12} aria-hidden />} label="Reply" disabled={handlers.busy} onClick={() => handlers.onReply(shownText())} />
       <ActionButton icon={copier.icon} label={copier.label} onClick={() => copier.copy(shownText(), bodyRef.current?.innerHTML)} />
-      <ActionButton icon={<MoreHorizontal size={12} aria-hidden />} label="More" onClick={() => setMore((v) => !v)} />
-      {more ? (
-        <>
-          {handlers.onAskAgain ? <ActionButton icon={<RotateCcw size={12} aria-hidden />} label="Ask Again" disabled={handlers.busy} onClick={handlers.onAskAgain} /> : null}
-          {handlers.onEdit ? <ActionButton icon={<Pencil size={12} aria-hidden />} label="Edit" disabled={handlers.busy} onClick={handlers.onEdit} /> : null}
-          {handlers.onSendAgain ? <ActionButton icon={<RotateCcw size={12} aria-hidden />} label="Send Again" disabled={handlers.busy} onClick={handlers.onSendAgain} /> : null}
-          {role === 'assistant' ? <ActionButton icon={<HelpCircle size={12} aria-hidden />} label="Explain" disabled={handlers.busy} onClick={() => handlers.onExplain(shownText())} /> : null}
-          {handlers.onRemember ? <RememberButton text={shownText} onRemember={handlers.onRemember} busy={handlers.busy} /> : null}
-          {handlers.onEmail ? <ActionButton icon={<Mail size={12} aria-hidden />} label="Prepare Email" disabled={handlers.busy} onClick={() => handlers.onEmail?.(shownText())} /> : null}
-        </>
-      ) : null}
+      {handlers.onAskAgain ? <ActionButton icon={<RotateCcw size={12} aria-hidden />} label="Ask Again" disabled={handlers.busy} onClick={handlers.onAskAgain} /> : null}
+      {handlers.onEdit ? <ActionButton icon={<Pencil size={12} aria-hidden />} label="Edit" disabled={handlers.busy} onClick={handlers.onEdit} /> : null}
+      {handlers.onSendAgain ? <ActionButton icon={<RotateCcw size={12} aria-hidden />} label="Send Again" disabled={handlers.busy} onClick={handlers.onSendAgain} /> : null}
+      {role === 'assistant' ? <ActionButton icon={<HelpCircle size={12} aria-hidden />} label="Explain" disabled={handlers.busy} onClick={() => handlers.onExplain(shownText())} /> : null}
+      {handlers.onRemember ? <RememberButton text={shownText} onRemember={handlers.onRemember} busy={handlers.busy} /> : null}
+      {handlers.onEmail ? <ActionButton icon={<Mail size={12} aria-hidden />} label="Email" disabled={handlers.busy} onClick={() => handlers.onEmail?.(shownText())} /> : null}
     </div>
   )
 }

@@ -225,7 +225,7 @@ function AssistantMessage({ content }: { content: string }) {
   )
 }
 
-/** One chat bubble with Reply, Copy and More under it. */
+/** One chat bubble with its options under it. */
 function ChatMessageRow({
   message,
   handlers,
@@ -238,10 +238,10 @@ function ChatMessageRow({
   const bodyRef = useRef<HTMLDivElement>(null)
   const own = message.role === 'user'
   return (
-    <div className={cn('flex max-w-[92%] flex-col', own ? 'ml-auto' : 'mr-auto')}>
+    <div className={cn('flex max-w-[92%] flex-col', own ? 'ml-auto items-end' : 'mr-auto items-start')}>
       <div
         className={cn(
-          'border px-3.5 py-2.5 text-sm leading-relaxed shadow-sm',
+          'max-w-full border px-3.5 py-2.5 text-sm leading-relaxed shadow-sm',
           own ? 'border-amber-800/30 bg-amber-700 text-amber-50 selection:bg-stone-900 selection:text-white' : 'border-stone-400 bg-white text-stone-800',
         )}
       >
