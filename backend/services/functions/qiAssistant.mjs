@@ -407,6 +407,22 @@ export function createQiAssistantHandler(deps) {
       }
     }
 
+    // Admin Agent: the admin's saved facts and standing instructions (own rows only, via their JWT).
+    let agentMemory = ''
+    if (agentMode) {
+      try {
+        const { data } = await userRestFor(req)('/assistant_memories?select=id,kind,content&order=created_at.asc&limit=100')
+        const rows = Array.isArray(data) ? data : []
+        if (rows.length) {
+          agentMemory = `ADMIN MEMORY (saved by the admin — follow the instructions, use the facts):\n${rows
+            .map((m) => `- [${m.id}] (${m.kind}) ${String(m.content).slice(0, 600)}`)
+            .join('\n')}`
+        }
+      } catch {
+        // Memory is optional (e.g. before the migration runs).
+      }
+    }
+
     const systemParts = [
       settings?.system_prompt_prefix ? String(settings.system_prompt_prefix) : '',
       'You are QE Assistant, a helpful assistant inside Consultancy Pro / Q Engineering (BIS licensing & LIMS). Answer clearly and concisely in English unless the user writes in Hindi.',
@@ -414,6 +430,7 @@ export function createQiAssistantHandler(deps) {
       agentMode
         ? AGENT_SYSTEM_PROMPT
         : 'You cannot modify database records in this build; only explain how the user can do it in the UI.',
+      agentMemory,
       agentMode && Array.isArray(body.routes) && body.routes.length
         ? `App Pages (path — name):\n${body.routes
             .slice(0, 200)
