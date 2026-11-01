@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
-import { BookOpen, Check, Columns3, Download, Eye, ExternalLink, FileText, FileType, Globe, Import, LogIn, Paperclip, Plus, Trash2, Upload, X, Printer } from 'lucide-react'
+import { Check, Columns3, Download, Eye, FileType, Import, Paperclip, Plus, Trash2, Upload, X, Printer } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -19,7 +19,6 @@ import {
   type BisProjectViewFile,
 } from './bisProjectFilesApi'
 import { supabase } from '@/lib/supabaseClient'
-import { isQeExtensionPresent } from './manakExtensionBridge'
 import { saveBisProjectNotes } from './bisProjectsApi'
 import { fetchBisModulePayload } from './bisModuleDataApi'
 import { BisModuleImportDialog } from './BisModuleImportDialog'
@@ -36,52 +35,6 @@ const iconBtn =
   'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-none border bg-white transition-colors hover:bg-amber-50 disabled:opacity-40'
 
 const isManualName = (name: string) => /product[_\s-]*manual|\bmanual\b|\bpm\b|^pm[_\s-]/i.test(name)
-
-function pickIsFile(files: IsCodeFileLink[], kind: 'manual' | 'standard'): IsCodeFileLink | null {
-  const usable = files.filter((f) => Boolean(f.url?.trim()))
-  const pool = usable.length > 0 ? usable : files
-  if (pool.length === 0) return null
-  return kind === 'manual'
-    ? pool.find((f) => isManualName(f.file_name)) ?? null
-    : pool.find((f) => !isManualName(f.file_name)) ?? null
-}
-
-/** Opens BIS Product Manuals online; the QE extension searches the IS number when installed. */
-function openProductManualOnline(isNumber: string, setBusy: (busy: boolean) => void) {
-  const url = 'https://standards.bis.gov.in/website/product-manuals'
-  const selected = isNumber.trim()
-  if (!selected) {
-    window.open(url, '_blank', 'noopener,noreferrer')
-    toast.warning('Product Manuals opened. This application has no IS number to search.')
-    return
-  }
-  if (!isQeExtensionPresent()) {
-    window.open(url, '_blank', 'noopener,noreferrer')
-    toast.warning('Reload the QE Consultancy Extension to Auto-Search the IS Number.')
-    return
-  }
-  const requestId = `${Date.now()}-${Math.random().toString(36).slice(2)}`
-  setBusy(true)
-  let done = false
-  const finish = (message: string, isError: boolean) => {
-    if (done) return
-    done = true
-    window.clearTimeout(timer)
-    window.removeEventListener('message', onResult)
-    setBusy(false)
-    if (isError) toast.error(message)
-    else toast.success(message)
-  }
-  const onResult = (event: MessageEvent) => {
-    if (event.source !== window || event.origin !== window.location.origin) return
-    const data = event.data
-    if (data?.type !== 'QE_PRODUCT_MANUAL_SEARCH_RESULT' || data.requestId !== requestId) return
-    finish(String(data.message || (data.ok ? 'Product Manual search started.' : 'Could not search Product Manuals.')), !data.ok)
-  }
-  const timer = window.setTimeout(() => finish('The QE Consultancy extension did not respond. Reload it and try again.', true), 60000)
-  window.addEventListener('message', onResult)
-  window.postMessage({ type: 'QE_PRODUCT_MANUAL_SEARCH', requestId, isNumber: selected }, window.location.origin)
-}
 
 /** Product manual number with a view button when a manual PDF is attached to the IS Code master (opens in a new tab, no download). */
 export function ProductManualValue({
@@ -200,8 +153,6 @@ const typeOf = (file: BisProjectViewFile) => FILE_TYPES.find((t) => stripKey(fil
  */
 export function ManakVarietiesTable({
   projectId,
-  isCodeId,
-  isNumber,
   varieties,
   panel,
   scopeNotes = '',
@@ -215,10 +166,11 @@ export function ManakVarietiesTable({
   projectId: string | null
   /** The application itself; enables "Import from Another Application" (other applications / licences of the client). */
   projectRow?: BisProjectRow | null
-  isCodeId: string | null
-  isNumber: string
+  /** Kept for callers; the specification / manual / online / login buttons now live in the window header (BisQuickTools). */
+  isCodeId?: string | null
+  isNumber?: string
   varieties: string[]
-  /** Wraps the table in its panel; the specification / manual / online buttons go in the panel header. */
+  /** Wraps the table in its panel; the import / column / scope document buttons go in the panel header. */
   panel: (headerExtra: ReactNode, body: ReactNode) => ReactNode
   /** Notes / License Scope of the project; the Column button switches it between plain text and a 2-6 column table. */
   scopeNotes?: string
@@ -449,35 +401,13 @@ export function ManakVarietiesTable({
       toast.error(error instanceof Error ? error.message : 'Could not save the License Scope columns.')
     }
   }
-  const [isFiles, setIsFiles] = useState<IsCodeFileLink[]>([])
-  const [filesLoading, setFilesLoading] = useState(false)
   const [scopeFiles, setScopeFiles] = useState<BisProjectViewFile[]>([])
   // Which row's attachments the Scope files dialog shows (null = closed).
   const [filesTarget, setFilesTarget] = useState<RowKey | null>(null)
   const [fileType, setFileType] = useState<(typeof FILE_TYPES)[number]>('Copy of Scope')
   const [busy, setBusy] = useState(false)
-  const [searchBusy, setSearchBusy] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const sharesTotal = shares.reduce((sum, share) => sum + share, 0) || 1
-
-  useEffect(() => {
-    const id = (isCodeId ?? '').trim()
-    if (!id) {
-      setIsFiles([])
-      return
-    }
-    let cancelled = false
-    setFilesLoading(true)
-    void loadIsCodeFileLinks(id).then((files) => {
-      if (!cancelled) {
-        setIsFiles(files)
-        setFilesLoading(false)
-      }
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [isCodeId])
 
   useEffect(() => {
     if (!projectId) return
@@ -494,8 +424,6 @@ export function ManakVarietiesTable({
     }
   }, [projectId])
 
-  const standardFile = pickIsFile(isFiles, 'standard')
-  const manualFile = pickIsFile(isFiles, 'manual')
 
   const upload = async (file?: File) => {
     if (!projectId || !file) return
@@ -542,56 +470,6 @@ export function ManakVarietiesTable({
 
   const docButtons = (
     <div className="flex flex-wrap items-center justify-end gap-1">
-      <button
-        type="button"
-        className={cn(iconBtn, 'border-stone-400 text-amber-800')}
-        disabled={filesLoading || !standardFile?.url}
-        title={standardFile?.file_name ? `View specification: ${standardFile.file_name}` : 'No specification attached to this IS Code'}
-        aria-label="View Specification"
-        onClick={() => viewFile(standardFile?.url, standardFile?.file_name || 'Specification', 'Specification file not found for this IS Code.')}
-      >
-        <BookOpen size={15} aria-hidden />
-      </button>
-      <button
-        type="button"
-        className={cn(iconBtn, 'border-stone-400 text-amber-800')}
-        disabled={filesLoading || !manualFile?.url}
-        title={manualFile?.file_name ? `View product manual: ${manualFile.file_name}` : 'No product manual attached to this IS Code'}
-        aria-label="View Product Manual"
-        onClick={() => viewFile(manualFile?.url, manualFile?.file_name || 'Product manual', 'Product manual file not found for this IS Code.')}
-      >
-        <FileText size={15} aria-hidden />
-      </button>
-      <button
-        type="button"
-        className={cn(iconBtn, 'border-stone-400 text-amber-800')}
-        disabled={searchBusy}
-        title="Open the standard / product manual online (BIS) and search this IS number"
-        aria-label="Open Standard Online"
-        onClick={() => openProductManualOnline(isNumber, setSearchBusy)}
-      >
-        <ExternalLink size={15} aria-hidden />
-      </button>
-      <a
-        className={cn(iconBtn, 'border-stone-400 text-amber-800')}
-        href="https://standards.bis.gov.in/website"
-        target="_blank"
-        rel="noopener noreferrer"
-        title="BIS Standards Website (standards.bis.gov.in)"
-        aria-label="BIS Standards Website"
-      >
-        <Globe size={15} aria-hidden />
-      </a>
-      <a
-        className={cn(iconBtn, 'border-stone-400 text-amber-800')}
-        href="https://standardsbis.bsbedge.com/BIS_Login"
-        target="_blank"
-        rel="noopener noreferrer"
-        title="BIS Portal Login (standardsbis.bsbedge.com)"
-        aria-label="BIS Portal Login"
-      >
-        <LogIn size={15} aria-hidden />
-      </a>
       {projectRow?.id ? (
         <button
           type="button"

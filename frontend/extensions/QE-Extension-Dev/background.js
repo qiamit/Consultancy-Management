@@ -1,6 +1,7 @@
 const STORAGE_KEY = "copyPasteBypassEnabled";
 const STORAGE_KEY_CTRL = "ctrlKeyBypassEnabled";
 const EBIS_LOGIN = "https://www.manakonline.in/MANAK/eBISLogin";
+const BSB_LOGIN_URL = "https://standardsbis.bsbedge.com/BIS_Login";
 const HOME_URL = "https://www.manakonline.in/MANAK/login";
 const GENERATE_QR_URL =
   "https://www.manakonline.in/MANAK/employeeQrCodeGeneration";
@@ -167,8 +168,27 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
       "qeManakRenewal",
       "qeManakLoginOnly",
       "qeManakLoginTabId",
+      "qeManakReport",
     ],
     (data) => {
+      // Test Report fetch: keep filling User ID / Password on the login page of its tab (content.js waits for the
+      // captcha, signs in and finds the report); a PDF tab opened from it is the report itself.
+      const report = data && data.qeManakReport;
+      if (report && report.tabId) {
+        if (Number(report.tabId) === tabId) {
+          if (isManakLoginPageUrl(url)) {
+            const userId = lastPortal.userId || (data.qeManakPortal && data.qeManakPortal.userId) || "";
+            if (userId || lastPortal.password) scheduleLoginFill(tabId, userId, lastPortal.password);
+          }
+          return;
+        }
+        if (report.capture && Number(tab.openerTabId) === Number(report.tabId) && changeInfo.status === "complete") {
+          void captureReportFromUrl(url, "Test_Report.pdf").then((done) => {
+            if (done) void settle(chrome.tabs.remove(tabId));
+          });
+          return;
+        }
+      }
       // Manak Login only: keep filling User ID / Password while that tab is on a login page; once it has
       // signed in, switch off — nothing else runs on Manak after a login-only open.
       if (data && data.qeManakLoginOnly === true && Number(data.qeManakLoginTabId) === tabId) {
@@ -780,6 +800,7 @@ function armOnly(section, extra) {
     renewalStage: null,
     qeManakLoginOnly: false,
     qeManakLoginTabId: 0,
+    qeManakReport: null,
   };
   if (section !== "tr") state.qeManakReturn = null;
   return { ...state, ...(extra || {}) };
@@ -936,6 +957,40 @@ async function findConfirmedLoggedInManakTab() {
   return null;
 }
 
+/** Test Report fetch: hand the result (PDF or reason) to the Consultancy Pro tab that asked, then switch off. */
+async function finishReportJob(result) {
+  const data = await chrome.storage.local.get(["qeManakReport"]);
+  const job = data && data.qeManakReport;
+  if (!job) return false;
+  await chrome.storage.local.set({ qeManakReport: null });
+  clearRememberedPortal();
+  const appTabId = Number(job.appTabId) || lastManakAppTabId || 0;
+  const payload = { ...result, sampleId: job.sampleId, qrCode: job.qrCode };
+  if (appTabId) {
+    await safeSendTab(appTabId, { type: "QE_MANAK_TEST_REPORT", result: payload });
+    await safeTabUpdate(appTabId, { active: true });
+  }
+  return true;
+}
+
+/** A Manak URL (download / opened tab) that is the report PDF: fetch it with the Manak session and deliver it. */
+async function captureReportFromUrl(url, name) {
+  if (!/manakonline\.in/i.test(String(url || ""))) return false;
+  try {
+    const res = await fetch(url, { credentials: "include" });
+    const buf = await res.arrayBuffer();
+    const head = String.fromCharCode.apply(null, new Uint8Array(buf.slice(0, 5)));
+    if (buf.byteLength < 80 || head !== "%PDF-") return false;
+    return finishReportJob({
+      ok: true,
+      pdfName: String(name || "Test_Report.pdf").split(/[/\\]/).pop(),
+      pdfBase64: arrayBufferToBase64(buf),
+    });
+  } catch {
+    return false;
+  }
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || typeof message.type !== "string") return;
 
@@ -999,6 +1054,121 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         throw new Error(result?.message || "The Product Manuals search field was not found.");
       }
       sendResponse({ ok: true, message: `Searching Product Manuals for ${isNumber}.` });
+    })().catch((error) => {
+      sendResponse({ ok: false, message: String(error?.message || error) });
+    });
+    return true;
+  }
+
+  if (message.type === "QE_MANAK_REPORT_FETCH") {
+    // Test Report button (single click) in Consultancy Pro: sign in (User ID / Password filled, user types the
+    // captcha, 10 s wait, auto Sign In), open Test Requests List, find this QR code's row and bring its report back.
+    const senderTab = sender && sender.tab;
+    if (!senderTab || !isAppTabUrl(senderTab.url || "")) {
+      sendResponse({ ok: false, message: "The Test Report fetch can only be started from Consultancy Pro." });
+      return true;
+    }
+    const sampleId = String(message.sampleId || "").trim();
+    const qrCode = String(message.qrCode || "").replace(/\s+/g, "");
+    if (!sampleId || !/^\d{6,20}$/.test(qrCode)) {
+      sendResponse({ ok: false, message: "This sample has no Manak QR code." });
+      return true;
+    }
+    rememberAppTab(senderTab.id, senderTab.url);
+    const portalUserId = String(message.portalUserId || "").trim();
+    rememberPortal(portalUserId, String(message.portalPassword || ""));
+    void (async () => {
+      const job = { sampleId, qrCode, appTabId: senderTab.id, tabId: 0, capture: false, startedAt: Date.now() };
+      await chrome.storage.local.set(
+        armOnly("report", { qeManakArmed: false, qeManakReport: job, qeManakPortal: { userId: portalUserId } }),
+      );
+      const reused = await findConfirmedLoggedInManakTab();
+      if (
+        reused &&
+        reused.tab.id &&
+        portalUserIdsMatch(portalUserId, reused.session.userIds?.length ? reused.session.userIds : [reused.session.userId])
+      ) {
+        clearRememberedPortal();
+        await chrome.storage.local.set({ qeManakReport: { ...job, tabId: reused.tab.id } });
+        await activateManakTab(reused.tab.id, TEST_REQUEST);
+        sendResponse({ ok: true, message: "Already signed in — opening the Test Requests List…" });
+        return;
+      }
+      const created = await createManakTab(ebisLoginHref(portalUserId));
+      await chrome.storage.local.set({ qeManakReport: { ...job, tabId: created.id } });
+      scheduleLoginFill(created.id, portalUserId, String(message.portalPassword || ""));
+      sendResponse({ ok: true, message: "Opening Manak — type the captcha (10 s wait), then the report is looked up." });
+    })().catch((error) => {
+      sendResponse({ ok: false, message: String(error?.message || error) });
+    });
+    return true;
+  }
+
+  if (message.type === "QE_MANAK_REPORT_RESULT" && message.result) {
+    // From content.js in the tracked report tab only.
+    const senderTabId = Number(sender && sender.tab && sender.tab.id) || 0;
+    void chrome.storage.local.get(["qeManakReport"]).then(async (data) => {
+      const job = data && data.qeManakReport;
+      if (!job || !senderTabId || Number(job.tabId) !== senderTabId) {
+        sendResponse({ ok: false });
+        return;
+      }
+      if (message.result.capture) {
+        // The report opens through a click: catch the PDF download / tab it starts.
+        await chrome.storage.local.set({ qeManakReport: { ...job, capture: true } });
+        setTimeout(() => {
+          void chrome.storage.local.get(["qeManakReport"]).then((later) => {
+            const still = later && later.qeManakReport;
+            if (still && still.capture && still.startedAt === job.startedAt) {
+              void finishReportJob({ ok: false, message: "Manak shows a Test Report, but it could not be downloaded. Open it on Manak and upload it here by double-click." });
+            }
+          });
+        }, 45000);
+        sendResponse({ ok: true });
+        return;
+      }
+      const r = message.result;
+      await finishReportJob({
+        ok: Boolean(r.ok && r.pdfBase64),
+        message: String(r.message || ""),
+        pdfName: String(r.pdfName || "Test_Report.pdf"),
+        pdfBase64: String(r.pdfBase64 || ""),
+      });
+      sendResponse({ ok: true });
+    });
+    return true;
+  }
+
+  if (message.type === "QE_BSB_LOGIN_OPEN") {
+    // BIS Portal Login from Consultancy Pro: open BSB Edge, fill the company's User ID / Password, user types the
+    // captcha and signs in. The password only travels in this message; nothing is stored.
+    const senderTab = sender && sender.tab;
+    if (!senderTab || !isAppTabUrl(senderTab.url || "")) {
+      sendResponse({ ok: false, notOpened: true, message: "BIS Portal Login can only be started from Consultancy Pro." });
+      return true;
+    }
+    const creds = { email: String(message.userId || "").trim(), password: String(message.password || "") };
+    void (async () => {
+      const tab = await safeTabCreate({ url: BSB_LOGIN_URL, active: true });
+      if (!tab || !tab.id) {
+        sendResponse({ ok: false, notOpened: true, message: "Could not open the BIS Portal login." });
+        return;
+      }
+      if (tab.status !== "complete") await waitTabComplete(tab.id, 45000);
+      await injectIsFetch(tab.id);
+      let result = null;
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        result = await chrome.tabs.sendMessage(tab.id, { type: "QE_BSB_FILL_LOGIN", creds }).catch(() => null);
+        if (result && (result.ok || result.signedIn)) break;
+        await new Promise((resolve) => setTimeout(resolve, 400));
+      }
+      if (result && result.signedIn) {
+        sendResponse({ ok: true, message: "Already signed in to the BIS Portal." });
+      } else if (result && result.ok) {
+        sendResponse({ ok: true, message: "BIS Portal Login filled — type the captcha and click Sign In." });
+      } else {
+        sendResponse({ ok: false, message: "BIS Portal opened, but the login fields were not found. Sign in by hand." });
+      }
     })().catch((error) => {
       sendResponse({ ok: false, message: String(error?.message || error) });
     });
@@ -1960,6 +2130,18 @@ if (hasDownloads) {
       const item = items && items[0];
       if (!item) return;
       const blob = `${item.url} ${item.finalUrl || ""} ${item.referrer || ""} ${item.filename || ""} ${item.mime || ""}`;
+      if (isManakPdfDownload(item)) {
+        const stored = await chrome.storage.local.get(["qeManakReport"]);
+        const job = stored && stored.qeManakReport;
+        if (job && job.capture) {
+          const done = await captureReportFromUrl(item.finalUrl || item.url, (item.filename || "Test_Report.pdf").split(/[/\\]/).pop());
+          if (done) {
+            await settle(chrome.downloads.removeFile(item.id));
+            await settle(chrome.downloads.erase({ id: item.id }));
+            return;
+          }
+        }
+      }
       if (pendingDownloadCapture && /pdf/i.test(blob)) {
         const wantedTab = pendingDownloadCapture.tabId;
         const sameTab = !wantedTab || item.tabId === wantedTab || /bsbedge|bis\.gov/i.test(blob);

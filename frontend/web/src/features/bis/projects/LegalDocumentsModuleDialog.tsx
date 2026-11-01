@@ -104,6 +104,7 @@ import { emptyCmpf311Payload, parseCmpf311Payload, type Cmpf311ModulePayload } f
 import { Cmpf307ModuleFields } from './Cmpf307ModuleFields'
 import { cmpf307RowHasContent, emptyCmpf307BrandRow, emptyCmpf307Payload, parseCmpf307Payload, type Cmpf307ModulePayload } from './cmpf307Model'
 import { BisModuleImportDialog } from './BisModuleImportDialog'
+import { BisQuickTools } from '../shared/BisQuickTools'
 import { Cmpf310ModuleFields } from './Cmpf310ModuleFields'
 import { RawMaterialReferenceModuleFields } from './RawMaterialReferenceModuleFields'
 import { packagingMarkingFieldsFrom, sefPackagingRowsFrom } from '../print/manufacturingStepDocumentsHtml'
@@ -1872,7 +1873,7 @@ export function LegalDocumentsModuleDialog({
             style={limsDarkBarGlowStyle}
           />
           <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
-          <DialogHeader className={cn('relative min-w-0 flex-1 space-y-0 text-left', showFlowChartAi ? 'pr-24' : showPlantLayoutAi || showCmpf311Fields ? 'pr-20' : 'pr-10')}>
+          <DialogHeader className="relative min-w-0 flex-1 space-y-0 pr-2 text-left">
             <DialogTitle className="text-base font-semibold tracking-tight text-white">
               {title}
             </DialogTitle>
@@ -1880,6 +1881,20 @@ export function LegalDocumentsModuleDialog({
               {subtitle}
             </p>
           </DialogHeader>
+          {/* The absolute header buttons (import / AI) and Close sit to the right of these tools. */}
+          <BisQuickTools
+            projectId={row?.id}
+            isCodeId={row?.is_code_id}
+            isNumber={row?.is_code?.is_number}
+            className={cn(
+              'relative hidden sm:flex',
+              showFlowChartAi || showPlantLayoutAi
+                ? 'mr-[6rem]'
+                : row?.id && (showCmpf307Fields || showCmpf311Fields || showProcessFlowFields || showPlantLayoutFields)
+                  ? 'mr-[4rem]'
+                  : 'mr-[2rem]',
+            )}
+          />
           {showCmpf307Fields && row?.id ? (
             <Button
               type="button"

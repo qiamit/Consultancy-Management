@@ -69,6 +69,7 @@ import { paginateHtmlForDownload } from '../print/bisPreviewPagination'
 import { buildExcelWorkbook } from './bisExcelWorkbook'
 import { isImportableBisModuleKind } from './bisModuleImportApi'
 import { LegalDocumentsModuleDialog } from './LegalDocumentsModuleDialog'
+import { BisQuickTools, BisQuickToolsProvider } from '../shared/BisQuickTools'
 import {
   buildMergedBisProjectFilesPdf,
   writePdfViewerHtml,
@@ -841,7 +842,7 @@ export function BisLicenseDocumentsDialog({
   }
 
   return (
-    <>
+    <BisQuickToolsProvider value={{ projectId: row?.id, isCodeId: row?.is_code_id, isNumber: row?.is_code?.is_number }}>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         persistOnFocusLoss
@@ -892,6 +893,12 @@ export function BisLicenseDocumentsDialog({
                   >
                     {subtitle ? `${processTitle} of ${subtitle}` : processTitle}
                   </p>
+                  <BisQuickTools
+                    projectId={row?.id}
+                    isCodeId={row?.is_code_id}
+                    isNumber={row?.is_code?.is_number}
+                    className="hidden sm:flex"
+                  />
                   <Button
                     type="button"
                     variant="outline"
@@ -1256,6 +1263,6 @@ export function BisLicenseDocumentsDialog({
       bundle={importBundle}
       onImported={onProjectSaved}
     />
-    </>
+    </BisQuickToolsProvider>
   )
 }

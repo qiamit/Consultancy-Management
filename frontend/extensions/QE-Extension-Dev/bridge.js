@@ -210,6 +210,47 @@
       );
       return;
     }
+    if (data.type === "QE_MANAK_REPORT_FETCH") {
+      markPresent();
+      sendRuntime(
+        {
+          type: "QE_MANAK_REPORT_FETCH",
+          sampleId: String(data.sampleId || ""),
+          qrCode: String(data.qrCode || ""),
+          portalUserId: String(data.portalUserId || ""),
+          portalPassword: String(data.portalPassword || ""),
+        },
+        (response, error) => {
+          window.postMessage(
+            {
+              type: "QE_MANAK_REPORT_FETCH_ACK",
+              ok: Boolean(response && response.ok && !error),
+              message: error?.message || response?.message || "The extension could not open Manak Online.",
+            },
+            window.location.origin,
+          );
+        },
+      );
+      return;
+    }
+    if (data.type === "QE_BSB_LOGIN_OPEN") {
+      markPresent();
+      sendRuntime(
+        { type: "QE_BSB_LOGIN_OPEN", userId: String(data.userId || ""), password: String(data.password || "") },
+        (response, error) => {
+          window.postMessage(
+            {
+              type: "QE_BSB_LOGIN_OPEN_RESULT",
+              ok: Boolean(response && response.ok && !error),
+              notOpened: Boolean(error || !response || response.notOpened),
+              message: error?.message || response?.message || "The BIS Portal login could not be opened.",
+            },
+            window.location.origin,
+          );
+        },
+      );
+      return;
+    }
     if (data.type !== "QE_MANAK_OPEN") return;
     // Always forward to background — ACK-only debounce skipped the login payload.
     window.__qeManakOpenSent = Date.now();
@@ -268,6 +309,9 @@
         }
         if (msg.type === "QE_MANAK_PDF_CHUNK") {
           acceptPdfChunk(msg);
+        }
+        if (msg.type === "QE_MANAK_TEST_REPORT" && msg.result) {
+          window.postMessage({ type: "QE_MANAK_TEST_REPORT", result: msg.result }, window.location.origin);
         }
         if (msg.type === "QE_IS_CODE_PROGRESS") {
           window.postMessage({ type: "QE_IS_CODE_PROGRESS", message: msg.message || "" }, window.location.origin);

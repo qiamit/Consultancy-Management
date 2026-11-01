@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { Dialog, DialogContent, DialogFooter, DialogTitle } from '@/components/ui/dialog'
+import { BisContextQuickTools } from '../shared/BisQuickTools'
 import { Input } from '@/components/ui/input'
 import { supabase } from '@/lib/supabaseClient'
 import {
@@ -618,6 +619,7 @@ export function FtrIsTestParameterDialog({
         <div className="shrink-0 border-b border-stone-600">
           <TestParameterHeaderBar
             reserveCloseButtonSpace
+            extraActions={<BisContextQuickTools />}
             search={search}
             onSearchChange={(value) => {
               setSearch(value)

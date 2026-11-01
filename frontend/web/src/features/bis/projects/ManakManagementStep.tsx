@@ -788,7 +788,7 @@ export function EditableRows({
                 )
               })}
               {extraColumns?.map((c) => (
-                <th key={c.label} className={cn(thCls, c.compact && 'w-[1%] text-center')}>
+                <th key={c.label} className={cn(thCls, c.compact && 'w-[1%] whitespace-nowrap text-center')}>
                   {c.label}
                 </th>
               ))}

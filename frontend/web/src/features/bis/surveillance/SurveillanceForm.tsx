@@ -3,6 +3,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { fetchEmployeeNames } from '../shared/bisLookupApi'
 import { BisFormDialog } from '../shared/BisFormDialog'
+import { BisQuickTools } from '../shared/BisQuickTools'
 import { ClientIsLicenseFields } from '../shared/ClientIsLicenseFields'
 import type { SurveillanceForm as SurveillanceFormValue } from './types'
 
@@ -54,6 +55,7 @@ export function SurveillanceForm({
       saving={saving}
       errorMessage={errorMessage}
       onSave={onSave}
+      headerTools={<BisQuickTools projectId={form.bisProjectId || null} isCodeId={form.isCodeId} className="hidden sm:flex" />}
     >
       <ClientIsLicenseFields
         idPrefix="surv"

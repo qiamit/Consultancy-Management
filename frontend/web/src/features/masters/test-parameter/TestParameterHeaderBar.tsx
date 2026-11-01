@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import {
   limsDarkBarSearchClass,
@@ -25,6 +26,7 @@ export function TestParameterHeaderBar({
   onAiAdd,
   canEdit = true,
   reserveCloseButtonSpace = false,
+  extraActions,
 }: {
   search: string
   onSearchChange: (value: string) => void
@@ -39,6 +41,8 @@ export function TestParameterHeaderBar({
   canEdit?: boolean
   /** Inside a dialog: keep clear of the dialog's top-right close button, buttons on its line. */
   reserveCloseButtonSpace?: boolean
+  /** Extra buttons at the end of the title row (for example the BIS standard / portal tools). */
+  extraActions?: ReactNode
 }) {
   return (
     <div className={cn(limsPanelClass)}>
@@ -134,6 +138,7 @@ export function TestParameterHeaderBar({
             triggerVariant="icon"
             triggerClassName={cn(limsAiTriggerClass, 'h-8 w-8 shrink-0')}
           />
+          {extraActions}
         </div>
       </div>
     </div>

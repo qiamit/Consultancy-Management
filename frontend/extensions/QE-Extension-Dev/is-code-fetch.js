@@ -1011,6 +1011,20 @@
         .catch((error) => sendResponse({ ok: false, message: String(error) }));
       return true;
     }
+    if (message && message.type === "QE_BSB_FILL_LOGIN") {
+      // BIS Portal Login button: fill User ID / Password only; the user types the captcha and clicks Sign In.
+      const email = bsbEmailField();
+      const password = bsbPasswordField();
+      if (!email && !password) {
+        sendResponse({ ok: false, signedIn: !/BIS_Login/i.test(location.pathname) });
+        return true;
+      }
+      fillBsbCredentials(message.creds || {});
+      const cap = bsbCaptchaField();
+      if (cap && typeof cap.focus === "function") cap.focus();
+      sendResponse({ ok: true });
+      return true;
+    }
     if (!message || message.type !== "QE_IS_CODE_RUN") return;
     runJob(message)
       .then((result) => sendResponse({ ok: true, result }))

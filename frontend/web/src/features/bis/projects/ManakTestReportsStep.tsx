@@ -16,7 +16,6 @@ import { printableOslSampleRows } from '../print/oslSampleRequirementsHtml'
 import { parseOslSampleRequirementsPayload } from './oslSampleRequirementsModel'
 import { factoryTestReportHasContent, parseFactoryTestReportPayload } from './factoryTestReportModel'
 import { FactoryTestReportGenerateDialog } from './FactoryTestReportGenerateDialog'
-import { ManakWarnings } from './ManakStepPages'
 
 type Rec = Record<string, unknown>
 type Payload = Rec | null | undefined
@@ -115,6 +114,11 @@ function FactoryTestReportsList({
             <th className={cn(th, 'w-12 text-center')}>S.No.</th>
             <th className={cn(th, 'text-center')}>Grade / Type / Variety</th>
             <th className={cn(th, 'text-center')}>Declared Value</th>
+            <th className={cn(th, 'w-[1%] whitespace-nowrap text-center')}>
+              Sample Code
+              <br />
+              QR Code
+            </th>
             <th className={cn(th, 'w-[1%] text-center')}>
               Batch
               <br />
@@ -131,7 +135,7 @@ function FactoryTestReportsList({
         <tbody>
           {samples.length === 0 ? (
             <tr>
-              <td colSpan={6} className={cn(td, 'py-3 text-center text-stone-500')}>
+              <td colSpan={7} className={cn(td, 'py-3 text-center text-stone-500')}>
                 No sample is ticked &ldquo;In Offer Letter&rdquo; in the Sample Offer Letter.
               </td>
             </tr>
@@ -143,6 +147,10 @@ function FactoryTestReportsList({
                   <td className={cn(td, 'text-center')}>{i + 1}</td>
                   <td data-label="Grade / Type / Variety" className={cn(td, 'text-center')}>{sample.gradeTypeVariety.trim() || sample.sampleDescription.trim() || '—'}</td>
                   <td data-label="Declared Value" className={cn(td, 'text-center')}>{sample.declaredValue.trim() || '—'}</td>
+                  <td data-label="Sample Code / QR Code" className={cn(td, 'whitespace-nowrap text-center')}>
+                    <span className="block font-medium text-stone-800">{sample.sampleCode.trim() || '—'}</span>
+                    <span className="block text-xs text-stone-500">{sample.qrCode.trim() || '—'}</span>
+                  </td>
                   <td data-label="Batch Number" className={cn(td, 'whitespace-nowrap text-center')}>{sample.batchNumber.trim() || '—'}</td>
                   <td data-label="Date of Manufacturing" className={cn(td, 'whitespace-nowrap text-center')}>{sample.dateOfManufacturing.trim() ? formatDisplayDate(sample.dateOfManufacturing) : '—'}</td>
                   <td className={cn(td, 'text-center')}>
@@ -189,12 +197,6 @@ export function ManakTestReportsStep({
   // Generate Test Report lives here (Sample Offer Letter only uploads a finished report).
   const [generateSampleId, setGenerateSampleId] = useState<string | null>(null)
   const generateSample = generateSampleId ? samples.find((r) => r.id === generateSampleId) ?? null : null
-  // Manak's Test Report step gets one row per sample with a QR code, and asks whether that sample conforms.
-  const noConformity = samples.filter((r) => r.qrCode.trim() && !r.conformity)
-  const warnings = [
-    noConformity.length > 0 &&
-      `${noConformity.length} sample${noConformity.length === 1 ? '' : 's'} with a QR code (${noConformity.map((r) => r.qrCode.trim()).join(', ')}) ${noConformity.length === 1 ? 'has' : 'have'} no "Conformity of sample as per IS". Set it from the lab report in Sample Offer Letter & Test Request.`,
-  ]
   // FMCS applies under Option 1: BIS draws the samples at the factory visit, Manak asks for the in-house test report
   // (Form IV) and, when the IS needs it, the raw-material test certificates.
   const fmcs = isFmcsProject(projectRow)
@@ -289,7 +291,6 @@ export function ManakTestReportsStep({
       onEdit={onEdit}
       renderDocActions={renderDocActions}
       selection={selection}
-      after={<ManakWarnings items={warnings} />}
     />
     </>
   )
