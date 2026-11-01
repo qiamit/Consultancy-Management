@@ -233,6 +233,10 @@
       );
       return;
     }
+    if (data.type === "QE_MANAK_TEST_REPORT_SAVED") {
+      sendRuntime({ type: "QE_MANAK_TEST_REPORT_SAVED", sampleId: String(data.sampleId || "") });
+      return;
+    }
     if (data.type === "QE_BSB_LOGIN_OPEN") {
       markPresent();
       sendRuntime(

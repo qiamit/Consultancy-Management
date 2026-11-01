@@ -311,6 +311,11 @@ export function subscribeManakTestReport(onResult: (result: ManakTestReportResul
   return () => window.removeEventListener('message', onMessage)
 }
 
+/** The fetched Test Report is uploaded to the sample: the extension may close the Manak tabs it opened for it. */
+export function notifyManakTestReportSaved(sampleId: string): void {
+  window.postMessage({ type: 'QE_MANAK_TEST_REPORT_SAVED', sampleId }, window.location.origin)
+}
+
 export const BSB_PORTAL_LOGIN_URL = 'https://standardsbis.bsbedge.com/BIS_Login'
 
 /**

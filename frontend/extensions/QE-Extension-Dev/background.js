@@ -964,7 +964,9 @@ async function finishReportJob(result) {
   const data = await chrome.storage.local.get(["qeManakReport"]);
   const job = data && data.qeManakReport;
   if (!job) return false;
-  await chrome.storage.local.set({ qeManakReport: null });
+  // The Manak tabs of this fetch are closed once Consultancy Pro says the report is uploaded (QE_MANAK_TEST_REPORT_SAVED).
+  const doneTabs = result && result.ok ? { sampleId: job.sampleId, tabId: Number(job.tabId) || 0, ownTab: Boolean(job.ownTab), at: Date.now() } : null;
+  await chrome.storage.local.set({ qeManakReport: null, qeManakReportDone: doneTabs });
   clearRememberedPortal();
   const appTabId = Number(job.appTabId) || lastManakAppTabId || 0;
   const payload = { ...result, sampleId: job.sampleId, qrCode: job.qrCode };
@@ -1097,13 +1099,44 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return;
       }
       const created = await createManakTab(ebisLoginHref(portalUserId));
-      await chrome.storage.local.set({ qeManakReport: { ...job, tabId: created.id } });
+      await chrome.storage.local.set({ qeManakReport: { ...job, tabId: created.id, ownTab: true } });
       scheduleLoginFill(created.id, portalUserId, String(message.portalPassword || ""));
       sendResponse({ ok: true, message: "Opening Manak — type the captcha (10 s wait), then the report is looked up." });
     })().catch((error) => {
       sendResponse({ ok: false, message: String(error?.message || error) });
     });
     return true;
+  }
+
+  if (message.type === "QE_MANAK_TEST_REPORT_SAVED") {
+    // Consultancy Pro uploaded the fetched Test Report: close the Manak tabs opened for it (the sign-in tab this fetch
+    // opened, and every report / popup tab opened from it). A Manak tab that was already open and signed in is kept.
+    const sampleId = String(message.sampleId || "");
+    void chrome.storage.local.get(["qeManakReportDone"]).then(async (data) => {
+      const done = data && data.qeManakReportDone;
+      if (!done || done.sampleId !== sampleId || Date.now() - Number(done.at || 0) > 10 * 60 * 1000) return;
+      await chrome.storage.local.set({ qeManakReportDone: null });
+      const root = Number(done.tabId) || 0;
+      if (!root) return;
+      const tabs = (await settle(chrome.tabs.query({}))) || [];
+      // From a reused tab only the eLIMS report pages are closed (other tabs it opened earlier may be the user's own).
+      const fromFetch = (t) => done.ownTab || /^https:\/\/nsws\.manakonline\.in\/eLIMS\//i.test(String(t.url || ""));
+      const close = new Set();
+      let grew = true;
+      while (grew) {
+        grew = false;
+        for (const t of tabs) {
+          const opener = Number(t.openerTabId) || 0;
+          if (t.id && !close.has(t.id) && (opener === root || close.has(opener)) && fromFetch(t)) {
+            close.add(t.id);
+            grew = true;
+          }
+        }
+      }
+      if (done.ownTab) close.add(root);
+      if (close.size) void settle(chrome.tabs.remove([...close])).catch(() => {});
+    });
+    return;
   }
 
   if (message.type === "QE_MANAK_REPORT_RESULT" && message.result) {

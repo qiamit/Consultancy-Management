@@ -91,6 +91,7 @@ import {
   ackManakTestRequestResult,
   fetchManakTestReport,
   subscribeManakTestReport,
+  notifyManakTestReportSaved,
   type ManakTrResult,
 } from './manakExtensionBridge'
 import {
@@ -1521,7 +1522,7 @@ export function OslSampleRequirementsModuleFields({
     const pid = (projectId ?? '').trim()
     if (!pid) {
       toast.error('Save the BIS project first, then upload a Test Report PDF.')
-      return Promise.resolve()
+      return Promise.resolve(false)
     }
     // Smallest readable PDF first (both from the computer and from Manak).
     const compressing = toast.loading('Reducing the Test Report PDF Size…')
@@ -1550,9 +1551,11 @@ export function OslSampleRequirementsModuleFields({
           ),
         })
         toast.success(successMessage)
+        return true
       })
       .catch((err) => {
         toast.error(err instanceof Error ? err.message : 'Test Report upload failed.')
+        return false
       })
   }
 
@@ -1597,7 +1600,12 @@ export function OslSampleRequirementsModuleFields({
       try {
         const bytes = Uint8Array.from(atob(result.pdfBase64), (c) => c.charCodeAt(0))
         const name = /\.pdf$/i.test(result.pdfName) ? result.pdfName : `Test_Report_${row.qrCode || row.id}.pdf`
-        void attachTestReportFile(row.id, new File([bytes], name, { type: 'application/pdf' }), 'Test Report Brought From Manak and Attached.')
+        void attachTestReportFile(row.id, new File([bytes], name, { type: 'application/pdf' }), 'Test Report Brought From Manak and Attached.').then(
+          (saved) => {
+            // Uploaded here: the extension closes the Manak tabs it opened for this fetch.
+            if (saved) notifyManakTestReportSaved(row.id)
+          },
+        )
       } catch {
         toast.error('The Test Report From Manak Could Not Be Read.')
       }
