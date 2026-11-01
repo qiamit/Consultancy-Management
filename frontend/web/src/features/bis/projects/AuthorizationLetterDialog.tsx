@@ -140,7 +140,7 @@ export function AuthorizationLetterDialog({ open, onOpenChange, projectRow, lega
 
   return <>
     <Dialog open={open} onOpenChange={close}>
-      <DialogContent persistOnFocusLoss layer="stacked" aria-describedby={undefined} className={cn(limsDialogClass, 'flex max-h-[90dvh] w-[min(64rem,calc(100vw_-_var(--app-dialog-overlay-left,0px)_-_2rem))] min-w-0 max-w-6xl flex-col p-0')}>
+      <DialogContent persistOnFocusLoss layer="stacked" aria-describedby={undefined} className={cn(limsDialogClass, 'flex flex-col p-0 left-[var(--app-dialog-overlay-left,0px)] right-0 top-0 h-[100dvh] max-h-[100dvh] w-[calc(100vw-var(--app-dialog-overlay-left,0px))] min-w-0 max-w-none translate-x-0 translate-y-0')}>
         <DialogHeader className="flex-row items-center gap-2 space-y-0 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 py-2 pl-4 pr-12 text-left"><DialogTitle className="min-w-0 flex-1 text-base font-semibold text-white">Authorization Letter of Person Submitting the Application</DialogTitle><BisContextQuickTools /></DialogHeader>
         <div className="min-h-0 flex-1 space-y-3 overflow-auto bg-[#fffcf7] p-4">
           {loading ? <p className="text-sm text-stone-500">Loading Top Management…</p> : error ? <p role="alert" className="text-sm text-red-700">{error}</p> : !people.length ? <p className="text-sm text-amber-800">Add the persons in Step 2 → Top Management before generating this letter.</p> : null}
