@@ -5,6 +5,22 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "display_override": [
+    "tabbed",
+    "standalone"
+  ],
+  "tab_strip": {
+    "home_tab": {},
+    "new_tab_button": {
+      "url": "/"
+    }
+  },
+  "launch_handler": {
+    "client_mode": [
+      "navigate-new",
+      "auto"
+    ]
+  },
   "background_color": "#f5f5f4",
   "theme_color": "#0c416a",
   "lang": "en",
