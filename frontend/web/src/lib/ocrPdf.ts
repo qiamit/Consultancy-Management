@@ -10,12 +10,13 @@ const RULE_MIN_WIDTH = 0.08
 const RULE_MIN_HEIGHT = 0.03
 
 /**
- * Black-and-white copy of the page with the table rules wiped out: Tesseract reads bordered tables (test results)
- * badly while the grid lines are there.
+ * Wipes the table rules off the page (Tesseract reads bordered tables — test results — badly while the grid lines
+ * are there) and returns a black-and-white version for a second read. The canvas itself stays grey, which keeps
+ * digits such as 0 / 6 / 8 apart.
  */
-function cleanForOcr(canvas: HTMLCanvasElement) {
+function cleanForOcr(canvas: HTMLCanvasElement): ImageData | null {
   const ctx = canvas.getContext('2d', { willReadFrequently: true })
-  if (!ctx) return
+  if (!ctx) return null
   const w = canvas.width
   const h = canvas.height
   const image = ctx.getImageData(0, 0, w, h)
@@ -49,13 +50,20 @@ function cleanForOcr(canvas: HTMLCanvasElement) {
       }
     }
   }
+  const bw = new ImageData(w, h)
   for (let p = 0, i = 0; p < w * h; p += 1, i += 4) {
+    const grey = rule[p] === 1 ? 255 : 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2]
+    px[i] = grey
+    px[i + 1] = grey
+    px[i + 2] = grey
     const v = ink[p] === 1 && rule[p] === 0 ? 0 : 255
-    px[i] = v
-    px[i + 1] = v
-    px[i + 2] = v
+    bw.data[i] = v
+    bw.data[i + 1] = v
+    bw.data[i + 2] = v
+    bw.data[i + 3] = 255
   }
   ctx.putImageData(image, 0, 0)
+  return bw
 }
 
 const tidy = (text: string) =>
@@ -66,8 +74,9 @@ const tidy = (text: string) =>
 
 /**
  * Reads the text of a scanned PDF (pages that are pictures) in the browser with Tesseract OCR, so a text-only AI
- * model can still check it. Each page is read twice (as a text block, and as columns) because each way misses or
- * misreads different table cells; both readings go to the AI with page markers. Slow (a few seconds a page): call
+ * model can still check it. Each page is read twice (grey as columns, black-and-white as a block) because each way
+ * misses or misreads different table cells; both readings go to the AI with page markers (read 1 has the better
+ * digits). Slow (a few seconds a page): call
  * it only when the PDF has no selectable text.
  */
 export async function ocrPdfText(
@@ -96,12 +105,15 @@ export async function ocrPdfText(
       canvas.height = Math.max(1, Math.floor(viewport.height))
       await page.render({ canvas, viewport, background: '#ffffff' }).promise
       page.cleanup()
-      cleanForOcr(canvas)
+      const bw = cleanForOcr(canvas)
       const reads: string[] = []
-      for (const mode of [tesseract.PSM.SINGLE_BLOCK, tesseract.PSM.SINGLE_COLUMN]) {
-        await worker.setParameters({ tessedit_pageseg_mode: mode })
-        const { data } = await worker.recognize(canvas)
-        reads.push(tidy(data.text))
+      // Read 1: grey page as columns (best digits). Read 2: black-and-white page as one block (catches other cells).
+      await worker.setParameters({ tessedit_pageseg_mode: tesseract.PSM.SINGLE_COLUMN })
+      reads.push(tidy((await worker.recognize(canvas)).data.text))
+      if (bw) {
+        canvas.getContext('2d')?.putImageData(bw, 0, 0)
+        await worker.setParameters({ tessedit_pageseg_mode: tesseract.PSM.SINGLE_BLOCK })
+        reads.push(tidy((await worker.recognize(canvas)).data.text))
       }
       canvas.width = 0
       canvas.height = 0

@@ -174,7 +174,7 @@ export async function checkSampleConformity(input: {
     INSTRUCTIONS,
     `=== SAMPLE (${input.isLabel}) ===\n${sampleFacts(row)}`,
     requestText ? `=== TEST REQUEST ===\n${requestText}` : '',
-    `=== TEST REPORT${report.ocr ? ' (scanned, read by OCR twice per page — figures may have OCR mistakes such as 0↔8, 0↔6, 1↔I: compare both reads, take the one that fits the units and limits, and prefer the page pictures when attached)' : ''} ===\n${report.text || '(scanned — see the attached page pictures)'}`,
+    `=== TEST REPORT${report.ocr ? ' (scanned, read by OCR twice per page — figures may have OCR mistakes such as 0↔8, 0↔6, 1↔I: read 1 has the more reliable digits; compare both reads, take the one that fits the units and limits, and prefer the page pictures when attached)' : ''} ===\n${report.text || '(scanned — see the attached page pictures)'}`,
     standardText ? `=== INDIAN STANDARD ===\n${standardText}` : '',
     manualText ? `=== PRODUCT MANUAL ===\n${manualText}` : '',
   ]
