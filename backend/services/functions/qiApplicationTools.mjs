@@ -71,6 +71,45 @@ const CHOICE_KEYS = {
   'testing-components': ['equipment', 'calibration'],
   'test-report-components': ['sample-offer', 'factory-test-report', 'long-duration', 'raw-material-test-reports'],
 }
+/** Sections written from the product's documents: refused until the Manual and the Standard are read in full. */
+const NEEDS_DOCUMENTS = ['raw-material-reference', 'process-flow-chart', 'packaging-marking', 'cmpf-306']
+/**
+ * Facts only the firm knows. A value here must come from the admin's words or the firm's saved data; anything else
+ * is left empty and reported, so a guess never reaches a confirm card as if it were known.
+ */
+const FACT_FIELDS = {
+  'raw-material-reference': ['supplierName', 'supplierCountry', 'bisCertificationMark', 'testCertificate', 'batchesPackaging'],
+  'cmpf-305': ['make', 'capacityPerDay', 'number'],
+  'cmpf-306': ['make', 'leastCount', 'range', 'calibrationStatus', 'quantity'],
+  'manufacturing-subcontracting': ['machinery', 'subcontractorName', 'subcontractorAddress'],
+  'subcontracted-tests': ['laboratoryName', 'laboratoryId'],
+  'application-correspondence': ['name', 'designation', 'email', 'mobile'],
+}
+const FACT_LABELS = {
+  supplierName: 'Supplier',
+  supplierCountry: 'Supplier Country',
+  bisCertificationMark: 'Conformity of Material',
+  testCertificate: 'Record Maintained',
+  batchesPackaging: 'Batches',
+  make: 'Make',
+  capacityPerDay: 'Capacity',
+  number: 'Number',
+  leastCount: 'Least Count',
+  range: 'Range',
+  calibrationStatus: 'Calibration Status',
+  quantity: 'Quantity',
+  machinery: 'Machinery',
+  subcontractorName: 'Sub-Contractor',
+  subcontractorAddress: 'Sub-Contractor Address',
+  laboratoryName: 'Laboratory',
+  laboratoryId: 'Laboratory',
+  name: 'Name',
+  designation: 'Designation',
+  email: 'Email',
+  mobile: 'Mobile',
+}
+/** Facts that differ per material: the base's supplier is not this product's supplier, so only this application counts. */
+const OWN_FACTS_ONLY = ['raw-material-reference']
 const WRITABLE_KINDS = ['process-flow-chart', ...Object.keys(DRAFT_SHAPES), ...Object.keys(FLAT_SHAPES), ...Object.keys(CHOICE_KEYS)]
 
 const text = (v) => (typeof v === 'string' ? v.trim() : v == null ? '' : String(v).trim())
@@ -141,6 +180,24 @@ function scopeLines(notes) {
   } catch {
     return [raw.slice(0, 300)]
   }
+}
+
+const squeeze = (value) => text(value).toLowerCase().replace(/\s+/g, ' ')
+/** True when the value stands as whole words in the text ("Heat" is not found in "Wheat"). */
+function saysValue(haystack, value) {
+  const needle = squeeze(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return Boolean(needle) && new RegExp(`(^|[^a-z0-9])${needle}($|[^a-z0-9])`).test(haystack)
+}
+
+/** Page numbers as short ranges: 9–21, 30. */
+function pageRanges(pages) {
+  const parts = []
+  for (const n of [...pages].sort((a, b) => a - b)) {
+    const last = parts[parts.length - 1]
+    if (last && last[1] === n - 1) last[1] = n
+    else parts.push([n, n])
+  }
+  return parts.map(([a, b]) => (a === b ? String(a) : `${a}-${b}`)).join(', ')
 }
 
 const isManualFile = (f) => /manual/i.test(text(f.document_kind)) || /product[_\s-]*manual|\bmanual\b|\bpm\b|^pm[_\s-]/i.test(text(f.file_name))
@@ -301,7 +358,10 @@ export const APPLICATION_TOOLS = [
 ]
 
 /** Tool handlers bound to one run. readStorage(bucket, path) returns the file's bytes as the caller. */
-export function applicationToolHandlers({ userRest, steps, proposals, readStorage }) {
+export function applicationToolHandlers({ userRest, steps, proposals, readStorage, adminWords = '' }) {
+  /** What this run has really read: "<is code>:<manual|standard>" → { total, pages, unread }. */
+  const documentsRead = new Map()
+  const documentKey = (codeId, document) => `${codeId}:${document === 'manual' ? 'manual' : 'standard'}`
   const rows = (data) => (Array.isArray(data) ? data : [])
   const projectId = (value) => {
     const id = text(value)
@@ -331,6 +391,28 @@ export function applicationToolHandlers({ userRest, steps, proposals, readStorag
     }
     return out
   }
+  /** Why a product section cannot be written yet: what is not attached or not read. Empty when all is read. */
+  const documentsMissing = async (codeId) => {
+    if (!UUID.test(text(codeId))) return ['This application has no IS code.']
+    const { data } = await userRest(`/is_code_files?is_code_id=eq.${codeId}&select=file_name,storage_path,document_kind`)
+    const pdfs = rows(data).filter((f) => /\.pdf$/i.test(text(f.file_name)) && text(f.storage_path))
+    const missing = []
+    for (const [document, name] of [['manual', 'Product Manual'], ['standard', 'Indian Standard']]) {
+      if (!pdfs.some((f) => (document === 'manual' ? isManualFile(f) : !isManualFile(f)))) {
+        missing.push(`The ${name} PDF is not attached in IS Code Master: ask the admin to attach it.`)
+        continue
+      }
+      const log = documentsRead.get(documentKey(codeId, document))
+      if (!log) {
+        missing.push(`Read the whole ${name} first: read_standard with document "${document}".`)
+        continue
+      }
+      const left = Array.from({ length: log.total }, (_, i) => i + 1).filter((n) => !log.pages.has(n))
+      if (left.length) missing.push(`The ${name} is not fully read: read_standard with document "${document}" and pages "${pageRanges(left).split(', ')[0]}", until pages ${pageRanges(left)} are done.`)
+    }
+    return missing
+  }
+
   const projectLabel = (p) => `${isLabel(p.is_code) || text(p.title)} — ${text(p.client?.company_name)}`
 
   return {
@@ -452,6 +534,10 @@ export function applicationToolHandlers({ userRest, steps, proposals, readStorag
         chosen = Array.from({ length: Math.max(0, to - from + 1) }, (_, i) => from + i)
         ;({ pages, unread } = await readDocumentPages(file.storage_path, download, chosen))
       }
+      const key = documentKey(codeId, args.document)
+      const log = documentsRead.get(key) ?? { total: pages.length, pages: new Set(), unread: [] }
+      documentsRead.set(key, log)
+      log.unread = unread
       let body = ''
       const returned = []
       for (const n of chosen) {
@@ -459,6 +545,7 @@ export function applicationToolHandlers({ userRest, steps, proposals, readStorag
         if (body && body.length + block.length > MAX_DOC_CHARS) break
         body += block.slice(0, MAX_DOC_CHARS)
         returned.push(n)
+        log.pages.add(n)
       }
       const last = returned[returned.length - 1] ?? 0
       const nextPage = !query && last && last < (chosen[chosen.length - 1] ?? 0) ? last + 1 : null
@@ -494,6 +581,8 @@ export function applicationToolHandlers({ userRest, steps, proposals, readStorag
       const ids = [sourceId, ...targetIds]
       const [payloads, fileCounts] = await Promise.all([loadPayloads(ids), loadFileCounts(ids)])
       const report = []
+      // A copied list keeps the base's clause numbers, which belong to the base's standard.
+      const reClause = kinds.includes('cmpf-306') && args.same_product !== true
       for (const target of targets) {
         const copied = []
         const skipped = []
@@ -513,14 +602,26 @@ export function applicationToolHandlers({ userRest, steps, proposals, readStorag
           action: 'copy_sections',
           table: 'application',
           id: target.id,
-          values: { From: projectLabel(source), To: projectLabel(target), Sections: copied.map((c) => c.label).join(', '), ...(skipped.length ? { 'Left As It Is': skipped.join('; ') } : {}) },
+          values: {
+            From: projectLabel(source),
+            To: projectLabel(target),
+            Sections: copied.map((c) => c.label).join(', '),
+            ...(skipped.length ? { 'Left As It Is': skipped.join('; ') } : {}),
+            ...(reClause && copied.some((c) => c.kind === 'cmpf-306')
+              ? { 'Check After Copy': `Testing Equipment Clause Numbers Belong to ${isLabel(source.is_code)}. Change Them to ${isLabel(target.is_code)} Clauses.` }
+              : {}),
+          },
           before: null,
           apply: { sourceProjectId: sourceId, targetProjectId: target.id, kinds: copied.map((c) => c.kind) },
           summary: `Copy ${copied.length} Section${copied.length === 1 ? '' : 's'} to ${isLabel(target.is_code)}`,
         })
       }
       steps.push({ tool: 'propose_copy_sections', summary: `Prepared copying to ${targets.length} application${targets.length === 1 ? '' : 's'} for confirmation` })
-      return capJson({ status: 'waiting for the admin to confirm in the app — not copied yet', report })
+      return capJson({
+        status: 'waiting for the admin to confirm in the app — not copied yet',
+        report,
+        ...(reClause ? { still_to_do: 'clauseNo on the copied Testing Equipment belongs to the base standard. Tell the admin, and after the copy is confirmed offer to re-map it with propose_section.' } : {}),
+      })
     },
 
     async propose_section(args) {
@@ -530,10 +631,36 @@ export function applicationToolHandlers({ userRest, steps, proposals, readStorag
       const incoming = args.payload && typeof args.payload === 'object' && !Array.isArray(args.payload) ? args.payload : null
       if (!incoming) throw new Error('payload must be an object')
       const project = await loadProject(id)
+      if (NEEDS_DOCUMENTS.includes(kind)) {
+        const missing = await documentsMissing(project.is_code_id)
+        if (missing.length) throw new Error(`Not prepared yet. ${missing.join(' ')}`)
+      }
       const saved = (await loadPayloads([id])).get(id)[kind] ?? {}
       const known = fileValues(saved)
       const stray = [...fileValues(incoming)].filter((v) => !known.has(v))
       if (stray.length) throw new Error('A file reference in payload does not belong to this section. Files are attached by the owner.')
+
+      // Facts must be known: from the admin's words or the firm's saved data. Others are left empty and reported.
+      const factFields = FACT_FIELDS[kind] ?? []
+      let knownFacts = squeeze(adminWords)
+      if (factFields.length) {
+        const own = JSON.stringify(saved)
+        let firm = ''
+        if (!OWN_FACTS_ONLY.includes(kind)) {
+          const { data: sameFirm } = await userRest(`/bis_projects?client_id=eq.${project.client_id}&select=id&limit=60`)
+          const all = await loadPayloads(rows(sameFirm).map((p) => p.id))
+          firm = JSON.stringify([...all.values()])
+        }
+        knownFacts = `${knownFacts} ${squeeze(own)} ${squeeze(firm)}`
+      }
+      const leftEmpty = new Set()
+      const keepKnown = (fields, label = '') => {
+        for (const field of factFields) {
+          if (!text(fields[field]) || saysValue(knownFacts, fields[field])) continue
+          leftEmpty.add(`${FACT_LABELS[field] ?? field}${label}`)
+          fields[field] = ''
+        }
+      }
 
       let payload
       let display
@@ -554,6 +681,7 @@ export function applicationToolHandlers({ userRest, steps, proposals, readStorag
           for (const [field, allowed] of Object.entries(shape.choices)) {
             if (out[field] && !allowed.includes(out[field])) throw new Error(`Row ${i + 1}: ${field} must be one of: ${allowed.join(', ')}`)
           }
+          keepKnown(out, ` (Row ${i + 1})`)
           return out
         })
         payload = { ...saved, [shape.list]: cleaned }
@@ -561,6 +689,7 @@ export function applicationToolHandlers({ userRest, steps, proposals, readStorag
       } else if (FLAT_SHAPES[kind]) {
         const fields = Object.fromEntries(FLAT_SHAPES[kind].filter((f) => incoming[f] != null).map((f) => [f, text(incoming[f])]))
         if (!Object.keys(fields).length) throw new Error(`payload needs at least one of: ${FLAT_SHAPES[kind].join(', ')}`)
+        keepKnown(fields)
         payload = { ...saved, ...fields }
         display = fields
       } else {
@@ -574,6 +703,11 @@ export function applicationToolHandlers({ userRest, steps, proposals, readStorag
       }
 
       const section = SECTION_BY_KIND.get(kind)
+      const empties = [...leftEmpty]
+      const docLogs = NEEDS_DOCUMENTS.includes(kind) ? ['manual', 'standard'].map((d) => documentsRead.get(documentKey(project.is_code_id, d))) : []
+      const unreadPages = docLogs.flatMap((log) => log?.unread ?? [])
+      if (empties.length) display = { ...display, 'Left Empty for You': empties.join(', ') }
+      if (unreadPages.length) display = { ...display, 'Could Not Read': `Scanned Pages ${pageRanges(new Set(unreadPages))}` }
       proposals.push({
         key: `p${proposals.length + 1}-${Date.now().toString(36)}`,
         action: 'save_section',
@@ -585,7 +719,11 @@ export function applicationToolHandlers({ userRest, steps, proposals, readStorag
         summary: text(args.summary).slice(0, 240) || `Fill ${section?.label ?? kind}`,
       })
       steps.push({ tool: 'propose_section', summary: `Prepared ${section?.label ?? kind} for ${isLabel(project.is_code)} for confirmation` })
-      return capJson({ status: 'waiting for the admin to confirm in the app — not saved yet', section: section?.label ?? kind })
+      return capJson({
+        status: 'waiting for the admin to confirm in the app — not saved yet',
+        section: section?.label ?? kind,
+        ...(empties.length ? { left_empty: empties, left_empty_note: 'These values were not said by the admin or saved for this firm, so they were removed. Ask the admin for them; never fill them by guessing.' } : {}),
+      })
     },
   }
 }

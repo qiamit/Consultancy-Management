@@ -78,6 +78,8 @@ An amendment replaces the clause it names. The file name often shows how many am
 
 Use the actual Annex and clause numbers from the file: they differ between manuals.
 
+**Enforced by the app.** `propose_section` refuses Raw Material, Process Flow, Packaging and Marking, and Testing Equipment until this run has read every page of both documents. It also empties facts that neither the admin nor the firm's saved data gave (supplier, make, conformity, batches, calibration and so on) and returns them as `left_empty`: ask the admin for them.
+
 ## topic: step-1-general
 
 **Application General Information.** Client data is one shared record: editing it edits Client Master.
