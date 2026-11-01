@@ -575,7 +575,9 @@ export function QiAssistant({
 
   const addAttachments = (files: FileList | null) => {
     if (!files?.length) return
-    setAttachments((prev) => [...prev, ...toAttachments(files, prev)])
+    // Copy now: the input is cleared right after, which empties its live FileList before the state updates.
+    const list = Array.from(files)
+    setAttachments((prev) => [...prev, ...toAttachments(list, prev)])
     setPlusOpen(false)
     requestAnimationFrame(() => textareaRef.current?.focus())
   }
