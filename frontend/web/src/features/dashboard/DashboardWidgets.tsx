@@ -82,7 +82,7 @@ export function KpiTile({ label, value, icon: Icon, tone = 'neutral', href, spar
           <Icon className="h-4 w-4" />
         </span>
       </div>
-      <div className="mt-1 flex min-w-0 items-end justify-between gap-2">
+      <div className="mt-0.5 flex min-w-0 items-end justify-between gap-2">
         <p className="min-w-0 truncate font-jakarta text-2xl font-bold tabular-nums text-foreground sm:text-[1.7rem]">
           {value}
         </p>
@@ -92,7 +92,7 @@ export function KpiTile({ label, value, icon: Icon, tone = 'neutral', href, spar
   )
   const cls = cn(
     limsPanelClass,
-    'relative block min-h-[7.25rem] py-3 pl-4 pr-3 transition',
+    'relative block py-2 pl-4 pr-3 transition',
     href && 'hover:border-amber-600/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600',
   )
   if (href) {
