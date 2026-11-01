@@ -2059,7 +2059,7 @@ export function OslSampleRequirementsModuleFields({
             type="button"
             size="sm"
             variant="outline"
-            className={cn(limsOutlineBtnClass, actionBtnClass, 'w-auto gap-1.5 px-2.5 text-xs font-semibold')}
+            className={cn(limsOutlineBtnClass, actionBtnClass)}
             disabled={disabled || conformityBusy !== null}
             title={
               selectedCount
@@ -2069,7 +2069,7 @@ export function OslSampleRequirementsModuleFields({
             aria-label="AI Conformity Check"
             onClick={() => void runConformityCheck()}
           >
-            {conformityBusy ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Sparkles size={14} aria-hidden />} AI Check
+            {conformityBusy ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Sparkles size={14} aria-hidden />}
           </Button>
           <Button
             type="button"
