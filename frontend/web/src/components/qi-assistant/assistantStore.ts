@@ -69,6 +69,12 @@ export async function listMemories(): Promise<AssistantMemory[]> {
   return (data ?? []) as AssistantMemory[]
 }
 
+/** Saved from the chat's Remember option; the table allows 2000 characters. */
+export async function addMemory(content: string): Promise<void> {
+  const { error } = await supabase.from('assistant_memories').insert({ content: content.trim().slice(0, 2000), kind: 'fact' })
+  if (error) throw new Error(error.message)
+}
+
 export async function deleteMemory(id: string): Promise<void> {
   const { error } = await supabase.from('assistant_memories').delete().eq('id', id)
   if (error) throw new Error(error.message)

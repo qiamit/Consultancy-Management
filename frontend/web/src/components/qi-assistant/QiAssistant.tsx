@@ -19,10 +19,13 @@ import { useShowAiAssistant } from '@/hooks/useShowAiAssistant'
 import { useIsLaboratoryDirector } from '@/components/lims/LaboratoryDirectorOnly'
 import { flattenNavModules } from '@/lib/appNav'
 import { AgentProposals, AgentSteps } from './QiAgentParts'
+import { splitQuote, withQuote } from './chatQuote'
+import { MessageActions, ReplyQuoteBar, SelectionPopup, type ChatActionHandlers } from './QiChatActions'
 import { readAttachments, toAttachments, type ChatAttachment } from './chatAttachments'
 import {
   createConversation,
   deleteConversation,
+  addMemory,
   deleteMemory,
   listConversations,
   listMemories,
@@ -104,6 +107,7 @@ type MessageSegment =
   | { kind: 'table'; rows: string[][] }
   | { kind: 'ul' | 'ol'; items: string[] }
   | { kind: 'p'; lines: string[] }
+  | { kind: 'quote'; lines: string[] }
 
 const TABLE_ROW = /^\s*\|.*\|\s*$/
 const TABLE_RULE = /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/
@@ -114,6 +118,7 @@ function parseMessage(content: string): MessageSegment[] {
   const push = (seg: MessageSegment) => {
     const last = out[out.length - 1]
     if (seg.kind === 'p' && last?.kind === 'p') last.lines.push(...seg.lines)
+    else if (seg.kind === 'quote' && last?.kind === 'quote') last.lines.push(...seg.lines)
     else if ((seg.kind === 'ul' || seg.kind === 'ol') && last?.kind === seg.kind) last.items.push(...seg.items)
     else out.push(seg)
   }
@@ -125,6 +130,10 @@ function parseMessage(content: string): MessageSegment[] {
       continue
     }
     if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) continue
+    if (line.startsWith('> ')) {
+      push({ kind: 'quote', lines: [line.slice(2)] })
+      continue
+    }
     const heading = line.match(/^\s*#{1,4}\s+(.+)$/)
     if (heading) {
       push({ kind: 'heading', text: heading[1]! })
@@ -200,6 +209,9 @@ function AssistantMessage({ content }: { content: string }) {
             </List>
           )
         }
+        if (seg.kind === 'quote') {
+          return <blockquote key={index} className="line-clamp-4 whitespace-pre-wrap break-words border-l-2 border-current pl-2 text-xs opacity-80">{seg.lines.join('\n')}</blockquote>
+        }
         if (seg.kind !== 'p') return null
         return (
           <p key={index}>
@@ -209,6 +221,36 @@ function AssistantMessage({ content }: { content: string }) {
           </p>
         )
       })}
+    </div>
+  )
+}
+
+/** One chat bubble with Reply, Copy and More under it. */
+function ChatMessageRow({
+  message,
+  handlers,
+  children,
+}: {
+  message: QiChatMessage
+  handlers: ChatActionHandlers
+  children?: ReactNode
+}) {
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const own = message.role === 'user'
+  return (
+    <div className={cn('group/message flex max-w-[92%] flex-col', own ? 'ml-auto' : 'mr-auto')}>
+      <div
+        className={cn(
+          'border px-3.5 py-2.5 text-sm leading-relaxed shadow-sm',
+          own ? 'border-amber-800/30 bg-amber-700 text-amber-50 selection:bg-stone-900 selection:text-white' : 'border-stone-400 bg-white text-stone-800',
+        )}
+      >
+        <div ref={bodyRef} data-chat-body>
+          <AssistantMessage content={message.content} />
+        </div>
+        {children}
+      </div>
+      <MessageActions role={message.role} handlers={handlers} bodyRef={bodyRef} />
     </div>
   )
 }
@@ -302,6 +344,8 @@ export function QiAssistant({
   const agentRoutes = useMemo(() => flattenNavModules().map((m) => ({ path: m.key, label: m.label })), [])
   const [open, setOpen] = useState(false)
   const [input, setInput] = useState('')
+  /** The text the next message replies to. */
+  const [replyQuote, setReplyQuote] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [messages, setMessages] = useState<QiChatMessage[]>([])
@@ -548,6 +592,7 @@ export function QiAssistant({
     setMessages([])
     setError(null)
     setInput('')
+    setReplyQuote(null)
     setAgentView('chat')
   }
 
@@ -810,7 +855,7 @@ export function QiAssistant({
   }, [messages, loading])
 
   const sendMessage = useCallback(
-    async (text: string) => {
+    async (text: string, quoteOverride?: string) => {
       const trimmed =
         text.trim() ||
         (attachedImage && isClientsPage ? CLIENT_CARD_SAVE_PROMPT : '') ||
@@ -831,6 +876,8 @@ export function QiAssistant({
       setError(null)
       setInput('')
       setSkillPickerOpen(false)
+      const asked = withQuote(quoteOverride ?? replyQuote, trimmed)
+      setReplyQuote(null)
 
       const skillTag = selectedSkill ? `[Skill: ${selectedSkill.name}] ` : ''
       const pdfTag = attachedPdf ? `📎 PDF: ${attachedPdf.name}\n\n` : ''
@@ -842,7 +889,7 @@ export function QiAssistant({
       const userMsg: QiChatMessage = {
         id: newId(),
         role: 'user',
-        content: `${skillTag}${pdfTag}${imageTag}${filesTag}${trimmed}`,
+        content: `${skillTag}${pdfTag}${imageTag}${filesTag}${asked}`,
       }
       const skillId = selectedSkill?.id
       const pdfFile = attachedPdf
@@ -890,7 +937,7 @@ export function QiAssistant({
           ...(agentMode ? { mode: 'agent' as const, routes: agentRoutes } : {}),
           ...(read?.images.length ? { images: read.images } : {}),
           page,
-          message: read?.text ? `${trimmed}\n\n${read.text}` : trimmed,
+          message: read?.text ? `${asked}\n\n${read.text}` : asked,
           context: contextSummary,
           isCodeId: effectiveIsCodeId,
           activeRecordId,
@@ -928,11 +975,51 @@ export function QiAssistant({
       page,
       agentMode,
       agentRoutes,
+      replyQuote,
       selectedSkill,
       showIsCodePicker,
       stopListening,
     ],
   )
+
+  const focusComposer = () => requestAnimationFrame(() => textareaRef.current?.focus())
+  const sharedActions: ChatActionHandlers = {
+    busy: loading,
+    onReply: (quote) => {
+      setReplyQuote(quote)
+      focusComposer()
+    },
+    onExplain: (quote) => void sendMessage('Explain this in simple words, in the language of this chat.', quote),
+    ...(agentMode
+      ? {
+          onRemember: (text: string) => addMemory(text),
+          onEmail: (quote: string) => {
+            setReplyQuote(quote)
+            setInput('Prepare an email with this to ')
+            focusComposer()
+          },
+        }
+      : {}),
+  }
+  /** What the options do for one message: an answer can be asked again, an own message edited or sent again. */
+  const messageActions = (m: QiChatMessage, index: number): ChatActionHandlers => {
+    if (m.role === 'user') {
+      const { quote, text } = splitQuote(m.content)
+      return {
+        ...sharedActions,
+        onEdit: () => {
+          setReplyQuote(quote)
+          setInput(text)
+          focusComposer()
+        },
+        onSendAgain: () => void sendMessage(text, quote ?? ''),
+      }
+    }
+    const question = messages.slice(0, index).reverse().find((x) => x.role === 'user')
+    if (!question) return sharedActions
+    const { quote, text } = splitQuote(question.content)
+    return { ...sharedActions, onAskAgain: () => void sendMessage(text, quote ?? '') }
+  }
 
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (skillPickerOpen && filteredSkills.length > 0) {
@@ -1134,7 +1221,7 @@ export function QiAssistant({
         <div
           ref={scrollRef}
           className={cn(
-            'flex-1 space-y-3 overflow-y-auto bg-gradient-to-b from-[#f7f3eb] to-[#fffcf7] px-4 py-3 sm:px-5',
+            'relative flex-1 space-y-3 overflow-y-auto bg-gradient-to-b from-[#f7f3eb] to-[#fffcf7] px-4 py-3 sm:px-5',
             agentMode && minimized && 'hidden',
             agentMode ? 'min-h-0' : 'min-h-[220px] max-h-[42dvh]',
           )}
@@ -1273,25 +1360,17 @@ export function QiAssistant({
               )}
             </div>
           ) : null}
-          {(!agentMode || agentView === 'chat') && messages.map((m) => (
-            <div
-              key={m.id}
-              className={cn(
-                'max-w-[92%] border px-3.5 py-2.5 text-sm leading-relaxed shadow-sm',
-                m.role === 'user'
-                  ? 'ml-auto border-amber-800/30 bg-amber-700 text-amber-50'
-                  : 'mr-auto border-stone-400 bg-white text-stone-800',
-              )}
-            >
-              <AssistantMessage content={m.content} />
+          {(!agentMode || agentView === 'chat') && messages.map((m, index) => (
+            <ChatMessageRow key={m.id} message={m} handlers={messageActions(m, index)}>
               {m.agent ? (
                 <>
                   <AgentSteps steps={m.agent.steps} />
                   <AgentProposals proposals={m.agent.proposals} onApplied={handleAgentApplied} readOnly={m.fromHistory} />
                 </>
               ) : null}
-            </div>
+            </ChatMessageRow>
           ))}
+          {!agentMode || agentView === 'chat' ? <SelectionPopup containerRef={scrollRef} handlers={sharedActions} /> : null}
           {loading && (
             <div className="mr-auto flex max-w-[92%] items-center gap-2 border border-stone-400 bg-white px-3.5 py-2.5 text-sm text-stone-600">
               <Loader2 size={14} className="animate-spin text-amber-700" />
@@ -1571,6 +1650,7 @@ export function QiAssistant({
                 listening ? 'border-red-400' : 'border-stone-400',
               )}
             >
+              {replyQuote ? <ReplyQuoteBar quote={replyQuote} onClear={() => setReplyQuote(null)} /> : null}
               {attachments.length ? (
                 <div className="flex max-h-24 flex-wrap gap-1.5 overflow-y-auto border-b border-stone-200 p-2">
                   {attachments.map((a) => (
