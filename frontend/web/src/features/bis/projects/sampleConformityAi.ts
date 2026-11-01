@@ -2,12 +2,19 @@ import { loadPdfjs } from '@/lib/pdfjsLoader'
 import { loadIsCodeFileLinks, type IsCodeFileLink } from '@/features/masters/is-codes/loadIsCodeFileLinks'
 import { sendQiAssistantMessage } from '@/components/qi-assistant/qiAssistantApi'
 import { pdfFileToAiPages } from '@/components/qi-assistant/aiImages'
+import { ocrPdfText } from '@/lib/ocrPdf'
 import { createBisProjectFileUrls } from './bisProjectFilesApi'
 import { parseOslConformityCheck, type OslConformityCheck, type OslSampleRequirementRow } from './oslSampleRequirementsModel'
 
-/** Text budget per document (characters), so the whole check fits the AI model's context. */
-const LIMITS = { request: 6_000, report: 22_000, standard: 38_000, manual: 14_000 }
-const MAX_PAGES = 80
+/** Text budget per document (characters), so the whole check fits the AI model's context (~60k tokens in all). */
+const LIMITS = { request: 12_000, report: 45_000, standard: 100_000, manual: 35_000 }
+const MAX_PAGES = 120
+/** Less selectable text than this means a scanned PDF: it is read with OCR. */
+const SCANNED_BELOW = 300
+/** Scanned pages read by OCR per document (a few seconds each). */
+const OCR_PAGES = { request: 4, report: 30, standard: 25, manual: 20 }
+/** Page pictures sent along for a vision AI model (the server accepts 8). */
+const REPORT_IMAGES = 8
 
 const isManualName = (name: string) => /product[_\s-]*manual|\bmanual\b|\bpm\b|^pm[_\s-]/i.test(name)
 
@@ -27,6 +34,24 @@ async function storedFile(storagePath: string, name: string): Promise<File> {
   if (!viewUrl) throw new Error(`${name} could not be opened.`)
   return fetchFile(viewUrl, name)
 }
+
+/** Selectable text of a PDF, or its OCR text when it is scanned. */
+async function readPdf(
+  file: File,
+  kind: keyof typeof LIMITS,
+  label: string,
+  onStep?: (step: string) => void,
+): Promise<{ text: string; ocr: boolean }> {
+  const text = await pdfText(file, LIMITS[kind])
+  if (text.replace(/\[Page \d+\]/g, '').trim().length >= SCANNED_BELOW) return { text, ocr: false }
+  const ocr = await ocrPdfText(file, {
+    maxPages: OCR_PAGES[kind],
+    onPage: (page, total) => onStep?.(`Reading the Scanned ${label} (OCR) — Page ${page} of ${total}…`),
+  })
+  return { text: ocr.length > LIMITS[kind] ? `${ocr.slice(0, LIMITS[kind])}\n… (cut)` : ocr, ocr: true }
+}
+
+const VISION_MISSING = /vision ai model|reading photos needs/i
 
 /** All selectable text of a PDF (page markers kept, so the AI can cite pages), cut to `max` characters. */
 async function pdfText(file: File, max: number): Promise<string> {
@@ -77,8 +102,8 @@ function sampleFacts(row: OslSampleRequirementRow): string {
 const INSTRUCTIONS = `You are a BIS product certification reviewer checking one sample's Test Report.
 Use ONLY the documents below. Work in this order:
 1. Identify the exact sample (grade / type / size / class / declared values) from the Test Request and the sample details.
-2. From the Indian Standard and the Product Manual (scheme of testing), list every test / requirement that applies to THIS sample, with clause numbers and limits (including tolerances on declared values).
-3. For each test in the Test Report, compare the reported result with the applicable requirement: Pass, Fail, or Not Clear (when the requirement or the result cannot be read).
+2. From the Indian Standard and the Product Manual (scheme of testing), list every test / requirement that applies to THIS sample, with clause numbers and limits (including tolerances on declared values). Amendments printed with the Standard replace the clauses they name: use the amended text.
+3. For each test in the Test Report, compare the reported result with the applicable requirement: Pass, Fail, or Not Clear (when the requirement or the result cannot be read). Work out the limit for this sample's size / grade yourself (tables, formulas, tolerances); do not just copy the lab's own remark.
 4. List the required tests that are missing from the Test Report (compare with "Test Required" and the Product Manual).
 5. Verdict: "Yes" only when every reported result passes and no required test is missing; "No" when any result fails the requirement (even if the lab wrote "conforms"); "Undecided" when the documents are not enough to decide (say why in notes).
 Do not invent values. Quote results and limits as written. Keep wording short.
@@ -86,7 +111,7 @@ Reply with JSON only:
 {"verdict":"Yes|No|Undecided","summary":"one or two sentences","results":[{"parameter":"","clause":"","requirement":"","result":"","verdict":"Pass|Fail|Not Clear"}],"missing_tests":["test (clause)"],"notes":["…"]}`
 
 /**
- * AI conformity check of one sample: reads the Test Request, the Test Report (text, or page pictures when scanned),
+ * AI conformity check of one sample: reads the Test Request, the Test Report (text; OCR and page pictures when scanned),
  * the IS specification and the Product Manual, and compares every result with the requirement for this sample.
  */
 export async function checkSampleConformity(input: {
@@ -101,17 +126,20 @@ export async function checkSampleConformity(input: {
 
   onStep?.('Reading the Test Report…')
   const reportFile = await storedFile(row.testReportStoragePath, row.testReportFileName || 'Test_Report.pdf')
-  const report = await pdfFileToAiPages(reportFile, 4)
-  let reportText = report.text
-  if (reportText.length < 400) reportText = (await pdfText(reportFile, LIMITS.report)) || reportText
-  const images = reportText.trim().length < 400 ? report.images : []
-  sources.push(`Test Report: ${row.testReportFileName || 'attached'}${images.length ? ' (scanned — read as pictures)' : ''}`)
+  const report = await readPdf(reportFile, 'report', 'Test Report', onStep)
+  // A scanned report also goes as page pictures, for an AI model that can see (tables read best that way).
+  const images = report.ocr ? (await pdfFileToAiPages(reportFile, REPORT_IMAGES).catch(() => null))?.images ?? [] : []
+  if (!report.text.trim() && !images.length) throw new Error('The Test Report PDF has no readable text.')
+  sources.push(`Test Report: ${row.testReportFileName || 'attached'}${report.ocr ? ' (scanned — read by OCR)' : ''}`)
 
   let requestText = ''
   if (row.testRequestStoragePath.trim()) {
     onStep?.('Reading the Test Request…')
-    requestText = await pdfText(await storedFile(row.testRequestStoragePath, row.testRequestFileName || 'Test_Request.pdf'), LIMITS.request).catch(() => '')
-    if (requestText) sources.push(`Test Request: ${row.testRequestFileName || 'attached'}`)
+    const request = await storedFile(row.testRequestStoragePath, row.testRequestFileName || 'Test_Request.pdf')
+      .then((f) => readPdf(f, 'request', 'Test Request', onStep))
+      .catch(() => ({ text: '', ocr: false }))
+    requestText = request.text
+    if (requestText) sources.push(`Test Request: ${row.testRequestFileName || 'attached'}${request.ocr ? ' (scanned — read by OCR)' : ''}`)
   }
 
   let standardText = ''
@@ -122,12 +150,18 @@ export async function checkSampleConformity(input: {
     const standard = pickIsFile(files, 'standard')
     const manual = pickIsFile(files, 'manual')
     if (standard) {
-      standardText = await fetchFile(standard.url!, standard.file_name).then((f) => pdfText(f, LIMITS.standard)).catch(() => '')
-      if (standardText) sources.push(`Standard: ${standard.file_name}`)
+      const read = await fetchFile(standard.url!, standard.file_name)
+        .then((f) => readPdf(f, 'standard', 'Standard', onStep))
+        .catch(() => ({ text: '', ocr: false }))
+      standardText = read.text
+      if (standardText) sources.push(`Standard: ${standard.file_name}${read.ocr ? ' (scanned — read by OCR)' : ''}`)
     }
     if (manual) {
-      manualText = await fetchFile(manual.url!, manual.file_name).then((f) => pdfText(f, LIMITS.manual)).catch(() => '')
-      if (manualText) sources.push(`Product Manual: ${manual.file_name}`)
+      const read = await fetchFile(manual.url!, manual.file_name)
+        .then((f) => readPdf(f, 'manual', 'Product Manual', onStep))
+        .catch(() => ({ text: '', ocr: false }))
+      manualText = read.text
+      if (manualText) sources.push(`Product Manual: ${manual.file_name}${read.ocr ? ' (scanned — read by OCR)' : ''}`)
     }
   }
   if (!standardText && !manualText) {
@@ -139,18 +173,24 @@ export async function checkSampleConformity(input: {
     INSTRUCTIONS,
     `=== SAMPLE (${input.isLabel}) ===\n${sampleFacts(row)}`,
     requestText ? `=== TEST REQUEST ===\n${requestText}` : '',
-    `=== TEST REPORT ===\n${reportText || '(scanned — see the attached page pictures)'}`,
+    `=== TEST REPORT${report.ocr ? ' (scanned, read by OCR — figures may have OCR mistakes; prefer the page pictures when attached)' : ''} ===\n${report.text || '(scanned — see the attached page pictures)'}`,
     standardText ? `=== INDIAN STANDARD ===\n${standardText}` : '',
     manualText ? `=== PRODUCT MANUAL ===\n${manualText}` : '',
   ]
     .filter(Boolean)
     .join('\n\n')
-  const { reply } = await sendQiAssistantMessage({
-    page: 'bis/sample-conformity',
-    message,
-    responseFormat: 'json_object',
-    history: [],
-    ...(images.length ? { images } : {}),
+  const ask = (pictures: string[]) =>
+    sendQiAssistantMessage({
+      page: 'bis/sample-conformity',
+      message,
+      responseFormat: 'json_object',
+      history: [],
+      ...(pictures.length ? { images: pictures } : {}),
+    })
+  // Without a vision model the pictures are refused: the OCR text alone is then checked.
+  const { reply } = await ask(images).catch((err: unknown) => {
+    if (images.length && report.text.trim() && VISION_MISSING.test(err instanceof Error ? err.message : String(err))) return ask([])
+    throw err
   })
   const json = reply.match(/\{[\s\S]*\}/)?.[0]
   let raw: Record<string, unknown> = {}
