@@ -80,8 +80,35 @@
         /* fall back to the click below */
       }
     }
-    // The link downloads or opens the PDF itself: background.js catches the download (job.capture is set).
-    banner("Downloading the Test Report for Consultancy Pro…");
+    // The link opens / submits / builds the PDF in a popup: report-hook-nsws.js (page world) catches it and posts the
+    // bytes here. A real download, if any, is still caught by background.js (job.capture is set).
+    banner("Opening the Test Report for Consultancy Pro…");
+    const got = new Promise((resolve) => {
+      const onMessage = (event) => {
+        const data = event.data;
+        if (event.source !== window || !data || data.source !== "qe-nsws-report" || data.type !== "pdf") return;
+        window.removeEventListener("message", onMessage);
+        resolve(data.buf);
+      };
+      window.addEventListener("message", onMessage);
+      window.setTimeout(() => {
+        window.removeEventListener("message", onMessage);
+        resolve(null);
+      }, 25000);
+    });
+    document.documentElement.dataset.qeCaptureReport = "1";
     link.click();
+    const buf = await got;
+    if (buf) {
+      banner("Test Report found — sending it to Consultancy Pro…");
+      send({ ok: true, pdfName: name, pdfBase64: toBase64(buf) });
+      return;
+    }
+    delete document.documentElement.dataset.qeCaptureReport;
+    banner("Could not read the Test Report PDF here.");
+    send({
+      ok: false,
+      message: "Manak Opened the Test Report but It Could Not Be Read. Download It From Manak and Upload It Here by Double-Click.",
+    });
   });
 })();
