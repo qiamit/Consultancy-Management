@@ -6,6 +6,18 @@ export type OslSamplePriority = string
 /** Conformity of sample as per IS (Manak Test Report step): read off the lab report, so blank until someone decides. */
 export type OslSampleConformity = '' | 'Yes' | 'No'
 
+/** One AI conformity check of a sample's Test Report against the IS / Product Manual (kept as the sample's log). */
+export type OslConformityCheck = {
+  checkedAt: string
+  verdict: 'Yes' | 'No' | 'Undecided'
+  summary: string
+  results: { parameter: string; clause: string; requirement: string; result: string; verdict: 'Pass' | 'Fail' | 'Not Clear' }[]
+  missingTests: string[]
+  notes: string[]
+  /** Documents the check read (names). */
+  sources: string[]
+}
+
 export type OslSampleRequirementRow = {
   id: string
   sampleFor: OslSampleFor
@@ -48,6 +60,8 @@ export type OslSampleRequirementRow = {
   testReportFileName: string
   testReportStoragePath: string
   conformity: OslSampleConformity
+  /** Latest AI conformity check (log shown beside Conformity); null until checked. */
+  conformityCheck: OslConformityCheck | null
 }
 
 export type OslSampleRequirementsModulePayload = {
@@ -137,6 +151,7 @@ export function emptyOslSampleRequirementRow(sampleFor: OslSampleFor = 'osl'): O
     testReportFileName: '',
     testReportStoragePath: '',
     conformity: '',
+    conformityCheck: null,
   }
 }
 
@@ -252,6 +267,33 @@ export function parseOslSampleRequirementRow(
       raw.testReportStoragePath ?? raw.test_report_storage_path,
     ),
     conformity: parseOslSampleConformity(raw.conformity),
+    conformityCheck: parseOslConformityCheck(raw.conformityCheck),
+  }
+}
+
+const strList = (v: unknown): string[] => (Array.isArray(v) ? v.map((x) => String(x ?? '').trim()).filter(Boolean) : [])
+
+export function parseOslConformityCheck(raw: unknown): OslConformityCheck | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+  const r = raw as Record<string, unknown>
+  const verdict = r.verdict === 'Yes' || r.verdict === 'No' ? r.verdict : 'Undecided'
+  const results = (Array.isArray(r.results) ? r.results : [])
+    .filter((x): x is Record<string, unknown> => Boolean(x) && typeof x === 'object')
+    .map((x) => ({
+      parameter: str(x.parameter),
+      clause: str(x.clause),
+      requirement: str(x.requirement),
+      result: str(x.result),
+      verdict: (x.verdict === 'Pass' || x.verdict === 'Fail' ? x.verdict : 'Not Clear') as 'Pass' | 'Fail' | 'Not Clear',
+    }))
+  return {
+    checkedAt: str(r.checkedAt),
+    verdict,
+    summary: str(r.summary),
+    results,
+    missingTests: strList(r.missingTests),
+    notes: strList(r.notes),
+    sources: strList(r.sources),
   }
 }
 
