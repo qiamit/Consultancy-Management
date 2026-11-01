@@ -3133,8 +3133,37 @@
     await sendReportResult({ capture: true });
     showBanner("Test Report found — opening it for Consultancy Pro…", true, true);
     const url = reportControlUrl(control);
-    if (url) location.href = url;
-    else control.click();
+    if (url) {
+      location.href = url;
+      return;
+    }
+    // Manak opens the report with window.open (a popup Chrome blocks from a scripted click): page-hook.js hands the
+    // URL back instead, and it opens in this tab. Links / forms aimed at a new window are pointed at this one.
+    const opened = new Promise((resolve) => {
+      const onUrl = () => resolve(document.documentElement.dataset.qeOpenUrl || "");
+      document.addEventListener("qe-window-open-captured", onUrl, { once: true });
+      window.setTimeout(() => resolve(""), 12000);
+    });
+    delete document.documentElement.dataset.qeOpenUrl;
+    document.dispatchEvent(new CustomEvent("qe-capture-window-open"));
+    [control.closest("a[target]"), control.closest("form[target]"), control.form].forEach((el) => {
+      if (el && el.target && el.target !== "_self") el.target = "_self";
+    });
+    control.click();
+    const target = await opened;
+    if (target) {
+      location.href = target;
+      return;
+    }
+    // Same-tab navigation (form / link) already left this page; otherwise nothing opened.
+    await sleep(2000);
+    if (isReportListPage()) {
+      showBanner("View Test Report did not open — open it on Manak and upload the PDF in Consultancy Pro.", false, true);
+      await sendReportResult({
+        ok: false,
+        message: "Manak Did Not Open View Test Report. Open It on Manak and Upload the PDF Here by Double-Click.",
+      });
+    }
   }
 
   async function runReportJob(job) {

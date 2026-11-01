@@ -255,9 +255,28 @@
     else void fetchFormAsPdf(form, extra);
   });
 
+  // Test Report fetch (content.js): the next window.open within 15 s is not opened as a popup (Chrome blocks popups
+  // from scripted clicks) — its URL goes back to content.js, which opens it in the same tab.
+  let captureOpenUntil = 0;
+  document.addEventListener("qe-capture-window-open", () => {
+    captureOpenUntil = Date.now() + 15000;
+  });
+
   function lockOpen() {
     function safeOpen(url, name, specs) {
       if (blockedUrl(url)) return null;
+      if (url && captureOpenUntil > Date.now()) {
+        captureOpenUntil = 0;
+        let abs = String(url);
+        try {
+          abs = new URL(String(url), location.href).toString();
+        } catch {
+          /* keep as given */
+        }
+        document.documentElement.dataset.qeOpenUrl = abs;
+        document.dispatchEvent(new CustomEvent("qe-window-open-captured", { detail: abs }));
+        return null;
+      }
       rememberPdfUrl(url);
       return window.__qeNativeOpen
         ? window.__qeNativeOpen.call(window, url, name, specs)

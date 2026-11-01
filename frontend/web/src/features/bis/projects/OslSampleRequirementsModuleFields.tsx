@@ -49,6 +49,7 @@ import {
   limsPrimaryBtnClass,
 } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
+import { compressPdfForUpload, formatBytes } from '@/lib/compressPdf'
 import { downloadPdfViaPlaywright } from '@/lib/playwrightPdfClient'
 import { getCurrencyCode, getCurrencySymbol } from '@/lib/appCurrency'
 import { formatMoneyInput, sanitizeMoneyInput } from '@/features/masters/products-services/types'
@@ -1519,9 +1520,17 @@ export function OslSampleRequirementsModuleFields({
       toast.error('Save the BIS project first, then upload a Test Report PDF.')
       return Promise.resolve()
     }
-    return uploadBisProjectFile(pid, file, 'osl-sample-test-report', {
-      displayName: file.name,
-    })
+    // Smallest readable PDF first (both from the computer and from Manak).
+    const compressing = toast.loading('Reducing the Test Report PDF Size…')
+    return compressPdfForUpload(file)
+      .catch(() => ({ file, before: file.size, after: file.size, method: 'original' as const }))
+      .then((small) => {
+        toast.dismiss(compressing)
+        if (small.method !== 'original') {
+          toast.message(`Test Report PDF Reduced: ${formatBytes(small.before)} → ${formatBytes(small.after)}`)
+        }
+        return uploadBisProjectFile(pid, small.file, 'osl-sample-test-report', { displayName: file.name })
+      })
       .then((uploaded) => {
         const current = valueRef.current
         onChangeRef.current({
