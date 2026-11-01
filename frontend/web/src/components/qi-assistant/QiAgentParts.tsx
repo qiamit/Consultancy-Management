@@ -55,7 +55,16 @@ async function applyProposal(p: QiAgentProposal): Promise<string> {
  * Changes the agent prepared: each shows before → after and saves only when the admin confirms it.
  * onApplied gets one line per saved change, so the chat (and the agent's next turn) knows what happened.
  */
-export function AgentProposals({ proposals, onApplied }: { proposals: QiAgentProposal[]; onApplied: (lines: string[]) => void }) {
+export function AgentProposals({
+  proposals,
+  onApplied,
+  readOnly = false,
+}: {
+  proposals: QiAgentProposal[]
+  onApplied: (lines: string[]) => void
+  /** From a saved chat: shown for reference, never confirmable again (ask the agent again to redo). */
+  readOnly?: boolean
+}) {
   const [state, setState] = useState<Record<string, ApplyState>>({})
   if (!proposals.length) return null
   const statusOf = (key: string) => state[key]?.status ?? 'pending'
@@ -112,7 +121,9 @@ export function AgentProposals({ proposals, onApplied }: { proposals: QiAgentPro
               </table>
             ) : null}
             <div className="flex items-center justify-end gap-1.5 border-t border-stone-200 px-2 py-1.5">
-              {st.status === 'pending' ? (
+              {readOnly && st.status === 'pending' ? (
+                <span className="text-stone-500">From an Earlier Chat — Ask Again to Redo</span>
+              ) : st.status === 'pending' ? (
                 <>
                   <button type="button" className="inline-flex h-7 items-center gap-1 border border-stone-400 bg-white px-2 font-semibold text-stone-700 hover:bg-stone-100" onClick={() => setState((prev) => ({ ...prev, [p.key]: { status: 'cancelled' } }))}>
                     <X className="h-3.5 w-3.5" aria-hidden /> Cancel
@@ -138,7 +149,7 @@ export function AgentProposals({ proposals, onApplied }: { proposals: QiAgentPro
           </div>
         )
       })}
-      {pending.length > 1 ? (
+      {!readOnly && pending.length > 1 ? (
         <div className="flex justify-end">
           <button type="button" className="inline-flex h-7 items-center gap-1 border border-amber-800 bg-amber-700 px-2.5 text-xs font-semibold text-white hover:bg-amber-800" onClick={() => void run(pending)}>
             <Check className="h-3.5 w-3.5" aria-hidden /> Confirm All ({pending.length})

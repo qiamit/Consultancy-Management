@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { FileText, FileUp, FolderUp, ImagePlus, Loader2, Mic, MicOff, Paperclip, Plus, RotateCcw, Send, ShieldCheck, Sparkles, X } from 'lucide-react'
+import { Brain, FileText, FileUp, FolderUp, History, ImagePlus, Loader2, MessageSquare, Mic, MicOff, Paperclip, Plus, RotateCcw, Send, ShieldCheck, Sparkles, Trash2, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
@@ -20,6 +20,17 @@ import { useIsLaboratoryDirector } from '@/components/lims/LaboratoryDirectorOnl
 import { flattenNavModules } from '@/lib/appNav'
 import { AgentProposals, AgentSteps } from './QiAgentParts'
 import { readAttachments, toAttachments, type ChatAttachment } from './chatAttachments'
+import {
+  createConversation,
+  deleteConversation,
+  deleteMemory,
+  listConversations,
+  listMemories,
+  loadConversationMessages,
+  saveMessage,
+  type AssistantConversation,
+  type AssistantMemory,
+} from './assistantStore'
 import {
   sendQiAssistantMessage,
   validateAssistantImageFile,
@@ -43,6 +54,13 @@ type AttachPickOption = {
   keywords: string[]
 }
 import { cn } from '@/lib/utils'
+
+function headerToolClass(active: boolean) {
+  return cn(
+    'inline-flex h-7 w-7 items-center justify-center border text-amber-100 hover:bg-amber-500/20',
+    active ? 'border-amber-300 bg-amber-500/30' : 'border-amber-500/40 bg-stone-800/80',
+  )
+}
 
 function newId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
@@ -195,6 +213,15 @@ export function QiAssistant({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [messages, setMessages] = useState<QiChatMessage[]>([])
+  // Admin Agent: the saved chat being continued (null = a new chat, created on the first message).
+  const conversationIdRef = useRef<string | null>(null)
+  // Same id for rendering (refs are not read during render).
+  const [activeChatId, setActiveChatId] = useState<string | null>(null)
+  const [agentView, setAgentView] = useState<'chat' | 'history' | 'memory'>('chat')
+  const [conversations, setConversations] = useState<AssistantConversation[]>([])
+  const [memories, setMemories] = useState<AssistantMemory[]>([])
+  const [viewLoading, setViewLoading] = useState(false)
+  const restoredRef = useRef(false)
   const [agentCrudEnabled, setAgentCrudEnabled] = useState(true)
   const [skills, setSkills] = useState<AiSkillPick[]>([])
   const [selectedSkill, setSelectedSkill] = useState<AiSkillPick | null>(null)
@@ -341,6 +368,18 @@ export function QiAssistant({
       return
     }
     if (messages.length > 0) return
+    if (agentMode && !restoredRef.current) {
+      restoredRef.current = true
+      void listConversations(1)
+        .then(async ([latest]) => {
+          if (!latest) return
+          const saved = await loadConversationMessages(latest.id)
+          conversationIdRef.current = latest.id
+          setActiveChatId(latest.id)
+          setMessages((prev) => (prev.length ? prev : saved))
+        })
+        .catch(() => undefined)
+    }
     const pdfNote = enablePdfImport
       ? ' Use the **PDF** button to attach a file, then type your command and press **Send**.'
       : ''
@@ -384,20 +423,60 @@ export function QiAssistant({
       content = `${reply}\n\n**Database changes:**\n${lines.join('\n')}`
       if (actionsExecuted.some((a) => a.ok)) onDataChanged?.()
     }
-    setMessages((prev) => [...prev, { id: newId(), role: 'assistant', content, agent }])
+    const message: QiChatMessage = { id: newId(), role: 'assistant', content, agent }
+    setMessages((prev) => [...prev, message])
+    persistMessage(message)
+  }
+
+  /** Admin Agent: saves a message to the current chat (best effort: the chat keeps working if saving fails). */
+  const persistMessage = (message: QiChatMessage) => {
+    const id = conversationIdRef.current
+    if (!agentMode || !id) return
+    void saveMessage(id, message).catch(() => undefined)
   }
 
   /** Confirmed agent changes: tell the chat (so the agent knows next turn) and refresh what the app shows. */
   const handleAgentApplied = (lines: string[]) => {
-    setMessages((prev) => [...prev, { id: newId(), role: 'assistant', content: lines.join('\n') }])
+    const message: QiChatMessage = { id: newId(), role: 'assistant', content: lines.join('\n') }
+    setMessages((prev) => [...prev, message])
+    persistMessage(message)
     void queryClient.invalidateQueries()
     onDataChanged?.()
   }
 
   const resetChat = () => {
+    conversationIdRef.current = null
+    setActiveChatId(null)
     setMessages([])
     setError(null)
     setInput('')
+    setAgentView('chat')
+  }
+
+  const openAgentView = (view: 'history' | 'memory') => {
+    if (agentView === view) {
+      setAgentView('chat')
+      return
+    }
+    setAgentView(view)
+    setViewLoading(true)
+    const load = view === 'history' ? listConversations().then(setConversations) : listMemories().then(setMemories)
+    void load
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Could Not Load.'))
+      .finally(() => setViewLoading(false))
+  }
+
+  const openConversation = (id: string) => {
+    setViewLoading(true)
+    void loadConversationMessages(id)
+      .then((saved) => {
+        conversationIdRef.current = id
+        setActiveChatId(id)
+        setMessages(saved)
+        setAgentView('chat')
+      })
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Could Not Open the Chat.'))
+      .finally(() => setViewLoading(false))
   }
 
   const stripTriggerFromInput = (trigger: SkillTriggerMatch | null) => {
@@ -630,6 +709,18 @@ export function QiAssistant({
       setAttachments([])
 
       setMessages((prev) => [...prev, userMsg])
+      setAgentView('chat')
+      if (agentMode) {
+        try {
+          if (!conversationIdRef.current) {
+            conversationIdRef.current = await createConversation(trimmed)
+            setActiveChatId(conversationIdRef.current)
+          }
+          void saveMessage(conversationIdRef.current, userMsg).catch(() => undefined)
+        } catch {
+          /* chat works unsaved (e.g. before the memory migration) */
+        }
+      }
       setLoading(true)
       setBusyHint(
         files.length
@@ -840,17 +931,18 @@ export function QiAssistant({
                   <ShieldCheck size={12} aria-hidden /> Admin Agent
                 </span>
               ) : null}
-              {agentMode && messages.length > 0 ? (
-                <button
-                  type="button"
-                  className="ml-auto inline-flex h-7 w-7 shrink-0 items-center justify-center border border-amber-500/40 bg-stone-800/80 text-amber-100 hover:bg-amber-500/20"
-                  title="New Chat"
-                  aria-label="New Chat"
-                  disabled={loading}
-                  onClick={resetChat}
-                >
-                  <RotateCcw size={14} aria-hidden />
-                </button>
+              {agentMode ? (
+                <span className="ml-auto flex shrink-0 items-center gap-1">
+                  <button type="button" className={headerToolClass(agentView === 'history')} title="Saved Chats" aria-label="Saved Chats" disabled={loading} onClick={() => openAgentView('history')}>
+                    <History size={14} aria-hidden />
+                  </button>
+                  <button type="button" className={headerToolClass(agentView === 'memory')} title="Memory" aria-label="Memory" disabled={loading} onClick={() => openAgentView('memory')}>
+                    <Brain size={14} aria-hidden />
+                  </button>
+                  <button type="button" className={headerToolClass(false)} title="New Chat" aria-label="New Chat" disabled={loading} onClick={() => resetChat()}>
+                    <RotateCcw size={14} aria-hidden />
+                  </button>
+                </span>
               ) : null}
             </DialogTitle>
           </DialogHeader>
@@ -863,7 +955,71 @@ export function QiAssistant({
             agentMode ? 'min-h-0' : 'min-h-[220px] max-h-[42dvh]',
           )}
         >
-          {messages.map((m) => (
+          {agentMode && agentView !== 'chat' ? (
+            <div className="space-y-2">
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-amber-800">
+                {agentView === 'history' ? 'Saved Chats' : 'Memory — Facts and Standing Instructions'}
+              </p>
+              {viewLoading ? (
+                <p className="flex items-center gap-2 text-sm text-stone-500"><Loader2 size={14} className="animate-spin" /> Loading…</p>
+              ) : agentView === 'history' ? (
+                conversations.length ? (
+                  conversations.map((c) => (
+                    <div key={c.id} className={cn('flex items-center gap-2 border bg-white px-2.5 py-2', c.id === activeChatId ? 'border-amber-600' : 'border-stone-300')}>
+                      <button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => openConversation(c.id)}>
+                        <MessageSquare size={14} className="shrink-0 text-amber-700" aria-hidden />
+                        <span className="min-w-0 flex-1 truncate text-sm text-stone-800">{c.title}</span>
+                        <span className="shrink-0 text-[10px] text-stone-400">{new Date(c.updated_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="inline-flex h-6 w-6 shrink-0 items-center justify-center text-stone-400 hover:bg-red-50 hover:text-red-700"
+                        aria-label={`Delete Chat ${c.title}`}
+                        title="Delete Chat"
+                        onClick={() => {
+                          void deleteConversation(c.id)
+                            .then(() => {
+                              setConversations((prev) => prev.filter((x) => x.id !== c.id))
+                              if (conversationIdRef.current === c.id) resetChat()
+                            })
+                            .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Could Not Delete.'))
+                        }}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-stone-500">No Saved Chats Yet.</p>
+                )
+              ) : memories.length ? (
+                memories.map((m) => (
+                  <div key={m.id} className="flex items-start gap-2 border border-stone-300 bg-white px-2.5 py-2">
+                    <span className={cn('mt-0.5 shrink-0 border px-1 text-[9px] font-bold uppercase', m.kind === 'instruction' ? 'border-amber-600 text-amber-800' : 'border-stone-400 text-stone-600')}>
+                      {m.kind === 'instruction' ? 'Rule' : 'Fact'}
+                    </span>
+                    <span className="min-w-0 flex-1 break-words text-sm text-stone-800">{m.content}</span>
+                    <button
+                      type="button"
+                      className="inline-flex h-6 w-6 shrink-0 items-center justify-center text-stone-400 hover:bg-red-50 hover:text-red-700"
+                      aria-label="Forget This"
+                      title="Forget This"
+                      onClick={() => {
+                        void deleteMemory(m.id)
+                          .then(() => setMemories((prev) => prev.filter((x) => x.id !== m.id)))
+                          .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Could Not Delete.'))
+                      }}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-stone-500">Nothing Saved Yet. Tell Me “Remember …” in the Chat.</p>
+              )}
+            </div>
+          ) : null}
+          {(!agentMode || agentView === 'chat') && messages.map((m) => (
             <div
               key={m.id}
               className={cn(
@@ -877,7 +1033,7 @@ export function QiAssistant({
               {m.agent ? (
                 <>
                   <AgentSteps steps={m.agent.steps} />
-                  <AgentProposals proposals={m.agent.proposals} onApplied={handleAgentApplied} />
+                  <AgentProposals proposals={m.agent.proposals} onApplied={handleAgentApplied} readOnly={m.fromHistory} />
                 </>
               ) : null}
             </div>

@@ -6,6 +6,8 @@ export type QiChatMessage = {
   content: string
   /** Admin Agent: the steps taken, changes waiting for confirmation and pages opened for this answer. */
   agent?: QiAgentResult
+  /** Loaded from a saved chat: its proposed changes can no longer be confirmed. */
+  fromHistory?: boolean
 }
 
 export type QiAgentStep = { tool: string; summary: string; error?: boolean }

@@ -10,7 +10,8 @@ const MAX_CELL_CHARS = 600
 const SCHEMA_TTL_MS = 10 * 60 * 1000
 
 // Tables the agent never sees: credentials, sessions, audit / access logs and the MCP bookkeeping.
-const BLOCKED_TABLE = /(secret|token|oauth|password|passwd|session|audit|access_log|^mcp_|api_key|_keys?$|webhook|otp|mfa|vault|pending_change)/i
+// assistant_* (the agent's own chats and memory) are reached only through remember / forget / list_memories.
+const BLOCKED_TABLE = /(secret|token|oauth|password|passwd|session|audit|access_log|^mcp_|^assistant_|api_key|_keys?$|webhook|otp|mfa|vault|pending_change)/i
 // Columns stripped from results and refused in writes.
 const SECRET_COLUMN = /(password|passwd|secret|api_?key|access_?token|refresh_?token|private_?key|otp|totp|recovery)/i
 const FILTER_OPS = new Set(['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'like', 'ilike', 'is', 'in'])
@@ -174,6 +175,38 @@ export const AGENT_TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'remember',
+      description:
+        'Save something the admin wants you to remember for later chats: a fact (e.g. "our GSTIN is …") or a standing instruction (e.g. "always reply in Hindi"). Use when asked to remember, or when the admin states a lasting preference.',
+      parameters: {
+        type: 'object',
+        properties: {
+          content: { type: 'string' },
+          kind: { type: 'string', enum: ['fact', 'instruction'] },
+        },
+        required: ['content'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'forget',
+      description: 'Delete one saved memory by its id (from the ADMIN MEMORY list or list_memories).',
+      parameters: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_memories',
+      description: 'List what you have saved for the admin (facts and standing instructions) with ids.',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'open_page',
       description: 'Open a page of the app for the admin (path from the App Pages list, optionally with ?query).',
       parameters: {
@@ -262,6 +295,34 @@ export async function runAgent({ callModel, messages, userRest, routes }) {
       steps.push({ tool: 'propose_changes', summary: `Prepared ${out.length} change${out.length === 1 ? '' : 's'} for confirmation` })
       return capJson({ status: 'waiting for the admin to confirm in the app — not saved yet', changes: out })
     },
+    async remember(args) {
+      const content = String(args.content || '').trim().slice(0, 2000)
+      if (!content) throw new Error('Nothing to remember')
+      const kind = args.kind === 'instruction' ? 'instruction' : 'fact'
+      const { data } = await userRest('/assistant_memories?select=id', {
+        method: 'POST',
+        body: JSON.stringify({ content, kind }),
+        headers: { Prefer: 'return=representation' },
+      })
+      steps.push({ tool: 'remember', summary: `Remembered: ${content.slice(0, 80)}` })
+      return capJson({ saved: true, id: Array.isArray(data) && data[0] ? data[0].id : null })
+    },
+    async forget(args) {
+      const id = String(args.id || '').trim()
+      if (!/^[0-9a-f-]{36}$/i.test(id)) throw new Error('forget needs a memory id')
+      const { data } = await userRest(`/assistant_memories?id=eq.${id}&select=id,content`, {
+        method: 'DELETE',
+        headers: { Prefer: 'return=representation' },
+      })
+      const gone = Array.isArray(data) && data[0]
+      steps.push({ tool: 'forget', summary: gone ? `Forgot: ${String(gone.content).slice(0, 80)}` : 'Nothing to forget' })
+      return gone ? 'Deleted.' : 'No memory with that id.'
+    },
+    async list_memories() {
+      const { data } = await userRest('/assistant_memories?select=id,kind,content,created_at&order=created_at.asc&limit=200')
+      steps.push({ tool: 'list_memories', summary: 'Read saved memories' })
+      return capJson(Array.isArray(data) ? data : [])
+    },
     async open_page(args) {
       const path = String(args.path || '').trim()
       const base = path.split('?')[0]
@@ -313,6 +374,8 @@ export const AGENT_SYSTEM_PROMPT = [
   '- list_tables / describe_table / query_rows to find and report any data (clients, BIS licences = bis_projects, IS codes, renewals, finance documents, users, settings …).',
   '- propose_changes to create, update or delete records. Nothing is saved until the admin confirms each change in the app, so say so. Always look the record up first, use real ids and existing column names, and send only the columns that change.',
   '- open_page to take the admin to a page (use paths from the App Pages list).',
+  '- remember / forget / list_memories to keep facts and standing instructions across chats. Follow the ADMIN MEMORY list.',
+  'Act like a bot that does the work for the admin: when a task needs information you do not have (which client or licence, dates, amounts, wording), ask ONE short clear question at a time, wait for the answer, then continue. Before proposing changes, repeat the key details in one line. When the admin gives an answer, continue the same task without restarting.',
   'Work step by step: search, then answer with the facts you found (counts, names, dates). Never invent data, ids or columns.',
   'Keep replies short and clear; use simple lists or tables. Answer in Hindi when the admin writes in Hindi.',
 ].join('\n')
