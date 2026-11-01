@@ -16,19 +16,43 @@ function escapeHtml(text) {
   return String(text).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
 }
 
-/** The agent's short Markdown report as simple email HTML (bold, lists, line breaks). */
+/** Inline Markdown of the report (bold) as safe HTML. */
+function inlineHtml(text) {
+  return escapeHtml(text).replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+}
+
+/** The agent's short Markdown report as simple email HTML: bold, bullet lists, tables, line breaks. */
 function reportHtml(title, schedule, reply, proposalCount) {
-  const body = escapeHtml(reply)
-    .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
-    .replace(/^\s*[-*]\s+(.*)$/gm, '&bull; $1')
-    .replace(/\n/g, '<br>')
+  const lines = String(reply).replace(/\r/g, '').split('\n')
+  const parts = []
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i]
+    if (/^\s*\|.*\|\s*$/.test(line)) {
+      const rows = []
+      while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) {
+        if (!/^\s*\|?\s*:?-{2,}/.test(lines[i])) rows.push(lines[i].trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim()))
+        i += 1
+      }
+      i -= 1
+      if (rows.length) {
+        const cell = (tag, c) => `<${tag} style="border:1px solid #d6d3d1;padding:4px 8px;text-align:left;${tag === 'th' ? 'background:#f5f5f4' : ''}">${inlineHtml(c)}</${tag}>`
+        parts.push(`<table style="border-collapse:collapse;font-size:13px;margin:6px 0">${rows.map((r, n) => `<tr>${r.map((c) => cell(n ? 'td' : 'th', c)).join('')}</tr>`).join('')}</table>`)
+      }
+    } else if (/^\s*[-*•]\s+/.test(line)) {
+      parts.push(`&bull; ${inlineHtml(line.replace(/^\s*[-*•]\s+/, ''))}<br>`)
+    } else if (/^\s*(-{3,}|\*{3,})\s*$/.test(line)) {
+      continue
+    } else {
+      parts.push(`${inlineHtml(line.replace(/^\s*#{1,4}\s+/, ''))}<br>`)
+    }
+  }
   const pending = proposalCount
     ? `<p style="margin:16px 0 0;padding:8px 10px;border:1px solid #d97706;background:#fffbeb">${proposalCount} change${proposalCount === 1 ? '' : 's'} prepared — open QE Assistant → Scheduled Tasks in Consultancy Pro to confirm.</p>`
     : ''
   return `<div style="font-family:Arial,sans-serif;font-size:14px;color:#1c1917">
 <p style="margin:0 0 4px;font-size:16px"><b>${escapeHtml(title)}</b></p>
 <p style="margin:0 0 12px;color:#78716c;font-size:12px">${escapeHtml(schedule)} · QE Assistant</p>
-<div>${body}</div>${pending}</div>`
+<div>${parts.join('\n')}</div>${pending}</div>`
 }
 
 /**
