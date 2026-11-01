@@ -261,6 +261,13 @@
   document.addEventListener("qe-capture-window-open", () => {
     captureOpenUntil = Date.now() + 15000;
   });
+  // content.js marks a javascript: View Test Report link to be clicked here (blocked from the extension's world).
+  document.addEventListener("qe-report-click", () => {
+    const el = document.querySelector('[data-qe-report-click="1"]');
+    if (!el) return;
+    el.removeAttribute("data-qe-report-click");
+    el.click();
+  });
 
   function lockOpen() {
     function safeOpen(url, name, specs) {

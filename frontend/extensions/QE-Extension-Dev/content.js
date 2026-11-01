@@ -3149,7 +3149,14 @@
     [control.closest("a[target]"), control.closest("form[target]"), control.form].forEach((el) => {
       if (el && el.target && el.target !== "_self") el.target = "_self";
     });
-    control.click();
+    // A javascript: link is blocked when clicked from this (extension) world: page-hook.js clicks it in the page's.
+    const jsLink = control.closest('a[href^="javascript:" i]');
+    if (jsLink) {
+      jsLink.setAttribute("data-qe-report-click", "1");
+      document.dispatchEvent(new CustomEvent("qe-report-click"));
+    } else {
+      control.click();
+    }
     const target = await opened;
     if (target) {
       location.href = target;

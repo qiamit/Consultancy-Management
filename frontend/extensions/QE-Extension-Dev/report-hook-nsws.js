@@ -100,6 +100,15 @@
     true,
   );
 
+  // report-fetch-nsws.js marks the View Test Report link and asks for it to be clicked here, in the page's world
+  // (its javascript: URL is blocked when an extension script clicks it).
+  document.addEventListener("qe-report-click", () => {
+    const el = document.querySelector('[data-qe-report-click="1"]');
+    if (!el) return;
+    el.removeAttribute("data-qe-report-click");
+    el.click();
+  });
+
   // A PDF built in the page (XHR / fetch → blob → download link).
   const nativeCreate = URL.createObjectURL;
   URL.createObjectURL = function (obj) {

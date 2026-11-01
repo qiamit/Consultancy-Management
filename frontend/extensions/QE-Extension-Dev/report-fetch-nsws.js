@@ -97,7 +97,10 @@
       }, 25000);
     });
     document.documentElement.dataset.qeCaptureReport = "1";
-    link.click();
+    // The link is a javascript: URL: clicked from this (extension) world Chrome blocks it under the extension's CSP,
+    // so report-hook-nsws.js clicks it in the page's own world.
+    link.setAttribute("data-qe-report-click", "1");
+    document.dispatchEvent(new CustomEvent("qe-report-click"));
     const buf = await got;
     if (buf) {
       banner("Test Report found — sending it to Consultancy Pro…");
