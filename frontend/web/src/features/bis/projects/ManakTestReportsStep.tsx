@@ -211,6 +211,7 @@ export function ManakTestReportsStep({
       label: fmcs ? 'In-House Test Report (Form IV)' : 'Factory Test Report',
       printKind: 'factory-test-report',
       defaultApplicable: 'Yes',
+      popupFullScreen: true,
       // Same generator as Sample Offer Letter → Test Report → Generate Report.
       popup: () => (
         <FactoryTestReportsList
