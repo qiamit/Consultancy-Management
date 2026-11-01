@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Brain, CalendarClock, FileText, FileUp, FolderUp, History, ImagePlus, Loader2, MessageSquare, Mic, MicOff, Paperclip, Pause, Play, Plus, RotateCcw, Send, ShieldCheck, Sparkles, Trash2, X, Zap } from 'lucide-react'
+import { Brain, CalendarClock, FileText, FileUp, FolderUp, History, ImagePlus, Loader2, MessageSquare, Mic, MicOff, Paperclip, Pause, Play, Plug, Plus, RotateCcw, Send, ShieldCheck, Sparkles, Trash2, X, Zap } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
@@ -42,6 +42,7 @@ import {
   type AssistantTaskRun,
 } from './assistantStore'
 import { describeSchedule, formatIst } from './assistantSchedule'
+import { MailConnectorPanel } from './MailConnectorPanel'
 import {
   sendQiAssistantMessage,
   validateAssistantImageFile,
@@ -228,7 +229,7 @@ export function QiAssistant({
   const conversationIdRef = useRef<string | null>(null)
   // Same id for rendering (refs are not read during render).
   const [activeChatId, setActiveChatId] = useState<string | null>(null)
-  const [agentView, setAgentView] = useState<'chat' | 'history' | 'memory' | 'tasks'>('chat')
+  const [agentView, setAgentView] = useState<'chat' | 'history' | 'memory' | 'tasks' | 'connectors'>('chat')
   const [tasks, setTasks] = useState<AssistantTask[]>([])
   const [runs, setRuns] = useState<AssistantTaskRun[]>([])
   // Scheduled-task results not looked at yet (badge on the assistant button and the Tasks button).
@@ -468,12 +469,14 @@ export function QiAssistant({
     setAgentView('chat')
   }
 
-  const openAgentView = (view: 'history' | 'memory' | 'tasks') => {
+  const openAgentView = (view: 'history' | 'memory' | 'tasks' | 'connectors') => {
     if (agentView === view) {
       setAgentView('chat')
       return
     }
     setAgentView(view)
+    // The Connectors view loads its own data.
+    if (view === 'connectors') return
     setViewLoading(true)
     const load =
       view === 'history'
@@ -1007,6 +1010,9 @@ export function QiAssistant({
                     <CalendarClock size={14} aria-hidden />
                     {unseenRuns > 0 ? <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-red-600" aria-hidden /> : null}
                   </button>
+                  <button type="button" className={headerToolClass(agentView === 'connectors')} title="Connectors (Mail)" aria-label="Connectors" disabled={loading} onClick={() => openAgentView('connectors')}>
+                    <Plug size={14} aria-hidden />
+                  </button>
                   <button type="button" className={headerToolClass(false)} title="New Chat" aria-label="New Chat" disabled={loading} onClick={() => resetChat()}>
                     <RotateCcw size={14} aria-hidden />
                   </button>
@@ -1026,9 +1032,17 @@ export function QiAssistant({
           {agentMode && agentView !== 'chat' ? (
             <div className="space-y-2">
               <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-amber-800">
-                {agentView === 'history' ? 'Saved Chats' : agentView === 'tasks' ? 'Scheduled Tasks' : 'Memory — Facts and Standing Instructions'}
+                {agentView === 'history'
+                  ? 'Saved Chats'
+                  : agentView === 'tasks'
+                    ? 'Scheduled Tasks'
+                    : agentView === 'connectors'
+                      ? 'Connectors'
+                      : 'Memory — Facts and Standing Instructions'}
               </p>
-              {viewLoading ? (
+              {agentView === 'connectors' ? (
+                <MailConnectorPanel />
+              ) : viewLoading ? (
                 <p className="flex items-center gap-2 text-sm text-stone-500"><Loader2 size={14} className="animate-spin" /> Loading…</p>
               ) : agentView === 'tasks' ? (
                 <div className="space-y-3">

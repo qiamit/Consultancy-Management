@@ -6,6 +6,7 @@ import path from 'node:path'
 import { createQiAssistantHandler } from './qiAssistant.mjs'
 import { createRenewalReminders } from './renewalReminders.mjs'
 import { startAssistantScheduler } from './assistantScheduler.mjs'
+import { createAssistantMail } from './assistantMail.mjs'
 
 const PORT = Number(process.env.PORT || 8080)
 const MANAK_TTL_MS = 45 * 60 * 1000
@@ -1329,6 +1330,28 @@ async function handleRenewalRemindersEnable(req, res) {
   json(res, 200, { ok: true, ...result })
 }
 
+const assistantMail = createAssistantMail({ rest })
+
+/** Admin: sync the caller's connected mailbox now (also checks the saved details). */
+async function handleAssistantMailSync(req, res) {
+  const caller = await requireFullAccess(req)
+  const account = await assistantMail.accountFor(String(caller?.id ?? ''))
+  if (!account) {
+    json(res, 400, { error: 'Save the mailbox details first.' })
+    return
+  }
+  const result = await assistantMail.syncAccount(account)
+  json(res, 200, { ok: true, ...result })
+}
+
+/** Admin: send a mail the admin confirmed in QE Assistant, from their own mailbox. */
+async function handleAssistantMailSend(req, res) {
+  const caller = await requireFullAccess(req)
+  const body = await readBody(req, 256 * 1024)
+  const result = await assistantMail.send(String(caller?.id ?? ''), body)
+  json(res, 200, { ok: true, ...result })
+}
+
 const routes = {
   'GET /health': async (_req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' })
@@ -1344,6 +1367,8 @@ const routes = {
   'POST /reset-user-mfa': handleResetUserMfa,
   'POST /portal-invite-customer': handleInviteCustomer,
   'POST /portal-resend-invite': handleResendCustomerInvite,
+  'POST /assistant-mail/sync': handleAssistantMailSync,
+  'POST /assistant-mail/send': handleAssistantMailSend,
   'POST /qi-assistant': handleQiAssistant,
   'OPTIONS /qi-assistant': handleQiAssistant,
   'GET /osl/manak-pdf': handleManakPdf,
@@ -1394,5 +1419,10 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`functions listening on ${PORT}`)
   renewalReminders.startScheduler()
   // QE Assistant scheduled tasks: read-only runs as the service, results emailed (ASSISTANT_TASKS_DISABLED=1 stops it).
-  startAssistantScheduler({ rest, serviceRest: userRestFor(SERVICE_ROLE_KEY), sendEmail: sendResendEmail })
+  startAssistantScheduler({
+    rest,
+    serviceRest: userRestFor(SERVICE_ROLE_KEY),
+    sendEmail: sendResendEmail,
+    syncMail: () => assistantMail.syncAll(),
+  })
 })

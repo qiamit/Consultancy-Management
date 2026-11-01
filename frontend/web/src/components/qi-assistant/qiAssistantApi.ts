@@ -14,7 +14,7 @@ export type QiAgentStep = { tool: string; summary: string; error?: boolean }
 
 export type QiAgentProposal = {
   key: string
-  action: 'create' | 'update' | 'delete'
+  action: 'create' | 'update' | 'delete' | 'send_email'
   table: string
   id: string | null
   values: Record<string, unknown>
