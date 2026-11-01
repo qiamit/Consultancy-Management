@@ -558,9 +558,12 @@ export function createQiAssistantHandler(deps) {
     const isCmpf311Request = body.page === 'bis/cmpf-311-on-sit'
     // Long source-PDF extractions: full output budget and no hidden reasoning, which can otherwise use up the tokens.
     const isLongExtraction = isCmpf311Request || body.page === 'bis/undertaking-indian-standards' || body.page === 'bis/undertaking-other' || String(body.page || '').startsWith('bis/non-conformity') || body.page === 'masters/test-parameters-ai' || body.page === 'bis/process-flow-chart' || body.page === 'bis/plant-layout' || body.page === 'bis/sample-conformity'
-    const chatMaxTokens = isLongExtraction ? 8192 : Number.isFinite(maxTokens) ? Math.min(maxTokens, 8192) : 4096
+    // Sample conformity is a judgement over long documents: DeepSeek reasons first (its reasoning counts towards
+    // max_tokens, so the budget is larger), at a low temperature, with more time.
+    const reasonedCheck = body.page === 'bis/sample-conformity' && provider === 'deepseek'
+    const chatMaxTokens = reasonedCheck ? 32768 : isLongExtraction ? 8192 : Number.isFinite(maxTokens) ? Math.min(maxTokens, 8192) : 4096
     // Drawing a layout from a sketch wants faithful positions, not creative variety.
-    const chatTemperature = body.page === 'bis/plant-layout'
+    const chatTemperature = body.page === 'bis/plant-layout' || body.page === 'bis/sample-conformity'
       ? 0.2
       : Number.isFinite(temperature) ? temperature : 0.7
     // OpenAI reasoning models (o-series, GPT-5) take max_completion_tokens and only their default temperature
@@ -571,7 +574,7 @@ export function createQiAssistantHandler(deps) {
       method: 'POST',
       // A provider must not bounce the request (and the API key) somewhere else.
       redirect: 'error',
-      signal: AbortSignal.timeout(180_000),
+      signal: AbortSignal.timeout(reasonedCheck ? 420_000 : 180_000),
       headers: {
         Authorization: `Bearer ${String(model.api_key).trim()}`,
         'Content-Type': 'application/json',
@@ -583,7 +586,7 @@ export function createQiAssistantHandler(deps) {
           ? { max_completion_tokens: chatMaxTokens }
           : { temperature: chatTemperature, max_tokens: chatMaxTokens }),
         ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
-        ...(provider === 'deepseek' && isLongExtraction ? { thinking: { type: 'disabled' } } : {}),
+        ...(provider === 'deepseek' && isLongExtraction ? { thinking: { type: reasonedCheck ? 'enabled' : 'disabled' } } : {}),
       }),
     })
 

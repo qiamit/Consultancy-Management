@@ -207,5 +207,9 @@ export async function checkSampleConformity(input: {
     sources,
   })
   if (!check) throw new Error('The AI answer could not be read. Try again.')
+  // A failed result or a missing test can never leave the sample at "Yes".
+  if (check.verdict === 'Yes' && (check.results.some((r) => r.verdict === 'Fail') || check.missingTests.length)) {
+    return { ...check, verdict: 'No' }
+  }
   return check
 }
