@@ -494,7 +494,11 @@ export function ManakManufacturingStep({
           persistOnFocusLoss
           layer="stacked"
           aria-describedby={undefined}
-          className={cn(limsDialogClass, 'flex max-h-[90dvh] w-[min(72rem,calc(100vw_-_var(--app-dialog-overlay-left,0px)_-_1.5rem))] max-w-6xl flex-col p-0')}
+          className={cn(
+            limsDialogClass,
+            // Fills the screen beside the sidebar, from the top (same as the Factory Test Report popup).
+            'flex flex-col p-0 left-[var(--app-dialog-overlay-left,0px)] right-0 top-0 h-[100dvh] max-h-[100dvh] w-[calc(100vw-var(--app-dialog-overlay-left,0px))] max-w-none translate-x-0 translate-y-0',
+          )}
         >
           <DialogHeader className="flex-row items-center justify-between gap-2 space-y-0 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 py-1.5 pl-4 pr-12 text-left">
             <DialogTitle className="text-base font-semibold tracking-tight text-white">{popup?.label}</DialogTitle>
