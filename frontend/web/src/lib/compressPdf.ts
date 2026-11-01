@@ -121,7 +121,8 @@ export async function compressPdfForUpload(file: File): Promise<CompressedPdf> {
     for (const step of STEPS) {
       const bytes = await rebuild(data, pdf, scanned, step).catch(() => null)
       if (!bytes) break
-      if (bytes.byteLength < best.after * REBUILD_MAX_RATIO) {
+      // The first rebuild must clearly beat the re-save; after that any smaller step wins.
+      if (bytes.byteLength < (best.method === 'images' ? best.after : best.after * REBUILD_MAX_RATIO)) {
         best = { file: asFile(bytes, file.name), before, after: bytes.byteLength, method: 'images' }
       }
       if (bytes.byteLength <= TARGET_BYTES) break
