@@ -109,8 +109,7 @@ export function MessageActions({ role, handlers, bodyRef }: { role: 'user' | 'as
   return (
     <div
       className={cn(
-        'mt-0.5 flex flex-wrap items-center gap-0.5 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:focus-within:opacity-100 [@media(hover:hover)]:group-hover/message:opacity-100',
-        more && '[@media(hover:hover)]:opacity-100',
+        'mt-0.5 flex flex-wrap items-center gap-0.5',
         role === 'user' && 'justify-end',
       )}
     >

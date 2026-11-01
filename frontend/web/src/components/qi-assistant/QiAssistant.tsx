@@ -238,7 +238,7 @@ function ChatMessageRow({
   const bodyRef = useRef<HTMLDivElement>(null)
   const own = message.role === 'user'
   return (
-    <div className={cn('group/message flex max-w-[92%] flex-col', own ? 'ml-auto' : 'mr-auto')}>
+    <div className={cn('flex max-w-[92%] flex-col', own ? 'ml-auto' : 'mr-auto')}>
       <div
         className={cn(
           'border px-3.5 py-2.5 text-sm leading-relaxed shadow-sm',
