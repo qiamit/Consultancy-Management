@@ -615,7 +615,13 @@ export async function runAgent({ callModel, messages, userRest, routes, userEmai
       steps.push({ tool: 'open_page', summary: `Opened ${String(args.label || base)}` })
       return 'Page opened for the admin.'
     },
-    ...applicationToolHandlers({ userRest, steps, proposals, readStorage }),
+    ...applicationToolHandlers({
+      userRest,
+      steps,
+      proposals,
+      readStorage,
+      adminWords: messages.filter((m) => m.role === 'user').map((m) => String(m.content ?? '')).join('\n'),
+    }),
   }
 
   const started = Date.now()
