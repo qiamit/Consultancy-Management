@@ -557,7 +557,7 @@ export function createQiAssistantHandler(deps) {
     const maxTokens = Number(model.max_tokens)
     const isCmpf311Request = body.page === 'bis/cmpf-311-on-sit'
     // Long source-PDF extractions: full output budget and no hidden reasoning, which can otherwise use up the tokens.
-    const isLongExtraction = isCmpf311Request || body.page === 'bis/undertaking-indian-standards' || body.page === 'bis/undertaking-other' || String(body.page || '').startsWith('bis/non-conformity') || body.page === 'masters/test-parameters-ai' || body.page === 'bis/process-flow-chart' || body.page === 'bis/plant-layout'
+    const isLongExtraction = isCmpf311Request || body.page === 'bis/undertaking-indian-standards' || body.page === 'bis/undertaking-other' || String(body.page || '').startsWith('bis/non-conformity') || body.page === 'masters/test-parameters-ai' || body.page === 'bis/process-flow-chart' || body.page === 'bis/plant-layout' || body.page === 'bis/sample-conformity'
     const chatMaxTokens = isLongExtraction ? 8192 : Number.isFinite(maxTokens) ? Math.min(maxTokens, 8192) : 4096
     // Drawing a layout from a sketch wants faithful positions, not creative variety.
     const chatTemperature = body.page === 'bis/plant-layout'

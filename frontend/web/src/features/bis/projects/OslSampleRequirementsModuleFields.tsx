@@ -8,6 +8,7 @@ import {
   FileDown,
   FileText,
   FolderInput,
+  ScanSearch,
   Globe,
   Import,
   Loader2,
@@ -90,6 +91,7 @@ import {
   ackManakTestRequestResult,
   fetchManakTestReport,
   subscribeManakTestReport,
+  notifyManakTestReportSaved,
   type ManakTrResult,
 } from './manakExtensionBridge'
 import {
@@ -123,6 +125,7 @@ import {
   type OslSampleRequirementsModulePayload,
 } from './oslSampleRequirementsModel'
 import { formatDisplayDate } from './types'
+import { checkSampleConformity } from './sampleConformityAi'
 import {
   findLaboratoryOslCodeByName,
   searchLaboratoryMasterOptions,
@@ -658,6 +661,7 @@ export function OslSampleRequirementsModuleFields({
       sampleFor: qrOnlyFields && !qrCode ? 'ft' : source.sampleFor,
       serialNumber: nextSerial,
       conformity: '',
+      conformityCheck: null,
       sampleCode: source.sampleCode.trim()
         ? `${source.sampleCode.trim()}${qrCode ? '' : '-COPY'}`
         : '',
@@ -1518,7 +1522,7 @@ export function OslSampleRequirementsModuleFields({
     const pid = (projectId ?? '').trim()
     if (!pid) {
       toast.error('Save the BIS project first, then upload a Test Report PDF.')
-      return Promise.resolve()
+      return Promise.resolve(false)
     }
     // Smallest readable PDF first (both from the computer and from Manak).
     const compressing = toast.loading('Reducing the Test Report PDF Size…')
@@ -1547,9 +1551,11 @@ export function OslSampleRequirementsModuleFields({
           ),
         })
         toast.success(successMessage)
+        return true
       })
       .catch((err) => {
         toast.error(err instanceof Error ? err.message : 'Test Report upload failed.')
+        return false
       })
   }
 
@@ -1594,13 +1600,66 @@ export function OslSampleRequirementsModuleFields({
       try {
         const bytes = Uint8Array.from(atob(result.pdfBase64), (c) => c.charCodeAt(0))
         const name = /\.pdf$/i.test(result.pdfName) ? result.pdfName : `Test_Report_${row.qrCode || row.id}.pdf`
-        void attachTestReportFile(row.id, new File([bytes], name, { type: 'application/pdf' }), 'Test Report Brought From Manak and Attached.')
+        void attachTestReportFile(row.id, new File([bytes], name, { type: 'application/pdf' }), 'Test Report Brought From Manak and Attached.').then(
+          (saved) => {
+            // Uploaded here: the extension closes the Manak tabs it opened for this fetch.
+            if (saved) notifyManakTestReportSaved(row.id)
+          },
+        )
       } catch {
         toast.error('The Test Report From Manak Could Not Be Read.')
       }
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps -- attachTestReportFile reads refs; subscribe once per project
   }, [projectId])
+
+  // AI Conformity Check: progress text while running, and the sample whose check log is open.
+  const [conformityBusy, setConformityBusy] = useState<string | null>(null)
+  const [conformityLogId, setConformityLogId] = useState<string | null>(null)
+  const conformityLog = useMemo(() => {
+    const row = conformityLogId ? rows.find((r) => r.id === conformityLogId) : undefined
+    return row?.conformityCheck ? { row, check: row.conformityCheck } : null
+  }, [conformityLogId, rows])
+
+  /** Checks the selected samples (or every sample with a Test Report) and sets Conformity from the AI verdict. */
+  const runConformityCheck = async () => {
+    const pool = selectedIds.size ? rows.filter((r) => selectedIds.has(r.id)) : rows
+    const targets = pool.filter((r) => r.testReportStoragePath.trim())
+    if (!targets.length) {
+      toast.error(selectedIds.size ? 'The Selected Samples Have No Test Report Attached.' : 'Attach the Test Report of at Least One Sample First.')
+      return
+    }
+    const tally = { Yes: 0, No: 0, Undecided: 0, failed: 0 }
+    for (const [i, row] of targets.entries()) {
+      const label = `Sample ${i + 1} of ${targets.length} (${row.sampleCode || row.qrCode || 'No Code'})`
+      setConformityBusy(`${label}: Starting…`)
+      try {
+        const check = await checkSampleConformity({
+          row,
+          isCodeId,
+          isLabel: isCodeLabel,
+          onStep: (step) => setConformityBusy(`${label}: ${step}`),
+        })
+        tally[check.verdict] += 1
+        const current = valueRef.current
+        onChangeRef.current({
+          ...current,
+          rows: current.rows.map((r) =>
+            r.id === row.id
+              ? { ...r, conformityCheck: check, conformity: check.verdict === 'Undecided' ? r.conformity : check.verdict }
+              : r,
+          ),
+        })
+      } catch (err) {
+        tally.failed += 1
+        toast.error(`${label}: ${err instanceof Error ? err.message : 'AI Check Failed.'}`)
+      }
+    }
+    setConformityBusy(null)
+    toast.success(
+      `AI Conformity Check Done — ${tally.Yes} Yes, ${tally.No} No${tally.Undecided ? `, ${tally.Undecided} Undecided` : ''}${tally.failed ? `, ${tally.failed} Failed` : ''}. Click Save to Keep.`,
+    )
+  }
 
   const [aiInstruction, setAiInstruction] = useState('')
   const [aiBusy, setAiBusy] = useState(false)
@@ -1991,6 +2050,27 @@ export function OslSampleRequirementsModuleFields({
           Sample Requirements
         </p>
         <div className="flex flex-wrap items-center gap-2">
+          {conformityBusy ? (
+            <span className="max-w-[22rem] truncate text-xs font-medium text-amber-800" role="status" title={conformityBusy}>
+              {conformityBusy}
+            </span>
+          ) : null}
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className={cn(limsOutlineBtnClass, actionBtnClass)}
+            disabled={disabled || conformityBusy !== null}
+            title={
+              selectedCount
+                ? 'AI Conformity Check of the Selected Samples: Reads the Test Request, Test Report, Standard and Product Manual, Checks Every Result and Missing Tests, and Sets Conformity'
+                : 'AI Conformity Check of All Samples With a Test Report: Reads the Test Request, Test Report, Standard and Product Manual, Checks Every Result and Missing Tests, and Sets Conformity'
+            }
+            aria-label="AI Conformity Check"
+            onClick={() => void runConformityCheck()}
+          >
+            {conformityBusy ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Sparkles size={14} aria-hidden />}
+          </Button>
           <Button
             type="button"
             size="sm"
@@ -2148,16 +2228,29 @@ export function OslSampleRequirementsModuleFields({
                     </div>
                     <div className="min-w-0">
                       <p className={cardFieldLabelClass}>Conformity of Sample as per IS</p>
-                      <SampleConformitySelect
-                        className="h-8 w-full max-w-[12rem] text-sm"
-                        value={row.conformity}
-                        needed={Boolean(row.qrCode.trim())}
-                        disabled={disabled}
-                        ariaLabel={`Conformity of sample ${index + 1} as per IS`}
-                        onChange={(next) =>
-                          setRows(rows.map((r, i) => (i === index ? { ...r, conformity: next } : r)))
-                        }
-                      />
+                      <div className="flex items-center gap-1">
+                        <SampleConformitySelect
+                          className="h-8 w-full max-w-[12rem] text-sm"
+                          value={row.conformity}
+                          needed={Boolean(row.qrCode.trim())}
+                          disabled={disabled}
+                          ariaLabel={`Conformity of sample ${index + 1} as per IS`}
+                          onChange={(next) =>
+                            setRows(rows.map((r, i) => (i === index ? { ...r, conformity: next } : r)))
+                          }
+                        />
+                        {row.conformityCheck ? (
+                          <button
+                            type="button"
+                            className="inline-flex h-8 w-8 shrink-0 items-center justify-center border border-stone-400 bg-white text-amber-800 hover:bg-amber-50"
+                            title="AI Conformity Check Log"
+                            aria-label={`AI Conformity Check Log of Sample ${index + 1}`}
+                            onClick={() => setConformityLogId(row.id)}
+                          >
+                            <ScanSearch size={14} aria-hidden />
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
 </>
 ) : null}
@@ -2340,6 +2433,7 @@ export function OslSampleRequirementsModuleFields({
                       </TableCell>
                       {showQrCols ? (
                       <TableCell className="px-1.5 py-2 text-center align-middle">
+                        <div className="flex items-center gap-1">
                         <SampleConformitySelect
                           className="h-8 w-full px-2 text-xs"
                           value={row.conformity}
@@ -2350,6 +2444,18 @@ export function OslSampleRequirementsModuleFields({
                             setRows(rows.map((r, i) => (i === index ? { ...r, conformity: next } : r)))
                           }
                         />
+                        {row.conformityCheck ? (
+                          <button
+                            type="button"
+                            className="inline-flex h-8 w-7 shrink-0 items-center justify-center border border-stone-400 bg-white text-amber-800 hover:bg-amber-50"
+                            title="AI Conformity Check Log"
+                            aria-label={`AI Conformity Check Log of Sample ${index + 1}`}
+                            onClick={() => setConformityLogId(row.id)}
+                          >
+                            <ScanSearch size={13} aria-hidden />
+                          </button>
+                        ) : null}
+                        </div>
                       </TableCell>
 ) : null}
                       <TableCell className="px-2 py-2 text-center align-middle">
@@ -2936,6 +3042,127 @@ export function OslSampleRequirementsModuleFields({
         </DialogContent>
       </Dialog>
 
+      <Dialog open={conformityLog !== null} onOpenChange={(open) => !open && setConformityLogId(null)}>
+        <DialogContent
+          persistOnFocusLoss
+          layer="stacked"
+          aria-describedby={undefined}
+          className={cn(limsDialogClass, 'flex max-h-[90vh] max-w-4xl flex-col overflow-hidden bg-white')}
+        >
+          <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white">
+            <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={limsDarkBarGlowStyle} />
+            <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
+            <DialogHeader className="relative pr-10 text-left">
+              <DialogTitle className="text-base font-semibold tracking-tight text-white">
+                AI Conformity Log{conformityLog?.row.sampleCode.trim() ? ` — ${conformityLog.row.sampleCode.trim()}` : ''}
+              </DialogTitle>
+            </DialogHeader>
+          </div>
+          {conformityLog ? (
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 text-sm text-stone-800">
+              <div className="flex flex-wrap items-center gap-3">
+                <span
+                  className={cn(
+                    'border px-2.5 py-1 text-xs font-bold uppercase tracking-wide',
+                    conformityLog.check.verdict === 'Yes'
+                      ? 'border-emerald-600 bg-emerald-50 text-emerald-800'
+                      : conformityLog.check.verdict === 'No'
+                        ? 'border-red-600 bg-red-50 text-red-800'
+                        : 'border-amber-500 bg-amber-50 text-amber-800',
+                  )}
+                >
+                  Conformity: {conformityLog.check.verdict}
+                </span>
+                <span className="text-xs text-stone-500">
+                  Checked {new Date(conformityLog.check.checkedAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
+                </span>
+              </div>
+              {conformityLog.check.summary ? <p className="leading-relaxed">{conformityLog.check.summary}</p> : null}
+
+              <div className="space-y-1.5">
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-stone-600">Test Results vs Requirements</p>
+                {conformityLog.check.results.length ? (
+                  <div className="overflow-x-auto border border-stone-300">
+                    <table className="w-full min-w-[640px] border-collapse text-xs">
+                      <thead className="bg-stone-100 text-left text-stone-700">
+                        <tr>
+                          {['Parameter', 'Clause', 'Requirement', 'Result', 'Verdict'].map((h) => (
+                            <th key={h} className="border-b border-stone-300 px-2 py-1.5 font-semibold">
+                              {h}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {conformityLog.check.results.map((r, i) => (
+                          <tr key={i} className="align-top odd:bg-white even:bg-stone-50">
+                            <td className="border-b border-stone-200 px-2 py-1.5 font-medium">{r.parameter}</td>
+                            <td className="border-b border-stone-200 px-2 py-1.5">{r.clause}</td>
+                            <td className="border-b border-stone-200 px-2 py-1.5">{r.requirement}</td>
+                            <td className="border-b border-stone-200 px-2 py-1.5">{r.result}</td>
+                            <td
+                              className={cn(
+                                'border-b border-stone-200 px-2 py-1.5 font-semibold',
+                                r.verdict === 'Pass' ? 'text-emerald-700' : r.verdict === 'Fail' ? 'text-red-700' : 'text-amber-700',
+                              )}
+                            >
+                              {r.verdict}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="text-xs text-stone-500">No Results Were Read From the Test Report.</p>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-stone-600">Missing Tests</p>
+                {conformityLog.check.missingTests.length ? (
+                  <ul className="list-disc space-y-0.5 pl-5 text-red-800">
+                    {conformityLog.check.missingTests.map((t, i) => (
+                      <li key={i}>{t}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-xs font-medium text-emerald-700">No Required Test Is Missing.</p>
+                )}
+              </div>
+
+              {conformityLog.check.notes.length ? (
+                <div className="space-y-1.5">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-stone-600">Observations</p>
+                  <ul className="list-disc space-y-0.5 pl-5">
+                    {conformityLog.check.notes.map((n, i) => (
+                      <li key={i}>{n}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              {conformityLog.check.sources.length ? (
+                <div className="space-y-1.5">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-stone-600">Documents Checked</p>
+                  <ul className="list-disc space-y-0.5 pl-5 text-xs text-stone-600">
+                    {conformityLog.check.sources.map((n, i) => (
+                      <li key={i}>{n}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              <p className="text-[11px] text-stone-500">AI Check Is a Review Aid — Confirm Against the Documents Before Final Use.</p>
+            </div>
+          ) : null}
+          <DialogFooter className="shrink-0 gap-2 border-t border-stone-300 bg-stone-100 px-4 py-3 sm:justify-end">
+            <Button type="button" variant="outline" className={limsOutlineBtnClass} onClick={() => setConformityLogId(null)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={addChooserOpen} onOpenChange={setAddChooserOpen}>
         <DialogContent
           persistOnFocusLoss
@@ -3167,6 +3394,7 @@ export function OslSampleRequirementsModuleFields({
                                   testReportFileName: prev.testReportFileName,
                                   testReportStoragePath: prev.testReportStoragePath,
                                   conformity: prev.conformity,
+                                  conformityCheck: prev.conformityCheck,
                                 }
                               : prev,
                           )
