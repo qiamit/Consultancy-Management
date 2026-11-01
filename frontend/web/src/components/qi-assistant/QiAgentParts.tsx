@@ -59,13 +59,21 @@ export function AgentProposals({
   proposals,
   onApplied,
   readOnly = false,
+  done,
+  onSaved,
 }: {
   proposals: QiAgentProposal[]
   onApplied: (lines: string[]) => void
   /** From a saved chat: shown for reference, never confirmable again (ask the agent again to redo). */
   readOnly?: boolean
+  /** Changes already saved earlier (key → result line), e.g. confirmed from a scheduled run. */
+  done?: Record<string, string>
+  /** Called for each change saved now, so its owner can remember it. */
+  onSaved?: (key: string, line: string) => void
 }) {
-  const [state, setState] = useState<Record<string, ApplyState>>({})
+  const [state, setState] = useState<Record<string, ApplyState>>(() =>
+    Object.fromEntries(Object.entries(done ?? {}).map(([key, message]) => [key, { status: 'saved' as const, message }])),
+  )
   if (!proposals.length) return null
   const statusOf = (key: string) => state[key]?.status ?? 'pending'
   const pending = proposals.filter((p) => statusOf(p.key) === 'pending')
@@ -78,6 +86,7 @@ export function AgentProposals({
         const line = await applyProposal(p)
         lines.push(`Saved: ${p.summary} — ${line}`)
         setState((prev) => ({ ...prev, [p.key]: { status: 'saved', message: line } }))
+        onSaved?.(p.key, line)
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Could Not Save'
         lines.push(`Not saved: ${p.summary} — ${message}`)

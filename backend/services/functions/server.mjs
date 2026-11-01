@@ -5,6 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { createQiAssistantHandler } from './qiAssistant.mjs'
 import { createRenewalReminders } from './renewalReminders.mjs'
+import { startAssistantScheduler } from './assistantScheduler.mjs'
 
 const PORT = Number(process.env.PORT || 8080)
 const MANAK_TTL_MS = 45 * 60 * 1000
@@ -1392,4 +1393,6 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`functions listening on ${PORT}`)
   renewalReminders.startScheduler()
+  // QE Assistant scheduled tasks: read-only runs as the service, results emailed (ASSISTANT_TASKS_DISABLED=1 stops it).
+  startAssistantScheduler({ rest, serviceRest: userRestFor(SERVICE_ROLE_KEY), sendEmail: sendResendEmail })
 })

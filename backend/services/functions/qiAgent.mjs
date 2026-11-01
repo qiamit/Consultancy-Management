@@ -3,6 +3,8 @@
 // The agent never writes: create / update / delete come back as proposals that the admin confirms in the app,
 // and the app performs them with the admin's own session. Page opens come back as navigation actions.
 
+import { describeSchedule, nextRunAt, parseIstDateTime, parseWeekdays } from './assistantSchedule.mjs'
+
 const MAX_ROUNDS = 8
 const MAX_ROWS = 50
 const MAX_RESULT_CHARS = 14_000
@@ -17,10 +19,12 @@ const SECRET_COLUMN = /(password|passwd|secret|api_?key|access_?token|refresh_?t
 const FILTER_OPS = new Set(['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'like', 'ilike', 'is', 'in'])
 const IDENT = /^[a-z_][a-z0-9_]{0,62}$/
 
-let schemaCache = { at: 0, tables: /** @type {Record<string, Record<string, { type?: string; format?: string; description?: string }>>} */ ({}) }
+/** @type {Map<string, { at: number; tables: Record<string, Record<string, { type?: string; format?: string; description?: string }>> }>} */
+const schemaCaches = new Map()
 
-/** Table → column definitions from PostgREST's OpenAPI root (as the admin), cached for all admins. */
-async function loadSchema(userRest) {
+/** Table → column definitions from PostgREST's OpenAPI root, cached per role (admins / scheduled runs). */
+async function loadSchema(userRest, cacheKey) {
+  const schemaCache = schemaCaches.get(cacheKey) ?? { at: 0, tables: {} }
   if (Date.now() - schemaCache.at < SCHEMA_TTL_MS && Object.keys(schemaCache.tables).length) return schemaCache.tables
   const { data: doc } = await userRest('/', { headers: { Accept: 'application/openapi+json' } })
   const defs = (doc && typeof doc === 'object' && (doc.definitions || doc.components?.schemas)) || {}
@@ -39,7 +43,7 @@ async function loadSchema(userRest) {
     }
     tables[name] = cols
   }
-  schemaCache = { at: Date.now(), tables }
+  schemaCaches.set(cacheKey, { at: Date.now(), tables })
   return tables
 }
 
@@ -207,6 +211,67 @@ export const AGENT_TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'schedule_task',
+      description:
+        'Schedule work you will do later on your own (read-only: reports, checks, summaries; any changes become proposals the admin confirms). schedule_kind: once (run_at "YYYY-MM-DD HH:MM" India time), daily (time_of_day "HH:MM"), weekly (weekdays like ["mon","thu"] + time_of_day), hourly (every_hours). The result is shown in the app and emailed unless email=false. Ask for any missing timing before scheduling.',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string' },
+          instruction: { type: 'string', description: 'What to do at each run, written as a full instruction to yourself.' },
+          schedule_kind: { type: 'string', enum: ['once', 'daily', 'weekly', 'hourly'] },
+          run_at: { type: 'string' },
+          time_of_day: { type: 'string' },
+          weekdays: { type: 'array', items: { type: 'string' } },
+          every_hours: { type: 'integer' },
+          email: { type: 'boolean' },
+        },
+        required: ['title', 'instruction', 'schedule_kind'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_tasks',
+      description: 'List the scheduled tasks with ids, schedule, next run and last status.',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_task',
+      description: 'Pause / resume (enabled), rename, change the instruction or the schedule of a task by id.',
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          enabled: { type: 'boolean' },
+          title: { type: 'string' },
+          instruction: { type: 'string' },
+          schedule_kind: { type: 'string', enum: ['once', 'daily', 'weekly', 'hourly'] },
+          run_at: { type: 'string' },
+          time_of_day: { type: 'string' },
+          weekdays: { type: 'array', items: { type: 'string' } },
+          every_hours: { type: 'integer' },
+          email: { type: 'boolean' },
+        },
+        required: ['id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'delete_task',
+      description: 'Delete a scheduled task by id.',
+      parameters: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'open_page',
       description: 'Open a page of the app for the admin (path from the App Pages list, optionally with ?query).',
       parameters: {
@@ -222,13 +287,40 @@ export const AGENT_TOOLS = [
  * Runs the tool loop. callModel(messages, tools) returns the provider's choice.message.
  * Returns { reply, steps, proposals, navigation }.
  */
-export async function runAgent({ callModel, messages, userRest, routes }) {
+export async function runAgent({ callModel, messages, userRest, routes, userEmail = '', allowedTools = null, schemaKey = 'admin' }) {
   const steps = []
   const proposals = []
   const navigation = []
   const allowedPaths = new Set((routes || []).map((r) => String(r.path || '')).filter((p) => p.startsWith('/')))
   let schema = null
-  const tables = async () => (schema ??= await loadSchema(userRest))
+  const tables = async () => (schema ??= await loadSchema(userRest, schemaKey))
+  const tools = allowedTools ? AGENT_TOOLS.filter((t) => allowedTools.includes(t.function.name)) : AGENT_TOOLS
+
+  /** Schedule fields from tool args → task columns (with next_run_at), or an error message. */
+  const scheduleFields = (args, current = {}) => {
+    const kind = String(args.schedule_kind ?? current.schedule_kind ?? '')
+    if (!['once', 'daily', 'weekly', 'hourly'].includes(kind)) throw new Error('schedule_kind must be once, daily, weekly or hourly')
+    const runAt = args.run_at != null ? parseIstDateTime(args.run_at) : current.run_at ? new Date(current.run_at) : null
+    const fields = {
+      schedule_kind: kind,
+      run_at: kind === 'once' ? (runAt ? runAt.toISOString() : null) : null,
+      time_of_day: kind === 'daily' || kind === 'weekly' ? String(args.time_of_day ?? current.time_of_day ?? '').padStart(5, '0') : null,
+      weekdays: kind === 'weekly' ? parseWeekdays(args.weekdays ?? current.weekdays) : null,
+      every_hours: kind === 'hourly' ? Number(args.every_hours ?? current.every_hours) || null : null,
+    }
+    if (kind === 'once' && !fields.run_at) throw new Error('once needs run_at "YYYY-MM-DD HH:MM" (India time)')
+    if ((kind === 'daily' || kind === 'weekly') && !/^([01]\d|2[0-3]):[0-5]\d$/.test(fields.time_of_day)) throw new Error('time_of_day must be HH:MM')
+    if (kind === 'weekly' && !fields.weekdays.length) throw new Error('weekly needs weekdays')
+    if (kind === 'hourly' && !(fields.every_hours >= 1 && fields.every_hours <= 168)) throw new Error('every_hours must be 1–168')
+    const next = nextRunAt(fields)
+    if (!next) throw new Error('That time has already passed')
+    return { ...fields, next_run_at: next.toISOString() }
+  }
+  const taskId = (args) => {
+    const id = String(args.id || '').trim()
+    if (!/^[0-9a-f-]{36}$/i.test(id)) throw new Error('A task id is needed')
+    return id
+  }
 
   const tool = {
     async list_tables(args) {
@@ -323,6 +415,53 @@ export async function runAgent({ callModel, messages, userRest, routes }) {
       steps.push({ tool: 'list_memories', summary: 'Read saved memories' })
       return capJson(Array.isArray(data) ? data : [])
     },
+    async schedule_task(args) {
+      const title = String(args.title || '').trim().slice(0, 200)
+      const instruction = String(args.instruction || '').trim().slice(0, 4000)
+      if (!title || !instruction) throw new Error('title and instruction are needed')
+      const fields = scheduleFields(args)
+      const { data } = await userRest('/assistant_tasks?select=id,next_run_at', {
+        method: 'POST',
+        headers: { Prefer: 'return=representation' },
+        body: JSON.stringify({ title, instruction, ...fields, notify_email: args.email === false ? null : userEmail || null }),
+      })
+      const row = Array.isArray(data) ? data[0] : null
+      steps.push({ tool: 'schedule_task', summary: `Scheduled “${title}” — ${describeSchedule(fields)}` })
+      return capJson({ scheduled: true, id: row?.id, schedule: describeSchedule(fields), next_run_at: fields.next_run_at, emailed_to: args.email === false ? null : userEmail || null })
+    },
+    async list_tasks() {
+      const { data } = await userRest('/assistant_tasks?select=id,title,instruction,schedule_kind,run_at,time_of_day,weekdays,every_hours,next_run_at,enabled,last_run_at,last_status,notify_email&order=created_at.asc&limit=100')
+      const rows = (Array.isArray(data) ? data : []).map((t) => ({ ...t, schedule: describeSchedule(t) }))
+      steps.push({ tool: 'list_tasks', summary: `Read ${rows.length} scheduled task${rows.length === 1 ? '' : 's'}` })
+      return capJson(rows)
+    },
+    async update_task(args) {
+      const id = taskId(args)
+      const { data: found } = await userRest(`/assistant_tasks?id=eq.${id}&select=*`)
+      const current = Array.isArray(found) ? found[0] : null
+      if (!current) throw new Error('No task with that id')
+      const patch = {}
+      if (typeof args.title === 'string' && args.title.trim()) patch.title = args.title.trim().slice(0, 200)
+      if (typeof args.instruction === 'string' && args.instruction.trim()) patch.instruction = args.instruction.trim().slice(0, 4000)
+      if (typeof args.email === 'boolean') patch.notify_email = args.email ? userEmail || current.notify_email : null
+      if (['schedule_kind', 'run_at', 'time_of_day', 'weekdays', 'every_hours'].some((k) => args[k] != null)) Object.assign(patch, scheduleFields(args, current))
+      if (typeof args.enabled === 'boolean') {
+        patch.enabled = args.enabled
+        // Resuming recomputes the next run from now.
+        if (args.enabled && !patch.next_run_at) Object.assign(patch, scheduleFields({}, current))
+      }
+      patch.updated_at = new Date().toISOString()
+      await userRest(`/assistant_tasks?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify(patch) })
+      steps.push({ tool: 'update_task', summary: `Updated task “${patch.title ?? current.title}”` })
+      return 'Task updated.'
+    },
+    async delete_task(args) {
+      const id = taskId(args)
+      const { data } = await userRest(`/assistant_tasks?id=eq.${id}&select=title`, { method: 'DELETE', headers: { Prefer: 'return=representation' } })
+      const gone = Array.isArray(data) && data[0]
+      steps.push({ tool: 'delete_task', summary: gone ? `Deleted task “${gone.title}”` : 'No task deleted' })
+      return gone ? 'Deleted.' : 'No task with that id.'
+    },
     async open_page(args) {
       const path = String(args.path || '').trim()
       const base = path.split('?')[0]
@@ -337,7 +476,7 @@ export async function runAgent({ callModel, messages, userRest, routes }) {
 
   const convo = [...messages]
   for (let round = 0; round < MAX_ROUNDS; round += 1) {
-    const message = await callModel(convo, AGENT_TOOLS)
+    const message = await callModel(convo, tools)
     const calls = Array.isArray(message?.tool_calls) ? message.tool_calls : []
     if (!calls.length) {
       const content = message?.content
@@ -352,7 +491,7 @@ export async function runAgent({ callModel, messages, userRest, routes }) {
       let result
       try {
         const args = JSON.parse(String(call?.function?.arguments || '{}') || '{}')
-        if (!tool[name]) throw new Error(`Unknown tool: ${name}`)
+        if (!tool[name] || !tools.some((t) => t.function.name === name)) throw new Error(`Unknown tool: ${name}`)
         result = await tool[name](args)
       } catch (err) {
         result = `Error: ${err instanceof Error ? err.message : String(err)}`
@@ -375,7 +514,17 @@ export const AGENT_SYSTEM_PROMPT = [
   '- propose_changes to create, update or delete records. Nothing is saved until the admin confirms each change in the app, so say so. Always look the record up first, use real ids and existing column names, and send only the columns that change.',
   '- open_page to take the admin to a page (use paths from the App Pages list).',
   '- remember / forget / list_memories to keep facts and standing instructions across chats. Follow the ADMIN MEMORY list.',
+  '- schedule_task / list_tasks / update_task / delete_task for work to do later or repeatedly (reports, checks, reminders). Scheduled runs only read and report; changes they find wait for the admin to confirm. Times are India time (IST).',
   'Act like a bot that does the work for the admin: when a task needs information you do not have (which client or licence, dates, amounts, wording), ask ONE short clear question at a time, wait for the answer, then continue. Before proposing changes, repeat the key details in one line. When the admin gives an answer, continue the same task without restarting.',
   'Work step by step: search, then answer with the facts you found (counts, names, dates). Never invent data, ids or columns.',
   'Keep replies short and clear; use simple lists or tables. Answer in Hindi when the admin writes in Hindi.',
+].join('\n')
+
+/** Tools a scheduled run may use: read and propose only (no pages, memory or task changes). */
+export const SCHEDULED_RUN_TOOLS = ['list_tables', 'describe_table', 'query_rows', 'propose_changes', 'list_memories']
+
+export const SCHEDULED_RUN_PROMPT = [
+  'SCHEDULED RUN. You are running a scheduled task on your own; the admin is not in the chat, so do not ask questions.',
+  'Do the instruction with the tools, then write the result as a short report for the admin (lists or a small table).',
+  'If something should be changed, use propose_changes: the changes wait for the admin to confirm in the app.',
 ].join('\n')
