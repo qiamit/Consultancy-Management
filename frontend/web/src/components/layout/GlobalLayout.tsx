@@ -28,6 +28,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useAuth, signOut } from '@/hooks/useAuth'
+import { useIsNarrowScreen } from '@/hooks/useIsNarrowScreen'
 import { supabase } from '@/lib/supabaseClient'
 import { isLaboratoryDirector } from '@/lib/isLaboratoryDirector'
 import { canAccessNavItem as checkNavAccess } from '@/lib/moduleAccess'
@@ -440,6 +441,7 @@ export default function GlobalLayout() {
     }
     return label || 'Q Engineering'
   }, [location.pathname])
+  const narrowScreen = useIsNarrowScreen()
   const hideGlobalAssistant =
     location.pathname === '/masters/clients' ||
     location.pathname.startsWith('/masters/clients/') ||
@@ -730,25 +732,14 @@ export default function GlobalLayout() {
 
           <div className="relative flex shrink-0 items-center gap-2 sm:gap-3">
             {hideGlobalAssistant ? null : (
-              <>
-                <div className="hidden sm:block">
-                  <QiAssistant
-                    page="global"
-                    pageTitle={globalPageTitle}
-                    contextSummary={`The user is on the app route ${location.pathname}.`}
-                    triggerVariant="default"
-                    triggerClassName="h-8"
-                  />
-                </div>
-                <div className="sm:hidden">
-                  <QiAssistant
-                    page="global"
-                    pageTitle={globalPageTitle}
-                    contextSummary={`The user is on the app route ${location.pathname}.`}
-                    triggerVariant="icon"
-                  />
-                </div>
-              </>
+              // One instance on every screen size, so its chat and notifications are never doubled.
+              <QiAssistant
+                page="global"
+                pageTitle={globalPageTitle}
+                contextSummary={`The user is on the app route ${location.pathname}.`}
+                triggerVariant={narrowScreen ? 'icon' : 'default'}
+                triggerClassName={narrowScreen ? undefined : 'h-8'}
+              />
             )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
