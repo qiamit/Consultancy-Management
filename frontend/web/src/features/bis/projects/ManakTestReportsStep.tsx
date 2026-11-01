@@ -116,6 +116,11 @@ function FactoryTestReportsList({
             <th className={cn(th, 'text-center')}>Grade / Type / Variety</th>
             <th className={cn(th, 'text-center')}>Declared Value</th>
             <th className={cn(th, 'w-[1%] text-center')}>
+              Sample Code
+              <br />
+              QR Code
+            </th>
+            <th className={cn(th, 'w-[1%] text-center')}>
               Batch
               <br />
               Number
@@ -131,7 +136,7 @@ function FactoryTestReportsList({
         <tbody>
           {samples.length === 0 ? (
             <tr>
-              <td colSpan={6} className={cn(td, 'py-3 text-center text-stone-500')}>
+              <td colSpan={7} className={cn(td, 'py-3 text-center text-stone-500')}>
                 No sample is ticked &ldquo;In Offer Letter&rdquo; in the Sample Offer Letter.
               </td>
             </tr>
@@ -143,6 +148,10 @@ function FactoryTestReportsList({
                   <td className={cn(td, 'text-center')}>{i + 1}</td>
                   <td data-label="Grade / Type / Variety" className={cn(td, 'text-center')}>{sample.gradeTypeVariety.trim() || sample.sampleDescription.trim() || '—'}</td>
                   <td data-label="Declared Value" className={cn(td, 'text-center')}>{sample.declaredValue.trim() || '—'}</td>
+                  <td data-label="Sample Code / QR Code" className={cn(td, 'whitespace-nowrap text-center')}>
+                    <span className="block font-medium text-stone-800">{sample.sampleCode.trim() || '—'}</span>
+                    <span className="block text-xs text-stone-500">{sample.qrCode.trim() || '—'}</span>
+                  </td>
                   <td data-label="Batch Number" className={cn(td, 'whitespace-nowrap text-center')}>{sample.batchNumber.trim() || '—'}</td>
                   <td data-label="Date of Manufacturing" className={cn(td, 'whitespace-nowrap text-center')}>{sample.dateOfManufacturing.trim() ? formatDisplayDate(sample.dateOfManufacturing) : '—'}</td>
                   <td className={cn(td, 'text-center')}>
