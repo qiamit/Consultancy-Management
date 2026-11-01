@@ -64,9 +64,8 @@ function LabOslCode({ row, labs }: { row: Rec; labs: Map<string, LaboratoryOslIn
   }
   if (!lab) return <span className="text-stone-400">{str(row.laboratoryId) ? '…' : '—'}</span>
   return (
-    <span className="whitespace-nowrap" title={lab.place || undefined}>
-      <span className="font-mono text-sm font-semibold text-amber-900">{lab.oslCode}</span>
-      {lab.place ? <span className="block text-[11px] text-stone-500">{lab.place}</span> : null}
+    <span className="whitespace-nowrap font-mono text-sm font-semibold text-amber-900" title={lab.place || undefined}>
+      {lab.oslCode}
     </span>
   )
 }
