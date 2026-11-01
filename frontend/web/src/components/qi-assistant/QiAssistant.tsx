@@ -335,8 +335,9 @@ export function QiAssistant({
       ? ' Pick an **IS Code** below so I can read its uploaded PDFs.'
       : ''
     const skillNote = ' Type **/** for **Skills**, **@** to attach a file from your computer.'
+    // The Admin Agent starts with an empty chat (no welcome message).
     const intro = agentMode
-      ? `Hello! I'm **QE Assistant**, your **Admin Agent**. I can find and report any data in the app, open any page, and prepare **create / update / delete** changes — each change is saved only after you **Confirm** it.${voiceNote}${skillNote}`
+      ? ''
       : welcomeMessage !== undefined
         ? welcomeMessage
         : `Hello! I'm **QE Assistant** on **${pageTitle}**. Ask me about this screen or the data shown here.${crudNote}${imageNote}${pdfNote}${voiceNote}${isCodeNote}${skillNote}`
@@ -795,7 +796,7 @@ export function QiAssistant({
                   <ShieldCheck size={12} aria-hidden /> Admin Agent
                 </span>
               ) : null}
-              {agentMode && messages.length > 1 ? (
+              {agentMode && messages.length > 0 ? (
                 <button
                   type="button"
                   className="ml-auto inline-flex h-7 w-7 shrink-0 items-center justify-center border border-amber-500/40 bg-stone-800/80 text-amber-100 hover:bg-amber-500/20"
