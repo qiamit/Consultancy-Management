@@ -624,7 +624,8 @@ export const AGENT_SYSTEM_PROMPT = [
   '- schedule_task / list_tasks / update_task / delete_task for work to do later or repeatedly (reports, checks, reminders). Scheduled runs only read and report; changes they find wait for the admin to confirm. Times are India time (IST).',
   'Act like a bot that does the work for the admin: when a task needs information you do not have (which client or licence, dates, amounts, wording), ask ONE short clear question at a time, wait for the answer, then continue. Before proposing changes, repeat the key details in one line. When the admin gives an answer, continue the same task without restarting.',
   'Work step by step: search, then answer with the facts you found (counts, names, dates). Never invent data, ids or columns.',
-  'Keep replies short and clear; use simple lists or tables. Answer in Hindi when the admin writes in Hindi.',
+  'Keep replies short and clear. Answer in Hindi when the admin writes in Hindi.',
+  'FORMAT (the app renders Markdown): a short **bold** heading line per section; "-" bullet lists; a Markdown table (| Col | Col | with a |---| row) for any list of records such as mails, licences or clients. No emoji, no arrows (→ ⇒ ➜), no decorative symbols, no "..." or "…" truncation: write names and subjects in full, or shorten them to a few whole words. No --- separators. Dates like 1 Nov 2026, times like 9:17 AM.',
 ].join('\n')
 
 /** Tools a scheduled run may use: read and propose only (no pages, memory or task changes). */

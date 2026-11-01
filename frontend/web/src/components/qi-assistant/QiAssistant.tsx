@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Brain, CalendarClock, FileText, FileUp, FolderUp, History, ImagePlus, Loader2, MessageSquare, Mic, MicOff, Paperclip, Pause, Play, Plug, Plus, RotateCcw, Send, ShieldCheck, Sparkles, Trash2, X, Zap } from 'lucide-react'
+import { Brain, CalendarClock, Maximize2, Minus, FileText, FileUp, FolderUp, History, ImagePlus, Loader2, MessageSquare, Mic, MicOff, Paperclip, Pause, Play, Plug, Plus, RotateCcw, Send, ShieldCheck, Sparkles, Trash2, X, Zap } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
@@ -99,32 +99,112 @@ function renderAssistantInline(text: string): ReactNode[] {
   return nodes
 }
 
+type MessageSegment =
+  | { kind: 'heading'; text: string }
+  | { kind: 'table'; rows: string[][] }
+  | { kind: 'ul' | 'ol'; items: string[] }
+  | { kind: 'p'; lines: string[] }
+
+const TABLE_ROW = /^\s*\|.*\|\s*$/
+const TABLE_RULE = /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/
+
+/** Markdown the agent writes → segments: headings, tables, bullet / numbered lists, paragraphs (--- rules dropped). */
+function parseMessage(content: string): MessageSegment[] {
+  const out: MessageSegment[] = []
+  const push = (seg: MessageSegment) => {
+    const last = out[out.length - 1]
+    if (seg.kind === 'p' && last?.kind === 'p') last.lines.push(...seg.lines)
+    else if ((seg.kind === 'ul' || seg.kind === 'ol') && last?.kind === seg.kind) last.items.push(...seg.items)
+    else out.push(seg)
+  }
+  const lines = content.replace(/\r/g, '').split('\n')
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i]!
+    if (!line.trim()) {
+      out.push({ kind: 'p', lines: [] })
+      continue
+    }
+    if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) continue
+    const heading = line.match(/^\s*#{1,4}\s+(.+)$/)
+    if (heading) {
+      push({ kind: 'heading', text: heading[1]! })
+      continue
+    }
+    if (TABLE_ROW.test(line)) {
+      const rows: string[][] = []
+      while (i < lines.length && TABLE_ROW.test(lines[i]!)) {
+        if (!TABLE_RULE.test(lines[i]!)) {
+          rows.push(lines[i]!.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim()))
+        }
+        i += 1
+      }
+      i -= 1
+      if (rows.length) push({ kind: 'table', rows })
+      continue
+    }
+    const bullet = line.match(/^\s*[-*•]\s+(.+)$/)
+    if (bullet) {
+      push({ kind: 'ul', items: [bullet[1]!] })
+      continue
+    }
+    const numbered = line.match(/^\s*\d+[.)]\s+(.+)$/)
+    if (numbered) {
+      push({ kind: 'ol', items: [numbered[1]!] })
+      continue
+    }
+    push({ kind: 'p', lines: [line.trim()] })
+  }
+  return out.filter((seg) => seg.kind !== 'p' || seg.lines.length > 0)
+}
+
 function AssistantMessage({ content }: { content: string }) {
-  const blocks = content.trim().split(/\n\s*\n/).filter(Boolean)
+  const segments = parseMessage(content.trim())
   return (
     <div className="space-y-2 whitespace-normal">
-      {blocks.map((block, blockIndex) => {
-        const lines = block.split('\n')
-        const heading = lines.length === 1 ? lines[0].match(/^(#{1,4})\s+(.+)$/) : null
-        const bulletLines = lines.every((line) => /^\s*[-*]\s+/.test(line))
-        const numberedLines = lines.every((line) => /^\s*\d+[.)]\s+/.test(line))
-        if (heading) {
-          return <h4 key={blockIndex} className="font-semibold">{renderAssistantInline(heading[2])}</h4>
+      {segments.map((seg, index) => {
+        if (seg.kind === 'heading') {
+          return <h4 key={index} className="pt-1 text-[13px] font-bold text-stone-900">{renderAssistantInline(seg.text)}</h4>
         }
-        if (bulletLines || numberedLines) {
-          const List = numberedLines ? 'ol' : 'ul'
+        if (seg.kind === 'table') {
+          const [head, ...body] = seg.rows
           return (
-            <List key={blockIndex} className={numberedLines ? 'list-decimal pl-5' : 'list-disc pl-5'}>
-              {lines.map((line, lineIndex) => (
-                <li key={lineIndex}>{renderAssistantInline(line.replace(/^\s*(?:[-*]|\d+[.)])\s+/, ''))}</li>
+            <div key={index} className="overflow-x-auto">
+              <table className="w-full border-collapse text-xs">
+                <thead>
+                  <tr>
+                    {head!.map((cell, c) => (
+                      <th key={c} className="border border-stone-300 bg-stone-100 px-2 py-1 text-left font-semibold text-stone-700">{renderAssistantInline(cell)}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {body.map((row, r) => (
+                    <tr key={r} className={r % 2 ? 'bg-stone-50/70' : undefined}>
+                      {head!.map((_, c) => (
+                        <td key={c} className="border border-stone-200 px-2 py-1 align-top text-stone-800">{renderAssistantInline(row[c] ?? '')}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        }
+        if (seg.kind === 'ul' || seg.kind === 'ol') {
+          const List = seg.kind
+          return (
+            <List key={index} className={cn('space-y-0.5 pl-5', seg.kind === 'ol' ? 'list-decimal' : 'list-disc')}>
+              {seg.items.map((item, i) => (
+                <li key={i}>{renderAssistantInline(item)}</li>
               ))}
             </List>
           )
         }
+        if (seg.kind !== 'p') return null
         return (
-          <p key={blockIndex}>
-            {lines.map((line, lineIndex) => (
-              <span key={lineIndex}>{renderAssistantInline(line)}{lineIndex < lines.length - 1 ? <br /> : null}</span>
+          <p key={index}>
+            {seg.lines.map((line, i) => (
+              <span key={i}>{renderAssistantInline(line)}{i < seg.lines.length - 1 ? <br /> : null}</span>
             ))}
           </p>
         )
@@ -229,6 +309,8 @@ export function QiAssistant({
   const conversationIdRef = useRef<string | null>(null)
   // Same id for rendering (refs are not read during render).
   const [activeChatId, setActiveChatId] = useState<string | null>(null)
+  // Admin Agent panel folded to a small bar (chat kept).
+  const [minimized, setMinimized] = useState(false)
   const [agentView, setAgentView] = useState<'chat' | 'history' | 'memory' | 'tasks' | 'connectors'>('chat')
   const [tasks, setTasks] = useState<AssistantTask[]>([])
   const [runs, setRuns] = useState<AssistantTaskRun[]>([])
@@ -964,13 +1046,17 @@ export function QiAssistant({
       </DialogTrigger>
       <DialogContent
         aria-describedby={undefined}
+        showCloseButton={!agentMode}
         onInteractOutside={(e) => {
           if (agentMode) e.preventDefault()
         }}
         className={cn(
           'flex flex-col gap-0 overflow-hidden rounded-none border-4 border-stone-700 bg-[#fffcf7] p-0 shadow-2xl ring-2 ring-amber-700/35',
           '[&>button]:!rounded-none [&>button]:opacity-100',
-          agentMode
+          agentMode && minimized
+            ? // Minimized: a small bar at the bottom right; the chat stays as it was.
+              'left-auto right-4 top-auto bottom-4 h-auto max-h-none w-[min(22rem,calc(100vw-2rem))] max-w-none translate-x-0 translate-y-0'
+            : agentMode
             ? // Admin Agent: a full-height panel on the right, so the page it opens stays visible beside it.
               'left-auto right-0 top-0 h-[100dvh] max-h-[100dvh] w-[min(34rem,100vw)] max-w-none translate-x-0 translate-y-0 border-y-0 border-r-0'
             : 'max-h-[90dvh] w-[calc(100vw-1rem)] sm:max-w-xl md:top-1/2 md:!-translate-x-1/2 md:!-translate-y-1/2',
@@ -985,7 +1071,7 @@ export function QiAssistant({
             }}
           />
           <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
-          <DialogHeader className="relative space-y-1 pr-10 text-left">
+          <DialogHeader className={cn('relative space-y-1 text-left', !agentMode && 'pr-10')}>
             <DialogTitle className="flex items-center gap-2.5 text-base font-semibold tracking-tight text-white sm:text-lg">
               <span className="flex h-8 w-8 items-center justify-center border border-amber-400/40 bg-amber-400/15">
                 <Sparkles size={16} className="text-amber-200" />
@@ -993,13 +1079,15 @@ export function QiAssistant({
               <span className="min-w-0 truncate">
                 {agentMode ? 'QE Assistant' : assistantDialogTitle(activeRecordTable, effectiveIsCodeId, page)}
               </span>
-              {agentMode ? (
+              {agentMode && !minimized ? (
                 <span className="inline-flex shrink-0 items-center gap-1 border border-emerald-400/50 bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-200">
                   <ShieldCheck size={12} aria-hidden /> Admin Agent
                 </span>
               ) : null}
               {agentMode ? (
                 <span className="ml-auto flex shrink-0 items-center gap-1">
+                  {minimized ? null : (
+                  <>
                   <button type="button" className={headerToolClass(agentView === 'history')} title="Saved Chats" aria-label="Saved Chats" disabled={loading} onClick={() => openAgentView('history')}>
                     <History size={14} aria-hidden />
                   </button>
@@ -1016,6 +1104,27 @@ export function QiAssistant({
                   <button type="button" className={headerToolClass(false)} title="New Chat" aria-label="New Chat" disabled={loading} onClick={() => resetChat()}>
                     <RotateCcw size={14} aria-hidden />
                   </button>
+                  <span className="mx-0.5 h-5 w-px bg-amber-500/30" aria-hidden />
+                  </>
+                  )}
+                  <button
+                    type="button"
+                    className={headerToolClass(false)}
+                    title={minimized ? 'Restore' : 'Minimize'}
+                    aria-label={minimized ? 'Restore QE Assistant' : 'Minimize QE Assistant'}
+                    onClick={() => setMinimized((m) => !m)}
+                  >
+                    {minimized ? <Maximize2 size={14} aria-hidden /> : <Minus size={14} aria-hidden />}
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex h-7 w-7 items-center justify-center border border-red-700 bg-red-600 text-white hover:bg-red-700"
+                    title="Close"
+                    aria-label="Close QE Assistant"
+                    onClick={() => setOpen(false)}
+                  >
+                    <X size={14} aria-hidden />
+                  </button>
                 </span>
               ) : null}
             </DialogTitle>
@@ -1026,6 +1135,7 @@ export function QiAssistant({
           ref={scrollRef}
           className={cn(
             'flex-1 space-y-3 overflow-y-auto bg-gradient-to-b from-[#f7f3eb] to-[#fffcf7] px-4 py-3 sm:px-5',
+            agentMode && minimized && 'hidden',
             agentMode ? 'min-h-0' : 'min-h-[220px] max-h-[42dvh]',
           )}
         >
@@ -1191,11 +1301,11 @@ export function QiAssistant({
         </div>
 
 
-        {error && (
+        {error && !(agentMode && minimized) && (
           <p className="border-t border-red-300 bg-red-50 px-4 py-2 text-xs text-red-700 sm:px-5">{error}</p>
         )}
 
-        <div className="relative border-t-2 border-stone-500 bg-[#fffcf7]">
+        <div className={cn('relative border-t-2 border-stone-500 bg-[#fffcf7]', agentMode && minimized && 'hidden')}>
           {skillPickerOpen && (
             <div
               className="absolute bottom-full left-3 right-3 z-10 mb-1 max-h-48 overflow-y-auto border-2 border-stone-600 bg-white shadow-xl ring-1 ring-amber-700/25"
