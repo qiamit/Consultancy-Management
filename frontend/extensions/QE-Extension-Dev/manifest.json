@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "QE Consultancy",
-  "version": "2.8.1",
+  "version": "2.8.5",
   "description": "Manak Test Request, Import QR, New Application and Inclusion fill, IS Code portal fetch and search, copy/paste bypass, and bulk field fill for Chrome, Edge, and other Chromium browsers.",
   "action": {
     "default_title": "QE Consultancy",
@@ -93,6 +93,25 @@
         "gst-fill.js"
       ],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://nsws.manakonline.in/eLIMS/*"
+      ],
+      "js": [
+        "report-fetch-nsws.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://nsws.manakonline.in/eLIMS/*"
+      ],
+      "js": [
+        "report-hook-nsws.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
     }
   ],
   "permissions": [
