@@ -285,11 +285,11 @@ export default function DashboardPage() {
             type="button"
             onClick={retry}
             disabled={!ready || isFetching}
-            className="inline-flex h-10 min-h-10 items-center gap-1.5 border border-amber-500/40 bg-stone-800/80 px-3 text-xs font-semibold text-amber-100 hover:bg-amber-500/20 disabled:opacity-60"
+            className="inline-flex h-10 min-h-10 w-10 items-center justify-center border border-amber-500/40 bg-stone-800/80 text-amber-100 hover:bg-amber-500/20 disabled:opacity-60"
             aria-label="Refresh Dashboard"
+            title={isFetching ? 'Refreshing' : data && !allSectionsFailed(data) ? `Refresh — Updated ${relativeTimeLabel(new Date(data.loadedAt).toISOString())}` : 'Refresh'}
           >
             <RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} aria-hidden="true" />
-            <span>{isFetching ? 'Refreshing' : data && !allSectionsFailed(data) ? `Updated ${relativeTimeLabel(new Date(data.loadedAt).toISOString())}` : 'Refresh'}</span>
           </button>
         </div>
       </div>
