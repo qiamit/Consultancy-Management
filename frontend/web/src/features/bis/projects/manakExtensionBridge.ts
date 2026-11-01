@@ -237,6 +237,80 @@ export async function openManakEbisAssist(options: {
   })
 }
 
+export type ManakTestReportResult = {
+  sampleId: string
+  qrCode: string
+  ok: boolean
+  message: string
+  pdfName: string
+  pdfBase64: string
+}
+
+/**
+ * Test Report from Manak for one sample: the extension signs in (User ID / Password filled, captcha + 10 s wait),
+ * opens the Test Requests List, finds the QR code's row and sends its report back (see subscribeManakTestReport).
+ */
+export async function fetchManakTestReport(options: {
+  sampleId: string
+  qrCode: string
+  portalUserId?: string | null
+  projectId?: string | null
+}): Promise<{ started: boolean; message: string }> {
+  if (!(await pingExtension())) {
+    openManakUrl(manakEbisLoginHref(options.portalUserId))
+    return { started: false, message: 'Extension Not Detected — Opened the Manak Login in a New Tab.' }
+  }
+  const portalPassword = options.projectId ? ((await getPortalPasswordForExtension(options.projectId)) ?? '') : ''
+  return new Promise((resolve) => {
+    const finish = (result: { started: boolean; message: string }) => {
+      window.removeEventListener('message', onAck)
+      window.clearTimeout(timer)
+      resolve(result)
+    }
+    function onAck(event: MessageEvent) {
+      if (event.source !== window || event.origin !== window.location.origin) return
+      if (event.data?.type !== 'QE_MANAK_REPORT_FETCH_ACK') return
+      finish({ started: Boolean(event.data.ok), message: String(event.data.message || '') })
+    }
+    const timer = window.setTimeout(
+      () => finish({ started: false, message: 'The Extension Did Not Respond — Reload It and Try Again.' }),
+      15000,
+    )
+    window.addEventListener('message', onAck)
+    window.postMessage(
+      {
+        type: 'QE_MANAK_REPORT_FETCH',
+        sampleId: options.sampleId,
+        qrCode: options.qrCode,
+        portalUserId: String(options.portalUserId ?? '').trim(),
+        portalPassword,
+      },
+      window.location.origin,
+    )
+  })
+}
+
+/** Results of fetchManakTestReport (the PDF, or why there is none). */
+export function subscribeManakTestReport(onResult: (result: ManakTestReportResult) => void): () => void {
+  function onMessage(event: MessageEvent) {
+    if (event.source !== window || event.origin !== window.location.origin) return
+    if (event.data?.type !== 'QE_MANAK_TEST_REPORT') return
+    const raw = (event.data.result ?? {}) as Partial<Record<keyof ManakTestReportResult, unknown>>
+    const sampleId = String(raw.sampleId ?? '').trim()
+    if (!sampleId) return
+    onResult({
+      sampleId,
+      qrCode: String(raw.qrCode ?? ''),
+      ok: Boolean(raw.ok),
+      message: String(raw.message ?? ''),
+      pdfName: String(raw.pdfName ?? 'Test_Report.pdf'),
+      pdfBase64: String(raw.pdfBase64 ?? '').replace(/^data:application\/pdf;base64,/i, '').replace(/\s+/g, ''),
+    })
+  }
+  window.addEventListener('message', onMessage)
+  return () => window.removeEventListener('message', onMessage)
+}
+
 export const BSB_PORTAL_LOGIN_URL = 'https://standardsbis.bsbedge.com/BIS_Login'
 
 /**

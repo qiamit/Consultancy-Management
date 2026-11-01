@@ -87,6 +87,8 @@ import {
   subscribeManakQrImport,
   subscribeManakTestRequestResult,
   ackManakTestRequestResult,
+  fetchManakTestReport,
+  subscribeManakTestReport,
   type ManakTrResult,
 } from './manakExtensionBridge'
 import {
@@ -364,6 +366,8 @@ export function OslSampleRequirementsModuleFields({
     applicationNo: string
   }>({ name: '', address: '', isNumber: '', applicationNo: '' })
   const [extensionBusyId, setExtensionBusyId] = useState<string | null>(null)
+  // Sample whose Test Report is being fetched from Manak by the extension.
+  const [reportFetchId, setReportFetchId] = useState<string | null>(null)
   const [mergeBusy, setMergeBusy] = useState(false)
   // Extension runs started from this tab, per sample row (see loadManakTrRuns).
   const manakTrRunsRef = useRef<{ projectId: string; runs: Map<string, ManakTrRun> } | null>(null)
@@ -1502,12 +1506,17 @@ export function OslSampleRequirementsModuleFields({
     const rowId = testReportRowIdRef.current
     testReportRowIdRef.current = null
     if (!file || !rowId) return
+    void attachTestReportFile(rowId, file)
+  }
+
+  /** Store a Test Report PDF (picked from the computer or brought from Manak) on one sample row. */
+  const attachTestReportFile = (rowId: string, file: File, successMessage = 'Test Report PDF Attached.') => {
     const pid = (projectId ?? '').trim()
     if (!pid) {
       toast.error('Save the BIS project first, then upload a Test Report PDF.')
-      return
+      return Promise.resolve()
     }
-    void uploadBisProjectFile(pid, file, 'osl-sample-test-report', {
+    return uploadBisProjectFile(pid, file, 'osl-sample-test-report', {
       displayName: file.name,
     })
       .then((uploaded) => {
@@ -1525,12 +1534,61 @@ export function OslSampleRequirementsModuleFields({
               : r,
           ),
         })
-        toast.success('Test Report PDF Attached.')
+        toast.success(successMessage)
       })
       .catch((err) => {
         toast.error(err instanceof Error ? err.message : 'Test Report upload failed.')
       })
   }
+
+  /** Single click on a red Test Report button: the extension looks the report up on Manak by this sample's QR code. */
+  const fetchTestReportFromManak = (row: OslSampleRequirementRow) => {
+    const qr = row.qrCode.replace(/\s+/g, '')
+    if (!/^\d{6,20}$/.test(qr)) {
+      toast.error('This Sample Has No Manak QR Code — Double-Click to Upload the Test Report From the Computer.')
+      return
+    }
+    const pid = (projectId ?? '').trim()
+    if (!pid) {
+      toast.error('Save the BIS project first, then fetch the Test Report.')
+      return
+    }
+    setReportFetchId(row.id)
+    void fetchManakTestReport({ sampleId: row.id, qrCode: qr, portalUserId, projectId: pid })
+      .then(({ started, message }) => {
+        if (started) toast.success(message || 'Manak Opened — Type the Captcha; the Test Report Is Looked Up After Sign In.')
+        else {
+          setReportFetchId(null)
+          toast.warning(message || 'Could Not Start the Manak Extension.')
+        }
+      })
+      .catch((err: unknown) => {
+        setReportFetchId(null)
+        toast.error(err instanceof Error ? err.message : 'Could Not Start the Manak Extension.')
+      })
+  }
+
+  useEffect(() => {
+    return subscribeManakTestReport((result) => {
+      const row = valueRef.current.rows.find((r) => r.id === result.sampleId)
+      if (!row) return
+      setReportFetchId((id) => (id === result.sampleId ? null : id))
+      if (!result.ok || !result.pdfBase64) {
+        toast.warning(result.message || 'Test Report Is Not Uploaded on Manak Yet.', {
+          description: `Sample QR Code ${result.qrCode || row.qrCode}`,
+        })
+        return
+      }
+      try {
+        const bytes = Uint8Array.from(atob(result.pdfBase64), (c) => c.charCodeAt(0))
+        const name = /\.pdf$/i.test(result.pdfName) ? result.pdfName : `Test_Report_${row.qrCode || row.id}.pdf`
+        void attachTestReportFile(row.id, new File([bytes], name, { type: 'application/pdf' }), 'Test Report Brought From Manak and Attached.')
+      } catch {
+        toast.error('The Test Report From Manak Could Not Be Read.')
+      }
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- attachTestReportFile reads refs; subscribe once per project
+  }, [projectId])
 
   const [aiInstruction, setAiInstruction] = useState('')
   const [aiBusy, setAiBusy] = useState(false)
@@ -1718,6 +1776,8 @@ export function OslSampleRequirementsModuleFields({
     onUpload,
     onView,
     onDelete,
+    onFetch,
+    fetching = false,
   }: {
     key: string
     label: string
@@ -1725,8 +1785,32 @@ export function OslSampleRequirementsModuleFields({
     onUpload: () => void
     onView: () => void
     onDelete: () => void
+    /** Red state: single click fetches (from Manak), double-click uploads from the computer. */
+    onFetch?: () => void
+    fetching?: boolean
   }) => {
     const btn = 'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-none border p-0 text-white shadow-sm transition-colors disabled:opacity-60'
+    if (!hasFile && onFetch) {
+      return (
+        <button
+          type="button"
+          className={cn(btn, 'border-red-700 bg-red-600 hover:bg-red-700', fetching && 'animate-pulse')}
+          title={fetching ? `${label} — Fetching From Manak…` : `${label} — Click to Fetch From Manak, Double-Click to Upload From the Computer`}
+          aria-label={`Fetch ${label} From Manak (double-click to upload)`}
+          disabled={disabled}
+          onClick={() => {
+            window.clearTimeout(fileClickTimers.current[key])
+            fileClickTimers.current[key] = window.setTimeout(onFetch, 250)
+          }}
+          onDoubleClick={() => {
+            window.clearTimeout(fileClickTimers.current[key])
+            onUpload()
+          }}
+        >
+          {fetching ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Upload size={14} aria-hidden />}
+        </button>
+      )
+    }
     if (!hasFile) {
       return (
         <button
@@ -1780,6 +1864,8 @@ export function OslSampleRequirementsModuleFields({
       onUpload: () => openTestReportUpload(row),
       onView: () => viewTestReport(row),
       onDelete: () => deleteTestReport(row),
+      onFetch: () => fetchTestReportFromManak(row),
+      fetching: reportFetchId === row.id,
     })
 
   const renderDocButtons = (row: OslSampleRequirementRow) => (

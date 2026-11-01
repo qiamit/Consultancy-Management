@@ -3047,6 +3047,131 @@
     fillLoginFields(next.userId, next.password);
   }
 
+  // ---------------------------------------------------------------------------------------------------------------
+  // Test Report fetch (Consultancy Pro → Test Report button, single click). Runs only in the Manak tab background
+  // tracks for the job: captcha (10 s hold) → Sign In → Test Request → Test Requests List → this QR's row → report.
+  // ---------------------------------------------------------------------------------------------------------------
+  function sendReportResult(result) {
+    return sendRuntimeMessage({ type: "QE_MANAK_REPORT_RESULT", result }).catch(() => null);
+  }
+
+  /** The report link / button in a list row: the "Test Report" column first, else anything named report (not request). */
+  function findReportControl(row, table) {
+    const reportIdx = headerIndex(table, /test\s*report|^report|lab\s*report|report\s*(status|file|pdf)?$/);
+    const cells = Array.from(row.querySelectorAll("td"));
+    const pool = [];
+    if (reportIdx >= 0 && cells[reportIdx]) pool.push(...cells[reportIdx].querySelectorAll("a, button, input[type='button'], [onclick]"));
+    pool.push(...row.querySelectorAll("a, button, input[type='button'], [onclick]"));
+    const label = (el) =>
+      normalize(
+        [el.textContent, el.value, el.title, el.getAttribute("aria-label"), el.getAttribute("href"), el.getAttribute("onclick")]
+          .filter(Boolean)
+          .join(" "),
+      );
+    const inReportCell = (el) => reportIdx >= 0 && cells[reportIdx] && cells[reportIdx].contains(el);
+    return (
+      pool.find((el) => /report/.test(label(el)) && !/request/.test(label(el))) ||
+      pool.find((el) => inReportCell(el) && /view|download|pdf|\.pdf/.test(label(el))) ||
+      null
+    );
+  }
+
+  async function lookUpReportOnList(job) {
+    if (window.__qeReportLookup) return;
+    window.__qeReportLookup = true;
+    const qr = text(job.qrCode);
+    showBanner(`Test Report: Looking for QR Code ${qr}…`, true, true);
+    let found = null;
+    for (let attempt = 0; attempt < 24 && !found; attempt += 1) {
+      filterListByQr(qr);
+      for (const table of Array.from(document.querySelectorAll("table"))) {
+        const row = Array.from(table.querySelectorAll("tr")).find(
+          (tr) => tr.querySelector("td") && normalize(tr.textContent || "").replace(/\s+/g, "").includes(qr),
+        );
+        if (row) {
+          found = { row, table };
+          break;
+        }
+      }
+      if (!found) await sleep(500);
+    }
+    if (!found) {
+      showBanner(`QR Code ${qr} was not found in the Test Requests List.`, false, true);
+      await sendReportResult({ ok: false, message: `QR Code ${qr} Was Not Found in the Manak Test Requests List.` });
+      return;
+    }
+    const control = findReportControl(found.row, found.table);
+    if (!control) {
+      showBanner("Test Report is not uploaded on Manak yet.", false, true);
+      await sendReportResult({ ok: false, message: "Test Report Is Not Uploaded on Manak Yet." });
+      return;
+    }
+    const href = String(control.getAttribute("href") || control.href || "");
+    if (href && !/^javascript:|^#/i.test(href)) {
+      try {
+        const res = await fetch(new URL(href, location.href).toString(), { credentials: "include" });
+        const buf = await res.arrayBuffer();
+        const head = String.fromCharCode.apply(null, new Uint8Array(buf.slice(0, 5)));
+        if (buf.byteLength >= 80 && head === "%PDF-") {
+          showBanner("Test Report found — sending it to Consultancy Pro…", true, true);
+          await sendReportResult({ ok: true, pdfName: `Test_Report_${qr}.pdf`, pdfBase64: arrayBufferToBase64(buf) });
+          return;
+        }
+      } catch {
+        /* open it by click below */
+      }
+    }
+    // The report opens through a click (popup / download): background catches the PDF.
+    await sendReportResult({ capture: true });
+    showBanner("Test Report found — downloading it for Consultancy Pro…", true, true);
+    control.click();
+  }
+
+  async function runReportJob(job) {
+    if (isKnowFeesPage()) return;
+    if (isLoginPage()) {
+      if (window.__qeReportLogin) return;
+      window.__qeReportLogin = true;
+      showBanner("Test Report: User ID and password filled. Type the captcha — waits 10 seconds from your first key.", true, true);
+      const assist = self.qeCaptchaAssist;
+      if (!assist || typeof assist.solvePageCaptcha !== "function") return;
+      const solved = await assist.solvePageCaptcha({ minChars: 4, holdMs: 10000, fallbackMs: 300000 });
+      if (!solved || !isLoginPage()) return;
+      const clicked = clickContinueAfterCaptcha();
+      showBanner(clicked ? "Captcha accepted. Signing in…" : "Captcha filled. Click Sign In.", clicked, true);
+      return;
+    }
+    if (isTestRequestListPage()) {
+      await lookUpReportOnList(job);
+      return;
+    }
+    if (!isLoggedInSession()) return;
+    if (isTrPage()) {
+      showBanner("Test Report: opening the Test Requests List…", true, true);
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        if (clickTestRequestList()) return;
+        await sleep(500);
+      }
+      await sendReportResult({ ok: false, message: "The Test Requests List button was not found on Manak." });
+      return;
+    }
+    // Signed in somewhere else (home): go to Test Request, whose page has the list button. Once per tab session.
+    const hops = Number(sessionStorage.getItem("qeReportHops") || "0");
+    if (hops >= 3) return;
+    sessionStorage.setItem("qeReportHops", String(hops + 1));
+    window.setTimeout(() => {
+      location.href = (map && map.testRequestUrl) || TR_URL;
+    }, 1200);
+  }
+
+  chrome.storage.local.get(["qeManakReport"], (data) => {
+    const job = data && data.qeManakReport;
+    if (!job || !job.tabId || job.capture) return;
+    void getMyTabId().then((id) => {
+      if (id && id === Number(job.tabId)) void runReportJob(job);
+    });
+  });
+
   chrome.storage.local.get(
     [
       "pendingFill",
