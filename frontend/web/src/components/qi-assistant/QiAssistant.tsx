@@ -726,7 +726,8 @@ export function QiAssistant({
   const canSend = Boolean(input.trim() || (attachedImage && isClientsPage))
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    // The Admin Agent panel is not modal: the page behind stays usable (and shows what the agent opened).
+    <Dialog open={open} onOpenChange={setOpen} modal={!agentMode}>
       <DialogTrigger asChild>
         {triggerVariant === 'icon' ? (
           <Button
@@ -760,6 +761,9 @@ export function QiAssistant({
       </DialogTrigger>
       <DialogContent
         aria-describedby={undefined}
+        onInteractOutside={(e) => {
+          if (agentMode) e.preventDefault()
+        }}
         className={cn(
           'flex flex-col gap-0 overflow-hidden rounded-none border-4 border-stone-700 bg-[#fffcf7] p-0 shadow-2xl ring-2 ring-amber-700/35',
           '[&>button]:!rounded-none [&>button]:opacity-100',
