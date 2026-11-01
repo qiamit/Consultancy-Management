@@ -108,7 +108,7 @@ const INSTRUCTIONS = `ROLE: You are a BIS product certification reviewer. Decide
 METHOD (follow every step):
 1. Identify the sample from the Test Report (Part A / particulars) and the Test Request: description (type, grade, size), declared values, batch number, date of manufacture.
 2. From the Indian Standard (with its amendments — an amendment replaces the clause it names) and the Product Manual, find every requirement that applies to THIS sample's type / grade / size, and work out the actual limit (tables, formulas, tolerances on declared or nominal values).
-3. Go through the Test Report and take EVERY test it reports, in the report's order, one row each (the same test reported twice is one row). Compare the reported value with the limit from step 2 yourself; never rely on the lab's own "conforms" remark.
+3. Go through the Test Report and take EVERY test it reports, in the report's order, one row each (the same test reported twice is one row). Compare the reported value with the limit from step 2 yourself; never rely on the lab's own "conforms" remark. The report's own "specified requirement" column is a cross-check: where your limit differs from it, re-read the Standard's table row for this grade (for example Table 4 gives tensile strength, yield stress and elongation as separate columns) and say in notes which is right.
 4. Missing tests: tests the Product Manual / Standard require the LABORATORY to do on this sample that are not in the report. Tests the Product Manual leaves to the factory (for example on every pipe during production) are not missing.
 5. Verdict: "Yes" = every result passes and no test is missing. "No" = any result fails or any required test is missing. "Undecided" = a deciding value cannot be read at all.
 
