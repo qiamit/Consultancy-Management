@@ -6,13 +6,16 @@ const SMALL_ENOUGH = 250 * 1024
 /** Size the compression aims for. */
 const TARGET_BYTES = 1024 * 1024
 /**
- * Picture quality steps for scanned pages, best first: the first step that brings the file under TARGET_BYTES is
- * used. The last step (~115 DPI) is the floor at which report tables are still clearly readable by people and OCR.
+ * Picture steps for scanned pages, best first: the first step that brings the file under TARGET_BYTES is used.
+ * Resolution matters more than JPEG quality for reading small table figures (people and OCR), so 150 DPI is kept
+ * while the quality steps down; 130 DPI is the last resort.
  */
 const STEPS = [
-  { dpi: 150, quality: 0.72 },
-  { dpi: 130, quality: 0.66 },
-  { dpi: 115, quality: 0.6 },
+  { dpi: 150, quality: 0.6 },
+  { dpi: 150, quality: 0.48 },
+  { dpi: 150, quality: 0.38 },
+  { dpi: 150, quality: 0.3 },
+  { dpi: 130, quality: 0.35 },
 ]
 const MAX_SIDE_PX = 2200
 /** Very long PDFs are only re-saved (rendering every page would take too long in the browser). */
@@ -94,8 +97,8 @@ async function rebuild(data: ArrayBuffer, pdf: PdfJsDoc, scanned: Set<number>, s
 
 /**
  * Makes a PDF as small as it can be while staying readable, before it is uploaded: a lossless re-save, then — when
- * it has scanned pages — a rebuild with those pages as JPEGs, stepping the picture quality down (150 → 130 → 115 DPI)
- * until the file is under 1 MB. Text pages are never turned into pictures. Anything that fails, or does not shrink,
+ * it has scanned pages — a rebuild with those pages as JPEGs at 150 DPI, stepping the JPEG quality down until the
+ * file is under 1 MB. Text pages are never turned into pictures. Anything that fails, or does not shrink,
  * keeps the original file. Non-PDF files are returned unchanged.
  */
 export async function compressPdfForUpload(file: File): Promise<CompressedPdf> {
