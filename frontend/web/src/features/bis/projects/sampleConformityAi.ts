@@ -103,9 +103,10 @@ const INSTRUCTIONS = `You are a BIS product certification reviewer checking one 
 Use ONLY the documents below. Work in this order:
 1. Identify the exact sample (grade / type / size / class / declared values) from the Test Request and the sample details.
 2. From the Indian Standard and the Product Manual (scheme of testing), list every test / requirement that applies to THIS sample, with clause numbers and limits (including tolerances on declared values). Amendments printed with the Standard replace the clauses they name: use the amended text.
-3. For each test in the Test Report, compare the reported result with the applicable requirement: Pass, Fail, or Not Clear (when the requirement or the result cannot be read). Work out the limit for this sample's size / grade yourself (tables, formulas, tolerances); do not just copy the lab's own remark.
-4. List the required tests that are missing from the Test Report (compare with "Test Required" and the Product Manual).
-5. Verdict: "Yes" only when every reported result passes and no required test is missing; "No" when any result fails the requirement (even if the lab wrote "conforms"); "Undecided" when the documents are not enough to decide (say why in notes).
+3. For each test in the Test Report, compare the reported result with the applicable requirement: Pass or Fail. Work out the limit for this sample's size / grade yourself (tables, formulas, tolerances); do not just copy the lab's own remark.
+4. List the required tests that are missing from the Test Report. Which tests the laboratory must do comes from the Product Manual (tests on the sample drawn for independent testing / "Test Required"); tests the Product Manual leaves to the factory (for example a test on every pipe during production) are not missing from a lab report.
+5. Verdict: "Yes" when every applicable result passes and no required test is missing; "No" when any applicable result fails (even if the lab wrote "conforms") or a required test is missing; "Undecided" only when a deciding figure cannot be read at all (say which in notes).
+Scanned reports are read by OCR, which confuses digits (0↔8, 0↔6, 1↔7, 5↔S). When the two reads differ, or a figure is impossible for its unit or limit (8.26 for a ratio whose limit is 0.45; 16.660 kg/m for 10.60 nominal), take the plausible reading, judge it, and say so in the result. Use "Not Clear" only when no plausible reading exists.
 Do not invent values. Quote results and limits as written. Keep wording short.
 Reply with JSON only:
 {"verdict":"Yes|No|Undecided","summary":"one or two sentences","results":[{"parameter":"","clause":"","requirement":"","result":"","verdict":"Pass|Fail|Not Clear"}],"missing_tests":["test (clause)"],"notes":["…"]}`
