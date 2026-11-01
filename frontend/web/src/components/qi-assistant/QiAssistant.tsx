@@ -141,7 +141,6 @@ export function QiAssistant({
   page,
   pageTitle,
   contextSummary,
-  suggestedQuestions,
   isCodeId,
   isCodeOptions,
   activeRecordId,
@@ -158,6 +157,7 @@ export function QiAssistant({
   page: string
   pageTitle: string
   contextSummary: string
+  /** No longer shown (the Try Asking list was removed); kept so existing callers compile. */
   suggestedQuestions?: string[]
   isCodeId?: string
   /** Header assistant: user picks IS code to load PDFs for test-parameter import */
@@ -251,13 +251,6 @@ export function QiAssistant({
     )
   }, [attachOptions, attachTrigger])
 
-  const defaults = [
-    'How do I add a new client?',
-    'What does balance type Dr and Cr mean?',
-    'Summarize the clients shown in the list',
-  ]
-
-  const prompts = suggestedQuestions ?? defaults
   const isClientsPage = page === 'clients'
 
   const showIsCodePicker = Boolean(isCodeOptions?.length) && !isCodeId
@@ -786,24 +779,6 @@ export function QiAssistant({
           )}
         </div>
 
-        {messages.length <= 1 && prompts.length > 0 && (
-          <div className="space-y-2 border-t border-stone-400 bg-[#fffcf7] px-4 py-3 sm:px-5">
-            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-amber-800/80">Try Asking</p>
-            <div className="flex flex-col gap-1.5">
-              {prompts.map((q) => (
-                <button
-                  key={q}
-                  type="button"
-                  className="border border-stone-400 bg-white px-3 py-2 text-left text-xs text-stone-700 transition-colors hover:border-amber-600 hover:bg-amber-50 hover:text-amber-950"
-                  onClick={() => void sendMessage(q)}
-                  disabled={loading}
-                >
-                  {q}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
 
         {error && (
           <p className="border-t border-red-300 bg-red-50 px-4 py-2 text-xs text-red-700 sm:px-5">{error}</p>
