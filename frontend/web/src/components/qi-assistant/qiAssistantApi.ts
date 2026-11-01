@@ -4,6 +4,27 @@ export type QiChatMessage = {
   id: string
   role: 'user' | 'assistant'
   content: string
+  /** Admin Agent: the steps taken, changes waiting for confirmation and pages opened for this answer. */
+  agent?: QiAgentResult
+}
+
+export type QiAgentStep = { tool: string; summary: string; error?: boolean }
+
+export type QiAgentProposal = {
+  key: string
+  action: 'create' | 'update' | 'delete'
+  table: string
+  id: string | null
+  values: Record<string, unknown>
+  /** update: the changed columns before; delete: the whole row. */
+  before: Record<string, unknown> | null
+  summary: string
+}
+
+export type QiAgentResult = {
+  steps: QiAgentStep[]
+  proposals: QiAgentProposal[]
+  navigation: { path: string; label: string }[]
 }
 
 export type QiAssistantActionResult = {
@@ -18,6 +39,7 @@ export type QiAssistantResponse = {
   reply: string
   actionsExecuted?: QiAssistantActionResult[]
   createdIsCodeId?: string
+  agent?: QiAgentResult
 }
 
 const MAX_PDF_BYTES = 5 * 1024 * 1024
@@ -79,6 +101,7 @@ async function postQiAssistant(body: Record<string, unknown>): Promise<QiAssista
     error?: string | { message?: string }
     actionsExecuted?: QiAssistantActionResult[]
     createdIsCodeId?: string
+    agent?: Partial<QiAgentResult>
   } | null
   if (!response.ok) {
     const err = payload?.error
@@ -95,6 +118,13 @@ async function postQiAssistant(body: Record<string, unknown>): Promise<QiAssista
     reply: String(payload?.reply ?? '').trim() || 'No response.',
     actionsExecuted: payload?.actionsExecuted,
     createdIsCodeId: payload?.createdIsCodeId,
+    agent: payload?.agent
+      ? {
+          steps: Array.isArray(payload.agent.steps) ? payload.agent.steps : [],
+          proposals: Array.isArray(payload.agent.proposals) ? payload.agent.proposals : [],
+          navigation: Array.isArray(payload.agent.navigation) ? payload.agent.navigation : [],
+        }
+      : undefined,
   }
 }
 
@@ -163,8 +193,14 @@ export async function sendQiAssistantMessage(input: {
    */
   images?: string[]
   history: Array<{ role: 'user' | 'assistant'; content: string }>
+  /** Admin Agent (admins with Two-Step Login): tools over the whole app. */
+  mode?: 'agent'
+  /** App pages the agent may open (path + name). */
+  routes?: Array<{ path: string; label: string }>
 }): Promise<QiAssistantResponse> {
   const body: Record<string, unknown> = {
+    mode: input.mode,
+    routes: input.routes,
     page: input.page,
     message: input.message,
     context: input.context,

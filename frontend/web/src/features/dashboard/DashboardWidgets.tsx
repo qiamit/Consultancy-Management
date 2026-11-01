@@ -60,7 +60,6 @@ export function Sparkline({ values, className }: { values: number[]; className?:
 export type KpiTileProps = {
   label: string
   value: string
-  detail?: ReactNode
   icon: ElementType
   tone?: Tone
   href?: string | null
@@ -68,7 +67,7 @@ export type KpiTileProps = {
   ariaLabel?: string
 }
 
-export function KpiTile({ label, value, detail, icon: Icon, tone = 'neutral', href, spark, ariaLabel }: KpiTileProps) {
+export function KpiTile({ label, value, icon: Icon, tone = 'neutral', href, spark, ariaLabel }: KpiTileProps) {
   const body = (
     <>
       <span aria-hidden="true" className={cn('absolute inset-y-0 left-0 w-1', TONE_BAR[tone])} />
@@ -83,18 +82,17 @@ export function KpiTile({ label, value, detail, icon: Icon, tone = 'neutral', hr
           <Icon className="h-4 w-4" />
         </span>
       </div>
-      <div className="mt-1 flex min-w-0 items-end justify-between gap-2">
+      <div className="mt-0.5 flex min-w-0 items-end justify-between gap-2">
         <p className="min-w-0 truncate font-jakarta text-2xl font-bold tabular-nums text-foreground sm:text-[1.7rem]">
           {value}
         </p>
         {spark ? <Sparkline values={spark} className="mb-1" /> : null}
       </div>
-      {detail ? <p className="mt-0.5 min-w-0 truncate text-xs text-muted-foreground">{detail}</p> : null}
     </>
   )
   const cls = cn(
     limsPanelClass,
-    'relative block min-h-[7.25rem] py-3 pl-4 pr-3 transition',
+    'relative block py-2 pl-4 pr-3 transition',
     href && 'hover:border-amber-600/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600',
   )
   if (href) {
@@ -113,10 +111,9 @@ export function KpiTile({ label, value, detail, icon: Icon, tone = 'neutral', hr
 
 export function KpiTileSkeleton() {
   return (
-    <div className={cn(limsPanelClass, 'min-h-[7.25rem] space-y-3 p-3 pl-4')} aria-hidden="true">
+    <div className={cn(limsPanelClass, 'min-h-[5.25rem] space-y-3 py-2 pl-4 pr-3')} aria-hidden="true">
       <Skeleton className="h-3 w-24" />
       <Skeleton className="h-7 w-20" />
-      <Skeleton className="h-3 w-32" />
     </div>
   )
 }
@@ -158,13 +155,11 @@ export function SrDataTable({ table }: { table: SrTable }) {
 
 export function CardHeader({
   title,
-  subtitle,
   href,
   linkLabel = 'Open',
   right,
 }: {
   title: string
-  subtitle?: ReactNode
   href?: string | null
   linkLabel?: string
   right?: ReactNode
@@ -173,7 +168,6 @@ export function CardHeader({
     <div className="flex min-w-0 flex-wrap items-start justify-between gap-x-3 gap-y-1 border-b border-[rgb(var(--lims-paper-border))] px-4 py-3">
       <div className="min-w-0">
         <h2 className="font-jakarta text-sm font-bold text-foreground sm:text-base">{title}</h2>
-        {subtitle ? <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p> : null}
       </div>
       <div className="flex shrink-0 items-center gap-2">
         {right}

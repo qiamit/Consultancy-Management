@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { FileUp, ImagePlus, Loader2, Mic, MicOff, Send, Sparkles, X } from 'lucide-react'
+import { FileText, FileUp, FolderUp, ImagePlus, Loader2, Mic, MicOff, Paperclip, Plus, RotateCcw, Send, ShieldCheck, Sparkles, X } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { IsCodeSearchPicker } from './IsCodeSearchPicker'
@@ -14,10 +16,15 @@ import { Textarea } from '@/components/ui/textarea'
 import { supabase } from '@/lib/supabaseClient'
 import { AI_SETTINGS_SINGLETON_ID } from '@/features/settings/ai-settings/types'
 import { useShowAiAssistant } from '@/hooks/useShowAiAssistant'
+import { useIsLaboratoryDirector } from '@/components/lims/LaboratoryDirectorOnly'
+import { flattenNavModules } from '@/lib/appNav'
+import { AgentProposals, AgentSteps } from './QiAgentParts'
+import { readAttachments, toAttachments, type ChatAttachment } from './chatAttachments'
 import {
   sendQiAssistantMessage,
   validateAssistantImageFile,
   validateAssistantPdfFile,
+  type QiAgentResult,
   type QiAssistantActionResult,
   type QiChatMessage,
 } from './qiAssistantApi'
@@ -141,7 +148,6 @@ export function QiAssistant({
   page,
   pageTitle,
   contextSummary,
-  suggestedQuestions,
   isCodeId,
   isCodeOptions,
   activeRecordId,
@@ -158,6 +164,7 @@ export function QiAssistant({
   page: string
   pageTitle: string
   contextSummary: string
+  /** No longer shown (the Try Asking list was removed); kept so existing callers compile. */
   suggestedQuestions?: string[]
   isCodeId?: string
   /** Header assistant: user picks IS code to load PDFs for test-parameter import */
@@ -177,6 +184,12 @@ export function QiAssistant({
   imageAttachHint?: string
 }) {
   const showAssistant = useShowAiAssistant()
+  // QE Assistant is for admins only; the header assistant runs as the Admin Agent (tools over the whole app).
+  const isAdmin = useIsLaboratoryDirector()
+  const agentMode = isAdmin && page === 'global'
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const agentRoutes = useMemo(() => flattenNavModules().map((m) => ({ path: m.key, label: m.label })), [])
   const [open, setOpen] = useState(false)
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -190,6 +203,17 @@ export function QiAssistant({
   const [attachedImage, setAttachedImage] = useState<File | null>(null)
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
   const [listening, setListening] = useState(false)
+  // Files / folders attached with the + button (read in the browser when the message is sent).
+  const [attachments, setAttachments] = useState<ChatAttachment[]>([])
+  const [plusOpen, setPlusOpen] = useState(false)
+  // Voice typing language, remembered in this browser.
+  const [voiceLang, setVoiceLang] = useState<'en-IN' | 'hi-IN'>(() => {
+    try {
+      return window.localStorage.getItem('qe-assistant-voice-lang') === 'hi-IN' ? 'hi-IN' : 'en-IN'
+    } catch {
+      return 'en-IN'
+    }
+  })
   const [voiceSupported, setVoiceSupported] = useState(false)
   const [busyHint, setBusyHint] = useState<string | null>(null)
   const [skillPickerOpen, setSkillPickerOpen] = useState(false)
@@ -203,6 +227,10 @@ export function QiAssistant({
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
   const voiceBaseRef = useRef('')
+  // True while the user wants to keep listening: the browser ends recognition after a silence, so it restarts.
+  const wantListeningRef = useRef(false)
+  const filesInputRef = useRef<HTMLInputElement>(null)
+  const folderInputRef = useRef<HTMLInputElement | null>(null)
 
   const skillTrigger = useMemo(
     () => (skillPickerOpen ? parseSkillTrigger(input, caretPos) : null),
@@ -251,13 +279,6 @@ export function QiAssistant({
     )
   }, [attachOptions, attachTrigger])
 
-  const defaults = [
-    'How do I add a new client?',
-    'What does balance type Dr and Cr mean?',
-    'Summarize the clients shown in the list',
-  ]
-
-  const prompts = suggestedQuestions ?? defaults
   const isClientsPage = page === 'clients'
 
   const showIsCodePicker = Boolean(isCodeOptions?.length) && !isCodeId
@@ -330,8 +351,10 @@ export function QiAssistant({
       ? ' Pick an **IS Code** below so I can read its uploaded PDFs.'
       : ''
     const skillNote = ' Type **/** for **Skills**, **@** to attach a file from your computer.'
-    const intro =
-      welcomeMessage !== undefined
+    // The Admin Agent starts with an empty chat (no welcome message).
+    const intro = agentMode
+      ? ''
+      : welcomeMessage !== undefined
         ? welcomeMessage
         : `Hello! I'm **QE Assistant** on **${pageTitle}**. Ask me about this screen or the data shown here.${crudNote}${imageNote}${pdfNote}${voiceNote}${isCodeNote}${skillNote}`
     if (intro.trim()) {
@@ -342,53 +365,17 @@ export function QiAssistant({
     messages.length,
     pageTitle,
     welcomeMessage,
+    agentMode,
     agentCrudEnabled,
     enablePdfImport,
     enableImageImport,
     showIsCodePicker,
   ])
 
-  const insertComposerToken = (token: '/' | '@') => {
-    const el = textareaRef.current
-    const start = el?.selectionStart ?? input.length
-    const end = el?.selectionEnd ?? start
-    const before = input.slice(0, start)
-    const after = input.slice(end)
-    const needsSpace = before.length > 0 && !/\s$/.test(before)
-
-    // Single attach type → open the computer file picker immediately.
-    if (token === '@' && attachOptions.length === 1) {
-      const option = attachOptions[0]!
-      setSkillPickerOpen(false)
-      setAttachPickerOpen(false)
-      requestAnimationFrame(() => {
-        if (option.id === 'image') imageInputRef.current?.click()
-        else pdfInputRef.current?.click()
-        el?.focus()
-      })
-      return
-    }
-
-    const next = `${before}${needsSpace ? ' ' : ''}${token}${after}`
-    const caret = before.length + (needsSpace ? 1 : 0) + 1
-    setInput(next)
-    setCaretPos(caret)
-    if (token === '/') {
-      setAttachPickerOpen(false)
-      setSkillPickerOpen(true)
-      setSkillHighlight(0)
-    } else {
-      setSkillPickerOpen(false)
-      setAttachPickerOpen(attachOptions.length > 0)
-      setAttachHighlight(0)
-    }
-    requestAnimationFrame(() => {
-      el?.focus()
-      el?.setSelectionRange(caret, caret)
-    })
-  }
-
-  const appendAssistantResult = (reply: string, actionsExecuted?: QiAssistantActionResult[]) => {
+  const appendAssistantResult = (reply: string, actionsExecuted?: QiAssistantActionResult[], agent?: QiAgentResult) => {
+    // Admin Agent: open the page it chose (the panel stays open beside it).
+    const target = agent?.navigation.at(-1)
+    if (target?.path) navigate(target.path)
     let content = reply
     if (actionsExecuted?.length) {
       const lines = actionsExecuted.map(
@@ -397,7 +384,20 @@ export function QiAssistant({
       content = `${reply}\n\n**Database changes:**\n${lines.join('\n')}`
       if (actionsExecuted.some((a) => a.ok)) onDataChanged?.()
     }
-    setMessages((prev) => [...prev, { id: newId(), role: 'assistant', content }])
+    setMessages((prev) => [...prev, { id: newId(), role: 'assistant', content, agent }])
+  }
+
+  /** Confirmed agent changes: tell the chat (so the agent knows next turn) and refresh what the app shows. */
+  const handleAgentApplied = (lines: string[]) => {
+    setMessages((prev) => [...prev, { id: newId(), role: 'assistant', content: lines.join('\n') }])
+    void queryClient.invalidateQueries()
+    onDataChanged?.()
+  }
+
+  const resetChat = () => {
+    setMessages([])
+    setError(null)
+    setInput('')
   }
 
   const stripTriggerFromInput = (trigger: SkillTriggerMatch | null) => {
@@ -471,59 +471,115 @@ export function QiAssistant({
   }
 
   const stopListening = useCallback(() => {
+    wantListeningRef.current = false
     recognitionRef.current?.stop()
     setListening(false)
   }, [])
 
+  const VOICE_ERRORS: Record<string, string> = {
+    'not-allowed': 'Allow Microphone Access for This Site (Lock Icon in the Address Bar → Microphone), Then Try Again.',
+    'service-not-allowed': 'Allow Microphone Access for This Site, Then Try Again.',
+    'audio-capture': 'No Microphone Found. Connect a Microphone and Try Again.',
+    network: 'Voice Typing Needs an Internet Connection.',
+    'language-not-supported': 'This Browser Cannot Type This Language by Voice.',
+  }
+
+  const startRecognition = (lang: 'en-IN' | 'hi-IN') => {
+    const Ctor = getSpeechRecognitionCtor()
+    if (!Ctor) return
+    const recognition = new Ctor()
+    recognition.continuous = true
+    recognition.interimResults = true
+    recognition.lang = lang
+    recognition.onresult = (event) => {
+      let interim = ''
+      let finalChunk = ''
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const piece = event.results[i]![0]!.transcript
+        if (event.results[i]!.isFinal) finalChunk += piece
+        else interim += piece
+      }
+      if (finalChunk) {
+        const base = voiceBaseRef.current
+        const joiner = base && !/\s$/.test(base) ? ' ' : ''
+        voiceBaseRef.current = `${base}${joiner}${finalChunk.trim()} `.replace(/\s+/g, ' ')
+      }
+      setInput(`${voiceBaseRef.current}${interim}`.trimStart())
+    }
+    recognition.onerror = (event) => {
+      if (event.error === 'aborted' || event.error === 'no-speech') return
+      wantListeningRef.current = false
+      setError(VOICE_ERRORS[String(event.error)] ?? `Voice Typing Stopped (${String(event.error)}).`)
+      setListening(false)
+    }
+    recognition.onend = () => {
+      recognitionRef.current = null
+      // Keep listening through pauses until the user taps the mic again (or sends).
+      if (wantListeningRef.current) {
+        try {
+          startRecognition(lang)
+          return
+        } catch {
+          wantListeningRef.current = false
+        }
+      }
+      setListening(false)
+    }
+    recognitionRef.current = recognition
+    recognition.start()
+  }
+
   const toggleListening = () => {
     if (loading) return
-    const Ctor = getSpeechRecognitionCtor()
-    if (!Ctor) {
-      setError('Voice typing is not supported in this browser. Try Chrome or Edge.')
+    if (!getSpeechRecognitionCtor()) {
+      setError('Voice Typing Works in Chrome or Edge. This Browser Does Not Support It.')
       return
     }
-
     if (listening) {
       stopListening()
       return
     }
-
     try {
-      const recognition = new Ctor()
-      recognition.continuous = true
-      recognition.interimResults = true
-      recognition.lang = 'en-IN'
       voiceBaseRef.current = input.trim() ? `${input.trim()} ` : ''
-      recognition.onresult = (event) => {
-        let interim = ''
-        let finalChunk = ''
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const piece = event.results[i]![0]!.transcript
-          if (event.results[i]!.isFinal) finalChunk += piece
-          else interim += piece
-        }
-        if (finalChunk) {
-          voiceBaseRef.current = `${voiceBaseRef.current}${finalChunk}`.replace(/\s+/g, ' ')
-        }
-        setInput(`${voiceBaseRef.current}${interim}`.trimStart())
-      }
-      recognition.onerror = (event) => {
-        if (event.error === 'aborted' || event.error === 'no-speech') return
-        setError(event.error === 'not-allowed' ? 'Microphone permission denied.' : `Voice error: ${event.error}`)
-        setListening(false)
-      }
-      recognition.onend = () => {
-        setListening(false)
-        recognitionRef.current = null
-      }
-      recognitionRef.current = recognition
-      recognition.start()
+      wantListeningRef.current = true
+      startRecognition(voiceLang)
       setListening(true)
       setError(null)
     } catch {
-      setError('Could not start voice typing.')
+      wantListeningRef.current = false
+      setError('Could Not Start Voice Typing.')
       setListening(false)
     }
+  }
+
+  const switchVoiceLang = () => {
+    const next = voiceLang === 'en-IN' ? 'hi-IN' : 'en-IN'
+    setVoiceLang(next)
+    try {
+      window.localStorage.setItem('qe-assistant-voice-lang', next)
+    } catch {
+      /* private mode: not remembered */
+    }
+    // Restart in the new language when already listening.
+    if (listening) {
+      recognitionRef.current?.abort()
+      recognitionRef.current = null
+      try {
+        voiceBaseRef.current = input.trim() ? `${input.trim()} ` : ''
+        startRecognition(next)
+      } catch {
+        stopListening()
+      }
+    }
+  }
+
+  const addAttachments = (files: FileList | null) => {
+    if (!files?.length) return
+    // Copy now: the input is cleared right after, which empties its live FileList before the state updates.
+    const list = Array.from(files)
+    setAttachments((prev) => [...prev, ...toAttachments(list, prev)])
+    setPlusOpen(false)
+    requestAnimationFrame(() => textareaRef.current?.focus())
   }
 
   useEffect(() => {
@@ -534,7 +590,8 @@ export function QiAssistant({
     async (text: string) => {
       const trimmed =
         text.trim() ||
-        (attachedImage && isClientsPage ? CLIENT_CARD_SAVE_PROMPT : '')
+        (attachedImage && isClientsPage ? CLIENT_CARD_SAVE_PROMPT : '') ||
+        (attachments.length ? 'Read the attached files and summarise them.' : '')
       if (!trimmed || loading) return
 
       if (
@@ -555,10 +612,14 @@ export function QiAssistant({
       const skillTag = selectedSkill ? `[Skill: ${selectedSkill.name}] ` : ''
       const pdfTag = attachedPdf ? `📎 PDF: ${attachedPdf.name}\n\n` : ''
       const imageTag = attachedImage ? `🖼️ Card/Photo: ${attachedImage.name}\n\n` : ''
+      const files = attachments
+      const filesTag = files.length
+        ? `**Attached (${files.length}):** ${files.slice(0, 6).map((a) => a.path).join(', ')}${files.length > 6 ? ` +${files.length - 6} more` : ''}\n\n`
+        : ''
       const userMsg: QiChatMessage = {
         id: newId(),
         role: 'user',
-        content: `${skillTag}${pdfTag}${imageTag}${trimmed}`,
+        content: `${skillTag}${pdfTag}${imageTag}${filesTag}${trimmed}`,
       }
       const skillId = selectedSkill?.id
       const pdfFile = attachedPdf
@@ -566,11 +627,14 @@ export function QiAssistant({
       setSelectedSkill(null)
       setAttachedPdf(null)
       setAttachedImage(null)
+      setAttachments([])
 
       setMessages((prev) => [...prev, userMsg])
       setLoading(true)
       setBusyHint(
-        imageFile
+        files.length
+          ? `Reading ${files.length} attached file${files.length === 1 ? '' : 's'}…`
+          : imageFile
           ? 'Reading card photo and saving client…'
           : pdfFile
             ? 'Reading attached PDF…'
@@ -585,9 +649,13 @@ export function QiAssistant({
           .slice(-10)
           .map((m) => ({ role: m.role, content: m.content }))
 
-        const { reply, actionsExecuted } = await sendQiAssistantMessage({
+        const read = files.length ? await readAttachments(files) : null
+        if (read) setBusyHint('Working…')
+        const { reply, actionsExecuted, agent } = await sendQiAssistantMessage({
+          ...(agentMode ? { mode: 'agent' as const, routes: agentRoutes } : {}),
+          ...(read?.images.length ? { images: read.images } : {}),
           page,
-          message: trimmed,
+          message: read?.text ? `${trimmed}\n\n${read.text}` : trimmed,
           context: contextSummary,
           isCodeId: effectiveIsCodeId,
           activeRecordId,
@@ -598,7 +666,7 @@ export function QiAssistant({
           history,
         })
 
-        appendAssistantResult(reply, actionsExecuted)
+        appendAssistantResult(reply, actionsExecuted, agent)
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Unable to get a response'
         setError(msg)
@@ -616,12 +684,15 @@ export function QiAssistant({
       activeRecordTable,
       attachedImage,
       attachedPdf,
+      attachments,
       contextSummary,
       effectiveIsCodeId,
       isClientsPage,
       loading,
       messages,
       page,
+      agentMode,
+      agentRoutes,
       selectedSkill,
       showIsCodePicker,
       stopListening,
@@ -695,12 +766,13 @@ export function QiAssistant({
     }
   }
 
-  if (!showAssistant) return null
+  if (!showAssistant || !isAdmin) return null
 
-  const canSend = Boolean(input.trim() || (attachedImage && isClientsPage))
+  const canSend = Boolean(input.trim() || (attachedImage && isClientsPage) || attachments.length)
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    // The Admin Agent panel is not modal: the page behind stays usable (and shows what the agent opened).
+    <Dialog open={open} onOpenChange={setOpen} modal={!agentMode}>
       <DialogTrigger asChild>
         {triggerVariant === 'icon' ? (
           <Button
@@ -734,10 +806,16 @@ export function QiAssistant({
       </DialogTrigger>
       <DialogContent
         aria-describedby={undefined}
+        onInteractOutside={(e) => {
+          if (agentMode) e.preventDefault()
+        }}
         className={cn(
-          'flex max-h-[90dvh] w-[calc(100vw-1rem)] flex-col gap-0 overflow-hidden rounded-none border-4 border-stone-700 bg-[#fffcf7] p-0 shadow-2xl ring-2 ring-amber-700/35 sm:max-w-xl',
-          'md:top-1/2 md:!-translate-x-1/2 md:!-translate-y-1/2',
+          'flex flex-col gap-0 overflow-hidden rounded-none border-4 border-stone-700 bg-[#fffcf7] p-0 shadow-2xl ring-2 ring-amber-700/35',
           '[&>button]:!rounded-none [&>button]:opacity-100',
+          agentMode
+            ? // Admin Agent: a full-height panel on the right, so the page it opens stays visible beside it.
+              'left-auto right-0 top-0 h-[100dvh] max-h-[100dvh] w-[min(34rem,100vw)] max-w-none translate-x-0 translate-y-0 border-y-0 border-r-0'
+            : 'max-h-[90dvh] w-[calc(100vw-1rem)] sm:max-w-xl md:top-1/2 md:!-translate-x-1/2 md:!-translate-y-1/2',
         )}
       >
         <div className="relative shrink-0 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-3 text-white sm:px-5">
@@ -755,15 +833,35 @@ export function QiAssistant({
                 <Sparkles size={16} className="text-amber-200" />
               </span>
               <span className="min-w-0 truncate">
-                {assistantDialogTitle(activeRecordTable, effectiveIsCodeId, page)}
+                {agentMode ? 'QE Assistant' : assistantDialogTitle(activeRecordTable, effectiveIsCodeId, page)}
               </span>
+              {agentMode ? (
+                <span className="inline-flex shrink-0 items-center gap-1 border border-emerald-400/50 bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-200">
+                  <ShieldCheck size={12} aria-hidden /> Admin Agent
+                </span>
+              ) : null}
+              {agentMode && messages.length > 0 ? (
+                <button
+                  type="button"
+                  className="ml-auto inline-flex h-7 w-7 shrink-0 items-center justify-center border border-amber-500/40 bg-stone-800/80 text-amber-100 hover:bg-amber-500/20"
+                  title="New Chat"
+                  aria-label="New Chat"
+                  disabled={loading}
+                  onClick={resetChat}
+                >
+                  <RotateCcw size={14} aria-hidden />
+                </button>
+              ) : null}
             </DialogTitle>
           </DialogHeader>
         </div>
 
         <div
           ref={scrollRef}
-          className="min-h-[220px] max-h-[42dvh] flex-1 space-y-3 overflow-y-auto bg-gradient-to-b from-[#f7f3eb] to-[#fffcf7] px-4 py-3 sm:px-5"
+          className={cn(
+            'flex-1 space-y-3 overflow-y-auto bg-gradient-to-b from-[#f7f3eb] to-[#fffcf7] px-4 py-3 sm:px-5',
+            agentMode ? 'min-h-0' : 'min-h-[220px] max-h-[42dvh]',
+          )}
         >
           {messages.map((m) => (
             <div
@@ -776,6 +874,12 @@ export function QiAssistant({
               )}
             >
               <AssistantMessage content={m.content} />
+              {m.agent ? (
+                <>
+                  <AgentSteps steps={m.agent.steps} />
+                  <AgentProposals proposals={m.agent.proposals} onApplied={handleAgentApplied} />
+                </>
+              ) : null}
             </div>
           ))}
           {loading && (
@@ -786,24 +890,6 @@ export function QiAssistant({
           )}
         </div>
 
-        {messages.length <= 1 && prompts.length > 0 && (
-          <div className="space-y-2 border-t border-stone-400 bg-[#fffcf7] px-4 py-3 sm:px-5">
-            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-amber-800/80">Try Asking</p>
-            <div className="flex flex-col gap-1.5">
-              {prompts.map((q) => (
-                <button
-                  key={q}
-                  type="button"
-                  className="border border-stone-400 bg-white px-3 py-2 text-left text-xs text-stone-700 transition-colors hover:border-amber-600 hover:bg-amber-50 hover:text-amber-950"
-                  onClick={() => void sendMessage(q)}
-                  disabled={loading}
-                >
-                  {q}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
 
         {error && (
           <p className="border-t border-red-300 bg-red-50 px-4 py-2 text-xs text-red-700 sm:px-5">{error}</p>
@@ -1034,59 +1120,65 @@ export function QiAssistant({
             </>
           )}
 
-          <div className="space-y-1.5 p-3 sm:p-4">
-            <div className="flex items-end gap-1.5 sm:gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                className={cn(
-                  'h-10 w-10 shrink-0 rounded-none border-stone-500 font-bold text-amber-800 hover:bg-amber-50',
-                  skillPickerOpen && 'border-amber-600 bg-amber-50',
-                )}
-                aria-label="Pick AI Skill"
-                disabled={loading}
-                title="Type / for Skills"
-                onClick={() => insertComposerToken('/')}
-              >
-                /
-              </Button>
-              {(enableImageImport || enablePdfImport) && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className={cn(
-                    'h-10 w-10 shrink-0 rounded-none border-stone-500 font-bold text-amber-800 hover:bg-amber-50',
-                    attachPickerOpen && 'border-amber-600 bg-amber-50',
-                  )}
-                  aria-label="Attach File from Computer"
-                  disabled={loading}
-                  title="Type @ to attach a file from your computer"
-                  onClick={() => insertComposerToken('@')}
-                >
-                  @
-                </Button>
+          <div className="space-y-2 p-3 sm:p-4">
+            <input
+              ref={filesInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                addAttachments(e.target.files)
+                e.target.value = ''
+              }}
+            />
+            <input
+              ref={(el) => {
+                folderInputRef.current = el
+                // Folder picking is not in React's input typings.
+                el?.setAttribute('webkitdirectory', '')
+                el?.setAttribute('directory', '')
+              }}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                addAttachments(e.target.files)
+                e.target.value = ''
+              }}
+            />
+            {listening ? (
+              <div className="flex items-center gap-2 border border-red-300 bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-700" role="status">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
+                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-600" />
+                </span>
+                Listening — Speak Now ({voiceLang === 'hi-IN' ? 'Hindi' : 'English'}). Tap the Mic to Stop.
+              </div>
+            ) : null}
+            <div
+              className={cn(
+                'border-2 bg-white shadow-sm transition-colors focus-within:border-amber-600 focus-within:ring-2 focus-within:ring-amber-500/20',
+                listening ? 'border-red-400' : 'border-stone-400',
               )}
-              {voiceSupported && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className={cn(
-                    'h-10 w-10 shrink-0 rounded-none border-stone-500',
-                    listening
-                      ? 'border-red-600 bg-red-50 text-red-700 hover:bg-red-100'
-                      : 'text-stone-700 hover:bg-amber-50 hover:text-amber-900',
-                  )}
-                  aria-label={listening ? 'Stop voice typing' : 'Start voice typing'}
-                  disabled={loading}
-                  title={listening ? 'Stop listening' : 'Voice typing'}
-                  onClick={toggleListening}
-                >
-                  {listening ? <MicOff size={18} /> : <Mic size={18} />}
-                </Button>
-              )}
+            >
+              {attachments.length ? (
+                <div className="flex max-h-24 flex-wrap gap-1.5 overflow-y-auto border-b border-stone-200 p-2">
+                  {attachments.map((a) => (
+                    <span key={a.id} className="inline-flex max-w-[14rem] items-center gap-1 border border-stone-300 bg-stone-50 py-0.5 pl-1.5 pr-0.5 text-[11px] text-stone-700" title={a.path}>
+                      {a.kind === 'image' ? <ImagePlus size={12} className="shrink-0 text-amber-700" aria-hidden /> : <FileText size={12} className="shrink-0 text-amber-700" aria-hidden />}
+                      <span className="truncate">{a.path}</span>
+                      <button
+                        type="button"
+                        className="inline-flex h-5 w-5 shrink-0 items-center justify-center text-stone-500 hover:bg-red-50 hover:text-red-700"
+                        aria-label={`Remove ${a.path}`}
+                        onClick={() => setAttachments((prev) => prev.filter((x) => x.id !== a.id))}
+                      >
+                        <X size={12} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              ) : null}
               <Textarea
                 ref={textareaRef}
                 value={input}
@@ -1104,44 +1196,101 @@ export function QiAssistant({
                   attachedImage && isClientsPage
                     ? 'Card attached — Send to save client, or edit the prompt…'
                     : attachedPdf
-                      ? page === 'samples/receiving'
-                        ? 'e.g. Register this test request as a new sample…'
-                        : 'Type command for attached PDF, then Send…'
+                      ? 'Type command for attached PDF, then Send…'
                       : showIsCodePicker
-                        ? 'Select IS Code, type / for skill, ask to import…'
-                        : page === 'samples/receiving'
-                          ? 'Type @ to attach Test Request PDF, then ask…'
-                          : 'Ask anything — / skills · @ attach file…'
+                        ? 'Select IS Code, then ask…'
+                        : listening
+                          ? 'Listening…'
+                          : 'Ask Anything, or Tell Me What to Do…'
                 }
-                className="min-h-10 max-h-28 flex-1 resize-none rounded-none border-stone-500 bg-stone-50 shadow-none focus-visible:border-amber-600 focus-visible:ring-amber-500/20"
-                rows={1}
+                className="min-h-[3.25rem] max-h-40 w-full resize-none rounded-none border-0 bg-transparent px-3 py-2.5 text-sm shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                rows={2}
                 onKeyDown={handleInputKeyDown}
                 disabled={loading}
                 aria-label="Message to QE Assistant"
                 aria-expanded={skillPickerOpen || attachPickerOpen}
                 aria-autocomplete="list"
               />
-              <Button
-                type="button"
-                size="icon"
-                className="h-10 w-10 shrink-0 rounded-none bg-amber-700 text-white hover:bg-amber-800"
-                aria-label="Send Message"
-                disabled={loading || !canSend}
-                onClick={() => void sendMessage(input)}
-              >
-                <Send size={18} />
-              </Button>
+              <div className="flex items-center gap-1.5 border-t border-stone-200 bg-stone-50/70 px-2 py-1.5">
+                <div className="relative">
+                  <button
+                    type="button"
+                    className={cn(
+                      'inline-flex h-8 w-8 items-center justify-center border text-amber-800 transition-colors',
+                      plusOpen ? 'border-amber-600 bg-amber-100' : 'border-stone-400 bg-white hover:bg-amber-50',
+                    )}
+                    aria-label="Attach Files or a Folder"
+                    title="Attach Files or a Folder From the Computer"
+                    disabled={loading}
+                    onClick={() => setPlusOpen((v) => !v)}
+                  >
+                    <Plus size={16} />
+                  </button>
+                  {plusOpen ? (
+                    <div className="absolute bottom-full left-0 z-20 mb-1 w-52 border-2 border-stone-600 bg-white py-1 shadow-xl" role="menu">
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-stone-800 hover:bg-amber-50"
+                        onClick={() => filesInputRef.current?.click()}
+                      >
+                        <Paperclip size={15} className="text-amber-700" aria-hidden /> Attach Files
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-stone-800 hover:bg-amber-50"
+                        onClick={() => folderInputRef.current?.click()}
+                      >
+                        <FolderUp size={15} className="text-amber-700" aria-hidden /> Attach Folder
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+                {voiceSupported ? (
+                  <>
+                    <button
+                      type="button"
+                      className={cn(
+                        'inline-flex h-8 w-8 items-center justify-center border transition-colors',
+                        listening
+                          ? 'border-red-600 bg-red-600 text-white hover:bg-red-700'
+                          : 'border-stone-400 bg-white text-stone-700 hover:bg-amber-50 hover:text-amber-900',
+                      )}
+                      aria-label={listening ? 'Stop Voice Typing' : 'Start Voice Typing'}
+                      title={listening ? 'Stop Listening' : 'Voice Typing'}
+                      disabled={loading}
+                      onClick={toggleListening}
+                    >
+                      {listening ? <MicOff size={16} /> : <Mic size={16} />}
+                    </button>
+                    <button
+                      type="button"
+                      className="inline-flex h-8 items-center border border-stone-400 bg-white px-2 text-[11px] font-bold text-stone-700 hover:bg-amber-50"
+                      title="Voice Typing Language — Click to Switch"
+                      aria-label={`Voice Typing Language: ${voiceLang === 'hi-IN' ? 'Hindi' : 'English'}`}
+                      disabled={loading}
+                      onClick={switchVoiceLang}
+                    >
+                      {voiceLang === 'hi-IN' ? 'हिंदी' : 'EN'}
+                    </button>
+                  </>
+                ) : null}
+                <span className="ml-auto truncate text-[10px] text-stone-400">
+                  {attachments.length ? `${attachments.length} File${attachments.length === 1 ? '' : 's'}` : ''}
+                </span>
+                <button
+                  type="button"
+                  className="inline-flex h-8 items-center gap-1.5 bg-amber-700 px-3 text-xs font-semibold text-white transition-colors hover:bg-amber-800 disabled:opacity-40"
+                  aria-label="Send Message"
+                  disabled={loading || !canSend}
+                  onClick={() => void sendMessage(input)}
+                >
+                  {loading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                  Send
+                </button>
+              </div>
             </div>
-            <p className="px-0.5 text-[10px] font-medium tracking-wide text-stone-500">
-              <span className="text-amber-800">/</span> skills
-              {(enableImageImport || enablePdfImport) && (
-                <>
-                  {' · '}
-                  <span className="text-amber-800">@</span> attach from computer
-                </>
-              )}
-              {voiceSupported ? ' · mic to speak' : ''}
-            </p>
           </div>
         </div>
       </DialogContent>

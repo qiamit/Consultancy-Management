@@ -1,10 +1,12 @@
 /**
  * Railway Node QI Assistant (chat path). The old Deno version was removed on 2026-10-08; see git history at 4e28cc0.
  * Full Deno CRUD/PDF tooling is not ported yet — chat + generate (process description) work.
+ * Admins get the Admin Agent (body.mode = 'agent'): tool calling over the app's data, see qiAgent.mjs.
  */
 
 import dns from 'node:dns/promises'
 import net from 'node:net'
+import { AGENT_SYSTEM_PROMPT, runAgent } from './qiAgent.mjs'
 
 const AI_SETTINGS_ID = '00000000-0000-0000-0000-000000000002'
 
@@ -185,7 +187,7 @@ function extractAiError(payload, status) {
  * }} deps
  */
 export function createQiAssistantHandler(deps) {
-  const { requireUser, rest, readBody, corsJson } = deps
+  const { requireUser, requireAdmin, userRestFor, rest, readBody, corsJson } = deps
 
   return async function handleQiAssistant(req, res) {
     if (req.method === 'OPTIONS') {
@@ -223,6 +225,19 @@ export function createQiAssistantHandler(deps) {
     } catch {
       corsJson(res, 400, { error: 'Invalid JSON' })
       return
+    }
+
+    // Admin Agent (tools over the whole app): active admin with Two-Step Login only.
+    const agentMode = body.mode === 'agent'
+    if (agentMode) {
+      try {
+        await requireAdmin(req)
+      } catch (err) {
+        corsJson(res, Number(err?.statusCode) || 403, {
+          error: String(err?.message || 'QE Assistant Agent Is for Admins Only.'),
+        })
+        return
+      }
     }
 
     const isPdfImport = body.action === 'import_is_code_pdf'
@@ -396,7 +411,15 @@ export function createQiAssistantHandler(deps) {
       settings?.system_prompt_prefix ? String(settings.system_prompt_prefix) : '',
       'You are QE Assistant, a helpful assistant inside Consultancy Pro / Q Engineering (BIS licensing & LIMS). Answer clearly and concisely in English unless the user writes in Hindi.',
       body.page ? `The user is on the "${body.page}" page.` : '',
-      'You cannot modify database records in this build; only explain how the user can do it in the UI.',
+      agentMode
+        ? AGENT_SYSTEM_PROMPT
+        : 'You cannot modify database records in this build; only explain how the user can do it in the UI.',
+      agentMode && Array.isArray(body.routes) && body.routes.length
+        ? `App Pages (path — name):\n${body.routes
+            .slice(0, 200)
+            .map((r) => `${String(r?.path ?? '')} — ${String(r?.label ?? '')}`)
+            .join('\n')}`
+        : '',
       isCodeId
         ? 'When IS code metadata is provided, ground product/process answers in that standard.'
         : '',
@@ -477,6 +500,55 @@ export function createQiAssistantHandler(deps) {
         ...(provider === 'deepseek' && isLongExtraction ? { thinking: { type: 'disabled' } } : {}),
       }),
     })
+
+    if (agentMode) {
+      const callModel = async (messages, tools) => {
+        const r = await fetch(`${apiBase}/chat/completions`, {
+          method: 'POST',
+          redirect: 'error',
+          signal: AbortSignal.timeout(180_000),
+          headers: {
+            Authorization: `Bearer ${String(model.api_key).trim()}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: modelId,
+            messages,
+            tools,
+            tool_choice: 'auto',
+            ...(openAiReasoning
+              ? { max_completion_tokens: chatMaxTokens }
+              : { temperature: Math.min(chatTemperature, 0.3), max_tokens: chatMaxTokens }),
+          }),
+        })
+        const payload = await r.json().catch(() => ({}))
+        if (!r.ok) {
+          console.warn(
+            `[qi-assistant] agent provider error ${r.status} (provider ${provider}, model ${modelId}): ${extractAiError(payload, r.status).slice(0, 500)}`,
+          )
+          const err = new Error(providerErrorMessage(r.status))
+          err.statusCode = 400
+          throw err
+        }
+        return payload?.choices?.[0]?.message ?? {}
+      }
+      try {
+        const result = await runAgent({ callModel, messages: chatMessages, userRest: userRestFor(req), routes: body.routes })
+        corsJson(res, 200, {
+          reply: result.reply,
+          agent: { steps: result.steps, proposals: result.proposals, navigation: result.navigation },
+        })
+      } catch (err) {
+        console.error(`[qi-assistant] agent failed (provider ${provider}, model ${modelId})`, err)
+        const timedOut = Boolean(err && typeof err === 'object' && 'name' in err && err.name === 'TimeoutError')
+        corsJson(res, Number(err?.statusCode) || 502, {
+          error: timedOut
+            ? 'The AI provider took too long to answer. Try again, or send a shorter request.'
+            : err instanceof Error && err.message ? err.message : 'The agent could not finish. Try again.',
+        })
+      }
+      return
+    }
 
     const requestJson = body.responseFormat === 'json_object'
     let aiRes
