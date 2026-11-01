@@ -1079,7 +1079,7 @@ export function QiAssistant({
               <span className="min-w-0 truncate">
                 {agentMode ? 'QE Assistant' : assistantDialogTitle(activeRecordTable, effectiveIsCodeId, page)}
               </span>
-              {agentMode ? (
+              {agentMode && !minimized ? (
                 <span className="inline-flex shrink-0 items-center gap-1 border border-emerald-400/50 bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-200">
                   <ShieldCheck size={12} aria-hidden /> Admin Agent
                 </span>
