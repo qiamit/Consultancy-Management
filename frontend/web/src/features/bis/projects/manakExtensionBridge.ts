@@ -1,6 +1,7 @@
 /** window.postMessage bridge for QE Consultancy browser extension (see frontend/extensions/QE-Extension-Dev/bridge.js). */
 
 import { getPortalPasswordForExtension } from './bisPortalSecretApi'
+import { getCompanyPortalLoginForExtension } from '@/features/settings/lab-settings/companyPortalLoginApi'
 import type { ManakInclusionPayload } from './inclusionPayload'
 import type { ManakRenewalPayload } from '../renewals/renewalPayload'
 import type { ManakNewAppPayload } from './manakNewAppPayload'
@@ -233,6 +234,52 @@ export async function openManakEbisAssist(options: {
       openManakUrl(loginUrl)
       resolve({ extensionUsed: false })
     }, 5000)
+  })
+}
+
+export const BSB_PORTAL_LOGIN_URL = 'https://standardsbis.bsbedge.com/BIS_Login'
+
+/**
+ * BIS Portal (BSB Edge) login with the company's User ID / Password from Company Settings: the extension opens the
+ * login page and fills them; the user types the captcha. Without the extension (or a saved login) the page just opens.
+ */
+export async function openBsbPortalLogin(): Promise<{ filled: boolean; message: string }> {
+  const present = await pingExtension()
+  const login = present ? await getCompanyPortalLoginForExtension('bsb') : null
+  if (!present || !login) {
+    openManakUrl(BSB_PORTAL_LOGIN_URL)
+    return {
+      filled: false,
+      message: present
+        ? 'BIS Portal Login Is Not Saved — Add It in Company Settings → Settings.'
+        : 'Extension Not Detected — Opened the BIS Portal Login in a New Tab.',
+    }
+  }
+  return new Promise((resolve) => {
+    let done = false
+    const finish = (result: { filled: boolean; message: string }, fallback: boolean) => {
+      if (done) return
+      done = true
+      window.removeEventListener('message', onResult)
+      window.clearTimeout(timer)
+      if (fallback) openManakUrl(BSB_PORTAL_LOGIN_URL)
+      resolve(result)
+    }
+    function onResult(event: MessageEvent) {
+      if (event.source !== window || event.origin !== window.location.origin) return
+      if (event.data?.type !== 'QE_BSB_LOGIN_OPEN_RESULT') return
+      const ok = Boolean(event.data.ok)
+      finish({ filled: ok, message: String(event.data.message || '') }, !ok && Boolean(event.data.notOpened))
+    }
+    const timer = window.setTimeout(
+      () => finish({ filled: false, message: 'The Extension Did Not Respond — Reload It and Try Again.' }, false),
+      45000,
+    )
+    window.addEventListener('message', onResult)
+    window.postMessage(
+      { type: 'QE_BSB_LOGIN_OPEN', userId: login.userId, password: login.password },
+      window.location.origin,
+    )
   })
 }
 

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { BookOpen, ChevronDown, ChevronUp, Columns3, Download, Eye, FileText, Plus, Trash2, Upload } from 'lucide-react'
+import { ChevronDown, ChevronUp, Columns3, Download, Eye, FileText, Plus, Trash2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -27,7 +27,6 @@ import {
   limsRegistryFormClass,
 } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
-import { isQeExtensionPresent } from './manakExtensionBridge'
 import {
   loadIsCodeFileLinks,
   type IsCodeFileLink,
@@ -48,37 +47,6 @@ import {
   setBisNotesScopeColumnCount,
 } from './types'
 import { openFileInNewTab } from '@/lib/fileViewer'
-
-function pickIsCodeFile(
-  files: IsCodeFileLink[],
-  kind: 'manual' | 'standard',
-): IsCodeFileLink | null {
-  const usable = files.filter((f) => Boolean(f.url?.trim()))
-  const pool = usable.length > 0 ? usable : files
-  if (pool.length === 0) return null
-
-  const isManualName = (name: string) =>
-    /product[_\s-]*manual|\bmanual\b|\bpm\b|^pm[_\s-]/i.test(name)
-
-  if (kind === 'manual') {
-    return pool.find((f) => isManualName(f.file_name)) ?? null
-  }
-
-  return pool.find((f) => !isManualName(f.file_name)) ?? null
-}
-
-function openFileInBrowser(file: IsCodeFileLink | null, label: string) {
-  const url = file?.url?.trim()
-  if (!url) {
-    toast.warning(
-      file?.error
-        ? `${label}: ${file.error}`
-        : `${label} file not found for this IS Code.`,
-    )
-    return
-  }
-  openFileInNewTab(url, file?.file_name ?? label)
-}
 
 function AutoResizeScopeCell({
   value,
@@ -127,7 +95,6 @@ export function LicenseScopeFields({
   inputId = 'bis-license-scope',
   className,
   isCodeId = null,
-  isNumber = '',
   projectId = null,
 }: {
   value: string
@@ -136,9 +103,9 @@ export function LicenseScopeFields({
   label?: string
   inputId?: string
   className?: string
-  /** When set, shows View buttons for the Specification + Product Manual of this IS Code. */
+  /** When set, warns if this IS Code has no specification / product manual (they open from the window header). */
   isCodeId?: string | null
-  /** Selected IS number used by the BIS Product Manual search. */
+  /** Kept for callers; the Product Manual search now opens from the window header (BisQuickTools). */
   isNumber?: string
   /** Existing project required to store an uploaded manufacturing scope PDF. */
   projectId?: string | null
@@ -153,7 +120,6 @@ export function LicenseScopeFields({
   const [scopeFiles, setScopeFiles] = useState<BisProjectViewFile[]>([])
   const [scopeFilesProjectId, setScopeFilesProjectId] = useState('')
   const [scopeUploadBusy, setScopeUploadBusy] = useState(false)
-  const [manualSearchBusy, setManualSearchBusy] = useState(false)
   const scopeUploadRef = useRef<HTMLInputElement | null>(null)
   const scopeProjectId = (projectId ?? '').trim()
 
@@ -252,58 +218,11 @@ export function LicenseScopeFields({
     })
   }
 
-  const standardFile = pickIsCodeFile(isFiles, 'standard')
   const showIsFileButtons = Boolean((isCodeId ?? '').trim())
   const filesMissing =
     showIsFileButtons && !filesLoading && isFiles.length === 0
   const scopeFilesLoading = Boolean(scopeProjectId) && scopeFilesProjectId !== scopeProjectId
   const scopeFile = scopeFilesProjectId === scopeProjectId ? scopeFiles[0] ?? null : null
-
-  const openProductManualSearch = () => {
-    const selectedIs = isNumber.trim()
-    const productManualUrl = 'https://standards.bis.gov.in/website/product-manuals'
-    if (!selectedIs) {
-      window.open(productManualUrl, '_blank', 'noopener,noreferrer')
-      toast.warning('Product Manuals opened. Select an IS Number first to search automatically.')
-      return
-    }
-    if (!isQeExtensionPresent()) {
-      window.open(productManualUrl, '_blank', 'noopener,noreferrer')
-      toast.warning('Reload the QE Consultancy extension to auto-search the selected IS Number.')
-      return
-    }
-
-    const requestId = `${Date.now()}-${Math.random().toString(36).slice(2)}`
-    setManualSearchBusy(true)
-    let completed = false
-    const finish = (message: string, isError: boolean) => {
-      if (completed) return
-      completed = true
-      window.clearTimeout(timer)
-      window.removeEventListener('message', onResult)
-      setManualSearchBusy(false)
-      if (isError) toast.error(message)
-      else toast.success(message)
-    }
-    const onResult = (event: MessageEvent) => {
-      if (event.source !== window || event.origin !== window.location.origin) return
-      const data = event.data
-      if (data?.type !== 'QE_PRODUCT_MANUAL_SEARCH_RESULT' || data.requestId !== requestId) return
-      finish(
-        String(data.message || (data.ok ? 'Product Manual search started.' : 'Could not search Product Manuals.')),
-        !data.ok,
-      )
-    }
-    const timer = window.setTimeout(
-      () => finish('The QE Consultancy extension did not respond. Reload it and try again.', true),
-      60000,
-    )
-    window.addEventListener('message', onResult)
-    window.postMessage(
-      { type: 'QE_PRODUCT_MANUAL_SEARCH', requestId, isNumber: selectedIs },
-      window.location.origin,
-    )
-  }
 
   const handleScopeUpload = async (file?: File) => {
     const id = (projectId ?? '').trim()
@@ -395,40 +314,6 @@ export function LicenseScopeFields({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          {showIsFileButtons ? (
-            <>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className={cn(limsOutlineBtnClass, 'h-10 gap-1.5 px-2.5 text-xs min-[641px]:h-7')}
-                disabled={disabled || filesLoading || !standardFile?.url}
-                title={
-                  standardFile?.file_name
-                    ? `View ${standardFile.file_name}`
-                  : 'Specification file not attached on this IS Code'
-                }
-                onClick={() => openFileInBrowser(standardFile, 'Specification')}
-              >
-                <BookOpen className="h-3.5 w-3.5" aria-hidden />
-                <Eye className="h-3.5 w-3.5" aria-hidden />
-                View Specification
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className={cn(limsOutlineBtnClass, 'h-10 gap-1.5 px-2.5 text-xs min-[641px]:h-7')}
-                disabled={disabled || manualSearchBusy}
-                title="Open BIS Product Manuals and Search the Selected IS Number"
-                onClick={openProductManualSearch}
-              >
-                <FileText className="h-3.5 w-3.5" aria-hidden />
-                <Eye className="h-3.5 w-3.5" aria-hidden />
-                View Product Manual
-              </Button>
-            </>
-          ) : null}
           <Button
             type="button"
             variant="outline"

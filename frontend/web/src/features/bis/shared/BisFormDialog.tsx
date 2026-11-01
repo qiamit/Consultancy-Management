@@ -23,6 +23,7 @@ export function BisFormDialog({
   errorMessage,
   onSave,
   footerExtra,
+  headerTools,
   compact = false,
   children,
 }: {
@@ -36,6 +37,8 @@ export function BisFormDialog({
   onSave: () => void
   /** Extra buttons at the left of the footer (for example "Close case"). */
   footerExtra?: ReactNode
+  /** Buttons in the header bar beside the title (for example BisQuickTools). */
+  headerTools?: ReactNode
   /** A centered dialog sized to its content (in the main area, beside the sidebar) instead of a full-height sheet. */
   compact?: boolean
   children: ReactNode
@@ -63,11 +66,14 @@ export function BisFormDialog({
         <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white sm:px-5 sm:py-3">
           <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={limsDarkBarGlowStyle} />
           <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
-          <DialogHeader className="relative pr-10 text-left">
-            <DialogTitle className="text-base font-semibold tracking-tight text-white sm:text-lg">
-              {title}
-            </DialogTitle>
-          </DialogHeader>
+          <div className="relative flex min-w-0 items-center gap-2 pr-10">
+            <DialogHeader className="min-w-0 flex-1 text-left">
+              <DialogTitle className="text-base font-semibold tracking-tight text-white sm:text-lg">
+                {title}
+              </DialogTitle>
+            </DialogHeader>
+            {headerTools}
+          </div>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-gradient-to-b from-stone-100/80 to-white px-4 py-4 sm:px-6 sm:py-5">

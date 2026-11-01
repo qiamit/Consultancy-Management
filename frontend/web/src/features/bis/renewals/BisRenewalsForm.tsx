@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type Dispatch, type FormEvent, type SetSta
 import { ChevronRight, Download, FileCheck2, FileText, Mail, MessageCircle, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { BisQuickTools } from '../shared/BisQuickTools'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent,
   DropdownMenuSubTrigger, DropdownMenuTrigger,
@@ -281,11 +282,14 @@ export function BisRenewalsForm({
         <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white sm:px-5 sm:py-3">
           <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={limsDarkBarGlowStyle} />
           <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
-          <DialogHeader className="relative pr-10 text-center">
+          <div className="relative flex min-w-0 items-center gap-2 pr-10">
+          <DialogHeader className="min-w-0 flex-1 text-center">
             <DialogTitle className="text-center text-base font-semibold tracking-tight text-white sm:text-lg">
               Renewal Sheet for {form.clientLabel || 'Firm Name'} of License No. {form.cmLDigits ? `CM/L-${form.cmLDigits}` : '—'} ({form.currentValidity ? `Valid till ${formatDisplayDate(form.currentValidity)}` : 'Validity not set'})
             </DialogTitle>
           </DialogHeader>
+          <BisQuickTools projectId={form.projectId} className="hidden sm:flex" />
+          </div>
         </div>
 
         <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto bg-gradient-to-b from-stone-100/80 to-white px-[2mm] py-4 sm:px-[2mm] sm:py-5">

@@ -210,6 +210,24 @@
       );
       return;
     }
+    if (data.type === "QE_BSB_LOGIN_OPEN") {
+      markPresent();
+      sendRuntime(
+        { type: "QE_BSB_LOGIN_OPEN", userId: String(data.userId || ""), password: String(data.password || "") },
+        (response, error) => {
+          window.postMessage(
+            {
+              type: "QE_BSB_LOGIN_OPEN_RESULT",
+              ok: Boolean(response && response.ok && !error),
+              notOpened: Boolean(error || !response || response.notOpened),
+              message: error?.message || response?.message || "The BIS Portal login could not be opened.",
+            },
+            window.location.origin,
+          );
+        },
+      );
+      return;
+    }
     if (data.type !== "QE_MANAK_OPEN") return;
     // Always forward to background — ACK-only debounce skipped the login payload.
     window.__qeManakOpenSent = Date.now();

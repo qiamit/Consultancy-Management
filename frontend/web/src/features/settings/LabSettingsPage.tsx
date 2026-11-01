@@ -1,5 +1,6 @@
 import { useEffect, useState, type Dispatch, type SetStateAction } from 'react'
 import { RatePlansEditor, type RatePlanDraft } from './lab-settings/RatePlansEditor'
+import { BsbPortalLoginSettings } from './lab-settings/BsbPortalLoginSettings'
 import { limsPageShellClass } from '@/lib/limsThemeUi'
 import { getThemeSelectOptions, normalizeAppThemeId } from '@/lib/appTheme'
 import { useAppTheme } from '@/lib/AppThemeProvider'
@@ -2178,6 +2179,7 @@ export default function LabSettingsPage() {
                   </span>
                 </label>
               </div>
+              <BsbPortalLoginSettings />
           </LabSettingsPanel>
         </TabsContent>
 

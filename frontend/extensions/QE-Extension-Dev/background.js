@@ -1,6 +1,7 @@
 const STORAGE_KEY = "copyPasteBypassEnabled";
 const STORAGE_KEY_CTRL = "ctrlKeyBypassEnabled";
 const EBIS_LOGIN = "https://www.manakonline.in/MANAK/eBISLogin";
+const BSB_LOGIN_URL = "https://standardsbis.bsbedge.com/BIS_Login";
 const HOME_URL = "https://www.manakonline.in/MANAK/login";
 const GENERATE_QR_URL =
   "https://www.manakonline.in/MANAK/employeeQrCodeGeneration";
@@ -999,6 +1000,42 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         throw new Error(result?.message || "The Product Manuals search field was not found.");
       }
       sendResponse({ ok: true, message: `Searching Product Manuals for ${isNumber}.` });
+    })().catch((error) => {
+      sendResponse({ ok: false, message: String(error?.message || error) });
+    });
+    return true;
+  }
+
+  if (message.type === "QE_BSB_LOGIN_OPEN") {
+    // BIS Portal Login from Consultancy Pro: open BSB Edge, fill the company's User ID / Password, user types the
+    // captcha and signs in. The password only travels in this message; nothing is stored.
+    const senderTab = sender && sender.tab;
+    if (!senderTab || !isAppTabUrl(senderTab.url || "")) {
+      sendResponse({ ok: false, notOpened: true, message: "BIS Portal Login can only be started from Consultancy Pro." });
+      return true;
+    }
+    const creds = { email: String(message.userId || "").trim(), password: String(message.password || "") };
+    void (async () => {
+      const tab = await safeTabCreate({ url: BSB_LOGIN_URL, active: true });
+      if (!tab || !tab.id) {
+        sendResponse({ ok: false, notOpened: true, message: "Could not open the BIS Portal login." });
+        return;
+      }
+      if (tab.status !== "complete") await waitTabComplete(tab.id, 45000);
+      await injectIsFetch(tab.id);
+      let result = null;
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        result = await chrome.tabs.sendMessage(tab.id, { type: "QE_BSB_FILL_LOGIN", creds }).catch(() => null);
+        if (result && (result.ok || result.signedIn)) break;
+        await new Promise((resolve) => setTimeout(resolve, 400));
+      }
+      if (result && result.signedIn) {
+        sendResponse({ ok: true, message: "Already signed in to the BIS Portal." });
+      } else if (result && result.ok) {
+        sendResponse({ ok: true, message: "BIS Portal Login filled — type the captcha and click Sign In." });
+      } else {
+        sendResponse({ ok: false, message: "BIS Portal opened, but the login fields were not found. Sign in by hand." });
+      }
     })().catch((error) => {
       sendResponse({ ok: false, message: String(error?.message || error) });
     });
