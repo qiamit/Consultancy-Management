@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Check, CircleAlert, Database, ExternalLink, Loader2, Mail, Search, Send, Table2, Trash2, X } from 'lucide-react'
+import { BookOpen, Check, CircleAlert, Database, ExternalLink, Loader2, Mail, Search, Send, Table2, Trash2, X } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { sendAssistantMail } from './assistantStore'
 import { cn } from '@/lib/utils'
+import type { BisPrintDocumentKind } from '@/features/bis/print/printBisDocument'
 import type { QiAgentProposal, QiAgentStep } from './qiAssistantApi'
 
 const ACTION_STYLE: Record<QiAgentProposal['action'], { label: string; cls: string }> = {
@@ -10,6 +11,8 @@ const ACTION_STYLE: Record<QiAgentProposal['action'], { label: string; cls: stri
   update: { label: 'Update', cls: 'border-amber-700 bg-amber-50 text-amber-900' },
   delete: { label: 'Delete', cls: 'border-red-700 bg-red-50 text-red-700' },
   send_email: { label: 'Email', cls: 'border-sky-700 bg-sky-50 text-sky-800' },
+  copy_sections: { label: 'Copy', cls: 'border-emerald-700 bg-emerald-50 text-emerald-800' },
+  save_section: { label: 'Fill', cls: 'border-emerald-700 bg-emerald-50 text-emerald-800' },
 }
 
 function show(value: unknown): string {
@@ -28,8 +31,10 @@ export function AgentSteps({ steps }: { steps: QiAgentStep[] }) {
           ? CircleAlert
           : s.tool === 'open_page'
             ? ExternalLink
-            : s.tool === 'propose_changes'
+            : /^propose_(changes|section|copy)/.test(s.tool)
               ? Database
+              : /^read_(guide|standard)$/.test(s.tool)
+                ? BookOpen
               : /mail/.test(s.tool)
                 ? Mail
                 : s.tool === 'query_rows'
@@ -53,6 +58,20 @@ async function applyProposal(p: QiAgentProposal): Promise<string> {
   if (p.action === 'send_email') {
     const result = await sendAssistantMail(p.values)
     return `Sent to ${result.to.join(', ')}`
+  }
+  if (p.action === 'copy_sections') {
+    const { copySectionsBetweenApplications } = await import('@/features/bis/projects/bisModuleImportApi')
+    const { sourceProjectId, targetProjectId, kinds } = (p.apply ?? {}) as { sourceProjectId: string; targetProjectId: string; kinds: string[] }
+    const result = await copySectionsBetweenApplications({ sourceProjectId, targetProjectId, kinds })
+    return `Copied ${result.sections} Sections and ${result.files} Files`
+  }
+  if (p.action === 'save_section') {
+    const { saveBisModulePayload } = await import('@/features/bis/projects/bisModuleDataApi')
+    const { projectId, kind, payload } = (p.apply ?? {}) as { projectId: string; kind: BisPrintDocumentKind; payload: Record<string, unknown> }
+    await saveBisModulePayload(projectId, kind, payload)
+    // Process Description shares the Process Flow Chart's data.
+    if (kind === 'process-flow-chart') await saveBisModulePayload(projectId, 'process-description', payload)
+    return 'Saved to the Application'
   }
   const table = supabase.from(p.table)
   const { data, error } =
@@ -124,7 +143,7 @@ export function AgentProposals({
           <div key={p.key} className={cn('border bg-white text-xs', st.status === 'saved' ? 'border-emerald-600' : st.status === 'error' ? 'border-red-500' : 'border-stone-400')}>
             <div className="flex items-center gap-2 border-b border-stone-200 bg-stone-50 px-2 py-1.5">
               <span className={cn('border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide', style.cls)}>{style.label}</span>
-              <span className="font-mono text-[11px] text-stone-600">{p.table}</span>
+              {p.table !== 'application' ? <span className="font-mono text-[11px] text-stone-600">{p.table}</span> : null}
               <span className="min-w-0 flex-1 truncate font-medium text-stone-800" title={p.summary}>{p.summary}</span>
             </div>
             {cols.length ? (
@@ -139,9 +158,9 @@ export function AgentProposals({
                 <tbody>
                   {cols.map((c) => (
                     <tr key={c} className="border-t border-stone-100 align-top">
-                      <td className="px-2 py-1 font-mono text-[11px] text-stone-600">{c}</td>
+                      <td className={cn('px-2 py-1 text-[11px] text-stone-600', p.table !== 'application' && 'font-mono')}>{c}</td>
                       {hasBefore ? <td className="break-all px-2 py-1 text-stone-500 line-through decoration-stone-300">{show(p.before?.[c])}</td> : null}
-                      {hasAfter ? <td className={cn('break-words px-2 py-1 font-medium text-stone-900', p.action === 'send_email' && c === 'body' && 'whitespace-pre-wrap font-normal')}>{show(p.values[c])}</td> : null}
+                      {hasAfter ? <td className={cn('break-words px-2 py-1 font-medium text-stone-900', ((p.action === 'send_email' && c === 'body') || p.action === 'save_section') && 'whitespace-pre-wrap font-normal')}>{show(p.values[c])}</td> : null}
                     </tr>
                   ))}
                 </tbody>

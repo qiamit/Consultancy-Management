@@ -464,3 +464,88 @@ export async function importModulesWithFilesFromProject(opts: {
   }
   return { kindsCopied, recordsCopied, filesCopied }
 }
+
+/** Sections that belong to one application only: never copied by the QE Assistant. */
+const NEVER_COPIED_KINDS = ['osl-sample-requirements', 'factory-test-report', 'long-duration-tests', 'raw-material-test-reports', 'manufacturing-scope']
+/** Sections kept only as uploaded files. */
+const FILE_ONLY_KINDS = ['consent-letter', 'calibration-certificates']
+
+/** Re-points every file reference anywhere in a section (rows, nested files) at a fresh copy in the target project. */
+async function withAllFilesCopied(
+  value: unknown,
+  sourceProjectId: string,
+  targetProjectId: string,
+  fallbackDocKind: string,
+): Promise<{ value: unknown; files: number }> {
+  if (Array.isArray(value)) {
+    const items: unknown[] = []
+    let files = 0
+    for (const item of value) {
+      const copied = await withAllFilesCopied(item, sourceProjectId, targetProjectId, fallbackDocKind)
+      items.push(copied.value)
+      files += copied.files
+    }
+    return { value: items, files }
+  }
+  if (!value || typeof value !== 'object') return { value, files: 0 }
+  const next: Record<string, unknown> = { ...(value as Record<string, unknown>) }
+  let files = 0
+  for (const [key, inner] of Object.entries(next)) {
+    const match = /^(.*?)(storagePath|StoragePath)$/.exec(key)
+    if (match && typeof inner === 'string') {
+      if (!inner.trim()) continue
+      const prefix = match[1]
+      const idKey = prefix ? `${prefix}FileId` : 'fileId'
+      const nameKey = prefix ? `${prefix}FileName` : 'fileName'
+      const copy = await duplicateReferencedFile(
+        sourceProjectId,
+        targetProjectId,
+        { id: text(next[idKey]), name: text(next[nameKey]), path: inner },
+        fallbackDocKind,
+      )
+      next[idKey] = copy?.id ?? ''
+      next[key] = copy?.path ?? ''
+      // Source file is gone: drop the dangling reference instead of pointing at nothing.
+      if (!copy) next[nameKey] = ''
+      else files += 1
+    } else if (inner && typeof inner === 'object') {
+      const copied = await withAllFilesCopied(inner, sourceProjectId, targetProjectId, fallbackDocKind)
+      next[key] = copied.value
+      files += copied.files
+    }
+  }
+  return { value: next, files }
+}
+
+/**
+ * Copies whole sections from one application to another of the same firm (the QE Assistant's confirmed proposal).
+ * Replaces the target's data for each kind, and copies files so the two applications never share them.
+ */
+export async function copySectionsBetweenApplications(opts: {
+  sourceProjectId: string
+  targetProjectId: string
+  kinds: string[]
+}): Promise<{ sections: number; files: number }> {
+  const { sourceProjectId, targetProjectId, kinds } = opts
+  if (sourceProjectId === targetProjectId) throw new Error('Choose a different Application as the source.')
+  let sections = 0
+  let files = 0
+  for (const kind of kinds) {
+    if (NEVER_COPIED_KINDS.includes(kind)) throw new Error(`${kind} belongs to each application and is never copied.`)
+    const printKind = kind as BisPrintDocumentKind
+    if (FILE_ONLY_KINDS.includes(kind)) {
+      const result = await importBisModuleFromProject({ targetProjectId, sourceProjectId, kind: printKind })
+      files += result.filesCopied
+      sections += 1
+      continue
+    }
+    const payload = await fetchBisModulePayload(sourceProjectId, printKind)
+    if (!payload) continue
+    const fallbackDocKind = kind === 'top-management' ? 'top-management-signature' : `${kind}-document`
+    const copied = await withAllFilesCopied(payload, sourceProjectId, targetProjectId, fallbackDocKind)
+    await saveBisModulePayload(targetProjectId, printKind, copied.value as Record<string, unknown>)
+    sections += 1
+    files += copied.files
+  }
+  return { sections, files }
+}

@@ -14,10 +14,13 @@ export type QiAgentStep = { tool: string; summary: string; error?: boolean }
 
 export type QiAgentProposal = {
   key: string
-  action: 'create' | 'update' | 'delete' | 'send_email'
+  action: 'create' | 'update' | 'delete' | 'send_email' | 'copy_sections' | 'save_section'
   table: string
   id: string | null
+  /** What the card shows (for copy_sections / save_section; the work itself is in apply). */
   values: Record<string, unknown>
+  /** copy_sections: { sourceProjectId, targetProjectId, kinds }. save_section: { projectId, kind, payload }. */
+  apply?: Record<string, unknown>
   /** update: the changed columns before; delete: the whole row. */
   before: Record<string, unknown> | null
   summary: string
