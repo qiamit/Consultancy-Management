@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { FileUp, ImagePlus, Loader2, Mic, MicOff, Send, Sparkles, X } from 'lucide-react'
+import { FileUp, ImagePlus, Loader2, Mic, MicOff, RotateCcw, Send, ShieldCheck, Sparkles, X } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { IsCodeSearchPicker } from './IsCodeSearchPicker'
@@ -14,10 +16,14 @@ import { Textarea } from '@/components/ui/textarea'
 import { supabase } from '@/lib/supabaseClient'
 import { AI_SETTINGS_SINGLETON_ID } from '@/features/settings/ai-settings/types'
 import { useShowAiAssistant } from '@/hooks/useShowAiAssistant'
+import { useIsLaboratoryDirector } from '@/components/lims/LaboratoryDirectorOnly'
+import { flattenNavModules } from '@/lib/appNav'
+import { AgentProposals, AgentSteps } from './QiAgentParts'
 import {
   sendQiAssistantMessage,
   validateAssistantImageFile,
   validateAssistantPdfFile,
+  type QiAgentResult,
   type QiAssistantActionResult,
   type QiChatMessage,
 } from './qiAssistantApi'
@@ -177,6 +183,12 @@ export function QiAssistant({
   imageAttachHint?: string
 }) {
   const showAssistant = useShowAiAssistant()
+  // QE Assistant is for admins only; the header assistant runs as the Admin Agent (tools over the whole app).
+  const isAdmin = useIsLaboratoryDirector()
+  const agentMode = isAdmin && page === 'global'
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const agentRoutes = useMemo(() => flattenNavModules().map((m) => ({ path: m.key, label: m.label })), [])
   const [open, setOpen] = useState(false)
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -323,8 +335,9 @@ export function QiAssistant({
       ? ' Pick an **IS Code** below so I can read its uploaded PDFs.'
       : ''
     const skillNote = ' Type **/** for **Skills**, **@** to attach a file from your computer.'
-    const intro =
-      welcomeMessage !== undefined
+    const intro = agentMode
+      ? `Hello! I'm **QE Assistant**, your **Admin Agent**. I can find and report any data in the app, open any page, and prepare **create / update / delete** changes — each change is saved only after you **Confirm** it.${voiceNote}${skillNote}`
+      : welcomeMessage !== undefined
         ? welcomeMessage
         : `Hello! I'm **QE Assistant** on **${pageTitle}**. Ask me about this screen or the data shown here.${crudNote}${imageNote}${pdfNote}${voiceNote}${isCodeNote}${skillNote}`
     if (intro.trim()) {
@@ -335,6 +348,7 @@ export function QiAssistant({
     messages.length,
     pageTitle,
     welcomeMessage,
+    agentMode,
     agentCrudEnabled,
     enablePdfImport,
     enableImageImport,
@@ -381,7 +395,10 @@ export function QiAssistant({
     })
   }
 
-  const appendAssistantResult = (reply: string, actionsExecuted?: QiAssistantActionResult[]) => {
+  const appendAssistantResult = (reply: string, actionsExecuted?: QiAssistantActionResult[], agent?: QiAgentResult) => {
+    // Admin Agent: open the page it chose (the panel stays open beside it).
+    const target = agent?.navigation.at(-1)
+    if (target?.path) navigate(target.path)
     let content = reply
     if (actionsExecuted?.length) {
       const lines = actionsExecuted.map(
@@ -390,7 +407,20 @@ export function QiAssistant({
       content = `${reply}\n\n**Database changes:**\n${lines.join('\n')}`
       if (actionsExecuted.some((a) => a.ok)) onDataChanged?.()
     }
-    setMessages((prev) => [...prev, { id: newId(), role: 'assistant', content }])
+    setMessages((prev) => [...prev, { id: newId(), role: 'assistant', content, agent }])
+  }
+
+  /** Confirmed agent changes: tell the chat (so the agent knows next turn) and refresh what the app shows. */
+  const handleAgentApplied = (lines: string[]) => {
+    setMessages((prev) => [...prev, { id: newId(), role: 'assistant', content: lines.join('\n') }])
+    void queryClient.invalidateQueries()
+    onDataChanged?.()
+  }
+
+  const resetChat = () => {
+    setMessages([])
+    setError(null)
+    setInput('')
   }
 
   const stripTriggerFromInput = (trigger: SkillTriggerMatch | null) => {
@@ -578,7 +608,8 @@ export function QiAssistant({
           .slice(-10)
           .map((m) => ({ role: m.role, content: m.content }))
 
-        const { reply, actionsExecuted } = await sendQiAssistantMessage({
+        const { reply, actionsExecuted, agent } = await sendQiAssistantMessage({
+          ...(agentMode ? { mode: 'agent' as const, routes: agentRoutes } : {}),
           page,
           message: trimmed,
           context: contextSummary,
@@ -591,7 +622,7 @@ export function QiAssistant({
           history,
         })
 
-        appendAssistantResult(reply, actionsExecuted)
+        appendAssistantResult(reply, actionsExecuted, agent)
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Unable to get a response'
         setError(msg)
@@ -615,6 +646,8 @@ export function QiAssistant({
       loading,
       messages,
       page,
+      agentMode,
+      agentRoutes,
       selectedSkill,
       showIsCodePicker,
       stopListening,
@@ -688,7 +721,7 @@ export function QiAssistant({
     }
   }
 
-  if (!showAssistant) return null
+  if (!showAssistant || !isAdmin) return null
 
   const canSend = Boolean(input.trim() || (attachedImage && isClientsPage))
 
@@ -728,9 +761,12 @@ export function QiAssistant({
       <DialogContent
         aria-describedby={undefined}
         className={cn(
-          'flex max-h-[90dvh] w-[calc(100vw-1rem)] flex-col gap-0 overflow-hidden rounded-none border-4 border-stone-700 bg-[#fffcf7] p-0 shadow-2xl ring-2 ring-amber-700/35 sm:max-w-xl',
-          'md:top-1/2 md:!-translate-x-1/2 md:!-translate-y-1/2',
+          'flex flex-col gap-0 overflow-hidden rounded-none border-4 border-stone-700 bg-[#fffcf7] p-0 shadow-2xl ring-2 ring-amber-700/35',
           '[&>button]:!rounded-none [&>button]:opacity-100',
+          agentMode
+            ? // Admin Agent: a full-height panel on the right, so the page it opens stays visible beside it.
+              'left-auto right-0 top-0 h-[100dvh] max-h-[100dvh] w-[min(34rem,100vw)] max-w-none translate-x-0 translate-y-0 border-y-0 border-r-0'
+            : 'max-h-[90dvh] w-[calc(100vw-1rem)] sm:max-w-xl md:top-1/2 md:!-translate-x-1/2 md:!-translate-y-1/2',
         )}
       >
         <div className="relative shrink-0 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-3 text-white sm:px-5">
@@ -748,15 +784,35 @@ export function QiAssistant({
                 <Sparkles size={16} className="text-amber-200" />
               </span>
               <span className="min-w-0 truncate">
-                {assistantDialogTitle(activeRecordTable, effectiveIsCodeId, page)}
+                {agentMode ? 'QE Assistant' : assistantDialogTitle(activeRecordTable, effectiveIsCodeId, page)}
               </span>
+              {agentMode ? (
+                <span className="inline-flex shrink-0 items-center gap-1 border border-emerald-400/50 bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-200">
+                  <ShieldCheck size={12} aria-hidden /> Admin Agent
+                </span>
+              ) : null}
+              {agentMode && messages.length > 1 ? (
+                <button
+                  type="button"
+                  className="ml-auto inline-flex h-7 w-7 shrink-0 items-center justify-center border border-amber-500/40 bg-stone-800/80 text-amber-100 hover:bg-amber-500/20"
+                  title="New Chat"
+                  aria-label="New Chat"
+                  disabled={loading}
+                  onClick={resetChat}
+                >
+                  <RotateCcw size={14} aria-hidden />
+                </button>
+              ) : null}
             </DialogTitle>
           </DialogHeader>
         </div>
 
         <div
           ref={scrollRef}
-          className="min-h-[220px] max-h-[42dvh] flex-1 space-y-3 overflow-y-auto bg-gradient-to-b from-[#f7f3eb] to-[#fffcf7] px-4 py-3 sm:px-5"
+          className={cn(
+            'flex-1 space-y-3 overflow-y-auto bg-gradient-to-b from-[#f7f3eb] to-[#fffcf7] px-4 py-3 sm:px-5',
+            agentMode ? 'min-h-0' : 'min-h-[220px] max-h-[42dvh]',
+          )}
         >
           {messages.map((m) => (
             <div
@@ -769,6 +825,12 @@ export function QiAssistant({
               )}
             >
               <AssistantMessage content={m.content} />
+              {m.agent ? (
+                <>
+                  <AgentSteps steps={m.agent.steps} />
+                  <AgentProposals proposals={m.agent.proposals} onApplied={handleAgentApplied} />
+                </>
+              ) : null}
             </div>
           ))}
           {loading && (

@@ -344,10 +344,42 @@ async function handleManakPdf(req, res) {
 
 const handleQiAssistant = createQiAssistantHandler({
   requireUser: requireActiveUser,
+  requireAdmin: requireFullAccess,
+  userRestFor: (req) => userRestFor(callerJwt(req)),
   rest,
   readBody,
   corsJson,
 })
+
+/** PostgREST as the caller (their own JWT, so RLS applies). Returns { data, total } (total with Prefer count=exact). */
+function userRestFor(jwt) {
+  return async function userRest(path, init = {}) {
+    const res = await fetch(`${REST_URL}${path}`, {
+      method: init.method || 'GET',
+      body: init.body,
+      signal: AbortSignal.timeout(30_000),
+      headers: {
+        Authorization: `Bearer ${jwt}`,
+        'Content-Type': 'application/json',
+        ...(init.headers || {}),
+      },
+    })
+    const text = await res.text()
+    let data = null
+    try {
+      data = text ? JSON.parse(text) : null
+    } catch {
+      data = text
+    }
+    if (!res.ok) {
+      const message = data && typeof data === 'object' && 'message' in data ? String(data.message) : `REST ${res.status}`
+      throw new Error(message)
+    }
+    const range = String(res.headers.get('content-range') || '')
+    const total = /\/(\d+)$/.test(range) ? Number(range.split('/').pop()) : null
+    return { data, total }
+  }
+}
 
 const BODY_LIMIT_DEFAULT = 25 * 1024 * 1024
 
