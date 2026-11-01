@@ -73,16 +73,17 @@ const tidy = (text: string) =>
     .trim()
 
 /**
- * Reads the text of a scanned PDF (pages that are pictures) in the browser with Tesseract OCR, so a text-only AI
- * model can still check it. Each page is read twice (grey as columns, black-and-white as a block) because each way
- * misses or misreads different table cells; both readings go to the AI with page markers (read 1 has the better
- * digits). Slow (a few seconds a page): call
- * it only when the PDF has no selectable text.
+ * Reads chosen pages of a PDF that are pictures (scanned) in the browser with Tesseract OCR, so a text-only AI model
+ * can still check them. Each page is read twice (grey as columns, black-and-white as a block) because each way
+ * misses or misreads different table cells; read 1 has the better digits. Slow (a few seconds a page): pass only the
+ * pages without selectable text. Returns the reads per page number.
  */
-export async function ocrPdfText(
+export async function ocrPdfPages(
   file: File,
-  options: { maxPages?: number; onPage?: (page: number, total: number) => void } = {},
-): Promise<string> {
+  options: { pages: number[]; onPage?: (done: number, total: number, page: number) => void },
+): Promise<Map<number, string[]>> {
+  const result = new Map<number, string[]>()
+  if (!options.pages.length) return result
   const { getDocument } = await loadPdfjs()
   const mod = await import('tesseract.js')
   // CommonJS package: the named exports may only be on `default`, depending on the bundler.
@@ -92,10 +93,9 @@ export async function ocrPdfText(
   const worker = await tesseract.createWorker('eng')
   try {
     await worker.setParameters({ preserve_interword_spaces: '1' })
-    const total = Math.min(pdf.numPages, options.maxPages ?? 30)
-    const parts: string[] = []
-    for (let n = 1; n <= total; n += 1) {
-      options.onPage?.(n, total)
+    const pages = options.pages.filter((n) => n >= 1 && n <= pdf.numPages)
+    for (const [i, n] of pages.entries()) {
+      options.onPage?.(i + 1, pages.length, n)
       const page = await pdf.getPage(n)
       const base = page.getViewport({ scale: 1 })
       const scale = Math.min(OCR_DPI / 72, OCR_MAX_SIDE_PX / Math.max(base.width, base.height, 1))
@@ -117,11 +117,10 @@ export async function ocrPdfText(
       }
       canvas.width = 0
       canvas.height = 0
-      const [a, b] = reads
-      if (a && b && a !== b) parts.push(`[Page ${n} — OCR read 1]\n${a}\n[Page ${n} — OCR read 2]\n${b}`)
-      else if (a || b) parts.push(`[Page ${n}]\n${a || b}`)
+      const distinct = reads.filter((r, k) => r && reads.indexOf(r) === k)
+      if (distinct.length) result.set(n, distinct)
     }
-    return parts.join('\n')
+    return result
   } finally {
     void worker.terminate()
     void task.destroy()
