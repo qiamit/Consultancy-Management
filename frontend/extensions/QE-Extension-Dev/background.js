@@ -5,6 +5,8 @@ const BSB_LOGIN_URL = "https://standardsbis.bsbedge.com/BIS_Login";
 const HOME_URL = "https://www.manakonline.in/MANAK/login";
 const GENERATE_QR_URL =
   "https://www.manakonline.in/MANAK/employeeQrCodeGeneration";
+// Test Request Details: every sample's test request, with View Test Report per row (Test Report fetch).
+const REPORT_LIST_URL = "https://www.manakonline.in/MANAK/viewTestRequestGenerationForApplicant";
 const TEST_REQUEST =
   "https://www.manakonline.in/MANAK/testRequestGenerationForApplicant";
 const RESULT_KIND = "QE_MANAK_TR_RESULT_V1";
@@ -1090,8 +1092,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       ) {
         clearRememberedPortal();
         await chrome.storage.local.set({ qeManakReport: { ...job, tabId: reused.tab.id } });
-        await activateManakTab(reused.tab.id, TEST_REQUEST);
-        sendResponse({ ok: true, message: "Already signed in — opening the Test Requests List…" });
+        await activateManakTab(reused.tab.id, REPORT_LIST_URL);
+        sendResponse({ ok: true, message: "Already signed in — opening Test Request Details…" });
         return;
       }
       const created = await createManakTab(ebisLoginHref(portalUserId));
@@ -1105,14 +1107,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === "QE_MANAK_REPORT_RESULT" && message.result) {
-    // From content.js in the tracked report tab only.
+    // From the tracked report tab, or (after View Test Report was opened) the Manak eLIMS report page it opened.
     const senderTabId = Number(sender && sender.tab && sender.tab.id) || 0;
+    const senderUrl = String((sender && sender.tab && sender.tab.url) || "");
     void chrome.storage.local.get(["qeManakReport"]).then(async (data) => {
       const job = data && data.qeManakReport;
-      if (!job || !senderTabId || Number(job.tabId) !== senderTabId) {
+      const fromReportPage =
+        Boolean(job && job.capture) && /^https:\/\/nsws\.manakonline\.in\/eLIMS\//i.test(senderUrl);
+      if (!job || !senderTabId || (Number(job.tabId) !== senderTabId && !fromReportPage)) {
         sendResponse({ ok: false });
         return;
       }
+      // A popup report page is closed once its PDF (or the reason) is delivered.
+      const closeAfter = fromReportPage && Number(job.tabId) !== senderTabId ? senderTabId : 0;
       if (message.result.capture) {
         // The report opens through a click: catch the PDF download / tab it starts.
         await chrome.storage.local.set({ qeManakReport: { ...job, capture: true } });
@@ -1123,7 +1130,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               void finishReportJob({ ok: false, message: "Manak shows a Test Report, but it could not be downloaded. Open it on Manak and upload it here by double-click." });
             }
           });
-        }, 45000);
+        }, 90000);
         sendResponse({ ok: true });
         return;
       }
@@ -1135,6 +1142,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         pdfBase64: String(r.pdfBase64 || ""),
       });
       sendResponse({ ok: true });
+      if (closeAfter) void settle(chrome.tabs.remove(closeAfter));
     });
     return true;
   }

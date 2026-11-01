@@ -3055,25 +3055,47 @@
     return sendRuntimeMessage({ type: "QE_MANAK_REPORT_RESULT", result }).catch(() => null);
   }
 
-  /** The report link / button in a list row: the "Test Report" column first, else anything named report (not request). */
+  /** Manak's "Test Request Details" list (all samples, with View Test Report per row). */
+  const REPORT_LIST_URL = "https://www.manakonline.in/MANAK/viewTestRequestGenerationForApplicant";
+
+  function isReportListPage() {
+    return /viewTestRequestGenerationForApplicant/i.test(location.pathname) || isTestRequestListPage();
+  }
+
+  /**
+   * The View Test Report control of a list row: the download button in the "View Test Report" column, never the
+   * "Apply for new licence" link next to it.
+   */
   function findReportControl(row, table) {
-    const reportIdx = headerIndex(table, /test\s*report|^report|lab\s*report|report\s*(status|file|pdf)?$/);
+    const reportIdx = headerIndex(table, /view\s*test\s*report|test\s*report/);
     const cells = Array.from(row.querySelectorAll("td"));
-    const pool = [];
-    if (reportIdx >= 0 && cells[reportIdx]) pool.push(...cells[reportIdx].querySelectorAll("a, button, input[type='button'], [onclick]"));
-    pool.push(...row.querySelectorAll("a, button, input[type='button'], [onclick]"));
     const label = (el) =>
       normalize(
         [el.textContent, el.value, el.title, el.getAttribute("aria-label"), el.getAttribute("href"), el.getAttribute("onclick")]
           .filter(Boolean)
           .join(" "),
       );
-    const inReportCell = (el) => reportIdx >= 0 && cells[reportIdx] && cells[reportIdx].contains(el);
+    const notApply = (el) => !/apply|licen[cs]e/.test(label(el));
+    const cell = reportIdx >= 0 ? cells[reportIdx] : null;
+    const inCell = cell ? Array.from(cell.querySelectorAll("a, button, input[type='button'], [onclick]")) : [];
     return (
-      pool.find((el) => /report/.test(label(el)) && !/request/.test(label(el))) ||
-      pool.find((el) => inReportCell(el) && /view|download|pdf|\.pdf/.test(label(el))) ||
+      inCell.find((el) => notApply(el) && (el.querySelector("i, img, svg, span") || /download|view|report|pdf/.test(label(el)))) ||
+      inCell.find(notApply) ||
+      Array.from(row.querySelectorAll("a, button, [onclick]")).find(
+        (el) => /report/.test(label(el)) && !/request|apply|licen[cs]e/.test(label(el)),
+      ) ||
       null
     );
+  }
+
+  /** The page a View Test Report control opens: its link, or the URL inside its onclick (window.open). */
+  function reportControlUrl(control) {
+    const link = control.closest("a[href]") || (control.querySelector && control.querySelector("a[href]"));
+    const href = String((link && link.getAttribute("href")) || "");
+    if (href && !/^javascript:|^#/i.test(href)) return new URL(href, location.href).toString();
+    const onclick = [control, control.closest("[onclick]")].filter(Boolean).map((el) => el.getAttribute("onclick") || "").join(" ");
+    const m = onclick.match(/['"]((?:https?:\/\/|\/)[^'"]+)['"]/);
+    return m ? new URL(m[1], location.href).toString() : "";
   }
 
   async function lookUpReportOnList(job) {
@@ -3106,25 +3128,13 @@
       await sendReportResult({ ok: false, message: "Test Report Is Not Uploaded on Manak Yet." });
       return;
     }
-    const href = String(control.getAttribute("href") || control.href || "");
-    if (href && !/^javascript:|^#/i.test(href)) {
-      try {
-        const res = await fetch(new URL(href, location.href).toString(), { credentials: "include" });
-        const buf = await res.arrayBuffer();
-        const head = String.fromCharCode.apply(null, new Uint8Array(buf.slice(0, 5)));
-        if (buf.byteLength >= 80 && head === "%PDF-") {
-          showBanner("Test Report found — sending it to Consultancy Pro…", true, true);
-          await sendReportResult({ ok: true, pdfName: `Test_Report_${qr}.pdf`, pdfBase64: arrayBufferToBase64(buf) });
-          return;
-        }
-      } catch {
-        /* open it by click below */
-      }
-    }
-    // The report opens through a click (popup / download): background catches the PDF.
+    // View Test Report opens "View Test Reports and Testing Charges" (nsws.manakonline.in), where
+    // report-fetch-nsws.js takes the PDF from its "View Test Report" link.
     await sendReportResult({ capture: true });
-    showBanner("Test Report found — downloading it for Consultancy Pro…", true, true);
-    control.click();
+    showBanner("Test Report found — opening it for Consultancy Pro…", true, true);
+    const url = reportControlUrl(control);
+    if (url) location.href = url;
+    else control.click();
   }
 
   async function runReportJob(job) {
@@ -3141,27 +3151,19 @@
       showBanner(clicked ? "Captcha accepted. Signing in…" : "Captcha filled. Click Sign In.", clicked, true);
       return;
     }
-    if (isTestRequestListPage()) {
+    if (isReportListPage()) {
       await lookUpReportOnList(job);
       return;
     }
     if (!isLoggedInSession()) return;
-    if (isTrPage()) {
-      showBanner("Test Report: opening the Test Requests List…", true, true);
-      for (let attempt = 0; attempt < 20; attempt += 1) {
-        if (clickTestRequestList()) return;
-        await sleep(500);
-      }
-      await sendReportResult({ ok: false, message: "The Test Requests List button was not found on Manak." });
-      return;
-    }
-    // Signed in somewhere else (home): go to Test Request, whose page has the list button. Once per tab session.
+    // Signed in (home or any page): open Test Request Details directly — never the Generate Test Request form.
     const hops = Number(sessionStorage.getItem("qeReportHops") || "0");
     if (hops >= 3) return;
     sessionStorage.setItem("qeReportHops", String(hops + 1));
+    showBanner("Test Report: opening Test Request Details…", true, true);
     window.setTimeout(() => {
-      location.href = (map && map.testRequestUrl) || TR_URL;
-    }, 1200);
+      location.href = REPORT_LIST_URL;
+    }, 1000);
   }
 
   chrome.storage.local.get(["qeManakReport"], (data) => {
