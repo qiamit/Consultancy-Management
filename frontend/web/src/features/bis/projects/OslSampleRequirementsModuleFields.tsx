@@ -253,6 +253,8 @@ function SampleConformitySelect({
   needed?: boolean
 }) {
   const missing = needed && !value
+  // Red until the lab report says the sample conforms (Yes), then green.
+  const conforms = value === 'Yes'
   return (
     <Select
       value={value || SAMPLE_CONFORMITY_UNSET}
@@ -264,8 +266,9 @@ function SampleConformitySelect({
         className={cn(
           limsFieldClass,
           'rounded-none',
-          !value && 'text-stone-500',
-          missing && 'border-amber-600 bg-amber-50',
+          conforms
+            ? 'border-green-700 bg-green-50 font-semibold text-green-800'
+            : 'border-red-600 bg-red-50 font-semibold text-red-700',
           className,
         )}
         aria-label={ariaLabel}

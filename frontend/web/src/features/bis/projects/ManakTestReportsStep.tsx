@@ -16,7 +16,6 @@ import { printableOslSampleRows } from '../print/oslSampleRequirementsHtml'
 import { parseOslSampleRequirementsPayload } from './oslSampleRequirementsModel'
 import { factoryTestReportHasContent, parseFactoryTestReportPayload } from './factoryTestReportModel'
 import { FactoryTestReportGenerateDialog } from './FactoryTestReportGenerateDialog'
-import { ManakWarnings } from './ManakStepPages'
 
 type Rec = Record<string, unknown>
 type Payload = Rec | null | undefined
@@ -198,12 +197,6 @@ export function ManakTestReportsStep({
   // Generate Test Report lives here (Sample Offer Letter only uploads a finished report).
   const [generateSampleId, setGenerateSampleId] = useState<string | null>(null)
   const generateSample = generateSampleId ? samples.find((r) => r.id === generateSampleId) ?? null : null
-  // Manak's Test Report step gets one row per sample with a QR code, and asks whether that sample conforms.
-  const noConformity = samples.filter((r) => r.qrCode.trim() && !r.conformity)
-  const warnings = [
-    noConformity.length > 0 &&
-      `${noConformity.length} sample${noConformity.length === 1 ? '' : 's'} with a QR code (${noConformity.map((r) => r.qrCode.trim()).join(', ')}) ${noConformity.length === 1 ? 'has' : 'have'} no "Conformity of sample as per IS". Set it from the lab report in Sample Offer Letter & Test Request.`,
-  ]
   // FMCS applies under Option 1: BIS draws the samples at the factory visit, Manak asks for the in-house test report
   // (Form IV) and, when the IS needs it, the raw-material test certificates.
   const fmcs = isFmcsProject(projectRow)
@@ -298,7 +291,6 @@ export function ManakTestReportsStep({
       onEdit={onEdit}
       renderDocActions={renderDocActions}
       selection={selection}
-      after={<ManakWarnings items={warnings} />}
     />
     </>
   )
