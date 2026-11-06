@@ -10,7 +10,9 @@ import {
   applicantContextFromPrintData,
   applicationNoDisplay,
   buildPrintPage,
-  contentFitColgroup,
+  CONTENT_FIT_TABLE_CSS,
+  contentFitTable,
+  type ContentFitLayout,
   inspectionDateOrToday,
   isStandardRefHtml,
   letterheadHtml,
@@ -53,21 +55,29 @@ function sampleCells(rows: OslSampleRequirementRow[]): string[][] {
   ])
 }
 
-function sampleRows(cells: string[][]): string {
+/** A cell as laid out: turned on its side when the layout says so. */
+function cellHtml(text: string, column: number, layout: ContentFitLayout, className = ''): string {
+  if (!layout.vertical[column]) return `<td${className ? ` class="${className}"` : ''}>${esc(text)}</td>`
+  return `<td class="pd-vcell"><span class="pd-vtext">${esc(text)}</span></td>`
+}
+
+function headerHtml(layout: ContentFitLayout): string {
+  const shown = ['Sr<br/>No', 'Grade / Type / Variety', 'Declared Value', 'Batch No.', 'Date of<br/>Manufacturing', 'Batch Quantity']
+  return shown
+    .map((label, i) =>
+      layout.vertical[i]
+        ? `<th class="pd-vcell"><span class="pd-vtext">${layout.verticalHeader[i].map(esc).join('<br/>')}</span></th>`
+        : `<th>${label}</th>`,
+    )
+    .join('')
+}
+
+function sampleRows(cells: string[][], layout: ContentFitLayout): string {
   if (cells.length === 0) {
     return `<tr><td colspan="6" class="pd-left">No samples marked for letter.</td></tr>`
   }
   return cells
-    .map(
-      (c) => `<tr>
-      <td>${esc(c[0])}</td>
-      <td class="pd-left">${esc(c[1])}</td>
-      <td>${esc(c[2])}</td>
-      <td>${esc(c[3])}</td>
-      <td>${esc(c[4])}</td>
-      <td>${esc(c[5])}</td>
-    </tr>`,
-    )
+    .map((c) => `<tr>${c.map((text, i) => cellHtml(text, i, layout, i === 1 ? 'pd-left' : '')).join('')}</tr>`)
     .join('')
 }
 
@@ -77,6 +87,7 @@ function buildBody(data: OslSampleRequirementsData): string {
   const stdRef = isStandardRefHtml(data.isNumber, data.isTitle)
   const sigName = data.signatoryName.trim() || data.contactPerson.trim()
   const cells = sampleCells(data.rows)
+  const layout = contentFitTable(SAMPLE_HEADERS, cells)
 
   return `
 <div class="pd-sheet">
@@ -102,18 +113,11 @@ function buildBody(data: OslSampleRequirementsData): string {
   </p>
 
   <table class="pd-table osl-table">
-    ${contentFitColgroup(SAMPLE_HEADERS, cells)}
+    ${layout.colgroup}
     <thead>
-      <tr>
-        <th>Sr<br/>No</th>
-        <th>Grade / Type / Variety</th>
-        <th>Declared Value</th>
-        <th>Batch No.</th>
-        <th>Date of<br/>Manufacturing</th>
-        <th>Batch Quantity</th>
-      </tr>
+      <tr>${headerHtml(layout)}</tr>
     </thead>
-    <tbody>${sampleRows(cells)}</tbody>
+    <tbody>${sampleRows(cells, layout)}</tbody>
   </table>
 
   <div class="osl-closing">
@@ -128,7 +132,7 @@ function buildBody(data: OslSampleRequirementsData): string {
 </div>`
 }
 
-const STYLES = `
+const STYLES = `${CONTENT_FIT_TABLE_CSS}
   .osl-table td { height: 8mm; }
   .osl-closing { display: block; margin-top: 8px; break-inside: avoid; page-break-inside: avoid; }
   .osl-declaration { width: 100%; margin: 0; font-size: 11px; line-height: 1.4; text-align: justify; }
