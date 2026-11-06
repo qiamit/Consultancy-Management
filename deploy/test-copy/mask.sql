@@ -160,13 +160,22 @@ create table mask.strong as
     from mask.map where strong and length(btrim(real)) >= 3;
 create index on mask.strong (id);
 
+-- Is any strong value in the text? lower(t) is worked out once, not once per strong value (thousands on live).
+create function mask.has_real(t text) returns boolean language plpgsql stable as $f$
+declare lt text := lower(t);
+begin
+  return exists (select 1 from mask.strong where strpos(lt, lreal) > 0);
+end $f$;
+
 -- Ids of the strong values found in a text, longest first.
-create function mask.ids(t text) returns bigint[] language sql stable as $f$
-  select coalesce(array_agg(s.id order by s.len desc), '{}') from mask.strong s
-   where s.fake in (select f.fake from mask.strong f where strpos(lower(t), f.lreal) > 0)
-$f$;
+create function mask.ids(t text) returns bigint[] language plpgsql stable as $f$
+declare lt text := lower(t);
+begin
+  return (select coalesce(array_agg(s.id order by s.len desc), '{}') from mask.strong s
+           where s.fake in (select f.fake from mask.strong f where strpos(lt, f.lreal) > 0));
+end $f$;
 create function mask.needs(t text) returns boolean language sql stable as $f$
-  select t is not null and (exists (select 1 from mask.strong where strpos(lower(t), lreal) > 0)
+  select t is not null and (mask.has_real(t)
                             or t ~ '[A-Za-z0-9._%+-]+@(?!example\.test)[A-Za-z0-9.-]+\.[A-Za-z]{2,}|(?<![0-9A-Za-z._/-])(\+?91[- ]?)?(?!90000)[6-9][0-9]{9}(?![0-9A-Za-z._/-])|(?<![0-9A-Za-z])(?!AAAAA)[A-Z]{5}[0-9]{4}[A-Z](?![0-9A-Za-z])')
 $f$;
 
@@ -314,7 +323,7 @@ begin
        and c.column_name !~ '(_sha256|_hash|encrypted_password)$'
        and not (c.table_schema = 'public' and mask.has_check(c.table_schema, c.table_name, c.column_name))
   loop
-    execute format('select count(*) from %I.%I x where exists (select 1 from mask.strong s where strpos(lower(x.%I::text), s.lreal) > 0)', r.s, r.t, r.col) into n; total_real := total_real + n;
+    execute format('select count(*) from %I.%I x where mask.has_real(x.%I::text)', r.s, r.t, r.col) into n; total_real := total_real + n;
     execute format($q$select count(*) from %I.%I where %I::text ~ '[A-Za-z0-9._%%+-]+@(?!example\.test)[A-Za-z0-9.-]+\.[A-Za-z]{2,}'$q$, r.s, r.t, r.col) into n; total_mail := total_mail + n;
     if r.s = 'public' then
       execute format($q$select count(*) from %I.%I where %I::text ~ '(?<![0-9A-Za-z._/-])(\+?91[- ]?)?(?!90000)[6-9][0-9]{9}(?![0-9A-Za-z._/-])'$q$, r.s, r.t, r.col) into n; total_phone := total_phone + n;
