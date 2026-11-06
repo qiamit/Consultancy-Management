@@ -98,6 +98,164 @@ export function isStandardRefHtml(isNumber: string, isTitle: string): string {
   return ''
 }
 
+/** Width of a `.pd-table` on an A4 portrait sheet, in CSS pixels (sheet width less its side padding). */
+const TABLE_WIDTH_PX = 680
+/** Cell padding and borders, with a little room so a one-line cell never wraps. */
+const CELL_PADDING_PX = 20
+/** A column whose text fits in this width on one line is set to that width (numbers, dates, batch numbers). */
+const ONE_LINE_PX = 130
+/** Used where the page cannot measure text (no canvas). */
+const FALLBACK_CHAR_PX = 7
+
+let measureContext: CanvasRenderingContext2D | null | undefined
+/** Width of text in the table's printed font: 10pt Arial, bold for headers. */
+function textWidth(text: string, bold = false): number {
+  if (measureContext === undefined) {
+    measureContext = typeof document === 'undefined' ? null : document.createElement('canvas').getContext('2d')
+  }
+  if (!measureContext) return text.length * FALLBACK_CHAR_PX
+  measureContext.font = `${bold ? '700 ' : ''}10pt Arial, Helvetica, "Liberation Sans", sans-serif`
+  return measureContext.measureText(text).width
+}
+
+/** One line of the table text, and the cell's top + bottom padding and borders. */
+const LINE_PX = 16
+const CELL_PADDING_V_PX = 12
+/** A vertical (turned) column: the side padding and borders around its line(s). */
+const VERTICAL_PADDING_PX = 14
+/** A layout must save at least this much height to be worth turning a column on its side. */
+const VERTICAL_MIN_GAIN_PX = 8
+
+const splitWords = (text: string) => text.split(/\s+/).filter(Boolean)
+
+/** Lines a text takes when wrapped at its spaces into the given width. */
+function wrappedLines(text: string, avail: number, bold = false): number {
+  const list = splitWords(text)
+  if (!list.length) return 1
+  const space = textWidth(' ', bold)
+  let lines = 1
+  let used = 0
+  for (const w of list) {
+    const ww = textWidth(w, bold)
+    if (used && used + space + ww > avail) {
+      lines += 1
+      used = ww
+    } else used += (used ? space : 0) + ww
+  }
+  return lines
+}
+
+/** A header turned on its side may take two lines: split where the longer line is shortest. */
+function verticalHeaderParts(header: string): string[] {
+  const list = splitWords(header)
+  if (list.length < 2) return [header.trim()]
+  let best = [header.trim()]
+  let bestLength = textWidth(header, true)
+  for (let cut = 1; cut < list.length; cut += 1) {
+    const parts = [list.slice(0, cut).join(' '), list.slice(cut).join(' ')]
+    const length = Math.max(...parts.map((part) => textWidth(part, true)))
+    if (length < bestLength) {
+      best = parts
+      bestLength = length
+    }
+  }
+  return best
+}
+
+export type ContentFitLayout = {
+  /** <colgroup> with percentage widths. */
+  colgroup: string
+  /** Columns shown on their side (vertical text), and the header lines to use for them. */
+  vertical: boolean[]
+  verticalHeader: string[][]
+}
+
+/**
+ * Lays a table out by its content so rows stay as low as possible.
+ * - Short columns (numbers, dates, batch numbers) get just what their text needs on one line.
+ * - Long-text columns share the rest so they wrap to the same number of lines. No column is narrower than its
+ *   longest word.
+ * - When the long text would still make tall rows, short columns may be turned on their side (vertical text), which
+ *   gives their width to the long columns. Every combination is tried and the one with the lowest table height wins.
+ * headers and rows are plain text (not HTML).
+ */
+export function contentFitTable(headers: string[], rows: string[][]): ContentFitLayout {
+  const columns = headers.map((header, c) => {
+    const cells = rows.map((r) => String(r[c] ?? '').trim())
+    const longestWord = Math.max(...splitWords(header).map((w) => textWidth(w, true)), ...cells.flatMap(splitWords).map((w) => textWidth(w)), 1)
+    const oneLine = Math.max(longestWord, ...cells.map((t) => textWidth(t)))
+    const amount = Math.max(textWidth(header, true), ...cells.map((t) => textWidth(t)))
+    // A line wraps before a word that does not fit, so on average half a word per line is left empty.
+    const allWords = cells.flatMap(splitWords)
+    const halfWord = allWords.length ? allWords.reduce((sum, w) => sum + textWidth(`${w} `), 0) / allWords.length / 2 : 0
+    const parts = verticalHeaderParts(header)
+    return { header, cells, longestWord, oneLine, amount, halfWord, short: oneLine <= ONE_LINE_PX, parts }
+  })
+  const long = columns.map((col, i) => (col.short ? -1 : i)).filter((i) => i >= 0)
+  const shortCols = columns.map((col, i) => (col.short ? i : -1)).filter((i) => i >= 0)
+
+  /** Widths and table height when the columns in `vertical` are turned on their side. */
+  const tryLayout = (vertical: boolean[]) => {
+    const width = columns.map((col, i) =>
+      vertical[i] ? col.parts.length * LINE_PX + VERTICAL_PADDING_PX : (col.short ? col.oneLine : col.longestWord) + CELL_PADDING_PX,
+    )
+    const fixed = columns.reduce((sum, col, i) => sum + (col.short ? width[i] : 0), 0)
+    const widthFor = (i: number, lines: number) =>
+      Math.max(columns[i].longestWord, columns[i].amount / lines + columns[i].halfWord) + CELL_PADDING_PX
+    if (long.length) {
+      let low = 1
+      let high = 200
+      for (let step = 0; step < 40; step += 1) {
+        const lines = (low + high) / 2
+        if (long.reduce((sum, i) => sum + widthFor(i, lines), 0) > TABLE_WIDTH_PX - fixed) low = lines
+        else high = lines
+      }
+      for (const i of long) width[i] = widthFor(i, high)
+    }
+    const spare = TABLE_WIDTH_PX - width.reduce((a, b) => a + b, 0)
+    if (spare > 0 && !long.length) width.forEach((_, i) => (width[i] += spare / width.length))
+    // Fit to the page when the minimums are wider than it.
+    const scale = Math.min(1, TABLE_WIDTH_PX / width.reduce((a, b) => a + b, 0))
+    const final = width.map((w) => w * scale)
+    const cellHeight = (text: string, i: number, bold: boolean, vText: string[]) =>
+      vertical[i]
+        ? Math.max(...vText.map((t) => textWidth(t, bold))) + CELL_PADDING_V_PX
+        : wrappedLines(text, final[i] - CELL_PADDING_PX, bold) * LINE_PX + CELL_PADDING_V_PX
+    const headerHeight = Math.max(...columns.map((col, i) => cellHeight(col.header, i, true, col.parts)))
+    const rowsHeight = rows.reduce(
+      (sum, _, r) => sum + Math.max(...columns.map((col, i) => cellHeight(col.cells[r], i, false, [col.cells[r]]))),
+      0,
+    )
+    return { width: final, height: headerHeight + rowsHeight }
+  }
+
+  const none = columns.map(() => false)
+  let best = { vertical: none, ...tryLayout(none) }
+  // Only worth it when long text is there to gain the width; each extra turned column must save height.
+  if (long.length && rows.length) {
+    for (let mask = 1; mask < 2 ** shortCols.length; mask += 1) {
+      const vertical = columns.map((_, i) => shortCols.some((c, k) => c === i && mask & (2 ** k)))
+      const layout = tryLayout(vertical)
+      const turned = vertical.filter(Boolean).length
+      const bestTurned = best.vertical.filter(Boolean).length
+      const gain = best.height - layout.height
+      if (gain > VERTICAL_MIN_GAIN_PX * Math.max(1, turned - bestTurned) || (gain >= 0 && turned < bestTurned)) best = { vertical, ...layout }
+    }
+  }
+  const total = best.width.reduce((a, b) => a + b, 0)
+  return {
+    colgroup: `<colgroup>${best.width.map((w) => `<col style="width:${((w / total) * 100).toFixed(1)}%"/>`).join('')}</colgroup>`,
+    vertical: best.vertical,
+    verticalHeader: columns.map((col) => col.parts),
+  }
+}
+
+/** Styles for turned (vertical) cells of a contentFitTable layout: text reads bottom to top. */
+export const CONTENT_FIT_TABLE_CSS = `
+  .pd-table .pd-vcell { padding: 6px 2px; }
+  .pd-table .pd-vtext { display: inline-block; writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; line-height: 16px; text-align: center; }
+`
+
 export function letterheadHtml(ctx: PrintApplicantContext): string {
   const parts: string[] = []
   if (ctx.applicantPhone.trim()) {
