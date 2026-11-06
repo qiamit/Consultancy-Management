@@ -1,0 +1,96 @@
+# Entrance of the test copy. Plain HTTP on this Mac only (ports bound to 127.0.0.1 in compose.override.yml).
+# Same API routes as deploy/oracle/Caddyfile; any localhost origin may call the API (CORS).
+{
+	auto_https off
+}
+
+(strip_upstream_cors) {
+	header_down -Access-Control-Allow-Origin
+	header_down -Access-Control-Allow-Credentials
+	header_down -Access-Control-Allow-Headers
+	header_down -Access-Control-Allow-Methods
+	header_down -Access-Control-Expose-Headers
+}
+
+# Web app, built by tc.sh web.
+:8090 {
+	encode zstd gzip
+	root * /srv/app
+	try_files {path} /index.html
+	file_server
+}
+
+# API gateway: auth / rest / storage / functions.
+:54331 {
+	@local header_regexp Origin ^https?://(localhost|127\.0\.0\.1)(:[0-9]+)?$
+	header @local Access-Control-Allow-Origin "{http.request.header.Origin}"
+	header {
+		Access-Control-Allow-Credentials "true"
+		Access-Control-Expose-Headers "Content-Range, Range, Content-Location, Content-Profile, Preference-Applied, X-Request-Id"
+		Vary "Origin"
+	}
+
+	@preflight method OPTIONS
+	handle @preflight {
+		header Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+		header Access-Control-Allow-Headers "Authorization, apikey, Content-Type, Accept, Accept-Profile, Content-Profile, Prefer, Range, X-Client-Info, X-Supabase-Api-Version, X-Requested-With, Profile, X-User-Jwt, x-upsert, cache-control, content-disposition, X-Retry-Count"
+		header Access-Control-Max-Age "86400"
+		respond "" 204
+	}
+
+	handle /health {
+		respond "ok" 200
+	}
+
+	@auth path /auth/v1 /auth/v1/*
+	handle @auth {
+		uri strip_prefix /auth/v1
+		reverse_proxy auth:9999 {
+			import strip_upstream_cors
+		}
+	}
+
+	@rest path /rest/v1 /rest/v1/*
+	handle @rest {
+		uri strip_prefix /rest/v1
+		reverse_proxy rest:3000 {
+			import strip_upstream_cors
+		}
+	}
+
+	@storage path /storage/v1 /storage/v1/*
+	handle @storage {
+		uri strip_prefix /storage/v1
+		reverse_proxy storage:5000 {
+			import strip_upstream_cors
+		}
+	}
+
+	@functions path /functions/v1 /functions/v1/*
+	handle @functions {
+		uri strip_prefix /functions/v1
+		reverse_proxy functions:8080 {
+			import strip_upstream_cors
+		}
+	}
+
+	@manakPdf path /api/osl/manak-pdf /api/osl/manak-pdf/*
+	handle @manakPdf {
+		reverse_proxy functions:8080 {
+			import strip_upstream_cors
+		}
+	}
+
+	handle {
+		respond "Not Found" 404
+	}
+}
+
+:8091 {
+	reverse_proxy mcp:8090
+}
+
+:3857 {
+	encode zstd gzip
+	reverse_proxy pdf:3847
+}

@@ -1,0 +1,67 @@
+# Test copy of Consultancy Pro on the Mac. Adds to deploy/oracle/docker-compose.yml, so the same images and
+# services are tested. Differences: this Mac only (127.0.0.1), plain HTTP, Docker volumes instead of /opt/qe,
+# its own keys, email and scheduled jobs off. tc.sh always runs it as project "qe-test", so its containers,
+# volumes and network are separate from the LIMS test copy on the same Docker engine.
+# Paths here are relative to deploy/oracle (the first compose file), so they start with ../test-copy/.
+# Ports: app 8090, API 54331, MCP 8091, PDF 3857, database 54332 (the LIMS copy uses 8088 / 54321 / 8081 / 3847).
+services:
+  db:
+    ports: !override
+      - "127.0.0.1:54332:5432"
+    volumes: !override
+      - ../oracle/db/roles.sql:/docker-entrypoint-initdb.d/init-scripts/99-roles.sql:ro
+      - db_data:/var/lib/postgresql/data
+      - ../test-copy/local/pgsodium_root.key:/etc/postgresql-custom/pgsodium_root.key:ro
+
+  auth:
+    environment:
+      API_EXTERNAL_URL: http://127.0.0.1:54331/auth/v1
+      GOTRUE_API_EXTERNAL_URL: http://127.0.0.1:54331/auth/v1
+      GOTRUE_SITE_URL: http://127.0.0.1:8090
+      GOTRUE_URI_ALLOW_LIST: http://127.0.0.1:8090/**,http://localhost:5177/**
+      GOTRUE_MAILER_AUTOCONFIRM: "true"
+      GOTRUE_SMTP_HOST: ""
+
+  rest:
+    environment:
+      PGRST_OPENAPI_SERVER_PROXY_URI: http://127.0.0.1:54331/rest/v1
+
+  storage:
+    volumes: !override
+      - test_files:/var/lib/storage
+
+  functions:
+    environment:
+      APP_URL: http://127.0.0.1:8090
+      AUTH_PUBLIC_URL: http://127.0.0.1:54331/auth/v1
+      RESEND_API_KEY: ""
+      RENEWAL_REMINDERS_DISABLED: "1"
+      ASSISTANT_TASKS_DISABLED: "1"
+      CUSTOMER_PORTAL_INVITES: "0"
+
+  mcp:
+    environment:
+      MCP_PUBLIC_URL: http://127.0.0.1:8091
+      PUBLIC_API_URL: http://127.0.0.1:54331
+      APP_URL: http://127.0.0.1:8090
+
+  pdf:
+    environment:
+      PDF_CORS_ORIGINS: http://127.0.0.1:8090,http://localhost:5177
+      PDF_ALLOWED_URL_PREFIXES: http://127.0.0.1:54331/storage/v1/object/,http://caddy:54331/storage/v1/object/
+
+  caddy:
+    ports: !override
+      - "127.0.0.1:8090:8090"
+      - "127.0.0.1:54331:54331"
+      - "127.0.0.1:8091:8091"
+      - "127.0.0.1:3857:3857"
+    volumes: !override
+      - ../test-copy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../test-copy/local/web:/srv/app:ro
+      - caddy_data:/data
+
+volumes:
+  db_data:
+  test_files:
+  caddy_data:
