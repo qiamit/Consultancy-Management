@@ -98,6 +98,68 @@ export function isStandardRefHtml(isNumber: string, isTitle: string): string {
   return ''
 }
 
+/** Width of a `.pd-table` on an A4 portrait sheet, in CSS pixels (sheet width less its side padding). */
+const TABLE_WIDTH_PX = 680
+/** Cell padding and borders, with a little room so a one-line cell never wraps. */
+const CELL_PADDING_PX = 20
+/** A column whose text fits in this width on one line is set to that width (numbers, dates, batch numbers). */
+const ONE_LINE_PX = 130
+/** Used where the page cannot measure text (no canvas). */
+const FALLBACK_CHAR_PX = 7
+
+let measureContext: CanvasRenderingContext2D | null | undefined
+/** Width of text in the table's printed font: 10pt Arial, bold for headers. */
+function textWidth(text: string, bold = false): number {
+  if (measureContext === undefined) {
+    measureContext = typeof document === 'undefined' ? null : document.createElement('canvas').getContext('2d')
+  }
+  if (!measureContext) return text.length * FALLBACK_CHAR_PX
+  measureContext.font = `${bold ? '700 ' : ''}10pt Arial, Helvetica, "Liberation Sans", sans-serif`
+  return measureContext.measureText(text).width
+}
+
+/**
+ * Column widths that follow the content: short columns (numbers, dates, batch numbers) get just what their text
+ * needs on one line, and the rest of the table is shared by the long-text columns in proportion to their text, so
+ * they wrap to about the same number of lines and rows stay low. No column is narrower than its longest word.
+ * headers and rows are plain text (not HTML). Returns a <colgroup> with percentage widths.
+ */
+export function contentFitColgroup(headers: string[], rows: string[][]): string {
+  const words = (text: string) => text.split(/\s+/).filter(Boolean)
+  const columns = headers.map((header, c) => {
+    const cells = rows.map((r) => String(r[c] ?? '').trim())
+    // A header may wrap at its spaces; its longest word must still fit.
+    const longestWord = Math.max(...words(header).map((w) => textWidth(w, true)), ...cells.flatMap(words).map((w) => textWidth(w)), 1)
+    const oneLine = Math.max(longestWord, ...cells.map((t) => textWidth(t)))
+    const amount = Math.max(textWidth(header, true), ...cells.map((t) => textWidth(t)))
+    // A line wraps before a word that does not fit, so on average half a word per line is left empty.
+    const allWords = cells.flatMap(words)
+    const halfWord = allWords.length ? allWords.reduce((sum, w) => sum + textWidth(`${w} `), 0) / allWords.length / 2 : 0
+    return { longestWord, oneLine, amount, halfWord, short: oneLine <= ONE_LINE_PX }
+  })
+  const width = columns.map((col) => (col.short ? col.oneLine : col.longestWord) + CELL_PADDING_PX)
+  const long = columns.map((col, i) => (col.short ? -1 : i)).filter((i) => i >= 0)
+  const shortTotal = columns.reduce((sum, col, i) => sum + (col.short ? width[i] : 0), 0)
+  // Long columns share the rest so that all of them wrap to the same number of lines: find that number of lines.
+  const widthFor = (i: number, lines: number) =>
+    Math.max(columns[i].longestWord, columns[i].amount / lines + columns[i].halfWord) + CELL_PADDING_PX
+  const room = TABLE_WIDTH_PX - shortTotal
+  if (long.length) {
+    let low = 1
+    let high = 200
+    for (let step = 0; step < 40; step += 1) {
+      const lines = (low + high) / 2
+      if (long.reduce((sum, i) => sum + widthFor(i, lines), 0) > room) low = lines
+      else high = lines
+    }
+    for (const i of long) width[i] = widthFor(i, high)
+  }
+  const spare = TABLE_WIDTH_PX - width.reduce((a, b) => a + b, 0)
+  if (spare > 0 && !long.length) width.forEach((_, i) => (width[i] += spare / width.length))
+  const total = width.reduce((a, b) => a + b, 0)
+  return `<colgroup>${width.map((w) => `<col style="width:${((w / total) * 100).toFixed(1)}%"/>`).join('')}</colgroup>`
+}
+
 export function letterheadHtml(ctx: PrintApplicantContext): string {
   const parts: string[] = []
   if (ctx.applicantPhone.trim()) {

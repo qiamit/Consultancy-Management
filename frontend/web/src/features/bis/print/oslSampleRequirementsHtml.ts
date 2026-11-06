@@ -10,6 +10,7 @@ import {
   applicantContextFromPrintData,
   applicationNoDisplay,
   buildPrintPage,
+  contentFitColgroup,
   inspectionDateOrToday,
   isStandardRefHtml,
   letterheadHtml,
@@ -38,23 +39,35 @@ export function printableOslSampleRows(rows: OslSampleRequirementRow[]): OslSamp
   )
 }
 
-function sampleRows(rows: OslSampleRequirementRow[]): string {
-  const filled = printableOslSampleRows(rows)
-  if (filled.length === 0) {
+const SAMPLE_HEADERS = ['Sr No', 'Grade / Type / Variety', 'Declared Value', 'Batch No.', 'Date of Manufacturing', 'Batch Quantity']
+
+/** The table's text, one array per sample, in column order. */
+function sampleCells(rows: OslSampleRequirementRow[]): string[][] {
+  return printableOslSampleRows(rows).map((r, i) => [
+    String(i + 1),
+    r.gradeTypeVariety.trim() || r.sampleDescription.trim(),
+    r.declaredValue.trim(),
+    r.batchNumber.trim(),
+    r.dateOfManufacturing ? formatDisplayDate(r.dateOfManufacturing) : '',
+    (r.batchQuantity || r.sampleQuantity).trim(),
+  ])
+}
+
+function sampleRows(cells: string[][]): string {
+  if (cells.length === 0) {
     return `<tr><td colspan="6" class="pd-left">No samples marked for letter.</td></tr>`
   }
-  return filled
-    .map((r, i) => {
-      const grade = r.gradeTypeVariety.trim() || r.sampleDescription.trim()
-      return `<tr>
-      <td>${i + 1}</td>
-      <td class="pd-left">${esc(grade)}</td>
-      <td>${esc(r.declaredValue)}</td>
-      <td>${esc(r.batchNumber)}</td>
-      <td>${esc(r.dateOfManufacturing ? formatDisplayDate(r.dateOfManufacturing) : '')}</td>
-      <td>${esc(r.batchQuantity || r.sampleQuantity)}</td>
-    </tr>`
-    })
+  return cells
+    .map(
+      (c) => `<tr>
+      <td>${esc(c[0])}</td>
+      <td class="pd-left">${esc(c[1])}</td>
+      <td>${esc(c[2])}</td>
+      <td>${esc(c[3])}</td>
+      <td>${esc(c[4])}</td>
+      <td>${esc(c[5])}</td>
+    </tr>`,
+    )
     .join('')
 }
 
@@ -63,6 +76,7 @@ function buildBody(data: OslSampleRequirementsData): string {
   const inspection = inspectionDateOrToday(data.dateOfInspection)
   const stdRef = isStandardRefHtml(data.isNumber, data.isTitle)
   const sigName = data.signatoryName.trim() || data.contactPerson.trim()
+  const cells = sampleCells(data.rows)
 
   return `
 <div class="pd-sheet">
@@ -88,9 +102,7 @@ function buildBody(data: OslSampleRequirementsData): string {
   </p>
 
   <table class="pd-table osl-table">
-    <colgroup>
-      <col style="width:6%"/><col style="width:28%"/><col style="width:16%"/><col style="width:16%"/><col style="width:16%"/><col style="width:18%"/>
-    </colgroup>
+    ${contentFitColgroup(SAMPLE_HEADERS, cells)}
     <thead>
       <tr>
         <th>Sr<br/>No</th>
@@ -101,7 +113,7 @@ function buildBody(data: OslSampleRequirementsData): string {
         <th>Batch Quantity</th>
       </tr>
     </thead>
-    <tbody>${sampleRows(data.rows)}</tbody>
+    <tbody>${sampleRows(cells)}</tbody>
   </table>
 
   <div class="osl-closing">
