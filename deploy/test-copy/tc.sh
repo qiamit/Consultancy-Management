@@ -9,9 +9,10 @@
 #   tc.sh use-frontend   write frontend/web/.env.testcopy, for npm run dev on port 5177 (mode testcopy)
 #   tc.sh migrate        apply this checkout's new database migrations to the test copy
 #   tc.sh fetch          LIVE SERVER: read-only copy, masked in memory, kept in local/ (asks first)
-#   tc.sh load           replace this copy's database with the last masked copy
+#   tc.sh fetch real     the same, but names and contact details stay real (sign-ins, secrets, mail still removed)
+#   tc.sh load           replace this copy's database with the newest saved copy (masked or real)
 #   tc.sh placeholders   put a placeholder file behind every stored-file record
-#   tc.sh refresh        fetch, load, up and placeholders in one go (asks first, like fetch)
+#   tc.sh refresh [real] fetch, load, up and placeholders in one go (asks first, like fetch)
 #   tc.sh code <user-01> current two-step code of a test account set up here (local/test-2fa-<user>.txt)
 #   tc.sh wipe           remove this copy's containers and volumes
 set -euo pipefail
@@ -69,17 +70,25 @@ case "${1:-}" in
     DATABASE_URL="postgres://supabase_admin:$(val POSTGRES_PASSWORD)@127.0.0.1:54332/postgres" node "$ROOT/backend/scripts/apply-migrations.mjs" ;;
   fetch)
     guard
-    cat <<MSG
+    case "${2:-}" in real) MODE=real ;; "") MODE=masked ;; *) stop "fetch takes no option but real" ;; esac
+    if [ "$MODE" = real ]; then cat <<MSG
+This reads the LIVE Consultancy Pro database on the Oracle server, read only, and writes nothing there.
+REAL DATA, NOT MASKED: client names, contacts, emails and phone numbers are saved as they are in $LOCAL
+(this Mac only). Sign-ins get the test password; sessions, authenticators, stored secrets, mail and connector
+tokens are still removed. If any check fails, nothing is saved. Stored files are never copied.
+MSG
+    else cat <<MSG
 This reads the LIVE Consultancy Pro database on the Oracle server, read only, and writes nothing there.
 Real data stays in the memory of a throwaway container with no network, is masked there, and only the masked
 copy is saved in $LOCAL. If any check fails, nothing is saved. Stored files are never copied.
 MSG
+    fi
     if [ -t 0 ]; then read -r -p "Type COPY to continue: " A; [ "$A" = COPY ] || stop "not confirmed"; fi
     [ -t 0 ] || [ "${TC_CONFIRM:-}" = yes ] || stop "needs a terminal, or TC_CONFIRM=yes"
     RAW=qe-tc-raw; D=$(date +%F)
     trap 'docker rm -f -v qe-tc-raw >/dev/null 2>&1 || true; rm -f "$LOCAL/mask.log" "$LOCAL/restore.err"' EXIT
     (umask 077; : > "$LOCAL/fetch-last.log"); exec > >(tee "$LOCAL/fetch-last.log") 2>&1
-    echo "fetch started $(date '+%F %T')"
+    echo "fetch started $(date '+%F %T') ($MODE)"
     docker rm -f -v "$RAW" >/dev/null 2>&1 || true
     docker run -d --name "$RAW" --network none --tmpfs /var/lib/postgresql/data:size=6g -e POSTGRES_PASSWORD=throwaway "$DB_IMAGE" >/dev/null
     for _ in $(seq 1 90); do docker exec "$RAW" pg_isready -q -U postgres -h localhost 2>/dev/null && break; sleep 2; done; sleep 3
@@ -123,9 +132,9 @@ MSG
         "drop schema if exists storage cascade; create schema public;" "$EXT" | RQ >/dev/null
     done
     [ "$R" = 0 ] || stop "no clean copy after 3 tries; nothing saved"
-    echo "Masking..."
+    if [ "$MODE" = real ]; then echo "Removing sign-ins, secrets and mail (names and contacts stay real)..."; MASKING=off; else echo "Masking..."; MASKING=on; fi
     set +e
-    docker exec -i "$RAW" psql -U supabase_admin -d postgres -q -v test_password="$(tr -d '\n' < "$LOCAL/test-password.txt")" < "$HERE/mask.sql" > "$LOCAL/mask.log" 2>&1; M=$?
+    docker exec -i "$RAW" psql -U supabase_admin -d postgres -q -v masking=$MASKING -v test_password="$(tr -d '\n' < "$LOCAL/test-password.txt")" < "$HERE/mask.sql" > "$LOCAL/mask.log" 2>&1; M=$?
     set -e
     { grep -E '^(ok |FAILED|map:|emptied:|test accounts|setting columns|changed: )' "$LOCAL/mask.log" || true; } | cut -c1-100
     [ "$M" = 0 ] || { { grep -E '(psql:|ERROR)' "$LOCAL/mask.log" || tail -3 "$LOCAL/mask.log"; } | sed -E 's/: ".*/: <value hidden>/; s/(for type [a-z ]+|value|key|string|Key \(|row contains): .*/\1: <value hidden>/; s/(DETAIL|CONTEXT): .*/\1: <hidden>/' | cut -c1-200; stop "masking failed (exit $M); nothing saved"; }
@@ -134,12 +143,12 @@ MSG
     RQ -At -F ' | ' -c "select u.email, coalesce(p.role, '-'), coalesce(p.full_name, '-') from auth.users u left join public.user_profiles p on p.id = u.id order by 2, 1" > "$LOCAL/test-accounts.txt"
     RQ -c 'set client_min_messages = warning' -c 'drop schema mask cascade'
     docker exec "$RAW" pg_dump -U supabase_admin -d postgres $SCHEMAS -Fc -f /tmp/masked.dump
-    (umask 077; docker exec "$RAW" cat /tmp/masked.dump > "$LOCAL/masked-$D.dump"; printf '%s\n' "$EXT" > "$LOCAL/masked-$D.extensions.sql")
+    (umask 077; docker exec "$RAW" cat /tmp/masked.dump > "$LOCAL/$MODE-$D.dump"; printf '%s\n' "$EXT" > "$LOCAL/$MODE-$D.extensions.sql")
     chmod 600 "$LOCAL/test-accounts.txt"
-    echo "Saved: masked-$D.dump ($(du -h "$LOCAL/masked-$D.dump" | cut -f1)). Now: tc.sh load" ;;
+    echo "Saved: $MODE-$D.dump ($(du -h "$LOCAL/$MODE-$D.dump" | cut -f1)). Now: tc.sh load" ;;
   load)
     guard
-    DUMP=$(ls -t "$LOCAL"/masked-*.dump 2>/dev/null | head -1); [ -n "$DUMP" ] || stop "no masked copy yet: tc.sh fetch"
+    DUMP=$(ls -t "$LOCAL"/masked-*.dump "$LOCAL"/real-*.dump 2>/dev/null | head -1 || true); [ -n "$DUMP" ] || stop "no saved copy yet: tc.sh fetch"
     # Nothing may write while the data is loaded; the database itself keeps its own roles and Vault.
     C stop auth storage rest functions mcp pdf caddy >/dev/null 2>&1 || true
     C up -d db >/dev/null 2>&1; wait_db
@@ -151,7 +160,7 @@ MSG
     C exec -T db rm -f /tmp/masked.dump /tmp/masked.list
     { grep 'error:' "$LOCAL/load.err" || true; } | grep -v -E 'Command was|CONTEXT|DETAIL' | sed -E 's/: ".*/: <value hidden>/' | cut -c1-170 | head -12 || true
     rm -f "$LOCAL/load.err"
-    [ "$R" = 0 ] || stop "the masked copy did not load (exit $R)"
+    [ "$R" = 0 ] || stop "the saved copy did not load (exit $R)"
     # This copy's own encryption key (Manak passwords, AI keys), kept in its own Vault: the live key never leaves the server.
     psql_db -c "select vault.create_secret(encode(extensions.gen_random_bytes(32), 'hex'), 'portal_v1', 'Test copy key') where not exists (select 1 from vault.secrets where name = 'portal_v1')" >/dev/null
     psql_db -c "CLUSTER storage.migrations USING migrations_pkey" -c "ANALYZE" >/dev/null
@@ -169,8 +178,8 @@ h=hmac.new(k,struct.pack(">Q",c),hashlib.sha1).digest(); o=h[-1]&15
 print("%06d  (valid %ds more)" % ((struct.unpack(">I",h[o:o+4])[0]&0x7fffffff)%1000000, 30-int(time.time())%30))' ;;
   refresh)
     # One step after another: set -e stops at the first that fails (an && chain would not, and the line below would lie).
-    "$0" fetch; "$0" load; "$0" up; "$0" placeholders
-    echo "Test copy refreshed from the live app (masked). App http://127.0.0.1:8090" ;;
+    "$0" fetch ${2:+"$2"}; "$0" load; "$0" up; "$0" placeholders
+    echo "Test copy refreshed from the live app ($([ "${2:-}" = real ] && echo 'REAL data, not masked' || echo masked)). App http://127.0.0.1:8090" ;;
   wipe)
     guard
     if [ -t 0 ]; then read -r -p "Type WIPE to remove the test copy's data: " A; [ "$A" = WIPE ] || stop "not confirmed"; fi
