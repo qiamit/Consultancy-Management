@@ -8,7 +8,7 @@ errors. The two sessions message each other.
 |---|---|---|
 | Works on | The test copy on this Mac | The Oracle server (`qe-consultancy`, 129.225.118.1) |
 | App link | http://localhost:5177 (while developing), http://127.0.0.1:8090 (built as on the server) | https://qengineering.in |
-| Data | Masked copy of live data. Nothing saved here reaches the server | Real client data: every production rule applies |
+| Data | Copy of live data: real since 6 Nov 2026 (`refresh real`), masked with plain `refresh`. It stays on this Mac; nothing saved here reaches the server | Real client data: every production rule applies |
 | Does | Build, test, commit, merge to `main` with the owner's OK | Release with the owner's go-ahead, check after release, look into live errors |
 | Never | Writes to the live database or server | Writes new features. A live error is fixed in Local Host, then released |
 
@@ -32,12 +32,18 @@ engine on this Mac but under its own name, ports and data (`qirlpl-lims-test`, 8
 
 ## Refreshing the test copy from live
 
-Run it from the Mac's Terminal app (not the chat). It asks for `COPY`, reads the live database read only, masks
-it in memory and saves it only if all checks pass. Stored files are never copied.
+Run it from the Mac's Terminal app (not the chat). It asks for `COPY`, reads the live database read only and saves
+it only if all checks pass. Stored files are never copied. The owner chose real data (6 Nov 2026):
 
 ```bash
-deploy/test-copy/tc.sh refresh
+deploy/test-copy/tc.sh refresh real
 ```
+
+`refresh real` keeps client names, contacts, emails and phones real, but still removes stored secrets, mail,
+connector sign-ins, sessions and authenticators, and gives every sign-in the test password. Plain
+`tc.sh refresh` masks the copy in memory instead. Real data stays on this Mac (FileVault on, `local/` not synced).
+Email, reminders and scheduled jobs are off in the test copy, so nothing reaches a client. In Claude sessions,
+print counts only, never values. After each refresh an admin sets up Two-Step Login again.
 
 `tc.sh status` shows what is running. After a Mac restart: `tc.sh start-docker`, then `tc.sh up`.
 More in `deploy/test-copy/README.md`.
