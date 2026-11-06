@@ -180,12 +180,12 @@ begin
 end $f$;
 create function mask.needs(t text) returns boolean language sql stable as $f$
   select t is not null and (mask.has_real(t)
-                            or t ~ '[A-Za-z0-9._%+-]+@(?!example\.test)[A-Za-z0-9.-]+\.[A-Za-z]{2,}|(?<![0-9A-Za-z._/-])(\+?91[- ]?)?(?!90000)[6-9][0-9]{9}(?![0-9A-Za-z._/-])|(?<![0-9A-Za-z])(?!AAAAA)[A-Z]{5}[0-9]{4}[A-Z](?![0-9A-Za-z])')
+                            or t ~ '[A-Za-z0-9._%+-]+@(?!example\.test)[A-Za-z0-9.-]+\.[A-Za-z]{2,}|(?<![0-9A-Za-z._/-])(\+?91[- ]?)?(?!90000)[6-9][0-9]{9}(?![0-9A-Za-z._/-])|(?<![0-9A-Za-z])(?!AAAAA)[A-Z]{5}[0-9]{4}[A-Z](?![0-9A-Za-z])|(?<![0-9A-Za-z])[0-9]{2}(?!AAAAA)[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]Z[0-9A-Z](?![0-9A-Za-z])')
 $f$;
 
 create function mask.patterns(t text) returns text language plpgsql stable as $f$
 begin
-  if t is null or t !~ '[A-Za-z0-9._%+-]+@(?!example\.test)[A-Za-z0-9.-]+\.[A-Za-z]{2,}|(?<![0-9A-Za-z._/-])(\+?91[- ]?)?(?!90000)[6-9][0-9]{9}(?![0-9A-Za-z._/-])|(?<![0-9A-Za-z])(?!AAAAA)[A-Z]{5}[0-9]{4}[A-Z](?![0-9A-Za-z])' then return t; end if;
+  if t is null or t !~ '[A-Za-z0-9._%+-]+@(?!example\.test)[A-Za-z0-9.-]+\.[A-Za-z]{2,}|(?<![0-9A-Za-z._/-])(\+?91[- ]?)?(?!90000)[6-9][0-9]{9}(?![0-9A-Za-z._/-])|(?<![0-9A-Za-z])(?!AAAAA)[A-Z]{5}[0-9]{4}[A-Z](?![0-9A-Za-z])|(?<![0-9A-Za-z])[0-9]{2}(?!AAAAA)[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]Z[0-9A-Z](?![0-9A-Za-z])' then return t; end if;
   t := regexp_replace(t, '[A-Za-z0-9._%+-]+@(?!example\.test)[A-Za-z0-9.-]+\.[A-Za-z]{2,}', 'masked@example.test', 'g');
   t := regexp_replace(t, '(?<![0-9A-Za-z._/-])(\+?91[- ]?)?(?!90000)[6-9][0-9]{9}(?![0-9A-Za-z._/-])', '9000000000', 'g');
   t := regexp_replace(t, '(?<![0-9A-Za-z])[0-9]{2}(?!AAAAA)[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]Z[0-9A-Z](?![0-9A-Za-z])', '27AAAAA0000A1Z5', 'g');

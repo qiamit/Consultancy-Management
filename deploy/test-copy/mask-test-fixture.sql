@@ -51,6 +51,9 @@ insert into public.company_settings values (1, 'Q Engineering', '123456789012', 
 insert into public.assistant_mail_messages (from_addr, subject, body_text) values ('someone@example.net', 'Renewal', 'Please renew.');
 insert into public.audit_log (table_name, old_data, new_data)
   select 'clients', null, to_jsonb(c) from public.clients c;
+-- As on the server: an old GST number that no longer sits in any GST column, only in the audit log.
+insert into public.audit_log (table_name, old_data, new_data)
+  values ('clients', '{"gst_number": "09ZXCVB5678K1Z3", "remark": "GSTIN changed from 09ZXCVB5678K1Z3"}', null);
 insert into private.bis_portal_secrets select id, '\x00'::bytea from public.bis_projects;
 
 -- Two sign-ins (the sign-in service's own table, as GoTrue creates it).
