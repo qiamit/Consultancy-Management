@@ -172,3 +172,6 @@ frontend/extensions/**/_metadata/
 node_modules
 frontend/web/node_modules
 frontend/web/dist-oracle/
+
+# Test copy of the live app on the Mac (masked data, keys, built web app): never committed
+deploy/test-copy/local/

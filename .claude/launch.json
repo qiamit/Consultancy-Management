@@ -17,6 +17,23 @@
       "port": 5176
     },
     {
+      "name": "qe-local",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "frontend/web",
+        "--",
+        "--mode",
+        "testcopy",
+        "--port",
+        "5177",
+        "--strictPort"
+      ],
+      "port": 5177
+    },
+    {
       "name": "web-5174",
       "runtimeExecutable": "npm",
       "runtimeArgs": [
