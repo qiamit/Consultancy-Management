@@ -97,7 +97,7 @@ MSG
       echo "Server key accepted."
     fi
     echo "Preparing the throwaway database..."
-    EXT=$(remote "psql -U supabase_admin -d postgres -tAc \"select format('create extension if not exists %I with schema %I;', e.extname, n.nspname) from pg_extension e join pg_namespace n on n.oid = e.extnamespace where n.nspname = 'public'\"")
+    EXT=$(remote "psql -U supabase_admin -d postgres -tAc \"select format('create extension if not exists %I with schema %I;', e.extname, n.nspname) from pg_extension e join pg_namespace n on n.oid = e.extnamespace where n.nspname in ('public', 'extensions') order by e.extname\"")
     printf '%s\n' "drop schema if exists private cascade; drop schema if exists public cascade; drop schema if exists auth cascade;" \
       "drop schema if exists storage cascade; create schema public;" "$EXT" | RQ >/dev/null
     echo "Copying the database into memory..."
@@ -168,7 +168,8 @@ k=base64.b32decode(os.environ["KEY"]); c=int(time.time())//30
 h=hmac.new(k,struct.pack(">Q",c),hashlib.sha1).digest(); o=h[-1]&15
 print("%06d  (valid %ds more)" % ((struct.unpack(">I",h[o:o+4])[0]&0x7fffffff)%1000000, 30-int(time.time())%30))' ;;
   refresh)
-    "$0" fetch && "$0" load && "$0" up && "$0" placeholders
+    # One step after another: set -e stops at the first that fails (an && chain would not, and the line below would lie).
+    "$0" fetch; "$0" load; "$0" up; "$0" placeholders
     echo "Test copy refreshed from the live app (masked). App http://127.0.0.1:8090" ;;
   wipe)
     guard

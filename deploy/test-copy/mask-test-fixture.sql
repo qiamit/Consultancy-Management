@@ -19,6 +19,9 @@ create table public.company_settings (id int primary key, company_name text, ban
 create table public.assistant_mail_messages (id uuid primary key default gen_random_uuid(), from_addr text, subject text, body_text text);
 create table public.audit_log (id bigserial primary key, table_name text, old_data jsonb, new_data jsonb);
 create table private.bis_portal_secrets (project_id uuid primary key, secret bytea);
+-- As on the server: pg_trgm lives in the schema extensions and a search index uses it.
+create extension if not exists pg_trgm with schema extensions;
+create index clients_company_name_trgm on public.clients using gin (company_name extensions.gin_trgm_ops);
 
 insert into public.clients (name, company_name, email, phone, mobile, address, gst_number, contact_person_name, city, notes, manak_user_id) values
   ('Shree Ganesh Pipes Pvt Ltd', 'Shree Ganesh Pipes Pvt Ltd', 'accounts@ganeshpipes.example.com', '9876543210', '+91 9123456780',
