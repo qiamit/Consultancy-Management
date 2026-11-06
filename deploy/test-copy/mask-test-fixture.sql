@@ -8,7 +8,7 @@ create table public.clients (id uuid primary key default gen_random_uuid(), name
 create table public.client_contacts (id uuid primary key default gen_random_uuid(), client_id uuid references public.clients(id),
   contact_role text not null default 'Other', name text, designation text, mobile text, email text);
 create table public.bis_projects (id uuid primary key default gen_random_uuid(), client_id uuid references public.clients(id),
-  title text, notes text, portal_user_id text, portal_password text,
+  title text, notes text, portal_user_id text, portal_password text, cm_l_digits text, license_number text, project_kind text,
   status text not null default 'in_progress' check (status in ('lead', 'in_progress', 'submitted', 'completed')));
 create table public.bis_project_module_data (id uuid primary key default gen_random_uuid(), bis_project_id uuid references public.bis_projects(id),
   module_kind text, payload jsonb);
@@ -19,6 +19,9 @@ create table public.company_settings (id int primary key, company_name text, ban
 create table public.assistant_mail_messages (id uuid primary key default gen_random_uuid(), from_addr text, subject text, body_text text);
 create table public.audit_log (id bigserial primary key, table_name text, old_data jsonb, new_data jsonb);
 create table private.bis_portal_secrets (project_id uuid primary key, secret bytea);
+-- As on the server: pg_trgm lives in the schema extensions and a search index uses it.
+create extension if not exists pg_trgm with schema extensions;
+create index clients_company_name_trgm on public.clients using gin (company_name extensions.gin_trgm_ops);
 
 insert into public.clients (name, company_name, email, phone, mobile, address, gst_number, contact_person_name, city, notes, manak_user_id) values
   ('Shree Ganesh Pipes Pvt Ltd', 'Shree Ganesh Pipes Pvt Ltd', 'accounts@ganeshpipes.example.com', '9876543210', '+91 9123456780',
@@ -28,8 +31,15 @@ insert into public.clients (name, company_name, email, phone, mobile, address, g
    'Survey 44, Ring Road, Raipur', '22PQRST6789K1Z2', 'Sunita Verma', 'Raipur', null, 'omsteel01');
 insert into public.client_contacts (client_id, name, designation, mobile, email)
   select id, 'Mahesh Gupta', 'Partner', '7766554433', 'mahesh@example.org' from public.clients where company_name = 'Om Steel Tubes LLP';
-insert into public.bis_projects (client_id, title, notes, portal_user_id, portal_password)
-  select id, company_name || ' — IS 1161: 2014', 'Scope for ' || company_name, manak_user_id, 'encrypted-elsewhere' from public.clients;
+-- As on the server: CM/L numbers are 10 digits starting 6-9 (like a mobile number) and unique except for Inclusions.
+create unique index bis_projects_cm_l_digits_uidx on public.bis_projects (cm_l_digits)
+  where cm_l_digits is not null and lower(coalesce(project_kind, '')) <> 'inclusion';
+insert into public.bis_projects (client_id, title, notes, portal_user_id, portal_password, cm_l_digits, license_number, project_kind)
+  select id, company_name || ' — IS 1161: 2014', 'Scope for ' || company_name || ', licence CM/L-' || cml, manak_user_id,
+         'encrypted-elsewhere', cml, 'CM/L-' || cml, 'licence'
+    from (select c.*, case when company_name like 'Shree%' then '7600012345' else '8400098765' end cml from public.clients c) c;
+insert into public.bis_projects (client_id, title, cm_l_digits, license_number, project_kind)
+  select id, 'Inclusion for CM/L-7600012345', '7600012345', 'CM/L-7600012345', 'inclusion' from public.clients where company_name like 'Shree%';
 insert into public.bis_project_module_data (bis_project_id, module_kind, payload)
   select p.id, 'top-management', jsonb_build_object('rows', jsonb_build_array(
     jsonb_build_object('personName', 'Anil Kumar Jain', 'designation', 'Director', 'email', 'anil.jain@example.com', 'mobile', '9988776655'),
@@ -41,6 +51,9 @@ insert into public.company_settings values (1, 'Q Engineering', '123456789012', 
 insert into public.assistant_mail_messages (from_addr, subject, body_text) values ('someone@example.net', 'Renewal', 'Please renew.');
 insert into public.audit_log (table_name, old_data, new_data)
   select 'clients', null, to_jsonb(c) from public.clients c;
+-- As on the server: an old GST number that no longer sits in any GST column, only in the audit log.
+insert into public.audit_log (table_name, old_data, new_data)
+  values ('clients', '{"gst_number": "09ZXCVB5678K1Z3", "remark": "GSTIN changed from 09ZXCVB5678K1Z3"}', null);
 insert into private.bis_portal_secrets select id, '\x00'::bytea from public.bis_projects;
 
 -- Two sign-ins (the sign-in service's own table, as GoTrue creates it).
