@@ -1,6 +1,8 @@
 -- Replaces client names and contact details, and removes sign-ins, secrets and mail, in a THROWAWAY copy of
 -- the Consultancy Pro database (tc.sh fetch runs it inside a Postgres held in memory).
 -- Prints counts only, never a value. -v test_password=... is the password every test account gets.
+-- -v masking=on replaces names and contact details; -v masking=off (tc.sh fetch real) keeps the real data and
+-- only removes sign-ins, secrets, mail and tokens.
 \set ON_ERROR_STOP on
 \set VERBOSITY terse
 \pset format unaligned
@@ -9,6 +11,7 @@ set client_min_messages = warning;
 set search_path = public, extensions;
 -- Audit triggers stay out of this: it is not real work.
 set session_replication_role = replica;
+select set_config('mask.masking', case when :'masking' = 'on' then 'on' else 'off' end, false) \gset ignored_
 
 create schema mask;
 create table mask.map (real text primary key, fake text not null, kind text not null, strong boolean not null);
@@ -87,6 +90,7 @@ create table mask.cols as
     and c.table_name not in ('user_profiles', 'profiles', 'company_settings', 'app_settings');
 delete from mask.cols where kind is null;
 
+\if :masking
 -- Staff sign-ins first, so that their addresses are mapped too.
 create table mask.users as
   select id, email real_email, 'user-' || lpad(row_number() over (order by created_at, id)::text, 2, '0') || '@example.test' fake_email
@@ -259,6 +263,8 @@ end $f$;
 create function mask.fix_text(t text) returns text language sql stable as $f$ select mask.text(t, mask.ids(t)) $f$;
 create function mask.fix_json(j jsonb) returns jsonb language sql stable as $f$ select mask.json(j, mask.ids(j::text)) $f$;
 
+\endif
+
 -- A text column whose CHECK rule is a fixed list of values holds settings, not free text: left out.
 create function mask.has_check(s text, t text, col text) returns boolean language sql stable as $f$
   select exists (select 1 from pg_constraint k join pg_attribute a on a.attrelid = k.conrelid and a.attnum = any(k.conkey)
@@ -292,6 +298,7 @@ end $$;
 -- Every other text, JSON and text-array column. Hash and path columns stay out where a changed value means
 -- nothing. Numbers and dates are never touched.
 create table mask.scan_log (t text, col text, changed bigint);
+\if :masking
 do $$
 declare r record; q text; n bigint; expr text;
 begin
@@ -318,6 +325,7 @@ begin
     if n > 0 then insert into mask.scan_log values (r.s||'.'||r.t, r.col, n); end if;
   end loop;
 end $$;
+\endif
 
 -- Sign-ins: test accounts only. No session, token or authenticator from the live app.
 do $$
@@ -328,6 +336,7 @@ begin
     if to_regclass('auth.'||t) is not null then execute format('truncate auth.%I cascade', t); end if;
   end loop;
 end $$;
+\if :masking
 update auth.users u set email = m.fake_email, phone = null, phone_change = '', email_change = '',
     confirmation_token = '', recovery_token = '', email_change_token_new = '', email_change_token_current = '',
     reauthentication_token = '', phone_change_token = '',
@@ -344,12 +353,19 @@ begin
     update public.profiles set mobile = null;
   end if;
 end $$;
+\else
+-- Real data: names, addresses and email stay; every account gets the test password and no pending token.
+update auth.users set encrypted_password = crypt(:'test_password', gen_salt('bf', 10)),
+    confirmation_token = '', recovery_token = '', email_change_token_new = '', email_change_token_current = '',
+    reauthentication_token = '', phone_change_token = '', email_change = '', phone_change = '';
+\endif
 
 -- Proof. Counts only. Any "FAILED" line stops tc.sh from keeping the result.
 create table mask.left_over (check_name text, n bigint);
 do $$
 declare r record; n bigint; total_real bigint := 0; total_mail bigint := 0; total_phone bigint := 0; total_tax bigint := 0; k bigint;
 begin
+  if current_setting('mask.masking') = 'on' then
   for r in
     select c.table_schema s, c.table_name t, c.column_name col
       from information_schema.columns c
@@ -375,9 +391,10 @@ begin
   end if;
   insert into mask.left_over values ('real names or details left', total_real), ('other email addresses left', total_mail),
     ('phone numbers left', total_phone), ('GST numbers left', total_tax);
+  select count(*) into n from auth.users where email !~ '@example\.test$'; insert into mask.left_over values ('real sign-ins left', n);
+  end if;
   select count(*) into n from auth.mfa_factors; insert into mask.left_over values ('authenticators left', n);
   select count(*) into n from auth.refresh_tokens; insert into mask.left_over values ('sign-in tokens left', n);
-  select count(*) into n from auth.users where email !~ '@example\.test$'; insert into mask.left_over values ('real sign-ins left', n);
   n := 0;
   for r in select schemaname s, tablename t from pg_tables where schemaname = 'private' loop
     execute format('select count(*) from %I.%I', r.s, r.t) into k; n := n + k;

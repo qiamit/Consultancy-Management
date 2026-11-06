@@ -47,7 +47,21 @@ It uses the server key `~/.ssh/qe_oracle`.
    `deploy/test-copy/local/`, which git ignores.
 
 Limits: a name written differently in free text (a spelling mistake, a short form) or a one-word name inside other
-text can remain. Staff names stay. Treat a masked copy as confidential: keep it on this Mac.
+text can remain. Staff names get "Test Staff" names. Treat a masked copy as confidential: keep it on this Mac.
+
+## Real data (no masking)
+
+```bash
+deploy/test-copy/tc.sh refresh real
+```
+
+The owner's choice (6 Nov 2026): step 3 is skipped, so client names, contacts, emails, phones, GST and staff names
+stay real. Step 4 still runs: no stored secret, mail, connector sign-in, session or authenticator is copied, and
+every sign-in gets the test password (the real email stays, so `info@qengineering.in` signs in with it; an admin
+sets up two-step login again after each refresh). The copy is saved as `local/real-YYYY-MM-DD.dump`; `load` takes
+the newest copy, real or masked. Email, renewal reminders, scheduled jobs and portal invites stay off
+(`compose.override.yml`), so nothing reaches a real client. Real data stays on this Mac (FileVault on,
+`local/` is not synced); in Claude sessions print counts only, never values.
 
 ## Testing the scripts
 
