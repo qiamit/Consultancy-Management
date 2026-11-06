@@ -56,6 +56,9 @@ create function mask.fake(kind text, n bigint) returns text language sql immutab
     when 'gst'     then '27AAAAA' || lpad((n % 10000)::text, 4, '0') || 'A1Z5'
     when 'pan'     then 'AAAAA' || lpad((n % 10000)::text, 4, '0') || 'A'
     when 'ref'     then 'TEST-REF-' || lpad(n::text, 4, '0')
+    -- A CM/L number is 10 digits from 6 to 9, like a mobile number. Each gets its own fake starting with 1, so
+    -- the unique CM/L index and links between records still hold and the phone rule leaves it alone.
+    when 'licence' then '1' || lpad(n::text, 9, '0')
   end
 $f$;
 
@@ -63,6 +66,7 @@ $f$;
 create table mask.cols as
   select c.table_schema s, c.table_name t, c.column_name col,
     case
+      when c.column_name = 'cm_l_digits' then 'licence'
       when c.column_name ~ '^(client_name|customer_name|company_name|firm_name|party_name|applicant_name)$' then 'client'
       when c.table_name in ('clients', 'master_clients') and c.column_name = 'name' then 'client'
       when c.column_name ~ '^(contact_person|contact_person_name|ceo_name|person_name|branch_head_name|inspection_officer_name|dealing_officer_name|bis_desk_officer|bis_inspector_name|allotted_employee_name)$' then 'contact'
