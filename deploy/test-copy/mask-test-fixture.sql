@@ -8,11 +8,12 @@ create table public.clients (id uuid primary key default gen_random_uuid(), name
 create table public.client_contacts (id uuid primary key default gen_random_uuid(), client_id uuid references public.clients(id),
   contact_role text not null default 'Other', name text, designation text, mobile text, email text);
 create table public.bis_projects (id uuid primary key default gen_random_uuid(), client_id uuid references public.clients(id),
-  title text, notes text, portal_user_id text, portal_password text, cm_l_digits text, license_number text, project_kind text,
+  title text, notes text, case_handled_by text, portal_user_id text, portal_password text, cm_l_digits text, license_number text, project_kind text,
   status text not null default 'in_progress' check (status in ('lead', 'in_progress', 'submitted', 'completed')));
 create table public.bis_project_module_data (id uuid primary key default gen_random_uuid(), bis_project_id uuid references public.bis_projects(id),
   module_kind text, payload jsonb);
 create table public.user_profiles (id uuid primary key, full_name text, email text, mobile text, role text);
+create table public.profiles (id uuid primary key, full_name text, role text, mobile text);
 create table public.ai_models (id uuid primary key default gen_random_uuid(), provider text, api_key text);
 create table public.company_settings (id int primary key, company_name text, bank_account_number text, bank_ifsc text,
   bank_upi_id text, bank_account_holder_name text);
@@ -62,7 +63,14 @@ insert into auth.users (instance_id, id, aud, role, email, encrypted_password, e
 values ('00000000-0000-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111', 'authenticated', 'authenticated',
         'owner@realcompany.example.com', 'x', now(), now(), now(), '{}', '{"full_name":"Amit Owner"}', '919812345678'),
        ('00000000-0000-0000-0000-000000000000', '22222222-2222-2222-2222-222222222222', 'authenticated', 'authenticated',
-        'staff@realcompany.example.com', 'x', now(), now(), now(), '{}', '{}', null);
+        'staff@realcompany.example.com', 'x', now(), now(), now(), '{}', '{}', null),
+       ('00000000-0000-0000-0000-000000000000', '33333333-3333-3333-3333-333333333333', 'authenticated', 'authenticated',
+        'ravindra@realcompany.example.com', 'x', now(), now(), now(), '{}', '{"full_name":"Ravindra"}', null);
 insert into public.user_profiles values
   ('11111111-1111-1111-1111-111111111111', 'Amit Owner', 'owner@realcompany.example.com', '9812345678', 'admin'),
-  ('22222222-2222-2222-2222-222222222222', 'Staff Member', 'staff@realcompany.example.com', null, 'user');
+  ('22222222-2222-2222-2222-222222222222', 'Staff Member', 'staff@realcompany.example.com', null, 'user'),
+  ('33333333-3333-3333-3333-333333333333', 'Ravindra', 'ravindra@realcompany.example.com', null, 'staff');
+-- As on the server: staff names in profiles (one-word ones too) and in Case Handled By.
+insert into public.profiles values ('11111111-1111-1111-1111-111111111111', 'Amit Owner', 'admin', null),
+  ('33333333-3333-3333-3333-333333333333', 'Ravindra', 'staff', null);
+update public.bis_projects set case_handled_by = 'Amit Owner', notes = coalesce(notes, '') || ' Handled by Staff Member.';

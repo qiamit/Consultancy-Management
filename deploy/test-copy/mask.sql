@@ -50,6 +50,7 @@ create function mask.fake(kind text, n bigint) returns text language sql immutab
   select case kind
     when 'client'  then 'Test Client '  || lpad(n::text, 4, '0')
     when 'contact' then 'Test Person ' || lpad(n::text, 4, '0')
+    when 'staff_name' then 'Test Staff ' || lpad(n::text, 4, '0')
     when 'address' then 'Test Address ' || lpad(n::text, 4, '0') || ', Test City'
     when 'email'   then 'client-' || lpad(n::text, 4, '0') || '@example.test'
     when 'mobile'  then '90000' || lpad(n::text, 5, '0')
@@ -97,6 +98,37 @@ begin
     insert into mask.map select p.email, u.fake_email, 'staff', true from public.user_profiles p join mask.users u on u.id = p.id
       where not mask.ignorable(p.email) on conflict do nothing;
   end if;
+end $$;
+
+-- Staff names too (the owner's included): every name a sign-in or a staff profile carries gets a "Test Staff"
+-- name, replaced wherever it appears (Case Handled By, notes, audit log). A one-word name only as a whole cell.
+do $$
+declare v text;
+begin
+  for v in
+    select distinct btrim(n) from (
+      select raw_user_meta_data->>'full_name' n from auth.users
+      union all select raw_user_meta_data->>'name' from auth.users
+      union all select full_name from public.user_profiles where to_regclass('public.user_profiles') is not null
+    ) x where n is not null
+  loop
+    continue when mask.ignorable(v) or exists (select 1 from mask.map m where m.real = v);
+    insert into mask.map values (v, mask.fake('staff_name', nextval('mask.seq')), 'staff_name', length(v) >= 6 and v like '% %');
+  end loop;
+  if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'profiles' and column_name = 'full_name') then
+    for v in select distinct btrim(full_name) from public.profiles where full_name is not null loop
+      continue when mask.ignorable(v) or exists (select 1 from mask.map m where m.real = v);
+      insert into mask.map values (v, mask.fake('staff_name', nextval('mask.seq')), 'staff_name', length(v) >= 6 and v like '% %');
+    end loop;
+    update public.profiles x set full_name = m.fake from mask.map m where btrim(x.full_name) = m.real;
+  end if;
+  if to_regclass('public.user_profiles') is not null then
+    update public.user_profiles x set full_name = m.fake from mask.map m where btrim(x.full_name) = m.real;
+  end if;
+  update auth.users u set raw_user_meta_data = u.raw_user_meta_data
+      || coalesce((select jsonb_build_object('full_name', m.fake) from mask.map m where m.real = btrim(u.raw_user_meta_data->>'full_name')), '{}')
+      || coalesce((select jsonb_build_object('name', m.fake) from mask.map m where m.real = btrim(u.raw_user_meta_data->>'name')), '{}')
+   where u.raw_user_meta_data ?| array['full_name', 'name'];
 end $$;
 
 -- Build the map, then replace whole cells.
@@ -334,6 +366,13 @@ begin
       execute format($q$select count(*) from %I.%I where %I::text ~ '(?<![0-9A-Za-z])[0-9]{2}(?!AAAAA)[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]Z[0-9A-Z](?![0-9A-Za-z])'$q$, r.s, r.t, r.col) into n; total_tax := total_tax + n;
     end if;
   end loop;
+  -- Staff names: every one a fake, also the one-word names that are only replaced as a whole cell.
+  select count(*) into n from public.user_profiles where full_name is not null and full_name !~ '^Test (Staff|Person) [0-9]{4}$' and not mask.ignorable(full_name);
+  total_real := total_real + n;
+  if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'profiles' and column_name = 'full_name') then
+    execute $q$select count(*) from public.profiles where full_name is not null and full_name !~ '^Test (Staff|Person) [0-9]{4}$' and not mask.ignorable(full_name)$q$ into n;
+    total_real := total_real + n;
+  end if;
   insert into mask.left_over values ('real names or details left', total_real), ('other email addresses left', total_mail),
     ('phone numbers left', total_phone), ('GST numbers left', total_tax);
   select count(*) into n from auth.mfa_factors; insert into mask.left_over values ('authenticators left', n);
