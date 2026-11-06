@@ -70,11 +70,56 @@ function friendlyPdfServiceError(detail: string, status?: number): string {
   return 'PDF download failed. Start PDF service with: npm run pdf:dev'
 }
 
+/** Google map tiles in the Location Map (they allow any origin, so the browser can read them). */
+const MAP_TILE_URL = /https:\/\/mt[0-3]\.google\.com\/vt\/[^"'\s)]+/g
+const MAP_TILE_TIMEOUT_MS = 10_000
+const MAP_TILE_PARALLEL = 6
+
+async function tileAsDataUrl(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(MAP_TILE_TIMEOUT_MS) })
+    if (!res.ok) return null
+    const blob = await res.blob()
+    if (!blob.type.startsWith('image/')) return null
+    return await new Promise<string | null>((resolve) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : null)
+      reader.onerror = () => resolve(null)
+      reader.readAsDataURL(blob)
+    })
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The PDF service loads nothing from outside our own storage, so map tiles are put into the page as data: images
+ * first. A tile that cannot be fetched stays as it was (it shows blank, as before).
+ */
+export async function inlineMapTiles(html: string): Promise<string> {
+  const urls = [...new Set(html.match(MAP_TILE_URL) ?? [])]
+  if (!urls.length) return html
+  const inlined = new Map<string, string>()
+  let next = 0
+  await Promise.all(
+    Array.from({ length: Math.min(MAP_TILE_PARALLEL, urls.length) }, async () => {
+      while (next < urls.length) {
+        const url = urls[next++]
+        // In the HTML the query is written with &amp;; the request needs plain &.
+        const data = await tileAsDataUrl(url.replace(/&amp;/g, '&'))
+        if (data) inlined.set(url, data)
+      }
+    }),
+  )
+  return html.replace(MAP_TILE_URL, (url) => inlined.get(url) ?? url)
+}
+
 /** Render HTML → PDF bytes via Playwright service (does not trigger a download). */
 export async function renderPdfViaPlaywright(
   request: PlaywrightPdfRequest,
 ): Promise<Blob> {
   const endpoint = pdfServiceUrl()
+  const html = await inlineMapTiles(request.html)
   let res: Response
   try {
     const { data, error } = await supabase.auth.getSession()
@@ -89,7 +134,7 @@ export async function renderPdfViaPlaywright(
         Authorization: `Bearer ${accessToken}`,
       },
       body: JSON.stringify({
-        html: request.html,
+        html,
         filename: request.filename,
         format: request.format ?? 'a4',
         landscape: request.landscape === true,
