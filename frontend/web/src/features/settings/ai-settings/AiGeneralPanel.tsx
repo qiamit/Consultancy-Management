@@ -1,6 +1,6 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useState, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Cpu, FlaskConical } from 'lucide-react'
+import { Cpu, FileSearch, FlaskConical } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -113,6 +113,7 @@ export const AiGeneralPanel = forwardRef<AiGeneralPanelHandle, AiGeneralPanelPro
 ) {
   const [models, setModels] = useState<AiModelRow[]>([])
   const [defaultModelId, setDefaultModelId] = useState<string>('')
+  const [documentModelId, setDocumentModelId] = useState<string>('')
   const [showAiAssistant, setShowAiAssistant] = useState(true)
   const [temperature, setTemperature] = useState('0.7')
   const [maxTokens, setMaxTokens] = useState('4096')
@@ -133,8 +134,14 @@ export const AiGeneralPanel = forwardRef<AiGeneralPanelHandle, AiGeneralPanelPro
         modelRows.find((model) => model.id === configuredDefaultId) ??
         modelRows.find((model) => model.is_default) ??
         modelRows.find((model) => model.is_active)
-      setModels(modelRows.filter((model) => model.is_active || model.id === selectedDefault?.id))
+      const configuredDocumentId = String(settings?.document_model_id ?? '').trim()
+      setModels(
+        modelRows.filter(
+          (model) => model.is_active || model.id === selectedDefault?.id || model.id === configuredDocumentId,
+        ),
+      )
       setDefaultModelId(selectedDefault?.id ?? '')
+      setDocumentModelId(modelRows.some((model) => model.id === configuredDocumentId) ? configuredDocumentId : '')
       if (settings) {
         setShowAiAssistant(settings.ai_enabled)
         setTemperature(String(settings.temperature ?? 0.7))
@@ -177,6 +184,7 @@ export const AiGeneralPanel = forwardRef<AiGeneralPanelHandle, AiGeneralPanelPro
 
         await upsertAiSettings({
           default_model_id: defaultModelId || null,
+          document_model_id: documentModelId || null,
           ai_enabled: showAiAssistant,
           temperature: temp,
           max_tokens: Math.round(tokens),
@@ -197,6 +205,7 @@ export const AiGeneralPanel = forwardRef<AiGeneralPanelHandle, AiGeneralPanelPro
     agentCrudEnabled,
     showAiAssistant,
     defaultModelId,
+    documentModelId,
     logRequests,
     maxTokens,
     queryClient,
@@ -317,7 +326,36 @@ export const AiGeneralPanel = forwardRef<AiGeneralPanelHandle, AiGeneralPanelPro
           </div>
         </SettingSection>
 
-        <SettingSection step="02" title="Lab Context" icon={<FlaskConical className="h-4 w-4" />}>
+        <SettingSection step="02" title="Model for Document Checks" icon={<FileSearch className="h-4 w-4" />}>
+          <div className="grid grid-cols-1 gap-x-5 gap-y-2 md:grid-cols-3">
+            <div className="space-y-0.5">
+              <Label>AI Model for Document Checks</Label>
+              <Select
+                value={documentModelId || '_default'}
+                onValueChange={(v) => setDocumentModelId(v === '_default' ? '' : v)}
+              >
+                <SelectTrigger className={cn(limsFieldClass, 'h-8 w-full')}>
+                  <SelectValue placeholder="Same as Default Model" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_default">— Same as Default Model —</SelectItem>
+                  {models.map((m) => (
+                    <SelectItem key={m.id} value={m.id}>
+                      {m.display_name} ({m.provider})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="self-end text-xs leading-snug text-stone-600 md:col-span-2">
+              Used for the AI Conformity Check and for Reading PDFs (CMPF-311, Undertakings, Non-Conformity, Test
+              Parameters, Process Flow Chart, Plant Layout). A Cheaper Model Here Saves Cost; Chat and the Admin Agent
+              Keep the Default Model. Each Conformity Result Can Be Re-Checked With the Default Model.
+            </p>
+          </div>
+        </SettingSection>
+
+        <SettingSection step="03" title="Lab Context" icon={<FlaskConical className="h-4 w-4" />}>
           <div className="space-y-0.5">
             <Label htmlFor="ai-system-prefix">System Prompt Prefix</Label>
             <Textarea

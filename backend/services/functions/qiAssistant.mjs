@@ -291,6 +291,24 @@ export async function loadAgentModel(rest) {
   }
 }
 
+/**
+ * Document checks: long source-PDF tasks (AI Conformity Check and the PDF extractions). They may run on their own,
+ * cheaper model (AI Settings → Model for Document Checks); chat and the Admin Agent always use the Default AI Model.
+ */
+export function isDocumentTaskPage(page) {
+  const p = String(page || '')
+  return (
+    p === 'bis/cmpf-311-on-sit' ||
+    p === 'bis/undertaking-indian-standards' ||
+    p === 'bis/undertaking-other' ||
+    p.startsWith('bis/non-conformity') ||
+    p === 'masters/test-parameters-ai' ||
+    p === 'bis/process-flow-chart' ||
+    p === 'bis/plant-layout' ||
+    p === 'bis/sample-conformity'
+  )
+}
+
 export function createQiAssistantHandler(deps) {
   const { requireUser, requireAdmin, userRestFor, storageFor, rest, readBody, corsJson } = deps
 
@@ -385,8 +403,17 @@ export function createQiAssistantHandler(deps) {
 
     /** @type {Record<string, unknown> | null} */
     let model = null
+    // A document check uses the Model for Document Checks when one is set (and active), unless the user asked to
+    // re-check with the main model.
+    const useDocumentModel = !agentMode && isDocumentTaskPage(body.page) && body.useMainModel !== true
     try {
-      if (settings?.default_model_id) {
+      if (useDocumentModel && settings?.document_model_id) {
+        const rows = await rest(
+          `/ai_models?id=eq.${encodeURIComponent(String(settings.document_model_id))}&is_active=eq.true&select=*`,
+        )
+        model = Array.isArray(rows) && rows[0] ? rows[0] : null
+      }
+      if (!model && settings?.default_model_id) {
         const rows = await rest(
           `/ai_models?id=eq.${encodeURIComponent(String(settings.default_model_id))}&is_active=eq.true&select=*`,
         )
@@ -586,7 +613,7 @@ export function createQiAssistantHandler(deps) {
     const maxTokens = Number(model.max_tokens)
     const isCmpf311Request = body.page === 'bis/cmpf-311-on-sit'
     // Long source-PDF extractions: full output budget and no hidden reasoning, which can otherwise use up the tokens.
-    const isLongExtraction = isCmpf311Request || body.page === 'bis/undertaking-indian-standards' || body.page === 'bis/undertaking-other' || String(body.page || '').startsWith('bis/non-conformity') || body.page === 'masters/test-parameters-ai' || body.page === 'bis/process-flow-chart' || body.page === 'bis/plant-layout' || body.page === 'bis/sample-conformity'
+    const isLongExtraction = isDocumentTaskPage(body.page)
     // Sample conformity is a judgement over long documents: DeepSeek reasons first (its reasoning counts towards
     // max_tokens, so the budget is larger), at a low temperature, with more time.
     const reasonedCheck = body.page === 'bis/sample-conformity' && provider === 'deepseek'
@@ -732,6 +759,6 @@ export function createQiAssistantHandler(deps) {
       return
     }
 
-    corsJson(res, 200, { reply })
+    corsJson(res, 200, { reply, model: String(model.display_name || modelId) })
   }
 }

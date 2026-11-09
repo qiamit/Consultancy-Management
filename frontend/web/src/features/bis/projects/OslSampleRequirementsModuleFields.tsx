@@ -127,6 +127,7 @@ import {
 } from './oslSampleRequirementsModel'
 import { formatDisplayDate } from './types'
 import { checkSampleConformity } from './sampleConformityAi'
+import { fetchAiSettings } from '@/features/settings/ai-settings/aiSettingsApi'
 import {
   findLaboratoryOslCodeByName,
   searchLaboratoryMasterOptions,
@@ -1627,7 +1628,21 @@ export function OslSampleRequirementsModuleFields({
    * Conformity not set by hand); decided samples are skipped, and a sample whose Test Report was replaced is checked
    * again. With ticked samples (or `onlyIds`, from Re-Check in the log): exactly those are re-checked.
    */
-  const runConformityCheck = async (onlyIds?: string[]) => {
+  // A separate Model for Document Checks is set in AI Settings: the log then offers a re-check with the main model.
+  const [documentModelSet, setDocumentModelSet] = useState(false)
+  useEffect(() => {
+    let live = true
+    fetchAiSettings()
+      .then((s) => {
+        if (live) setDocumentModelSet(Boolean(s?.document_model_id))
+      })
+      .catch(() => undefined)
+    return () => {
+      live = false
+    }
+  }, [])
+
+  const runConformityCheck = async (onlyIds?: string[], opts?: { useMainModel?: boolean }) => {
     const chosen = onlyIds ?? (selectedIds.size ? [...selectedIds] : null)
     const withReport = (chosen ? rows.filter((r) => chosen.includes(r.id)) : rows).filter((r) => r.testReportStoragePath.trim())
     const targets = chosen ? withReport : withReport.filter((r) => !oslConformityDecided(r))
@@ -1651,6 +1666,7 @@ export function OslSampleRequirementsModuleFields({
           isCodeId,
           isLabel: isCodeLabel,
           onStep: (step) => setConformityBusy(`${label}: ${step}`),
+          useMainModel: opts?.useMainModel,
         })
         tally[check.verdict] += 1
         const current = valueRef.current
@@ -3088,6 +3104,7 @@ export function OslSampleRequirementsModuleFields({
                 </span>
                 <span className="text-xs text-stone-500">
                   Checked {new Date(conformityLog.check.checkedAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
+                  {conformityLog.check.model ? ` · AI Model: ${conformityLog.check.model}` : ''}
                 </span>
                 {conformityLog.check.reportPath && conformityLog.check.reportPath !== conformityLog.row.testReportStoragePath ? (
                   <span className="border border-amber-500 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
@@ -3184,6 +3201,7 @@ export function OslSampleRequirementsModuleFields({
             </div>
           ) : null}
           <DialogFooter className="shrink-0 gap-2 border-t border-stone-300 bg-stone-100 px-4 py-3 sm:justify-between">
+            <div className="flex flex-wrap gap-2">
             <Button
               type="button"
               variant="outline"
@@ -3198,6 +3216,23 @@ export function OslSampleRequirementsModuleFields({
             >
               <Sparkles size={14} aria-hidden /> Re-Check
             </Button>
+            {documentModelSet ? (
+              <Button
+                type="button"
+                variant="outline"
+                className={cn(limsOutlineBtnClass, 'gap-1.5')}
+                disabled={disabled || conformityBusy !== null || !conformityLog?.row.testReportStoragePath.trim()}
+                title="Run the AI Conformity Check Again for This Sample With the Default AI Model (Not the Model for Document Checks)"
+                onClick={() => {
+                  const id = conformityLog?.row.id
+                  setConformityLogId(null)
+                  if (id) void runConformityCheck([id], { useMainModel: true })
+                }}
+              >
+                <Sparkles size={14} aria-hidden /> Re-Check With Main Model
+              </Button>
+            ) : null}
+            </div>
             <Button type="button" variant="outline" className={limsOutlineBtnClass} onClick={() => setConformityLogId(null)}>
               Close
             </Button>
