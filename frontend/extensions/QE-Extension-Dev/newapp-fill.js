@@ -351,6 +351,8 @@
       if (g.sitAccept === "No") {
         files("own-sit").forEach((f) => plan.push({ kind: "file", key: "Own SIT document", slot: "own-sit", file: f }));
       }
+      // "Yes" reveals selectSIT, the BIS SIT document list (e.g. "PM/ 14650/3Nov2023"): pick it.
+      if (g.sitAccept === "Yes") plan.push({ kind: "sit-doc", key: "SIT document" });
       // Manak renders variety row 0 (productVarities0 / productVaritiesFile0); "+" (addproductVarities())
       // appends the next blank row, so add first, then fill row i.
       (g.varieties || []).forEach((v, i) =>
@@ -498,20 +500,8 @@
     if (stepId === "test-reports") {
       // TestReport: one input row (productVarirtyDescription, qrCode by value, testReportComplete,
       // conformitySample) + #addDetails (addDetail()) appends it to the table. Lab report is pulled by QR.
-      (d.testReports || []).forEach((r, i) =>
-        plan.push({
-          kind: "report-row",
-          key: `Test report ${i + 1}`,
-          index: i,
-          qr: r.qrCode,
-          cells: [
-            { key: "Variety", value: r.variety, id: "productVarirtyDescription" },
-            { key: "QR code", value: r.qrCode, optionValue: r.qrCode, id: "qrCode", wait: 2500 },
-            { key: "Test report complete", value: r.complete, id: "testReportComplete" },
-            { key: "Conformity of sample", value: r.conformity, id: "conformitySample" },
-          ],
-        }),
-      );
+      // The rows are laid out on the page (planReportRows), where Manak's variety list is known.
+      plan.push({ kind: "report-rows", samples: d.testReports || [] });
       const o = d.testReportOptions || {};
       plan.push(scalar("Long duration tests", o.longDuration, [/^longDurationTestsFlag$/], []));
       plan.push(scalar("Raw material conformity", o.rawMaterialReports, [/^rawMaterialOption\dFlag$/], []));
@@ -677,6 +667,188 @@
     }
   }
 
+  const realOptions = (select) =>
+    select && select.tagName === "SELECT"
+      ? Array.from(select.options).filter((o) => o.value && o.value !== "0" && !/^\s*-*\s*select/i.test(o.text))
+      : [];
+
+  /** "Yes" to the BIS SIT reveals selectSIT (filled by Manak a moment later): choose the SIT document. */
+  async function fillSitDocument(report) {
+    const find = () => document.getElementById("selectSIT") || document.querySelector('select[name="selectSIT"]');
+    let sel = find();
+    for (let i = 0; i < 20 && !realOptions(sel).length; i += 1) {
+      await sleep(400);
+      sel = find();
+    }
+    const opts = realOptions(sel);
+    if (!opts.length) {
+      report.missing.push("SIT document (Manak shows no SIT document to choose — pick it yourself)");
+      return;
+    }
+    if (sel.selectedIndex > 0 && opts.some((o) => o.value === sel.value)) {
+      report.skipped.push(`SIT document (already ${norm(sel.selectedOptions[0].text)})`);
+      return;
+    }
+    const pick = opts[0];
+    sel.value = pick.value;
+    sel.dispatchEvent(new Event("change", { bubbles: true }));
+    nudgePage(sel);
+    report.filled.push(`SIT document (${norm(pick.text)})${opts.length > 1 ? ` — Manak lists ${opts.length}, check it` : ""}`);
+    await sleep(800);
+  }
+
+  /** A saved Step 6 table row (not the input row) that already has this variety and QR code. */
+  function reportRowOnPage(variety, qr) {
+    const q = low(qr);
+    const v = low(variety);
+    if (!q) return false;
+    return Array.from(document.querySelectorAll("table tr")).some((tr) => {
+      if (tr.querySelector("input, select, textarea")) return false;
+      const cells = Array.from(tr.querySelectorAll("td")).map((td) => low(td.innerText));
+      return cells.includes(q) && (!v || cells.includes(v));
+    });
+  }
+
+  /**
+   * Step 6 rows. Every variety from Step 1 (Manak's variety list) gets a row and every QR code is used at least once:
+   * a sample goes on its own variety; a variety with no sample of its own takes the least-used QR code (samples with
+   * no variety of their own first), so QR codes repeat when there are fewer QR codes than varieties. Samples left
+   * over (more QR codes than varieties) still get a row on Manak's varieties in turn.
+   */
+  function planReportRows(samples, varietySelect) {
+    const list = (samples || []).filter((s) => norm(s.qrCode));
+    const opts = realOptions(varietySelect);
+    const row = (s, variety, n) => ({
+      key: `Test report ${n}`,
+      index: n - 1,
+      qr: s.qrCode,
+      cells: [
+        { key: "Variety", value: variety, id: "productVarirtyDescription" },
+        { key: "QR code", value: s.qrCode, optionValue: s.qrCode, id: "qrCode", wait: 2500 },
+        { key: "Test report complete", value: s.complete, id: "testReportComplete" },
+        { key: "Conformity of sample", value: s.conformity, id: "conformitySample" },
+      ],
+    });
+    if (!opts.length || !list.length) return { list: list.map((s, i) => row(s, s.variety, i + 1)) };
+    const own = list.map((s) => {
+      const v = norm(s.variety);
+      if (!v) return null;
+      if (opts.length === 1) return opts[0];
+      return pickOption(varietySelect, v) || pickVarietyFuzzy(varietySelect, v);
+    });
+    const uses = own.map((o) => (o ? 1 : 0));
+    const out = [];
+    opts.forEach((opt) => {
+      const mine = list.map((_, i) => i).filter((i) => own[i] === opt);
+      if (mine.length) {
+        mine.forEach((i) => out.push([i, opt]));
+        return;
+      }
+      let best = 0;
+      uses.forEach((u, i) => {
+        if (u < uses[best]) best = i;
+      });
+      uses[best] += 1;
+      out.push([best, opt]);
+    });
+    uses.forEach((u, i) => {
+      if (!u) out.push([i, opts[out.length % opts.length]]);
+    });
+    const repeated = list.length < opts.length;
+    return {
+      list: out.map(([i, opt], n) => row(list[i], norm(opt.text), n + 1)),
+      extra: repeated ? `Test reports: ${opts.length} varieties, ${list.length} QR code(s) — QR codes repeated so every variety has a row` : "",
+    };
+  }
+
+  /** One Step 6 row: variety, QR code, report complete, conformity, then Add (addDetail()). */
+  async function fillReportRow(item, report) {
+    const prefix = `${item.key}: `;
+    const variety = (item.cells.find((c) => c.id === "productVarirtyDescription") || {}).value;
+    if (item.qr && reportRowOnPage(variety, item.qr)) {
+      report.skipped.push(`${item.key} (${norm(variety) || "row"} with QR ${item.qr} already added)`);
+      return;
+    }
+    let ok = true;
+    // Every selected QR code gets a row. A QR with no variety of its own (a raw material sample, say) reuses
+    // Manak's varieties in turn, so the same variety is repeated when there are fewer varieties than QR codes.
+    const varietySelect = document.getElementById("productVarirtyDescription");
+    const manakVarieties = varietySelect && varietySelect.tagName === "SELECT"
+      ? Array.from(varietySelect.options).filter((o) => o.value && o.value !== "0" && !/^\s*-*\s*select/i.test(o.text))
+      : [];
+    const cycled = () => (manakVarieties.length ? manakVarieties[(item.index || 0) % manakVarieties.length] : null);
+    const varietyCell = item.cells.find((c) => c.id === "productVarirtyDescription");
+    if (varietyCell && !norm(varietyCell.value) && cycled()) {
+      varietyCell.value = norm(cycled().text);
+      report.filled.push(`${prefix}Variety repeated from Manak's list (no variety on this sample)`);
+    }
+    for (const cell of item.cells) {
+      const el = document.getElementById(cell.id);
+      if (!norm(cell.value)) {
+        report.empty.push(`${prefix}${cell.key}`);
+        ok = false;
+        continue;
+      }
+      if (!el) {
+        report.missing.push(`${prefix}${cell.key}`);
+        ok = false;
+        continue;
+      }
+      let res;
+      const byValue = cell.optionValue && Array.from(el.options || []).find((o) => o.value === cell.optionValue || norm(o.text) === cell.optionValue);
+      if (byValue) {
+        el.value = byValue.value;
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+        nudgePage(el);
+        res = "filled";
+      } else {
+        res = setValue(el, cell.value);
+        // The sample's variety text can differ from Manak's variety names: match by class, pressure and size.
+        if (res === "no-option" && cell.id === "productVarirtyDescription" && el.tagName === "SELECT") {
+          const fuzzy = pickVarietyFuzzy(el, cell.value);
+          if (fuzzy) {
+            el.value = fuzzy.value;
+            el.dispatchEvent(new Event("change", { bubbles: true }));
+            nudgePage(el);
+            res = "filled";
+            report.filled.push(`${prefix}Variety matched to "${norm(fuzzy.text)}"`);
+          }
+        }
+        // Still no match: keep going with Manak's varieties in turn, so the QR code is not left out (the report says so).
+        if (res === "no-option" && cell.id === "productVarirtyDescription" && cycled()) {
+          const pick = cycled();
+          el.value = pick.value;
+          el.dispatchEvent(new Event("change", { bubbles: true }));
+          nudgePage(el);
+          res = "filled";
+          report.filled.push(`${prefix}Variety "${cell.value}" not in Manak's list — used "${norm(pick.text)}" (check it)`);
+        }
+        // One real option (e.g. the single variety from step 1) — that is the one.
+        const real = el.tagName === "SELECT" ? Array.from(el.options).filter((o) => o.value && o.value !== "0" && !/^\s*-*\s*select/i.test(o.text)) : [];
+        if (res === "no-option" && real.length === 1) {
+          el.value = real[0].value;
+          el.dispatchEvent(new Event("change", { bubbles: true }));
+          nudgePage(el);
+          res = "filled";
+        }
+      }
+      if (res === "no-option") {
+        const listed = el.tagName === "SELECT" && cell.id === "productVarirtyDescription" ? ` — Manak has: ${Array.from(el.options).filter((o) => o.value).map((o) => norm(o.text)).join(" | ")}` : "";
+        report.missing.push(`${prefix}${cell.key} (no option "${cell.value}"${listed})`);
+        ok = false;
+      } else report.filled.push(`${prefix}${cell.key}`);
+      await sleep(cell.wait || 500);
+    }
+    const add = document.getElementById("addDetails");
+    if (ok && add) {
+      add.click();
+      report.filled.push(`${prefix}Add clicked`);
+      await sleep(2000);
+    } else if (!ok) {
+      report.missing.push(`${prefix}not added — complete the row in Consultancy Pro (conformity, QR)`);
+    }
+  }
+
   async function runStepInner(step, data) {
     document.querySelectorAll("input, select, textarea").forEach((el) => {
       el.__qeUsed = false;
@@ -692,90 +864,12 @@
       } else if (item.kind === "group") {
         const root = sectionRoot(item.section) || document;
         await runCells(item.cells, root, report, `${item.key}: `);
-      } else if (item.kind === "report-row") {
-        const prefix = `${item.key}: `;
-        if (item.qr && pageHasValue(item.qr)) {
-          report.skipped.push(`${item.key} (QR already added)`);
-          continue;
-        }
-        let ok = true;
-        // Every selected QR code gets a row. A QR with no variety of its own (a raw material sample, say) reuses
-        // Manak's varieties in turn, so the same variety is repeated when there are fewer varieties than QR codes.
-        const varietySelect = document.getElementById("productVarirtyDescription");
-        const manakVarieties = varietySelect && varietySelect.tagName === "SELECT"
-          ? Array.from(varietySelect.options).filter((o) => o.value && o.value !== "0" && !/^\s*-*\s*select/i.test(o.text))
-          : [];
-        const cycled = () => (manakVarieties.length ? manakVarieties[(item.index || 0) % manakVarieties.length] : null);
-        const varietyCell = item.cells.find((c) => c.id === "productVarirtyDescription");
-        if (varietyCell && !norm(varietyCell.value) && cycled()) {
-          varietyCell.value = norm(cycled().text);
-          report.filled.push(`${prefix}Variety repeated from Manak's list (no variety on this sample)`);
-        }
-        for (const cell of item.cells) {
-          const el = document.getElementById(cell.id);
-          if (!norm(cell.value)) {
-            report.empty.push(`${prefix}${cell.key}`);
-            ok = false;
-            continue;
-          }
-          if (!el) {
-            report.missing.push(`${prefix}${cell.key}`);
-            ok = false;
-            continue;
-          }
-          let res;
-          const byValue = cell.optionValue && Array.from(el.options || []).find((o) => o.value === cell.optionValue || norm(o.text) === cell.optionValue);
-          if (byValue) {
-            el.value = byValue.value;
-            el.dispatchEvent(new Event("change", { bubbles: true }));
-            nudgePage(el);
-            res = "filled";
-          } else {
-            res = setValue(el, cell.value);
-            // The sample's variety text can differ from Manak's variety names: match by class, pressure and size.
-            if (res === "no-option" && cell.id === "productVarirtyDescription" && el.tagName === "SELECT") {
-              const fuzzy = pickVarietyFuzzy(el, cell.value);
-              if (fuzzy) {
-                el.value = fuzzy.value;
-                el.dispatchEvent(new Event("change", { bubbles: true }));
-                nudgePage(el);
-                res = "filled";
-                report.filled.push(`${prefix}Variety matched to "${norm(fuzzy.text)}"`);
-              }
-            }
-            // Still no match: keep going with Manak's varieties in turn, so the QR code is not left out (the report says so).
-            if (res === "no-option" && cell.id === "productVarirtyDescription" && cycled()) {
-              const pick = cycled();
-              el.value = pick.value;
-              el.dispatchEvent(new Event("change", { bubbles: true }));
-              nudgePage(el);
-              res = "filled";
-              report.filled.push(`${prefix}Variety "${cell.value}" not in Manak's list — used "${norm(pick.text)}" (check it)`);
-            }
-            // One real option (e.g. the single variety from step 1) — that is the one.
-            const real = el.tagName === "SELECT" ? Array.from(el.options).filter((o) => o.value && o.value !== "0" && !/^\s*-*\s*select/i.test(o.text)) : [];
-            if (res === "no-option" && real.length === 1) {
-              el.value = real[0].value;
-              el.dispatchEvent(new Event("change", { bubbles: true }));
-              nudgePage(el);
-              res = "filled";
-            }
-          }
-          if (res === "no-option") {
-            const listed = el.tagName === "SELECT" && cell.id === "productVarirtyDescription" ? ` — Manak has: ${Array.from(el.options).filter((o) => o.value).map((o) => norm(o.text)).join(" | ")}` : "";
-            report.missing.push(`${prefix}${cell.key} (no option "${cell.value}"${listed})`);
-            ok = false;
-          } else report.filled.push(`${prefix}${cell.key}`);
-          await sleep(cell.wait || 500);
-        }
-        const add = document.getElementById("addDetails");
-        if (ok && add) {
-          add.click();
-          report.filled.push(`${prefix}Add clicked`);
-          await sleep(2000);
-        } else if (!ok) {
-          report.missing.push(`${prefix}not added — complete the row in Consultancy Pro (conformity, QR)`);
-        }
+      } else if (item.kind === "sit-doc") {
+        await fillSitDocument(report);
+      } else if (item.kind === "report-rows") {
+        const rows = planReportRows(item.samples, document.getElementById("productVarirtyDescription"));
+        if (rows.extra) report.filled.push(rows.extra);
+        for (const row of rows.list) await fillReportRow(row, report);
       } else if (item.kind === "file-rows") {
         // Rows of (file name, PDF): ids <prefix>0, <prefix>1 …; the table's own "add" control appends the next row.
         const isVisible = (el) => el && el.getBoundingClientRect().width > 0;
