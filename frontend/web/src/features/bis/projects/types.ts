@@ -78,6 +78,25 @@ export const DEFAULT_CASE_REFERRED_BY = 'QE'
 export const DEFAULT_BILLING_FREQUENCY = 'Yearly'
 export const DEFAULT_APPLICATION_STAGE = 'Under Preparation'
 
+/** Stages of a BIS New Application, in order (table bis_projects.application_stage, checked by the database). */
+export const APPLICATION_STAGES = [
+  'Under Preparation',
+  'Test Request Submitted',
+  'Test Report Uploaded',
+  'Application Submitted',
+  'Query Raised by BIS',
+  'Closure Notice Issued',
+  'Application Scrutinized',
+  'Inspection Scheduled',
+  'Inspection Done',
+] as const
+export type ApplicationStage = (typeof APPLICATION_STAGES)[number]
+/**
+ * Stages the app sets by itself from the application's data (database trigger bis_projects_advance_stage): Test Request
+ * PDF of a sample, every Test Report, the Manak application number. A stage only moves forward by itself.
+ */
+export const AUTO_APPLICATION_STAGES: readonly string[] = APPLICATION_STAGES.slice(0, 4)
+
 export type BisProjectClientJoin = {
   company_name: string | null
   email?: string | null
