@@ -212,6 +212,15 @@ function extractAiError(payload, status) {
  *   corsJson: (res: import('node:http').ServerResponse, status: number, body: unknown) => void
  * }} deps
  */
+/**
+ * Claude 5 models and later reject the temperature setting ("temperature is deprecated for this model"); they are
+ * called with their own default. Older Claude models and other providers still get it.
+ */
+export function acceptsTemperature(modelId) {
+  const m = /claude-[a-z]+-(\d+)/i.exec(String(modelId || ''))
+  return !(m && Number(m[1]) >= 5)
+}
+
 /** Chat completions with tools (OpenAI-compatible); returns the provider's choice.message. */
 export function createToolCaller({ apiBase, apiKey, modelId, provider, maxTokens, temperature, reasoning = false }) {
   return async (messages, tools, { final = false } = {}) => {
@@ -225,7 +234,9 @@ export function createToolCaller({ apiBase, apiKey, modelId, provider, maxTokens
         messages,
         tools,
         tool_choice: final ? 'none' : 'auto',
-        ...(reasoning ? { max_completion_tokens: maxTokens } : { temperature, max_tokens: maxTokens }),
+        ...(reasoning
+          ? { max_completion_tokens: maxTokens }
+          : { ...(acceptsTemperature(modelId) ? { temperature } : {}), max_tokens: maxTokens }),
       }),
     })
     const payload = await r.json().catch(() => ({}))
@@ -609,7 +620,7 @@ export function createQiAssistantHandler(deps) {
         messages: chatMessages,
         ...(openAiReasoning
           ? { max_completion_tokens: chatMaxTokens }
-          : { temperature: chatTemperature, max_tokens: chatMaxTokens }),
+          : { ...(acceptsTemperature(modelId) ? { temperature: chatTemperature } : {}), max_tokens: chatMaxTokens }),
         ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
         ...(provider === 'deepseek' && isLongExtraction ? { thinking: { type: reasonedCheck ? 'enabled' : 'disabled' } } : {}),
       }),
