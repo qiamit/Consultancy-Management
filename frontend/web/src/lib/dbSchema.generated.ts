@@ -105,7 +105,8 @@ export const publicColumns = {
     "system_prompt_prefix",
     "log_requests",
     "updated_at",
-    "agent_crud_enabled"
+    "agent_crud_enabled",
+    "document_model_id"
   ],
   "ai_skills": [
     "id",

@@ -241,6 +241,8 @@ export async function checkSampleConformity(input: {
   isCodeId: string | null
   isLabel: string
   onStep?: (step: string) => void
+  /** Re-check with the Default AI Model even when a Model for Document Checks is set. */
+  useMainModel?: boolean
 }): Promise<OslConformityCheck> {
   const { row, onStep } = input
   if (!row.testReportStoragePath.trim()) throw new Error('Attach the Test Report first.')
@@ -307,10 +309,11 @@ export async function checkSampleConformity(input: {
       message,
       responseFormat: 'json_object',
       history: [],
+      ...(input.useMainModel ? { useMainModel: true } : {}),
       ...(pictures.length ? { images: pictures } : {}),
     })
   // Without a vision model the pictures are refused: the OCR text alone is then checked.
-  const { reply } = await ask(images).catch((err: unknown) => {
+  const { reply, model } = await ask(images).catch((err: unknown) => {
     if (images.length && report.text.trim() && VISION_MISSING.test(err instanceof Error ? err.message : String(err))) return ask([])
     throw err
   })
@@ -326,6 +329,7 @@ export async function checkSampleConformity(input: {
     missingTests: raw.missing_tests ?? raw.missingTests,
     checkedAt: new Date().toISOString(),
     sources,
+    model: model ?? '',
     reportPath: row.testReportStoragePath,
   })
   if (!parsed) throw new Error('The AI answer could not be read. Try again.')

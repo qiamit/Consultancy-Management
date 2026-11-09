@@ -77,6 +77,8 @@ export type AiSkillForm = {
 export type AiSettingsRow = {
   id: string
   default_model_id: string | null
+  /** Model for document checks (AI Conformity Check, PDF extractions); null = the Default AI Model. */
+  document_model_id?: string | null
   ai_enabled: boolean
   temperature: number
   max_tokens: number

@@ -18,6 +18,8 @@ export type OslConformityCheck = {
   notes: string[]
   /** Documents the check read (names). */
   sources: string[]
+  /** The AI model that made the check (empty for checks saved before this was recorded). */
+  model: string
   /** The Test Report file that was checked: a different file later makes the check out of date. */
   reportPath: string
 }
@@ -312,6 +314,7 @@ export function parseOslConformityCheck(raw: unknown): OslConformityCheck | null
     missingTests: strList(r.missingTests),
     notes: strList(r.notes),
     sources: strList(r.sources),
+    model: str(r.model),
     reportPath: str(r.reportPath),
   }
 }

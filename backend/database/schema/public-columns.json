@@ -175,6 +175,13 @@
     "ordinal_position": 9
   },
   {
+    "table_name": "ai_settings",
+    "column_name": "document_model_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "ordinal_position": 10
+  },
+  {
     "table_name": "ai_skills",
     "column_name": "id",
     "data_type": "uuid",

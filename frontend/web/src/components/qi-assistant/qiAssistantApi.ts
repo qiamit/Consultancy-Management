@@ -42,6 +42,8 @@ export type QiAssistantActionResult = {
 
 export type QiAssistantResponse = {
   reply: string
+  /** Name of the AI model that answered (page tasks). */
+  model?: string
   actionsExecuted?: QiAssistantActionResult[]
   createdIsCodeId?: string
   agent?: QiAgentResult
@@ -103,6 +105,7 @@ async function postQiAssistant(body: Record<string, unknown>): Promise<QiAssista
 
   const payload = (await response.json().catch(() => null)) as {
     reply?: string
+    model?: string
     error?: string | { message?: string }
     actionsExecuted?: QiAssistantActionResult[]
     createdIsCodeId?: string
@@ -121,6 +124,7 @@ async function postQiAssistant(body: Record<string, unknown>): Promise<QiAssista
 
   return {
     reply: String(payload?.reply ?? '').trim() || 'No response.',
+    model: typeof payload?.model === 'string' ? payload.model : undefined,
     actionsExecuted: payload?.actionsExecuted,
     createdIsCodeId: payload?.createdIsCodeId,
     agent: payload?.agent
@@ -200,6 +204,8 @@ export async function sendQiAssistantMessage(input: {
   history: Array<{ role: 'user' | 'assistant'; content: string }>
   /** Admin Agent (admins with Two-Step Login): tools over the whole app. */
   mode?: 'agent'
+  /** Document checks: use the Default AI Model even when a Model for Document Checks is set. */
+  useMainModel?: boolean
   /** App pages the agent may open (path + name). */
   routes?: Array<{ path: string; label: string }>
 }): Promise<QiAssistantResponse> {
@@ -215,6 +221,7 @@ export async function sendQiAssistantMessage(input: {
     activeRecordTable: input.activeRecordTable,
     activeSkillId: input.activeSkillId,
     history: input.history,
+    ...(input.useMainModel ? { useMainModel: true } : {}),
   }
 
   if (input.images?.length) {
