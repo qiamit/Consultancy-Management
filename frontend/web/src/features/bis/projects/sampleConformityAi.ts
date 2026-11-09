@@ -1,7 +1,7 @@
 import { loadPdfjs } from '@/lib/pdfjsLoader'
 import { loadIsCodeFileLinks, type IsCodeFileLink } from '@/features/masters/is-codes/loadIsCodeFileLinks'
 import { sendQiAssistantMessage } from '@/components/qi-assistant/qiAssistantApi'
-import { pdfFileToAiPages } from '@/components/qi-assistant/aiImages'
+import { pdfPagesToAiPictures } from '@/components/qi-assistant/aiImages'
 import { ocrPdfPages } from '@/lib/ocrPdf'
 import { createBisProjectFileUrls } from './bisProjectFilesApi'
 import { parseOslConformityCheck, type OslConformityCheck, type OslSampleRequirementRow } from './oslSampleRequirementsModel'
@@ -43,7 +43,7 @@ async function storedFile(storagePath: string, name: string): Promise<File> {
   return fetchFile(viewUrl, name)
 }
 
-type PdfRead = { text: string; ocr: boolean }
+type PdfRead = { text: string; ocr: boolean; scannedPages: number[] }
 
 const cut = (text: string, max: number) => (text.length > max ? `${text.slice(0, max)}\n… (cut)` : text)
 
@@ -96,7 +96,7 @@ async function readPdf(
       .filter(Boolean)
       .join('\n\n')
   }
-  return { text: cut(text, LIMITS[kind]), ocr: ocr.size > 0 }
+  return { text: cut(text, LIMITS[kind]), ocr: ocr.size > 0, scannedPages: [...ocr.keys()].sort((a, b) => a - b) }
 }
 
 const VISION_MISSING = /vision ai model|reading photos needs/i
@@ -161,13 +161,14 @@ const INSTRUCTIONS = `ROLE: You are a BIS product certification reviewer. Decide
 
 METHOD (follow every step):
 1. Identify the sample from the Test Report (Part A / particulars) and the Test Request: description (type, grade, size), declared values, batch number, date of manufacture.
-2. From the Indian Standard (with its amendments — an amendment replaces the clause it names) and the Product Manual, find every requirement that applies to THIS sample's type / grade / size, and work out the actual limit (tables, formulas, tolerances on declared or nominal values).
+1a. SAMPLE CONDITIONS: from the sample description, declared values, grade and size, list what decides which requirements apply — e.g. grade, nominal size / thickness, "Aluminium Killed" / "Silicon Killed" / "Semi-Killed", coated or not, class / type. Use them in every step below.
+2. From the Indian Standard (with its amendments — an amendment replaces the clause it names), any REFERENCED STANDARD it points to (e.g. "steel conforming to IS 2062": its chemical table and notes then apply) and the Product Manual, find every requirement that applies to THIS sample's conditions, and work out the actual limit (tables, formulas, tolerances on declared or nominal values). Read the table NOTES: a note such as "when killed by aluminium alone, total aluminium ≥ 0.020 %; when killed by silicon alone, silicon ≥ 0.10 %" changes which elements are required for this sample.
 3. Go through the LABORATORY REPORT PAGES and take EVERY test with its observed value, in the laboratory's order, one row each (the same test reported twice is one row). The Manak summary pages only list tests with "Test Report Attached": that text is never a result — take the value from the laboratory pages (chemical results may be on a separate laboratory page from the mechanical / dimensional ones; read all of them). Compare the reported value with the limit from step 2 yourself; never rely on the lab's own "conforms" remark. The report's own "specified requirement" column is a cross-check: where your limit differs from it, re-read the Standard's table row for this grade (for example Table 4 gives tensile strength, yield stress and elongation as separate columns) and say in notes which is right.
-4. Missing tests: tests the Product Manual / Standard require the LABORATORY to do on this sample that are not in the report. Tests the Product Manual leaves to the factory (for example on every pipe during production) are not missing.
+4. Missing tests: tests the Product Manual / Standard require the LABORATORY to do on THIS sample (its conditions from step 1a) that are not in the report. A test whose requirement does not apply to this sample's conditions (other grade / size / killed type / coating) is NOT missing: if the report gives it anyway, give the row requirement "Not Applicable — <reason>" and verdict "Pass". Tests the Product Manual leaves to the factory (for example on every pipe during production) are not missing.
 4a. Sample Stage "SS": the Marking clause is not applicable — give the Marking row requirement "Not Applicable — SS Sample (No Licence Yet)", verdict "Pass", never list Marking as missing or as a failure.
 5. Verdict: "Yes" = every result passes and no test is missing. "No" = any result fails or any required test is missing. "Undecided" = a deciding value cannot be read at all.
 
-SCANNED REPORTS: the text was read by OCR twice per page and may confuse digits (0↔8, 0↔6, 1↔7, 5↔S). Read 1 has the more reliable digits. When reads differ or a value is impossible for its unit or limit, take the plausible reading. Put any such reading in "notes", never in "result". Use "Not Clear" only when no plausible reading exists.
+SCANNED REPORTS: the page pictures (each page may come as a top and a bottom half) are the primary source: read every value from the picture. The OCR text (read twice per page) is only a guide and may confuse digits (0↔8, 0↔6, 1↔7, 3↔8, 5↔S, "3.5"↔"15" when the decimal point is faint). PLAUSIBILITY: check each value against the sample's own size and the limit — e.g. a wall thickness reported for a 3.5 mm section cannot be 15 mm, a mass per metre must match the size — and when a reading is implausible, look at the picture again and take the reading that fits; say so in "notes". Use "Not Clear" only when neither the picture nor the OCR gives a plausible value.
 
 FIELD FORMATS (keep each cell short, no sentences in the table):
 - parameter: the test name in Title Case, without method or standard numbers ("Ultimate Tensile Strength").
@@ -208,6 +209,39 @@ export function numericVerdict(r: CheckResult): 'Pass' | 'Fail' | null {
   if (limits.length !== 1 || !values.length || values.length > 2) return null
   const limit = Number(limits[0])
   return values.every((v) => (min ? v >= limit : v <= limit)) ? 'Pass' : 'Fail'
+}
+
+/**
+ * A reviewer types the value of a row the AI could not read ("Not Clear"): the row gets that value and its verdict
+ * (from the limit when it is a simple number limit, else the one the reviewer chose), and the overall verdict follows
+ * the same rule as the AI check (any Fail or missing test = No; any row still Not Clear = Undecided; else Yes).
+ */
+export function setResultByHand(
+  check: OslConformityCheck,
+  index: number,
+  value: string,
+  chosen?: 'Pass' | 'Fail',
+): { check: OslConformityCheck; needsChoice: boolean } {
+  const row = check.results[index]
+  const result = value.trim()
+  if (!row || !result) return { check, needsChoice: false }
+  const verdict = numericVerdict({ ...row, result }) ?? chosen ?? null
+  if (!verdict) return { check, needsChoice: true }
+  const results = check.results.map((r, i) => (i === index ? { ...r, result, verdict } : r))
+  const failed = results.some((r) => r.verdict === 'Fail') || check.missingTests.length > 0
+  const unclear = results.some((r) => r.verdict === 'Not Clear')
+  const overall = failed ? 'No' : unclear ? 'Undecided' : 'Yes'
+  const note = `${row.parameter}: value set by hand to ${result} (${verdict}).`
+  return {
+    check: {
+      ...check,
+      results,
+      verdict: overall,
+      notes: [...check.notes, note],
+      summary: overall === check.verdict ? check.summary : `${overall === 'Yes' ? 'Conforms' : overall === 'No' ? 'Does not conform' : 'Undecided'} after a value was set by hand.`,
+    },
+    needsChoice: false,
+  }
 }
 
 /**
@@ -323,10 +357,28 @@ export function applyRequiredTests(check: OslConformityCheck, required: Required
  * The Standard's matching pages and the Product Manual from the standards index (no PDF download, no OCR in the
  * browser). Null when the IS Code is not in the index, so the check falls back to the IS Code's own PDF files.
  */
+/** IS numbers the Standard / Manual send the reader to ("steel conforming to IS 2062"), most cited first. */
+export function referencedStandards(text: string, ownFolders: string[]): string[] {
+  const own = new Set(ownFolders.map((f) => f.match(/\d+/)?.[0]))
+  const counts = new Map<string, number>()
+  const re = /\b(?:conform(?:ing|s)?\s+to|as\s+per|in\s+accordance\s+with|requirements?\s+of|specified\s+in)\s+IS\s*:?\s*(\d{2,5})(?:\s*\(\s*Part\s*(\d+)\s*\))?/gi
+  for (const m of text.matchAll(re)) {
+    if (own.has(m[1])) continue
+    const key = m[2] ? `IS ${m[1]} Part ${m[2]}` : `IS ${m[1]}`
+    counts.set(key, (counts.get(key) ?? 0) + 1)
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k)
+}
+
+const REFERENCED_WORDS =
+  'chemical composition table notes killed aluminium silicon carbon manganese sulphur phosphorus carbon equivalent mechanical properties tensile yield elongation grade'
+const REFERENCED_LIMITS = { standards: 3, pages: 8, chars: 24_000 }
+
 async function readFromStandardsIndex(
   isCodeId: string,
   words: string,
-): Promise<{ standardText: string; manualText: string; sources: string[] } | null> {
+  conditionWords: string,
+): Promise<{ standardText: string; manualText: string; referencedText: string; sources: string[] } | null> {
   const folders = await fetchStandardFolders(isCodeId).catch(() => [] as string[])
   if (!folders.length) return null
   const [standardPages, manualPages] = await Promise.all([
@@ -336,14 +388,32 @@ async function readFromStandardsIndex(
   const standard = indexPagesText(standardPages, INDEX_LIMITS.standard)
   const manual = indexPagesText(manualPages, INDEX_LIMITS.manual)
   if (!standard.text) return null
-  return {
-    standardText: standard.text,
-    manualText: manual.text,
-    sources: [
-      `Standard (Standards Index, ${folders[0]}): ${standard.count} Matching Pages`,
-      ...(manual.count ? [`Product Manual (Standards Index): ${manual.count} Pages`] : []),
-    ],
+  const sources = [
+    `Standard (Standards Index, ${folders[0]}): ${standard.count} Matching Pages`,
+    ...(manual.count ? [`Product Manual (Standards Index): ${manual.count} Pages`] : []),
+  ]
+  // Referenced standards (e.g. IS 4923 hollow sections → IS 2062 steel): their tables and notes decide the chemistry.
+  let referencedText = ''
+  // Standards named by the sample itself ("Raw Material as per IS 10748 Grade 3") come first, then those the
+  // Standard / Manual point to.
+  const refs = [
+    ...referencedStandards(conditionWords, folders),
+    ...referencedStandards(`${standard.text}\n${manual.text}`, folders),
+  ].filter((v, i, a) => a.indexOf(v) === i)
+  for (const ref of refs.slice(0, REFERENCED_LIMITS.standards)) {
+    const refFolders = ref.includes(' Part ') ? [ref, ref.replace(/ Part \d+$/, '')] : [ref]
+    const pages = await searchStandardPages(refFolders, `${REFERENCED_WORDS} ${conditionWords}`, REFERENCED_LIMITS.pages, [
+      'Standard',
+      'Amendment',
+    ]).catch(() => [] as StandardPage[])
+    // The grade-wise chemistry / mechanical tables decide the limits: those pages first, then the rest by rank.
+    const isTable = (p: StandardPage) => /table\s*\d+[^\n]{0,120}(chemical composition|mechanical properties)/i.test(p.text)
+    const read = indexPagesText([...pages.filter(isTable), ...pages.filter((p) => !isTable(p))], REFERENCED_LIMITS.chars)
+    if (!read.text) continue
+    referencedText += `--- ${ref} ---\n${read.text}`
+    sources.push(`Referenced Standard (Standards Index, ${ref}): ${read.count} Pages`)
   }
+  return { standardText: standard.text, manualText: manual.text, referencedText, sources }
 }
 
 /**
@@ -366,7 +436,14 @@ export async function checkSampleConformity(input: {
   const reportFile = await storedFile(row.testReportStoragePath, row.testReportFileName || 'Test_Report.pdf')
   const report = await readPdf(reportFile, 'report', 'Test Report', onStep)
   // A scanned report also goes as page pictures, for an AI model that can see (tables read best that way).
-  const images = report.ocr ? (await pdfFileToAiPages(reportFile, REPORT_IMAGES).catch(() => null))?.images ?? [] : []
+  // Pictures of the scanned (laboratory) pages, not just the first pages: Manak's own text pages often come first.
+  // Up to 4 pages go as top and bottom halves at full size, so small table figures stay readable.
+  const scanned = report.scannedPages
+  const images = report.ocr
+    ? await pdfPagesToAiPictures(reportFile, scanned, { halves: scanned.length <= REPORT_IMAGES / 2, maxPictures: REPORT_IMAGES }).catch(
+        () => [] as string[],
+      )
+    : []
   if (!report.text.trim() && !images.length) throw new Error('The Test Report PDF has no readable text.')
   sources.push(`Test Report: ${row.testReportFileName || 'attached'}${report.ocr ? ' (scanned — read by OCR)' : ''}`)
 
@@ -375,7 +452,7 @@ export async function checkSampleConformity(input: {
     onStep?.('Reading the Test Request…')
     const request = await storedFile(row.testRequestStoragePath, row.testRequestFileName || 'Test_Request.pdf')
       .then((f) => readPdf(f, 'request', 'Test Request', onStep))
-      .catch(() => ({ text: '', ocr: false }))
+      .catch(() => ({ text: '', ocr: false, scannedPages: [] as number[] }))
     requestText = request.text
     if (requestText) sources.push(`Test Request: ${row.testRequestFileName || 'attached'}${request.ocr ? ' (scanned — read by OCR)' : ''}`)
   }
@@ -387,15 +464,19 @@ export async function checkSampleConformity(input: {
 
   let standardText = ''
   let manualText = ''
+  let referencedText = ''
   if (input.isCodeId) {
     onStep?.('Reading the Standard and the Product Manual (Standards Index)…')
+    const conditionWords = `${row.gradeTypeVariety} ${row.sampleDescription} ${row.declaredValue}`
     const indexed = await readFromStandardsIndex(
       input.isCodeId,
-      indexQueryWords({ requiredTests, reportText: report.text, grade: `${row.gradeTypeVariety} ${row.sampleDescription}` }),
+      indexQueryWords({ requiredTests, reportText: report.text, grade: conditionWords }),
+      conditionWords,
     )
     if (indexed) {
       standardText = indexed.standardText
       manualText = indexed.manualText
+      referencedText = indexed.referencedText
       sources.push(...indexed.sources)
     }
   }
@@ -407,14 +488,14 @@ export async function checkSampleConformity(input: {
     if (standard) {
       const read = await fetchFile(standard.url!, standard.file_name)
         .then((f) => readPdf(f, 'standard', 'Standard', onStep))
-        .catch(() => ({ text: '', ocr: false }))
+        .catch(() => ({ text: '', ocr: false, scannedPages: [] as number[] }))
       standardText = read.text
       if (standardText) sources.push(`Standard: ${standard.file_name}${read.ocr ? ' (scanned — read by OCR)' : ''}`)
     }
     if (manual && !manualText) {
       const read = await fetchFile(manual.url!, manual.file_name)
         .then((f) => readPdf(f, 'manual', 'Product Manual', onStep))
-        .catch(() => ({ text: '', ocr: false }))
+        .catch(() => ({ text: '', ocr: false, scannedPages: [] as number[] }))
       manualText = read.text
       if (manualText) sources.push(`Product Manual: ${manual.file_name}${read.ocr ? ' (scanned — read by OCR)' : ''}`)
     }
@@ -431,6 +512,7 @@ export async function checkSampleConformity(input: {
     requestText ? `=== TEST REQUEST ===\n${requestText}` : '',
     `=== TEST REPORT${report.ocr ? ' (scanned, read by OCR twice per page — figures may have OCR mistakes such as 0↔8, 0↔6, 1↔I: read 1 has the more reliable digits; compare both reads, take the one that fits the units and limits, and prefer the page pictures when attached)' : ''} ===\n${report.text || '(scanned — see the attached page pictures)'}`,
     standardText ? `=== INDIAN STANDARD ===\n${standardText}` : '',
+    referencedText ? `=== REFERENCED STANDARD (its tables and notes apply where the Standard points to it) ===\n${referencedText}` : '',
     manualText ? `=== PRODUCT MANUAL ===\n${manualText}` : '',
   ]
     .filter(Boolean)
@@ -441,7 +523,8 @@ export async function checkSampleConformity(input: {
       message,
       responseFormat: 'json_object',
       history: [],
-      ...(input.useMainModel ? { useMainModel: true } : {}),
+      // A scanned report is read from pictures: the main (stronger) model reads them more reliably.
+      ...(input.useMainModel || pictures.length ? { useMainModel: true } : {}),
       ...(pictures.length ? { images: pictures } : {}),
     })
   // Without a vision model the pictures are refused: the OCR text alone is then checked.
