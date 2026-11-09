@@ -4,6 +4,7 @@ import { sendQiAssistantMessage } from '@/components/qi-assistant/qiAssistantApi
 import { pdfPagesToAiPictures } from '@/components/qi-assistant/aiImages'
 import { ocrPdfPages } from '@/lib/ocrPdf'
 import { createBisProjectFileUrls } from './bisProjectFilesApi'
+import { sizeTableRows } from './sampleSizeTable'
 import { parseOslConformityCheck, type OslConformityCheck, type OslSampleRequirementRow } from './oslSampleRequirementsModel'
 import {
   fetchProductManualPages,
@@ -163,6 +164,8 @@ METHOD (follow every step):
 1. Identify the sample from the Test Report (Part A / particulars) and the Test Request: description (type, grade, size), declared values, batch number, date of manufacture.
 1a. SAMPLE CONDITIONS: from the sample description, declared values, grade and size, list what decides which requirements apply — e.g. grade, nominal size / thickness, "Aluminium Killed" / "Silicon Killed" / "Semi-Killed", coated or not, class / type. Use them in every step below.
 2. From the Indian Standard (with its amendments — an amendment replaces the clause it names), any REFERENCED STANDARD it points to (e.g. "steel conforming to IS 2062": its chemical table and notes then apply) and the Product Manual, find every requirement that applies to THIS sample's conditions, and work out the actual limit (tables, formulas, tolerances on declared or nominal values). Read the table NOTES: a note such as "when killed by aluminium alone, total aluminium ≥ 0.020 %; when killed by silicon alone, silicon ≥ 0.10 %" changes which elements are required for this sample.
+2a. TABLES: never say what a table holds unless its rows are in the documents above. The SIZE TABLE ROWS block (when given) is complete — it has every row of this sample's size and of the next higher standard size, read by the app from the Standard (an amendment's substituted table already replaces the original). When the same table appears twice, an amendment's substituted table replaces the original printed later. When a requirement needs a table that is not in the documents, give that row verdict "Not Clear" and say in notes which table is missing — never fail a sample on a guessed table.
+2b. BY AGREEMENT: a requirement the Standard leaves to agreement between purchaser and manufacturer (exact length, coating, finish, end type …) with no agreed value in the Test Request or the declared values: requirement "By Agreement — Not Declared", verdict "Pass" (it is not Not Clear and not a failure).
 3. Go through the LABORATORY REPORT PAGES and take EVERY test with its observed value, in the laboratory's order, one row each (the same test reported twice is one row). The Manak summary pages only list tests with "Test Report Attached": that text is never a result — take the value from the laboratory pages (chemical results may be on a separate laboratory page from the mechanical / dimensional ones; read all of them). Compare the reported value with the limit from step 2 yourself; never rely on the lab's own "conforms" remark. The report's own "specified requirement" column is a cross-check: where your limit differs from it, re-read the Standard's table row for this grade (for example Table 4 gives tensile strength, yield stress and elongation as separate columns) and say in notes which is right.
 4. Missing tests: tests the Product Manual / Standard require the LABORATORY to do on THIS sample (its conditions from step 1a) that are not in the report. A test whose requirement does not apply to this sample's conditions (other grade / size / killed type / coating) is NOT missing: if the report gives it anyway, give the row requirement "Not Applicable — <reason>" and verdict "Pass". Tests the Product Manual leaves to the factory (for example on every pipe during production) are not missing.
 4a. Sample Stage "SS": the Marking clause is not applicable — give the Marking row requirement "Not Applicable — SS Sample (No Licence Yet)", verdict "Pass", never list Marking as missing or as a failure.
@@ -176,6 +179,7 @@ FIELD FORMATS (keep each cell short, no sentences in the table):
 - requirement: the limit for this sample with unit ("≤ 0.25 %", "≥ 450 MPa", "168.30 ± 0.75 % (167.04 – 169.56 mm)", "No Crack").
 - result: the reported value with unit, exactly as the report gives it ("0.20 %", "486.90 MPa", "Satisfactory").
 - verdict: "Pass", "Fail" or "Not Clear".
+- evidence: for every "Fail" row, the exact words copied from the documents (Standard, amendment, referenced standard, Product Manual or SIZE TABLE ROWS) that set the limit it fails — the table row or the clause sentence with the number, up to 200 characters, copied character for character; "" for other rows. A Fail without evidence that the app finds in the documents is not accepted.
 - missing_tests: "Test Name (Clause x)".
 - summary: one sentence with the verdict and the deciding reason.
 - notes: the observations, one short sentence each: whether the sample matches the Test Request, every failure with its reason, missing tests, disagreement with the lab's remark, anything else the reviewer must know. OCR corrections: ONE note listing only the values you changed.
@@ -185,7 +189,7 @@ Before answering, re-check every row: for "≥ X" the result must be at least X;
 SELF-CHECK before answering: no result is "Test Report Attached"; every laboratory test appears once; each "≥ X" result is at least X and each "≤ X" at most X; the verdict follows step 5.
 
 ANSWER: JSON only, no other text, exactly these keys. Example of the format (values are only an example):
-{"sample":{"description":"ERW, Black, Fe 410, 168.3 mm OD × 4.5 mm","declared_values":"Silicon killed","batch_number":"B-12","date_of_manufacture":"12-10-2026"},"verdict":"No","summary":"Does not conform: Yield Strength 231 MPa is below the 235 MPa minimum.","results":[{"parameter":"Carbon","clause":"8.1, Table 2","requirement":"≤ 0.25 %","result":"0.18 %","verdict":"Pass"},{"parameter":"Yield Strength","clause":"9.1, Table 4","requirement":"≥ 235 MPa","result":"231 MPa","verdict":"Fail"}],"missing_tests":["Flattening Test (Clause 9.2.1)"],"notes":["Sample details match the Test Request.","Yield Strength 231 MPa is below the 235 MPa minimum of Table 4.","Flattening Test required by the Product Manual is not reported."]}`
+{"sample":{"description":"ERW, Black, Fe 410, 168.3 mm OD × 4.5 mm","declared_values":"Silicon killed","batch_number":"B-12","date_of_manufacture":"12-10-2026"},"verdict":"No","summary":"Does not conform: Yield Strength 231 MPa is below the 235 MPa minimum.","results":[{"parameter":"Carbon","clause":"8.1, Table 2","requirement":"≤ 0.25 %","result":"0.18 %","verdict":"Pass"},{"parameter":"Yield Strength","clause":"9.1, Table 4","requirement":"≥ 235 MPa","result":"231 MPa","verdict":"Fail","evidence":"Fe 410 410 235 23"}],"missing_tests":["Flattening Test (Clause 9.2.1)"],"notes":["Sample details match the Test Request.","Yield Strength 231 MPa is below the 235 MPa minimum of Table 4.","Flattening Test required by the Product Manual is not reported."]}`
 
 type CheckResult = OslConformityCheck['results'][number]
 
@@ -378,7 +382,7 @@ async function readFromStandardsIndex(
   isCodeId: string,
   words: string,
   conditionWords: string,
-): Promise<{ standardText: string; manualText: string; referencedText: string; sources: string[] } | null> {
+): Promise<{ folders: string[]; standardText: string; manualText: string; referencedText: string; sources: string[] } | null> {
   const folders = await fetchStandardFolders(isCodeId).catch(() => [] as string[])
   if (!folders.length) return null
   const [standardPages, manualPages] = await Promise.all([
@@ -413,7 +417,144 @@ async function readFromStandardsIndex(
     referencedText += `--- ${ref} ---\n${read.text}`
     sources.push(`Referenced Standard (Standards Index, ${ref}): ${read.count} Pages`)
   }
-  return { standardText: standard.text, manualText: manual.text, referencedText, sources }
+  return { folders, standardText: standard.text, manualText: manual.text, referencedText, sources }
+}
+
+const text = (v: unknown) => (typeof v === 'string' ? v.trim() : '')
+
+/** Text for comparing a quote with the documents: case, spacing, punctuation and "×" / "x" do not matter. */
+export const normEvidence = (v: string) =>
+  v
+    .toLowerCase()
+    .replace(/[×*]/g, 'x')
+    .replace(/\.(?=\s|$)/g, ' ')
+    .replace(/[^a-z0-9.]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    // "113.5 × 113.5 × 3" = "113.5x113.5x3"
+    .replace(/(\d) ?x ?(?=\d)/g, '$1x')
+    .trim()
+
+/** The quote is in the documents: each part of it (split at "…" / "|") of 12+ characters is found word for word. */
+export function evidenceFound(evidence: string, docsNorm: string): boolean {
+  const parts = evidence
+    .split(/…|\.\.\.|\s\|\s|;/)
+    .map(normEvidence)
+    .filter((part) => part.length >= 12)
+  return parts.length > 0 && parts.every((part) => docsNorm.includes(part))
+}
+
+const overallOf = (check: OslConformityCheck): OslConformityCheck['verdict'] =>
+  check.results.some((r) => r.verdict === 'Fail') || check.missingTests.length
+    ? 'No'
+    : check.results.some((r) => r.verdict === 'Not Clear')
+      ? 'Undecided'
+      : 'Yes'
+const verdictWord = (v: OslConformityCheck['verdict']) => (v === 'Yes' ? 'Conforms' : v === 'No' ? 'Does not conform' : 'Undecided')
+
+/**
+ * A Fail must quote the rule it rests on: the app looks for the quote in the documents that were sent. A Fail whose
+ * quote is not there (a guessed table, an invented limit) becomes "Not Clear" and goes to the review.
+ */
+export function checkFailEvidence(
+  check: OslConformityCheck,
+  rawResults: unknown,
+  docsNorm: string,
+): { check: OslConformityCheck; evidence: string[]; unbacked: number[] } {
+  const rawRows = (Array.isArray(rawResults) ? rawResults : []).filter((x): x is Record<string, unknown> => Boolean(x) && typeof x === 'object')
+  const evidence = check.results.map((_, i) => text(rawRows[i]?.evidence))
+  const unbacked: number[] = []
+  const results = check.results.map((r, i) => {
+    if (r.verdict !== 'Fail' || evidenceFound(evidence[i], docsNorm)) return r
+    unbacked.push(i)
+    return { ...r, verdict: 'Not Clear' as const }
+  })
+  if (!unbacked.length) return { check, evidence, unbacked }
+  const notes = unbacked.map(
+    (i) => `${check.results[i].parameter}: the Fail against ${check.results[i].requirement} is not backed by the documents (its quoted rule was not found) — checked again by the review.`,
+  )
+  return { check: { ...check, results, notes: [...check.notes, ...notes] }, evidence, unbacked }
+}
+
+const REVIEW_INSTRUCTIONS = `ROLE: You are a second BIS reviewer. A first reviewer checked one sample's Test Report against the Indian Standard and marked the ITEMS below as failing (or as missing tests). Check ONLY those items again, using ONLY the documents below (the Standard with its amendments, referenced standards, the Product Manual, the SIZE TABLE ROWS). The results were read from the Test Report and are correct: check the RULE — which requirement applies to THIS sample (its grade, size, killed type, coating, stage) and its actual limit.
+RULES: an amendment's substituted clause or table replaces the original (the original is often printed later in the same file). Never assume what a table holds: use only the rows shown; the SIZE TABLE ROWS block is complete for this sample's size and the next higher size. Compare the numbers yourself (for "≥ X" the result must be at least X).
+For each row: "requirement" for this sample with unit; "verdict" comparing the given result with it ("Pass", "Fail", or "Not Clear" when the documents do not give the rule); "evidence": the exact words copied from the documents that set the limit (a table row or the clause sentence with the number, up to 200 characters, character for character); "reason": one short sentence.
+For each missing test: "missing": true only when the documents require the LABORATORY to do it on THIS sample; false when it does not apply to this sample's conditions or is left to the factory; "reason": one short sentence.
+ANSWER: JSON only: {"rows":[{"parameter":"","requirement":"","verdict":"Pass","evidence":"","reason":""}],"missing_tests":[{"test":"","missing":false,"reason":""}]}`
+
+/**
+ * Second look, by the same (cheap) model, at only the failed rows and the AI's own missing tests: one short call with
+ * the documents and no report or pictures. A Fail stays only with a rule the app finds in the documents.
+ */
+async function reviewFails(input: {
+  check: OslConformityCheck
+  rows: number[]
+  evidence: string[]
+  reviewMissing: boolean
+  facts: string
+  documents: string
+  docsNorm: string
+  useMainModel?: boolean
+}): Promise<OslConformityCheck> {
+  const { check, rows } = input
+  const items = rows.map((i) => {
+    const r = check.results[i]
+    return `- ${r.parameter} | Clause ${r.clause || '—'} | Requirement given: ${r.requirement} | Result: ${r.result}${input.evidence[i] ? ` | First reviewer's evidence: "${input.evidence[i]}"` : ''}`
+  })
+  const missing = input.reviewMissing ? check.missingTests : []
+  if (!items.length && !missing.length) return check
+  const message = [
+    REVIEW_INSTRUCTIONS,
+    `=== SAMPLE ===\n${input.facts}\n- As identified in the report: ${check.sample.description}${check.sample.declaredValues ? ` | ${check.sample.declaredValues}` : ''}`,
+    items.length ? `=== ITEMS: FAILED ROWS ===\n${items.join('\n')}` : '',
+    missing.length ? `=== ITEMS: MISSING TESTS ===\n${missing.map((m) => `- ${m}`).join('\n')}` : '',
+    input.documents,
+  ]
+    .filter(Boolean)
+    .join('\n\n')
+  const { reply, model } = await sendQiAssistantMessage({
+    page: 'bis/sample-conformity',
+    message,
+    responseFormat: 'json_object',
+    history: [],
+    ...(input.useMainModel ? { useMainModel: true } : {}),
+  })
+  const raw = JSON.parse(reply.match(/\{[\s\S]*\}/)?.[0] ?? '{}') as Record<string, unknown>
+  const list = (v: unknown) => (Array.isArray(v) ? v : []).filter((x): x is Record<string, unknown> => Boolean(x) && typeof x === 'object')
+  const byName = new Map(list(raw.rows).map((x) => [normName(text(x.parameter)), x]))
+  const changes: string[] = []
+  const results = check.results.map((r, i) => {
+    if (!rows.includes(i)) return r
+    const x = byName.get(normName(r.parameter))
+    if (!x) return r
+    const requirement = text(x.requirement) || r.requirement
+    const said = x.verdict === 'Pass' || x.verdict === 'Fail' ? x.verdict : 'Not Clear'
+    let verdict: 'Pass' | 'Fail' | 'Not Clear' = numericVerdict({ ...r, requirement }) ?? said
+    if (verdict === 'Fail' && !evidenceFound(text(x.evidence) || input.evidence[i], input.docsNorm)) verdict = 'Not Clear'
+    if (verdict !== r.verdict || requirement !== r.requirement) {
+      changes.push(`${r.parameter}: ${r.result} against ${requirement} — ${verdict}${text(x.reason) ? ` (${text(x.reason)})` : ''}.`)
+    }
+    return { ...r, requirement, verdict }
+  })
+  const testKey = (v: string) => normName(v.split(' (')[0].split(' — ')[0])
+  const dropped = new Set(
+    list(raw.missing_tests)
+      .filter((x) => x.missing === false)
+      .map((x) => testKey(text(x.test))),
+  )
+  const missingTests = check.missingTests.filter((m) => {
+    if (!missing.includes(m) || !dropped.has(testKey(m))) return true
+    changes.push(`${m}: not required for this sample.`)
+    return false
+  })
+  const reviewed = { ...check, results, missingTests }
+  const verdict = overallOf(reviewed)
+  const note = `Second review (${model ?? 'AI'}) of ${items.length} failed row(s)${missing.length ? ` and ${missing.length} missing test(s)` : ''}: ${changes.length ? changes.join(' ') : 'no change.'}`
+  return {
+    ...reviewed,
+    verdict,
+    notes: [...check.notes, note],
+    summary: verdict === check.verdict ? check.summary : `${verdictWord(verdict)} after the second review: ${changes.join(' ')}`,
+  }
 }
 
 /**
@@ -465,6 +606,7 @@ export async function checkSampleConformity(input: {
   let standardText = ''
   let manualText = ''
   let referencedText = ''
+  let sizeText = ''
   if (input.isCodeId) {
     onStep?.('Reading the Standard and the Product Manual (Standards Index)…')
     const conditionWords = `${row.gradeTypeVariety} ${row.sampleDescription} ${row.declaredValue}`
@@ -478,6 +620,12 @@ export async function checkSampleConformity(input: {
       manualText = indexed.manualText
       referencedText = indexed.referencedText
       sources.push(...indexed.sources)
+      // The size table rows of this sample's size and the next higher size, read by the app (not left to the AI).
+      const size = await sizeTableRows(indexed.folders, `${conditionWords} ${requestText.slice(0, 4000)}`).catch(() => ({ text: '', rows: 0 }))
+      if (size.text) {
+        sizeText = size.text
+        sources.push(`Size Table (Standards Index): ${size.rows} Rows for This Size and the Next Higher Size`)
+      }
     }
   }
   if (input.isCodeId && !standardText) {
@@ -509,6 +657,7 @@ export async function checkSampleConformity(input: {
     INSTRUCTIONS,
     `=== SAMPLE (${input.isLabel}) ===\n${sampleFacts(row)}`,
     requiredTests.length ? `${REQUIRED_RULES}\n=== REQUIRED TESTS (locked list) ===\n${requiredTestsBlock(requiredTests)}` : '',
+    sizeText ? `=== SIZE TABLE ROWS (read by the app from the Standard's size tables; complete for this size and the next higher size) ===\n${sizeText}` : '',
     requestText ? `=== TEST REQUEST ===\n${requestText}` : '',
     `=== TEST REPORT${report.ocr ? ' (scanned, read by OCR twice per page — figures may have OCR mistakes such as 0↔8, 0↔6, 1↔I: read 1 has the more reliable digits; compare both reads, take the one that fits the units and limits, and prefer the page pictures when attached)' : ''} ===\n${report.text || '(scanned — see the attached page pictures)'}`,
     standardText ? `=== INDIAN STANDARD ===\n${standardText}` : '',
@@ -523,8 +672,9 @@ export async function checkSampleConformity(input: {
       message,
       responseFormat: 'json_object',
       history: [],
-      // A scanned report is read from pictures: the main (stronger) model reads them more reliably.
-      ...(input.useMainModel || pictures.length ? { useMainModel: true } : {}),
+      // Scanned reports too stay on the Model for Document Checks: the size table, the evidence check and the review
+      // below keep a cheap model from failing a sample on a wrong rule. "Re-Check with Main Model" is there when needed.
+      ...(input.useMainModel ? { useMainModel: true } : {}),
       ...(pictures.length ? { images: pictures } : {}),
     })
   // Without a vision model the pictures are refused: the OCR text alone is then checked.
@@ -558,5 +708,37 @@ export async function checkSampleConformity(input: {
       manufactureDate: parsed.sample.manufactureDate,
     },
   }
-  return settleCheck(applyRequiredTests(check, requiredTests, raw.required_check ?? raw.requiredCheck), row)
+  const settled = settleCheck(applyRequiredTests(check, requiredTests, raw.required_check ?? raw.requiredCheck), row)
+
+  // A Fail must rest on a rule found in the documents; failed rows (and the AI's own missing tests when there is no
+  // locked list) get one short second look by the same model.
+  const documents = [
+    sizeText ? `=== SIZE TABLE ROWS (complete for this size and the next higher size) ===\n${sizeText}` : '',
+    requiredTests.length ? `=== REQUIRED TESTS (locked list) ===\n${requiredTestsBlock(requiredTests)}` : '',
+    standardText ? `=== INDIAN STANDARD ===\n${standardText}` : '',
+    referencedText ? `=== REFERENCED STANDARD ===\n${referencedText}` : '',
+    manualText ? `=== PRODUCT MANUAL ===\n${manualText}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n')
+  const docsNorm = normEvidence(documents)
+  const backed = checkFailEvidence(settled, raw.results, docsNorm)
+  const failedRows = backed.check.results.map((r, i) => (r.verdict === 'Fail' || backed.unbacked.includes(i) ? i : -1)).filter((i) => i >= 0)
+  const reviewMissing = !requiredTests.length && backed.check.missingTests.length > 0
+  if (!failedRows.length && !reviewMissing) return settleCheck(backed.check, row)
+  onStep?.('AI is reviewing the failed results…')
+  const reviewed = await reviewFails({
+    check: backed.check,
+    rows: failedRows,
+    evidence: backed.evidence,
+    reviewMissing,
+    facts: sampleFacts(row),
+    documents,
+    docsNorm,
+    useMainModel: input.useMainModel,
+  }).catch((err: unknown) => ({
+    ...backed.check,
+    notes: [...backed.check.notes, `The second review could not run (${err instanceof Error ? err.message : String(err)}): check the failed rows by hand.`],
+  }))
+  return settleCheck(reviewed, row)
 }
