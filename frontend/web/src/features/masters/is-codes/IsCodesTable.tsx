@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, ArrowUpDown, BookOpen, FolderOpen, Pencil } from 'lucide-react'
+import { ArrowDown, ArrowUp, ArrowUpDown, BookOpen, FolderOpen, ListChecks, Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
 import { QiAssistant } from '@/components/qi-assistant/QiAssistant'
@@ -107,12 +107,14 @@ function RowActions({
   hasFiles,
   onEdit,
   onViewFiles,
+  onRequiredTests,
   onAssistantDataChanged,
 }: {
   row: IsCodeRow
   hasFiles: boolean
   onEdit: (row: IsCodeRow) => void
   onViewFiles: (row: IsCodeRow) => void
+  onRequiredTests?: (row: IsCodeRow) => void
   onAssistantDataChanged?: () => void
 }) {
   return (
@@ -127,6 +129,19 @@ function RowActions({
       >
         <Pencil size={16} />
       </Button>
+      {onRequiredTests ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-8 w-8 rounded-none p-0 text-[#92400e] hover:bg-[#f3e9d8] hover:text-[#78350f]"
+          aria-label={`Required Tests of ${formatIsCodeLabel(row)}`}
+          title="Required Tests"
+          onClick={() => onRequiredTests(row)}
+        >
+          <ListChecks size={16} />
+        </Button>
+      ) : null}
       <QiAssistant
         page="is-codes"
         pageTitle={formatIsCodeLabel(row)}
@@ -170,6 +185,7 @@ export function IsCodesTable({
   onToggleAll,
   onEdit,
   onViewFiles,
+  onRequiredTests,
   onAssistantDataChanged,
 }: {
   rows: IsCodeRow[]
@@ -183,6 +199,7 @@ export function IsCodesTable({
   onToggleAll: (checked: boolean) => void
   onEdit: (row: IsCodeRow) => void
   onViewFiles: (row: IsCodeRow) => void
+  onRequiredTests?: (row: IsCodeRow) => void
   onAssistantDataChanged?: () => void
 }) {
   const allChecked = rows.length > 0 && rows.every((r) => selectedIds.has(r.id))
@@ -325,6 +342,7 @@ export function IsCodesTable({
                           hasFiles={hasFiles}
                           onEdit={onEdit}
                           onViewFiles={onViewFiles}
+                          onRequiredTests={onRequiredTests}
                           onAssistantDataChanged={onAssistantDataChanged}
                         />
                       </div>
@@ -497,6 +515,7 @@ export function IsCodesTable({
                             hasFiles={idsWithFiles.has(r.id)}
                             onEdit={onEdit}
                             onViewFiles={onViewFiles}
+                            onRequiredTests={onRequiredTests}
                             onAssistantDataChanged={onAssistantDataChanged}
                           />
                         </div>

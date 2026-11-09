@@ -10,6 +10,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { IsCodesHeaderBar } from './IsCodesHeaderBar'
 import { IsCodesForm } from './IsCodesForm'
 import { IsCodesTable, type IsCodeSortDir, type IsCodeSortKey } from './IsCodesTable'
+import { IsCodeRequiredTestsDialog } from './IsCodeRequiredTestsDialog'
+import { formatIsCodeLabel as formatRequiredTestsLabel } from './buildIsCodeAssistantContext'
 import { IsCodesTableFooterBar } from './IsCodesFooterBar'
 import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { IsCodesFilesDialog, type IsCodeViewFile } from './IsCodesFilesDialog'
@@ -382,6 +384,7 @@ function rowToIsCodeForm(row: IsCodeRow): IsCodeForm {
 
 export default function IsCodesMasterPage() {
   const [confirmAction, confirmDialog] = useConfirmDialog()
+  const [requiredTestsFor, setRequiredTestsFor] = useState<IsCodeRow | null>(null)
   const { editId, viewId, setEdit, setView } = useMasterUiSearchState()
   const [saveLoading, setSaveLoading] = useState(false)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
@@ -1743,6 +1746,14 @@ export default function IsCodesMasterPage() {
       </Dialog>
 
       {confirmDialog}
+      <IsCodeRequiredTestsDialog
+        open={requiredTestsFor != null}
+        onOpenChange={(open) => {
+          if (!open) setRequiredTestsFor(null)
+        }}
+        isCodeId={requiredTestsFor?.id ?? null}
+        isLabel={requiredTestsFor ? formatRequiredTestsLabel(requiredTestsFor) : ''}
+      />
       <IsCodesFilesDialog
         open={viewId != null}
         onOpenChange={(open) => {
@@ -1777,6 +1788,7 @@ export default function IsCodesMasterPage() {
           onViewFiles={(row) => {
             void openFilesDialog(row)
           }}
+          onRequiredTests={(row) => setRequiredTestsFor(row)}
           onAssistantDataChanged={() => void loadIsCodes()}
           idsWithFiles={idsWithFiles}
           sortKey={sortKey}
