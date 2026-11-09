@@ -155,8 +155,28 @@ function normalizeModelId(provider, modelId) {
   return id
 }
 
-/** User-facing text for a failed provider call; the provider's own message only goes to the log. */
-function providerErrorMessage(status) {
+/**
+ * The provider's own reason, safe to show in the app: one line, at most 300 characters, with anything that looks
+ * like a key or token replaced. Empty when the provider gave no message of its own.
+ */
+export function providerReason(payload, status) {
+  const raw = extractAiError(payload, status)
+  if (!raw || raw === `AI request failed (${status})` || raw === 'AI request failed') return ''
+  const oneLine = raw
+    .replace(/\s+/g, ' ')
+    .replace(/\b(?:sk|pk|rk|key|api|gsk|xai)[-_][A-Za-z0-9_-]{8,}/gi, '[hidden]')
+    .replace(/\bAIza[0-9A-Za-z_-]{20,}/g, '[hidden]')
+    .replace(/\bBearer\s+\S+/gi, 'Bearer [hidden]')
+    .replace(/[A-Za-z0-9_+/=-]{40,}/g, '[hidden]')
+    .trim()
+  return oneLine.length > 300 ? `${oneLine.slice(0, 297)}...` : oneLine
+}
+
+/**
+ * User-facing text for a failed provider call. For a request the provider refused as wrong (400, 422) the
+ * provider's own reason is shown, since trying again will not help; the full message also goes to the log.
+ */
+export function providerErrorMessage(status, payload) {
   if (status === 401 || status === 403) {
     return 'The AI provider rejected the API key. Check Settings → AI Settings → AI Models.'
   }
@@ -164,6 +184,12 @@ function providerErrorMessage(status) {
   if (status === 402) return 'The AI provider account has no credit left. Check the provider billing.'
   if (status === 413) return 'The request is too large for the AI provider. Send less text or fewer pictures.'
   if (status === 429) return 'The AI provider is busy or rate-limiting requests. Try again in a minute.'
+  if (status === 400 || status === 422) {
+    const reason = providerReason(payload, status)
+    if (reason) {
+      return `The AI provider refused the request (error ${status}): ${reason}${/[.!?]$/.test(reason) ? '' : '.'} Check Settings → AI Settings → AI Models.`
+    }
+  }
   return `The AI provider could not answer (error ${status}). Try again later.`
 }
 
@@ -186,6 +212,15 @@ function extractAiError(payload, status) {
  *   corsJson: (res: import('node:http').ServerResponse, status: number, body: unknown) => void
  * }} deps
  */
+/**
+ * Claude 5 models and later reject the temperature setting ("temperature is deprecated for this model"); they are
+ * called with their own default. Older Claude models and other providers still get it.
+ */
+export function acceptsTemperature(modelId) {
+  const m = /claude-[a-z]+-(\d+)/i.exec(String(modelId || ''))
+  return !(m && Number(m[1]) >= 5)
+}
+
 /** Chat completions with tools (OpenAI-compatible); returns the provider's choice.message. */
 export function createToolCaller({ apiBase, apiKey, modelId, provider, maxTokens, temperature, reasoning = false }) {
   return async (messages, tools, { final = false } = {}) => {
@@ -199,7 +234,9 @@ export function createToolCaller({ apiBase, apiKey, modelId, provider, maxTokens
         messages,
         tools,
         tool_choice: final ? 'none' : 'auto',
-        ...(reasoning ? { max_completion_tokens: maxTokens } : { temperature, max_tokens: maxTokens }),
+        ...(reasoning
+          ? { max_completion_tokens: maxTokens }
+          : { ...(acceptsTemperature(modelId) ? { temperature } : {}), max_tokens: maxTokens }),
       }),
     })
     const payload = await r.json().catch(() => ({}))
@@ -207,7 +244,7 @@ export function createToolCaller({ apiBase, apiKey, modelId, provider, maxTokens
       console.warn(
         `[qi-assistant] agent provider error ${r.status} (provider ${provider}, model ${modelId}): ${extractAiError(payload, r.status).slice(0, 500)}`,
       )
-      const err = new Error(providerErrorMessage(r.status))
+      const err = new Error(providerErrorMessage(r.status, payload))
       err.statusCode = 400
       throw err
     }
@@ -410,15 +447,8 @@ export function createQiAssistantHandler(deps) {
       return
     }
 
+    // Every provider, Anthropic included, is called through its OpenAI-compatible chat endpoint (see resolveApiBase).
     const provider = String(model.provider ?? 'openai')
-    // Text chat stays on the providers it always used; picture requests and the Admin Agent may use Anthropic's OpenAI-compatible endpoint.
-    if (provider === 'anthropic' && images.length === 0 && !agentMode) {
-      corsJson(res, 400, {
-        error:
-          'Provider "anthropic" is not yet supported in QE Assistant. Use Google Gemini, OpenAI, DeepSeek, OpenRouter, or Custom with an OpenAI-compatible base URL.',
-      })
-      return
-    }
 
     let skillsBlock = ''
     try {
@@ -583,7 +613,7 @@ export function createQiAssistantHandler(deps) {
         messages: chatMessages,
         ...(openAiReasoning
           ? { max_completion_tokens: chatMaxTokens }
-          : { temperature: chatTemperature, max_tokens: chatMaxTokens }),
+          : { ...(acceptsTemperature(modelId) ? { temperature: chatTemperature } : {}), max_tokens: chatMaxTokens }),
         ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
         ...(provider === 'deepseek' && isLongExtraction ? { thinking: { type: reasonedCheck ? 'enabled' : 'disabled' } } : {}),
       }),
@@ -656,7 +686,7 @@ export function createQiAssistantHandler(deps) {
       console.warn(
         `[qi-assistant] provider error ${aiRes.status} (provider ${provider}, model ${modelId}): ${extractAiError(aiPayload, aiRes.status).slice(0, 500)}`,
       )
-      corsJson(res, 400, { error: providerErrorMessage(aiRes.status) })
+      corsJson(res, 400, { error: providerErrorMessage(aiRes.status, aiPayload) })
       return
     }
 
