@@ -8,7 +8,7 @@ Single **QE Consultancy** Chromium extension (Manak Test Request, IS Code fetch,
 
 Safari / Xcode copies were removed (2026-10-23). Use Chromium only.
 
-**Version:** `2.7.7` (see `QE-Extension-Dev/manifest.json`).
+**Version:** `2.8.8` (see `QE-Extension-Dev/manifest.json`).
 
 ## Allowed app origins
 
