@@ -126,7 +126,7 @@ import {
   type OslSampleRequirementsModulePayload,
 } from './oslSampleRequirementsModel'
 import { formatDisplayDate } from './types'
-import { checkSampleConformity } from './sampleConformityAi'
+import { checkSampleConformity, setResultByHand } from './sampleConformityAi'
 import { fetchAiSettings } from '@/features/settings/ai-settings/aiSettingsApi'
 import {
   findLaboratoryOslCodeByName,
@@ -1642,6 +1642,33 @@ export function OslSampleRequirementsModuleFields({
     }
   }, [])
 
+  // "Not Clear" rows of the open conformity log: the value a reviewer types, by row index.
+  const [handValues, setHandValues] = useState<Record<number, string>>({})
+  const [handNeedsChoice, setHandNeedsChoice] = useState<number | null>(null)
+  useEffect(() => {
+    setHandValues({})
+    setHandNeedsChoice(null)
+  }, [conformityLogId])
+  const applyHandValue = (index: number, chosen?: 'Pass' | 'Fail') => {
+    const rowId = conformityLog?.row.id
+    const check = conformityLog?.check
+    if (!rowId || !check) return
+    const { check: next, needsChoice } = setResultByHand(check, index, handValues[index] ?? '', chosen)
+    if (needsChoice) {
+      setHandNeedsChoice(index)
+      return
+    }
+    setHandNeedsChoice(null)
+    const current = valueRef.current
+    onChangeRef.current({
+      ...current,
+      rows: current.rows.map((r) =>
+        r.id === rowId ? { ...r, conformityCheck: next, conformity: next.verdict === 'Undecided' ? r.conformity : next.verdict } : r,
+      ),
+    })
+    toast.success(`Value Set — Conformity Now ${next.verdict}. Click Save to Keep.`)
+  }
+
   const runConformityCheck = async (onlyIds?: string[], opts?: { useMainModel?: boolean }) => {
     const chosen = onlyIds ?? (selectedIds.size ? [...selectedIds] : null)
     const withReport = (chosen ? rows.filter((r) => chosen.includes(r.id)) : rows).filter((r) => r.testReportStoragePath.trim())
@@ -3153,7 +3180,44 @@ export function OslSampleRequirementsModuleFields({
                             <td className="border-b border-stone-200 px-2 py-1.5 text-left font-medium">{r.parameter}</td>
                             <td className="border-b border-stone-200 px-2 py-1.5 text-center">{r.clause}</td>
                             <td className="border-b border-stone-200 px-2 py-1.5 text-center">{r.requirement}</td>
-                            <td className="border-b border-stone-200 px-2 py-1.5 text-center">{r.result}</td>
+                            <td className="border-b border-stone-200 px-2 py-1.5 text-center">
+                              {r.result}
+                              {r.verdict === 'Not Clear' && !disabled ? (
+                                <div className="mt-1 flex items-center justify-center gap-1">
+                                  <Input
+                                    className="h-7 w-28 rounded-none text-xs"
+                                    placeholder="Value From Report"
+                                    aria-label={`Value of ${r.parameter}`}
+                                    value={handValues[i] ?? ''}
+                                    onChange={(e) => setHandValues((prev) => ({ ...prev, [i]: e.target.value }))}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') applyHandValue(i)
+                                    }}
+                                  />
+                                  {handNeedsChoice === i ? (
+                                    <>
+                                      <Button type="button" size="sm" variant="outline" className="h-7 rounded-none px-2 text-[11px] text-emerald-700" onClick={() => applyHandValue(i, 'Pass')}>
+                                        Pass
+                                      </Button>
+                                      <Button type="button" size="sm" variant="outline" className="h-7 rounded-none px-2 text-[11px] text-red-700" onClick={() => applyHandValue(i, 'Fail')}>
+                                        Fail
+                                      </Button>
+                                    </>
+                                  ) : (
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-7 rounded-none px-2 text-[11px]"
+                                      disabled={!(handValues[i] ?? '').trim()}
+                                      onClick={() => applyHandValue(i)}
+                                    >
+                                      Set
+                                    </Button>
+                                  )}
+                                </div>
+                              ) : null}
+                            </td>
                             <td
                               className={cn(
                                 'border-b border-stone-200 px-2 py-1.5 font-semibold',

@@ -108,3 +108,56 @@ export async function pdfFileToAiPages(file: File, maxPages = 3, maxSide = AI_IM
     void task.destroy()
   }
 }
+
+/**
+ * Pictures of chosen PDF pages (1-based) for a vision AI model. With `halves`, each page goes as its top and bottom
+ * half (a little overlap), each at full picture size: small table figures of a scanned report stay readable.
+ */
+export async function pdfPagesToAiPictures(
+  file: File,
+  pages: number[],
+  opts: { halves?: boolean; maxPictures?: number; maxSide?: number } = {},
+): Promise<string[]> {
+  const maxSide = opts.maxSide ?? AI_IMAGE_MAX_SIDE
+  const maxPictures = opts.maxPictures ?? 8
+  const { getDocument } = await loadPdfjs()
+  const task = getDocument({ data: new Uint8Array(await file.arrayBuffer()) })
+  const pdf = await task.promise
+  try {
+    const out: string[] = []
+    for (const n of pages) {
+      if (out.length >= maxPictures || n < 1 || n > pdf.numPages) continue
+      const page = await pdf.getPage(n)
+      const base = page.getViewport({ scale: 1 })
+      // Halves: the page width becomes the picture's long side; whole page: the longer side does.
+      const scale = Math.min(4, maxSide / (opts.halves ? base.width : Math.max(base.width, base.height, 1)))
+      const viewport = page.getViewport({ scale })
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.max(1, Math.floor(viewport.width))
+      canvas.height = Math.max(1, Math.floor(viewport.height))
+      await page.render({ canvas, viewport, background: '#ffffff' }).promise
+      if (opts.halves && canvas.height > canvas.width * 0.9 && out.length + 2 <= maxPictures) {
+        const overlap = Math.round(canvas.height * 0.04)
+        const half = Math.ceil(canvas.height / 2)
+        for (const [top, height] of [
+          [0, half + overlap],
+          [half - overlap, canvas.height - (half - overlap)],
+        ]) {
+          const part = document.createElement('canvas')
+          part.width = canvas.width
+          part.height = height
+          const ctx = part.getContext('2d')
+          if (!ctx) continue
+          ctx.drawImage(canvas, 0, top, canvas.width, height, 0, 0, canvas.width, height)
+          out.push(canvasToJpeg(part))
+        }
+      } else {
+        out.push(canvasToJpeg(canvas))
+      }
+      page.cleanup()
+    }
+    return out
+  } finally {
+    void task.destroy()
+  }
+}
