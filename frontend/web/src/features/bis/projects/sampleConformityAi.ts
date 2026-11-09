@@ -182,7 +182,8 @@ FIELD FORMATS (keep each cell short, no sentences in the table):
 - evidence: for every "Fail" row, the exact words copied from the documents (Standard, amendment, referenced standard, Product Manual or SIZE TABLE ROWS) that set the limit it fails — the table row or the clause sentence with the number, up to 200 characters, copied character for character; "" for other rows. A Fail without evidence that the app finds in the documents is not accepted.
 - missing_tests: "Test Name (Clause x)".
 - summary: one sentence with the verdict and the deciding reason.
-- notes: the observations, one short sentence each: whether the sample matches the Test Request, every failure with its reason, missing tests, disagreement with the lab's remark, anything else the reviewer must know. OCR corrections: ONE note listing only the values you changed.
+- KEEP THE ANSWER SHORT: nothing outside the JSON, no reasoning written out, "requirement" and "result" cells under 60 characters each, no note that repeats a table row.
+- notes: at most 8, one short sentence each: whether the sample matches the Test Request, every failure with its reason, missing tests, disagreement with the lab's remark, anything else the reviewer must know. OCR corrections: ONE note listing only the values you changed.
 Before answering, re-check every row: for "≥ X" the result must be at least X; for "≤ X" at most X. Compare the numbers, not the words.
 - sample: values as written in the report ("" when not given).
 
@@ -320,7 +321,7 @@ export function indexQueryWords(input: { requiredTests: RequiredTest[]; reportTe
   return `${REQUIREMENT_WORDS} ${input.grade} ${fromList} ${fromReport}`.replace(/\s+/g, ' ').trim()
 }
 
-const REQUIRED_RULES = `REQUIRED TESTS: the locked list below is authoritative for missing tests. For EVERY listed test give one entry in "required_check": {"test": the name exactly as listed, "applicable": false only when its "applies to" excludes this sample's grade / type / size (else true), "found": true when the laboratory report gives a result for it (under any name), "result_parameter": the matching "parameter" of your results table or ""}. "missing_tests" = the applicable listed tests with found false (add others only when the Standard clearly requires them). Use the listed requirement as the limit unless the Standard pages show an amended limit. Add "required_check" to the JSON answer.`
+const REQUIRED_RULES = `REQUIRED TESTS: the locked list below is authoritative for missing tests. For EVERY listed test give one entry in "required_check": {"test": the name exactly as listed, "applicable": false only when its "applies to" excludes this sample's grade / type / size (else true), "found": true when the laboratory report gives a result for it (under any name)}. "missing_tests" = the applicable listed tests with found false (add others only when the Standard clearly requires them). Use the listed requirement as the limit unless the Standard pages show an amended limit. Add "required_check" to the JSON answer.`
 
 /** The locked list as prompt lines. */
 export function requiredTestsBlock(tests: RequiredTest[]): string {
@@ -473,6 +474,65 @@ export function checkFailEvidence(
     (i) => `${check.results[i].parameter}: the Fail against ${check.results[i].requirement} is not backed by the documents (its quoted rule was not found) — checked again by the review.`,
   )
   return { check: { ...check, results, notes: [...check.notes, ...notes] }, evidence, unbacked }
+}
+
+/** Page header written by indexPagesText: "[Standard — IS 4923 2017 - 03.pdf — page 9]". */
+const PAGE_HEADER = /(?=^\[(?:Standard|Amendment|Product Manual|Old version|Extra \(other\)) — [^\n]*page \d+\]$)/m
+
+/**
+ * The few document pages the second review needs: those holding a Fail row's quoted rule, its clause or table, or the
+ * test's name — not the whole Standard again (that was ~60k tokens for a review of two rows). A long block without page
+ * headers (a Standard read from its PDF) is cut to the passages around the matches.
+ */
+export function pickReviewPages(
+  texts: string[],
+  items: Array<{ parameter: string; clause: string; evidence: string }>,
+  missing: string[],
+  budget = 20_000,
+): string {
+  const fragments = items.flatMap((it) =>
+    it.evidence
+      .split(/…|\.\.\.|\s\|\s|;/)
+      .map(normEvidence)
+      .filter((f) => f.length >= 12),
+  )
+  const clauseKeys = items.flatMap((it) => normEvidence(it.clause).match(/\d+(?:\.\d+)+|table \d+|annex [a-z]/g) ?? [])
+  const words = [...items.map((it) => it.parameter), ...missing.map((m) => m.split(' (')[0])]
+    .flatMap((w) => normEvidence(w).split(' '))
+    .filter((w) => w.length >= 4 && !/^(test|tests|total|value|side|with|from)$/.test(w))
+  const hits = (norm: string) =>
+    fragments.filter((f) => norm.includes(f)).length * 10 +
+    clauseKeys.filter((k) => new RegExp(`(^|[^0-9.])${k.replace(/\./g, '\\.')}([^0-9]|$)`).test(norm)).length * 3 +
+    [...new Set(words)].filter((w) => norm.includes(w)).length * 2
+  const blocks = texts
+    .flatMap((t) => t.split(PAGE_HEADER))
+    .map((b) => b.trim())
+    .filter(Boolean)
+    .map((b) => {
+      const norm = normEvidence(b)
+      let text = b
+      if (b.length > 6_000) {
+        // No page headers: keep ±1,500 characters around each match.
+        const low = b.toLowerCase()
+        const at = [...fragments, ...clauseKeys, ...words]
+          .map((k) => low.indexOf(k.split(' ')[0]))
+          .filter((i) => i >= 0)
+          .sort((x, y) => x - y)
+          .slice(0, 6)
+        text = at.map((i) => b.slice(Math.max(0, i - 1_500), i + 1_500)).join('\n…\n') || b.slice(0, 3_000)
+      }
+      const amended = /^\[Amendment|amendment no/i.test(b.slice(0, 300)) ? 2 : 0
+      const score = hits(norm)
+      return { text, score: score ? score + amended : 0 }
+    })
+    .filter((b) => b.score > 0)
+    .sort((x, y) => y.score - x.score)
+  let out = ''
+  for (const b of blocks) {
+    if (out.length + b.text.length > budget) continue
+    out += `${b.text}\n\n`
+  }
+  return out.trim()
 }
 
 const REVIEW_INSTRUCTIONS = `ROLE: You are a second BIS reviewer. A first reviewer checked one sample's Test Report against the Indian Standard and marked the ITEMS below as failing (or as missing tests). Check ONLY those items again, using ONLY the documents below (the Standard with its amendments, referenced standards, the Product Manual, the SIZE TABLE ROWS). The results were read from the Test Report and are correct: check the RULE — which requirement applies to THIS sample (its grade, size, killed type, coating, stage) and its actual limit.
@@ -727,13 +787,26 @@ export async function checkSampleConformity(input: {
   const reviewMissing = !requiredTests.length && backed.check.missingTests.length > 0
   if (!failedRows.length && !reviewMissing) return settleCheck(backed.check, row)
   onStep?.('AI is reviewing the failed results…')
+  const reviewPages = pickReviewPages(
+    [standardText, referencedText, manualText],
+    failedRows.map((i) => ({ ...backed.check.results[i], evidence: backed.evidence[i] ?? '' })),
+    reviewMissing ? backed.check.missingTests : [],
+  )
+  const reviewDocuments = [
+    sizeText ? `=== SIZE TABLE ROWS (complete for this size and the next higher size) ===\n${sizeText}` : '',
+    requiredTests.length ? `=== REQUIRED TESTS (locked list) ===\n${requiredTestsBlock(requiredTests)}` : '',
+    reviewPages ? `=== DOCUMENT PAGES FOR THESE ITEMS (Standard, amendments, referenced standards, Product Manual) ===\n${reviewPages}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n')
   const reviewed = await reviewFails({
     check: backed.check,
     rows: failedRows,
     evidence: backed.evidence,
     reviewMissing,
     facts: sampleFacts(row),
-    documents,
+    // The pages for these items only; the evidence is still checked against all the documents.
+    documents: reviewPages ? reviewDocuments : documents,
     docsNorm,
     useMainModel: input.useMainModel,
   }).catch((err: unknown) => ({
