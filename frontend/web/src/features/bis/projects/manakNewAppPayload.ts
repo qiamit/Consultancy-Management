@@ -13,6 +13,7 @@ import { buildBisDocumentPdfBlob } from './bisDocumentPdf'
 import { buildExcelWorkbook } from './bisExcelWorkbook'
 import { fetchBisModulePayload } from './bisModuleDataApi'
 import { BIS_PROJECT_FILES_BUCKET } from './bisProjectFilesApi'
+import { relinkModuleFiles } from './bisModuleFileRelink'
 import { loadBisProjectPrintPageSettings } from './bisPrintPageSettingsApi'
 import { parseCmpf311Payload } from './cmpf311Model'
 import { isManakEmail } from './manakChecks'
@@ -193,6 +194,11 @@ export async function buildManakNewAppPayload(row: BisProjectRow): Promise<Manak
     'undertaking-general',
     APPLICATION_DECLARATION_KIND,
   ]
+  // Data imported from another Application / License may still point at that project's files (staff photos and
+  // qualification documents, signatures): give this application its own copies first, so every file can be sent.
+  const relinked = await Promise.all(
+    (['technical-staff', 'top-management'] as BisPrintDocumentKind[]).map((k) => relinkModuleFiles(row.id, k).catch(() => ({ copied: 0, missing: [] as string[] }))),
+  )
   const [print, projectRes, scopeFiles, consentFiles, ...loaded] = await Promise.all([
     loadBisPrintData(row),
     supabase.from('bis_projects').select('*').eq('id', row.id).maybeSingle(),
@@ -205,11 +211,16 @@ export async function buildManakNewAppPayload(row: BisProjectRow): Promise<Manak
   const c = print.client
 
   const files: ManakNewAppFile[] = []
+  /** Files the data names but storage no longer has (the extension could not upload them). */
+  const brokenFiles: Array<{ slot: ManakNewAppFileSlot; label: string }> = []
   const addFile = async (slot: ManakNewAppFileSlot, label: string, storagePath: unknown, fileName: unknown, rowIndex?: number) => {
     const path = str(storagePath)
     if (!path) return
     const url = await link(path)
-    if (!url) return
+    if (!url) {
+      brokenFiles.push({ slot, label })
+      return
+    }
     // Manak validates uploads by file-name extension; app display names often have none
     // ("Photo — Pratik Baisware"), so take it from the stored object path.
     const stored = path.split('/').pop() || 'document'
@@ -330,6 +341,20 @@ export async function buildManakNewAppPayload(row: BisProjectRow): Promise<Manak
     }))
 
   const missingFiles: ManakNewAppPayload['missingFiles'] = []
+  const SLOT_STEP: Partial<Record<ManakNewAppFileSlot, string>> = {
+    variety: 'general',
+    'staff-education': 'management',
+    'staff-photo': 'management',
+    consent: 'testing',
+    label: 'packaging',
+    brand: 'packaging',
+    statutory: 'declaration',
+  }
+  const stepOfSlot = (slot: ManakNewAppFileSlot) => SLOT_STEP[slot] ?? 'general'
+  for (const b of brokenFiles) missingFiles.push({ step: stepOfSlot(b.slot), label: `${b.label} (file not found — attach it again)` })
+  for (const name of relinked.flatMap((r) => r.missing)) {
+    missingFiles.push({ step: 'management', label: `${name} (imported file no longer exists — attach it again)` })
+  }
   if (varietyDocMissing) missingFiles.push({ step: 'general', label: 'Variety supporting document (attach it on the Varieties row)' })
   const sitAccept: YesNo = sit.mode === 'bis-sit' ? 'Yes' : 'No'
   const outsourcing: YesNo = applicable.subcontracting === 'Yes' ? 'Yes' : 'No'
