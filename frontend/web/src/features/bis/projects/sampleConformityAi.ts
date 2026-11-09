@@ -5,6 +5,14 @@ import { pdfFileToAiPages } from '@/components/qi-assistant/aiImages'
 import { ocrPdfPages } from '@/lib/ocrPdf'
 import { createBisProjectFileUrls } from './bisProjectFilesApi'
 import { parseOslConformityCheck, type OslConformityCheck, type OslSampleRequirementRow } from './oslSampleRequirementsModel'
+import {
+  fetchProductManualPages,
+  fetchRequiredTests,
+  fetchStandardFolders,
+  searchStandardPages,
+  type RequiredTest,
+  type StandardPage,
+} from '@/features/masters/is-codes/requiredTestsApi'
 
 /** Text budget per document (characters), so the whole check fits the AI model's context (~60k tokens in all). */
 const LIMITS = { request: 12_000, report: 70_000, standard: 100_000, manual: 35_000 }
@@ -187,13 +195,16 @@ const NUMBER = /-?\d+(?:\.\d+)?/g
  * the reported value(s) — every number of a range such as "2.61 - 2.65 mm" must meet it. Returns the verdict the
  * numbers give, or null when the requirement or result is not a simple numeric limit.
  */
-function numericVerdict(r: CheckResult): 'Pass' | 'Fail' | null {
-  const req = r.requirement.replace(/,/g, '')
+/** Units with a power ("N/mm2", "mm²", "g/m2", "m³") must not count as numbers: "545 N/mm2" is one value, 545. */
+const stripUnitPowers = (v: string) => v.replace(/([A-Za-z])[23²³](?![\d.])/g, '$1')
+
+export function numericVerdict(r: CheckResult): 'Pass' | 'Fail' | null {
+  const req = stripUnitPowers(r.requirement.replace(/,/g, ''))
   const min = /≥|>=|\bmin(?:imum)?\b|\bnot less than\b|\bat least\b/i.test(req)
   const max = /≤|<=|\bmax(?:imum)?\b|\bnot more than\b|\bup to\b/i.test(req)
   if (min === max || /±|%\s*of|of\s+(?:od|thickness|length)|\(|\bor\b/i.test(req)) return null
   const limits = req.match(NUMBER) ?? []
-  const values = (r.result.replace(/,/g, '').match(NUMBER) ?? []).map(Number)
+  const values = (stripUnitPowers(r.result.replace(/,/g, '')).match(NUMBER) ?? []).map(Number)
   if (limits.length !== 1 || !values.length || values.length > 2) return null
   const limit = Number(limits[0])
   return values.every((v) => (min ? v >= limit : v <= limit)) ? 'Pass' : 'Fail'
@@ -232,6 +243,109 @@ function settleCheck(check: OslConformityCheck, row: OslSampleRequirementRow): O
   return { ...check, results, missingTests, verdict, notes, summary }
 }
 
+/** Standards index budgets: only the matching pages are sent, far less than the whole Standard. */
+const INDEX_LIMITS = { standard: 45_000, manual: 30_000, standardPages: 24 }
+const REQUIREMENT_WORDS =
+  'requirement requirements table clause test method limit shall tolerance chemical composition mechanical properties dimensions marking'
+const WORD_STOP = new Set(
+  'the and for with from that this test tests report page sample result results value values laboratory method remark conforms specified requirement observed signatory issued date number total'.split(
+    ' ',
+  ),
+)
+
+/** Pages as text, each page once (the same page often sits in two files), cut at a character budget. */
+function indexPagesText(pages: StandardPage[], budget: number): { text: string; count: number } {
+  const seen = new Set<string>()
+  let text = ''
+  let count = 0
+  for (const p of pages) {
+    const body = p.text.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim()
+    const key = body.slice(0, 400)
+    if (!body || seen.has(key)) continue
+    seen.add(key)
+    const block = `[${p.kind} — ${p.relpath.split('/').pop()} — page ${p.page}]\n${body}\n\n`
+    if (text.length + block.length > budget) break
+    text += block
+    count += 1
+  }
+  return { text, count }
+}
+
+/** Words that find the Standard's pages for this sample: the required tests, else the words of the report. */
+export function indexQueryWords(input: { requiredTests: RequiredTest[]; reportText: string; grade: string }): string {
+  const fromList = input.requiredTests.map((t) => t.testName).join(' ')
+  const fromReport = fromList
+    ? ''
+    : [...new Set((input.reportText.toLowerCase().match(/[a-z]{4,}/g) ?? []).filter((w) => !WORD_STOP.has(w)))]
+        .slice(0, 80)
+        .join(' ')
+  return `${REQUIREMENT_WORDS} ${input.grade} ${fromList} ${fromReport}`.replace(/\s+/g, ' ').trim()
+}
+
+const REQUIRED_RULES = `REQUIRED TESTS: the locked list below is authoritative for missing tests. For EVERY listed test give one entry in "required_check": {"test": the name exactly as listed, "applicable": false only when its "applies to" excludes this sample's grade / type / size (else true), "found": true when the laboratory report gives a result for it (under any name), "result_parameter": the matching "parameter" of your results table or ""}. "missing_tests" = the applicable listed tests with found false (add others only when the Standard clearly requires them). Use the listed requirement as the limit unless the Standard pages show an amended limit. Add "required_check" to the JSON answer.`
+
+/** The locked list as prompt lines. */
+export function requiredTestsBlock(tests: RequiredTest[]): string {
+  return tests
+    .map((t, i) => `${i + 1}. ${t.testName}${t.clause ? ` | Clause ${t.clause}` : ''}${t.requirement ? ` | ${t.requirement}` : ''}${t.appliesTo ? ` | Applies To: ${t.appliesTo}` : ''}`)
+    .join('\n')
+}
+
+const normName = (v: string) => v.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+
+/**
+ * Missing tests from the locked list, decided by the app: every applicable listed test the AI did not confirm as
+ * found in the report is missing, also when the AI left it out of "required_check" altogether.
+ */
+export function applyRequiredTests(check: OslConformityCheck, required: RequiredTest[], rawRequiredCheck: unknown): OslConformityCheck {
+  if (!required.length) return check
+  const entries = (Array.isArray(rawRequiredCheck) ? rawRequiredCheck : []).filter(
+    (e): e is Record<string, unknown> => Boolean(e) && typeof e === 'object',
+  )
+  const byName = new Map(entries.map((e) => [normName(String(e.test ?? '')), e]))
+  const missing: string[] = []
+  for (const t of required) {
+    const e = byName.get(normName(t.testName))
+    const label = `${t.testName}${t.clause ? ` (Clause ${t.clause})` : ''}`
+    if (!e) missing.push(`${label} — Not Confirmed in the Report`)
+    else if (e.applicable !== false && e.found !== true) missing.push(label)
+  }
+  const have = new Set(missing.map((m) => normName(m.split(' (Clause')[0].split(' — ')[0])))
+  const extra = check.missingTests.filter((m) => !have.has(normName(m.split(' (Clause')[0].split('(')[0])))
+  const missingTests = [...missing, ...extra]
+  const note = missing.length
+    ? [`Missing tests checked against the locked Required Tests list (${required.length} laboratory tests).`]
+    : [`All ${required.length} tests of the locked Required Tests list are in the report (or not applicable).`]
+  return { ...check, missingTests, notes: [...check.notes, ...note] }
+}
+
+/**
+ * The Standard's matching pages and the Product Manual from the standards index (no PDF download, no OCR in the
+ * browser). Null when the IS Code is not in the index, so the check falls back to the IS Code's own PDF files.
+ */
+async function readFromStandardsIndex(
+  isCodeId: string,
+  words: string,
+): Promise<{ standardText: string; manualText: string; sources: string[] } | null> {
+  const folders = await fetchStandardFolders(isCodeId).catch(() => [] as string[])
+  if (!folders.length) return null
+  const [standardPages, manualPages] = await Promise.all([
+    searchStandardPages(folders, words, INDEX_LIMITS.standardPages, ['Standard', 'Amendment']).catch(() => []),
+    fetchProductManualPages(folders).catch(() => []),
+  ])
+  const standard = indexPagesText(standardPages, INDEX_LIMITS.standard)
+  const manual = indexPagesText(manualPages, INDEX_LIMITS.manual)
+  if (!standard.text) return null
+  return {
+    standardText: standard.text,
+    manualText: manual.text,
+    sources: [
+      `Standard (Standards Index, ${folders[0]}): ${standard.count} Matching Pages`,
+      ...(manual.count ? [`Product Manual (Standards Index): ${manual.count} Pages`] : []),
+    ],
+  }
+}
+
 /**
  * AI conformity check of one sample: reads the Test Request, the Test Report (text; OCR and page pictures when scanned),
  * the IS specification and the Product Manual, and compares every result with the requirement for this sample.
@@ -266,9 +380,26 @@ export async function checkSampleConformity(input: {
     if (requestText) sources.push(`Test Request: ${row.testRequestFileName || 'attached'}${request.ocr ? ' (scanned — read by OCR)' : ''}`)
   }
 
+  // The locked Required Tests list of the IS Code: the authoritative list for missing tests.
+  const requiredList = input.isCodeId ? await fetchRequiredTests(input.isCodeId).catch(() => null) : null
+  const requiredTests = requiredList?.lockedAt ? requiredList.tests.filter((t) => t.testedBy === 'Lab') : []
+  if (requiredTests.length) sources.push(`Required Tests: Locked List of ${requiredTests.length} Laboratory Tests`)
+
   let standardText = ''
   let manualText = ''
   if (input.isCodeId) {
+    onStep?.('Reading the Standard and the Product Manual (Standards Index)…')
+    const indexed = await readFromStandardsIndex(
+      input.isCodeId,
+      indexQueryWords({ requiredTests, reportText: report.text, grade: `${row.gradeTypeVariety} ${row.sampleDescription}` }),
+    )
+    if (indexed) {
+      standardText = indexed.standardText
+      manualText = indexed.manualText
+      sources.push(...indexed.sources)
+    }
+  }
+  if (input.isCodeId && !standardText) {
     onStep?.('Reading the Standard and the Product Manual…')
     const files = await loadIsCodeFileLinks(input.isCodeId).catch(() => [] as IsCodeFileLink[])
     const standard = pickIsFile(files, 'standard')
@@ -280,7 +411,7 @@ export async function checkSampleConformity(input: {
       standardText = read.text
       if (standardText) sources.push(`Standard: ${standard.file_name}${read.ocr ? ' (scanned — read by OCR)' : ''}`)
     }
-    if (manual) {
+    if (manual && !manualText) {
       const read = await fetchFile(manual.url!, manual.file_name)
         .then((f) => readPdf(f, 'manual', 'Product Manual', onStep))
         .catch(() => ({ text: '', ocr: false }))
@@ -296,6 +427,7 @@ export async function checkSampleConformity(input: {
   const message = [
     INSTRUCTIONS,
     `=== SAMPLE (${input.isLabel}) ===\n${sampleFacts(row)}`,
+    requiredTests.length ? `${REQUIRED_RULES}\n=== REQUIRED TESTS (locked list) ===\n${requiredTestsBlock(requiredTests)}` : '',
     requestText ? `=== TEST REQUEST ===\n${requestText}` : '',
     `=== TEST REPORT${report.ocr ? ' (scanned, read by OCR twice per page — figures may have OCR mistakes such as 0↔8, 0↔6, 1↔I: read 1 has the more reliable digits; compare both reads, take the one that fits the units and limits, and prefer the page pictures when attached)' : ''} ===\n${report.text || '(scanned — see the attached page pictures)'}`,
     standardText ? `=== INDIAN STANDARD ===\n${standardText}` : '',
@@ -343,5 +475,5 @@ export async function checkSampleConformity(input: {
       manufactureDate: parsed.sample.manufactureDate,
     },
   }
-  return settleCheck(check, row)
+  return settleCheck(applyRequiredTests(check, requiredTests, raw.required_check ?? raw.requiredCheck), row)
 }
