@@ -303,6 +303,7 @@ export function isDocumentTaskPage(page) {
     p === 'bis/undertaking-other' ||
     p.startsWith('bis/non-conformity') ||
     p === 'masters/test-parameters-ai' ||
+    p === 'masters/is-required-tests' ||
     p === 'bis/process-flow-chart' ||
     p === 'bis/plant-layout' ||
     p === 'bis/sample-conformity'
