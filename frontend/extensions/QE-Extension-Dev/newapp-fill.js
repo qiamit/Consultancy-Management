@@ -267,7 +267,7 @@
           const bin = atob(res.base64);
           const bytes = new Uint8Array(bin.length);
           for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
-          resolve({ file: new File([bytes], file.fileName || "document.pdf", { type: file.mime || res.mime || "" }) });
+          resolve({ bytes, mime: file.mime || res.mime || "" });
         });
       } catch (error) {
         resolve({ error: String(error && error.message ? error.message : error) });
@@ -275,16 +275,140 @@
     });
   }
 
+  /*
+   * Manak checks the file-name extension of each upload: the Technical Staff qualification document must be a PDF and
+   * the photo a JPG / JPEG ("Please upload file with extension pdf only"). The stored file may be a picture of the
+   * certificate, a PNG photo, or carry a name whose extension does not match its content — so the type is read from
+   * the bytes, the file is converted when Manak wants another type, and the name always ends in the real extension.
+   */
+  const SLOT_WANTS = { "staff-education": "pdf", "staff-photo": "jpg" };
+  const EXT_RE = /\.(pdf|jpe?g|png|gif|webp|bmp|tiff?|heic|docx?|xlsx?)$/i;
+
+  function sniffType(bytes) {
+    const b = bytes;
+    if (b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46) return "pdf";
+    if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return "jpg";
+    if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return "png";
+    if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) return "gif";
+    if (b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57 && b[9] === 0x45) return "webp";
+    if (b[0] === 0x42 && b[1] === 0x4d) return "bmp";
+    return "";
+  }
+
+  /** What the Manak input accepts, from its slot or its accept attribute: "pdf", "jpg" or "" (anything). */
+  function wantedType(input, file) {
+    if (SLOT_WANTS[file.slot]) return SLOT_WANTS[file.slot];
+    const acc = String(input.getAttribute("accept") || "").toLowerCase();
+    if (!acc) return "";
+    const pdf = /pdf/.test(acc);
+    const jpg = /jpe?g|image\/\*/.test(acc);
+    if (pdf && !jpg) return "pdf";
+    if (jpg && !pdf) return "jpg";
+    return "";
+  }
+
+  /** Any picture the browser can read → JPEG (white behind transparency), with its size. */
+  async function toJpeg(bytes, mime) {
+    const bitmap = await createImageBitmap(new Blob([bytes], { type: mime || "image/png" }));
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(bitmap, 0, 0);
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
+    if (!blob) throw new Error("Picture could not be converted");
+    return { bytes: new Uint8Array(await blob.arrayBuffer()), width: canvas.width, height: canvas.height };
+  }
+
+  /** A one-page PDF (A4 width) showing the JPEG. */
+  function jpegToPdf(jpeg, width, height) {
+    const enc = new TextEncoder();
+    const W = 595;
+    const H = Math.max(1, Math.round((W * height) / width));
+    const draw = enc.encode(`q ${W} 0 0 ${H} 0 0 cm /Im0 Do Q`);
+    const parts = [];
+    const offsets = [];
+    let length = 0;
+    const push = (chunk) => {
+      const c = typeof chunk === "string" ? enc.encode(chunk) : chunk;
+      parts.push(c);
+      length += c.length;
+    };
+    const obj = (n, body) => {
+      offsets[n] = length;
+      push(`${n} 0 obj\n${body}\nendobj\n`);
+    };
+    push("%PDF-1.4\n");
+    obj(1, "<< /Type /Catalog /Pages 2 0 R >>");
+    obj(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>");
+    obj(3, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>`);
+    offsets[4] = length;
+    push(`4 0 obj\n<< /Type /XObject /Subtype /Image /Width ${width} /Height ${height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpeg.length} >>\nstream\n`);
+    push(jpeg);
+    push("\nendstream\nendobj\n");
+    offsets[5] = length;
+    push(`5 0 obj\n<< /Length ${draw.length} >>\nstream\n`);
+    push(draw);
+    push("\nendstream\nendobj\n");
+    const xref = length;
+    push(`xref\n0 6\n0000000000 65535 f \n${[1, 2, 3, 4, 5].map((n) => `${String(offsets[n]).padStart(10, "0")} 00000 n \n`).join("")}`);
+    push(`trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`);
+    const out = new Uint8Array(length);
+    let at = 0;
+    parts.forEach((c) => {
+      out.set(c, at);
+      at += c.length;
+    });
+    return out;
+  }
+
+  const MIME = { pdf: "application/pdf", jpg: "image/jpeg", png: "image/png", gif: "image/gif", webp: "image/webp", bmp: "image/bmp" };
+
+  /** The file as Manak wants it: right type (converted when needed) and a name ending in the real extension. */
+  async function readyFile(input, file, got) {
+    const want = wantedType(input, file);
+    let bytes = got.bytes;
+    let type = sniffType(bytes) || (EXT_RE.exec(file.fileName || "") || [])[1] || "";
+    type = type.toLowerCase().replace("jpeg", "jpg");
+    let note = "";
+    const isPicture = ["jpg", "png", "gif", "webp", "bmp"].includes(type);
+    if (want === "jpg" && type !== "jpg" && isPicture) {
+      bytes = (await toJpeg(bytes, MIME[type])).bytes;
+      note = `converted ${type.toUpperCase()} to JPG`;
+      type = "jpg";
+    } else if (want === "pdf" && type !== "pdf" && isPicture) {
+      const jpeg = await toJpeg(bytes, MIME[type]);
+      bytes = jpegToPdf(jpeg.bytes, jpeg.width, jpeg.height);
+      note = `converted ${type.toUpperCase()} picture to PDF`;
+      type = "pdf";
+    } else if (want && type && want !== type) {
+      return { error: `Manak needs a ${want.toUpperCase()} file; this one is ${type.toUpperCase()} — attach a ${want.toUpperCase()} in Consultancy Pro` };
+    }
+    const base = (file.fileName || "document").replace(EXT_RE, "").replace(/[\\/:*?"<>|]+/g, " ").trim() || "document";
+    const name = type ? `${base}.${type === "jpg" ? "jpg" : type}` : file.fileName || "document";
+    return { file: new File([bytes], name, { type: MIME[type] || got.mime || "" }), note };
+  }
+
   async function setFile(input, file) {
     if (input.files && input.files.length > 0) return "same";
     const got = await fetchFile(file);
-    if (!got.file) return `error: ${got.error}`;
+    if (!got.bytes) return `error: ${got.error}`;
+    let ready;
+    try {
+      ready = await readyFile(input, file, got);
+    } catch (error) {
+      return `error: ${String(error && error.message ? error.message : error)}`;
+    }
+    if (!ready.file) return `error: ${ready.error}`;
     const dt = new DataTransfer();
-    dt.items.add(got.file);
+    dt.items.add(ready.file);
     input.files = dt.files;
     input.dispatchEvent(new Event("input", { bubbles: true }));
     input.dispatchEvent(new Event("change", { bubbles: true }));
     nudgePage(input);
+    if (ready.note) file.__qeNote = ready.note;
     return "filled";
   }
 
@@ -574,7 +698,7 @@
       }
       input.__qeUsed = true;
       const res = await setFile(input, f);
-      if (res === "filled") report.filled.push(name);
+      if (res === "filled") report.filled.push(f.__qeNote ? `${name} (${f.__qeNote})` : name);
       else if (res !== "same") report.missing.push(`${name} (${res})`);
     }
   }
@@ -908,7 +1032,7 @@
             report.missing.push(`${name} — file name box`);
           }
           const res = await setFile(input, f);
-          if (res === "filled") report.filled.push(name);
+          if (res === "filled") report.filled.push(f.__qeNote ? `${name} (${f.__qeNote})` : name);
           else if (res !== "same") report.missing.push(`${name} (${res})`);
           await sleep(300);
         }
@@ -950,7 +1074,7 @@
             continue;
           }
           const res = await setFile(el, f);
-          if (res === "filled") report.filled.push(`${prefix}${f.label || "file"}`);
+          if (res === "filled") report.filled.push(`${prefix}${f.label || "file"}${f.__qeNote ? ` (${f.__qeNote})` : ""}`);
           else if (res !== "same") report.missing.push(`${prefix}${f.label || "file"} (${res})`);
         }
       } else if (item.kind === "row") {
