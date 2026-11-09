@@ -590,7 +590,10 @@ export function createQiAssistantHandler(deps) {
     // Sample conformity is a judgement over long documents: DeepSeek reasons first (its reasoning counts towards
     // max_tokens, so the budget is larger), at a low temperature, with more time.
     const reasonedCheck = body.page === 'bis/sample-conformity' && provider === 'deepseek'
-    const chatMaxTokens = reasonedCheck ? 32768 : isLongExtraction || agentMode ? 8192 : Number.isFinite(maxTokens) ? Math.min(maxTokens, 8192) : 4096
+    // Claude writes long, well-spaced JSON: a conformity table of a scanned report can pass 8192 tokens and be cut off.
+    // Claude 5 models allow far more output (only the tokens used are billed), so long tasks get a larger budget and time.
+    const longClaudeTask = isLongExtraction && provider === 'anthropic'
+    const chatMaxTokens = reasonedCheck || longClaudeTask ? 32768 : isLongExtraction || agentMode ? 8192 : Number.isFinite(maxTokens) ? Math.min(maxTokens, 8192) : 4096
     // Drawing a layout from a sketch wants faithful positions, not creative variety.
     const chatTemperature = body.page === 'bis/plant-layout' || body.page === 'bis/sample-conformity'
       ? 0.2
@@ -603,7 +606,7 @@ export function createQiAssistantHandler(deps) {
       method: 'POST',
       // A provider must not bounce the request (and the API key) somewhere else.
       redirect: 'error',
-      signal: AbortSignal.timeout(reasonedCheck ? 420_000 : 180_000),
+      signal: AbortSignal.timeout(reasonedCheck || longClaudeTask ? 420_000 : 180_000),
       headers: {
         Authorization: `Bearer ${String(model.api_key).trim()}`,
         'Content-Type': 'application/json',
@@ -658,6 +661,7 @@ export function createQiAssistantHandler(deps) {
     const requestJson = body.responseFormat === 'json_object'
     let aiRes
     let aiPayload
+    const startedAt = Date.now()
     try {
       aiRes = await requestChatCompletion(requestJson)
       aiPayload = await aiRes.json().catch(() => ({}))
@@ -692,11 +696,29 @@ export function createQiAssistantHandler(deps) {
 
     const choice = aiPayload?.choices?.[0]
     const content = choice?.message?.content
+    // Page tasks (conformity check, extractions) are long and costly: log size, time and how the answer ended.
+    if (body.page && body.page !== 'global') {
+      const usage = aiPayload?.usage ?? {}
+      console.log(
+        `[qi-assistant] page ${String(body.page).slice(0, 60)} (provider ${provider}, model ${modelId}): ${Math.round((Date.now() - startedAt) / 1000)} s, ` +
+          `tokens in ${usage.prompt_tokens ?? '?'} out ${usage.completion_tokens ?? '?'}, finish ${choice?.finish_reason ?? '?'}, images ${images.length}`,
+      )
+    }
     const reply = (typeof content === 'string'
       ? content
       : Array.isArray(content)
         ? content.map((part) => typeof part === 'string' ? part : String(part?.text ?? '')).join('\n')
         : '').trim()
+    // An answer cut off at the output limit is broken JSON for a page task: say so, instead of a reply that cannot be read.
+    if (choice?.finish_reason === 'length' && (requestJson || isLongExtraction)) {
+      console.warn(
+        `[qi-assistant] answer cut off at the output limit (${chatMaxTokens} tokens; page ${String(body.page || '').slice(0, 60)}, provider ${provider}, model ${modelId})`,
+      )
+      corsJson(res, 502, {
+        error: `The AI answer was cut off at its output limit (${chatMaxTokens} tokens), so it could not be read. Try again; if it repeats, the document is too long for one check.`,
+      })
+      return
+    }
     if (!reply) {
       const messageFields = choice?.message && typeof choice.message === 'object'
         ? Object.keys(choice.message).slice(0, 8).join(', ') || 'none'
