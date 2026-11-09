@@ -447,15 +447,8 @@ export function createQiAssistantHandler(deps) {
       return
     }
 
+    // Every provider, Anthropic included, is called through its OpenAI-compatible chat endpoint (see resolveApiBase).
     const provider = String(model.provider ?? 'openai')
-    // Text chat stays on the providers it always used; picture requests and the Admin Agent may use Anthropic's OpenAI-compatible endpoint.
-    if (provider === 'anthropic' && images.length === 0 && !agentMode) {
-      corsJson(res, 400, {
-        error:
-          'Provider "anthropic" is not yet supported in QE Assistant. Use Google Gemini, OpenAI, DeepSeek, OpenRouter, or Custom with an OpenAI-compatible base URL.',
-      })
-      return
-    }
 
     let skillsBlock = ''
     try {
