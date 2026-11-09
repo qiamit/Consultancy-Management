@@ -697,10 +697,11 @@ export function createQiAssistantHandler(deps) {
     const choice = aiPayload?.choices?.[0]
     const content = choice?.message?.content
     // Page tasks (conformity check, extractions) are long and costly: log size, time and how the answer ended.
-    if (body.page && body.page !== 'global') {
+    const pageName = String(body.page || '').replace(/[^\w/.-]/g, '').slice(0, 60)
+    if (pageName && pageName !== 'global') {
       const usage = aiPayload?.usage ?? {}
       console.log(
-        `[qi-assistant] page ${String(body.page).slice(0, 60)} (provider ${provider}, model ${modelId}): ${Math.round((Date.now() - startedAt) / 1000)} s, ` +
+        `[qi-assistant] page ${pageName} (provider ${provider}, model ${modelId}): ${Math.round((Date.now() - startedAt) / 1000)} s, ` +
           `tokens in ${usage.prompt_tokens ?? '?'} out ${usage.completion_tokens ?? '?'}, finish ${choice?.finish_reason ?? '?'}, images ${images.length}`,
       )
     }
@@ -710,9 +711,9 @@ export function createQiAssistantHandler(deps) {
         ? content.map((part) => typeof part === 'string' ? part : String(part?.text ?? '')).join('\n')
         : '').trim()
     // An answer cut off at the output limit is broken JSON for a page task: say so, instead of a reply that cannot be read.
-    if (choice?.finish_reason === 'length' && (requestJson || isLongExtraction)) {
+    if (choice?.finish_reason === 'length' && requestJson) {
       console.warn(
-        `[qi-assistant] answer cut off at the output limit (${chatMaxTokens} tokens; page ${String(body.page || '').slice(0, 60)}, provider ${provider}, model ${modelId})`,
+        `[qi-assistant] answer cut off at the output limit (${chatMaxTokens} tokens; page ${pageName || '-'}, provider ${provider}, model ${modelId})`,
       )
       corsJson(res, 502, {
         error: `The AI answer was cut off at its output limit (${chatMaxTokens} tokens), so it could not be read. Try again; if it repeats, the document is too long for one check.`,
