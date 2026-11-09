@@ -17,6 +17,7 @@ import { formatClientAddress } from '@/features/masters/clients/types'
 import type { FilterComboboxOption } from '@/features/sample-handling/receiving/FilterCombobox'
 import {
   buildBisProjectTitle,
+  APPLICATION_STAGES,
   DEFAULT_APPLICATION_STAGE,
   DEFAULT_BILLING_FREQUENCY,
   DEFAULT_CASE_HANDLED_BY,
@@ -161,6 +162,8 @@ export type FetchBisProjectsParams = {
   licenseStatusFilter?: BisLicenseStatusFilter
   /** 'open' = only licences with an open BIS notice (License Non-Conformity case). */
   openNoticeFilter?: 'all' | 'open'
+  /** BIS New Application list: only these stages (empty or every stage = all). */
+  stageFilter?: string[]
   /** Default: validity ascending (least days remaining first). */
   sortKey?: BisProjectSortKey
   sortDir?: BisProjectSortDir
@@ -181,6 +184,7 @@ export async function fetchBisProjectsPage(
     projectKindFilter = 'all',
     licenseStatusFilter = 'all',
     openNoticeFilter = 'all',
+    stageFilter = [],
     sortKey = 'validity',
     sortDir = 'asc',
   } = params
@@ -274,6 +278,7 @@ export async function fetchBisProjectsPage(
   }
   if (listMode === 'applications') {
     query = query.or('project_kind.eq.Application,project_kind.eq.application')
+    if (stageFilter.length && stageFilter.length < APPLICATION_STAGES.length) query = query.in('application_stage', stageFilter)
   } else if (listMode === 'inclusion') {
     query = includeInclusionProgressColumn
       ? query.or('inclusion_in_progress.eq.true,project_kind.eq.Inclusion,project_kind.eq.inclusion')
@@ -916,4 +921,19 @@ export async function saveBisApplicationDetails(
   }
   const { error } = await supabase.from('bis_projects').update(payload).eq('id', projectId)
   if (error) throw error
+}
+
+/**
+ * Sets an application's stage by hand. The database may keep it further on (the stage its data already shows), so the
+ * stored stage is returned.
+ */
+export async function updateApplicationStage(projectId: string, stage: string): Promise<string> {
+  const { data, error } = await supabase
+    .from('bis_projects')
+    .update({ application_stage: stage })
+    .eq('id', projectId)
+    .select('application_stage')
+    .single()
+  if (error) throw error
+  return String((data as { application_stage: string | null }).application_stage ?? stage)
 }

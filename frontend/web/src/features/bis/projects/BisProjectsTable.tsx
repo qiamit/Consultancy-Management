@@ -47,6 +47,9 @@ import {
   todayIsoDate,
   type BisProjectRow,
   type LicenseValidityState,
+  APPLICATION_STAGES,
+  AUTO_APPLICATION_STAGES,
+  DEFAULT_APPLICATION_STAGE,
 } from './types'
 import {
   cmLDigitsOnly,
@@ -455,6 +458,37 @@ function TableTextLink({
   )
 }
 
+/** Colour of a stage: automatic stages amber, BIS stages sky, a query / closure notice red, inspection green. */
+function stageTone(stage: string): string {
+  if (/query|closure/i.test(stage)) return 'border-red-300 bg-red-50 text-red-800'
+  if (/inspection|scrutin/i.test(stage)) return 'border-emerald-300 bg-emerald-50 text-emerald-800'
+  if (stage === 'Application Submitted') return 'border-sky-300 bg-sky-50 text-sky-800'
+  if (stage === DEFAULT_APPLICATION_STAGE) return 'border-stone-300 bg-white text-stone-700'
+  return 'border-amber-300 bg-amber-50 text-amber-800'
+}
+
+/** Application stage, set by hand here; the first stages also move forward by themselves (Auto). */
+function StageSelect({ row, onChange }: { row: BisProjectRow; onChange?: (row: BisProjectRow, stage: string) => void }) {
+  const stage = row.application_stage?.trim() || DEFAULT_APPLICATION_STAGE
+  return (
+    <select
+      value={stage}
+      disabled={!onChange}
+      onChange={(e) => onChange?.(row, e.target.value)}
+      aria-label={`Application Stage of ${clientDisplayName(row) || 'This Application'}`}
+      title={AUTO_APPLICATION_STAGES.includes(stage) ? 'Set by the App From the Samples and the Application Number — Change It When BIS Moves It On' : 'Set by Hand'}
+      className={cn('h-8 w-full max-w-[13rem] cursor-pointer rounded-none border px-1.5 text-xs font-semibold', stageTone(stage))}
+    >
+      {APPLICATION_STAGES.map((s) => (
+        <option key={s} value={s}>
+          {s}
+        </option>
+      ))}
+      {!(APPLICATION_STAGES as readonly string[]).includes(stage) ? <option value={stage}>{stage}</option> : null}
+    </select>
+  )
+}
+
 export function BisProjectsTable({
   rows,
   loading,
@@ -468,6 +502,8 @@ export function BisProjectsTable({
   onEmailDocument,
   renewalMode = false,
   inclusionMode = false,
+  applicationsMode = false,
+  onStageChange,
   noticeCounts = {},
   onStartRenewal,
   onRenewalReminder,
@@ -491,6 +527,9 @@ export function BisProjectsTable({
   onEmailDocument?: (row: BisProjectRow, kind: BisPrintDocumentKind) => void
   renewalMode?: boolean
   inclusionMode?: boolean
+  /** BIS New Application list: a Stage column instead of CM/L Number and Licence Validity. */
+  applicationsMode?: boolean
+  onStageChange?: (row: BisProjectRow, stage: string) => void
   /** Open BIS notices (License Non-Conformity cases) per licence id. */
   noticeCounts?: Record<string, number>
   onStartRenewal?: (row: BisProjectRow) => void
@@ -629,6 +668,12 @@ export function BisProjectsTable({
                           />
                         </div>
 
+                        {applicationsMode ? (
+                          <div className="mt-3 flex flex-wrap items-center gap-2 pl-10">
+                            <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">Stage</span>
+                            <StageSelect row={r} onChange={onStageChange} />
+                          </div>
+                        ) : (
                         <div className="mt-3 flex flex-wrap items-center gap-2 pl-10">
                           <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">CM/L</span>
                           <CmLNumberLink
@@ -653,10 +698,12 @@ export function BisProjectsTable({
                             {licStyle.label}
                           </span>
                         </div>
+                        )}
                       </div>
                     </div>
 
-                    <div className={cn('grid gap-3 border-t border-stone-200 bg-[#faf8f3] px-3 py-2.5 sm:px-4', inclusionMode ? 'grid-cols-1' : 'grid-cols-2')}>
+                    <div className={cn('grid gap-3 border-t border-stone-200 bg-[#faf8f3] px-3 py-2.5 sm:px-4', inclusionMode || applicationsMode ? 'grid-cols-1' : 'grid-cols-2')}>
+                      {!applicationsMode ? (
                       <div className="min-w-0">
                         <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">Validity</p>
                         <div className="mt-1 flex min-w-0 items-start gap-1.5 text-xs">
@@ -671,6 +718,7 @@ export function BisProjectsTable({
                           </p>
                         </div>
                       </div>
+                      ) : null}
                       {!inclusionMode ? (
                         <div className="min-w-0">
                           <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-500">Billing</p>
@@ -695,10 +743,16 @@ export function BisProjectsTable({
             <Table className={GRID_TABLE}>
               <colgroup>
                 <col className="w-10" />
-                <col className={inclusionMode ? 'w-[28%]' : 'w-[27%]'} />
-                <col className={inclusionMode ? 'w-[16%]' : 'w-[14%]'} />
-                <col className={inclusionMode ? 'w-[16%]' : 'w-[14%]'} />
-                <col className={inclusionMode ? 'w-[16%]' : 'w-[14%]'} />
+                <col className={inclusionMode ? 'w-[28%]' : applicationsMode ? 'w-[32%]' : 'w-[27%]'} />
+                <col className={inclusionMode ? 'w-[16%]' : applicationsMode ? 'w-[17%]' : 'w-[14%]'} />
+                {applicationsMode ? (
+                  <col className="w-[20%]" />
+                ) : (
+                  <>
+                    <col className={inclusionMode ? 'w-[16%]' : 'w-[14%]'} />
+                    <col className={inclusionMode ? 'w-[16%]' : 'w-[14%]'} />
+                  </>
+                )}
                 {!inclusionMode ? <col className="w-[11%]" /> : null}
                 <col className="bis-projects-action-column" />
               </colgroup>
@@ -733,22 +787,28 @@ export function BisProjectsTable({
                     onSort={onSort}
                     className={cn(thBase, inclusionMode ? 'w-[16%]' : 'w-[12%]')}
                   />
-                  <SortableHeader
-                    label="CM/L Number"
-                    columnKey="cmL"
-                    sortKey={sortKey}
-                    sortDir={sortDir}
-                    onSort={onSort}
-                    className={cn(thBase, inclusionMode ? 'w-[16%]' : 'w-[12%]')}
-                  />
-                  <SortableHeader
-                    label="License Validity"
-                    columnKey="validity"
-                    sortKey={sortKey}
-                    sortDir={sortDir}
-                    onSort={onSort}
-                    className={cn(thBase, inclusionMode ? 'w-[16%]' : 'w-[12%]')}
-                  />
+                  {applicationsMode ? (
+                    <TableHead className={cn(thBase, 'w-[20%]')}>Stage</TableHead>
+                  ) : (
+                    <>
+                      <SortableHeader
+                        label="CM/L Number"
+                        columnKey="cmL"
+                        sortKey={sortKey}
+                        sortDir={sortDir}
+                        onSort={onSort}
+                        className={cn(thBase, inclusionMode ? 'w-[16%]' : 'w-[12%]')}
+                      />
+                      <SortableHeader
+                        label="License Validity"
+                        columnKey="validity"
+                        sortKey={sortKey}
+                        sortDir={sortDir}
+                        onSort={onSort}
+                        className={cn(thBase, inclusionMode ? 'w-[16%]' : 'w-[12%]')}
+                      />
+                    </>
+                  )}
                   {!inclusionMode ? (
                     <SortableHeader
                       label="Billing"
@@ -807,6 +867,12 @@ export function BisProjectsTable({
                           className="block w-full text-center"
                         />
                       </TableCell>
+                      {applicationsMode ? (
+                        <TableCell className="px-2 py-2 text-center align-middle">
+                          <StageSelect row={r} onChange={onStageChange} />
+                        </TableCell>
+                      ) : (
+                        <>
                       <TableCell className="px-2 py-2 text-center align-middle">
                         <CmLNumberLink digits={r.cm_l_digits} />
                         <p className={cn('text-xs font-medium', licStyle.className)}>{licStyle.label}</p>
@@ -829,6 +895,8 @@ export function BisProjectsTable({
                           </p>
                         ) : null}
                       </TableCell>
+                        </>
+                      )}
                       {!inclusionMode ? (
                         <TableCell className="px-2 py-2 text-center align-middle text-sm">
                           <p className="tabular-nums text-[#292524]">{formatInr(r.billing_amount)}</p>

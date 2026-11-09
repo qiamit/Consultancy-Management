@@ -9,6 +9,7 @@ import { useFormDialogOpenChange } from '@/lib/formDialogOpenChange'
 import { useMasterUiSearchState } from '@/lib/useMasterUiSearchState'
 import { BisProjectsHeaderBar } from './BisProjectsHeaderBar'
 import { BisProjectsTable } from './BisProjectsTable'
+import { ApplicationStageFilter } from './ApplicationStageFilter'
 import { BisProjectsFooterBar } from './BisProjectsFooterBar'
 import { BisProjectsForm } from './BisProjectsForm'
 import { BisLicenseDocumentsDialog } from './BisLicenseDocumentsDialog'
@@ -22,6 +23,7 @@ import {
   fetchBisProjectById,
   fetchInclusionNewScope,
   fetchBisProjectsPage,
+  updateApplicationStage,
   formatBisApiError,
   saveBisProject,
   type BisLicenseStatusFilter,
@@ -109,6 +111,8 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
   const [qeManagedFilter, setQeManagedFilter] = useState<BisQeManagedFilter>('managed')
   const [schemeFilter, setSchemeFilter] = useState<BisSchemeFilter>('all')
   const [openNoticeFilter, setOpenNoticeFilter] = useState<'all' | 'open'>('all')
+  /** BIS New Application: the stages shown ([] = all). */
+  const [stageFilter, setStageFilter] = useState<string[]>([])
   const [noticeCounts, setNoticeCounts] = useState<Record<string, number>>({})
   const [projectKindFilter, setProjectKindFilter] = useState<BisProjectKindFilter>('all')
   const [licenseStatusFilter, setLicenseStatusFilter] =
@@ -196,6 +200,7 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
           projectKindFilter: showListFilters ? projectKindFilter : 'all',
           licenseStatusFilter: showListFilters ? licenseStatusFilter : 'all',
           openNoticeFilter: showListFilters ? openNoticeFilter : 'all',
+          stageFilter: listMode === 'applications' ? stageFilter : [],
           sortKey,
           sortDir,
         })
@@ -227,6 +232,7 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
     projectKindFilter,
     licenseStatusFilter,
     openNoticeFilter,
+    stageFilter,
     showListFilters,
     sortKey,
     sortDir,
@@ -360,6 +366,21 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
   }, [viewId, rows, documentsRow?.id, setView])
 
   const reload = useCallback(() => setReloadKey((k) => k + 1), [])
+
+  /** Stage set by hand from the list; the database keeps a later stage the application's data already shows. */
+  const handleStageChange = async (row: BisProjectRow, stage: string) => {
+    try {
+      const stored = await updateApplicationStage(row.id, stage)
+      setRows((list) => list.map((r) => (r.id === row.id ? { ...r, application_stage: stored } : r)))
+      setMessage(
+        stored === stage
+          ? `Stage Set to ${stored}.`
+          : `Stage Kept at ${stored}: the Application's Data Already Shows This Stage.`,
+      )
+    } catch (err) {
+      setMessage(formatBisApiError(err))
+    }
+  }
 
   const refreshDocumentsRow = useCallback(async () => {
     if (!viewId) return
@@ -668,6 +689,15 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
                 <SelectItem value="fmcs">FMCS</SelectItem>
               </SelectContent>
             </Select>
+            {listMode === 'applications' ? (
+              <ApplicationStageFilter
+                value={stageFilter}
+                onChange={(next) => {
+                  setStageFilter(next)
+                  setPage(1)
+                }}
+              />
+            ) : null}
             {showListFilters ? (
               <Select
                 value={openNoticeFilter}
@@ -703,6 +733,8 @@ export default function BisProjectsMasterPage({ listMode }: { listMode: BisProje
           onViewDocuments={openDocuments}
           renewalMode={listMode === 'due_soon'}
           inclusionMode={listMode === 'inclusion'}
+          applicationsMode={listMode === 'applications'}
+          onStageChange={(row, stage) => void handleStageChange(row, stage)}
           noticeCounts={noticeCounts}
           onStartRenewal={startRenewalForRow}
           onRenewalReminder={prepareRenewalReminder}
