@@ -19,6 +19,7 @@ import {
   saveBisModulePayload,
 } from './bisModuleDataApi'
 import { fetchBisProjectById, saveBisApplicationDetails } from './bisProjectsApi'
+import { relinkModuleFiles } from './bisModuleFileRelink'
 import {
   formatDisplayDate,
   rowToBisApplicationDetailsForm,
@@ -181,6 +182,7 @@ export async function importBisModuleFromProject(opts: {
         'process-flow-chart',
       )
       if (fieldsCopied) {
+        filesCopied += (await relinkModuleFiles(targetProjectId, 'process-flow-chart')).copied
         const payload = await fetchBisModulePayload(targetProjectId, 'process-flow-chart')
         if (payload) {
           await saveBisModulePayload(targetProjectId, 'process-description', payload)
@@ -188,6 +190,8 @@ export async function importBisModuleFromProject(opts: {
       }
     } else {
       fieldsCopied = await copyBisModulePayload(sourceProjectId, targetProjectId, kind)
+      // The copied data still names the source project's files: give this project its own copies.
+      if (fieldsCopied) filesCopied += (await relinkModuleFiles(targetProjectId, kind)).copied
     }
   } else {
     await deleteTargetModuleFiles(targetProjectId, docKind)
