@@ -10,6 +10,7 @@ import { parseOslConformityCheck, type OslConformityCheck, type OslSampleRequire
 import {
   fetchIsCodeEdition,
   fetchProductManualPages,
+  fetchStandardPage,
   fetchRequiredTests,
   pickStandardDocs,
   fetchStandardFolders,
@@ -171,7 +172,8 @@ METHOD (follow every step):
 2b. TABLES: never say what a table holds unless its rows are in the documents above. The SIZE TABLE ROWS block (when given) is complete — it has every row of this sample's size and of the next higher standard size, read by the app from the Standard (an amendment's substituted table already replaces the original). When the same table appears twice, an amendment's substituted table replaces the original printed later. When a requirement needs a table that is not in the documents, give that row verdict "Not Clear" and say in notes which table is missing — never fail a sample on a guessed table.
 2c. OPTIONS: when the documents give one test more than one limit depending on a condition (grade, size range, a process such as mill straightened or as rolled, coating, killed type …), list every option in "options" and choose the one whose condition the sample's own words state (description, declared values, Test Request), quoting those words in "chosen_because". Never fall back to a default option when the sample states the condition. When the sample does NOT state the condition (e.g. the killed type is not declared), do not guess it from the results: give that row requirement "Depends on <condition> — Not Declared", verdict "Not Clear", and say in notes what must be declared.
 2d. REVISION AND BANDS: use only the tables of the Standard under check (the IS, part and year in the SAMPLE heading) — table numbers differ between revisions, so never take or cite another revision's table. Take the thickness / size band of a table from the sample's declared size (e.g. ISA 130X130X12 → t = 12 mm). A test the Standard's notes make optional or subject to agreement, not reported and not asked for in the Test Request, is not missing; when reported, check it.
-2e. BY AGREEMENT: a requirement the Standard leaves to agreement between purchaser and manufacturer (exact length, coating, finish, end type …) with no agreed value in the Test Request or the declared values: requirement "By Agreement — Not Declared", verdict "Pass" (it is not Not Clear and not a failure).
+2e. DIMENSIONS AND TOLERANCES: take them only from the documents — the clause of a tolerance / dimension standard for the sample's own product form (e.g. equal leg angles, not bulb angles; square hollow sections, not circular) — never from the laboratory's "specified" column. In standards read by OCR, "±" often appears as "f", "*", "t" or "+" before a number ("f 2 percent" = ± 2 percent).
+2f. BY AGREEMENT: a requirement the Standard leaves to agreement between purchaser and manufacturer (exact length, coating, finish, end type …) with no agreed value in the Test Request or the declared values: requirement "By Agreement — Not Declared", verdict "Pass" (it is not Not Clear and not a failure).
 3. Go through the LABORATORY REPORT PAGES and take EVERY test with its observed value, in the laboratory's order, one row each (the same test reported twice is one row). The Manak summary pages only list tests with "Test Report Attached": that text is never a result — take the value from the laboratory pages (chemical results may be on a separate laboratory page from the mechanical / dimensional ones; read all of them). Compare the reported value with the limit from step 2 yourself; never rely on the lab's own "conforms" remark. The report's own "specified requirement" column is a cross-check: where your limit differs from it, re-read the Standard's table row for this grade (for example Table 4 gives tensile strength, yield stress and elongation as separate columns) and say in notes which is right.
 4. Missing tests: tests the Product Manual / Standard require the LABORATORY to do on THIS sample (its conditions from step 1a) that are not in the report. A test whose requirement does not apply to this sample's conditions (other grade / size / killed type / coating) is NOT missing: if the report gives it anyway, give the row requirement "Not Applicable — <reason>" and verdict "Pass". Tests the Product Manual leaves to the factory (for example on every pipe during production) are not missing.
 4a. Sample Stage "SS": the Marking clause is not applicable — give the Marking row requirement "Not Applicable — SS Sample (No Licence Yet)", verdict "Pass", never list Marking as missing or as a failure.
@@ -400,7 +402,7 @@ export function sampleNamedStandards(text: string, ownFolders: string[]): string
   return out
 }
 
-export type CitedStandard = { key: string; role: 'material' | 'coating' | 'coating-method' | 'method' | 'other'; score: number }
+export type CitedStandard = { key: string; role: 'material' | 'coating' | 'coating-method' | 'tolerance' | 'method' | 'other'; score: number }
 
 /** Titles from the Standard's list of references: "IS 4736 : 1986 Specification for hot-dip zinc coatings on …". */
 function referenceTitles(text: string): Map<string, string> {
@@ -423,9 +425,9 @@ function referenceTitles(text: string): Map<string, string> {
 export function referencedStandards(text: string, ownFolders: string[]): CitedStandard[] {
   const own = ownNumbers(ownFolders)
   const titles = referenceTitles(text)
-  const tally = new Map<string, { material: number; coating: number; method: number; other: number }>()
-  const bump = (key: string, field: 'material' | 'coating' | 'method' | 'other') => {
-    const t = tally.get(key) ?? { material: 0, coating: 0, method: 0, other: 0 }
+  const tally = new Map<string, { material: number; coating: number; tolerance: number; method: number; other: number }>()
+  const bump = (key: string, field: 'material' | 'coating' | 'tolerance' | 'method' | 'other') => {
+    const t = tally.get(key) ?? { material: 0, coating: 0, tolerance: 0, method: 0, other: 0 }
     t[field] += 1
     tally.set(key, t)
   }
@@ -436,27 +438,30 @@ export function referencedStandards(text: string, ownFolders: string[]): CitedSt
     const near = before.slice(-60)
     const key = isKey(m[1], m[2])
     if (/requirement/.test(near) && /galvani|zinc|coat/.test(before)) bump(key, 'coating')
-    else if (/\b(tests?|tested|testing|method|determin\w*|analysis|sampling|measured)\b/.test(near)) bump(key, 'method')
+    else if (/\b(tests?|tested|testing|method|determin\w*|analysis|sampling|measured|procedure|practice|welding|weldability)\b/.test(near)) bump(key, 'method')
+    else if (/toleranc|dimension/.test(before)) bump(key, 'tolerance')
     else if (/galvani|zinc|coat/.test(before)) bump(key, 'coating')
     else if (/(manufactured|made|produced|rolled)\s+from|\b(steel|strip|sheet|coil|plate|billet|bloom|wire rod|raw material)\b/.test(before)) bump(key, 'material')
     else bump(key, 'other')
   }
   // Listed in the references but never cited with a lead phrase (IS 2633): still known by its title.
-  for (const key of titles.keys()) if (!tally.has(key) && !own.has(key.match(/\d+/)?.[0])) tally.set(key, { material: 0, coating: 0, method: 0, other: 0 })
+  for (const key of titles.keys()) if (!tally.has(key) && !own.has(key.match(/\d+/)?.[0])) tally.set(key, { material: 0, coating: 0, tolerance: 0, method: 0, other: 0 })
   return [...tally.entries()]
     .map(([key, t]) => {
       const title = titles.get(key) ?? ''
       const isMethod = /^methods?\b|\bmethods? (of|for)\b/i.test(title)
       const isGeneral = /general requirements|glossary|terminology|code of practice/i.test(title)
       const isCoating = /zinc|coat|galvani/i.test(title)
+      const isTolerance = /toleranc|dimension/i.test(title)
       let role: CitedStandard['role']
-      if (isCoating) role = isMethod ? 'coating-method' : 'coating'
+      if ((isTolerance || (t.tolerance > 0 && t.tolerance >= t.material)) && !isMethod) role = 'tolerance'
+      else if (isCoating) role = isMethod ? 'coating-method' : 'coating'
       else if (isMethod) role = 'method'
       else if (isGeneral) role = 'other'
       else if (t.material) role = 'material'
       else if (t.coating) role = 'coating'
       else role = t.method > t.other ? 'method' : 'other'
-      return { key, role, score: t.material * 10 + t.coating * 3 + t.other + t.method * 0.2 }
+      return { key, role, score: t.material * 10 + t.coating * 3 + t.tolerance * 3 + t.other + t.method * 0.2 }
     })
     .sort((x, y) => y.score - x.score)
 }
@@ -464,11 +469,27 @@ export function referencedStandards(text: string, ownFolders: string[]): CitedSt
 const REFERENCED_WORDS =
   'chemical composition table notes killed aluminium silicon carbon manganese sulphur phosphorus nitrogen carbon equivalent micro alloying mechanical properties tensile yield elongation grade'
 const COATING_WORDS = 'zinc coating mass uniformity thickness galvanized requirements table adherence'
+const DIMENSION_WORDS =
+  'tolerance tolerances dimensions length difference between out square squareness camber straightness twist weight mass thickness width depth radius toe root'
+/** Section designations in the sample's words → the words a tolerance / dimension standard uses for that product. */
+const PRODUCT_FORMS: Array<[RegExp, string]> = [
+  [/\bISA\b|\bangles?\b/i, 'angle angles equal unequal leg legs'],
+  [/\bIS[MLWH]B\b|\bbeams?\b|\bcolumns?\b/i, 'beam beams column flange web'],
+  [/\bIS[MJL]C\b|\bchannels?\b/i, 'channel channels flange web'],
+  [/\b(?:CF|HF)?[SR]HS\b|\bhollow\b/i, 'hollow section sections square rectangular'],
+  [/\bCHS\b|\btubes?\b|\bpipes?\b/i, 'tube tubes pipe pipes circular outside diameter'],
+  [/\bplates?\b/i, 'plate plates'],
+  [/\bsheets?\b|\bstrips?\b|\bcoils?\b/i, 'sheet sheets strip coil'],
+  [/\bbars?\b|\brounds?\b|\bTMT\b|\bwire rod\b/i, 'bar bars round rod'],
+  [/\bflats?\b/i, 'flat flats'],
+]
+const productFormWords = (text: string) => PRODUCT_FORMS.filter(([re]) => re.test(text)).map(([, w]) => w).join(' ')
 /** Pages / characters read per referenced standard, by why it is read. */
 const REFERENCED_LIMITS = {
   named: { standards: 2, pages: 8, chars: 24_000 },
   material: { standards: 2, pages: 6, chars: 16_000 },
   coating: { standards: 3, pages: 4, chars: 8_000 },
+  tolerance: { standards: 2, pages: 5, chars: 14_000 },
 }
 
 async function readFromStandardsIndex(
@@ -517,7 +538,11 @@ async function readFromStandardsIndex(
   const coating = coated
     ? [...cited.filter((c) => c.role === 'coating'), ...cited.filter((c) => c.role === 'coating-method')].slice(0, REFERENCED_LIMITS.coating.standards)
     : []
-  const plan: Array<{ key: string; why: string; words: string; limits: { pages: number; chars: number } }> = [
+  // Rolling / dimension tolerance standards (IS 1852, IS 808): searched by the sample's product form ("angle",
+  // "hollow section") and dimension words, never by chemistry words.
+  const tolerance = cited.filter((c) => c.role === 'tolerance').slice(0, REFERENCED_LIMITS.tolerance.standards)
+  const form = productFormWords(declaredText)
+  const plan: Array<{ key: string; why: string; words: string; limits: { pages: number; chars: number }; nextPage?: boolean }> = [
     ...named.map((key) => ({
       key,
       why: "named in the sample's declared values — its row for the declared grade and its notes set the raw material's chemical limits",
@@ -526,6 +551,13 @@ async function readFromStandardsIndex(
     })),
     ...material.map((c) => ({ key: c.key, why: 'the material the Standard says the product is made from', words: `${REFERENCED_WORDS} ${conditionWords}`, limits: REFERENCED_LIMITS.material })),
     ...coating.map((c) => ({ key: c.key, why: 'zinc coating requirements the Standard points to', words: `${COATING_WORDS} ${conditionWords}`, limits: REFERENCED_LIMITS.coating })),
+    ...tolerance.map((c) => ({
+      key: c.key,
+      why: `dimension and rolling tolerances the Standard points to — use the clause for this sample's own product form${form ? ` (${form.split(' ')[0]})` : ''}`,
+      words: `${DIMENSION_WORDS} ${form}`,
+      limits: REFERENCED_LIMITS.tolerance,
+      nextPage: true,
+    })),
   ]
   let referencedText = ''
   for (const ref of plan) {
@@ -535,6 +567,18 @@ async function readFromStandardsIndex(
     const pages = await searchStandardPages(refFolders, ref.words, ref.limits.pages, ['Standard', 'Amendment'], refPick.standards.length ? refPick.standards : undefined).catch(
       () => [] as StandardPage[],
     )
+    // A tolerance standard whose best pages never name the sample's product form (an angle sample, a beam standard)
+    // is not this product's: skip it.
+    const formWord = form.split(' ')[0]
+    if (ref.nextPage && formWord && !pages.some((p) => new RegExp(`\\b${formWord}`, 'i').test(p.text))) continue
+    // A tolerance clause often runs on to the next page: add the page after each of the two best pages.
+    if (ref.nextPage) {
+      for (const p of pages.slice(0, 2)) {
+        if (pages.some((q) => q.relpath === p.relpath && q.page === p.page + 1)) continue
+        const next = await fetchStandardPage(p.relpath, p.page + 1).catch(() => null)
+        if (next) pages.splice(pages.indexOf(p) + 1, 0, next)
+      }
+    }
     // The grade-wise chemistry / mechanical / coating tables decide the limits: those pages first, then the rest by rank.
     const isTable = (p: StandardPage) => /table\s*\d+[^\n]{0,120}(chemical composition|mechanical properties|coating|zinc)/i.test(p.text)
     const read = indexPagesText([...pages.filter(isTable), ...pages.filter((p) => !isTable(p))], ref.limits.chars)
