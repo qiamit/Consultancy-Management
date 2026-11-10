@@ -5,10 +5,13 @@ import { pdfPagesToAiPictures } from '@/components/qi-assistant/aiImages'
 import { ocrPdfPages } from '@/lib/ocrPdf'
 import { createBisProjectFileUrls } from './bisProjectFilesApi'
 import { sizeTableRows } from './sampleSizeTable'
+import { gradeTablePages } from './sampleGradeTable'
 import { parseOslConformityCheck, type OslConformityCheck, type OslSampleRequirementRow } from './oslSampleRequirementsModel'
 import {
+  fetchIsCodeEdition,
   fetchProductManualPages,
   fetchRequiredTests,
+  pickStandardDocs,
   fetchStandardFolders,
   searchStandardPages,
   type RequiredTest,
@@ -167,7 +170,8 @@ METHOD (follow every step):
 2a. RAW-MATERIAL CHEMISTRY: when the declared values name a standard and grade ("as per Grade 5 of IS 10748", "Raw Material IS 10748 Gr 3"), the chemical limits and their notes (killed type, nitrogen, carbon equivalent, micro-alloying) come from THAT standard's row for that grade — never from another referenced standard. The Test Request only gives the declared facts (grade, killed type, micro alloys), not limits. A limit the Standard gives only for another process (e.g. seamless sections) does not apply to a welded sample. A clause, table or annex deleted by an amendment: requirement "Not Applicable — Deleted by Amd N", verdict "Pass".
 2b. TABLES: never say what a table holds unless its rows are in the documents above. The SIZE TABLE ROWS block (when given) is complete — it has every row of this sample's size and of the next higher standard size, read by the app from the Standard (an amendment's substituted table already replaces the original). When the same table appears twice, an amendment's substituted table replaces the original printed later. When a requirement needs a table that is not in the documents, give that row verdict "Not Clear" and say in notes which table is missing — never fail a sample on a guessed table.
 2c. OPTIONS: when the documents give one test more than one limit depending on a condition (grade, size range, a process such as mill straightened or as rolled, coating, killed type …), list every option in "options" and choose the one whose condition the sample's own words state (description, declared values, Test Request), quoting those words in "chosen_because". Never fall back to a default option when the sample states the condition. When the sample does NOT state the condition (e.g. the killed type is not declared), do not guess it from the results: give that row requirement "Depends on <condition> — Not Declared", verdict "Not Clear", and say in notes what must be declared.
-2d. BY AGREEMENT: a requirement the Standard leaves to agreement between purchaser and manufacturer (exact length, coating, finish, end type …) with no agreed value in the Test Request or the declared values: requirement "By Agreement — Not Declared", verdict "Pass" (it is not Not Clear and not a failure).
+2d. REVISION AND BANDS: use only the tables of the Standard under check (the IS, part and year in the SAMPLE heading) — table numbers differ between revisions, so never take or cite another revision's table. Take the thickness / size band of a table from the sample's declared size (e.g. ISA 130X130X12 → t = 12 mm). A test the Standard's notes make optional or subject to agreement, not reported and not asked for in the Test Request, is not missing; when reported, check it.
+2e. BY AGREEMENT: a requirement the Standard leaves to agreement between purchaser and manufacturer (exact length, coating, finish, end type …) with no agreed value in the Test Request or the declared values: requirement "By Agreement — Not Declared", verdict "Pass" (it is not Not Clear and not a failure).
 3. Go through the LABORATORY REPORT PAGES and take EVERY test with its observed value, in the laboratory's order, one row each (the same test reported twice is one row). The Manak summary pages only list tests with "Test Report Attached": that text is never a result — take the value from the laboratory pages (chemical results may be on a separate laboratory page from the mechanical / dimensional ones; read all of them). Compare the reported value with the limit from step 2 yourself; never rely on the lab's own "conforms" remark. The report's own "specified requirement" column is a cross-check: where your limit differs from it, re-read the Standard's table row for this grade (for example Table 4 gives tensile strength, yield stress and elongation as separate columns) and say in notes which is right.
 4. Missing tests: tests the Product Manual / Standard require the LABORATORY to do on THIS sample (its conditions from step 1a) that are not in the report. A test whose requirement does not apply to this sample's conditions (other grade / size / killed type / coating) is NOT missing: if the report gives it anyway, give the row requirement "Not Applicable — <reason>" and verdict "Pass". Tests the Product Manual leaves to the factory (for example on every pipe during production) are not missing.
 4a. Sample Stage "SS": the Marking clause is not applicable — give the Marking row requirement "Not Applicable — SS Sample (No Licence Yet)", verdict "Pass", never list Marking as missing or as a failure.
@@ -297,10 +301,11 @@ const WORD_STOP = new Set(
 )
 
 /** Pages as text, each page once (the same page often sits in two files), cut at a character budget. */
-function indexPagesText(pages: StandardPage[], budget: number): { text: string; count: number } {
+function indexPagesText(pages: StandardPage[], budget: number): { text: string; count: number; refs: string[] } {
   const seen = new Set<string>()
   let text = ''
   let count = 0
+  const refs: string[] = []
   for (const p of pages) {
     const body = p.text.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim()
     const key = body.slice(0, 400)
@@ -310,8 +315,20 @@ function indexPagesText(pages: StandardPage[], budget: number): { text: string; 
     if (text.length + block.length > budget) break
     text += block
     count += 1
+    refs.push(`${p.relpath.split('/').pop()} p${p.page}`)
   }
-  return { text, count }
+  return { text, count, refs }
+}
+
+/** "IS 2062 Part 1 2025 - 00.pdf p3, p5, p9" — the pages sent, for the check's Sources. */
+function pageList(refs: string[]): string {
+  const byFile = new Map<string, string[]>()
+  for (const r of refs) {
+    const at = r.lastIndexOf(' p')
+    const file = r.slice(0, at)
+    byFile.set(file, [...(byFile.get(file) ?? []), r.slice(at + 1)])
+  }
+  return [...byFile.entries()].map(([f, ps]) => `${f} ${ps.join(', ')}`).join('; ')
 }
 
 /** Words that find the Standard's pages for this sample: the required tests, else the words of the report. */
@@ -462,19 +479,34 @@ async function readFromStandardsIndex(
   declaredText: string,
   /** The sample is zinc coated (galvanized), so the coating standards the Standard cites are read too. */
   coated: boolean,
-): Promise<{ folders: string[]; standardText: string; manualText: string; referencedText: string; sources: string[] } | null> {
+): Promise<{
+  folders: string[]
+  standardDocs: string[]
+  standardText: string
+  gradeText: string
+  manualText: string
+  referencedText: string
+  sources: string[]
+} | null> {
   const folders = await fetchStandardFolders(isCodeId).catch(() => [] as string[])
   if (!folders.length) return null
+  // Only the IS Code's own part and revision: one folder can hold IS 2062:2011, Part 1:2025 and Part 2:2026, whose
+  // tables are numbered differently.
+  const edition = await fetchIsCodeEdition(isCodeId).catch(() => null)
+  const pick = await pickStandardDocs(folders, edition).catch(() => ({ standards: [] as string[], manuals: [] as string[] }))
   const [standardPages, manualPages] = await Promise.all([
-    searchStandardPages(folders, words, INDEX_LIMITS.standardPages, ['Standard', 'Amendment']).catch(() => []),
-    fetchProductManualPages(folders).catch(() => []),
+    searchStandardPages(folders, words, INDEX_LIMITS.standardPages, ['Standard', 'Amendment'], pick.standards.length ? pick.standards : undefined).catch(() => []),
+    fetchProductManualPages(folders, 40, pick.manuals.length ? pick.manuals : undefined).catch(() => []),
   ])
   const standard = indexPagesText(standardPages, INDEX_LIMITS.standard)
   const manual = indexPagesText(manualPages, INDEX_LIMITS.manual)
   if (!standard.text) return null
+  // The declared grade's own table pages (chemistry, mechanical, notes), read by the app.
+  const grade = await gradeTablePages(pick.standards, declaredText, new Set(standard.refs)).catch(() => ({ text: '', pages: [] as string[] }))
   const sources = [
-    `Standard (Standards Index, ${folders[0]}): ${standard.count} Matching Pages`,
-    ...(manual.count ? [`Product Manual (Standards Index): ${manual.count} Pages`] : []),
+    `Standard (Standards Index): ${standard.count} Pages — ${pageList(standard.refs)}`,
+    ...(grade.pages.length ? [`Grade Table Pages (Standards Index): ${pageList(grade.pages)}`] : []),
+    ...(manual.count ? [`Product Manual (Standards Index): ${manual.count} Pages — ${pageList(manual.refs)}`] : []),
   ]
   // The standard the sample's declared values name (e.g. IS 10748 Grade 5) sets the raw material's limits: always read,
   // and then other material standards the Standard cites are not (they would give a second, wrong set of limits).
@@ -498,15 +530,19 @@ async function readFromStandardsIndex(
   let referencedText = ''
   for (const ref of plan) {
     const refFolders = ref.key.includes(' Part ') ? [ref.key, ref.key.replace(/ Part \d+$/, '')] : [ref.key]
-    const pages = await searchStandardPages(refFolders, ref.words, ref.limits.pages, ['Standard', 'Amendment']).catch(() => [] as StandardPage[])
+    // A referenced standard is read in its latest revision (its folder may hold old ones too).
+    const refPick = await pickStandardDocs(refFolders, null).catch(() => ({ standards: [] as string[], manuals: [] as string[] }))
+    const pages = await searchStandardPages(refFolders, ref.words, ref.limits.pages, ['Standard', 'Amendment'], refPick.standards.length ? refPick.standards : undefined).catch(
+      () => [] as StandardPage[],
+    )
     // The grade-wise chemistry / mechanical / coating tables decide the limits: those pages first, then the rest by rank.
     const isTable = (p: StandardPage) => /table\s*\d+[^\n]{0,120}(chemical composition|mechanical properties|coating|zinc)/i.test(p.text)
     const read = indexPagesText([...pages.filter(isTable), ...pages.filter((p) => !isTable(p))], ref.limits.chars)
     if (!read.text) continue
     referencedText += `--- ${ref.key} (${ref.why}) ---\n${read.text}`
-    sources.push(`Referenced Standard (Standards Index, ${ref.key}): ${read.count} Pages`)
+    sources.push(`Referenced Standard (Standards Index, ${ref.key}): ${read.count} Pages — ${pageList(read.refs)}`)
   }
-  return { folders, standardText: standard.text, manualText: manual.text, referencedText, sources }
+  return { folders, standardDocs: pick.standards, standardText: standard.text, gradeText: grade.text, manualText: manual.text, referencedText, sources }
 }
 
 const text = (v: unknown) => (typeof v === 'string' ? v.trim() : '')
@@ -857,6 +893,7 @@ export async function checkSampleConformity(input: {
   let manualText = ''
   let referencedText = ''
   let sizeText = ''
+  let gradeText = ''
   if (input.isCodeId) {
     onStep?.('Reading the Standard and the Product Manual (Standards Index)…')
     const conditionWords = `${row.gradeTypeVariety} ${row.sampleDescription} ${row.declaredValue}`
@@ -875,11 +912,12 @@ export async function checkSampleConformity(input: {
     )
     if (indexed) {
       standardText = indexed.standardText
+      gradeText = indexed.gradeText
       manualText = indexed.manualText
       referencedText = indexed.referencedText
       sources.push(...indexed.sources)
       // The size table rows of this sample's size and the next higher size, read by the app (not left to the AI).
-      const size = await sizeTableRows(indexed.folders, `${conditionWords} ${requestText.slice(0, 4000)}`).catch(() => ({ text: '', rows: 0 }))
+      const size = await sizeTableRows(indexed.folders, `${conditionWords} ${requestText.slice(0, 4000)}`, indexed.standardDocs).catch(() => ({ text: '', rows: 0 }))
       if (size.text) {
         sizeText = size.text
         sources.push(`Size Table (Standards Index): ${size.rows} Rows for This Size and the Next Higher Size`)
@@ -918,6 +956,7 @@ export async function checkSampleConformity(input: {
     sizeText ? `=== SIZE TABLE ROWS (read by the app from the Standard's size tables; complete for this size and the next higher size) ===\n${sizeText}` : '',
     requestText ? `=== TEST REQUEST ===\n${requestText}` : '',
     `=== TEST REPORT${report.ocr ? ' (scanned, read by OCR twice per page — figures may have OCR mistakes such as 0↔8, 0↔6, 1↔I: read 1 has the more reliable digits; compare both reads, take the one that fits the units and limits, and prefer the page pictures when attached)' : ''} ===\n${report.text || '(scanned — see the attached page pictures)'}`,
+    gradeText ? `=== GRADE TABLE PAGES (read by the app: the tables of the Standard under check that list the declared grade, with the page before a continued table) ===\n${gradeText}` : '',
     standardText ? `=== INDIAN STANDARD ===\n${standardText}` : '',
     referencedText ? `=== REFERENCED STANDARD (its tables and notes apply where the Standard points to it) ===\n${referencedText}` : '',
     manualText ? `=== PRODUCT MANUAL ===\n${manualText}` : '',
@@ -973,6 +1012,7 @@ export async function checkSampleConformity(input: {
   const documents = [
     sizeText ? `=== SIZE TABLE ROWS (complete for this size and the next higher size) ===\n${sizeText}` : '',
     requiredTests.length ? `=== REQUIRED TESTS (locked list) ===\n${requiredTestsBlock(requiredTests)}` : '',
+    gradeText ? `=== GRADE TABLE PAGES ===\n${gradeText}` : '',
     standardText ? `=== INDIAN STANDARD ===\n${standardText}` : '',
     referencedText ? `=== REFERENCED STANDARD ===\n${referencedText}` : '',
     manualText ? `=== PRODUCT MANUAL ===\n${manualText}` : '',
@@ -992,7 +1032,7 @@ export async function checkSampleConformity(input: {
   if (!failedRows.length && !reviewMissing) return settleCheck(backed.check, row)
   onStep?.('AI is reviewing the failed results…')
   const reviewPages = pickReviewPages(
-    [standardText, referencedText, manualText],
+    [gradeText, standardText, referencedText, manualText],
     failedRows.map((i) => ({ ...backed.check.results[i], evidence: backed.evidence[i] ?? '' })),
     reviewMissing ? backed.check.missingTests : [],
   )
