@@ -166,7 +166,8 @@ METHOD (follow every step):
 2. From the Indian Standard (with its amendments — an amendment replaces the clause it names), any REFERENCED STANDARD it points to (e.g. "steel conforming to IS 2062": its chemical table and notes then apply) and the Product Manual, find every requirement that applies to THIS sample's conditions, and work out the actual limit (tables, formulas, tolerances on declared or nominal values). Read the table NOTES: a note such as "when killed by aluminium alone, total aluminium ≥ 0.020 %; when killed by silicon alone, silicon ≥ 0.10 %" changes which elements are required for this sample.
 2a. RAW-MATERIAL CHEMISTRY: when the declared values name a standard and grade ("as per Grade 5 of IS 10748", "Raw Material IS 10748 Gr 3"), the chemical limits and their notes (killed type, nitrogen, carbon equivalent, micro-alloying) come from THAT standard's row for that grade — never from another referenced standard. The Test Request only gives the declared facts (grade, killed type, micro alloys), not limits. A limit the Standard gives only for another process (e.g. seamless sections) does not apply to a welded sample. A clause, table or annex deleted by an amendment: requirement "Not Applicable — Deleted by Amd N", verdict "Pass".
 2b. TABLES: never say what a table holds unless its rows are in the documents above. The SIZE TABLE ROWS block (when given) is complete — it has every row of this sample's size and of the next higher standard size, read by the app from the Standard (an amendment's substituted table already replaces the original). When the same table appears twice, an amendment's substituted table replaces the original printed later. When a requirement needs a table that is not in the documents, give that row verdict "Not Clear" and say in notes which table is missing — never fail a sample on a guessed table.
-2c. BY AGREEMENT: a requirement the Standard leaves to agreement between purchaser and manufacturer (exact length, coating, finish, end type …) with no agreed value in the Test Request or the declared values: requirement "By Agreement — Not Declared", verdict "Pass" (it is not Not Clear and not a failure).
+2c. OPTIONS: when the documents give one test more than one limit depending on a condition (grade, size range, a process such as mill straightened or as rolled, coating, killed type …), list every option in "options" and choose the one whose condition the sample's own words state (description, declared values, Test Request), quoting those words in "chosen_because". Never fall back to a default option when the sample states the condition. When the sample does not state it, say so in notes.
+2d. BY AGREEMENT: a requirement the Standard leaves to agreement between purchaser and manufacturer (exact length, coating, finish, end type …) with no agreed value in the Test Request or the declared values: requirement "By Agreement — Not Declared", verdict "Pass" (it is not Not Clear and not a failure).
 3. Go through the LABORATORY REPORT PAGES and take EVERY test with its observed value, in the laboratory's order, one row each (the same test reported twice is one row). The Manak summary pages only list tests with "Test Report Attached": that text is never a result — take the value from the laboratory pages (chemical results may be on a separate laboratory page from the mechanical / dimensional ones; read all of them). Compare the reported value with the limit from step 2 yourself; never rely on the lab's own "conforms" remark. The report's own "specified requirement" column is a cross-check: where your limit differs from it, re-read the Standard's table row for this grade (for example Table 4 gives tensile strength, yield stress and elongation as separate columns) and say in notes which is right.
 4. Missing tests: tests the Product Manual / Standard require the LABORATORY to do on THIS sample (its conditions from step 1a) that are not in the report. A test whose requirement does not apply to this sample's conditions (other grade / size / killed type / coating) is NOT missing: if the report gives it anyway, give the row requirement "Not Applicable — <reason>" and verdict "Pass". Tests the Product Manual leaves to the factory (for example on every pipe during production) are not missing.
 4a. Sample Stage "SS": the Marking clause is not applicable — give the Marking row requirement "Not Applicable — SS Sample (No Licence Yet)", verdict "Pass", never list Marking as missing or as a failure.
@@ -180,6 +181,8 @@ FIELD FORMATS (keep each cell short, no sentences in the table):
 - requirement: the limit for this sample with unit ("≤ 0.25 %", "≥ 450 MPa", "168.30 ± 0.75 % (167.04 – 169.56 mm)", "No Crack").
 - result: the reported value with unit, exactly as the report gives it ("0.20 %", "486.90 MPa", "Satisfactory").
 - verdict: "Pass", "Fail" or "Not Clear".
+- options: only for a test whose limit depends on a condition — every option as {"condition": the documents' words naming when it applies, "requirement": its limit}; leave it out for a test with one limit.
+- chosen_because: with "options", the exact words from the sample's description / declared values / Test Request that decide the option ("" when the sample does not state it).
 - evidence: for every "Fail" row, the exact words copied from the documents (Standard, amendment, referenced standard, Product Manual or SIZE TABLE ROWS) that set the limit it fails — the table row or the clause sentence with the number, up to 200 characters, copied character for character; "" for other rows. A Fail without evidence that the app finds in the documents is not accepted.
 - missing_tests: "Test Name (Clause x)".
 - summary: one sentence with the verdict and the deciding reason.
@@ -191,7 +194,7 @@ Before answering, re-check every row: for "≥ X" the result must be at least X;
 SELF-CHECK before answering: no result is "Test Report Attached"; every laboratory test appears once; each "≥ X" result is at least X and each "≤ X" at most X; the verdict follows step 5.
 
 ANSWER: JSON only, no other text, exactly these keys. Example of the format (values are only an example):
-{"sample":{"description":"ERW, Black, Fe 410, 168.3 mm OD × 4.5 mm","declared_values":"Silicon killed","batch_number":"B-12","date_of_manufacture":"12-10-2026"},"verdict":"No","summary":"Does not conform: Yield Strength 231 MPa is below the 235 MPa minimum.","results":[{"parameter":"Carbon","clause":"8.1, Table 2","requirement":"≤ 0.25 %","result":"0.18 %","verdict":"Pass"},{"parameter":"Yield Strength","clause":"9.1, Table 4","requirement":"≥ 235 MPa","result":"231 MPa","verdict":"Fail","evidence":"Fe 410 410 235 23"}],"missing_tests":["Flattening Test (Clause 9.2.1)"],"notes":["Sample details match the Test Request.","Yield Strength 231 MPa is below the 235 MPa minimum of Table 4.","Flattening Test required by the Product Manual is not reported."]}`
+{"sample":{"description":"ERW, Black, Fe 410, 168.3 mm OD × 4.5 mm","declared_values":"Silicon killed","batch_number":"B-12","date_of_manufacture":"12-10-2026"},"verdict":"No","summary":"Does not conform: Yield Strength 231 MPa is below the 235 MPa minimum.","results":[{"parameter":"Carbon","clause":"8.1, Table 2","requirement":"≤ 0.25 %","result":"0.18 %","verdict":"Pass"},{"parameter":"Yield Strength","clause":"9.1, Table 4","requirement":"≥ 235 MPa","result":"231 MPa","verdict":"Fail","evidence":"Fe 410 410 235 23"},{"parameter":"Straightness","clause":"10.7","requirement":"≤ 1/200 of length (5.0 mm)","result":"0.30 mm","verdict":"Pass","options":[{"condition":"mill straightened","requirement":"1/200 of length"},{"condition":"other than mill straightened","requirement":"1/600 of length"}],"chosen_because":"Mill Straightened"}],"missing_tests":["Flattening Test (Clause 9.2.1)"],"notes":["Sample details match the Test Request.","Yield Strength 231 MPa is below the 235 MPa minimum of Table 4.","Flattening Test required by the Product Manual is not reported."]}`
 
 type CheckResult = OslConformityCheck['results'][number]
 
@@ -620,8 +623,102 @@ export function pickReviewPages(
   return out.trim()
 }
 
+export type RowOption = { condition: string; requirement: string }
+
+const OPTION_NEGATION = /\b(not|non|without|other than|otherwise than|except|excluding)\b/
+const OPTION_FALLBACK = /\b(others?|otherwise|all other|any other|remaining)\b/
+const OPTION_STOP = new Set(
+  'the and for with from that this shall when where which than case cases type types grade grades size sizes section sections tube tubes pipe pipes hollow steel sample samples product products having made other all any alone only used are its their such also'.split(
+    ' ',
+  ),
+)
+const stemOf = (w: string) => w.slice(0, 6)
+
+/** The condition's own words (no negation, no filler, no numbers: size ranges are left to the AI). */
+function conditionWords(condition: string): string[] {
+  return normEvidence(condition)
+    .replace(/\b(not|non|without|other than|otherwise than|except|excluding|otherwise|others?|remaining)\b/g, ' ')
+    .split(' ')
+    .filter((w) => w.length >= 3 && !OPTION_STOP.has(w) && !/^\d/.test(w))
+}
+
+/**
+ * Which of a test's options the sample's own words state — the same check for every Standard, no rules per Standard.
+ * A positive option ("mill straightened", "silicon killed", "galvanized") whose words are all in the sample text is
+ * stated by the sample; "without micro alloys" in the sample does not state "micro alloyed". Returns a hint when the
+ * AI chose another option while the sample states this one, or quoted words the sample does not have.
+ */
+export function optionMismatch(
+  options: RowOption[],
+  requirement: string,
+  chosenBecause: string,
+  sampleText: string,
+): string | null {
+  if (options.length < 2) return null
+  const sampleNorm = normEvidence(sampleText)
+  const negated = new Set<string>()
+  for (const m of sampleNorm.matchAll(/\b(?:without|non|not|no)\s+([a-z]+)(?:\s+([a-z]+))?/g)) {
+    negated.add(stemOf(m[1]))
+    if (m[2]) negated.add(stemOf(m[2]))
+  }
+  const stems = new Set(sampleNorm.split(' ').filter((w) => w.length >= 3 && !negated.has(stemOf(w))).map(stemOf))
+  const reqNorm = normEvidence(requirement)
+  const numbersOf = (v: string) => normEvidence(v).match(/\d+(?:[./]\d+)?/g) ?? []
+  const scored = options.map((o) => {
+    const cond = normEvidence(o.condition)
+    const words = conditionWords(o.condition)
+    const positive = !OPTION_NEGATION.test(cond) && !OPTION_FALLBACK.test(cond)
+    const stated = positive && words.length > 0 && words.every((w) => stems.has(stemOf(w)))
+    const nums = numbersOf(o.requirement)
+    const optNorm = normEvidence(o.requirement)
+    const chosen = nums.length > 0 ? nums.every((n) => reqNorm.includes(n)) : optNorm.length >= 3 && reqNorm.includes(optNorm)
+    return { o, stated, chosen }
+  })
+  const statedOpts = scored.filter((x) => x.stated)
+  const chosen = scored.filter((x) => x.chosen)
+  // Two options both fully stated (or the same numbers in two options) — too unclear for the app to judge.
+  if (statedOpts.length === 1 && chosen.length === 1 && !chosen[0].stated) {
+    const want = statedOpts[0].o
+    return `The sample states "${want.condition}", so the option "${want.condition}: ${want.requirement}" applies — not "${chosen[0].o.condition}: ${chosen[0].o.requirement}".`
+  }
+  const because = normEvidence(chosenBecause)
+  if (because.length >= 5 && !sampleNorm.includes(because)) {
+    return `The words "${chosenBecause}" given for choosing this option are not in the sample's description, declared values or Test Request.`
+  }
+  return null
+}
+
+/** Rows whose chosen option the sample's own words contradict: Not Clear, and sent to the review with the hint. */
+export function checkOptionChoices(
+  check: OslConformityCheck,
+  rawResults: unknown,
+  sampleText: string,
+): { check: OslConformityCheck; flagged: number[]; hints: Record<number, string>; options: Record<number, RowOption[]> } {
+  const rawRows = (Array.isArray(rawResults) ? rawResults : []).filter((x): x is Record<string, unknown> => Boolean(x) && typeof x === 'object')
+  const flagged: number[] = []
+  const hints: Record<number, string> = {}
+  const options: Record<number, RowOption[]> = {}
+  check.results.forEach((r, i) => {
+    const raw = rawRows[i]
+    const opts = (Array.isArray(raw?.options) ? (raw.options as unknown[]) : [])
+      .filter((o): o is Record<string, unknown> => Boolean(o) && typeof o === 'object')
+      .map((o) => ({ condition: text(o.condition), requirement: text(o.requirement) }))
+      .filter((o) => o.condition && o.requirement)
+    if (opts.length < 2) return
+    options[i] = opts
+    const hint = optionMismatch(opts, r.requirement, text(raw?.chosen_because ?? raw?.chosenBecause), sampleText)
+    if (!hint) return
+    flagged.push(i)
+    hints[i] = hint
+  })
+  if (!flagged.length) return { check, flagged, hints, options }
+  const results = check.results.map((r, i) => (flagged.includes(i) ? { ...r, verdict: 'Not Clear' as const } : r))
+  const notes = flagged.map((i) => `${check.results[i].parameter}: app check — ${hints[i]} Checked again by the review.`)
+  return { check: { ...check, results, notes: [...check.notes, ...notes] }, flagged, hints, options }
+}
+
 const REVIEW_INSTRUCTIONS = `ROLE: You are a second BIS reviewer. A first reviewer checked one sample's Test Report against the Indian Standard and marked the ITEMS below as failing (or as missing tests). Check ONLY those items again, using ONLY the documents below (the Standard with its amendments, referenced standards, the Product Manual, the SIZE TABLE ROWS). The results were read from the Test Report and are correct: check the RULE — which requirement applies to THIS sample (its grade, size, killed type, coating, stage) and its actual limit.
-RULES: an amendment's substituted clause or table replaces the original (the original is often printed later in the same file). Never assume what a table holds: use only the rows shown; the SIZE TABLE ROWS block is complete for this sample's size and the next higher size. Compare the numbers yourself (for "≥ X" the result must be at least X).
+RULES: when an item carries an APP CHECK, the sample's own words decide which option applies: use the option whose condition they state. An amendment's substituted clause or table replaces the original (the original is often printed later in the same file). Never assume what a table holds: use only the rows shown; the SIZE TABLE ROWS block is complete for this sample's size and the next higher size. Compare the numbers yourself (for "≥ X" the result must be at least X).
 For each row: "requirement" for this sample with unit; "verdict" comparing the given result with it ("Pass", "Fail", or "Not Clear" when the documents do not give the rule); "evidence": the exact words copied from the documents that set the limit (a table row or the clause sentence with the number, up to 200 characters, character for character); "reason": one short sentence.
 For each missing test: "missing": true only when the documents require the LABORATORY to do it on THIS sample; false when it does not apply to this sample's conditions or is left to the factory; "reason": one short sentence.
 ANSWER: JSON only: {"rows":[{"parameter":"","requirement":"","verdict":"Pass","evidence":"","reason":""}],"missing_tests":[{"test":"","missing":false,"reason":""}]}`
@@ -634,6 +731,10 @@ async function reviewFails(input: {
   check: OslConformityCheck
   rows: number[]
   evidence: string[]
+  /** App-check hints and the AI's options, by row (rows whose chosen option the sample contradicts). */
+  hints?: Record<number, string>
+  options?: Record<number, RowOption[]>
+  sampleText?: string
   reviewMissing: boolean
   facts: string
   documents: string
@@ -643,14 +744,15 @@ async function reviewFails(input: {
   const { check, rows } = input
   const items = rows.map((i) => {
     const r = check.results[i]
-    return `- ${r.parameter} | Clause ${r.clause || '—'} | Requirement given: ${r.requirement} | Result: ${r.result}${input.evidence[i] ? ` | First reviewer's evidence: "${input.evidence[i]}"` : ''}`
+    const opts = input.options?.[i]
+    return `- ${r.parameter} | Clause ${r.clause || '—'} | Requirement given: ${r.requirement} | Result: ${r.result}${input.evidence[i] ? ` | First reviewer's evidence: "${input.evidence[i]}"` : ''}${opts ? ` | Options: ${opts.map((o) => `${o.condition} → ${o.requirement}`).join('; ')}` : ''}${input.hints?.[i] ? ` | APP CHECK: ${input.hints[i]}` : ''}`
   })
   const missing = input.reviewMissing ? check.missingTests : []
   if (!items.length && !missing.length) return check
   const message = [
     REVIEW_INSTRUCTIONS,
     `=== SAMPLE ===\n${input.facts}\n- As identified in the report: ${check.sample.description}${check.sample.declaredValues ? ` | ${check.sample.declaredValues}` : ''}`,
-    items.length ? `=== ITEMS: FAILED ROWS ===\n${items.join('\n')}` : '',
+    items.length ? `=== ITEMS: ROWS TO CHECK AGAIN (failed, or an option the sample contradicts) ===\n${items.join('\n')}` : '',
     missing.length ? `=== ITEMS: MISSING TESTS ===\n${missing.map((m) => `- ${m}`).join('\n')}` : '',
     input.documents,
   ]
@@ -675,6 +777,9 @@ async function reviewFails(input: {
     const said = x.verdict === 'Pass' || x.verdict === 'Fail' ? x.verdict : 'Not Clear'
     let verdict: 'Pass' | 'Fail' | 'Not Clear' = numericVerdict({ ...r, requirement }) ?? said
     if (verdict === 'Fail' && !evidenceFound(text(x.evidence) || input.evidence[i], input.docsNorm)) verdict = 'Not Clear'
+    // A row sent for its option: the review's limit must be the option the sample states.
+    const opts = input.options?.[i]
+    if (input.hints?.[i] && opts && optionMismatch(opts, requirement, '', input.sampleText ?? '')) verdict = 'Not Clear'
     if (verdict !== r.verdict || requirement !== r.requirement) {
       changes.push(`${r.parameter}: ${r.result} against ${requirement} — ${verdict}${text(x.reason) ? ` (${text(x.reason)})` : ''}.`)
     }
@@ -693,7 +798,7 @@ async function reviewFails(input: {
   })
   const reviewed = { ...check, results, missingTests }
   const verdict = overallOf(reviewed)
-  const note = `Second review (${model ?? 'AI'}) of ${items.length} failed row(s)${missing.length ? ` and ${missing.length} missing test(s)` : ''}: ${changes.length ? changes.join(' ') : 'no change.'}`
+  const note = `Second review (${model ?? 'AI'}) of ${items.length} row(s)${missing.length ? ` and ${missing.length} missing test(s)` : ''}: ${changes.length ? changes.join(' ') : 'no change.'}`
   return {
     ...reviewed,
     verdict,
@@ -875,8 +980,14 @@ export async function checkSampleConformity(input: {
     .filter(Boolean)
     .join('\n\n')
   const docsNorm = normEvidence(documents)
-  const backed = checkFailEvidence(settled, raw.results, docsNorm)
-  const failedRows = backed.check.results.map((r, i) => (r.verdict === 'Fail' || backed.unbacked.includes(i) ? i : -1)).filter((i) => i >= 0)
+  const evidenced = checkFailEvidence(settled, raw.results, docsNorm)
+  // The option a row's limit was taken from must be the one the sample's own words state.
+  const sampleText = [sampleFacts(row), check.sample.description, check.sample.declaredValues, requestText.slice(0, 8_000)].join('\n')
+  const chosen = checkOptionChoices(evidenced.check, raw.results, sampleText)
+  const backed = { ...evidenced, check: chosen.check }
+  const failedRows = backed.check.results
+    .map((r, i) => (r.verdict === 'Fail' || backed.unbacked.includes(i) || chosen.flagged.includes(i) ? i : -1))
+    .filter((i) => i >= 0)
   const reviewMissing = !requiredTests.length && backed.check.missingTests.length > 0
   if (!failedRows.length && !reviewMissing) return settleCheck(backed.check, row)
   onStep?.('AI is reviewing the failed results…')
@@ -896,6 +1007,9 @@ export async function checkSampleConformity(input: {
     check: backed.check,
     rows: failedRows,
     evidence: backed.evidence,
+    hints: chosen.hints,
+    options: chosen.options,
+    sampleText,
     reviewMissing,
     facts: sampleFacts(row),
     // The pages for these items only; the evidence is still checked against all the documents.
