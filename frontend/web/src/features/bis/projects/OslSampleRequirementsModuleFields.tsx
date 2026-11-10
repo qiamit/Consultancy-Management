@@ -3261,6 +3261,19 @@ export function OslSampleRequirementsModuleFields({
                 </div>
               ) : null}
 
+              {conformityLog.check.sources.length ? (
+                <details className="space-y-1.5">
+                  <summary className="cursor-pointer text-[11px] font-bold uppercase tracking-[0.14em] text-stone-600">
+                    Documents Read ({conformityLog.check.sources.length})
+                  </summary>
+                  <ul className="list-disc space-y-1 pl-5 text-xs leading-relaxed text-stone-600">
+                    {conformityLog.check.sources.map((s, i) => (
+                      <li key={i}>{s}</li>
+                    ))}
+                  </ul>
+                </details>
+              ) : null}
+
               <p className="text-[11px] text-stone-500">AI Check Is a Review Aid — Confirm Against the Documents Before Final Use.</p>
             </div>
           ) : null}

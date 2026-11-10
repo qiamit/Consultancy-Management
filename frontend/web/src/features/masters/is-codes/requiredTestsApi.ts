@@ -121,26 +121,91 @@ export async function fetchStandardFolders(isCodeId: string): Promise<string[]> 
   return Array.isArray(data) ? (data as string[]) : []
 }
 
-/** Best-matching pages of the standards index for these folders (any of the words). */
+/**
+ * Best-matching pages of the standards index for these folders (any of the words). With `relpaths`, only pages of
+ * those documents (the IS Code's own part and revision — a folder such as "IS 2062" also holds 2011, Part 1 2025 and
+ * Part 2 2026), so more are asked for and the rest dropped.
+ */
 export async function searchStandardPages(
   folders: string[],
   words: string,
   limit = 12,
   kinds?: string[],
+  relpaths?: string[],
 ): Promise<StandardPage[]> {
   if (!folders.length) return []
   const { data, error } = await supabase.rpc('search_standard_pages', {
     p_folders: folders,
     p_query: words,
-    p_limit: limit,
+    p_limit: relpaths ? 60 : limit,
     ...(kinds ? { p_kinds: kinds } : {}),
   })
   if (error) throw error
-  return (data ?? []) as StandardPage[]
+  const pages = (data ?? []) as StandardPage[]
+  if (!relpaths) return pages
+  const allowed = new Set(relpaths)
+  return pages.filter((p) => allowed.has(p.relpath)).slice(0, limit)
+}
+
+export type IsCodeEdition = { part: string; section: string; year: string }
+
+/** Part, section and revision year of an IS Code (IS Code Master), digits only: "Part-1" → "1". */
+export async function fetchIsCodeEdition(isCodeId: string): Promise<IsCodeEdition | null> {
+  const { data } = await supabase.from('is_codes').select('part_no, section_no, revision_year').eq('id', isCodeId).maybeSingle()
+  if (!data) return null
+  const digits = (v: unknown) => String(v ?? '').match(/\d+/)?.[0] ?? ''
+  const row = data as { part_no: string | null; section_no: string | null; revision_year: string | number | null }
+  return { part: digits(row.part_no), section: digits(row.section_no), year: String(row.revision_year ?? '').match(/(19|20)\d{2}/)?.[0] ?? '' }
+}
+
+/** Part / section / year written in an index file name: "IS 2062 Part 1 2025 - 00.pdf". */
+function editionOf(relpath: string): IsCodeEdition {
+  const name = relpath.split('/').pop() ?? relpath
+  const years = name.match(/\b(?:19|20)\d{2}\b/g) ?? []
+  return {
+    part: name.match(/\bPart\s*-?\s*(\d+)/i)?.[1] ?? '',
+    section: name.match(/\bSec(?:tion)?\s*-?\s*(\d+)/i)?.[1] ?? '',
+    year: years[years.length - 1] ?? '',
+  }
+}
+
+/**
+ * The documents of the index folders that belong to this IS Code's own part, section and revision: the matching
+ * Standard and its Amendments, and the Product Manual of the same part (a main copy before an `_Extra/` duplicate).
+ * Without an edition (a referenced standard), the latest revision. When nothing matches, every document is kept.
+ */
+export async function pickStandardDocs(folders: string[], edition: IsCodeEdition | null): Promise<{ standards: string[]; manuals: string[] }> {
+  if (!folders.length) return { standards: [], manuals: [] }
+  const { data } = await supabase.from('standard_docs').select('relpath, kind').in('folder', folders)
+  const docs = (data ?? []) as Array<{ relpath: string; kind: string }>
+  const partScore = (e: IsCodeEdition) =>
+    (edition?.part ? (e.part === edition.part ? 3 : e.part ? -10 : -1) : e.part ? -10 : 0) +
+    (edition?.section ? (e.section === edition.section ? 2 : e.section ? -10 : -1) : e.section ? -10 : 0)
+  const best = (list: Array<{ relpath: string; score: number }>) => {
+    const ok = list.filter((d) => d.score > -5)
+    if (!ok.length) return list.map((d) => d.relpath)
+    const top = Math.max(...ok.map((d) => d.score))
+    return ok.filter((d) => d.score === top).map((d) => d.relpath)
+  }
+  const standardDocs = docs.filter((d) => d.kind === 'Standard')
+  const latestYear = Math.max(0, ...standardDocs.map((d) => Number(editionOf(d.relpath).year) || 0))
+  const standards = best(
+    standardDocs.map((d) => {
+      const e = editionOf(d.relpath)
+      const year = edition?.year ? (e.year === edition.year ? 2 : e.year ? -1 : 0) : Number(e.year) === latestYear ? 1 : 0
+      return { relpath: d.relpath, score: partScore(e) + year }
+    }),
+  )
+  // Amendments of another part are another Standard's.
+  const amendments = docs.filter((d) => d.kind === 'Amendment' && partScore(editionOf(d.relpath)) > -5).map((d) => d.relpath)
+  const manualDocs = docs.filter((d) => d.kind === 'Product Manual')
+  const mains = manualDocs.filter((d) => !/\/_Extra\//.test(d.relpath))
+  const manuals = best((mains.length ? mains : manualDocs).map((d) => ({ relpath: d.relpath, score: partScore(editionOf(d.relpath)) })))
+  return { standards: [...standards, ...amendments], manuals }
 }
 
 /** Every page of the Product Manual(s) of these folders (manuals are short), in order. */
-export async function fetchProductManualPages(folders: string[], maxPages = 40): Promise<StandardPage[]> {
+export async function fetchProductManualPages(folders: string[], maxPages = 40, relpaths?: string[]): Promise<StandardPage[]> {
   if (!folders.length) return []
   const { data: docs, error } = await supabase
     .from('standard_docs')
@@ -148,7 +213,9 @@ export async function fetchProductManualPages(folders: string[], maxPages = 40):
     .in('folder', folders)
     .eq('kind', 'Product Manual')
   if (error) throw error
-  const list = (docs ?? []) as Array<{ id: number; folder: string; relpath: string; kind: string }>
+  const list = ((docs ?? []) as Array<{ id: number; folder: string; relpath: string; kind: string }>).filter(
+    (d) => !relpaths || relpaths.includes(d.relpath),
+  )
   if (!list.length) return []
   const { data: pages, error: pageError } = await supabase
     .from('standard_pages')

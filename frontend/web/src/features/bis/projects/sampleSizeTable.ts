@@ -95,9 +95,9 @@ export function pickSizeRows(pages: Page[], size: SampleSize): { text: string; r
 }
 
 /** Every Standard / Amendment page of these index folders that names the size, read straight from the index. */
-async function sizePages(folders: string[], size: SampleSize): Promise<Page[]> {
+async function sizePages(folders: string[], size: SampleSize, relpaths?: string[]): Promise<Page[]> {
   const { data: docs } = await supabase.from('standard_docs').select('id, relpath').in('folder', folders).in('kind', ['Standard', 'Amendment'])
-  const list = (docs ?? []) as Array<{ id: number; relpath: string }>
+  const list = ((docs ?? []) as Array<{ id: number; relpath: string }>).filter((d) => !relpaths?.length || relpaths.includes(d.relpath))
   if (!list.length) return []
   const n = (v: number) => String(v).replace('.', '\\.')
   const { data: pages } = await supabase
@@ -114,13 +114,13 @@ async function sizePages(folders: string[], size: SampleSize): Promise<Page[]> {
 }
 
 /** The SIZE TABLE ROWS block for the sample's size(s), or '' when the Standard has no size table for it. */
-export async function sizeTableRows(folders: string[], sampleText: string): Promise<{ text: string; rows: number }> {
+export async function sizeTableRows(folders: string[], sampleText: string, relpaths?: string[]): Promise<{ text: string; rows: number }> {
   if (!folders.length) return { text: '', rows: 0 }
   let text = ''
   let rows = 0
   for (const size of sampleSizes(sampleText)) {
     // The next higher size sits on the same or the following table pages: read pages naming either size.
-    const pages = await sizePages(folders, size).catch(() => [] as Page[])
+    const pages = await sizePages(folders, size, relpaths).catch(() => [] as Page[])
     const own = pickSizeRows(pages, size)
     let picked = own
     // When the next higher size is on another page, look at the pages of the size table that follow.

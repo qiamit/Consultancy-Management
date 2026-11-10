@@ -1,7 +1,9 @@
 import { sendQiAssistantMessage } from '@/components/qi-assistant/qiAssistantApi'
 import {
+  fetchIsCodeEdition,
   fetchProductManualPages,
   fetchStandardFolders,
+  pickStandardDocs,
   searchStandardPages,
   type RequiredTest,
   type StandardPage,
@@ -48,9 +50,12 @@ export async function suggestRequiredTests(input: {
   if (!folders.length) throw new Error('This IS Code Is Not in the Standards Index Yet. Add Its PDFs on the Mac and Sync.')
 
   input.onStep?.('Reading the Product Manual and the Standard…')
+  // Only this IS Code's own part and revision (one folder can hold several).
+  const edition = await fetchIsCodeEdition(input.isCodeId).catch(() => null)
+  const pick = await pickStandardDocs(folders, edition).catch(() => ({ standards: [] as string[], manuals: [] as string[] }))
   const [manualPages, standardPages] = await Promise.all([
-    fetchProductManualPages(folders),
-    searchStandardPages(folders, `${REQUIREMENT_WORDS} ${input.description}`, 24, ['Standard', 'Amendment']),
+    fetchProductManualPages(folders, 40, pick.manuals.length ? pick.manuals : undefined),
+    searchStandardPages(folders, `${REQUIREMENT_WORDS} ${input.description}`, 24, ['Standard', 'Amendment'], pick.standards.length ? pick.standards : undefined),
   ])
   const manual = pagesText(manualPages, MANUAL_CHARS)
   const standard = pagesText(standardPages, STANDARD_CHARS)
