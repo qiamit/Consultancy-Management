@@ -164,8 +164,9 @@ METHOD (follow every step):
 1. Identify the sample from the Test Report (Part A / particulars) and the Test Request: description (type, grade, size), declared values, batch number, date of manufacture.
 1a. SAMPLE CONDITIONS: from the sample description, declared values, grade and size, list what decides which requirements apply — e.g. grade, nominal size / thickness, "Aluminium Killed" / "Silicon Killed" / "Semi-Killed", coated or not, class / type. Use them in every step below.
 2. From the Indian Standard (with its amendments — an amendment replaces the clause it names), any REFERENCED STANDARD it points to (e.g. "steel conforming to IS 2062": its chemical table and notes then apply) and the Product Manual, find every requirement that applies to THIS sample's conditions, and work out the actual limit (tables, formulas, tolerances on declared or nominal values). Read the table NOTES: a note such as "when killed by aluminium alone, total aluminium ≥ 0.020 %; when killed by silicon alone, silicon ≥ 0.10 %" changes which elements are required for this sample.
-2a. TABLES: never say what a table holds unless its rows are in the documents above. The SIZE TABLE ROWS block (when given) is complete — it has every row of this sample's size and of the next higher standard size, read by the app from the Standard (an amendment's substituted table already replaces the original). When the same table appears twice, an amendment's substituted table replaces the original printed later. When a requirement needs a table that is not in the documents, give that row verdict "Not Clear" and say in notes which table is missing — never fail a sample on a guessed table.
-2b. BY AGREEMENT: a requirement the Standard leaves to agreement between purchaser and manufacturer (exact length, coating, finish, end type …) with no agreed value in the Test Request or the declared values: requirement "By Agreement — Not Declared", verdict "Pass" (it is not Not Clear and not a failure).
+2a. RAW-MATERIAL CHEMISTRY: when the declared values name a standard and grade ("as per Grade 5 of IS 10748", "Raw Material IS 10748 Gr 3"), the chemical limits and their notes (killed type, nitrogen, carbon equivalent, micro-alloying) come from THAT standard's row for that grade — never from another referenced standard. The Test Request only gives the declared facts (grade, killed type, micro alloys), not limits. A limit the Standard gives only for another process (e.g. seamless sections) does not apply to a welded sample. A clause, table or annex deleted by an amendment: requirement "Not Applicable — Deleted by Amd N", verdict "Pass".
+2b. TABLES: never say what a table holds unless its rows are in the documents above. The SIZE TABLE ROWS block (when given) is complete — it has every row of this sample's size and of the next higher standard size, read by the app from the Standard (an amendment's substituted table already replaces the original). When the same table appears twice, an amendment's substituted table replaces the original printed later. When a requirement needs a table that is not in the documents, give that row verdict "Not Clear" and say in notes which table is missing — never fail a sample on a guessed table.
+2c. BY AGREEMENT: a requirement the Standard leaves to agreement between purchaser and manufacturer (exact length, coating, finish, end type …) with no agreed value in the Test Request or the declared values: requirement "By Agreement — Not Declared", verdict "Pass" (it is not Not Clear and not a failure).
 3. Go through the LABORATORY REPORT PAGES and take EVERY test with its observed value, in the laboratory's order, one row each (the same test reported twice is one row). The Manak summary pages only list tests with "Test Report Attached": that text is never a result — take the value from the laboratory pages (chemical results may be on a separate laboratory page from the mechanical / dimensional ones; read all of them). Compare the reported value with the limit from step 2 yourself; never rely on the lab's own "conforms" remark. The report's own "specified requirement" column is a cross-check: where your limit differs from it, re-read the Standard's table row for this grade (for example Table 4 gives tensile strength, yield stress and elongation as separate columns) and say in notes which is right.
 4. Missing tests: tests the Product Manual / Standard require the LABORATORY to do on THIS sample (its conditions from step 1a) that are not in the report. A test whose requirement does not apply to this sample's conditions (other grade / size / killed type / coating) is NOT missing: if the report gives it anyway, give the row requirement "Not Applicable — <reason>" and verdict "Pass". Tests the Product Manual leaves to the factory (for example on every pipe during production) are not missing.
 4a. Sample Stage "SS": the Marking clause is not applicable — give the Marking row requirement "Not Applicable — SS Sample (No Licence Yet)", verdict "Pass", never list Marking as missing or as a failure.
@@ -182,7 +183,8 @@ FIELD FORMATS (keep each cell short, no sentences in the table):
 - evidence: for every "Fail" row, the exact words copied from the documents (Standard, amendment, referenced standard, Product Manual or SIZE TABLE ROWS) that set the limit it fails — the table row or the clause sentence with the number, up to 200 characters, copied character for character; "" for other rows. A Fail without evidence that the app finds in the documents is not accepted.
 - missing_tests: "Test Name (Clause x)".
 - summary: one sentence with the verdict and the deciding reason.
-- notes: the observations, one short sentence each: whether the sample matches the Test Request, every failure with its reason, missing tests, disagreement with the lab's remark, anything else the reviewer must know. OCR corrections: ONE note listing only the values you changed.
+- KEEP THE ANSWER SHORT: nothing outside the JSON, no reasoning written out, "requirement" and "result" cells under 60 characters each, no note that repeats a table row.
+- notes: at most 8, one short sentence each: whether the sample matches the Test Request, every failure with its reason, missing tests, disagreement with the lab's remark, anything else the reviewer must know. OCR corrections: ONE note listing only the values you changed.
 Before answering, re-check every row: for "≥ X" the result must be at least X; for "≤ X" at most X. Compare the numbers, not the words.
 - sample: values as written in the report ("" when not given).
 
@@ -320,7 +322,7 @@ export function indexQueryWords(input: { requiredTests: RequiredTest[]; reportTe
   return `${REQUIREMENT_WORDS} ${input.grade} ${fromList} ${fromReport}`.replace(/\s+/g, ' ').trim()
 }
 
-const REQUIRED_RULES = `REQUIRED TESTS: the locked list below is authoritative for missing tests. For EVERY listed test give one entry in "required_check": {"test": the name exactly as listed, "applicable": false only when its "applies to" excludes this sample's grade / type / size (else true), "found": true when the laboratory report gives a result for it (under any name), "result_parameter": the matching "parameter" of your results table or ""}. "missing_tests" = the applicable listed tests with found false (add others only when the Standard clearly requires them). Use the listed requirement as the limit unless the Standard pages show an amended limit. Add "required_check" to the JSON answer.`
+const REQUIRED_RULES = `REQUIRED TESTS: the locked list below is authoritative for missing tests. For EVERY listed test give one entry in "required_check": {"test": the name exactly as listed, "applicable": false only when its "applies to" excludes this sample's grade / type / size (else true), "found": true when the laboratory report gives a result for it (under any name)}. "missing_tests" = the applicable listed tests with found false (add others only when the Standard clearly requires them). Use the listed requirement as the limit unless the Standard pages show an amended limit. Add "required_check" to the JSON answer.`
 
 /** The locked list as prompt lines. */
 export function requiredTestsBlock(tests: RequiredTest[]): string {
@@ -361,27 +363,102 @@ export function applyRequiredTests(check: OslConformityCheck, required: Required
  * The Standard's matching pages and the Product Manual from the standards index (no PDF download, no OCR in the
  * browser). Null when the IS Code is not in the index, so the check falls back to the IS Code's own PDF files.
  */
-/** IS numbers the Standard / Manual send the reader to ("steel conforming to IS 2062"), most cited first. */
-export function referencedStandards(text: string, ownFolders: string[]): string[] {
-  const own = new Set(ownFolders.map((f) => f.match(/\d+/)?.[0]))
-  const counts = new Map<string, number>()
-  const re = /\b(?:conform(?:ing|s)?\s+to|as\s+per|in\s+accordance\s+with|requirements?\s+of|specified\s+in)\s+IS\s*:?\s*(\d{2,5})(?:\s*\(\s*Part\s*(\d+)\s*\))?/gi
+const ownNumbers = (folders: string[]) => new Set(folders.map((f) => f.match(/\d+/)?.[0]))
+const isKey = (num: string, part?: string) => (part ? `IS ${num} Part ${part}` : `IS ${num}`)
+
+/**
+ * IS numbers the sample itself names — "Chemical Composition as per Grade 5 of IS 10748", "Raw Material IS 10748 Gr 3":
+ * any IS number, whatever words come before it. These decide the raw material's limits, so they are always read.
+ */
+export function sampleNamedStandards(text: string, ownFolders: string[]): string[] {
+  const own = ownNumbers(ownFolders)
+  const out: string[] = []
+  for (const m of text.matchAll(/\bIS\s*:?\s*(\d{2,5})(?:\s*\(?\s*Part\s*[-:]?\s*(\d+)\s*\)?)?/gi)) {
+    const key = isKey(m[1], m[2])
+    if (!own.has(m[1]) && !out.includes(key)) out.push(key)
+  }
+  return out
+}
+
+export type CitedStandard = { key: string; role: 'material' | 'coating' | 'coating-method' | 'method' | 'other'; score: number }
+
+/** Titles from the Standard's list of references: "IS 4736 : 1986 Specification for hot-dip zinc coatings on …". */
+function referenceTitles(text: string): Map<string, string> {
+  const titles = new Map<string, string>()
+  const re = /\bIS\s*:?\s*(\d{2,5})(?:\s*\(\s*Part\s*(\d+)\s*\))?\s*:\s*(?:19|20)\d{2}\s+([A-Z][^\n]{8,140})/g
+  for (const m of text.matchAll(re)) {
+    const key = isKey(m[1], m[2])
+    if (!titles.has(key)) titles.set(key, m[3].replace(/\s+IS\s*:?\s*\d{2,5}[\s\S]*$/, '').trim())
+  }
+  return titles
+}
+
+/**
+ * Standards the Standard / Manual send the reader to, by what they decide. "Manufactured from hot rolled steel strip
+ * conforming to IS 10748" (the material) ranks first however rarely it is cited; coating specifications ("the
+ * requirement of mass of zinc coating shall be as per IS 4736") next, then coating test methods (IS 2633 uniformity,
+ * IS 6745 mass); other test-method standards ("tensile test as per IS 1608") set no limit and come last. The title in
+ * the Standard's own list of references settles what a standard is ("Method for …", "Specification for … zinc …").
+ */
+export function referencedStandards(text: string, ownFolders: string[]): CitedStandard[] {
+  const own = ownNumbers(ownFolders)
+  const titles = referenceTitles(text)
+  const tally = new Map<string, { material: number; coating: number; method: number; other: number }>()
+  const bump = (key: string, field: 'material' | 'coating' | 'method' | 'other') => {
+    const t = tally.get(key) ?? { material: 0, coating: 0, method: 0, other: 0 }
+    t[field] += 1
+    tally.set(key, t)
+  }
+  const re = /\b(?:conform(?:ing|s)?\s+to|as\s+per|in\s+accordance\s+with|requirements?\s+of|specified\s+in|given\s+in|according\s+to|refer)\s+(?:the\s+)?(?:requirements?\s+of\s+)?IS\s*:?\s*(\d{2,5})(?:\s*\(\s*Part\s*(\d+)\s*\))?/gi
   for (const m of text.matchAll(re)) {
     if (own.has(m[1])) continue
-    const key = m[2] ? `IS ${m[1]} Part ${m[2]}` : `IS ${m[1]}`
-    counts.set(key, (counts.get(key) ?? 0) + 1)
+    const before = text.slice(Math.max(0, (m.index ?? 0) - 140), m.index ?? 0).toLowerCase()
+    const near = before.slice(-60)
+    const key = isKey(m[1], m[2])
+    if (/requirement/.test(near) && /galvani|zinc|coat/.test(before)) bump(key, 'coating')
+    else if (/\b(tests?|tested|testing|method|determin\w*|analysis|sampling|measured)\b/.test(near)) bump(key, 'method')
+    else if (/galvani|zinc|coat/.test(before)) bump(key, 'coating')
+    else if (/(manufactured|made|produced|rolled)\s+from|\b(steel|strip|sheet|coil|plate|billet|bloom|wire rod|raw material)\b/.test(before)) bump(key, 'material')
+    else bump(key, 'other')
   }
-  return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k)
+  // Listed in the references but never cited with a lead phrase (IS 2633): still known by its title.
+  for (const key of titles.keys()) if (!tally.has(key) && !own.has(key.match(/\d+/)?.[0])) tally.set(key, { material: 0, coating: 0, method: 0, other: 0 })
+  return [...tally.entries()]
+    .map(([key, t]) => {
+      const title = titles.get(key) ?? ''
+      const isMethod = /^methods?\b|\bmethods? (of|for)\b/i.test(title)
+      const isGeneral = /general requirements|glossary|terminology|code of practice/i.test(title)
+      const isCoating = /zinc|coat|galvani/i.test(title)
+      let role: CitedStandard['role']
+      if (isCoating) role = isMethod ? 'coating-method' : 'coating'
+      else if (isMethod) role = 'method'
+      else if (isGeneral) role = 'other'
+      else if (t.material) role = 'material'
+      else if (t.coating) role = 'coating'
+      else role = t.method > t.other ? 'method' : 'other'
+      return { key, role, score: t.material * 10 + t.coating * 3 + t.other + t.method * 0.2 }
+    })
+    .sort((x, y) => y.score - x.score)
 }
 
 const REFERENCED_WORDS =
-  'chemical composition table notes killed aluminium silicon carbon manganese sulphur phosphorus carbon equivalent mechanical properties tensile yield elongation grade'
-const REFERENCED_LIMITS = { standards: 3, pages: 8, chars: 24_000 }
+  'chemical composition table notes killed aluminium silicon carbon manganese sulphur phosphorus nitrogen carbon equivalent micro alloying mechanical properties tensile yield elongation grade'
+const COATING_WORDS = 'zinc coating mass uniformity thickness galvanized requirements table adherence'
+/** Pages / characters read per referenced standard, by why it is read. */
+const REFERENCED_LIMITS = {
+  named: { standards: 2, pages: 8, chars: 24_000 },
+  material: { standards: 2, pages: 6, chars: 16_000 },
+  coating: { standards: 3, pages: 4, chars: 8_000 },
+}
 
 async function readFromStandardsIndex(
   isCodeId: string,
   words: string,
   conditionWords: string,
+  /** The sample's declared values, description, variety and the Test Request's declared / raw-material lines. */
+  declaredText: string,
+  /** The sample is zinc coated (galvanized), so the coating standards the Standard cites are read too. */
+  coated: boolean,
 ): Promise<{ folders: string[]; standardText: string; manualText: string; referencedText: string; sources: string[] } | null> {
   const folders = await fetchStandardFolders(isCodeId).catch(() => [] as string[])
   if (!folders.length) return null
@@ -396,26 +473,35 @@ async function readFromStandardsIndex(
     `Standard (Standards Index, ${folders[0]}): ${standard.count} Matching Pages`,
     ...(manual.count ? [`Product Manual (Standards Index): ${manual.count} Pages`] : []),
   ]
-  // Referenced standards (e.g. IS 4923 hollow sections → IS 2062 steel): their tables and notes decide the chemistry.
+  // The standard the sample's declared values name (e.g. IS 10748 Grade 5) sets the raw material's limits: always read,
+  // and then other material standards the Standard cites are not (they would give a second, wrong set of limits).
+  const named = sampleNamedStandards(declaredText, folders).slice(0, REFERENCED_LIMITS.named.standards)
+  // The Standard's own pages are only its best matches; cite counts come from them and the whole of the manual.
+  const cited = referencedStandards(`${standard.text}\n${manual.text}`, folders).filter((c) => !named.includes(c.key))
+  const material = named.length ? [] : cited.filter((c) => c.role === 'material').slice(0, REFERENCED_LIMITS.material.standards)
+  const coating = coated
+    ? [...cited.filter((c) => c.role === 'coating'), ...cited.filter((c) => c.role === 'coating-method')].slice(0, REFERENCED_LIMITS.coating.standards)
+    : []
+  const plan: Array<{ key: string; why: string; words: string; limits: { pages: number; chars: number } }> = [
+    ...named.map((key) => ({
+      key,
+      why: "named in the sample's declared values — its row for the declared grade and its notes set the raw material's chemical limits",
+      words: `${REFERENCED_WORDS} ${conditionWords}`,
+      limits: REFERENCED_LIMITS.named,
+    })),
+    ...material.map((c) => ({ key: c.key, why: 'the material the Standard says the product is made from', words: `${REFERENCED_WORDS} ${conditionWords}`, limits: REFERENCED_LIMITS.material })),
+    ...coating.map((c) => ({ key: c.key, why: 'zinc coating requirements the Standard points to', words: `${COATING_WORDS} ${conditionWords}`, limits: REFERENCED_LIMITS.coating })),
+  ]
   let referencedText = ''
-  // Standards named by the sample itself ("Raw Material as per IS 10748 Grade 3") come first, then those the
-  // Standard / Manual point to.
-  const refs = [
-    ...referencedStandards(conditionWords, folders),
-    ...referencedStandards(`${standard.text}\n${manual.text}`, folders),
-  ].filter((v, i, a) => a.indexOf(v) === i)
-  for (const ref of refs.slice(0, REFERENCED_LIMITS.standards)) {
-    const refFolders = ref.includes(' Part ') ? [ref, ref.replace(/ Part \d+$/, '')] : [ref]
-    const pages = await searchStandardPages(refFolders, `${REFERENCED_WORDS} ${conditionWords}`, REFERENCED_LIMITS.pages, [
-      'Standard',
-      'Amendment',
-    ]).catch(() => [] as StandardPage[])
-    // The grade-wise chemistry / mechanical tables decide the limits: those pages first, then the rest by rank.
-    const isTable = (p: StandardPage) => /table\s*\d+[^\n]{0,120}(chemical composition|mechanical properties)/i.test(p.text)
-    const read = indexPagesText([...pages.filter(isTable), ...pages.filter((p) => !isTable(p))], REFERENCED_LIMITS.chars)
+  for (const ref of plan) {
+    const refFolders = ref.key.includes(' Part ') ? [ref.key, ref.key.replace(/ Part \d+$/, '')] : [ref.key]
+    const pages = await searchStandardPages(refFolders, ref.words, ref.limits.pages, ['Standard', 'Amendment']).catch(() => [] as StandardPage[])
+    // The grade-wise chemistry / mechanical / coating tables decide the limits: those pages first, then the rest by rank.
+    const isTable = (p: StandardPage) => /table\s*\d+[^\n]{0,120}(chemical composition|mechanical properties|coating|zinc)/i.test(p.text)
+    const read = indexPagesText([...pages.filter(isTable), ...pages.filter((p) => !isTable(p))], ref.limits.chars)
     if (!read.text) continue
-    referencedText += `--- ${ref} ---\n${read.text}`
-    sources.push(`Referenced Standard (Standards Index, ${ref}): ${read.count} Pages`)
+    referencedText += `--- ${ref.key} (${ref.why}) ---\n${read.text}`
+    sources.push(`Referenced Standard (Standards Index, ${ref.key}): ${read.count} Pages`)
   }
   return { folders, standardText: standard.text, manualText: manual.text, referencedText, sources }
 }
@@ -473,6 +559,65 @@ export function checkFailEvidence(
     (i) => `${check.results[i].parameter}: the Fail against ${check.results[i].requirement} is not backed by the documents (its quoted rule was not found) — checked again by the review.`,
   )
   return { check: { ...check, results, notes: [...check.notes, ...notes] }, evidence, unbacked }
+}
+
+/** Page header written by indexPagesText: "[Standard — IS 4923 2017 - 03.pdf — page 9]". */
+const PAGE_HEADER = /(?=^\[(?:Standard|Amendment|Product Manual|Old version|Extra \(other\)) — [^\n]*page \d+\]$)/m
+
+/**
+ * The few document pages the second review needs: those holding a Fail row's quoted rule, its clause or table, or the
+ * test's name — not the whole Standard again (that was ~60k tokens for a review of two rows). A long block without page
+ * headers (a Standard read from its PDF) is cut to the passages around the matches.
+ */
+export function pickReviewPages(
+  texts: string[],
+  items: Array<{ parameter: string; clause: string; evidence: string }>,
+  missing: string[],
+  budget = 20_000,
+): string {
+  const fragments = items.flatMap((it) =>
+    it.evidence
+      .split(/…|\.\.\.|\s\|\s|;/)
+      .map(normEvidence)
+      .filter((f) => f.length >= 12),
+  )
+  const clauseKeys = items.flatMap((it) => normEvidence(it.clause).match(/\d+(?:\.\d+)+|table \d+|annex [a-z]/g) ?? [])
+  const words = [...items.map((it) => it.parameter), ...missing.map((m) => m.split(' (')[0])]
+    .flatMap((w) => normEvidence(w).split(' '))
+    .filter((w) => w.length >= 4 && !/^(test|tests|total|value|side|with|from)$/.test(w))
+  const hits = (norm: string) =>
+    fragments.filter((f) => norm.includes(f)).length * 10 +
+    clauseKeys.filter((k) => new RegExp(`(^|[^0-9.])${k.replace(/\./g, '\\.')}([^0-9]|$)`).test(norm)).length * 3 +
+    [...new Set(words)].filter((w) => norm.includes(w)).length * 2
+  const blocks = texts
+    .flatMap((t) => t.split(PAGE_HEADER))
+    .map((b) => b.trim())
+    .filter(Boolean)
+    .map((b) => {
+      const norm = normEvidence(b)
+      let text = b
+      if (b.length > 6_000) {
+        // No page headers: keep ±1,500 characters around each match.
+        const low = b.toLowerCase()
+        const at = [...fragments, ...clauseKeys, ...words]
+          .map((k) => low.indexOf(k.split(' ')[0]))
+          .filter((i) => i >= 0)
+          .sort((x, y) => x - y)
+          .slice(0, 6)
+        text = at.map((i) => b.slice(Math.max(0, i - 1_500), i + 1_500)).join('\n…\n') || b.slice(0, 3_000)
+      }
+      const amended = /^\[Amendment|amendment no/i.test(b.slice(0, 300)) ? 2 : 0
+      const score = hits(norm)
+      return { text, score: score ? score + amended : 0 }
+    })
+    .filter((b) => b.score > 0)
+    .sort((x, y) => y.score - x.score)
+  let out = ''
+  for (const b of blocks) {
+    if (out.length + b.text.length > budget) continue
+    out += `${b.text}\n\n`
+  }
+  return out.trim()
 }
 
 const REVIEW_INSTRUCTIONS = `ROLE: You are a second BIS reviewer. A first reviewer checked one sample's Test Report against the Indian Standard and marked the ITEMS below as failing (or as missing tests). Check ONLY those items again, using ONLY the documents below (the Standard with its amendments, referenced standards, the Product Manual, the SIZE TABLE ROWS). The results were read from the Test Report and are correct: check the RULE — which requirement applies to THIS sample (its grade, size, killed type, coating, stage) and its actual limit.
@@ -610,10 +755,18 @@ export async function checkSampleConformity(input: {
   if (input.isCodeId) {
     onStep?.('Reading the Standard and the Product Manual (Standards Index)…')
     const conditionWords = `${row.gradeTypeVariety} ${row.sampleDescription} ${row.declaredValue}`
+    // The Test Request's own declared / raw-material lines (not its list of test methods).
+    const requestDeclared = requestText
+      .split('\n')
+      .filter((l) => /declared|raw\s*material|grade|killed/i.test(l) && !/\b(test|method)\b/i.test(l))
+      .join('\n')
+    const coated = /galvani[sz]|zinc\s*coat|\bGI\b|\bG\.I\./i.test(`${conditionWords}\n${requestDeclared}\n${report.text.slice(0, 20_000)}`)
     const indexed = await readFromStandardsIndex(
       input.isCodeId,
       indexQueryWords({ requiredTests, reportText: report.text, grade: conditionWords }),
       conditionWords,
+      `${conditionWords}\n${requestDeclared}`,
+      coated,
     )
     if (indexed) {
       standardText = indexed.standardText
@@ -727,13 +880,26 @@ export async function checkSampleConformity(input: {
   const reviewMissing = !requiredTests.length && backed.check.missingTests.length > 0
   if (!failedRows.length && !reviewMissing) return settleCheck(backed.check, row)
   onStep?.('AI is reviewing the failed results…')
+  const reviewPages = pickReviewPages(
+    [standardText, referencedText, manualText],
+    failedRows.map((i) => ({ ...backed.check.results[i], evidence: backed.evidence[i] ?? '' })),
+    reviewMissing ? backed.check.missingTests : [],
+  )
+  const reviewDocuments = [
+    sizeText ? `=== SIZE TABLE ROWS (complete for this size and the next higher size) ===\n${sizeText}` : '',
+    requiredTests.length ? `=== REQUIRED TESTS (locked list) ===\n${requiredTestsBlock(requiredTests)}` : '',
+    reviewPages ? `=== DOCUMENT PAGES FOR THESE ITEMS (Standard, amendments, referenced standards, Product Manual) ===\n${reviewPages}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n')
   const reviewed = await reviewFails({
     check: backed.check,
     rows: failedRows,
     evidence: backed.evidence,
     reviewMissing,
     facts: sampleFacts(row),
-    documents,
+    // The pages for these items only; the evidence is still checked against all the documents.
+    documents: reviewPages ? reviewDocuments : documents,
     docsNorm,
     useMainModel: input.useMainModel,
   }).catch((err: unknown) => ({
