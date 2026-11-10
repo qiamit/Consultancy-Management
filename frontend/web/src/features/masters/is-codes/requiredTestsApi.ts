@@ -147,6 +147,15 @@ export async function searchStandardPages(
   return pages.filter((p) => allowed.has(p.relpath)).slice(0, limit)
 }
 
+/** One page of an index document (null when there is no such page). */
+export async function fetchStandardPage(relpath: string, page: number): Promise<StandardPage | null> {
+  const { data: doc } = await supabase.from('standard_docs').select('id, folder, relpath, kind').eq('relpath', relpath).maybeSingle()
+  if (!doc) return null
+  const d = doc as { id: number; folder: string; relpath: string; kind: string }
+  const { data } = await supabase.from('standard_pages').select('page, text').eq('doc_id', d.id).eq('page', page).maybeSingle()
+  return data ? { folder: d.folder, relpath: d.relpath, kind: d.kind, page: Number((data as { page: number }).page), text: String((data as { text: string }).text ?? '') } : null
+}
+
 export type IsCodeEdition = { part: string; section: string; year: string }
 
 /** Part, section and revision year of an IS Code (IS Code Master), digits only: "Part-1" → "1". */
