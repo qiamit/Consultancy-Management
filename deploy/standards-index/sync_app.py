@@ -8,7 +8,9 @@ Usage:
   sync_app.py --dry-run              # only count what would change
   sync_app.py --psql "<command>"     # any psql command that reads SQL from stdin, e.g. on the live server:
       --psql "docker exec -i <db container> psql -U postgres -d postgres"
-Needs the standards_index migration (20261109110000) in that database first.
+Needs the standards_index migration (20261109110000) and the category migration (20261111100000) in that database.
+A file whose category or kind changed but whose text did not (an IS folder moved into "1 Specifications" …) only gets
+its row updated; its pages are not sent again.
 """
 import argparse
 import os
@@ -76,34 +78,45 @@ def main():
     a = ap.parse_args()
     psql = shlex.split(a.psql) + ["-v", "ON_ERROR_STOP=1", "-q", "-X"]
 
-    got = subprocess.run(psql + ["-At", "-F", "\t", "-c", "select relpath, mtime from public.standard_docs"],
-                         capture_output=True, text=True)
+    got = subprocess.run(
+        psql + ["-At", "-F", "\t", "-c", "select relpath, mtime, kind, coalesce(category, '') from public.standard_docs"],
+        capture_output=True, text=True,
+    )
     if got.returncode != 0:
-        sys.exit("Could not read the app's standard_docs (is the standards_index migration applied?):\n" + got.stderr.strip())
+        sys.exit("Could not read the app's standard_docs (are the standards_index and category migrations applied?):\n"
+                 + got.stderr.strip())
     in_app = {}
     for line in got.stdout.splitlines():
-        rel, _, mtime = line.rpartition("\t")
-        if rel:
-            in_app[rel] = int(round(float(mtime or 0)))
+        cols = line.split("\t")
+        if len(cols) >= 4 and cols[0]:
+            rel, mtime, kind, category = "\t".join(cols[:-3]), cols[-3], cols[-2], cols[-1]
+            in_app[rel] = (int(round(float(mtime or 0))), kind, category or None)
 
     db = sqlite3.connect(a.db)
-    docs = {rel: (folder, kind, pages, int(round(mtime or 0)))
-            for folder, rel, kind, pages, mtime in db.execute("select folder, relpath, kind, pages, mtime from docs")}
+    have = {row[1] for row in db.execute("pragma table_info(docs)")}
+    cat_col = "category" if "category" in have else "null"
+    docs = {rel: (folder, kind, pages, int(round(mtime or 0)), category)
+            for folder, rel, kind, pages, mtime, category in
+            db.execute(f"select folder, relpath, kind, pages, mtime, {cat_col} from docs")}
     gone = sorted(r for r in in_app if r not in docs)
     new = sorted(r for r in docs if r not in in_app)
-    changed = sorted(r for r in docs if r in in_app and (a.full or in_app[r] != docs[r][3]))
+    changed = sorted(r for r in docs if r in in_app and (a.full or in_app[r][0] != docs[r][3]))
+    # Same text, another category or kind (the file's IS folder was sorted into a category folder): row only.
+    meta = sorted(r for r in docs if r in in_app and r not in changed
+                  and (in_app[r][1] != docs[r][1] or in_app[r][2] != docs[r][4]))
     load = new + changed
     pages = sum(docs[r][2] or 0 for r in load)
-    print(f"App has {len(in_app)} files, index has {len(docs)}. New {len(new)}, changed {len(changed)}, removed {len(gone)} "
-          f"({pages} pages to load).")
-    if a.dry_run or not (gone or load):
+    print(f"App has {len(in_app)} files, index has {len(docs)}. New {len(new)}, changed {len(changed)}, removed {len(gone)}, "
+          f"category / kind only {len(meta)} ({pages} pages to load).")
+    if a.dry_run or not (gone or load or meta):
         return
 
     proc = subprocess.Popen(psql, stdin=subprocess.PIPE, text=True, encoding="utf-8")
     w = proc.stdin.write
     w("BEGIN;\n")
     w("CREATE TEMP TABLE sync_del (relpath text) ON COMMIT DROP;\n")
-    w("CREATE TEMP TABLE sync_docs (folder text, relpath text, kind text, pages integer, mtime double precision) ON COMMIT DROP;\n")
+    w("CREATE TEMP TABLE sync_docs (folder text, relpath text, kind text, pages integer, mtime double precision, category text) ON COMMIT DROP;\n")
+    w("CREATE TEMP TABLE sync_meta (relpath text, kind text, category text) ON COMMIT DROP;\n")
     w("CREATE TEMP TABLE sync_pages (relpath text, page integer, text text) ON COMMIT DROP;\n")
     w("COPY sync_del FROM STDIN;\n")
     for r in gone + changed:
@@ -111,8 +124,12 @@ def main():
     w("\\.\n")
     w("COPY sync_docs FROM STDIN;\n")
     for r in load:
-        folder, kind, n, mtime = docs[r]
-        w(copy_row(folder, r, kind, n or 0, mtime))
+        folder, kind, n, mtime, category = docs[r]
+        w(copy_row(folder, r, kind, n or 0, mtime, category))
+    w("\\.\n")
+    w("COPY sync_meta FROM STDIN;\n")
+    for r in meta:
+        w(copy_row(r, docs[r][1], docs[r][4]))
     w("\\.\n")
     w("COPY sync_pages FROM STDIN;\n")
     for r in load:
@@ -120,8 +137,9 @@ def main():
             w(copy_row(r, int(page), clean_text(text)))
     w("\\.\n")
     w("DELETE FROM public.standard_docs d USING sync_del x WHERE d.relpath = x.relpath;\n")
-    w("INSERT INTO public.standard_docs (folder, relpath, kind, pages, mtime) "
-      "SELECT folder, relpath, kind, pages, mtime FROM sync_docs;\n")
+    w("INSERT INTO public.standard_docs (folder, relpath, kind, pages, mtime, category) "
+      "SELECT folder, relpath, kind, pages, mtime, category FROM sync_docs;\n")
+    w("UPDATE public.standard_docs d SET kind = m.kind, category = m.category FROM sync_meta m WHERE d.relpath = m.relpath;\n")
     w("INSERT INTO public.standard_pages (doc_id, page, text) "
       "SELECT d.id, s.page, s.text FROM sync_pages s JOIN public.standard_docs d ON d.relpath = s.relpath "
       "ON CONFLICT (doc_id, page) DO UPDATE SET text = excluded.text;\n")

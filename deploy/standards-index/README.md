@@ -42,6 +42,40 @@ App database: standard_docs + standard_pages  →  search_standard_pages() / sta
    and any other email address are removed on the way, so no person's details reach the app or the AI.
    After a change to that cleaning, `sync_app.py --full` loads every file again.
 
+## Category folders (reorganising the IS Standards folder)
+
+The IS folders can sit in the root (old layout) or under a category folder (new layout), in any mix:
+
+```
+IS Standards/1 Specifications/IS 2062/…          -> category Specification
+IS Standards/2 Test Methods/IS 1608/…            -> Test Method
+IS Standards/3 General and Reference/IS 808/…    -> General and Reference
+IS Standards/_Review/IS 6454/…                   -> Review
+IS Standards/IS 4923/…                           -> (none: old layout)
+```
+
+- Inside an IS folder: the current edition file(s), `Amendments/` (Amendment), `PM IS N [Part P].pdf`, `Master Documents/`.
+  The old `_Extra/Amendments` and `_Extra/Old Versions` still work until they are gone.
+- `IS Standards Archive/` (next to the root, or a folder of that name inside it) is never indexed.
+- The index keys every file by its path **from the IS folder** (`IS 2062/IS 2062 Part 1 2025 - 00.pdf`), so moving an IS folder into
+  a category folder only changes its `category` and `disk_path`: nothing is read again and the app only gets the new category.
+- A file whose path inside its IS folder changes (`_Extra/Amendments/x.pdf` → `Amendments/x.pdf`, or a rename) is found again
+  by its checksum and keeps its pages and OCR text.
+
+Order for a reorganisation (nothing is OCR'd again):
+
+1. **Before moving anything:** `python3 deploy/standards-index/update_index.py --hash`
+   Records sha256 and size of every indexed file (reads the 8.8 GB once, with OneDrive set to keep the folder on this Mac).
+2. Move the files (Cowork, in batches, with its move log).
+3. `update_index.py --dry-run`: counts of new / changed / removed / moved / reused by checksum, and the CSV
+   `~/standards_ocr/update-report.csv` with those counts per IS folder. "Reused" should match the files moved inside their
+   IS folders, "moved" the files whose IS folder went into a category folder, "removed" the files sent to the Archive.
+4. `update_index.py` for real, then `sync_app.py --dry-run` ("category / kind only" = rows updated without reloading pages).
+5. The app needs migration `20261111100000_standard_docs_category.sql` before the first sync with categories.
+
+Scanned pages left over after a budget: `update_index.py --ocr-only` (it reads each file from its place on disk;
+the old `~/standards_ocr/ocr_pass.py` only knows the old layout).
+
 ## Size
 
 About 94,000 pages (5,864 files), about 245 MB of text. In Postgres with the search index: 354 MB (measured on
