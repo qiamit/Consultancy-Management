@@ -6,6 +6,7 @@ import { ocrPdfPages } from '@/lib/ocrPdf'
 import { createBisProjectFileUrls } from './bisProjectFilesApi'
 import { sizeTableRows } from './sampleSizeTable'
 import { gradeTablePages } from './sampleGradeTable'
+import { designationRows, ROLLED_SECTION } from './sampleDesignationTable'
 import { parseOslConformityCheck, type OslConformityCheck, type OslSampleRequirementRow } from './oslSampleRequirementsModel'
 import {
   fetchIsCodeEdition,
@@ -170,10 +171,11 @@ METHOD (follow every step):
 2. From the Indian Standard (with its amendments — an amendment replaces the clause it names), any REFERENCED STANDARD it points to (e.g. "steel conforming to IS 2062": its chemical table and notes then apply) and the Product Manual, find every requirement that applies to THIS sample's conditions, and work out the actual limit (tables, formulas, tolerances on declared or nominal values). Read the table NOTES: a note such as "when killed by aluminium alone, total aluminium ≥ 0.020 %; when killed by silicon alone, silicon ≥ 0.10 %" changes which elements are required for this sample.
 2a. RAW-MATERIAL CHEMISTRY: when the declared values name a standard and grade ("as per Grade 5 of IS 10748", "Raw Material IS 10748 Gr 3"), the chemical limits and their notes (killed type, nitrogen, carbon equivalent, micro-alloying) come from THAT standard's row for that grade — never from another referenced standard. The Test Request only gives the declared facts (grade, killed type, micro alloys), not limits. A limit the Standard gives only for another process (e.g. seamless sections) does not apply to a welded sample. A clause, table or annex deleted by an amendment: requirement "Not Applicable — Deleted by Amd N", verdict "Pass".
 2b. TABLES: never say what a table holds unless its rows are in the documents above. The SIZE TABLE ROWS block (when given) is complete — it has every row of this sample's size and of the next higher standard size, read by the app from the Standard (an amendment's substituted table already replaces the original). When the same table appears twice, an amendment's substituted table replaces the original printed later. When a requirement needs a table that is not in the documents, give that row verdict "Not Clear" and say in notes which table is missing — never fail a sample on a guessed table.
-2c. OPTIONS: when the documents give one test more than one limit depending on a condition (grade, size range, a process such as mill straightened or as rolled, coating, killed type …), list every option in "options" and choose the one whose condition the sample's own words state (description, declared values, Test Request), quoting those words in "chosen_because". Never fall back to a default option when the sample states the condition. When the sample does NOT state the condition (e.g. the killed type is not declared), do not guess it from the results: give that row requirement "Depends on <condition> — Not Declared", verdict "Not Clear", and say in notes what must be declared.
+2c. OPTIONS: when the documents give one test more than one limit depending on a condition (grade, size range, a process such as mill straightened or as rolled, coating, killed type …), list every option in "options" and choose the one whose condition the sample's own words state (description, declared values, Test Request), quoting those words in "chosen_because". Never fall back to a default option when the sample states the condition. When the sample does NOT state the condition (e.g. the killed type is not declared), do not guess it from the results: give that row requirement "Depends on <condition> — Not Declared", verdict "Not Clear", and say in notes what must be declared — unless the result meets the limit of EVERY option, which is then "Pass" (the condition does not change the outcome). A designation states conditions too: CF… = cold formed, HF… = hot formed, ERW = electric resistance welded, GI / galvanized = zinc coated.
 2d. REVISION AND BANDS: use only the tables of the Standard under check (the IS, part and year in the SAMPLE heading) — table numbers differ between revisions, so never take or cite another revision's table. Take the thickness / size band of a table from the sample's declared size (e.g. ISA 130X130X12 → t = 12 mm). A test the Standard's notes make optional or subject to agreement, not reported and not asked for in the Test Request, is not missing; when reported, check it.
 2e. DIMENSIONS AND TOLERANCES: take them only from the documents — the clause of a tolerance / dimension standard for the sample's own product form (e.g. equal leg angles, not bulb angles; square hollow sections, not circular) — never from the laboratory's "specified" column. In standards read by OCR, "±" often appears as "f", "*", "t" or "+" before a number ("f 2 percent" = ± 2 percent).
-2f. BY AGREEMENT: a requirement the Standard leaves to agreement between purchaser and manufacturer (exact length, coating, finish, end type …) with no agreed value in the Test Request or the declared values: requirement "By Agreement — Not Declared", verdict "Pass" (it is not Not Clear and not a failure).
+2f. NOMINAL ONLY: when the documents give only a nominal value for a parameter (e.g. t, R1, R2 in the DESIGNATION ROW) and the tolerance standard has no tolerance for it for this product form, first look in the tolerance standard's clause for this product form; then give requirement exactly "Nominal <value> <unit> — No Tolerance Specified (IS <number> cl. <clause you checked>)" and verdict "Pass" when the result is within ±5 % of the nominal, else "Not Clear". Never "Fail" on a nominal-only value. When the documents give a tolerance (±, min / max, a percentage such as mass +5 / −3 %), apply it to the nominal instead.
+2g. BY AGREEMENT: a requirement the Standard leaves to agreement between purchaser and manufacturer (exact length, coating, finish, end type …) with no agreed value in the Test Request or the declared values: requirement "By Agreement — Not Declared", verdict "Pass" (it is not Not Clear and not a failure).
 3. Go through the LABORATORY REPORT PAGES and take EVERY test with its observed value, in the laboratory's order, one row each (the same test reported twice is one row). The Manak summary pages only list tests with "Test Report Attached": that text is never a result — take the value from the laboratory pages (chemical results may be on a separate laboratory page from the mechanical / dimensional ones; read all of them). Compare the reported value with the limit from step 2 yourself; never rely on the lab's own "conforms" remark. The report's own "specified requirement" column is a cross-check: where your limit differs from it, re-read the Standard's table row for this grade (for example Table 4 gives tensile strength, yield stress and elongation as separate columns) and say in notes which is right.
 4. Missing tests: tests the Product Manual / Standard require the LABORATORY to do on THIS sample (its conditions from step 1a) that are not in the report. A test whose requirement does not apply to this sample's conditions (other grade / size / killed type / coating) is NOT missing: if the report gives it anyway, give the row requirement "Not Applicable — <reason>" and verdict "Pass". Tests the Product Manual leaves to the factory (for example on every pipe during production) are not missing.
 4a. Sample Stage "SS": the Marking clause is not applicable — give the Marking row requirement "Not Applicable — SS Sample (No Licence Yet)", verdict "Pass", never list Marking as missing or as a failure.
@@ -402,7 +404,7 @@ export function sampleNamedStandards(text: string, ownFolders: string[]): string
   return out
 }
 
-export type CitedStandard = { key: string; role: 'material' | 'coating' | 'coating-method' | 'tolerance' | 'method' | 'other'; score: number }
+export type CitedStandard = { key: string; role: 'material' | 'coating' | 'coating-method' | 'tolerance' | 'dimension' | 'method' | 'other'; score: number }
 
 /** Titles from the Standard's list of references: "IS 4736 : 1986 Specification for hot-dip zinc coatings on …". */
 function referenceTitles(text: string): Map<string, string> {
@@ -452,9 +454,11 @@ export function referencedStandards(text: string, ownFolders: string[]): CitedSt
       const isMethod = /^methods?\b|\bmethods? (of|for)\b/i.test(title)
       const isGeneral = /general requirements|glossary|terminology|code of practice/i.test(title)
       const isCoating = /zinc|coat|galvani/i.test(title)
-      const isTolerance = /toleranc|dimension/i.test(title)
+      const isTolerance = /toleranc/i.test(title)
+      const isDimension = !isTolerance && /\bdimensions?\b/i.test(title)
       let role: CitedStandard['role']
-      if ((isTolerance || (t.tolerance > 0 && t.tolerance >= t.material)) && !isMethod) role = 'tolerance'
+      if (isDimension && !isMethod) role = 'dimension'
+      else if ((isTolerance || (t.tolerance > 0 && t.tolerance >= t.material)) && !isMethod) role = 'tolerance'
       else if (isCoating) role = isMethod ? 'coating-method' : 'coating'
       else if (isMethod) role = 'method'
       else if (isGeneral) role = 'other'
@@ -505,6 +509,7 @@ async function readFromStandardsIndex(
   standardDocs: string[]
   standardText: string
   gradeText: string
+  designationText: string
   manualText: string
   referencedText: string
   sources: string[]
@@ -586,7 +591,30 @@ async function readFromStandardsIndex(
     referencedText += `--- ${ref.key} (${ref.why}) ---\n${read.text}`
     sources.push(`Referenced Standard (Standards Index, ${ref.key}): ${read.count} Pages — ${pageList(read.refs)}`)
   }
-  return { folders, standardDocs: pick.standards, standardText: standard.text, gradeText: grade.text, manualText: manual.text, referencedText, sources }
+  // Nominal dimensions and mass of the sample's rolled section from a dimension standard (IS 808 for ISA / ISMB / ISMC
+  // designations, or one the Standard cites as a dimension standard).
+  const dimensionKeys = [
+    ...cited.filter((c) => c.role === 'dimension').map((c) => c.key),
+    ...(ROLLED_SECTION.test(declaredText) ? ['IS 808'] : []),
+  ].filter((v, i, a) => a.indexOf(v) === i)
+  let designationText = ''
+  for (const key of dimensionKeys.slice(0, 2)) {
+    const dimPick = await pickStandardDocs([key], null).catch(() => ({ standards: [] as string[], manuals: [] as string[] }))
+    const rows = await designationRows(dimPick.standards, declaredText).catch(() => ({ text: '', pages: [] as string[] }))
+    if (!rows.text) continue
+    designationText += `${designationText ? '\n\n' : ''}--- ${key} ---\n${rows.text}`
+    sources.push(`Designation Row (Standards Index, ${key}): ${pageList(rows.pages)}`)
+  }
+  return {
+    folders,
+    standardDocs: pick.standards,
+    standardText: standard.text,
+    gradeText: grade.text,
+    designationText,
+    manualText: manual.text,
+    referencedText,
+    sources,
+  }
 }
 
 const text = (v: unknown) => (typeof v === 'string' ? v.trim() : '')
@@ -776,6 +804,7 @@ export function checkOptionChoices(
 ): { check: OslConformityCheck; flagged: number[]; hints: Record<number, string>; options: Record<number, RowOption[]> } {
   const rawRows = (Array.isArray(rawResults) ? rawResults : []).filter((x): x is Record<string, unknown> => Boolean(x) && typeof x === 'object')
   const flagged: number[] = []
+  const passEvery: number[] = []
   const hints: Record<number, string> = {}
   const options: Record<number, RowOption[]> = {}
   check.results.forEach((r, i) => {
@@ -786,15 +815,90 @@ export function checkOptionChoices(
       .filter((o) => o.condition && o.requirement)
     if (opts.length < 2) return
     options[i] = opts
+    // A row left Not Clear for an undeclared condition, whose result meets every option's limit: the condition does
+    // not change the outcome, so it is Pass.
+    if (r.verdict === 'Not Clear' && opts.every((o) => numericVerdict({ ...r, requirement: o.requirement }) === 'Pass')) {
+      passEvery.push(i)
+      return
+    }
     const hint = optionMismatch(opts, r.requirement, text(raw?.chosen_because ?? raw?.chosenBecause), sampleText)
     if (!hint) return
     flagged.push(i)
     hints[i] = hint
   })
-  if (!flagged.length) return { check, flagged, hints, options }
-  const results = check.results.map((r, i) => (flagged.includes(i) ? { ...r, verdict: 'Not Clear' as const } : r))
-  const notes = flagged.map((i) => `${check.results[i].parameter}: app check — ${hints[i]} Checked again by the review.`)
-  return { check: { ...check, results, notes: [...check.notes, ...notes] }, flagged, hints, options }
+  if (!flagged.length && !passEvery.length) return { check, flagged, hints, options }
+  const results = check.results.map((r, i) =>
+    flagged.includes(i) ? { ...r, verdict: 'Not Clear' as const } : passEvery.includes(i) ? { ...r, verdict: 'Pass' as const } : r,
+  )
+  const notes = [
+    ...flagged.map((i) => `${check.results[i].parameter}: app check — ${hints[i]} Checked again by the review.`),
+    ...passEvery.map(
+      (i) => `${check.results[i].parameter}: ${check.results[i].result} meets the limit of every option (${(options[i] ?? []).map((o) => o.requirement).join(' / ')}), so the undeclared condition does not change the outcome — Pass.`,
+    ),
+  ]
+  const next = { ...check, results, notes: [...check.notes, ...notes] }
+  const verdict = passEvery.length ? overallOf(next) : check.verdict
+  return {
+    check: { ...next, verdict, summary: verdict === check.verdict ? check.summary : `${verdictWord(verdict)} after the app's option check.` },
+    flagged,
+    hints,
+    options,
+  }
+}
+
+/** Owner's rule: a nominal-only value (no tolerance anywhere for this product form) within ±5 % of the nominal is Pass. */
+export const NOMINAL_BAND = 0.05
+
+/**
+ * A row the AI marked nominal-only ("Nominal 10.0 mm — No Tolerance Specified (IS 1852 cl. 4.3)"): the app confirms the
+ * clause it checked is named and is in the documents sent, then decides by the band — Pass within ±5 %, otherwise Not
+ * Clear (check by hand). Never Fail. Null for any other row.
+ */
+export function nominalOnlyVerdict(r: CheckResult, docsNorm: string): { verdict: 'Pass' | 'Not Clear'; note?: string } | null {
+  const req = r.requirement
+  const nominalMatch = req.match(/^\s*nominal\s*:?\s*(\d+(?:\.\d+)?)/i)
+  if (!nominalMatch || !/no\s+tolerance/i.test(req)) return null
+  const nominal = Number(nominalMatch[1])
+  const std = req.match(/\bIS\s*:?\s*(\d{2,5})/i)?.[1]
+  const clause = req.match(/\b(?:cl(?:ause)?)\.?\s*(\d+(?:\.\d+)+|\d+)/i)?.[1]
+  const clauseFound = clause ? new RegExp(`(^|[^0-9.])${clause.replace(/\./g, '\\.')}([^0-9]|$)`).test(docsNorm) : false
+  if (!std || !clause || !docsNorm.includes(`is ${std}`) || !clauseFound) {
+    return {
+      verdict: 'Not Clear',
+      note: `${r.parameter}: "no tolerance specified" is not confirmed — the tolerance standard's clause checked is not named or not in the documents read; check by hand.`,
+    }
+  }
+  const values = (stripUnitPowers(r.result.replace(/,/g, '')).match(NUMBER) ?? [])
+    .map((v) => Math.abs(Number(v)))
+    .filter((v) => Number.isFinite(v) && v > 0)
+  if (!values.length || !nominal) return { verdict: 'Not Clear', note: `${r.parameter}: no measured value to compare with the nominal ${nominal}; check by hand.` }
+  if (values.every((v) => Math.abs(v - nominal) <= nominal * NOMINAL_BAND)) return { verdict: 'Pass' }
+  return {
+    verdict: 'Not Clear',
+    note: `${r.parameter}: ${r.result} is more than ±${NOMINAL_BAND * 100} % from the nominal ${nominal} (no tolerance specified) — check by hand.`,
+  }
+}
+
+/** The nominal rule over every row; the overall verdict follows when a row changes. */
+export function applyNominalRule(check: OslConformityCheck, docsNorm: string): OslConformityCheck {
+  const notes: string[] = []
+  let changed = false
+  const results = check.results.map((r) => {
+    const n = nominalOnlyVerdict(r, docsNorm)
+    if (!n) return r
+    if (n.note) notes.push(n.note)
+    if (n.verdict === r.verdict) return r
+    changed = true
+    return { ...r, verdict: n.verdict }
+  })
+  if (!changed && !notes.length) return check
+  const next = { ...check, results, notes: [...check.notes, ...notes] }
+  const verdict = overallOf(next)
+  return {
+    ...next,
+    verdict,
+    summary: verdict === check.verdict ? check.summary : `${verdictWord(verdict)} after the app's nominal-value check (±${NOMINAL_BAND * 100} % where no tolerance is specified).`,
+  }
 }
 
 const REVIEW_INSTRUCTIONS = `ROLE: You are a second BIS reviewer. A first reviewer checked one sample's Test Report against the Indian Standard and marked the ITEMS below as failing (or as missing tests). Check ONLY those items again, using ONLY the documents below (the Standard with its amendments, referenced standards, the Product Manual, the SIZE TABLE ROWS). The results were read from the Test Report and are correct: check the RULE — which requirement applies to THIS sample (its grade, size, killed type, coating, stage) and its actual limit.
@@ -938,6 +1042,7 @@ export async function checkSampleConformity(input: {
   let referencedText = ''
   let sizeText = ''
   let gradeText = ''
+  let designationText = ''
   if (input.isCodeId) {
     onStep?.('Reading the Standard and the Product Manual (Standards Index)…')
     const conditionWords = `${row.gradeTypeVariety} ${row.sampleDescription} ${row.declaredValue}`
@@ -957,6 +1062,7 @@ export async function checkSampleConformity(input: {
     if (indexed) {
       standardText = indexed.standardText
       gradeText = indexed.gradeText
+      designationText = indexed.designationText
       manualText = indexed.manualText
       referencedText = indexed.referencedText
       sources.push(...indexed.sources)
@@ -998,6 +1104,9 @@ export async function checkSampleConformity(input: {
     `=== SAMPLE (${input.isLabel}) ===\n${sampleFacts(row)}`,
     requiredTests.length ? `${REQUIRED_RULES}\n=== REQUIRED TESTS (locked list) ===\n${requiredTestsBlock(requiredTests)}` : '',
     sizeText ? `=== SIZE TABLE ROWS (read by the app from the Standard's size tables; complete for this size and the next higher size) ===\n${sizeText}` : '',
+    designationText
+      ? `=== DESIGNATION ROW (read by the app from the dimension standard: this section's nominal mass and dimensions — the tolerance standard's tolerances apply to these nominal values) ===\n${designationText}`
+      : '',
     requestText ? `=== TEST REQUEST ===\n${requestText}` : '',
     `=== TEST REPORT${report.ocr ? ' (scanned, read by OCR twice per page — figures may have OCR mistakes such as 0↔8, 0↔6, 1↔I: read 1 has the more reliable digits; compare both reads, take the one that fits the units and limits, and prefer the page pictures when attached)' : ''} ===\n${report.text || '(scanned — see the attached page pictures)'}`,
     gradeText ? `=== GRADE TABLE PAGES (read by the app: the tables of the Standard under check that list the declared grade, with the page before a continued table) ===\n${gradeText}` : '',
@@ -1055,6 +1164,7 @@ export async function checkSampleConformity(input: {
   // locked list) get one short second look by the same model.
   const documents = [
     sizeText ? `=== SIZE TABLE ROWS (complete for this size and the next higher size) ===\n${sizeText}` : '',
+    designationText ? `=== DESIGNATION ROW ===\n${designationText}` : '',
     requiredTests.length ? `=== REQUIRED TESTS (locked list) ===\n${requiredTestsBlock(requiredTests)}` : '',
     gradeText ? `=== GRADE TABLE PAGES ===\n${gradeText}` : '',
     standardText ? `=== INDIAN STANDARD ===\n${standardText}` : '',
@@ -1064,7 +1174,9 @@ export async function checkSampleConformity(input: {
     .filter(Boolean)
     .join('\n\n')
   const docsNorm = normEvidence(documents)
-  const evidenced = checkFailEvidence(settled, raw.results, docsNorm)
+  // Nominal-only rows (no tolerance for this product form) are decided by the ±5 % band, never Fail.
+  const nominaled = applyNominalRule(settled, docsNorm)
+  const evidenced = checkFailEvidence(nominaled, raw.results, docsNorm)
   // The option a row's limit was taken from must be the one the sample's own words state.
   const sampleText = [sampleFacts(row), check.sample.description, check.sample.declaredValues, requestText.slice(0, 8_000)].join('\n')
   const chosen = checkOptionChoices(evidenced.check, raw.results, sampleText)
@@ -1082,6 +1194,7 @@ export async function checkSampleConformity(input: {
   )
   const reviewDocuments = [
     sizeText ? `=== SIZE TABLE ROWS (complete for this size and the next higher size) ===\n${sizeText}` : '',
+    designationText ? `=== DESIGNATION ROW ===\n${designationText}` : '',
     requiredTests.length ? `=== REQUIRED TESTS (locked list) ===\n${requiredTestsBlock(requiredTests)}` : '',
     reviewPages ? `=== DOCUMENT PAGES FOR THESE ITEMS (Standard, amendments, referenced standards, Product Manual) ===\n${reviewPages}` : '',
   ]
