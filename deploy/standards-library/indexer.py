@@ -40,7 +40,10 @@ LOCK_KEY = 7_204_311  # pg advisory lock: one indexer run at a time
 AMENDMENT_NAME = re.compile(r"(?i)(^|[\s_.-])amd[\s_.-]*\d|amendment")
 SET_DIR = re.compile(r"(?i)^current official set\b")
 # "IS 10124 Part 1 2009 - 02.pdf": number, Part, Sec, edition year, amendments merged into the file.
-STRICT_NAME = re.compile(r"^(?:IS |ISO |IS ISO |ISO-IEC |IS ISO-IEC )\d+(?: Part \d+[A-Z]?)?(?: Sec \d+[A-Z]?)? (?:19|20)\d{2} - \d{2}$")
+# A whole set in one file: "IS 1708 Parts 1 to 18 1986 - 02.pdf".
+STRICT_NAME = re.compile(
+    r"^(?:IS |ISO |IS ISO |ISO-IEC |IS ISO-IEC )\d+(?:(?: Part \d+[A-Z]?)?(?: Sec \d+[A-Z]?)?| Parts? \d+ to \d+) (?:19|20)\d{2} - \d{2}$"
+)
 # The same form after another body's number: "ASTM E18 2025 - 00", "ASTM E1507 1998 (R2003) - 00".
 STRICT_TAIL = re.compile(r"^(?: Part \d+[A-Z]?)?(?: Sec \d+[A-Z]?)? (?:19|20)\d{2}(?: \(R(?:19|20)\d{2}\))? - \d{2}$")
 NUMBER = re.compile(
@@ -389,6 +392,24 @@ def other_numbers(base, rel, text):
     return sorted(aka)
 
 
+ROMAN = {"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5, "VI": 6, "VII": 7, "VIII": 8, "IX": 9, "X": 10, "XI": 11, "XII": 12}
+
+
+def manual_covers_part(base, rel, text):
+    """True when a manual's first pages name this file's Part among the Parts it covers: "IS 9873 (Parts 1,2,3,4,7,9)",
+    "IS 2386 (PART I AND PART III)". A manual of another Part saved under this Part's name gives False."""
+    part = re.search(r"(?i)\bPart\s*(\d+)", rel.split("/")[-1])
+    if not part:
+        return False
+    num = base.split(" ")[-1]
+    for m in re.finditer(rf"(?<!\d){num}\s*\(\s*(Parts?[^)]{{0,80}})\)", text[:8000], re.I):
+        covered = {int(x) for x in re.findall(r"\d+", m.group(1))}
+        covered |= {ROMAN[x] for x in re.findall(r"\b([IVX]{1,4})\b", m.group(1).upper()) if x in ROMAN}
+        if len(covered) > 1 and int(part.group(1)) in covered:
+            return True
+    return False
+
+
 def refresh_notes(conn):
     """Number, category, year and review notes of every indexed file, from its name and its first pages as the
     indexer reads them now: a better rule reaches files already indexed without reading them again."""
@@ -414,6 +435,8 @@ def refresh_notes(conn):
                 if note:
                     notes.append(note)
             twins = [n for n in same.get(sha, []) if n != rel.split("/")[-1]]
+            if twins and info["kind"] == "Product Manual" and manual_covers_part(info["folder"], rel, first or ""):
+                twins = []  # one manual for several Parts ("IS 9873 (Parts 1,2,3,4,7,9)"), saved under each Part
             if twins:
                 notes.append("Same PDF as " + ", ".join(sorted(twins)[:3]) + (" …" if len(twins) > 3 else ""))
         read_notes = [n for n in (review or "").split("; ") if n and not n.startswith(RUN_NOTES)]
