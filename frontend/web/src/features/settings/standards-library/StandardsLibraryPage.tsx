@@ -14,6 +14,7 @@ import {
   limsTableHeadClass,
 } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
+import { SyncNowPanel } from './SyncNowPanel'
 import { fetchStandardsLibraryStatus, type IndexRun, type IndexRunStatus, type StandardsLibraryStatus } from './standardsLibraryApi'
 
 const STATUS_TONE: Record<IndexRunStatus, string> = {
@@ -135,9 +136,11 @@ export default function StandardsLibraryPage() {
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
       <p className="text-xs text-muted-foreground">
-        Source: The Oracle Database Folder on the Mac. Add or Replace PDFs There, Then Run Standards Sync (Any Time). It Also
+        Source: The Oracle Database Folder on the Mac. Add or Replace PDFs There, Then Press Sync Now (Any Time). It Also
         Runs Every Sunday at 10 PM. Only New and Changed Files Are Read Again.
       </p>
+
+      <SyncNowPanel onFinished={reload} />
 
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-5">
         <Stat
@@ -227,7 +230,7 @@ export default function StandardsLibraryPage() {
                     {minutes(r) ? <span className="text-muted-foreground"> · {minutes(r)}</span> : null}
                   </TableCell>
                   <TableCell className="text-sm">{r.host || '—'}</TableCell>
-                  <TableCell className="text-sm capitalize">{r.trigger}</TableCell>
+                  <TableCell className="text-sm capitalize">{r.trigger === 'app' ? 'Sync Now' : r.trigger}</TableCell>
                   <TableCell>
                     <span className={cn('inline-flex rounded-md px-2 py-0.5 text-xs font-medium', STATUS_TONE[r.status])}>
                       {STATUS_LABEL[r.status]}

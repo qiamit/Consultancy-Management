@@ -113,3 +113,49 @@ export async function fetchStandardsLibraryStatus(): Promise<StandardsLibrarySta
     refsMissing: (refsMissing.data ?? []) as MissingReference[],
   }
 }
+
+export type SyncRequestStatus = 'pending' | 'running' | 'done' | 'failed' | 'cancelled'
+
+export type SyncRequest = {
+  id: number
+  requested_at: string
+  status: SyncRequestStatus
+  picked_at: string | null
+  finished_at: string | null
+  message: string | null
+}
+
+/** "Sync Now": the latest request and when the Mac last checked for one. */
+export type SyncState = { request: SyncRequest | null; macHost: string; macLastSeen: string | null }
+
+export async function fetchSyncState(): Promise<SyncState> {
+  const [req, agent] = await Promise.all([
+    supabase
+      .from('standard_sync_requests')
+      .select('id, requested_at, status, picked_at, finished_at, message')
+      .order('id', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase.from('standard_sync_agent').select('host, last_seen').eq('id', 1).maybeSingle(),
+  ])
+  if (req.error) throw new Error(req.error.message)
+  if (agent.error) throw new Error(agent.error.message)
+  return {
+    request: (req.data ?? null) as SyncRequest | null,
+    macHost: (agent.data?.host as string | undefined) ?? '',
+    macLastSeen: (agent.data?.last_seen as string | null | undefined) ?? null,
+  }
+}
+
+/** Admin only. Returns the waiting / running request when there already is one. */
+export async function requestStandardsSync(): Promise<number> {
+  const { data, error } = await supabase.rpc('request_standards_sync')
+  if (error) throw new Error(error.message)
+  return Number(data)
+}
+
+export async function cancelStandardsSync(id: number): Promise<boolean> {
+  const { data, error } = await supabase.rpc('cancel_standards_sync', { p_id: id })
+  if (error) throw new Error(error.message)
+  return Boolean(data)
+}
