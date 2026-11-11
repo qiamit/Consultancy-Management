@@ -203,6 +203,30 @@ services:
       PDF_ALLOWED_URL_PREFIXES: https://${API_DOMAIN}/storage/v1/object/
     shm_size: 1gb
 
+  # Standards Library indexer (deploy/standards-library): not a running service, started on demand by
+  # standards-sync.sh after the Mac's "Oracle Database" folder is copied to ${STANDARDS_DIR}:
+  #   docker compose --profile tools run --rm standards-indexer [--dry-run]
+  # It reads the folder read-only and writes only the standards index tables. One CPU, so the app stays quick.
+  standards-indexer:
+    build: ../standards-library
+    profiles: ["tools"]
+    depends_on: [db]
+    cpus: ${INDEXER_CPUS:-1}
+    environment:
+      PGHOST: db
+      PGUSER: postgres
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: postgres
+      INDEX_HOST: ${INDEX_HOST:-Server}
+      INDEXER_WORKERS: ${INDEXER_WORKERS:-1}
+    volumes:
+      - ${STANDARDS_DIR:-/opt/qe/standards/library}:/library:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   caddy:
     <<: *service
     image: caddy:2.10.2-alpine

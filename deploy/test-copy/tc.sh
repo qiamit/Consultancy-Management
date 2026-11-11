@@ -15,6 +15,8 @@
 #   tc.sh refresh [real] fetch, load, up and placeholders in one go (asks first, like fetch)
 #   tc.sh code <user-01> current two-step code of a test account set up here (local/test-2fa-<user>.txt)
 #   tc.sh wipe           remove this copy's containers and volumes
+#   tc.sh index-standards [args]  index the Mac's "Oracle Database" folder into this copy (Standards Library;
+#                        args go to deploy/standards-library/indexer.py, e.g. --dry-run, --only "IS 2062")
 set -euo pipefail
 export PATH="$HOME/.local/bin:$HOME/.local/lima/bin:$PATH"
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -180,9 +182,26 @@ print("%06d  (valid %ds more)" % ((struct.unpack(">I",h[o:o+4])[0]&0x7fffffff)%1
     # One step after another: set -e stops at the first that fails (an && chain would not, and the line below would lie).
     "$0" fetch ${2:+"$2"}; "$0" load; "$0" up; "$0" placeholders
     echo "Test copy refreshed from the live app ($([ "${2:-}" = real ] && echo 'REAL data, not masked' || echo masked)). App http://127.0.0.1:8090" ;;
+  index-standards)
+    guard; shift
+    # Docker never reads the OneDrive folder itself (the VM stalls on File Provider paths): the folder is first
+    # copied to a plain local mirror, as the server gets it, and the indexer reads the mirror.
+    SRC=${STANDARDS_SRC:-"$HOME/Library/CloudStorage/OneDrive-Personal/Documents/All Standards Databse/Oracle Database"}
+    LIB=${STANDARDS_DIR:-"$HOME/qe-standards/library"}
+    [ -d "$SRC" ] || stop "library folder not found: $SRC"
+    mkdir -p "$LIB"
+    echo "Copying the library folder to $LIB (only new / changed files)…"
+    # Files OneDrive has not downloaded yet ("dataless") can hang the copy: left out (the older copy stays).
+    NOT_HERE=$(mktemp)
+    (cd "$SRC" && find . -type f -flags +dataless 2>/dev/null | sed 's|^\./|/|') > "$NOT_HERE"
+    [ ! -s "$NOT_HERE" ] || echo "Not yet on this Mac (OneDrive still downloading), left for the next run: $(wc -l < "$NOT_HERE" | tr -d ' ')"
+    rsync -a --delete --exclude '.*' --exclude '~$*' --exclude-from="$NOT_HERE" "$SRC/" "$LIB/"
+    rm -f "$NOT_HERE"
+    STANDARDS_DIR="$LIB" INDEX_HOST="Local Host" INDEXER_CPUS=4 INDEXER_WORKERS=${INDEXER_WORKERS:-4} \
+      C --profile tools run --rm --build standards-indexer "$@" ;;
   wipe)
     guard
     if [ -t 0 ]; then read -r -p "Type WIPE to remove the test copy's data: " A; [ "$A" = WIPE ] || stop "not confirmed"; fi
     C down -v --remove-orphans; echo "Test copy removed. Settings and masked copies in local/ are kept." ;;
-  *) sed -n 2,17p "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+  *) sed -n 2,19p "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
 esac

@@ -1,4 +1,7 @@
-# Standards Index (Mac → App)
+# Standards Index (Mac → App): retired
+
+> Replaced by `deploy/standards-library` (11 Nov 2026). Its rows (`source = 'mac'`) are deleted by the first
+> complete Standards Library run; do not run `sync_app.py` any more.
 
 The text of every IS Standard, Amendment and Product Manual, page by page, with OCR for scanned pages. AI document
 checks (AI Conformity Check, and later the Required Tests list) read only the pages that matter from it, instead of

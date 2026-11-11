@@ -13,6 +13,7 @@ import {
   fetchProductManualPages,
   fetchStandardPage,
   fetchRequiredTests,
+  editionOfKey,
   pickStandardDocs,
   fetchStandardFolders,
   searchStandardPages,
@@ -567,9 +568,11 @@ async function readFromStandardsIndex(
   let referencedText = ''
   for (const ref of plan) {
     const refFolders = ref.key.includes(' Part ') ? [ref.key, ref.key.replace(/ Part \d+$/, '')] : [ref.key]
-    // A referenced standard is read in its latest revision (its folder may hold old ones too).
-    const refPick = await pickStandardDocs(refFolders, null).catch(() => ({ standards: [] as string[], manuals: [] as string[] }))
-    const pages = await searchStandardPages(refFolders, ref.words, ref.limits.pages, ['Standard', 'Amendment'], refPick.standards.length ? refPick.standards : undefined).catch(
+    // A referenced standard is read in its latest revision (its folder may hold old ones too), and only in the Part it
+    // names: "IS 1367 Part 1" is never answered by IS 1367 Part 3. A Part the library does not have is not read.
+    const refPick = await pickStandardDocs(refFolders, editionOfKey(ref.key), { strict: true }).catch(() => ({ standards: [] as string[], manuals: [] as string[] }))
+    if (!refPick.standards.length) continue
+    const pages = await searchStandardPages(refFolders, ref.words, ref.limits.pages, ['Standard', 'Amendment'], refPick.standards).catch(
       () => [] as StandardPage[],
     )
     // A tolerance standard whose best pages never name the sample's product form (an angle sample, a beam standard)
@@ -599,7 +602,7 @@ async function readFromStandardsIndex(
   ].filter((v, i, a) => a.indexOf(v) === i)
   let designationText = ''
   for (const key of dimensionKeys.slice(0, 2)) {
-    const dimPick = await pickStandardDocs([key], null).catch(() => ({ standards: [] as string[], manuals: [] as string[] }))
+    const dimPick = await pickStandardDocs([key.replace(/ Part \d+$/, '')], editionOfKey(key), { strict: true }).catch(() => ({ standards: [] as string[], manuals: [] as string[] }))
     const rows = await designationRows(dimPick.standards, declaredText).catch(() => ({ text: '', pages: [] as string[] }))
     if (!rows.text) continue
     designationText += `${designationText ? '\n\n' : ''}--- ${key} ---\n${rows.text}`
@@ -1074,10 +1077,12 @@ export async function checkSampleConformity(input: {
       }
     }
   }
-  if (input.isCodeId && !standardText) {
-    onStep?.('Reading the Standard and the Product Manual…')
+  // The IS Code Master's own files: the Standard when the index has none, the Product Manual when the index has none
+  // (the Standards Library folder holds Standards; Product Manuals are uploaded in the IS Code Master).
+  if (input.isCodeId && (!standardText || !manualText)) {
+    onStep?.(standardText ? 'Reading the Product Manual…' : 'Reading the Standard and the Product Manual…')
     const files = await loadIsCodeFileLinks(input.isCodeId).catch(() => [] as IsCodeFileLink[])
-    const standard = pickIsFile(files, 'standard')
+    const standard = standardText ? null : pickIsFile(files, 'standard')
     const manual = pickIsFile(files, 'manual')
     if (standard) {
       const read = await fetchFile(standard.url!, standard.file_name)
@@ -1218,4 +1223,22 @@ export async function checkSampleConformity(input: {
     notes: [...backed.check.notes, `The second review could not run (${err instanceof Error ? err.message : String(err)}): check the failed rows by hand.`],
   }))
   return settleCheck(reviewed, row)
+}
+
+/**
+ * Text of the Product Manual uploaded in the IS Code Master (scanned pages by OCR), for when the Standards Index has
+ * none: the library folder holds Standards, Product Manuals are uploaded per IS Code.
+ */
+export async function readIsCodeMasterManual(
+  isCodeId: string,
+  onStep?: (step: string) => void,
+): Promise<{ text: string; source: string } | null> {
+  const files = await loadIsCodeFileLinks(isCodeId).catch(() => [] as IsCodeFileLink[])
+  const manual = pickIsFile(files, 'manual')
+  if (!manual) return null
+  const read = await fetchFile(manual.url!, manual.file_name)
+    .then((f) => readPdf(f, 'manual', 'Product Manual', onStep))
+    .catch(() => ({ text: '', ocr: false, scannedPages: [] as number[] }))
+  if (!read.text) return null
+  return { text: read.text, source: `Product Manual: ${manual.file_name}${read.ocr ? ' (scanned — read by OCR)' : ''}` }
 }

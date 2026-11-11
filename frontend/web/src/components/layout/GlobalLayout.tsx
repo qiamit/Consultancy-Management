@@ -96,6 +96,7 @@ const DIRECTOR_ONLY_PROFILE_PATHS = new Set([
   '/settings/module-access',
   '/settings/ai',
   '/settings/email-log',
+  '/settings/standards-library',
 ])
 
 function profileMenuIcon(item: NavItem): ElementType {

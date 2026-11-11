@@ -124,7 +124,7 @@ export async function fetchStandardFolders(isCodeId: string): Promise<string[]> 
 /**
  * Best-matching pages of the standards index for these folders (any of the words). With `relpaths`, only pages of
  * those documents (the IS Code's own part and revision — a folder such as "IS 2062" also holds 2011, Part 1 2025 and
- * Part 2 2026), so more are asked for and the rest dropped.
+ * Part 2 2026).
  */
 export async function searchStandardPages(
   folders: string[],
@@ -134,17 +134,16 @@ export async function searchStandardPages(
   relpaths?: string[],
 ): Promise<StandardPage[]> {
   if (!folders.length) return []
+  // The search runs inside the chosen documents only, so the best pages of another part never push theirs out.
   const { data, error } = await supabase.rpc('search_standard_pages', {
     p_folders: folders,
     p_query: words,
-    p_limit: relpaths ? 60 : limit,
+    p_limit: limit,
     ...(kinds ? { p_kinds: kinds } : {}),
+    ...(relpaths ? { p_relpaths: relpaths } : {}),
   })
   if (error) throw error
-  const pages = (data ?? []) as StandardPage[]
-  if (!relpaths) return pages
-  const allowed = new Set(relpaths)
-  return pages.filter((p) => allowed.has(p.relpath)).slice(0, limit)
+  return (data ?? []) as StandardPage[]
 }
 
 /** One page of an index document (null when there is no such page). */
@@ -178,21 +177,33 @@ function editionOf(relpath: string): IsCodeEdition {
   }
 }
 
+/** The Part a referenced standard's key names: "IS 1608 Part 1" → part "1", no year (its latest revision is read). */
+export function editionOfKey(key: string): IsCodeEdition {
+  return { part: key.match(/\bPart\s*(\d+)/i)?.[1] ?? '', section: key.match(/\bSec\s*(\d+)/i)?.[1] ?? '', year: '' }
+}
+
 /**
  * The documents of the index folders that belong to this IS Code's own part, section and revision: the matching
  * Standard and its Amendments, and the Product Manual of the same part (a main copy before an `_Extra/` duplicate).
- * Without an edition (a referenced standard), the latest revision. When nothing matches, every document is kept.
+ * Without a year, the latest revision. When nothing matches, every document is kept — except with `strict` (a
+ * referenced standard): then a Part the library does not have gives nothing, never another Part's pages.
  */
-export async function pickStandardDocs(folders: string[], edition: IsCodeEdition | null): Promise<{ standards: string[]; manuals: string[] }> {
+export async function pickStandardDocs(
+  folders: string[],
+  edition: IsCodeEdition | null,
+  opts: { strict?: boolean } = {},
+): Promise<{ standards: string[]; manuals: string[] }> {
   if (!folders.length) return { standards: [], manuals: [] }
   const { data } = await supabase.from('standard_docs').select('relpath, kind').in('folder', folders)
   const docs = (data ?? []) as Array<{ relpath: string; kind: string }>
+  // A reference that names no Section ("IS 1367 Part 9") is also answered by the Part's sections ("Part 9 Sec 1").
+  const otherSection = opts.strict ? -1 : -10
   const partScore = (e: IsCodeEdition) =>
     (edition?.part ? (e.part === edition.part ? 3 : e.part ? -10 : -1) : e.part ? -10 : 0) +
-    (edition?.section ? (e.section === edition.section ? 2 : e.section ? -10 : -1) : e.section ? -10 : 0)
+    (edition?.section ? (e.section === edition.section ? 2 : e.section ? -10 : -1) : e.section ? otherSection : 0)
   const best = (list: Array<{ relpath: string; score: number }>) => {
     const ok = list.filter((d) => d.score > -5)
-    if (!ok.length) return list.map((d) => d.relpath)
+    if (!ok.length) return opts.strict ? [] : list.map((d) => d.relpath)
     const top = Math.max(...ok.map((d) => d.score))
     return ok.filter((d) => d.score === top).map((d) => d.relpath)
   }
@@ -209,7 +220,20 @@ export async function pickStandardDocs(folders: string[], edition: IsCodeEdition
   const amendments = docs.filter((d) => d.kind === 'Amendment' && partScore(editionOf(d.relpath)) > -5).map((d) => d.relpath)
   const manualDocs = docs.filter((d) => d.kind === 'Product Manual')
   const mains = manualDocs.filter((d) => !/\/_Extra\//.test(d.relpath))
-  const manuals = best((mains.length ? mains : manualDocs).map((d) => ({ relpath: d.relpath, score: partScore(editionOf(d.relpath)) })))
+  // One Product Manual per part: the one of the IS Code's revision year, else the latest (a folder can hold the
+  // manuals of 1998 and 2023).
+  const manualPool = (mains.length ? mains : manualDocs).map((d) => ({ relpath: d.relpath, e: editionOf(d.relpath) }))
+  const topPart = Math.max(-5, ...manualPool.map((m) => partScore(m.e)))
+  const latestManual = Math.max(0, ...manualPool.filter((m) => partScore(m.e) === topPart).map((m) => Number(m.e.year) || 0))
+  const manuals = best(
+    manualPool.map((m) => ({
+      relpath: m.relpath,
+      score:
+        partScore(m.e) +
+        (edition?.year && m.e.year === edition.year ? 0.6 : 0) +
+        (Number(m.e.year) === latestManual ? 0.3 : 0),
+    })),
+  )
   return { standards: [...standards, ...amendments], manuals }
 }
 

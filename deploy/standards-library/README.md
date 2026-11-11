@@ -1,0 +1,113 @@
+# Standards Library (Oracle Database folder → App)
+
+The owner's folder on the Mac is the master:
+`~/Library/CloudStorage/OneDrive-Personal/Documents/All Standards Databse/Oracle Database/`.
+Every PDF in it is indexed page by page into the app's `standard_docs` / `standard_pages` (the tables the AI
+Conformity Check and Required Tests read), with OCR for scanned pages. It replaces the old Mac index
+(`deploy/standards-index`), which stays only as a fallback (see "The old index").
+
+```
+Mac: Oracle Database folder
+   │  standards-sync.sh server      (manual, any time)  +  every Sunday 10 pm (launchd)
+   │  rsync, one way. A file deleted or replaced on the Mac is kept in /opt/qe/standards/removed/<date>/
+   ▼
+Server: /opt/qe/standards/library
+   │  standards-indexer container (docker compose --profile tools), right after the copy
+   ▼
+standard_docs + standard_pages (+ standard_index_runs: one row per run)
+```
+
+## The folder
+
+- One category folder per kind of standard: `Product Specification`, `Test Method`, `Code of Practice`,
+  `Dimension & Tolerances`, … A new category folder is picked up as it is (the category = the folder name).
+- One file per Standard / Part / Section: `IS 10124 Part 1 2009 - 02.pdf` = IS number, Part, Sec, edition year,
+  `- 02` = amendments already merged into the file.
+- `Current Official Set - IS N YYYY - …/` folders: the base standard plus its separate amendment files
+  (`…Amd1…` in the name → kind Amendment).
+- A name starting with `PM ` or containing "Product Manual" → kind Product Manual.
+- An Indian adoption (`IS ISO 16160 …`, `IS/IEC 60947` in the list) is filed under its IS number (`IS 16160`), as
+  the IS Code Master writes it; a plain `ISO 9001 …` stays `ISO 9001`.
+- Other standards bodies follow the same form: `ASTM E18 2025 - 00`, `JIS B 7184 2021 - 00`,
+  `BS EN 10002 Part 1 2001 - 00`, `DIN EN ISO 6892 Part 1 2020 - 00`, `SAE J1939 2021 - 00`, and
+  `ASTM E1507 1998 (R2003) - 00` for a reapproved edition. A slash is written `_` or `-` in a file name
+  (`GB_T 228 …` → `GB/T 228`, `AS-NZS 4020 …` → `AS/NZS 4020`). The list of bodies is `BODIES` in `indexer.py`.
+- The number, category, year and name notes of every file are worked out again from its name on each run, so a
+  better name rule reaches files already indexed without reading them again.
+- Each run also checks every file against its content: first pages that never name the file's own number but name
+  another IS number ("Content Shows IS 9762, Not IS 10931"), and the same PDF saved under two names ("Same PDF as …").
+  Both go on the review list.
+
+## Referenced standards
+
+Every Standard and Amendment is scanned once (again only when its file changes) for the standards it names:
+`IS 1608 (Part 1)`, `IS/ISO 6892-1`, `ISO 5725-2`, `ASTM E18` → `standard_refs` (number, Part, times named). An ISO
+number written right after an IS number (`IS 1608 (Part 1) : 2022/ISO 6892-1 : 2019`) is the same standard and is
+not counted again. Each file also records its own ISO number from its first page (`standard_docs.aka`), so a reference
+to `ISO 6892-1` is answered by `IS 1608 Part 1`.
+
+After each run `standard_refs_refresh()` fills `standard_refs_status`: every referenced number + Part, how many
+library Standards cite it, and whether the library has it (the Part itself, or another Part only). The Standards
+Library page shows the coverage and the most cited ones that are missing.
+
+The checks (Conformity Check) read a referenced standard only in the Part it names, in its latest revision: a Part
+the library does not have is not read at all, never answered by another Part. Page search runs inside the chosen
+documents only (`search_standard_pages(..., p_relpaths)`).
+- Names that do not follow the pattern are indexed anyway and put on the review list (`standard_docs.review`).
+  So are PDFs locked by DRM (FileOpen: no tool can open them; add an unlocked copy) and scans with almost no text.
+- `Standards List.xlsx` at the root (S.No, IS Number, IS Title, Standard type, Technical Committee, Department,
+  PM no.) is read on every run into `standard_list`; the app shows the listed numbers that have no file yet.
+
+First full run on Local Host (11 Nov 2026, 4 workers): 3,269 PDFs, 66,314 pages (4,368 by OCR), 22 minutes, no
+errors. A run with nothing changed takes about 30 seconds. On the server (1 CPU) the first run takes a few hours:
+start it in the evening.
+
+In the index, every file of one IS number has the folder `IS 2062` (`base` too); the checks pick the Part,
+Section and edition year from the file name, as before.
+
+## After adding or replacing PDFs
+
+```bash
+deploy/standards-library/standards-sync.sh server --dry-run   # what would be copied / read / removed
+deploy/standards-library/standards-sync.sh server             # copy + index on the server
+```
+
+Only new and changed files are read (size + date, then sha256: a file whose date changed but whose content did
+not keeps its pages; a moved or renamed file is found again by its checksum). Text pages take seconds, scanned
+pages about 5 s each. The run stops without copying anything when the folder looks empty (OneDrive not ready) or
+when more than 50 PDFs and 10 % of the library would be removed at once (`--allow-many-removals` when meant).
+
+**Local Host** (test copy): `deploy/test-copy/tc.sh index-standards [--dry-run | --only "IS 2062 "]`. It first
+copies the folder to `~/qe-standards/library` (Docker never reads the OneDrive folder itself: the VM stalls on
+File Provider paths) and indexes that copy with 4 workers.
+
+## The weekly run
+
+```bash
+deploy/standards-library/standards-sync.sh install-schedule   # every Sunday 10 pm; log ~/Library/Logs/qe-standards/sync.log
+deploy/standards-library/standards-sync.sh remove-schedule
+```
+
+The schedule runs a copy of the script in `~/qe-standards/`. A Mac that is asleep at 10 pm runs it at the next
+wake. The first scheduled run may ask macOS for access to the OneDrive folder: allow it. When nothing changed
+the run only compares and finishes in about a minute.
+
+## The old index (removed)
+
+The old Mac index (`deploy/standards-index`, rows with `source = 'mac'`) is retired (owner, 11 Nov 2026). The
+first complete library run (whole folder, no `--only` / `--limit`, status done) deletes its rows; until then they
+answer only for IS numbers the library does not have (`standard_library_refresh_active()`). On Live this happens at
+the end of the first server run, so the app is never without an index.
+
+Product Manuals are not in the library folder: the AI Conformity Check and the Required Tests read the Product
+Manual uploaded in the IS Code Master when the index has none. A PDF named `PM IS …` in the folder is indexed as
+a Product Manual and is used first.
+
+## Rules kept from the old tool
+
+- `pdftotext` page by page; a page with under 30 characters is OCR'd (tesseract, 200 dpi). A file with almost no
+  text even after OCR goes on the review list.
+- PDF portfolio attachments are indexed as their own documents (`<file>::<attachment>.pdf`).
+- The BSB download stamp (buyer name, email, IP) and every email address are removed before saving.
+- Customers never see these tables (staff-only RLS); only the indexer (database owner) writes. Two runs never
+  overlap (advisory lock).
