@@ -14,6 +14,7 @@ import PortalRecordsPage from '@/features/portal/PortalRecordsPage'
 import {
   AiSettingsRoute,
   EmailLogRoute,
+  StandardsLibraryRoute,
   AuthenticatedShell,
   PortalShell,
   BisLicenseRenewalsRoute,
@@ -135,6 +136,7 @@ export default function App() {
           <Route path="/settings/module-access" element={<ModuleAccessRoute />} />
           <Route path="/settings/ai" element={<AiSettingsRoute />} />
           <Route path="/settings/email-log" element={<EmailLogRoute />} />
+          <Route path="/settings/standards-library" element={<StandardsLibraryRoute />} />
           <Route path="/help" element={<HelpRoute />} />
           <Route path="/contact" element={<ContactUsRoute />} />
         </Route>

@@ -22,6 +22,7 @@ import {
   Plug,
   Settings,
   HelpCircle,
+  Library,
 } from 'lucide-react'
 
 /** Sidebar navigation. Module Access catalog is generated from this tree. */
@@ -334,6 +335,12 @@ export const PROFILE_MENU_SECTIONS: NavSection[] = [
         to: '/settings/email-log',
         icon: Mail,
         clause: 'email-log',
+      },
+      {
+        label: 'Standards Library',
+        to: '/settings/standards-library',
+        icon: Library,
+        clause: 'standards-library',
       },
       {
         label: 'Help',
