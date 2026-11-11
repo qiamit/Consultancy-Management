@@ -28,6 +28,12 @@ standard_docs + standard_pages (+ standard_index_runs: one row per run)
 - A name starting with `PM ` or containing "Product Manual" → kind Product Manual.
 - An Indian adoption (`IS ISO 16160 …`, `IS/IEC 60947` in the list) is filed under its IS number (`IS 16160`), as
   the IS Code Master writes it; a plain `ISO 9001 …` stays `ISO 9001`.
+- Other standards bodies follow the same form: `ASTM E18 2025 - 00`, `JIS B 7184 2021 - 00`,
+  `BS EN 10002 Part 1 2001 - 00`, `DIN EN ISO 6892 Part 1 2020 - 00`, `SAE J1939 2021 - 00`, and
+  `ASTM E1507 1998 (R2003) - 00` for a reapproved edition. A slash is written `_` or `-` in a file name
+  (`GB_T 228 …` → `GB/T 228`, `AS-NZS 4020 …` → `AS/NZS 4020`). The list of bodies is `BODIES` in `indexer.py`.
+- The number, category, year and name notes of every file are worked out again from its name on each run, so a
+  better name rule reaches files already indexed without reading them again.
 - Names that do not follow the pattern are indexed anyway and put on the review list (`standard_docs.review`).
   So are PDFs locked by DRM (FileOpen: no tool can open them; add an unlocked copy) and scans with almost no text.
 - `Standards List.xlsx` at the root (S.No, IS Number, IS Title, Standard type, Technical Committee, Department,

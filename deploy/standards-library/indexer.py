@@ -41,9 +41,35 @@ AMENDMENT_NAME = re.compile(r"(?i)(^|[\s_.-])amd[\s_.-]*\d|amendment")
 SET_DIR = re.compile(r"(?i)^current official set\b")
 # "IS 10124 Part 1 2009 - 02.pdf": number, Part, Sec, edition year, amendments merged into the file.
 STRICT_NAME = re.compile(r"^(?:IS |ISO |IS ISO |ISO-IEC |IS ISO-IEC )\d+(?: Part \d+[A-Z]?)?(?: Sec \d+[A-Z]?)? (?:19|20)\d{2} - \d{2}$")
+# The same form after another body's number: "ASTM E18 2025 - 00", "ASTM E1507 1998 (R2003) - 00".
+STRICT_TAIL = re.compile(r"^(?: Part \d+[A-Z]?)?(?: Sec \d+[A-Z]?)? (?:19|20)\d{2}(?: \(R(?:19|20)\d{2}\))? - \d{2}$")
 NUMBER = re.compile(
     r"^(?P<pre>IS[\s_/]+(?:ISO|IEC)(?:[\s_/-]+IEC)?|IS|ISO(?:[\s_/-]+IEC)?|IEC)[\s_/-]*(?P<num>\d+)(?P<rest>.*)$", re.I
 )
+# Other standards bodies: "ASTM E18 2025 - 00", "JIS B 7184 2021 - 00", "BS EN 10002 Part 1 2001 - 00",
+# "DIN EN ISO 6892 Part 1 2020 - 00", "SAE J1939 2021 - 00". The number may carry a series letter (ASTM E18, JIS B 7184).
+# Longer prefixes first, so "BS EN ISO" is not read as "BS".
+BODIES = (
+    "BS EN ISO", "BS EN IEC", "BS EN", "BS ISO", "BS IEC", "BS",
+    "DIN EN ISO", "DIN EN IEC", "DIN EN", "DIN ISO", "DIN IEC", "DIN",
+    "NF EN ISO", "NF EN", "NF", "UNE EN ISO", "UNE EN", "UNE",
+    "EN ISO", "EN IEC", "EN",
+    "ANSI", "ASTM", "ASME", "AWS", "API", "SAE", "IEEE", "NEMA", "UL",
+    "JIS", "KS", "GB/T", "GB", "AS/NZS", "AS", "CSA", "GOST",
+)
+def _body_pattern(body):
+    """'BS EN' -> BS[\\s_-]+EN; 'GB/T' also matches 'GB_T' / 'GB-T' (a file name cannot hold a slash)."""
+    return r"[\s_-]+".join(r"[\s_/-]*".join(re.escape(p) for p in w.split("/")) for w in body.split(" "))
+
+
+OTHER_NUMBER = re.compile(
+    r"^(?P<pre>" + "|".join(_body_pattern(b) for b in BODIES) + r")"
+    r"[\s_/-]*(?P<ser>[A-Z]{1,2}(?=[\s_-]?\d))?[\s_-]?(?P<num>\d+)(?P<rest>.*)$",
+    re.I,
+)
+BODY_BY_KEY = {re.sub(r"[\s/]+", "", b): b for b in BODIES}  # "GBT" -> "GB/T", "BSEN" -> "BS EN"
+# Series letter written apart from the number in these bodies ("JIS B 7184", "KS D 3503"); joined elsewhere ("ASTM E18").
+SERIES_APART = {"JIS", "KS"}
 LIST_FILE = "Standards List.xlsx"  # at the root of the library: the IS numbers that should have a file
 
 # BSB download stamp on every page: "Free Standard provided by BIS via BSB Edge Private Limited to <buyer name>
@@ -89,6 +115,35 @@ def number_of(m):
     return f"{pre} {int(m.group('num'))}"
 
 
+def other_number_of(m):
+    """'ASTM E18', 'JIS B 7184', 'BS EN 10002' from an OTHER_NUMBER match."""
+    pre = BODY_BY_KEY[re.sub(r"[\s_/-]+", "", m.group("pre").upper())]
+    ser = (m.group("ser") or "").upper()
+    num = m.group("num")
+    if ser:
+        return f"{pre} {ser} {num}" if pre in SERIES_APART else f"{pre} {ser}{num}"
+    return f"{pre} {num}"
+
+
+def strict_name(base, stem, rest):
+    """True when the file name is in the agreed form: '<number> [Part P] [Sec S] YYYY - AA' (rest: what follows the
+    number in the name)."""
+    if STRICT_NAME.match(stem):
+        return True
+    return not base.startswith(("IS ", "ISO", "IEC")) and bool(STRICT_TAIL.match(rest))
+
+
+def match_number(text):
+    """(number, rest of the name) for an IS / ISO / IEC number or another body's number; None when there is none."""
+    m = NUMBER.match(text)
+    if m:
+        return number_of(m), m.group("rest")
+    m = OTHER_NUMBER.match(text)
+    if m:
+        return other_number_of(m), m.group("rest")
+    return None
+
+
 def read_list(root):
     """Rows of Standards List.xlsx (S.No, IS Number, IS Title, Standard type, Technical Committee, Department, PM)."""
     path = os.path.join(root, LIST_FILE)
@@ -102,8 +157,8 @@ def read_list(root):
         r = [("" if c is None else str(c).strip()) for c in (list(r) + [None] * 7)[:7]]
         if i == 0 or not r[1]:
             continue
-        m = NUMBER.match(r[1])
-        rows.append((int(r[0]) if r[0].isdigit() else None, r[1], number_of(m) if m else r[1],
+        m = match_number(r[1])
+        rows.append((int(r[0]) if r[0].isdigit() else None, r[1], m[0] if m else r[1],
                      r[2] or None, r[3] or None, r[4] or None, r[5] or None, r[6] or None))
     return rows
 
@@ -124,16 +179,16 @@ def describe(rel):
     name = parts[-1]
     stem = re.sub(r"(?i)\.pdf$", "", name)
     in_set = len(parts) > 2 and SET_DIR.match(parts[-2] or "")
-    m = NUMBER.match(stem.strip())
+    m = match_number(stem.strip())
     if not m and in_set:  # a set file without a number: the set folder's number
-        m = NUMBER.match(re.sub(SET_DIR, "", parts[-2]).strip(" -"))
+        m = match_number(re.sub(SET_DIR, "", parts[-2]).strip(" -"))
     review = []
     if m:
-        base = number_of(m)
-        rest = re.sub(r"[_]+", " ", m.group("rest"))
+        base = m[0]
+        rest = re.sub(r"[_]+", " ", m[1])
     else:
         base, rest = stem, ""
-        review.append("Name Not Understood (No IS Number)")
+        review.append("Name Not Understood (No Standard Number)")
     year = re.search(r"\b((?:19|20)\d{2})\b", rest)
     merged = re.search(r"-\s*(\d{2})\s*$", stem)
     if re.match(r"(?i)^pm[\s_-]", name) or re.search(r"(?i)product[\s_-]*man[ua]+l", name):
@@ -142,8 +197,9 @@ def describe(rel):
         kind = "Amendment"
     else:
         kind = "Standard"
-    if kind == "Standard" and not in_set and m and not STRICT_NAME.match(stem):
-        review.append("Name Not in the Form 'IS N [Part P] [Sec S] YYYY - AA'")
+    if kind == "Standard" and not in_set and m and not strict_name(base, stem, m[1]):
+        body = base.rsplit(" ", 1)[0] if not base.startswith(("IS ", "ISO")) else "IS"
+        review.append(f"Name Not in the Form '{body} N [Part P] [Sec S] YYYY - AA'")
     if len(parts) < 2:
         review.append("Not in a Category Folder")
     return {
@@ -271,6 +327,42 @@ def write_file(conn, rel, info, size, mtime, sha, docs):
                     cp.write_row((row[0], no, text))
 
 
+# Review notes that come from the file's name (recomputed from the name on every run); the rest come from reading it.
+NAME_NOTES = ("Name Not", "Not in a Category Folder")
+
+
+def refresh_names(conn, skip):
+    """Number, category, year and name notes of every indexed file, from its name as the indexer reads it now: a
+    better name rule reaches files already indexed without reading them again. skip: files read in this run."""
+    rows = conn.execute(
+        """SELECT id, relpath, folder, category, kind, edition_year, amendments_merged, review
+           FROM public.standard_docs WHERE source = 'library'"""
+    ).fetchall()
+    updates = []
+    for doc_id, relpath, folder, category, kind, year, merged, review in rows:
+        rel, _, suffix = relpath.partition("::")
+        if rel in skip:
+            continue
+        info = describe(rel)
+        read_notes = [n for n in (review or "").split("; ") if n and not n.startswith(NAME_NOTES)]
+        new_review = "; ".join(info["review"] + read_notes) or None
+        new_kind = kind if suffix else info["kind"]
+        new = (info["folder"], info["category"], new_kind, info["edition_year"],
+               None if suffix else info["amendments_merged"], new_review)
+        if new != (folder, category, kind, year, None if suffix else merged, review):
+            updates.append((info["folder"], info["category"], new_kind, info["edition_year"], bool(suffix),
+                            info["amendments_merged"], new_review, info["folder"], doc_id))
+    if updates:
+        with conn.transaction(), conn.cursor() as cur:
+            cur.executemany(
+                """UPDATE public.standard_docs SET folder = %s, category = %s, kind = %s, edition_year = %s,
+                   amendments_merged = CASE WHEN %s THEN amendments_merged ELSE %s END, review = %s, base = %s
+                   WHERE id = %s""",
+                updates,
+            )
+    return len(updates)
+
+
 def summary(conn):
     rows = conn.execute(
         """SELECT coalesce(category, '(none)'), count(*) FILTER (WHERE relpath NOT LIKE '%%::%%'), coalesce(sum(pages), 0),
@@ -356,7 +448,7 @@ def main():
         "INSERT INTO public.standard_index_runs (host, trigger, files) VALUES (%s, %s, %s) RETURNING id",
         (args.host, args.trigger, len(found)),
     ).fetchone()[0]
-    errors, pages_read, ocr_read, added, changed = [], 0, 0, 0, 0
+    errors, pages_read, ocr_read, added, changed, renamed = [], 0, 0, 0, 0, 0
     status = "done"
     try:
         for rel in touched:
@@ -373,6 +465,9 @@ def main():
                     )
         for rel in removed:
             conn.execute(f"DELETE FROM public.standard_docs WHERE {OWN}", (rel, rel + "::"))
+        renamed = refresh_names(conn, set(reads)) if not args.only else 0
+        if renamed:
+            print(f"Names read again: {renamed} documents updated")
         if not args.only:
             try:
                 listed = read_list(root)
@@ -423,6 +518,8 @@ def main():
     else:
         hidden = conn.execute("SELECT public.standard_library_refresh_active()").fetchone()[0]
         note = f"old index rows switched: {hidden}"
+    if renamed:
+        note += f"; names read again: {renamed}"
     conn.execute(
         """UPDATE public.standard_index_runs SET finished_at = now(), status = %s, added = %s, changed = %s, moved = %s,
            removed = %s, unchanged = %s, pages = %s, ocr_pages = %s, categories = %s, errors = %s, message = %s WHERE id = %s""",
