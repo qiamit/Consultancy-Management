@@ -191,7 +191,12 @@ print("%06d  (valid %ds more)" % ((struct.unpack(">I",h[o:o+4])[0]&0x7fffffff)%1
     [ -d "$SRC" ] || stop "library folder not found: $SRC"
     mkdir -p "$LIB"
     echo "Copying the library folder to $LIB (only new / changed files)…"
-    rsync -a --delete --exclude '.*' --exclude '~$*' "$SRC/" "$LIB/"
+    # Files OneDrive has not downloaded yet ("dataless") can hang the copy: left out (the older copy stays).
+    NOT_HERE=$(mktemp)
+    (cd "$SRC" && find . -type f -flags +dataless 2>/dev/null | sed 's|^\./|/|') > "$NOT_HERE"
+    [ ! -s "$NOT_HERE" ] || echo "Not yet on this Mac (OneDrive still downloading), left for the next run: $(wc -l < "$NOT_HERE" | tr -d ' ')"
+    rsync -a --delete --exclude '.*' --exclude '~$*' --exclude-from="$NOT_HERE" "$SRC/" "$LIB/"
+    rm -f "$NOT_HERE"
     STANDARDS_DIR="$LIB" INDEX_HOST="Local Host" INDEXER_CPUS=4 INDEXER_WORKERS=${INDEXER_WORKERS:-4} \
       C --profile tools run --rm --build standards-indexer "$@" ;;
   wipe)

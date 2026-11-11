@@ -157,8 +157,12 @@ export default function StandardsLibraryPage() {
         <Stat label="Pages" value={num(totals.pages)} sub={`${num(totals.ocr)} Read by OCR`} />
         <Stat
           label="Standards List Coverage"
-          value={listed ? `${num(listed - missing.length)} / ${num(listed)}` : '—'}
-          sub={listed ? `${num(missing.length)} Without a File` : 'No Standards List Read Yet'}
+          value={listed ? `${num(listed - (data?.noStandard ?? 0))} / ${num(listed)}` : '—'}
+          sub={
+            listed
+              ? `${num(data?.noStandard ?? 0)} Without a Standard · ${num(data?.noManual ?? 0)} Without a Product Manual`
+              : 'No Standards List Read Yet'
+          }
         />
       </div>
 
@@ -280,7 +284,7 @@ export default function StandardsLibraryPage() {
 
       <Section
         title="Listed IS Numbers Without a File"
-        note="From Standards List.xlsx in the Folder. Until a File Is Added, Checks Use the Old Index Where It Has One."
+        note="From Standards List.xlsx in the Folder. Without a Product Manual Here, Checks Use the One Uploaded in IS Code Master."
       >
         <Table className={limsTableClass}>
           <TableHeader>
@@ -289,11 +293,12 @@ export default function StandardsLibraryPage() {
               <TableHead className={limsTableHeadClass}>IS Number</TableHead>
               <TableHead className={limsTableHeadClass}>Title</TableHead>
               <TableHead className={limsTableHeadClass}>Type</TableHead>
+              <TableHead className={limsTableHeadClass}>Missing</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody className={limsTableBodyToneClass}>
             {missing.length === 0 ? (
-              <EmptyRow cols={4} text={loading ? 'Loading…' : listed ? 'Every Listed IS Number Has a File.' : 'No Standards List Read Yet.'} />
+              <EmptyRow cols={5} text={loading ? 'Loading…' : listed ? 'Every Listed IS Number Has a File.' : 'No Standards List Read Yet.'} />
             ) : (
               missing.map((m, i) => (
                 <TableRow key={`${m.is_number}-${i}`}>
@@ -301,6 +306,9 @@ export default function StandardsLibraryPage() {
                   <TableCell className="whitespace-nowrap text-sm">{m.is_number}</TableCell>
                   <TableCell className="text-xs">{m.title || '—'}</TableCell>
                   <TableCell className="whitespace-nowrap text-xs">{m.standard_type || '—'}</TableCell>
+                  <TableCell className="whitespace-nowrap text-xs font-medium">
+                    {[!m.has_standard && 'Standard', !m.has_manual && 'Product Manual'].filter(Boolean).join(' + ')}
+                  </TableCell>
                 </TableRow>
               ))
             )}

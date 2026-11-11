@@ -26,13 +26,23 @@ export type IndexRun = {
 
 export type ReviewDoc = { relpath: string; category: string | null; review: string }
 
-export type MissingListed = { row_no: number | null; is_number: string; title: string | null; standard_type: string | null }
+export type MissingListed = {
+  row_no: number | null
+  is_number: string
+  title: string | null
+  standard_type: string | null
+  has_standard: boolean
+  has_manual: boolean
+}
 
 export type StandardsLibraryStatus = {
   runs: IndexRun[]
   review: ReviewDoc[]
   oldIndexDocs: number
   listed: number
+  /** Listed numbers without a library Standard / without a Product Manual (counts, not capped by the list). */
+  noStandard: number
+  noManual: number
   missing: MissingListed[]
 }
 
@@ -40,7 +50,7 @@ const REVIEW_LIMIT = 500
 
 /** Everything the Standards Library page shows. Staff-only RLS on every table read here. */
 export async function fetchStandardsLibraryStatus(): Promise<StandardsLibraryStatus> {
-  const [runs, review, oldIndex, listed, missing] = await Promise.all([
+  const [runs, review, oldIndex, listed, missing, noStandard, noManual] = await Promise.all([
     supabase.from('standard_index_runs').select('*').order('id', { ascending: false }).limit(10),
     supabase
       .from('standard_docs')
@@ -52,15 +62,23 @@ export async function fetchStandardsLibraryStatus(): Promise<StandardsLibrarySta
     // Old-index rows the app still reads (hidden ones are invisible through RLS).
     supabase.from('standard_docs').select('id', { count: 'exact', head: true }).eq('source', 'mac'),
     supabase.from('standard_list').select('id', { count: 'exact', head: true }),
-    supabase.from('standard_list_missing').select('row_no, is_number, title, standard_type').order('row_no').limit(REVIEW_LIMIT),
+    supabase
+      .from('standard_list_missing')
+      .select('row_no, is_number, title, standard_type, has_standard, has_manual')
+      .order('row_no')
+      .limit(REVIEW_LIMIT),
+    supabase.from('standard_list_missing').select('id', { count: 'exact', head: true }).eq('has_standard', false),
+    supabase.from('standard_list_missing').select('id', { count: 'exact', head: true }).eq('has_manual', false),
   ])
-  const failed = [runs, review, oldIndex, listed, missing].find((r) => r.error)
+  const failed = [runs, review, oldIndex, listed, missing, noStandard, noManual].find((r) => r.error)
   if (failed?.error) throw new Error(failed.error.message)
   return {
     runs: (runs.data ?? []) as IndexRun[],
     review: (review.data ?? []) as ReviewDoc[],
     oldIndexDocs: oldIndex.count ?? 0,
     listed: listed.count ?? 0,
+    noStandard: noStandard.count ?? 0,
+    noManual: noManual.count ?? 0,
     missing: (missing.data ?? []) as MissingListed[],
   }
 }

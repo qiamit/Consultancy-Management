@@ -27,6 +27,18 @@ EXCLUDES=(--exclude '.*' --exclude '~$*')
 
 count_pdfs() { find "$SRC" -type f -iname '*.pdf' ! -name '.*' | wc -l | tr -d ' '; }
 
+# Files OneDrive has not downloaded to this Mac yet ("dataless"): reading them can hang, so they are left out of
+# this copy (the server keeps its older copy) and come with the next run.
+not_downloaded() {
+  NOT_HERE=$(mktemp)
+  (cd "$SRC" && find . -type f -flags +dataless 2>/dev/null | sed 's|^\.|/|; s|^//|/|') > "$NOT_HERE"
+  if [ -s "$NOT_HERE" ]; then
+    echo "Not yet on this Mac (OneDrive still downloading), left for the next run: $(wc -l < "$NOT_HERE" | tr -d ' ')"
+    sed 's|^/|  |' "$NOT_HERE" | head -10
+  fi
+  EXCLUDES+=(--exclude-from="$NOT_HERE")
+}
+
 check_source() {
   [ -d "$SRC" ] || stop "library folder not found: $SRC"
   N=$(count_pdfs)
@@ -50,6 +62,7 @@ case "${1:-}" in
     trap 'rmdir "$LOCK"' EXIT
     echo "== $(date '+%Y-%m-%d %H:%M') standards-sync server ($TRIGGER)"
     check_source
+    not_downloaded
     "${SSH[@]}" "$SERVER" "mkdir -p $REMOTE_LIB $REMOTE_REMOVED" || stop "server not reachable"
     RS=(rsync -a --delete "${EXCLUDES[@]}" -e "ssh -i $KEY -o BatchMode=yes -o ConnectTimeout=20")
     # What would be removed on the server, before anything is copied.

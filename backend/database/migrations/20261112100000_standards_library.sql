@@ -142,10 +142,17 @@ REVOKE ALL ON public.standard_list FROM anon;
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.standard_list FROM authenticated;
 GRANT SELECT ON public.standard_list TO authenticated;
 
--- Listed numbers without any library file. Runs as the caller (same RLS).
-CREATE OR REPLACE VIEW public.standard_list_missing WITH (security_invoker = true) AS
-  SELECT l.*
-  FROM public.standard_list l
-  WHERE NOT EXISTS (SELECT 1 FROM public.standard_docs d WHERE d.source = 'library' AND d.base = l.base);
+-- Listed numbers without a library Standard or without a library Product Manual. Runs as the caller (same RLS).
+DROP VIEW IF EXISTS public.standard_list_missing;
+CREATE VIEW public.standard_list_missing WITH (security_invoker = true) AS
+  SELECT * FROM (
+    SELECT l.*,
+      EXISTS (SELECT 1 FROM public.standard_docs d
+              WHERE d.source = 'library' AND d.base = l.base AND d.kind <> 'Product Manual') AS has_standard,
+      EXISTS (SELECT 1 FROM public.standard_docs d
+              WHERE d.source = 'library' AND d.base = l.base AND d.kind = 'Product Manual') AS has_manual
+    FROM public.standard_list l
+  ) x
+  WHERE NOT (has_standard AND has_manual);
 REVOKE ALL ON public.standard_list_missing FROM anon;
 GRANT SELECT ON public.standard_list_missing TO authenticated;

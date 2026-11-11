@@ -209,7 +209,20 @@ export async function pickStandardDocs(folders: string[], edition: IsCodeEdition
   const amendments = docs.filter((d) => d.kind === 'Amendment' && partScore(editionOf(d.relpath)) > -5).map((d) => d.relpath)
   const manualDocs = docs.filter((d) => d.kind === 'Product Manual')
   const mains = manualDocs.filter((d) => !/\/_Extra\//.test(d.relpath))
-  const manuals = best((mains.length ? mains : manualDocs).map((d) => ({ relpath: d.relpath, score: partScore(editionOf(d.relpath)) })))
+  // One Product Manual per part: the one of the IS Code's revision year, else the latest (a folder can hold the
+  // manuals of 1998 and 2023).
+  const manualPool = (mains.length ? mains : manualDocs).map((d) => ({ relpath: d.relpath, e: editionOf(d.relpath) }))
+  const topPart = Math.max(-5, ...manualPool.map((m) => partScore(m.e)))
+  const latestManual = Math.max(0, ...manualPool.filter((m) => partScore(m.e) === topPart).map((m) => Number(m.e.year) || 0))
+  const manuals = best(
+    manualPool.map((m) => ({
+      relpath: m.relpath,
+      score:
+        partScore(m.e) +
+        (edition?.year && m.e.year === edition.year ? 0.6 : 0) +
+        (Number(m.e.year) === latestManual ? 0.3 : 0),
+    })),
+  )
   return { standards: [...standards, ...amendments], manuals }
 }
 
