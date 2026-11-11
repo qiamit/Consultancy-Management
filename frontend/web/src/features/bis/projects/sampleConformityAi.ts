@@ -13,6 +13,7 @@ import {
   fetchProductManualPages,
   fetchStandardPage,
   fetchRequiredTests,
+  editionOfKey,
   pickStandardDocs,
   fetchStandardFolders,
   searchStandardPages,
@@ -567,9 +568,11 @@ async function readFromStandardsIndex(
   let referencedText = ''
   for (const ref of plan) {
     const refFolders = ref.key.includes(' Part ') ? [ref.key, ref.key.replace(/ Part \d+$/, '')] : [ref.key]
-    // A referenced standard is read in its latest revision (its folder may hold old ones too).
-    const refPick = await pickStandardDocs(refFolders, null).catch(() => ({ standards: [] as string[], manuals: [] as string[] }))
-    const pages = await searchStandardPages(refFolders, ref.words, ref.limits.pages, ['Standard', 'Amendment'], refPick.standards.length ? refPick.standards : undefined).catch(
+    // A referenced standard is read in its latest revision (its folder may hold old ones too), and only in the Part it
+    // names: "IS 1367 Part 1" is never answered by IS 1367 Part 3. A Part the library does not have is not read.
+    const refPick = await pickStandardDocs(refFolders, editionOfKey(ref.key), { strict: true }).catch(() => ({ standards: [] as string[], manuals: [] as string[] }))
+    if (!refPick.standards.length) continue
+    const pages = await searchStandardPages(refFolders, ref.words, ref.limits.pages, ['Standard', 'Amendment'], refPick.standards).catch(
       () => [] as StandardPage[],
     )
     // A tolerance standard whose best pages never name the sample's product form (an angle sample, a beam standard)
@@ -599,7 +602,7 @@ async function readFromStandardsIndex(
   ].filter((v, i, a) => a.indexOf(v) === i)
   let designationText = ''
   for (const key of dimensionKeys.slice(0, 2)) {
-    const dimPick = await pickStandardDocs([key], null).catch(() => ({ standards: [] as string[], manuals: [] as string[] }))
+    const dimPick = await pickStandardDocs([key.replace(/ Part \d+$/, '')], editionOfKey(key), { strict: true }).catch(() => ({ standards: [] as string[], manuals: [] as string[] }))
     const rows = await designationRows(dimPick.standards, declaredText).catch(() => ({ text: '', pages: [] as string[] }))
     if (!rows.text) continue
     designationText += `${designationText ? '\n\n' : ''}--- ${key} ---\n${rows.text}`

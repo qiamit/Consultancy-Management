@@ -139,7 +139,7 @@ export default function StandardsLibraryPage() {
         Runs Every Sunday at 10 PM. Only New and Changed Files Are Read Again.
       </p>
 
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-5">
         <Stat
           label="Last Run"
           value={
@@ -163,6 +163,11 @@ export default function StandardsLibraryPage() {
               ? `${num(data?.noStandard ?? 0)} Without a Standard · ${num(data?.noManual ?? 0)} Without a Product Manual`
               : 'No Standards List Read Yet'
           }
+        />
+        <Stat
+          label="Referenced Standards"
+          value={data?.refs ? `${num(data.refsFound)} / ${num(data.refs)}` : '—'}
+          sub={data?.refs ? `In the Library · ${num(data.refsOtherPart)} Only in Another Part` : 'Not Scanned Yet'}
         />
       </div>
 
@@ -309,6 +314,44 @@ export default function StandardsLibraryPage() {
                   <TableCell className="whitespace-nowrap text-xs font-medium">
                     {[!m.has_standard && 'Standard', !m.has_manual && 'Product Manual'].filter(Boolean).join(' + ')}
                   </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </Section>
+
+      <Section
+        title="Referenced Standards Not in the Library"
+        note="Named in the Library's Standards, Most Cited First. Checks Read a Referenced Standard Only in the Part It Names, so Add the Missing Part Too."
+      >
+        <Table className={limsTableClass}>
+          <TableHeader>
+            <TableRow>
+              <TableHead className={limsTableHeadClass}>Referenced Standard</TableHead>
+              <TableHead className={cn(limsTableHeadClass, 'text-right')}>Cited By</TableHead>
+              <TableHead className={limsTableHeadClass}>Cited In</TableHead>
+              <TableHead className={limsTableHeadClass}>Library Has</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody className={limsTableBodyToneClass}>
+            {(data?.refsMissing ?? []).length === 0 ? (
+              <EmptyRow cols={4} text={loading ? 'Loading…' : data?.refs ? 'Every Referenced Standard Is in the Library.' : 'Not Scanned Yet.'} />
+            ) : (
+              data!.refsMissing.map((r) => (
+                <TableRow key={`${r.ref_base}-${r.ref_part}`}>
+                  <TableCell className="whitespace-nowrap text-sm">
+                    {r.ref_base}
+                    {r.ref_part ? ` Part ${r.ref_part}` : ''}
+                  </TableCell>
+                  <TableCell className="text-right text-sm">
+                    {num(r.cited_by)} {r.cited_by === 1 ? 'Standard' : 'Standards'}
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    {(r.cited_in ?? []).join(', ')}
+                    {r.cited_by > (r.cited_in ?? []).length ? ' …' : ''}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-xs">{r.has_number ? 'Another Part Only' : '—'}</TableCell>
                 </TableRow>
               ))
             )}

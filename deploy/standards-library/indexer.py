@@ -327,40 +327,164 @@ def write_file(conn, rel, info, size, mtime, sha, docs):
                     cp.write_row((row[0], no, text))
 
 
-# Review notes that come from the file's name (recomputed from the name on every run); the rest come from reading it.
-NAME_NOTES = ("Name Not", "Not in a Category Folder")
+# Review notes worked out again on every run: from the file's name, from what its first pages say, and duplicates.
+# The other notes (no pages, almost no text, DRM) come from reading the file and stay until it is read again.
+RUN_NOTES = ("Name Not", "Not in a Category Folder", "Content Shows", "Same PDF as")
+# An IS number in a Standard's text: "IS 1608 (Part 1) : 2022", "IS 2062:2011", "IS/ISO 6892-1", "IS 4736 Part 2".
+IS_REF = re.compile(
+    r"\bIS\s*[:/]?\s*(?:(?:ISO|IEC)(?:\s*/\s*IEC)?\s*[:/]?\s*)?(?P<num>\d{2,5})(?![\d.])"
+    r"(?:\s*[-\u2010\u2011\u2013]\s*(?P<dash>\d{1,2})(?!\d))?"
+    r"(?:\s*\(?\s*Part\s*[-:]?\s*(?P<part>\d{1,3})\b)?"
+)
+ISO_REF = re.compile(r"\bISO(?:\s*/\s*IEC)?\s*[:/]?\s*(?P<num>\d{3,5})(?![\d.])(?:\s*[-\u2010\u2011\u2013]\s*(?P<dash>\d{1,2})(?!\d))?")
+ASTM_REF = re.compile(r"\bASTM\s*(?P<ser>[A-G])\s*-?\s*(?P<num>\d{1,5})\b")
+YEARS = range(1940, 2041)
 
 
-def refresh_names(conn, skip):
-    """Number, category, year and name notes of every indexed file, from its name as the indexer reads it now: a
-    better name rule reaches files already indexed without reading them again. skip: files read in this run."""
-    rows = conn.execute(
-        """SELECT id, relpath, folder, category, kind, edition_year, amendments_merged, review
-           FROM public.standard_docs WHERE source = 'library'"""
-    ).fetchall()
-    updates = []
-    for doc_id, relpath, folder, category, kind, year, merged, review in rows:
-        rel, _, suffix = relpath.partition("::")
-        if rel in skip:
+def own_number_in(num, text):
+    return re.search(rf"(?<!\d){num}(?!\d)", text) is not None
+
+
+def content_note(base, text):
+    """A note when the first pages are another standard's: the own number is nowhere on them and another IS number
+    is named at least twice (or in the title area of page 1)."""
+    num = base.split(" ")[-1]
+    if not text or own_number_in(num, text):
+        return None
+    counts = {}
+    for i, m in enumerate(IS_REF.finditer(text)):
+        n = int(m.group("num"))
+        if str(n) == num or n in YEARS:
             continue
+        counts[n] = counts.get(n, 0) + (3 if m.start() < 800 else 1)
+    if not counts:
+        return None
+    best, score = max(counts.items(), key=lambda kv: kv[1])
+    return f"Content Shows IS {best}, Not {base}: Check the File Name" if score >= 2 else None
+
+
+def other_numbers(base, rel, text):
+    """The same standard's ISO / IEC numbers: from its name (an adoption, "IS ISO 16160 2012 - 00.pdf") and from its
+    first pages, where the ISO number follows the IS number ("IS 1608 (Part 1) : 2022 / ISO 6892-1 : 2019")."""
+    num = base.split(" ")[-1]
+    aka = set()
+
+    def add(m):
+        iso = f"ISO {int(m.group('num'))}"
+        aka.add(iso)
+        if m.group("dash"):
+            aka.add(f"{iso} Part {int(m.group('dash'))}")
+
+    name = rel.split("/")[-1]
+    if re.match(r"(?i)^IS[\s_/-]+ISO", name):
+        aka.add(f"ISO {num}")
+        part = re.search(r"(?i)\bPart\s*(\d+)", name)
+        if part:
+            aka.add(f"ISO {num} Part {int(part.group(1))}")
+    for m in re.finditer(rf"\bIS\s*[:/]?\s*{num}(?!\d)", text[:6000]):
+        iso = ISO_REF.search(text, m.end(), m.end() + 60)
+        if iso and int(iso.group("num")) not in YEARS:
+            add(iso)
+            break
+    return sorted(aka)
+
+
+def refresh_notes(conn):
+    """Number, category, year and review notes of every indexed file, from its name and its first pages as the
+    indexer reads them now: a better rule reaches files already indexed without reading them again."""
+    rows = conn.execute(
+        """SELECT d.id, d.relpath, d.folder, d.category, d.kind, d.edition_year, d.amendments_merged, d.review, d.sha256, d.aka,
+                  (SELECT string_agg(left(p.text, 6000), ' ' ORDER BY p.page) FROM public.standard_pages p
+                   WHERE p.doc_id = d.id AND p.page <= 3)
+           FROM public.standard_docs d WHERE d.source = 'library'"""
+    ).fetchall()
+    # Files with the very same content under two names: one of the names is wrong (or a set file was copied per Part).
+    same = {}
+    for r in rows:
+        if "::" not in r[1] and r[8]:
+            same.setdefault(r[8], []).append(r[1].split("/")[-1])
+    updates = []
+    for doc_id, relpath, folder, category, kind, year, merged, review, sha, aka, first in rows:
+        rel, _, suffix = relpath.partition("::")
         info = describe(rel)
-        read_notes = [n for n in (review or "").split("; ") if n and not n.startswith(NAME_NOTES)]
-        new_review = "; ".join(info["review"] + read_notes) or None
+        notes = list(info["review"])
+        if not suffix:
+            if re.match(r"^IS \d+$", info["folder"]):
+                note = content_note(info["folder"], first or "")
+                if note:
+                    notes.append(note)
+            twins = [n for n in same.get(sha, []) if n != rel.split("/")[-1]]
+            if twins:
+                notes.append("Same PDF as " + ", ".join(sorted(twins)[:3]) + (" …" if len(twins) > 3 else ""))
+        read_notes = [n for n in (review or "").split("; ") if n and not n.startswith(RUN_NOTES)]
+        new_review = "; ".join(notes + read_notes) or None
         new_kind = kind if suffix else info["kind"]
-        new = (info["folder"], info["category"], new_kind, info["edition_year"],
-               None if suffix else info["amendments_merged"], new_review)
-        if new != (folder, category, kind, year, None if suffix else merged, review):
+        new_aka = [] if suffix or not re.match(r"^IS \d+$", info["folder"]) else other_numbers(info["folder"], rel, first or "")
+        if (info["folder"], info["category"], new_kind, info["edition_year"], merged if suffix else info["amendments_merged"],
+                new_review, new_aka) != (folder, category, kind, year, merged, review, list(aka or [])):
             updates.append((info["folder"], info["category"], new_kind, info["edition_year"], bool(suffix),
-                            info["amendments_merged"], new_review, info["folder"], doc_id))
+                            info["amendments_merged"], new_review, info["folder"], new_aka, doc_id))
     if updates:
         with conn.transaction(), conn.cursor() as cur:
             cur.executemany(
                 """UPDATE public.standard_docs SET folder = %s, category = %s, kind = %s, edition_year = %s,
-                   amendments_merged = CASE WHEN %s THEN amendments_merged ELSE %s END, review = %s, base = %s
-                   WHERE id = %s""",
+                   amendments_merged = CASE WHEN %s THEN amendments_merged ELSE %s END, review = %s, base = %s,
+                   aka = %s WHERE id = %s""",
                 updates,
             )
     return len(updates)
+
+
+def references_in(text, own):
+    """{(number, part): times named} of the standards a Standard's text names; its own number left out."""
+    found = {}
+
+    def add(key):
+        if key[0] != own:
+            found[key] = found.get(key, 0) + 1
+
+    spans = []
+    for m in IS_REF.finditer(text):
+        part = m.group("part") or m.group("dash") or ""
+        add((f"IS {int(m.group('num'))}", str(int(part)) if part else ""))
+        spans.append((m.start(), m.end()))
+    rest = text
+    # An adoption ("IS/ISO 6892-1") is the IS number only; so is the ISO number written right after an IS number
+    # ("IS 1608 (Part 1) : 2022/ISO 6892-1 : 2019": the same standard under its ISO name).
+    for a, b in reversed(spans):
+        b = min(len(rest), b + 45)
+        rest = rest[:a] + " " * (b - a) + rest[b:]
+    for m in ISO_REF.finditer(rest):
+        if int(m.group("num")) in YEARS:  # "ISO : 2019" — a year, not a number
+            continue
+        add((f"ISO {int(m.group('num'))}", str(int(m.group("dash"))) if m.group("dash") else ""))
+    for m in ASTM_REF.finditer(rest):
+        add((f"ASTM {m.group('ser')}{int(m.group('num'))}", ""))
+    return found
+
+
+def scan_references(conn):
+    """The referenced standards of every Standard / Amendment not scanned yet (new and changed files)."""
+    todo = conn.execute(
+        """SELECT id, base FROM public.standard_docs
+           WHERE source = 'library' AND NOT refs_scanned AND kind IN ('Standard', 'Amendment')"""
+    ).fetchall()
+    total = 0
+    for doc_id, base in todo:
+        text = conn.execute(
+            "SELECT coalesce(string_agg(text, ' ' ORDER BY page), '') FROM public.standard_pages WHERE doc_id = %s",
+            (doc_id,),
+        ).fetchone()[0]
+        refs = references_in(text, base)
+        with conn.transaction():
+            conn.execute("DELETE FROM public.standard_refs WHERE doc_id = %s", (doc_id,))
+            if refs:
+                with conn.cursor().copy("COPY public.standard_refs (doc_id, ref_base, ref_part, cites) FROM STDIN") as cp:
+                    for (ref_base, ref_part), n in refs.items():
+                        cp.write_row((doc_id, ref_base, ref_part, n))
+            conn.execute("UPDATE public.standard_docs SET refs_scanned = true WHERE id = %s", (doc_id,))
+        total += len(refs)
+    return len(todo), total
 
 
 def summary(conn):
@@ -465,9 +589,6 @@ def main():
                     )
         for rel in removed:
             conn.execute(f"DELETE FROM public.standard_docs WHERE {OWN}", (rel, rel + "::"))
-        renamed = refresh_names(conn, set(reads)) if not args.only else 0
-        if renamed:
-            print(f"Names read again: {renamed} documents updated")
         if not args.only:
             try:
                 listed = read_list(root)
@@ -504,6 +625,13 @@ def main():
                         "UPDATE public.standard_index_runs SET added = %s, changed = %s, pages = %s, ocr_pages = %s WHERE id = %s",
                         (added, changed, pages_read, ocr_read, run_id),
                     )
+        renamed = refresh_notes(conn)
+        if renamed:
+            print(f"Names and first pages checked again: {renamed} documents updated")
+        scanned, refs = scan_references(conn)
+        if scanned:
+            print(f"References: {refs} found in {scanned} Standards")
+        conn.execute("SELECT public.standard_refs_refresh()")
     except KeyboardInterrupt:
         status = "stopped"
     except Exception as e:
@@ -519,7 +647,7 @@ def main():
         hidden = conn.execute("SELECT public.standard_library_refresh_active()").fetchone()[0]
         note = f"old index rows switched: {hidden}"
     if renamed:
-        note += f"; names read again: {renamed}"
+        note += f"; notes updated: {renamed}"
     conn.execute(
         """UPDATE public.standard_index_runs SET finished_at = now(), status = %s, added = %s, changed = %s, moved = %s,
            removed = %s, unchanged = %s, pages = %s, ocr_pages = %s, categories = %s, errors = %s, message = %s WHERE id = %s""",

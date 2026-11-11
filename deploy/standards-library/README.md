@@ -34,6 +34,25 @@ standard_docs + standard_pages (+ standard_index_runs: one row per run)
   (`GB_T 228 …` → `GB/T 228`, `AS-NZS 4020 …` → `AS/NZS 4020`). The list of bodies is `BODIES` in `indexer.py`.
 - The number, category, year and name notes of every file are worked out again from its name on each run, so a
   better name rule reaches files already indexed without reading them again.
+- Each run also checks every file against its content: first pages that never name the file's own number but name
+  another IS number ("Content Shows IS 9762, Not IS 10931"), and the same PDF saved under two names ("Same PDF as …").
+  Both go on the review list.
+
+## Referenced standards
+
+Every Standard and Amendment is scanned once (again only when its file changes) for the standards it names:
+`IS 1608 (Part 1)`, `IS/ISO 6892-1`, `ISO 5725-2`, `ASTM E18` → `standard_refs` (number, Part, times named). An ISO
+number written right after an IS number (`IS 1608 (Part 1) : 2022/ISO 6892-1 : 2019`) is the same standard and is
+not counted again. Each file also records its own ISO number from its first page (`standard_docs.aka`), so a reference
+to `ISO 6892-1` is answered by `IS 1608 Part 1`.
+
+After each run `standard_refs_refresh()` fills `standard_refs_status`: every referenced number + Part, how many
+library Standards cite it, and whether the library has it (the Part itself, or another Part only). The Standards
+Library page shows the coverage and the most cited ones that are missing.
+
+The checks (Conformity Check) read a referenced standard only in the Part it names, in its latest revision: a Part
+the library does not have is not read at all, never answered by another Part. Page search runs inside the chosen
+documents only (`search_standard_pages(..., p_relpaths)`).
 - Names that do not follow the pattern are indexed anyway and put on the review list (`standard_docs.review`).
   So are PDFs locked by DRM (FileOpen: no tool can open them; add an unlocked copy) and scans with almost no text.
 - `Standards List.xlsx` at the root (S.No, IS Number, IS Title, Standard type, Technical Committee, Department,
