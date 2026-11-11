@@ -135,7 +135,7 @@ export default function StandardsLibraryPage() {
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
       <p className="text-xs text-muted-foreground">
-        Source: the Oracle Database Folder on the Mac. Add or Replace PDFs There, Then Run Standards Sync (Any Time); It Also
+        Source: The Oracle Database Folder on the Mac. Add or Replace PDFs There, Then Run Standards Sync (Any Time). It Also
         Runs Every Sunday at 10 PM. Only New and Changed Files Are Read Again.
       </p>
 

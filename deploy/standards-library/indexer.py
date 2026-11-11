@@ -133,7 +133,7 @@ def describe(rel):
         rest = re.sub(r"[_]+", " ", m.group("rest"))
     else:
         base, rest = stem, ""
-        review.append("Name not understood (no IS number)")
+        review.append("Name Not Understood (No IS Number)")
     year = re.search(r"\b((?:19|20)\d{2})\b", rest)
     merged = re.search(r"-\s*(\d{2})\s*$", stem)
     if re.match(r"(?i)^pm[\s_-]", name) or re.search(r"(?i)product[\s_-]*man[ua]+l", name):
@@ -143,9 +143,9 @@ def describe(rel):
     else:
         kind = "Standard"
     if kind == "Standard" and not in_set and m and not STRICT_NAME.match(stem):
-        review.append("Name not in the form 'IS N [Part P] [Sec S] YYYY - AA'")
+        review.append("Name Not in the Form 'IS N [Part P] [Sec S] YYYY - AA'")
     if len(parts) < 2:
-        review.append("Not in a category folder")
+        review.append("Not in a Category Folder")
     return {
         "folder": base,
         "category": parts[0] if len(parts) > 1 else None,
@@ -193,8 +193,8 @@ def why_unreadable(pdf):
     """Review note for a PDF of which no page could be read."""
     err = run(["pdfinfo", pdf], 60).stderr
     if "security handler" in err:  # FileOpen (FOPN_foweb) and other DRM: no tool can open it
-        return "Locked by DRM (FileOpen): add an unlocked copy"
-    return "No pages read (damaged or password-protected PDF)"
+        return "Locked by DRM (FileOpen): Add an Unlocked Copy"
+    return "No Pages Read (Damaged or Password-Protected PDF)"
 
 
 def page_texts(pdf):
@@ -253,9 +253,9 @@ def write_file(conn, rel, info, size, mtime, sha, docs):
         for suffix, pages in docs:
             review = list(info["review"])
             if not pages:
-                review.append(why_unreadable(os.path.join(ROOT_DIR, rel)) if not suffix else "No pages read (damaged or protected PDF)")
+                review.append(why_unreadable(os.path.join(ROOT_DIR, rel)) if not suffix else "No Pages Read (Damaged or Protected PDF)")
             elif sum(len(t) for _, t, _ in pages) < 20 * len(pages):
-                review.append("Almost no text, even after OCR")
+                review.append("Almost No Text, Even After OCR")
             kind = "Amendment" if suffix and AMENDMENT_NAME.search(suffix) else info["kind"]
             row = conn.execute(
                 """INSERT INTO public.standard_docs
