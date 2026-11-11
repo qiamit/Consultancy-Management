@@ -84,13 +84,25 @@ File Provider paths) and indexes that copy with 4 workers.
 ## The weekly run
 
 ```bash
-deploy/standards-library/standards-sync.sh install-schedule   # every Sunday 10 pm; log ~/Library/Logs/qe-standards/sync.log
+deploy/standards-library/standards-sync.sh install-schedule   # Sunday 10 pm + Sync Now check every 10 min; log ~/Library/Logs/qe-standards/
 deploy/standards-library/standards-sync.sh remove-schedule
 ```
 
 The schedule runs a copy of the script in `~/qe-standards/`. A Mac that is asleep at 10 pm runs it at the next
 wake. The first scheduled run may ask macOS for access to the OneDrive folder: allow it. When nothing changed
 the run only compares and finishes in about a minute.
+
+## Sync Now (from the app)
+
+Settings → Standards Library → **Sync Now** (admin only) records a request (`request_standards_sync()`); the server
+cannot read the Mac's OneDrive folder, so the Mac does the work. `install-schedule` also adds a check every 10
+minutes (`standards-sync.sh poll server`, log `~/Library/Logs/qe-standards/poll.log`): over the same SSH key it
+writes the Mac's last check (`standard_sync_agent`), takes the oldest waiting request, runs `server --app` and writes
+the result (`done:` line or the reason it stopped) back to the request. A request waits while another sync runs;
+one not finished within 6 hours is marked failed. The page shows the request, the Mac's last check (a check older
+than 25 minutes: the Mac is off, asleep or offline) and Cancel for a request not yet picked up.
+
+Local Host: `standards-sync.sh poll local` does the same against the test copy (`tc.sh index-standards`).
 
 ## The old index (removed)
 
