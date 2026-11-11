@@ -414,15 +414,23 @@ def main():
     except Exception as e:
         status = "failed"
         errors.append({"file": "", "error": str(e)[:300]})
-    hidden = conn.execute("SELECT public.standard_library_refresh_active()").fetchone()[0]
+    # The owner's decision (11 Nov 2026): the old Mac index goes once the library is indexed. A complete run
+    # (whole folder, no --only / --limit, finished) removes it; until then its rows only answer for numbers the
+    # library does not have.
+    if status == "done" and not args.only and args.limit is None:
+        hidden = conn.execute("DELETE FROM public.standard_docs WHERE source = 'mac'").rowcount
+        note = f"old index rows removed: {hidden}"
+    else:
+        hidden = conn.execute("SELECT public.standard_library_refresh_active()").fetchone()[0]
+        note = f"old index rows switched: {hidden}"
     conn.execute(
         """UPDATE public.standard_index_runs SET finished_at = now(), status = %s, added = %s, changed = %s, moved = %s,
            removed = %s, unchanged = %s, pages = %s, ocr_pages = %s, categories = %s, errors = %s, message = %s WHERE id = %s""",
         (status, added, changed, len(moves), len(removed), len(unchanged) + len(touched), pages_read, ocr_read,
-         json.dumps(summary(conn)), json.dumps(errors), f"old index rows switched: {hidden}", run_id),
+         json.dumps(summary(conn)), json.dumps(errors), note, run_id),
     )
     print(f"{status}: added {added}, changed {changed}, moved {len(moves)}, removed {len(removed)}, "
-          f"{pages_read} pages ({ocr_read} OCR), {len(errors)} errors; old index rows switched: {hidden}")
+          f"{pages_read} pages ({ocr_read} OCR), {len(errors)} errors; {note}")
     for e in errors[:20]:
         print("  error:", e["file"], e["error"])
     if status != "done":

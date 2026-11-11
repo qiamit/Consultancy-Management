@@ -1074,10 +1074,12 @@ export async function checkSampleConformity(input: {
       }
     }
   }
-  if (input.isCodeId && !standardText) {
-    onStep?.('Reading the Standard and the Product Manual…')
+  // The IS Code Master's own files: the Standard when the index has none, the Product Manual when the index has none
+  // (the Standards Library folder holds Standards; Product Manuals are uploaded in the IS Code Master).
+  if (input.isCodeId && (!standardText || !manualText)) {
+    onStep?.(standardText ? 'Reading the Product Manual…' : 'Reading the Standard and the Product Manual…')
     const files = await loadIsCodeFileLinks(input.isCodeId).catch(() => [] as IsCodeFileLink[])
-    const standard = pickIsFile(files, 'standard')
+    const standard = standardText ? null : pickIsFile(files, 'standard')
     const manual = pickIsFile(files, 'manual')
     if (standard) {
       const read = await fetchFile(standard.url!, standard.file_name)
@@ -1218,4 +1220,22 @@ export async function checkSampleConformity(input: {
     notes: [...backed.check.notes, `The second review could not run (${err instanceof Error ? err.message : String(err)}): check the failed rows by hand.`],
   }))
   return settleCheck(reviewed, row)
+}
+
+/**
+ * Text of the Product Manual uploaded in the IS Code Master (scanned pages by OCR), for when the Standards Index has
+ * none: the library folder holds Standards, Product Manuals are uploaded per IS Code.
+ */
+export async function readIsCodeMasterManual(
+  isCodeId: string,
+  onStep?: (step: string) => void,
+): Promise<{ text: string; source: string } | null> {
+  const files = await loadIsCodeFileLinks(isCodeId).catch(() => [] as IsCodeFileLink[])
+  const manual = pickIsFile(files, 'manual')
+  if (!manual) return null
+  const read = await fetchFile(manual.url!, manual.file_name)
+    .then((f) => readPdf(f, 'manual', 'Product Manual', onStep))
+    .catch(() => ({ text: '', ocr: false, scannedPages: [] as number[] }))
+  if (!read.text) return null
+  return { text: read.text, source: `Product Manual: ${manual.file_name}${read.ocr ? ' (scanned — read by OCR)' : ''}` }
 }

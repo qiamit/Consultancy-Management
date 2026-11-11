@@ -308,10 +308,11 @@ export default function StandardsLibraryPage() {
         </Table>
       </Section>
 
-      <p className="text-xs text-muted-foreground">
-        Old Index: {num(data?.oldIndexDocs ?? 0)} Documents Still Used for IS Numbers (or Product Manuals) Not Yet in the
-        Folder.
-      </p>
+      {data?.oldIndexDocs ? (
+        <p className="text-xs text-muted-foreground">
+          Old Index: {num(data.oldIndexDocs)} Documents Still Used Until the First Complete Run of the Library.
+        </p>
+      ) : null}
     </div>
   )
 }

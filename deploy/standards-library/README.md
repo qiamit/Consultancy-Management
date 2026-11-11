@@ -67,17 +67,16 @@ The schedule runs a copy of the script in `~/qe-standards/`. A Mac that is aslee
 wake. The first scheduled run may ask macOS for access to the OneDrive folder: allow it. When nothing changed
 the run only compares and finishes in about a minute.
 
-## The old index
+## The old index (removed)
 
-Rows from the old index have `source = 'mac'`; the library's have `source = 'library'`. After each run the
-indexer calls `standard_library_refresh_active()`: an old row is hidden (`active = false`, invisible to the app)
-as soon as the library has the same IS number in the same group. The groups are Product Manuals, and everything
-else. So IS 808 still answers from the old index until it is in the library, and an old Product Manual stays
-until the library has one for that number. When the folder is complete, on the owner's word:
+The old Mac index (`deploy/standards-index`, rows with `source = 'mac'`) is retired (owner, 11 Nov 2026). The
+first complete library run (whole folder, no `--only` / `--limit`, status done) deletes its rows; until then they
+answer only for IS numbers the library does not have (`standard_library_refresh_active()`). On Live this happens at
+the end of the first server run, so the app is never without an index.
 
-```sql
-DELETE FROM public.standard_docs WHERE source = 'mac';
-```
+Product Manuals are not in the library folder: the AI Conformity Check and the Required Tests read the Product
+Manual uploaded in the IS Code Master when the index has none. A PDF named `PM IS …` in the folder is indexed as
+a Product Manual and is used first.
 
 ## Rules kept from the old tool
 
