@@ -26,7 +26,16 @@ standard_docs + standard_pages (+ standard_index_runs: one row per run)
 - `Current Official Set - IS N YYYY - …/` folders: the base standard plus its separate amendment files
   (`…Amd1…` in the name → kind Amendment).
 - A name starting with `PM ` or containing "Product Manual" → kind Product Manual.
+- An Indian adoption (`IS ISO 16160 …`, `IS/IEC 60947` in the list) is filed under its IS number (`IS 16160`), as
+  the IS Code Master writes it; a plain `ISO 9001 …` stays `ISO 9001`.
 - Names that do not follow the pattern are indexed anyway and put on the review list (`standard_docs.review`).
+  So are PDFs locked by DRM (FileOpen: no tool can open them; add an unlocked copy) and scans with almost no text.
+- `Standards List.xlsx` at the root (S.No, IS Number, IS Title, Standard type, Technical Committee, Department,
+  PM no.) is read on every run into `standard_list`; the app shows the listed numbers that have no file yet.
+
+First full run on Local Host (11 Nov 2026, 4 workers): 3,269 PDFs, 66,314 pages (4,368 by OCR), 22 minutes, no
+errors. A run with nothing changed takes about 30 seconds. On the server (1 CPU) the first run takes a few hours:
+start it in the evening.
 
 In the index, every file of one IS number has the folder `IS 2062` (`base` too); the checks pick the Part,
 Section and edition year from the file name, as before.

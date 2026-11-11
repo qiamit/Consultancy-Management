@@ -35,6 +35,7 @@ import psycopg
 BLANK_BELOW = 30  # characters: a page with less text than this is a picture (scanned) or empty
 # A file's own row and its portfolio attachments' rows ("file.pdf::attachment.pdf").
 OWN = "source = 'library' AND (relpath = %s OR starts_with(relpath, %s))"
+ROOT_DIR = "/library"
 LOCK_KEY = 7_204_311  # pg advisory lock: one indexer run at a time
 AMENDMENT_NAME = re.compile(r"(?i)(^|[\s_.-])amd[\s_.-]*\d|amendment")
 SET_DIR = re.compile(r"(?i)^current official set\b")
@@ -80,8 +81,11 @@ def clean_text(text):
 # ---------------------------------------------------------------- names
 
 def number_of(m):
-    """'IS 2062', 'IS ISO 7240', 'ISO-IEC 17025' from a NUMBER match."""
+    """'IS 2062', 'ISO-IEC 17025' from a NUMBER match. An Indian adoption (IS/ISO 7240, IS/IEC 60947) is filed under
+    its IS number ('IS 7240'), as the IS Code Master and the owner's file names write it."""
     pre = re.sub(r"[\s_/-]+", " ", m.group("pre").upper()).replace("ISO IEC", "ISO-IEC")
+    if pre.startswith("IS "):
+        pre = "IS"
     return f"{pre} {int(m.group('num'))}"
 
 
@@ -185,6 +189,14 @@ def page_count(pdf):
     return int(m.group(1)) if m else 0
 
 
+def why_unreadable(pdf):
+    """Review note for a PDF of which no page could be read."""
+    err = run(["pdfinfo", pdf], 60).stderr
+    if "security handler" in err:  # FileOpen (FOPN_foweb) and other DRM: no tool can open it
+        return "Locked by DRM (FileOpen): add an unlocked copy"
+    return "No pages read (damaged or password-protected PDF)"
+
+
 def page_texts(pdf):
     n = page_count(pdf)
     if not n:
@@ -241,7 +253,7 @@ def write_file(conn, rel, info, size, mtime, sha, docs):
         for suffix, pages in docs:
             review = list(info["review"])
             if not pages:
-                review.append("No pages read (damaged or protected PDF)")
+                review.append(why_unreadable(os.path.join(ROOT_DIR, rel)) if not suffix else "No pages read (damaged or protected PDF)")
             elif sum(len(t) for _, t, _ in pages) < 20 * len(pages):
                 review.append("Almost no text, even after OCR")
             kind = "Amendment" if suffix and AMENDMENT_NAME.search(suffix) else info["kind"]
@@ -279,7 +291,8 @@ def main():
     ap.add_argument("--host", default=os.environ.get("INDEX_HOST", ""))
     args = ap.parse_args()
 
-    root = args.root.rstrip("/")
+    global ROOT_DIR
+    root = ROOT_DIR = args.root.rstrip("/")
     if not os.path.isdir(root):
         sys.exit(f"STOP: library folder not found: {root}")
     found = scan(root)
