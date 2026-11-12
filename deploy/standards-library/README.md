@@ -77,6 +77,19 @@ not keeps its pages; a moved or renamed file is found again by its checksum). Te
 pages about 5 s each. The run stops without copying anything when the folder looks empty (OneDrive not ready) or
 when more than 50 PDFs and 10 % of the library would be removed at once (`--allow-many-removals` when meant).
 
+The indexing runs on the server by itself, not inside the SSH session: the Mac starts it (`setsid nohup`, files
+`<id>.pid`, `<id>.log`, `<id>.rc` in `/opt/qe/standards/runs/`, the last 20 runs kept) and checks every minute with
+a short SSH call, printing the new log lines. A dropped connection or a sleeping Mac does not stop or fail it: the
+Mac keeps checking (it gives up after 30 checks in a row without the server, or after 10 hours) and the run goes on.
+When a sync starts while an earlier indexing is still going on the server, it waits for that run first. Files moved
+in the folder while copying (rsync 23 / 24) or a dropped connection during the copy: the copy is tried again, up
+to 3 times.
+
+```bash
+deploy/standards-library/standards-sync.sh server-status          # the last run on the server: log tail + RUNNING / RC
+deploy/standards-library/standards-sync.sh server-status --wait   # follow it to the end
+```
+
 **Local Host** (test copy): `deploy/test-copy/tc.sh index-standards [--dry-run | --only "IS 2062 "]`. It first
 copies the folder to `~/qe-standards/library` (Docker never reads the OneDrive folder itself: the VM stalls on
 File Provider paths) and indexes that copy with 4 workers.
@@ -98,7 +111,9 @@ Settings → Standards Library → **Sync Now** (admin only) records a request (
 cannot read the Mac's OneDrive folder, so the Mac does the work. `install-schedule` also adds a check every 10
 minutes (`standards-sync.sh poll server`, log `~/Library/Logs/qe-standards/poll.log`): over the same SSH key it
 writes the Mac's last check (`standard_sync_agent`), takes the oldest waiting request, runs `server --app` and writes
-the result (`done:` line or the reason it stopped) back to the request. A request waits while another sync runs;
+the result (`done:` line or the reason it stopped) back to the request; while the server indexes, every minute's
+check also updates the Mac's last check, and writing the result is tried for 10 minutes when the server is briefly
+unreachable. A request waits while another sync runs;
 one not finished within 6 hours is marked failed. The page shows the request, the Mac's last check (a check older
 than 25 minutes: the Mac is off, asleep or offline) and Cancel for a request not yet picked up.
 
