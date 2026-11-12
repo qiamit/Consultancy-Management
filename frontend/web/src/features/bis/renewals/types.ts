@@ -252,7 +252,9 @@ export function splitProductionRowForStockMarking(
   if (beforeExists) segments.push(activeWithExistingValues(row.periodFrom, shiftIsoDate(breakFrom, -1)))
   segments.push({
     ...blank(breakFrom, breakTo),
-    id: !beforeExists ? row.id : emptyRenewalProductionRow().id,
+    // The row keeps its id on one segment only: the part before the break, else the part after it, else the break.
+    // (Two segments with one id sent a second break of the same period to the wrong segment.)
+    id: !beforeExists && !afterExists ? row.id : emptyRenewalProductionRow().id,
     productionUnit: '0',
     coveredUnit: '0',
     stockMarkingBreak: true,
