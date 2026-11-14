@@ -6,7 +6,8 @@ import type { RenewalSlabRate } from './types'
 /** Slab rates of the licence's IS Code (from the IS Code Master), shown on request in the Renewal Sheet. */
 export function RenewalSlabRatesPanel({ slabRates, unitOfIs }: { slabRates: RenewalSlabRate[]; unitOfIs: string }) {
   const [open, setOpen] = useState(false)
-  const rows = slabRates.filter((slab) => slab.quantity.trim() || slab.rate.trim())
+  // Same slabs the fee uses: N/A or empty slabs are left out.
+  const rows = slabRates.filter((slab) => slab.quantity.trim() && slab.quantity.trim().toLowerCase() !== 'n/a')
   return (
     <section className="mb-4 border border-stone-300 bg-white" aria-label="Slab Rates">
       <button
