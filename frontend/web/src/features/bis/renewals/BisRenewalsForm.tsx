@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils'
 import { PeriodDateInput, RenewalProductionTable } from './RenewalProductionTable'
 import { RenewalCurrencyInput } from './RenewalCurrencyInput'
 import { RenewalSlabRatesPanel } from './RenewalSlabRatesPanel'
-import { formatDisplayDate, generateMonthlyRenewalRows, type BisRenewalForm } from './types'
+import { formatDisplayDate, generateMonthlyRenewalRows, renewalMarkingFeeSummary, type BisRenewalForm } from './types'
 import {
   createRenewalCalculationPdfFile,
   createRenewalClientWorkbookFile,
@@ -362,7 +362,7 @@ export function BisRenewalsForm({
               />
             </div>
           </div>
-          <RenewalSlabRatesPanel slabRates={form.slabRates} unitOfIs={form.unitOfIs} />
+          <RenewalSlabRatesPanel slabRates={form.slabRates} unitOfIs={form.unitOfIs} minimumFee={renewalMarkingFeeSummary([], form).minimumTotal} />
           <RenewalProductionTable
             rows={form.productionRows}
             unitOfIs={form.unitOfIs}
