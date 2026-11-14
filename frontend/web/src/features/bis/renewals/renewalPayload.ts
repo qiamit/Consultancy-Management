@@ -102,10 +102,10 @@ export async function buildManakRenewalPayload(row: BisProjectRow): Promise<Mana
         .map((r) => ({
           from: r.periodFrom,
           to: r.periodTo,
-          productionQty: r.stockMarkingBreak ? '0' : String(r.productionUnit ?? '').replace(/[,\s]/g, ''),
-          productionValue: r.stockMarkingBreak ? '0' : r.productionValue,
-          coveredQty: r.stockMarkingBreak ? '0' : r.coveredUnit,
-          coveredValue: r.stockMarkingBreak ? '0' : r.coveredValue,
+          productionQty: String(r.productionUnit ?? '').replace(/[,\s]/g, ''),
+          productionValue: r.productionValue,
+          coveredQty: r.coveredUnit,
+          coveredValue: r.coveredValue,
         }))
     : []
   return {

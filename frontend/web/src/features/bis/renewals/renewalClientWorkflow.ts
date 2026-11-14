@@ -169,9 +169,9 @@ export async function createRenewalClientWorkbook(form: BisRenewalForm): Promise
       // UTC midnight: Excel stores dates without a time zone, so a local (IST) midnight would show the day before.
       row.periodFrom ? new Date(`${row.periodFrom}T00:00:00Z`) : '',
       row.periodTo ? new Date(`${row.periodTo}T00:00:00Z`) : '',
-      row.stockMarkingBreak ? 0 : total ?? '',
-      row.stockMarkingBreak ? 0 : total !== null && covered !== null ? Math.max(0, total - covered) : '',
-      row.stockMarkingBreak ? 0 : { formula: `IF(C${headerRow + index + 1}="","",MAX(0,C${headerRow + index + 1}-IF(D${headerRow + index + 1}="",0,D${headerRow + index + 1})))`, result: '' },
+      total ?? '',
+      total !== null && covered !== null ? Math.max(0, total - covered) : '',
+      { formula: `IF(C${headerRow + index + 1}="","",MAX(0,C${headerRow + index + 1}-IF(D${headerRow + index + 1}="",0,D${headerRow + index + 1})))`, result: '' },
     ])
     excelRow.height = 25
     excelRow.eachCell({ includeEmpty: true }, (cell, column) => {
@@ -185,28 +185,22 @@ export async function createRenewalClientWorkbook(form: BisRenewalForm): Promise
     excelRow.getCell(3).numFmt = '#,##0.00;[Red]-#,##0.00;0'
     excelRow.getCell(4).numFmt = '#,##0.00;[Red]-#,##0.00;0'
     excelRow.getCell(5).numFmt = '#,##0.00;[Red]-#,##0.00;0'
-    if (row.stockMarkingBreak) {
-      for (const column of [3, 4, 5]) {
-        excelRow.getCell(column).font = { name: 'Aptos', size: 10, bold: true, color: { argb: 'FF78716C' } }
-        excelRow.getCell(column).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE7E5E4' } }
+    // Stock-marking break rows take quantities like any other period (owner, 14 Nov 2026).
+    for (const column of [3, 4]) {
+      const cell = excelRow.getCell(column)
+      cell.protection = { locked: false }
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF7D6' } }
+      cell.dataValidation = {
+        type: 'decimal', operator: 'greaterThanOrEqual', formulae: [0],
+        showErrorMessage: true, errorTitle: 'Invalid quantity', error: 'Enter zero or a positive quantity.',
       }
-    } else {
-      for (const column of [3, 4]) {
-        const cell = excelRow.getCell(column)
-        cell.protection = { locked: false }
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF7D6' } }
-        cell.dataValidation = {
-          type: 'decimal', operator: 'greaterThanOrEqual', formulae: [0],
-          showErrorMessage: true, errorTitle: 'Invalid quantity', error: 'Enter zero or a positive quantity.',
-        }
-      }
-      excelRow.getCell(4).dataValidation = {
-        type: 'decimal', operator: 'lessThanOrEqual', formulae: [`C${excelRow.number}`], allowBlank: true,
-        showErrorMessage: true, errorTitle: 'Rejection exceeds production', error: 'Rejection must be equal to or less than Total Production.',
-      }
-      excelRow.getCell(5).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFF6FF' } }
-      excelRow.getCell(5).font = { name: 'Aptos', size: 10, italic: true, color: { argb: 'FF44403C' } }
     }
+    excelRow.getCell(4).dataValidation = {
+      type: 'decimal', operator: 'lessThanOrEqual', formulae: [`C${excelRow.number}`], allowBlank: true,
+      showErrorMessage: true, errorTitle: 'Rejection exceeds production', error: 'Rejection must be equal to or less than Total Production.',
+    }
+    excelRow.getCell(5).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFF6FF' } }
+    excelRow.getCell(5).font = { name: 'Aptos', size: 10, italic: true, color: { argb: 'FF44403C' } }
   })
   // Total row under the periods (only for the client to see the sum; Import skips it).
   const firstDataRow = headerRow + 1
@@ -368,11 +362,10 @@ export async function importRenewalClientWorkbook(
     const total = amount(String(source[indexes.total] ?? ''))
     const rejection = indexes.rejection >= 0 ? amount(String(source[indexes.rejection] ?? '')) : null
     const legacyCovered = indexes.rejection < 0 ? amount(String(source[indexes.covered] ?? '')) : null
-    const isStockBreak = original.stockMarkingBreak || (indexes.type >= 0 && normalize(source[indexes.type]).includes('stockmarking'))
-    if (!isStockBreak && indexes.rejection >= 0 && rejection !== null && total === null) {
+    if (indexes.rejection >= 0 && rejection !== null && total === null) {
       throw new Error(`Enter Total Production before Rejection for ${periodFrom} to ${periodTo}.`)
     }
-    if (!isStockBreak && indexes.rejection >= 0 && total !== null && rejection !== null && rejection > total) {
+    if (indexes.rejection >= 0 && total !== null && rejection !== null && rejection > total) {
       throw new Error(`Rejection cannot exceed Total Production for ${periodFrom} to ${periodTo}.`)
     }
     const covered = indexes.rejection >= 0 && total !== null
@@ -380,8 +373,8 @@ export async function importRenewalClientWorkbook(
       : legacyCovered
     updated.set(key, {
       ...original,
-      productionUnit: isStockBreak ? '0' : total === null ? '' : String(total),
-      coveredUnit: isStockBreak ? '0' : covered === null ? '' : String(covered),
+      productionUnit: total === null ? '' : String(total),
+      coveredUnit: covered === null ? '' : String(covered),
     })
   }
   if (!updated.size) throw new Error('No production rows were found beneath the template headings.')

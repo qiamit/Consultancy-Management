@@ -357,11 +357,11 @@ export function RenewalProductionTable({
             {calculatedRows.map((row, index) => {
               return (
               <tr key={row.id} className={cn(row.stockMarkingBreak ? 'bg-amber-50' : index % 2 ? 'bg-stone-50' : 'bg-white')}>
-                <td className="border border-stone-300 p-1"><PeriodDateInput id={`renewal-period-from-desktop-${row.id}`} label={`Period from ${index + 1}`} value={index === 0 ? renewalPeriodFrom : row.periodFrom} disabled={index === 0 || row.stockMarkingBreak} onChange={(value) => update(row.id, 'periodFrom', value)} />{row.stockMarkingBreak ? <span className="mt-1 block text-center text-[9px] font-semibold text-amber-900">Stock Marking — No Production</span> : null}</td>
+                <td className="border border-stone-300 p-1"><PeriodDateInput id={`renewal-period-from-desktop-${row.id}`} label={`Period from ${index + 1}`} value={index === 0 ? renewalPeriodFrom : row.periodFrom} disabled={index === 0 || row.stockMarkingBreak} onChange={(value) => update(row.id, 'periodFrom', value)} /></td>
                 <td className="border border-stone-300 p-1"><PeriodDateInput id={`renewal-period-to-desktop-${row.id}`} label={`Period to ${index + 1}`} value={row.periodTo} disabled={row.stockMarkingBreak} onChange={(value) => update(row.id, 'periodTo', value)} /></td>
-                <td className="border border-stone-300 p-1">{row.stockMarkingBreak ? <div className="flex h-8 items-center justify-center border border-stone-300 bg-stone-50 tabular-nums">0</div> : <NumberCell label={`Total production units ${index + 1}`} value={row.productionUnit} quantityTabOrder onChange={(value) => update(row.id, 'productionUnit', value)} />}</td>
+                <td className="border border-stone-300 p-1"><NumberCell label={`Total production units ${index + 1}`} value={row.productionUnit} quantityTabOrder onChange={(value) => update(row.id, 'productionUnit', value)} /></td>
                 <td className="border border-stone-300 p-1"><CalculatedAmount value={row.productionValue} /></td>
-                <td className="border border-stone-300 p-1">{row.stockMarkingBreak ? <div className="flex h-8 items-center justify-center border border-stone-300 bg-stone-50 tabular-nums">0</div> : <NumberCell label={`Quantity covered units ${index + 1}`} value={row.coveredUnit} quantityTabOrder error={coveredProductionExceedsTotal(row) ? 'Must be equal to or less than Total Production.' : undefined} onChange={(value) => update(row.id, 'coveredUnit', value)} />}</td>
+                <td className="border border-stone-300 p-1"><NumberCell label={`Quantity covered units ${index + 1}`} value={row.coveredUnit} quantityTabOrder error={coveredProductionExceedsTotal(row) ? 'Must be equal to or less than Total Production.' : undefined} onChange={(value) => update(row.id, 'coveredUnit', value)} /></td>
                 <td className="border border-stone-300 p-1"><CalculatedAmount value={row.coveredValue} /></td>
                 <td className="border border-stone-300 px-1 py-2 text-center font-medium tabular-nums">{row.coveredPercent || '—'}</td>
                 <td className="border border-stone-300 p-1"><CalculatedAmount value={row.markingFee} /></td>
@@ -400,21 +400,20 @@ export function RenewalProductionTable({
           </Button>
         </div>
         {calculatedRows.map((row, index) => (
-          <article key={row.id} className={cn('space-y-3 border border-stone-400 p-3', row.stockMarkingBreak ? 'bg-amber-50' : 'bg-white')}>
-            {row.stockMarkingBreak ? <div className="border-b border-amber-200 pb-2 text-xs font-semibold text-amber-900">Stock Marking — No Production</div> : null}
-            <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="min-w-0 space-y-1 text-xs font-medium text-stone-700"><span className="block">Period Start</span><PeriodDateInput id={`renewal-period-from-mobile-${row.id}`} label={`Period start ${index + 1}`} value={index === 0 ? renewalPeriodFrom : row.periodFrom} disabled={index === 0} onChange={(value) => update(row.id, 'periodFrom', value)} /></div>
-              <div className="min-w-0 space-y-1 text-xs font-medium text-stone-700"><span className="block">Period End</span><PeriodDateInput id={`renewal-period-to-mobile-${row.id}`} label={`Period end ${index + 1}`} value={row.periodTo} onChange={(value) => update(row.id, 'periodTo', value)} /></div>
-              <label className="min-w-0 space-y-1 text-xs font-medium text-stone-700">Total Production{unitOfIs ? ` in ${unitOfIs}` : ''}<NumberCell label={`Total production units ${index + 1}`} value={row.stockMarkingBreak ? '0' : row.productionUnit} disabled={row.stockMarkingBreak} quantityTabOrder onChange={(value) => update(row.id, 'productionUnit', value)} /></label>
-              <div className="min-w-0 space-y-1 text-xs font-medium text-stone-700"><span className="block">Production Value (Rs)</span><CalculatedAmount value={row.productionValue} /></div>
-              <label className="min-w-0 space-y-1 text-xs font-medium text-stone-700">Covered Production{unitOfIs ? ` in ${unitOfIs}` : ''}<NumberCell label={`Quantity covered units ${index + 1}`} value={row.stockMarkingBreak ? '0' : row.coveredUnit} disabled={row.stockMarkingBreak} quantityTabOrder onChange={(value) => update(row.id, 'coveredUnit', value)} /></label>
-              <div className="min-w-0 space-y-1 text-xs font-medium text-stone-700"><span className="block">Covered Value (Rs)</span><CalculatedAmount value={row.coveredValue} /></div>
-              <div className="space-y-1 text-xs font-medium text-stone-700"><span className="block">Covered Qty in %</span><div className="flex h-8 items-center justify-center border border-stone-300 bg-stone-50 tabular-nums">{row.coveredPercent || '—'}</div></div>
-              <div className="min-w-0 space-y-1 text-xs font-medium text-stone-700"><span className="block">Marking Fee (Rs)</span><CalculatedAmount value={row.markingFee} /></div>
-            </div>
-            <div className="flex items-center justify-between border-t border-stone-200 pt-2">
-              <span className="text-xs font-semibold text-stone-700">Actions</span>
-              {rowActions(row, index, index === rows.length - 1)}
+          <article key={row.id} className={cn('border border-stone-400 p-3', row.stockMarkingBreak ? 'bg-amber-50' : 'bg-white')}>
+            <div className="grid min-w-0 grid-cols-2 gap-x-3 gap-y-2 md:grid-cols-3 lg:grid-cols-5">
+              <div className="flex min-w-0 flex-col justify-end gap-1 text-xs font-medium text-stone-700"><span className="block">Period Start</span><PeriodDateInput id={`renewal-period-from-mobile-${row.id}`} label={`Period start ${index + 1}`} value={index === 0 ? renewalPeriodFrom : row.periodFrom} disabled={index === 0} onChange={(value) => update(row.id, 'periodFrom', value)} /></div>
+              <div className="flex min-w-0 flex-col justify-end gap-1 text-xs font-medium text-stone-700"><span className="block">Period End</span><PeriodDateInput id={`renewal-period-to-mobile-${row.id}`} label={`Period end ${index + 1}`} value={row.periodTo} onChange={(value) => update(row.id, 'periodTo', value)} /></div>
+              <label className="flex min-w-0 flex-col justify-end gap-1 text-xs font-medium text-stone-700">Total Production{unitOfIs ? ` in ${unitOfIs}` : ''}<NumberCell label={`Total production units ${index + 1}`} value={row.productionUnit} quantityTabOrder onChange={(value) => update(row.id, 'productionUnit', value)} /></label>
+              <div className="flex min-w-0 flex-col justify-end gap-1 text-xs font-medium text-stone-700"><span className="block">Production Value (Rs)</span><CalculatedAmount value={row.productionValue} /></div>
+              <label className="flex min-w-0 flex-col justify-end gap-1 text-xs font-medium text-stone-700">Covered Production{unitOfIs ? ` in ${unitOfIs}` : ''}<NumberCell label={`Quantity covered units ${index + 1}`} value={row.coveredUnit} quantityTabOrder onChange={(value) => update(row.id, 'coveredUnit', value)} /></label>
+              <div className="flex min-w-0 flex-col justify-end gap-1 text-xs font-medium text-stone-700"><span className="block">Covered Value (Rs)</span><CalculatedAmount value={row.coveredValue} /></div>
+              <div className="flex min-w-0 flex-col justify-end gap-1 text-xs font-medium text-stone-700"><span className="block">Covered Qty in %</span><div className="flex h-8 items-center justify-center border border-stone-300 bg-stone-50 tabular-nums">{row.coveredPercent || '—'}</div></div>
+              <div className="flex min-w-0 flex-col justify-end gap-1 text-xs font-medium text-stone-700"><span className="block">Marking Fee (Rs)</span><CalculatedAmount value={row.markingFee} /></div>
+              <div className="col-span-2 flex min-w-0 flex-col justify-end gap-1 text-xs font-medium text-stone-700 md:col-span-1">
+                <span className="block">Actions</span>
+                <div className="flex h-8 items-center">{rowActions(row, index, index === rows.length - 1)}</div>
+              </div>
             </div>
           </article>
         ))}
@@ -504,8 +503,8 @@ export function RenewalProductionTable({
                     className="h-8 w-full rounded-none border-dashed border-amber-600 text-amber-800 hover:bg-amber-50"
                     onClick={() => {
                       const last = breakSelection.breaks[breakSelection.breaks.length - 1]
-                      // Next break starts two days after the last one (a production day in between).
-                      const start = last?.to ? new Date(Date.parse(`${last.to}T00:00:00Z`) + 2 * 86_400_000).toISOString().slice(0, 10) : breakSelection.row.periodFrom
+                      // Next break starts the day after the last one ends (owner, 14 Nov 2026).
+                      const start = last?.to ? new Date(Date.parse(`${last.to}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10) : breakSelection.row.periodFrom
                       const from = start > breakSelection.row.periodTo ? breakSelection.row.periodTo : start
                       setBreakSelection({ ...breakSelection, breaks: [...breakSelection.breaks, { from, to: breakSelection.row.periodTo }], error: '' })
                     }}
