@@ -503,8 +503,8 @@ export function RenewalProductionTable({
                     className="h-8 w-full rounded-none border-dashed border-amber-600 text-amber-800 hover:bg-amber-50"
                     onClick={() => {
                       const last = breakSelection.breaks[breakSelection.breaks.length - 1]
-                      // Next break starts two days after the last one (a production day in between).
-                      const start = last?.to ? new Date(Date.parse(`${last.to}T00:00:00Z`) + 2 * 86_400_000).toISOString().slice(0, 10) : breakSelection.row.periodFrom
+                      // Next break starts the day after the last one ends (owner, 14 Nov 2026).
+                      const start = last?.to ? new Date(Date.parse(`${last.to}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10) : breakSelection.row.periodFrom
                       const from = start > breakSelection.row.periodTo ? breakSelection.row.periodTo : start
                       setBreakSelection({ ...breakSelection, breaks: [...breakSelection.breaks, { from, to: breakSelection.row.periodTo }], error: '' })
                     }}
