@@ -392,6 +392,59 @@ def other_numbers(base, rel, text):
     return sorted(aka)
 
 
+def learn_equivalents(conn):
+    """{IS key: {ISO keys}} from the cross-reference tables of the library's Standards ("International Standard /
+    Corresponding Indian Standard / Degree of Equivalence"): an ISO number and the IS number printed after it.
+    A pair counts once per document and needs two documents; an ISO number must point mostly to one IS number, and
+    an IS number keeps only its strong ISO numbers ("ISO 3696" -> "IS 1070", "ISO 6508-1" -> "IS 1586 Part 1")."""
+    rows = conn.execute(
+        """SELECT d.relpath, p.text FROM public.standard_pages p JOIN public.standard_docs d ON d.id = p.doc_id
+           WHERE d.source = 'library' AND p.text ~ 'ISO'
+             AND p.text ~* '(corresponding|identical|technically equivalent)'"""
+    ).fetchall()
+    docs = {}
+    for relpath, text in rows:
+        doc = relpath.split("::")[0]
+        for m in ISO_REF.finditer(text):
+            num = int(m.group("num"))
+            # A year, or an adoption written as "IS/ISO 6892": not a table row.
+            if num in YEARS or re.search(r"IS\s*/\s*$", text[max(0, m.start() - 4):m.start()]):
+                continue
+            im = IS_REF.search(text, m.end(), m.end() + 260)
+            if not im or re.match(r"IS\s*[:/]?\s*(ISO|IEC)", im.group(0)):
+                continue
+            iso = f"ISO {num}" + (f" Part {int(m.group('dash'))}" if m.group("dash") else "")
+            part = im.group("part") or im.group("dash")
+            is_key = f"IS {int(im.group('num'))}" + (f" Part {int(part)}" if part else "")
+            docs.setdefault((iso, is_key), set()).add(doc)
+    by_iso, by_is = {}, {}
+    for (iso, is_key), found in docs.items():
+        by_iso.setdefault(iso, {})[is_key] = len(found)
+        by_is.setdefault(is_key, {})[iso] = len(found)
+    learned = {}
+    for (iso, is_key), found in docs.items():
+        votes = len(found)
+        others = [n for k, n in by_iso[iso].items() if k != is_key]
+        if votes < 2 or (others and votes < 2 * max(others)) or votes < 0.5 * max(by_is[is_key].values()):
+            continue
+        learned.setdefault(is_key, set()).add(iso)
+    return learned
+
+
+def learned_numbers(base, rel, text, learned):
+    """The ISO numbers learned for this file's IS number (and Part). When one IS number has several (a set of
+    Sections, each adopting another ISO standard), only those its own first pages name."""
+    part = re.search(r"(?i)\bPart\s*(\d+)", rel.split("/")[-1])
+    isos = learned.get(base + (f" Part {int(part.group(1))}" if part else ""), set())
+    if len(isos) > 1:
+        isos = {i for i in isos if re.search(rf"\bISO\s*[:/]?\s*{i.split(' ')[1]}(?!\d)", text)}
+    aka = set()
+    for iso in isos:
+        aka.add(iso)
+        aka.add(iso.split(" Part ")[0])  # "ISO 6508 Part 1" also answers for "ISO 6508"
+    return aka
+
+
 ROMAN = {"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5, "VI": 6, "VII": 7, "VIII": 8, "IX": 9, "X": 10, "XI": 11, "XII": 12}
 
 
@@ -424,6 +477,7 @@ def refresh_notes(conn):
     for r in rows:
         if "::" not in r[1] and r[8]:
             same.setdefault(r[8], []).append(r[1].split("/")[-1])
+    learned = learn_equivalents(conn)
     updates = []
     for doc_id, relpath, folder, category, kind, year, merged, review, sha, aka, first in rows:
         rel, _, suffix = relpath.partition("::")
@@ -442,7 +496,8 @@ def refresh_notes(conn):
         read_notes = [n for n in (review or "").split("; ") if n and not n.startswith(RUN_NOTES)]
         new_review = "; ".join(notes + read_notes) or None
         new_kind = kind if suffix else info["kind"]
-        new_aka = [] if suffix or not re.match(r"^IS \d+$", info["folder"]) else other_numbers(info["folder"], rel, first or "")
+        new_aka = [] if suffix or not re.match(r"^IS \d+$", info["folder"]) else sorted(
+            set(other_numbers(info["folder"], rel, first or "")) | learned_numbers(info["folder"], rel, first or "", learned))
         if (info["folder"], info["category"], new_kind, info["edition_year"], merged if suffix else info["amendments_merged"],
                 new_review, new_aka) != (folder, category, kind, year, merged, review, list(aka or [])):
             updates.append((info["folder"], info["category"], new_kind, info["edition_year"], bool(suffix),
