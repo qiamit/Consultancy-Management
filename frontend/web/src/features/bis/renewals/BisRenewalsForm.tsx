@@ -14,6 +14,7 @@ import { limsDarkBarGlowStyle, limsPrimaryBtnClass, limsFullscreenDialogClass } 
 import { cn } from '@/lib/utils'
 import { PeriodDateInput, RenewalProductionTable } from './RenewalProductionTable'
 import { RenewalCurrencyInput } from './RenewalCurrencyInput'
+import { RenewalSlabRatesPanel } from './RenewalSlabRatesPanel'
 import { formatDisplayDate, generateMonthlyRenewalRows, type BisRenewalForm } from './types'
 import {
   createRenewalCalculationPdfFile,
@@ -361,6 +362,7 @@ export function BisRenewalsForm({
               />
             </div>
           </div>
+          <RenewalSlabRatesPanel slabRates={form.slabRates} unitOfIs={form.unitOfIs} />
           <RenewalProductionTable
             rows={form.productionRows}
             unitOfIs={form.unitOfIs}
