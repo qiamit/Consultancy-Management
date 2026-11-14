@@ -46,6 +46,13 @@ number written right after an IS number (`IS 1608 (Part 1) : 2022/ISO 6892-1 : 2
 not counted again. Each file also records its own ISO number from its first page (`standard_docs.aka`), so a reference
 to `ISO 6892-1` is answered by `IS 1608 Part 1`.
 
+ISO numbers are also learned from the cross-reference tables in the library's Standards ("International Standard /
+Corresponding Indian Standard / Degree of Equivalence"): an ISO number and the IS number printed after it, counted
+once per document. A pair needs two documents, the ISO number must point mostly to that IS number, and the IS number
+keeps only its strong ISO numbers (`ISO 3696` → `IS 1070`, `ISO 6508-1` → `IS 1586 Part 1`). When one IS number has
+several ISO numbers (a set of Sections), a file keeps only those its own first pages name. This is worked out again on
+every run, so new files teach new pairs without re-reading anything.
+
 After each run `standard_refs_refresh()` fills `standard_refs_status`: every referenced number + Part, how many
 library Standards cite it, and whether the library has it (the Part itself, or another Part only). The Standards
 Library page shows the coverage and the most cited ones that are missing.
