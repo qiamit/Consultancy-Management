@@ -42,6 +42,9 @@ SSH_OPTS="-o BatchMode=yes -o ConnectTimeout=20 -o ServerAliveInterval=30 -o Ser
 SSH=(ssh -i "$KEY" $SSH_OPTS)
 EXCLUDES=(--exclude '.*' --exclude '~$*')
 
+# First N lines of a pipe. awk reads the whole input, so the writer never gets SIGPIPE: with "| head" under
+# pipefail a long list ends the script with exit 141.
+first() { awk -v n="$1" 'NR <= n'; }
 count_pdfs() { find "$SRC" -type f -iname '*.pdf' ! -name '.*' | wc -l | tr -d ' '; }
 
 # Files OneDrive has not downloaded to this Mac yet ("dataless"): reading them can hang, so they are left out of
@@ -51,7 +54,7 @@ not_downloaded() {
   (cd "$SRC" && find . -type f -flags +dataless 2>/dev/null | sed 's|^\.|/|; s|^//|/|') > "$NOT_HERE"
   if [ -s "$NOT_HERE" ]; then
     echo "Not yet on this Mac (OneDrive still downloading), left for the next run: $(wc -l < "$NOT_HERE" | tr -d ' ')"
-    sed 's|^/|  |' "$NOT_HERE" | head -10
+    sed 's|^/|  |' "$NOT_HERE" | first 10
   fi
   EXCLUDES+=(--exclude-from="$NOT_HERE")
 }
@@ -80,7 +83,7 @@ echo "STARTED $ID"'
 # With <hb> = 1 it also records the Mac's check for the app (Sync Now), as the 10-minute check cannot run meanwhile.
 REMOTE_STATUS='set -u
 RUNS=$1; ID=$2; FROM=$3; HB=$4; APP=$5; shift 5; COMPOSE="$*"
-[ "$ID" = "-" ] && ID=$(ls -t "$RUNS"/*.log 2>/dev/null | head -1 | xargs -r basename | sed "s/\.log$//")
+[ "$ID" = "-" ] && ID=$(ls -t "$RUNS"/*.log 2>/dev/null | first 1 | xargs -r basename | sed "s/\.log$//")
 [ -n "$ID" ] || { echo "@@ NONE"; exit 0; }
 echo "@@ ID $ID"
 f="$RUNS/$ID.log"; n=0
@@ -171,7 +174,9 @@ case "${1:-}" in
     }
     check_removals
     if [ -n "$DRY" ]; then
-      "${RS[@]}" -n --itemize-changes "$SRC/" "$SERVER:$REMOTE_LIB/" | grep -i '\.pdf$' | head -40
+      CHANGES=$("${RS[@]}" -n --itemize-changes "$SRC/" "$SERVER:$REMOTE_LIB/" | grep -i '\.pdf$' || true)
+      echo "PDF changes the copy would make: $(printf '%s' "$CHANGES" | grep -c . || true) (first 40 below)"
+      printf '%s\n' "$CHANGES" | first 40
       "${SSH[@]}" "$SERVER" "cd $REMOTE_APP && $COMPOSE --profile tools run --rm -T standards-indexer --dry-run" \
         | grep -v '^  read:' || true
       exit 0
