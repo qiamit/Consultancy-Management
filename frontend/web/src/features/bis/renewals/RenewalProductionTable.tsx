@@ -357,7 +357,7 @@ export function RenewalProductionTable({
             {calculatedRows.map((row, index) => {
               return (
               <tr key={row.id} className={cn(row.stockMarkingBreak ? 'bg-amber-50' : index % 2 ? 'bg-stone-50' : 'bg-white')}>
-                <td className="border border-stone-300 p-1"><PeriodDateInput id={`renewal-period-from-desktop-${row.id}`} label={`Period from ${index + 1}`} value={index === 0 ? renewalPeriodFrom : row.periodFrom} disabled={index === 0 || row.stockMarkingBreak} onChange={(value) => update(row.id, 'periodFrom', value)} />{row.stockMarkingBreak ? <span className="mt-1 block text-center text-[9px] font-semibold text-amber-900">Stock Marking — No Production</span> : null}</td>
+                <td className="border border-stone-300 p-1"><PeriodDateInput id={`renewal-period-from-desktop-${row.id}`} label={`Period from ${index + 1}`} value={index === 0 ? renewalPeriodFrom : row.periodFrom} disabled={index === 0 || row.stockMarkingBreak} onChange={(value) => update(row.id, 'periodFrom', value)} /></td>
                 <td className="border border-stone-300 p-1"><PeriodDateInput id={`renewal-period-to-desktop-${row.id}`} label={`Period to ${index + 1}`} value={row.periodTo} disabled={row.stockMarkingBreak} onChange={(value) => update(row.id, 'periodTo', value)} /></td>
                 <td className="border border-stone-300 p-1">{row.stockMarkingBreak ? <div className="flex h-8 items-center justify-center border border-stone-300 bg-stone-50 tabular-nums">0</div> : <NumberCell label={`Total production units ${index + 1}`} value={row.productionUnit} quantityTabOrder onChange={(value) => update(row.id, 'productionUnit', value)} />}</td>
                 <td className="border border-stone-300 p-1"><CalculatedAmount value={row.productionValue} /></td>
@@ -401,7 +401,6 @@ export function RenewalProductionTable({
         </div>
         {calculatedRows.map((row, index) => (
           <article key={row.id} className={cn('space-y-3 border border-stone-400 p-3', row.stockMarkingBreak ? 'bg-amber-50' : 'bg-white')}>
-            {row.stockMarkingBreak ? <div className="border-b border-amber-200 pb-2 text-xs font-semibold text-amber-900">Stock Marking — No Production</div> : null}
             <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="min-w-0 space-y-1 text-xs font-medium text-stone-700"><span className="block">Period Start</span><PeriodDateInput id={`renewal-period-from-mobile-${row.id}`} label={`Period start ${index + 1}`} value={index === 0 ? renewalPeriodFrom : row.periodFrom} disabled={index === 0} onChange={(value) => update(row.id, 'periodFrom', value)} /></div>
               <div className="min-w-0 space-y-1 text-xs font-medium text-stone-700"><span className="block">Period End</span><PeriodDateInput id={`renewal-period-to-mobile-${row.id}`} label={`Period end ${index + 1}`} value={row.periodTo} onChange={(value) => update(row.id, 'periodTo', value)} /></div>
