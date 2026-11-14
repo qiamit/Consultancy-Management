@@ -400,20 +400,20 @@ export function RenewalProductionTable({
           </Button>
         </div>
         {calculatedRows.map((row, index) => (
-          <article key={row.id} className={cn('space-y-3 border border-stone-400 p-3', row.stockMarkingBreak ? 'bg-amber-50' : 'bg-white')}>
-            <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="min-w-0 space-y-1 text-xs font-medium text-stone-700"><span className="block">Period Start</span><PeriodDateInput id={`renewal-period-from-mobile-${row.id}`} label={`Period start ${index + 1}`} value={index === 0 ? renewalPeriodFrom : row.periodFrom} disabled={index === 0} onChange={(value) => update(row.id, 'periodFrom', value)} /></div>
-              <div className="min-w-0 space-y-1 text-xs font-medium text-stone-700"><span className="block">Period End</span><PeriodDateInput id={`renewal-period-to-mobile-${row.id}`} label={`Period end ${index + 1}`} value={row.periodTo} onChange={(value) => update(row.id, 'periodTo', value)} /></div>
-              <label className="min-w-0 space-y-1 text-xs font-medium text-stone-700">Total Production{unitOfIs ? ` in ${unitOfIs}` : ''}<NumberCell label={`Total production units ${index + 1}`} value={row.productionUnit} quantityTabOrder onChange={(value) => update(row.id, 'productionUnit', value)} /></label>
-              <div className="min-w-0 space-y-1 text-xs font-medium text-stone-700"><span className="block">Production Value (Rs)</span><CalculatedAmount value={row.productionValue} /></div>
-              <label className="min-w-0 space-y-1 text-xs font-medium text-stone-700">Covered Production{unitOfIs ? ` in ${unitOfIs}` : ''}<NumberCell label={`Quantity covered units ${index + 1}`} value={row.coveredUnit} quantityTabOrder onChange={(value) => update(row.id, 'coveredUnit', value)} /></label>
-              <div className="min-w-0 space-y-1 text-xs font-medium text-stone-700"><span className="block">Covered Value (Rs)</span><CalculatedAmount value={row.coveredValue} /></div>
-              <div className="space-y-1 text-xs font-medium text-stone-700"><span className="block">Covered Qty in %</span><div className="flex h-8 items-center justify-center border border-stone-300 bg-stone-50 tabular-nums">{row.coveredPercent || '—'}</div></div>
-              <div className="min-w-0 space-y-1 text-xs font-medium text-stone-700"><span className="block">Marking Fee (Rs)</span><CalculatedAmount value={row.markingFee} /></div>
-            </div>
-            <div className="flex items-center justify-between border-t border-stone-200 pt-2">
-              <span className="text-xs font-semibold text-stone-700">Actions</span>
-              {rowActions(row, index, index === rows.length - 1)}
+          <article key={row.id} className={cn('border border-stone-400 p-3', row.stockMarkingBreak ? 'bg-amber-50' : 'bg-white')}>
+            <div className="grid min-w-0 grid-cols-2 gap-x-3 gap-y-2 md:grid-cols-3 lg:grid-cols-5">
+              <div className="flex min-w-0 flex-col justify-end gap-1 text-xs font-medium text-stone-700"><span className="block">Period Start</span><PeriodDateInput id={`renewal-period-from-mobile-${row.id}`} label={`Period start ${index + 1}`} value={index === 0 ? renewalPeriodFrom : row.periodFrom} disabled={index === 0} onChange={(value) => update(row.id, 'periodFrom', value)} /></div>
+              <div className="flex min-w-0 flex-col justify-end gap-1 text-xs font-medium text-stone-700"><span className="block">Period End</span><PeriodDateInput id={`renewal-period-to-mobile-${row.id}`} label={`Period end ${index + 1}`} value={row.periodTo} onChange={(value) => update(row.id, 'periodTo', value)} /></div>
+              <label className="flex min-w-0 flex-col justify-end gap-1 text-xs font-medium text-stone-700">Total Production{unitOfIs ? ` in ${unitOfIs}` : ''}<NumberCell label={`Total production units ${index + 1}`} value={row.productionUnit} quantityTabOrder onChange={(value) => update(row.id, 'productionUnit', value)} /></label>
+              <div className="flex min-w-0 flex-col justify-end gap-1 text-xs font-medium text-stone-700"><span className="block">Production Value (Rs)</span><CalculatedAmount value={row.productionValue} /></div>
+              <label className="flex min-w-0 flex-col justify-end gap-1 text-xs font-medium text-stone-700">Covered Production{unitOfIs ? ` in ${unitOfIs}` : ''}<NumberCell label={`Quantity covered units ${index + 1}`} value={row.coveredUnit} quantityTabOrder onChange={(value) => update(row.id, 'coveredUnit', value)} /></label>
+              <div className="flex min-w-0 flex-col justify-end gap-1 text-xs font-medium text-stone-700"><span className="block">Covered Value (Rs)</span><CalculatedAmount value={row.coveredValue} /></div>
+              <div className="flex min-w-0 flex-col justify-end gap-1 text-xs font-medium text-stone-700"><span className="block">Covered Qty in %</span><div className="flex h-8 items-center justify-center border border-stone-300 bg-stone-50 tabular-nums">{row.coveredPercent || '—'}</div></div>
+              <div className="flex min-w-0 flex-col justify-end gap-1 text-xs font-medium text-stone-700"><span className="block">Marking Fee (Rs)</span><CalculatedAmount value={row.markingFee} /></div>
+              <div className="col-span-2 flex min-w-0 flex-col justify-end gap-1 text-xs font-medium text-stone-700 md:col-span-1">
+                <span className="block">Actions</span>
+                <div className="flex h-8 items-center">{rowActions(row, index, index === rows.length - 1)}</div>
+              </div>
             </div>
           </article>
         ))}
