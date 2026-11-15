@@ -269,7 +269,7 @@ export function IsCodeRequiredTestsDialog({
                   <th className="w-40 px-2 py-1.5 text-center">Test Method</th>
                   <th className="w-24 px-2 py-1.5 text-center">Unit</th>
                   <th className="px-2 py-1.5 text-center">Requirement</th>
-                  <th className="w-28 px-2 py-1.5 text-center">Possible Test in a Day</th>
+                  <th className="w-24 px-2 py-1.5 text-center" title="Possible Test in a Day">PT in a Day</th>
                   <th className="w-10 px-2 py-1.5" />
                 </tr>
               </thead>
