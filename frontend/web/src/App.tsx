@@ -59,7 +59,6 @@ import {
   StatementsRoute,
   ReportsRoute,
   SaleQuotationRoute,
-  TestParameterPage,
   UserManagementRoute,
 } from '@/routes/routeElements'
 
@@ -104,7 +103,8 @@ export default function App() {
           <Route path="/masters/clients" element={<ClientsPage />} />
           <Route path="/masters/is-codes" element={<IsCodesPage />} />
           <Route path="/masters/product-services" element={<ProductServicesPage />} />
-          <Route path="/masters/test-parameter" element={<TestParameterPage />} />
+          {/* Test Parameters live in IS Code Master → Required Tests (one list per IS Code since 15 Nov 2026). */}
+          <Route path="/masters/test-parameter" element={<Navigate to="/masters/is-codes" replace />} />
           <Route path="/masters/laboratories" element={<LaboratoriesRoute />} />
           <Route path="/masters/bis-branch-offices" element={<BisBranchOfficesRoute />} />
 

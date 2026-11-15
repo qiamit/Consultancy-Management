@@ -157,7 +157,7 @@ These belong to each application. Never copy them.
 
 **Conformity.** The AI Check button in the Sample Requirements tab decides it from the Test Report. Do not set `conformity` yourself. For SS samples the Marking clause never counts against conformity.
 
-**Factory Test Report, `factory-test-report`.** Measured values come from the factory. You cannot fill it. Tell the owner to open the Factory Test Report page and generate it after the samples are ready. Test parameters are in `test_parameters` (`is_code_id`, `item_name`, `clause_no`, `specific_requirement`, `unit_value`, `test_method`).
+**Factory Test Report, `factory-test-report`.** Measured values come from the factory. You cannot fill it. Tell the owner to open the Factory Test Report page and generate it after the samples are ready. Test parameters are in `test_parameters` (`is_code_id`, `item_name`, `clause_no`, `specific_requirement`, `unit_value`, `test_method`, `applies_to`, `tested_by`, `source`): one list per IS Code, edited in IS Code Master → Required Tests (the separate Test Parameter page was retired on 15 Nov 2026).
 
 **Long Duration Tests, `long-duration-tests`** and **Raw Material Test Reports, `raw-material-test-reports`** need files from the owner. Report only.
 
