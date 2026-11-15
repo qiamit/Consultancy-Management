@@ -83,7 +83,7 @@ echo "STARTED $ID"'
 # With <hb> = 1 it also records the Mac's check for the app (Sync Now), as the 10-minute check cannot run meanwhile.
 REMOTE_STATUS='set -u
 RUNS=$1; ID=$2; FROM=$3; HB=$4; APP=$5; shift 5; COMPOSE="$*"
-[ "$ID" = "-" ] && ID=$(ls -t "$RUNS"/*.log 2>/dev/null | first 1 | xargs -r basename | sed "s/\.log$//")
+[ "$ID" = "-" ] && ID=$(ls -t "$RUNS"/*.log 2>/dev/null | head -n 1 | xargs -r basename | sed "s/\.log$//")
 [ -n "$ID" ] || { echo "@@ NONE"; exit 0; }
 echo "@@ ID $ID"
 f="$RUNS/$ID.log"; n=0
@@ -175,8 +175,9 @@ case "${1:-}" in
     check_removals
     if [ -n "$DRY" ]; then
       CHANGES=$("${RS[@]}" -n --itemize-changes "$SRC/" "$SERVER:$REMOTE_LIB/" | grep -i '\.pdf$' || true)
-      echo "PDF changes the copy would make: $(printf '%s' "$CHANGES" | grep -c . || true) (first 40 below)"
-      printf '%s\n' "$CHANGES" | first 40
+      NCH=$(printf '%s' "$CHANGES" | grep -c . || true)
+      echo "PDF changes the copy would make: $NCH"
+      [ "$NCH" -eq 0 ] || printf '%s\n' "$CHANGES" | first 40
       "${SSH[@]}" "$SERVER" "cd $REMOTE_APP && $COMPOSE --profile tools run --rm -T standards-indexer --dry-run" \
         | grep -v '^  read:' || true
       exit 0
