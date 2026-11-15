@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   limsDarkBarGlowStyle,
-  limsDialogClass,
+  limsFullscreenDialogClass,
   limsFieldClass,
   limsOutlineBtnClass,
   limsPrimaryBtnClass,
@@ -194,9 +194,11 @@ export function IsCodeRequiredTestsDialog({
         layer="stacked"
         aria-describedby={undefined}
         className={cn(
-          limsDialogClass,
-          'flex !flex-col gap-0 overflow-hidden p-0',
-          'max-h-[min(94dvh,900px)] w-[min(76rem,calc(100vw-1.5rem))] max-w-6xl bg-white',
+          // Fills the content area beside the docked sidebar (full width on phones / with the sidebar collapsed).
+          '!flex h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 bg-white p-0 shadow-none sm:rounded-none',
+          limsFullscreenDialogClass,
+          'border-stone-600 ring-1 ring-amber-700/20',
+          '[&>button]:!rounded-none [&>button]:text-white [&>button]:opacity-100 [&>button]:hover:bg-white/10',
         )}
       >
         <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white">
