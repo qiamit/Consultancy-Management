@@ -70,7 +70,6 @@ export function IsCodeRequiredTestsDialog({
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [dirty, setDirty] = useState(false)
-  const [description, setDescription] = useState('')
   const [aiSources, setAiSources] = useState<string[]>([])
 
   useEffect(() => {
@@ -79,7 +78,6 @@ export function IsCodeRequiredTestsDialog({
     setLoading(true)
     setDirty(false)
     setAiSources([])
-    setDescription('')
     fetchRequiredTests(isCodeId)
       .then((list) => {
         if (!live) return
@@ -105,7 +103,7 @@ export function IsCodeRequiredTestsDialog({
   const runAi = async () => {
     if (!isCodeId) return
     try {
-      const result = await suggestRequiredTests({ isCodeId, isLabel, description, onStep: setBusy })
+      const result = await suggestRequiredTests({ isCodeId, isLabel, description: '', onStep: setBusy })
       const { next, added } = mergeTests(tests, result.tests)
       setTests(next)
       setAiSources(result.sources)
@@ -230,20 +228,7 @@ export function IsCodeRequiredTestsDialog({
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden bg-gradient-to-b from-stone-100/80 to-white px-4 py-3">
-          <div className="flex flex-wrap items-end gap-2">
-            <div className="min-w-[14rem] flex-1 space-y-0.5">
-              <label className="text-[11px] font-semibold text-stone-700" htmlFor="rt-description">
-                Grade / Type / Size for the AI (Optional)
-              </label>
-              <Input
-                id="rt-description"
-                className={limsFieldClass}
-                value={description}
-                disabled={disabled}
-                placeholder="E.g. Fe 500D, 8–32 mm"
-                onChange={(e) => setDescription(e.target.value)}
-              />
-            </div>
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <Button type="button" variant="outline" className={cn(limsOutlineBtnClass, 'gap-1.5')} disabled={disabled} onClick={() => void runAi()}>
               <Sparkles size={14} aria-hidden /> Suggest With AI
             </Button>
