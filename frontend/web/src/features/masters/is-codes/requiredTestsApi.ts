@@ -194,8 +194,8 @@ export async function pickStandardDocs(
   opts: { strict?: boolean } = {},
 ): Promise<{ standards: string[]; manuals: string[] }> {
   if (!folders.length) return { standards: [], manuals: [] }
-  const { data } = await supabase.from('standard_docs').select('relpath, kind').in('folder', folders)
-  const docs = (data ?? []) as Array<{ relpath: string; kind: string }>
+  const { data } = await supabase.from('standard_docs').select('relpath, kind, pages').in('folder', folders)
+  const docs = (data ?? []) as Array<{ relpath: string; kind: string; pages: number | null }>
   // A reference that names no Section ("IS 1367 Part 9") is also answered by the Part's sections ("Part 9 Sec 1").
   const otherSection = opts.strict ? -1 : -10
   const partScore = (e: IsCodeEdition) =>
@@ -207,8 +207,17 @@ export async function pickStandardDocs(
     const top = Math.max(...ok.map((d) => d.score))
     return ok.filter((d) => d.score === top).map((d) => d.relpath)
   }
-  const standardDocs = docs.filter((d) => d.kind === 'Standard')
-  const latestYear = Math.max(0, ...standardDocs.map((d) => Number(editionOf(d.relpath).year) || 0))
+  const allStandards = docs.filter((d) => d.kind === 'Standard')
+  // A file no page could be read from (locked by DRM, damaged) is not the revision to read while a readable one exists:
+  // an older readable revision answers until a readable copy of the latest is added.
+  const readable = allStandards.filter((d) => (d.pages ?? 0) > 0)
+  const standardDocs = readable.length ? readable : allStandards
+  // The latest revision of the Part asked for (a folder holds every Part, each with its own years).
+  const topStandardPart = Math.max(-5, ...standardDocs.map((d) => partScore(editionOf(d.relpath))))
+  const latestYear = Math.max(
+    0,
+    ...standardDocs.filter((d) => partScore(editionOf(d.relpath)) === topStandardPart).map((d) => Number(editionOf(d.relpath).year) || 0),
+  )
   const standards = best(
     standardDocs.map((d) => {
       const e = editionOf(d.relpath)
