@@ -265,10 +265,10 @@ export function IsCodeRequiredTestsDialog({
                 <tr>
                   <th className="w-8 px-2 py-1.5">#</th>
                   <th className="px-2 py-1.5">Test Name</th>
-                  <th className="w-32 px-2 py-1.5">Clause</th>
-                  <th className="w-40 px-2 py-1.5">Test Method</th>
-                  <th className="w-24 px-2 py-1.5">Unit</th>
-                  <th className="px-2 py-1.5">Requirement</th>
+                  <th className="w-32 px-2 py-1.5 text-center">Clause</th>
+                  <th className="w-40 px-2 py-1.5 text-center">Test Method</th>
+                  <th className="w-24 px-2 py-1.5 text-center">Unit</th>
+                  <th className="px-2 py-1.5 text-center">Requirement</th>
                   <th className="w-28 px-2 py-1.5 text-center">Possible Test in a Day</th>
                   <th className="w-10 px-2 py-1.5" />
                 </tr>
@@ -294,16 +294,16 @@ export function IsCodeRequiredTestsDialog({
                         <Input className={cn(limsFieldClass, 'h-7 text-xs')} value={t.testName} disabled={disabled} onChange={(e) => update(i, { testName: e.target.value })} />
                       </td>
                       <td className="px-1 py-1">
-                        <Input className={cn(limsFieldClass, 'h-7 text-xs')} value={t.clause} disabled={disabled} onChange={(e) => update(i, { clause: e.target.value })} />
+                        <Input className={cn(limsFieldClass, 'h-7 text-center text-xs')} value={t.clause} disabled={disabled} onChange={(e) => update(i, { clause: e.target.value })} />
                       </td>
                       <td className="px-1 py-1">
-                        <Input className={cn(limsFieldClass, 'h-7 text-xs')} value={t.testMethod} disabled={disabled} aria-label="Test Method" onChange={(e) => update(i, { testMethod: e.target.value })} />
+                        <Input className={cn(limsFieldClass, 'h-7 text-center text-xs')} value={t.testMethod} disabled={disabled} aria-label="Test Method" onChange={(e) => update(i, { testMethod: e.target.value })} />
                       </td>
                       <td className="px-1 py-1">
-                        <Input className={cn(limsFieldClass, 'h-7 text-xs')} value={t.unit} disabled={disabled} aria-label="Unit" onChange={(e) => update(i, { unit: e.target.value })} />
+                        <Input className={cn(limsFieldClass, 'h-7 text-center text-xs')} value={t.unit} disabled={disabled} aria-label="Unit" onChange={(e) => update(i, { unit: e.target.value })} />
                       </td>
                       <td className="px-1 py-1">
-                        <Input className={cn(limsFieldClass, 'h-7 text-xs')} value={t.requirement} disabled={disabled} onChange={(e) => update(i, { requirement: e.target.value })}
+                        <Input className={cn(limsFieldClass, 'h-7 text-center text-xs')} value={t.requirement} disabled={disabled} onChange={(e) => update(i, { requirement: e.target.value })}
                           // "≤ 0.12 %" typed by hand becomes "0.12 % Maximum"; "8.5 - 10.5 %" becomes "8.5 % - 10.5 %".
                           onBlur={(e) => {
                             const next = formatRequirement(e.target.value, t.unit)
