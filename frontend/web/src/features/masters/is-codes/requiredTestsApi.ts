@@ -17,6 +17,8 @@ export type RequiredTest = {
   appliesTo: string
   testedBy: RequiredTestedBy
   source: RequiredTestSource
+  /** In the Product Manual's "possible tests in a day". */
+  possibleInADay: boolean
 }
 
 export type RequiredTestList = {
@@ -36,13 +38,14 @@ type Row = {
   applies_to: string
   tested_by: RequiredTestedBy
   source: RequiredTestSource
+  possible_in_a_day: boolean | null
 }
 
 export async function fetchRequiredTests(isCodeId: string): Promise<RequiredTestList> {
   const [{ data: rows, error }, { data: list, error: listError }] = await Promise.all([
     supabase
       .from('test_parameters')
-      .select('id, item_name, test_name, clause_no, test_method, unit_value, specific_requirement, applies_to, tested_by, source')
+      .select('id, item_name, test_name, clause_no, test_method, unit_value, specific_requirement, applies_to, tested_by, source, possible_in_a_day')
       .eq('is_code_id', isCodeId)
       .is('archived_at', null)
       .order('display_order', { ascending: true, nullsFirst: true })
@@ -62,6 +65,7 @@ export async function fetchRequiredTests(isCodeId: string): Promise<RequiredTest
       appliesTo: r.applies_to ?? '',
       testedBy: r.tested_by ?? 'Lab',
       source: r.source ?? 'Manual Entry',
+      possibleInADay: Boolean(r.possible_in_a_day),
     })),
     lockedAt: (list?.locked_at as string | null) ?? null,
     notes: String(list?.notes ?? ''),
@@ -97,6 +101,7 @@ export async function saveRequiredTests(
     applies_to: t.appliesTo.trim(),
     tested_by: t.testedBy,
     source: t.source,
+    possible_in_a_day: Boolean(t.possibleInADay),
     display_order: i + 1,
   })
   const keep = new Set(clean.map((t) => t.id).filter(Boolean) as string[])

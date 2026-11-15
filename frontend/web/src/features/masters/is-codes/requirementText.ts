@@ -10,7 +10,8 @@ function clean(s: string): string {
 }
 
 export function formatRequirement(raw: string, unit = ''): string {
-  let s = clean(raw)
+  // The specified requirement only: a permitted variation / tolerance note of the product analysis is left out.
+  let s = clean(raw.replace(/\s*[,;]?\s*\(?\s*(?:permissible\s+|permitted\s+)?variation\b.*$/i, ''))
   if (!s) return s
   // "≤ 0.12 %", "<= 0.12 %", "Max. 0.12 %", "Not More Than 0.12 %"  →  "0.12 % Maximum"
   const limit = s.match(new RegExp(String.raw`^(≤|<=|=<|max\.?|maximum|not more than|up to|≥|>=|=>|min\.?|minimum|not less than|<|>)\s*(${NUM})\s*(${UNIT})?\s*(.*)$`, 'i'))

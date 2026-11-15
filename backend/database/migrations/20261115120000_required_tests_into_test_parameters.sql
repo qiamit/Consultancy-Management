@@ -7,6 +7,8 @@
 ALTER TABLE public.test_parameters ADD COLUMN IF NOT EXISTS applies_to text NOT NULL DEFAULT '';
 ALTER TABLE public.test_parameters ADD COLUMN IF NOT EXISTS tested_by text NOT NULL DEFAULT 'Lab';
 ALTER TABLE public.test_parameters ADD COLUMN IF NOT EXISTS source text NOT NULL DEFAULT 'Manual Entry';
+-- The Product Manual's "possible tests in a day" (tests that can be done in one day, e.g. during a factory visit).
+ALTER TABLE public.test_parameters ADD COLUMN IF NOT EXISTS possible_in_a_day boolean NOT NULL DEFAULT false;
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'test_parameters_tested_by_check') THEN
@@ -90,7 +92,7 @@ COMMENT ON TABLE public.is_code_required_tests IS
   'Merged into test_parameters on 15 Nov 2026 (migration 20261115120000); no longer read or written by the app. Kept for reference.';
 
 -- 4. A locked list cannot be changed (unlock it first). The test itself is guarded: adding, removing or changing the
--- name, clause, method, unit, requirement or who tests it. Other fields (MU, accreditation) stay editable.
+-- name, clause, method, unit, requirement, who tests it or whether it is possible in a day. Other fields (MU, accreditation) stay editable.
 CREATE OR REPLACE FUNCTION public.test_parameters_lock_guard()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -108,6 +110,7 @@ BEGIN
      AND NEW.specific_requirement IS NOT DISTINCT FROM OLD.specific_requirement
      AND NEW.applies_to IS NOT DISTINCT FROM OLD.applies_to
      AND NEW.tested_by IS NOT DISTINCT FROM OLD.tested_by
+     AND NEW.possible_in_a_day IS NOT DISTINCT FROM OLD.possible_in_a_day
      AND NEW.archived_at IS NOT DISTINCT FROM OLD.archived_at THEN
     RETURN NEW;
   END IF;

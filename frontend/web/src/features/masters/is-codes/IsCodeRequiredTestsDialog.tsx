@@ -4,7 +4,6 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   limsDarkBarGlowStyle,
   limsFullscreenDialogClass,
@@ -32,6 +31,7 @@ const emptyTest = (): RequiredTest => ({
   appliesTo: '',
   testedBy: 'Lab',
   source: 'Manual Entry',
+  possibleInADay: false,
 })
 
 const keyOf = (t: RequiredTest) => `${t.testName.trim().toLowerCase()}|${t.appliesTo.trim().toLowerCase()}`
@@ -133,12 +133,14 @@ export function IsCodeRequiredTestsDialog({
         past.map((p) => ({
           testName: finalProductTestName(p.testName),
           clause: p.clause,
-          testMethod: '',
+          // No method known: the IS Code's own Standard.
+          testMethod: isLabel.split(':')[0].trim(),
           unit: '',
           requirement: formatRequirement(p.requirement),
           appliesTo: '',
           testedBy: 'Lab',
           source: 'Past Checks',
+          possibleInADay: false,
         })),
       )
       setTests(next)
@@ -258,7 +260,7 @@ export function IsCodeRequiredTestsDialog({
           ) : null}
 
           <div className="min-h-0 flex-1 overflow-auto border border-stone-400 bg-white">
-            <table className="w-full min-w-[72rem] border-collapse text-xs">
+            <table className="w-full min-w-[60rem] border-collapse text-xs">
               <thead className="sticky top-0 z-10 bg-stone-800 text-left text-[11px] uppercase tracking-wide text-stone-100">
                 <tr>
                   <th className="w-8 px-2 py-1.5">#</th>
@@ -267,22 +269,20 @@ export function IsCodeRequiredTestsDialog({
                   <th className="w-40 px-2 py-1.5">Test Method</th>
                   <th className="w-24 px-2 py-1.5">Unit</th>
                   <th className="px-2 py-1.5">Requirement</th>
-                  <th className="w-36 px-2 py-1.5">Applies To</th>
-                  <th className="w-24 px-2 py-1.5">Tested By</th>
-                  <th className="w-24 px-2 py-1.5">Source</th>
+                  <th className="w-28 px-2 py-1.5 text-center">Possible Test in a Day</th>
                   <th className="w-10 px-2 py-1.5" />
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={10} className="px-3 py-6 text-center text-stone-500">
+                    <td colSpan={8} className="px-3 py-6 text-center text-stone-500">
                       Loading…
                     </td>
                   </tr>
                 ) : tests.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="px-3 py-6 text-center text-stone-500">
+                    <td colSpan={8} className="px-3 py-6 text-center text-stone-500">
                       No Tests Yet. Use Suggest With AI, From Past Checks or Add Test.
                     </td>
                   </tr>
@@ -311,21 +311,16 @@ export function IsCodeRequiredTestsDialog({
                           }}
                         />
                       </td>
-                      <td className="px-1 py-1">
-                        <Input className={cn(limsFieldClass, 'h-7 text-xs')} value={t.appliesTo} disabled={disabled} placeholder="All" onChange={(e) => update(i, { appliesTo: e.target.value })} />
+                      <td className="px-1 py-1 text-center align-middle">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 accent-amber-700"
+                          checked={t.possibleInADay}
+                          disabled={disabled}
+                          aria-label={`${t.testName || 'Test'}: Possible Test in a Day`}
+                          onChange={(e) => update(i, { possibleInADay: e.target.checked })}
+                        />
                       </td>
-                      <td className="px-1 py-1">
-                        <Select value={t.testedBy} disabled={disabled} onValueChange={(v) => update(i, { testedBy: v === 'Factory' ? 'Factory' : 'Lab' })}>
-                          <SelectTrigger className={cn(limsFieldClass, 'h-7 w-full text-xs')}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Lab">Lab</SelectItem>
-                            <SelectItem value="Factory">Factory</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </td>
-                      <td className="px-2 py-1.5 text-[11px] text-stone-600">{t.source}</td>
                       <td className="px-1 py-1">
                         <Button
                           type="button"
