@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { History, Lock, Plus, Save, Sparkles, Trash2, Unlock } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { History, Lock, Plus, Save, Sparkles, Trash2, Unlock, Wand2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -59,11 +59,28 @@ export function IsCodeRequiredTestsDialog({
   onOpenChange,
   isCodeId,
   isLabel,
+  selection,
+  sampleAi,
+  onListChange,
+  readOnly = false,
+  layer = 'stacked',
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   isCodeId: string | null
   isLabel: string
+  /** Factory Test Report: a tick per saved test puts it on the report. */
+  selection?: {
+    selectedIds: Set<string>
+    onToggle: (test: RequiredTest, checked: boolean) => void
+    onToggleMany: (tests: RequiredTest[], checked: boolean) => void
+  }
+  /** Factory Test Report: the AI reads this sample's requirement for the ticked tests (returns a message). */
+  sampleAi?: { label: string; run: (tests: RequiredTest[], onStep: (step: string) => void) => Promise<string> }
+  /** After loading and after saving: the list in order, and the saved tests whose fields changed. */
+  onListChange?: (tests: RequiredTest[], changed: RequiredTest[]) => void
+  readOnly?: boolean
+  layer?: 'stacked' | 'overlay'
 }) {
   const [tests, setTests] = useState<RequiredTest[]>([])
   const [notes, setNotes] = useState('')
@@ -72,6 +89,10 @@ export function IsCodeRequiredTestsDialog({
   const [busy, setBusy] = useState<string | null>(null)
   const [dirty, setDirty] = useState(false)
   const [aiSources, setAiSources] = useState<string[]>([])
+  /** The saved list as loaded, to tell which tests a save changed. */
+  const savedRef = useRef(new Map<string, string>())
+  const snapshot = (list: RequiredTest[]) =>
+    new Map(list.filter((t) => t.id).map((t) => [t.id!, JSON.stringify([t.testName, t.clause, t.testMethod, t.unit, t.requirement])]))
 
   useEffect(() => {
     if (!open || !isCodeId) return
@@ -85,6 +106,8 @@ export function IsCodeRequiredTestsDialog({
         setTests(list.tests)
         setNotes(list.notes)
         setLockedAt(list.lockedAt)
+        savedRef.current = snapshot(list.tests)
+        onListChange?.(list.tests, [])
       })
       .catch((err: unknown) => toast.error(err instanceof Error ? err.message : 'Could Not Load the Required Tests.'))
       .finally(() => live && setLoading(false))
@@ -94,7 +117,7 @@ export function IsCodeRequiredTestsDialog({
   }, [open, isCodeId])
 
   const locked = Boolean(lockedAt)
-  const disabled = locked || loading || busy !== null
+  const disabled = readOnly || locked || loading || busy !== null
 
   const update = (i: number, patch: Partial<RequiredTest>) => {
     setTests((prev) => prev.map((t, k) => (k === i ? { ...t, ...patch } : t)))
@@ -159,8 +182,12 @@ export function IsCodeRequiredTestsDialog({
     try {
       const { kept } = await saveRequiredTests(isCodeId, isLabel, tests, notes)
       const list = await fetchRequiredTests(isCodeId)
+      const before = savedRef.current
+      const after = snapshot(list.tests)
+      savedRef.current = after
       setTests(list.tests)
       setDirty(false)
+      onListChange?.(list.tests, list.tests.filter((t) => t.id && before.has(t.id) && before.get(t.id) !== after.get(t.id)))
       toast.success(`Required Tests Saved — ${list.tests.length} Tests.`)
       if (kept.length) toast.message(`Still Used Elsewhere, So Not Removed: ${kept.join(', ')}`)
     } catch (err) {
@@ -193,12 +220,26 @@ export function IsCodeRequiredTestsDialog({
   }
 
   const labTests = tests.filter((t) => t.testName.trim() && t.testedBy === 'Lab').length
+  const saved = tests.filter((t) => t.id)
+  const ticked = selection ? saved.filter((t) => selection.selectedIds.has(t.id!)) : []
+
+  const runSampleAi = async () => {
+    if (!sampleAi || !ticked.length) return
+    try {
+      const msg = await sampleAi.run(ticked, setBusy)
+      toast.success(msg)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'AI Could Not Read the Requirements.')
+    } finally {
+      setBusy(null)
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={(next) => busy === null && onOpenChange(next)}>
       <DialogContent
         persistOnFocusLoss
-        layer="stacked"
+        layer={layer}
         aria-describedby={undefined}
         className={cn(
           // Fills the content area beside the docked sidebar (full width on phones / with the sidebar collapsed).
@@ -232,6 +273,23 @@ export function IsCodeRequiredTestsDialog({
 
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden bg-gradient-to-b from-stone-100/80 to-white px-4 py-3">
           <div className="flex flex-wrap items-center justify-end gap-2">
+            {selection ? (
+              <span className="mr-auto text-xs text-stone-600">
+                {ticked.length} of {saved.length} Selected for This Report{dirty ? ' — Save to Select New Tests' : ''}
+              </span>
+            ) : null}
+            {sampleAi ? (
+              <Button
+                type="button"
+                variant="outline"
+                className={cn(limsOutlineBtnClass, 'gap-1.5')}
+                disabled={busy !== null || loading || !ticked.length}
+                title="AI Reads This Sample's Grade, Size and Declared Value and the Standard for the Selected Tests"
+                onClick={() => void runSampleAi()}
+              >
+                <Wand2 size={14} aria-hidden /> {sampleAi.label}
+              </Button>
+            ) : null}
             <Button type="button" variant="outline" className={cn(limsOutlineBtnClass, 'gap-1.5')} disabled={disabled} onClick={() => void runAi()}>
               <Sparkles size={14} aria-hidden /> Suggest With AI
             </Button>
@@ -263,6 +321,18 @@ export function IsCodeRequiredTestsDialog({
             <table className="w-full min-w-[60rem] border-collapse text-xs">
               <thead className="sticky top-0 z-10 bg-stone-800 text-left text-[11px] uppercase tracking-wide text-stone-100">
                 <tr>
+                  {selection ? (
+                    <th className="w-8 px-2 py-1.5 text-center">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-amber-600"
+                        aria-label="Select All Tests"
+                        disabled={readOnly || !saved.length}
+                        checked={saved.length > 0 && ticked.length === saved.length}
+                        onChange={(e) => selection.onToggleMany(saved, e.target.checked)}
+                      />
+                    </th>
+                  ) : null}
                   <th className="w-8 px-2 py-1.5">#</th>
                   <th className="px-2 py-1.5">Test Name</th>
                   <th className="w-32 px-2 py-1.5 text-center">Clause</th>
@@ -276,19 +346,32 @@ export function IsCodeRequiredTestsDialog({
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={8} className="px-3 py-6 text-center text-stone-500">
+                    <td colSpan={selection ? 9 : 8} className="px-3 py-6 text-center text-stone-500">
                       Loading…
                     </td>
                   </tr>
                 ) : tests.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-3 py-6 text-center text-stone-500">
+                    <td colSpan={selection ? 9 : 8} className="px-3 py-6 text-center text-stone-500">
                       No Tests Yet. Use Suggest With AI, From Past Checks or Add Test.
                     </td>
                   </tr>
                 ) : (
                   tests.map((t, i) => (
                     <tr key={t.id ?? `new-${i}`} className="border-t border-stone-200 align-top odd:bg-stone-50/60">
+                      {selection ? (
+                        <td className="px-2 py-1 text-center align-middle">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 accent-amber-700"
+                            aria-label={`Select ${t.testName || 'Test'} for This Report`}
+                            title={t.id ? undefined : 'Save the List First'}
+                            disabled={readOnly || !t.id}
+                            checked={Boolean(t.id && selection.selectedIds.has(t.id))}
+                            onChange={(e) => selection.onToggle(t, e.target.checked)}
+                          />
+                        </td>
+                      ) : null}
                       <td className="px-2 py-1 text-stone-500 tabular-nums">{i + 1}</td>
                       <td className="px-1 py-1">
                         <Input className={cn(limsFieldClass, 'h-7 text-xs')} value={t.testName} disabled={disabled} onChange={(e) => update(i, { testName: e.target.value })} />
@@ -375,7 +458,7 @@ export function IsCodeRequiredTestsDialog({
             type="button"
             variant="outline"
             className={cn(limsOutlineBtnClass, 'gap-1.5')}
-            disabled={loading || busy !== null}
+            disabled={readOnly || loading || busy !== null}
             onClick={() => void toggleLock()}
           >
             {locked ? <Unlock size={14} aria-hidden /> : <Lock size={14} aria-hidden />}

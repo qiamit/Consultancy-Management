@@ -14,7 +14,9 @@ import {
 import { cn } from '@/lib/utils'
 import type { BisDocumentPrintSettingsPanel } from '../print/bisDocumentPrintPageSettings'
 import { BisDocumentPrintSettingsDialog } from './BisDocumentPrintSettingsDialog'
-import { FtrIsTestParameterDialog, type FtrMasterParam } from './FtrIsTestParameterDialog'
+import { IsCodeRequiredTestsDialog } from '@/features/masters/is-codes/IsCodeRequiredTestsDialog'
+import type { RequiredTest } from '@/features/masters/is-codes/requiredTestsApi'
+import { suggestSampleRequirements } from './ftrSampleRequirementsAi'
 import {
   applySampleToFactoryTestReport,
   emptyFactoryTestReportEntry,
@@ -44,7 +46,26 @@ export type FactoryTestReportPreviewContext = {
   testedByDesignation: string
 }
 
-type MasterParam = FtrMasterParam
+/** A test of the IS Code's list (test_parameters), as the report copies it. */
+type MasterParam = {
+  id: string
+  item_name: string
+  clause_no: string | null
+  unit_value: string | null
+  specific_requirement: string | null
+  is_code_label: string | null
+}
+
+function masterOf(t: RequiredTest): MasterParam {
+  return {
+    id: t.id ?? '',
+    item_name: t.testName,
+    clause_no: t.clause,
+    unit_value: t.unit,
+    specific_requirement: t.requirement,
+    is_code_label: null,
+  }
+}
 
 function paramFromMaster(p: MasterParam, isLabel: string): FactoryTestReportParamRow {
   return emptyFactoryTestReportParamRow({
@@ -830,20 +851,57 @@ export function FactoryTestReportModuleFields({
         </DialogContent>
       </Dialog>
 
-      <FtrIsTestParameterDialog
+      <IsCodeRequiredTestsDialog
         open={paramPickerOpen}
         onOpenChange={setParamPickerOpen}
-        isCodeId={isCodeId}
-        isCodeLabel={isCodeLabel.trim() || (isNumber !== '—' ? isNumber : '')}
-        selectedParamIds={selectedParamIds}
-        onToggleParam={toggleParam}
-        onToggleParams={toggleParams}
-        onParamCreated={() => {
-          /* list refresh handled inside dialog; selection via onToggleParam */
+        isCodeId={isCodeId?.trim() || null}
+        isLabel={isCodeLabel.trim() || (isNumber !== '—' ? isNumber : '')}
+        layer="overlay"
+        readOnly={disabled}
+        selection={{
+          selectedIds: selectedParamIds,
+          onToggle: (t, checked) => t.id && toggleParam(masterOf(t), checked),
+          onToggleMany: (list, checked) => toggleParams(list.filter((t) => t.id).map(masterOf), checked),
         }}
-        onParamUpdated={refreshParamFromMaster}
-        onOrderChange={applyMasterOrder}
-        disabled={disabled}
+        onListChange={(list, changed) => {
+          applyMasterOrder(list.map((t) => t.id).filter((id): id is string => Boolean(id)))
+          for (const t of changed) refreshParamFromMaster(masterOf(t))
+        }}
+        sampleAi={{
+          label: 'Requirements for This Sample',
+          run: async (list, onStep) => {
+            const sample = usableSamples.find((s) => s.id === activeReport.sampleRowId)
+            const { results, model } = await suggestSampleRequirements({
+              isCodeId: isCodeId?.trim() ?? '',
+              isLabel: isCodeLabel.trim() || isNumber,
+              sample: {
+                description: sample?.sampleDescription ?? '',
+                grade: activeReport.gradeTypeVariety || sample?.gradeTypeVariety || '',
+                declaredValue: activeReport.declaredValue || sample?.declaredValue || '',
+              },
+              tests: list.map((t) => {
+                const onReport = activeReport.parameters.find((p) => p.testParameterId === t.id)
+                return {
+                  id: t.id!,
+                  testName: t.testName,
+                  clause: t.clause,
+                  unit: onReport?.unit || t.unit,
+                  requirement: onReport?.specifiedRequirement || t.requirement,
+                }
+              }),
+              onStep,
+            })
+            if (results.length) {
+              const byId = new Map(results.map((r) => [r.id, r.requirement]))
+              patchActiveReport({
+                parameters: activeReport.parameters.map((p) =>
+                  byId.has(p.testParameterId) ? { ...p, specifiedRequirement: byId.get(p.testParameterId)! } : p,
+                ),
+              })
+            }
+            return `${results.length} of ${list.length} Specified Requirements Updated on This Report${model ? ` (AI Model: ${model})` : ''}.`
+          },
+        }}
       />
     </div>
   )
