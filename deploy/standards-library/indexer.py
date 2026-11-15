@@ -8,6 +8,7 @@ Only what changed since the last run is read again:
   - new path, sha256 of a file that is gone  -> moved (category / name updated, pages kept)
   - otherwise                                -> read: text page by page, OCR for scanned pages, BSB stamp removed
   - indexed but no longer in the folder      -> removed from the index
+  - noted "Almost No Text" on the last read  -> read again on every run (few files; OCR may get their text now)
 Every file is written in its own transaction, so a run that stops keeps what it finished; the next run goes on.
 Two runs never overlap (database lock). Each run is logged in standard_index_runs.
 
@@ -278,13 +279,14 @@ def ocr_page(pdf, page):
 def read_pdf(pdf):
     """[(page no., text, ocr?)] of a PDF; scanned pages OCR'd."""
     pages = []
-    for i, text in enumerate(page_texts(pdf), start=1):
-        ocr = False
+    for i, raw in enumerate(page_texts(pdf), start=1):
+        # Judged without the BSB stamp: a scanned page carrying the stamp's text line is still a scanned page.
+        text, ocr = clean_text(raw).strip(), False
         if len(text) < BLANK_BELOW:
-            t = ocr_page(pdf, i).strip()
+            t = clean_text(ocr_page(pdf, i)).strip()
             if len(t) > len(text):
                 text, ocr = t, True
-        pages.append((i, clean_text(text), ocr))
+        pages.append((i, text, ocr))
     return pages
 
 
@@ -600,16 +602,21 @@ def main():
         sys.exit("STOP: another indexer run is still working.")
 
     indexed = {}
-    for rel, size, mtime, sha in conn.execute(
-        "SELECT relpath, bytes, mtime, sha256 FROM public.standard_docs WHERE source = 'library' AND relpath NOT LIKE '%::%'"
+    no_text = set()  # read again on every run: a better reader (OCR) may now get their text; they are few
+    for rel, size, mtime, sha, review in conn.execute(
+        "SELECT relpath, bytes, mtime, sha256, review FROM public.standard_docs WHERE source = 'library' AND relpath NOT LIKE '%::%'"
     ):
         if not args.only or args.only.lower() in rel.lower():
             indexed[rel] = (size, mtime, sha)
+            if "Almost No Text" in (review or ""):
+                no_text.add(rel)
 
     unchanged, touched, to_read = [], [], []
     for rel, (full, size, mtime) in found.items():
         old = indexed.get(rel)
-        if old and old[0] == size and abs((old[1] or 0) - mtime) < 1:
+        if rel in no_text:
+            to_read.append(rel)
+        elif old and old[0] == size and abs((old[1] or 0) - mtime) < 1:
             unchanged.append(rel)
         else:
             to_read.append(rel)
@@ -620,7 +627,7 @@ def main():
     sha_of, moves, reads = {}, [], []
     for rel in to_read:
         old = indexed.get(rel)
-        if not old and not gone_by_sha:
+        if rel in no_text or (not old and not gone_by_sha):
             reads.append(rel)  # a new file and nothing removed: no move possible, hashed while it is read
             continue
         sha_of[rel] = sha256_of(found[rel][0])

@@ -139,8 +139,9 @@ a Product Manual and is used first.
 
 ## Rules kept from the old tool
 
-- `pdftotext` page by page; a page with under 30 characters is OCR'd (tesseract, 200 dpi). A file with almost no
-  text even after OCR goes on the review list.
+- `pdftotext` page by page; a page with under 30 characters is OCR'd (tesseract, 200 dpi). The 30 characters are
+  counted after the BSB stamp is removed: a scanned page whose only text is the stamp line is still OCR'd. A file
+  with almost no text even after OCR goes on the review list, and is read again on every run.
 - PDF portfolio attachments are indexed as their own documents (`<file>::<attachment>.pdf`).
 - The BSB download stamp (buyer name, email, IP) and every email address are removed before saving.
 - Customers never see these tables (staff-only RLS); only the indexer (database owner) writes. Two runs never
