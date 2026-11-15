@@ -21,6 +21,7 @@ import {
   type RequiredTest,
 } from './requiredTestsApi'
 import { suggestRequiredTests } from './requiredTestsAi'
+import { finalProductTestName, formatRequirement } from './requirementText'
 
 const emptyTest = (): RequiredTest => ({
   testName: '',
@@ -130,11 +131,11 @@ export function IsCodeRequiredTestsDialog({
       const { next, added } = mergeTests(
         tests,
         past.map((p) => ({
-          testName: p.testName,
+          testName: finalProductTestName(p.testName),
           clause: p.clause,
           testMethod: '',
           unit: '',
-          requirement: p.requirement,
+          requirement: formatRequirement(p.requirement),
           appliesTo: '',
           testedBy: 'Lab',
           source: 'Past Checks',
@@ -302,7 +303,13 @@ export function IsCodeRequiredTestsDialog({
                         <Input className={cn(limsFieldClass, 'h-7 text-xs')} value={t.unit} disabled={disabled} aria-label="Unit" onChange={(e) => update(i, { unit: e.target.value })} />
                       </td>
                       <td className="px-1 py-1">
-                        <Input className={cn(limsFieldClass, 'h-7 text-xs')} value={t.requirement} disabled={disabled} onChange={(e) => update(i, { requirement: e.target.value })} />
+                        <Input className={cn(limsFieldClass, 'h-7 text-xs')} value={t.requirement} disabled={disabled} onChange={(e) => update(i, { requirement: e.target.value })}
+                          // "≤ 0.12 %" typed by hand becomes "0.12 % Maximum"; "8.5 - 10.5 %" becomes "8.5 % - 10.5 %".
+                          onBlur={(e) => {
+                            const next = formatRequirement(e.target.value, t.unit)
+                            if (next !== e.target.value) update(i, { requirement: next })
+                          }}
+                        />
                       </td>
                       <td className="px-1 py-1">
                         <Input className={cn(limsFieldClass, 'h-7 text-xs')} value={t.appliesTo} disabled={disabled} placeholder="All" onChange={(e) => update(i, { appliesTo: e.target.value })} />
