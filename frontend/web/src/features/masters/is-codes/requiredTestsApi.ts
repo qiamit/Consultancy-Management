@@ -3,11 +3,16 @@ import { supabase } from '@/lib/supabaseClient'
 export type RequiredTestedBy = 'Lab' | 'Factory'
 export type RequiredTestSource = 'Manual Entry' | 'AI Suggestion' | 'Past Checks'
 
-/** One required test of an IS Code (table is_code_required_tests). */
+/**
+ * One test of an IS Code: a row of public.test_parameters (the one list of tests per IS Code since 15 Nov 2026; the
+ * Factory Test Report of BIS Applications / Licences and the Customer Portal records read the same rows).
+ */
 export type RequiredTest = {
   id?: string
   testName: string
   clause: string
+  testMethod: string
+  unit: string
   requirement: string
   appliesTo: string
   testedBy: RequiredTestedBy
@@ -22,9 +27,12 @@ export type RequiredTestList = {
 
 type Row = {
   id: string
+  item_name: string | null
   test_name: string
-  clause: string
-  requirement: string
+  clause_no: string | null
+  test_method: string | null
+  unit_value: string | null
+  specific_requirement: string | null
   applies_to: string
   tested_by: RequiredTestedBy
   source: RequiredTestSource
@@ -33,10 +41,12 @@ type Row = {
 export async function fetchRequiredTests(isCodeId: string): Promise<RequiredTestList> {
   const [{ data: rows, error }, { data: list, error: listError }] = await Promise.all([
     supabase
-      .from('is_code_required_tests')
-      .select('id, test_name, clause, requirement, applies_to, tested_by, source')
+      .from('test_parameters')
+      .select('id, item_name, test_name, clause_no, test_method, unit_value, specific_requirement, applies_to, tested_by, source')
       .eq('is_code_id', isCodeId)
-      .order('sort_order', { ascending: true }),
+      .is('archived_at', null)
+      .order('display_order', { ascending: true, nullsFirst: true })
+      .order('item_name', { ascending: true }),
     supabase.from('is_code_required_test_lists').select('locked_at, notes').eq('is_code_id', isCodeId).maybeSingle(),
   ])
   if (error) throw error
@@ -44,44 +54,77 @@ export async function fetchRequiredTests(isCodeId: string): Promise<RequiredTest
   return {
     tests: ((rows ?? []) as Row[]).map((r) => ({
       id: r.id,
-      testName: r.test_name,
-      clause: r.clause,
-      requirement: r.requirement,
-      appliesTo: r.applies_to,
-      testedBy: r.tested_by,
-      source: r.source,
+      testName: (r.item_name ?? '').trim() || r.test_name,
+      clause: r.clause_no ?? '',
+      testMethod: r.test_method ?? '',
+      unit: r.unit_value ?? '',
+      requirement: r.specific_requirement ?? '',
+      appliesTo: r.applies_to ?? '',
+      testedBy: r.tested_by ?? 'Lab',
+      source: r.source ?? 'Manual Entry',
     })),
     lockedAt: (list?.locked_at as string | null) ?? null,
     notes: String(list?.notes ?? ''),
   }
 }
 
-/** Replaces the whole list (in the order given). Fails while the list is locked. */
-export async function saveRequiredTests(isCodeId: string, tests: RequiredTest[], notes: string): Promise<void> {
-  const clean = tests
-    .map((t) => ({ ...t, testName: t.testName.trim() }))
-    .filter((t) => t.testName)
-  const { error: delError } = await supabase.from('is_code_required_tests').delete().eq('is_code_id', isCodeId)
-  if (delError) throw delError
-  if (clean.length) {
-    const { error } = await supabase.from('is_code_required_tests').insert(
-      clean.map((t, i) => ({
-        is_code_id: isCodeId,
-        test_name: t.testName,
-        clause: t.clause.trim(),
-        requirement: t.requirement.trim(),
-        applies_to: t.appliesTo.trim(),
-        tested_by: t.testedBy,
-        source: t.source,
-        sort_order: i,
-      })),
-    )
+/**
+ * Saves the list in the order given: changed rows are updated, new ones added, removed ones deleted (a test still used
+ * elsewhere is kept: delete_master_rows skips it). Fails while the list is locked. Returns the names not deleted.
+ */
+export async function saveRequiredTests(
+  isCodeId: string,
+  isCodeLabel: string,
+  tests: RequiredTest[],
+  notes: string,
+): Promise<{ kept: string[] }> {
+  const clean = tests.map((t) => ({ ...t, testName: t.testName.trim() })).filter((t) => t.testName)
+  const { data: current, error: curError } = await supabase
+    .from('test_parameters')
+    .select('id, item_name, test_name')
+    .eq('is_code_id', isCodeId)
+    .is('archived_at', null)
+  if (curError) throw curError
+  const fields = (t: RequiredTest, i: number) => ({
+    item_name: t.testName,
+    test_name: t.testName,
+    clause_no: t.clause.trim(),
+    test_method: t.testMethod.trim(),
+    unit_value: t.unit.trim(),
+    unit: t.unit.trim(),
+    specific_requirement: t.requirement.trim(),
+    specified_value: t.requirement.trim(),
+    applies_to: t.appliesTo.trim(),
+    tested_by: t.testedBy,
+    source: t.source,
+    display_order: i + 1,
+  })
+  const keep = new Set(clean.map((t) => t.id).filter(Boolean) as string[])
+  const removed = ((current ?? []) as Array<{ id: string; item_name: string | null; test_name: string }>).filter((r) => !keep.has(r.id))
+  let kept: string[] = []
+  if (removed.length) {
+    const { data, error } = await supabase.rpc('delete_master_rows', { p_table: 'test_parameters', p_ids: removed.map((r) => r.id) })
+    if (error) throw error
+    const deleted = new Set(((data as { deleted?: string[] | null } | null)?.deleted ?? []) as string[])
+    kept = removed.filter((r) => !deleted.has(r.id)).map((r) => (r.item_name ?? '').trim() || r.test_name)
+  }
+  for (const [i, t] of clean.entries()) {
+    if (!t.id) continue
+    const { error } = await supabase.from('test_parameters').update(fields(t, i)).eq('id', t.id)
+    if (error) throw error
+  }
+  const added = clean.map((t, i) => ({ t, i })).filter(({ t }) => !t.id)
+  if (added.length) {
+    const { error } = await supabase
+      .from('test_parameters')
+      .insert(added.map(({ t, i }) => ({ is_code_id: isCodeId, is_code_label: isCodeLabel || null, ...fields(t, i) })))
     if (error) throw error
   }
   const { error: listError } = await supabase
     .from('is_code_required_test_lists')
     .upsert({ is_code_id: isCodeId, notes: notes.trim(), updated_at: new Date().toISOString() }, { onConflict: 'is_code_id' })
   if (listError) throw listError
+  return { kept }
 }
 
 export async function setRequiredTestsLocked(isCodeId: string, locked: boolean): Promise<void> {

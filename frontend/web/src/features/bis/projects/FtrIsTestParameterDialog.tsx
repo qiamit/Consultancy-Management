@@ -392,7 +392,7 @@ export function FtrIsTestParameterDialog({
       if (!updated) throw new Error('You do not have edit access for this record (view-only).')
       setRows((prev) => prev.map((r) => (r.id === updated.id ? updated : r)))
       onParamUpdated?.(updated)
-      setSaveMessage('Saved to Test Parameter master.')
+      setSaveMessage('Saved to the Required Tests of This IS Code.')
       return true
     } catch (err) {
       setSaveMessage(err instanceof Error ? err.message : 'Unable to save test parameter.')
@@ -492,7 +492,7 @@ export function FtrIsTestParameterDialog({
       if (disabled) return
       const label = row.item_name?.trim() || 'this record'
       const ok = await confirm(
-        `Permanently Delete "${label}" from the Test Parameter Master? Records Still Used Elsewhere Will Be Skipped. This Cannot Be Undone.`,
+        `Permanently Delete "${label}" from the Required Tests of This IS Code? Records Still Used Elsewhere Will Be Skipped. This Cannot Be Undone.`,
         { title: 'Delete Test Parameter', confirmLabel: 'Delete', destructive: true },
       )
       if (!ok) return
@@ -512,7 +512,7 @@ export function FtrIsTestParameterDialog({
         if (param && selectedParamIds.has(row.id)) onToggleParam(param, false)
         if (editingId === row.id) setEditingId(null)
         setRows((prev) => prev.filter((r) => r.id !== row.id))
-        setSaveMessage(`Deleted "${label}" from Test Parameter master.`)
+        setSaveMessage(`Deleted "${label}" from the Required Tests of This IS Code.`)
       } catch (err) {
         setSaveMessage(err instanceof Error ? err.message : 'Unable to delete test parameter.')
       }
@@ -562,7 +562,7 @@ export function FtrIsTestParameterDialog({
             lockedLabel,
           ),
         )
-        setSaveMessage('Saved to Test Parameter master and added to this report.')
+        setSaveMessage('Saved to the Required Tests of This IS Code and Added to This Report.')
       } catch (err) {
         setSaveMessage(err instanceof Error ? err.message : 'Unable to save test parameter.')
       } finally {

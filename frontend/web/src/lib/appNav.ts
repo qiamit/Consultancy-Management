@@ -117,12 +117,6 @@ export const SIDEBAR_NAV_SECTIONS: NavSection[] = [
         clause: 'products',
       },
       {
-        label: 'Test Parameter',
-        to: '/masters/test-parameter',
-        icon: TestTube,
-        clause: 'test-parameters',
-      },
-      {
         label: 'Laboratory Master',
         to: '/masters/laboratories',
         icon: TestTube,

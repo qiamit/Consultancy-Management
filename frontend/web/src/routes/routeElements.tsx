@@ -11,7 +11,6 @@ import ContactUsPage from '@/features/contact/ContactUsPage'
 import ClientsPage from '@/features/masters/ClientsPage'
 import IsCodesPage from '@/features/masters/IsCodesPage'
 import ProductServicesPage from '@/features/masters/ProductServicesPage'
-import TestParameterPage from '@/features/masters/TestParameterPage'
 import LaboratoriesMasterPage from '@/features/masters/laboratories/LaboratoriesMasterPage'
 import BisBranchOfficesMasterPage from '@/features/masters/bis-branch-offices/BisBranchOfficesMasterPage'
 import QuotationPage from '@/features/finance/sale/quotation/QuotationPage'
@@ -116,7 +115,7 @@ export function AiSettingsRoute() {
   )
 }
 
-export { DashboardPage, ClientsPage, IsCodesPage, ProductServicesPage, TestParameterPage }
+export { DashboardPage, ClientsPage, IsCodesPage, ProductServicesPage }
 export { HelpPage as HelpRoute, ContactUsPage as ContactUsRoute }
 export {
   QuotationPage as SaleQuotationRoute,

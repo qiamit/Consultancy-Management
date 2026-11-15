@@ -25,6 +25,8 @@ import { suggestRequiredTests } from './requiredTestsAi'
 const emptyTest = (): RequiredTest => ({
   testName: '',
   clause: '',
+  testMethod: '',
+  unit: '',
   requirement: '',
   appliesTo: '',
   testedBy: 'Lab',
@@ -46,9 +48,10 @@ function mergeTests(list: RequiredTest[], extra: RequiredTest[]): { next: Requir
 }
 
 /**
- * Required Tests of one IS Code: the tests the laboratory must report, reviewed once and locked. Rows come from
- * "Suggest With AI" (Product Manual + Standard from the standards index), "From Past Checks" (results of earlier AI
- * Conformity Checks) or by hand.
+ * Required Tests of one IS Code: its one list of tests (public.test_parameters), reviewed once and locked. The same
+ * rows feed the Factory Test Report of BIS Applications / Licences, the Customer Portal records and the AI Conformity
+ * Check. Rows come from "Suggest With AI" (Product Manual + Standard from the standards index), "From Past Checks"
+ * (results of earlier AI Conformity Checks) or by hand.
  */
 export function IsCodeRequiredTestsDialog({
   open,
@@ -131,6 +134,8 @@ export function IsCodeRequiredTestsDialog({
         past.map((p) => ({
           testName: p.testName,
           clause: p.clause,
+          testMethod: '',
+          unit: '',
           requirement: p.requirement,
           appliesTo: '',
           testedBy: 'Lab',
@@ -151,11 +156,12 @@ export function IsCodeRequiredTestsDialog({
     if (!isCodeId) return
     setBusy('Saving…')
     try {
-      await saveRequiredTests(isCodeId, tests, notes)
+      const { kept } = await saveRequiredTests(isCodeId, isLabel, tests, notes)
       const list = await fetchRequiredTests(isCodeId)
       setTests(list.tests)
       setDirty(false)
       toast.success(`Required Tests Saved — ${list.tests.length} Tests.`)
+      if (kept.length) toast.message(`Still Used Elsewhere, So Not Removed: ${kept.join(', ')}`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could Not Save.')
     } finally {
@@ -266,29 +272,31 @@ export function IsCodeRequiredTestsDialog({
           ) : null}
 
           <div className="min-h-0 flex-1 overflow-auto border border-stone-400 bg-white">
-            <table className="w-full min-w-[60rem] border-collapse text-xs">
+            <table className="w-full min-w-[72rem] border-collapse text-xs">
               <thead className="sticky top-0 z-10 bg-stone-800 text-left text-[11px] uppercase tracking-wide text-stone-100">
                 <tr>
                   <th className="w-8 px-2 py-1.5">#</th>
                   <th className="px-2 py-1.5">Test Name</th>
-                  <th className="w-36 px-2 py-1.5">Clause</th>
+                  <th className="w-32 px-2 py-1.5">Clause</th>
+                  <th className="w-40 px-2 py-1.5">Test Method</th>
+                  <th className="w-24 px-2 py-1.5">Unit</th>
                   <th className="px-2 py-1.5">Requirement</th>
-                  <th className="w-40 px-2 py-1.5">Applies To</th>
-                  <th className="w-28 px-2 py-1.5">Tested By</th>
-                  <th className="w-28 px-2 py-1.5">Source</th>
+                  <th className="w-36 px-2 py-1.5">Applies To</th>
+                  <th className="w-24 px-2 py-1.5">Tested By</th>
+                  <th className="w-24 px-2 py-1.5">Source</th>
                   <th className="w-10 px-2 py-1.5" />
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={8} className="px-3 py-6 text-center text-stone-500">
+                    <td colSpan={10} className="px-3 py-6 text-center text-stone-500">
                       Loading…
                     </td>
                   </tr>
                 ) : tests.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-3 py-6 text-center text-stone-500">
+                    <td colSpan={10} className="px-3 py-6 text-center text-stone-500">
                       No Tests Yet. Use Suggest With AI, From Past Checks or Add Test.
                     </td>
                   </tr>
@@ -301,6 +309,12 @@ export function IsCodeRequiredTestsDialog({
                       </td>
                       <td className="px-1 py-1">
                         <Input className={cn(limsFieldClass, 'h-7 text-xs')} value={t.clause} disabled={disabled} onChange={(e) => update(i, { clause: e.target.value })} />
+                      </td>
+                      <td className="px-1 py-1">
+                        <Input className={cn(limsFieldClass, 'h-7 text-xs')} value={t.testMethod} disabled={disabled} aria-label="Test Method" onChange={(e) => update(i, { testMethod: e.target.value })} />
+                      </td>
+                      <td className="px-1 py-1">
+                        <Input className={cn(limsFieldClass, 'h-7 text-xs')} value={t.unit} disabled={disabled} aria-label="Unit" onChange={(e) => update(i, { unit: e.target.value })} />
                       </td>
                       <td className="px-1 py-1">
                         <Input className={cn(limsFieldClass, 'h-7 text-xs')} value={t.requirement} disabled={disabled} onChange={(e) => update(i, { requirement: e.target.value })} />
