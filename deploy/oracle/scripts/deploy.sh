@@ -45,6 +45,9 @@ fi
 echo "== Deploying $(git log -1 --format='%h %s')"
 # Caddy mounts this folder for the preview site; create it as this user before Docker would (as root).
 mkdir -p "$DATA_DIR/preview"
+# Docker creates a missing bind-mount folder as root (it did on the first release with the preview mount):
+# give it back to this user so the deploy can write into it.
+[ -w "$DATA_DIR/preview" ] || sudo -n chown "$(id -u):$(id -g)" "$DATA_DIR/preview"
 
 echo "== Web app build"
 docker run --rm \
