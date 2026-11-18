@@ -51,6 +51,9 @@ docker run --rm \
   node:22.23-bookworm-slim sh -c "npm ci --no-audit --no-fund --loglevel=error && npx vite build --outDir /web/dist-preview --emptyOutDir"
 # Caddy serves $DATA_DIR/preview (mounted once); swapping the web folder inside it needs no restart.
 mkdir -p "$DATA_DIR/preview"
+# Docker creates a missing bind-mount folder as root (it did on the first release with the preview mount):
+# give it back to this user so the deploy can write into it.
+[ -w "$DATA_DIR/preview" ] || sudo -n chown "$(id -u):$(id -g)" "$DATA_DIR/preview"
 rm -rf "$DATA_DIR/preview/web.next" && cp -a "$PREVIEW_SRC/frontend/web/dist-preview" "$DATA_DIR/preview/web.next"
 rm -rf "$DATA_DIR/preview/web.prev" && { [ -d "$DATA_DIR/preview/web" ] && mv "$DATA_DIR/preview/web" "$DATA_DIR/preview/web.prev" || true; }
 mv "$DATA_DIR/preview/web.next" "$DATA_DIR/preview/web"
