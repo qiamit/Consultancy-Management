@@ -45,14 +45,12 @@ deploy)। Database की गड़बड़ी के लिए release से
 
 - जाँच **सिर्फ़ एक TEST client** पर: नाम `TEST - Q Engineering`, email owner का अपना। असली client पर कभी नहीं।
 - जाँच ख़त्म होते ही उसी समय test के records (sample, SRF, report, application, document …) हटाएँ।
-- **Numbering:**
-  - Test Report No और NABL ULR No: app अगला नंबर "सबसे बड़ा मौजूदा नंबर + 1" से बनाता है। Test record हटाते
-    ही नंबर फिर से खाली हो जाता है, और अगला असली काम वही नंबर लेता है।
+- **Numbering:** Consultancy Pro में Test Report No, NABL ULR No जैसे LIMS वाले नंबर इस्तेमाल नहीं होते।
   - Finance documents (invoice, quotation, payment, credit / debit note, purchase …): नंबर एक counter
     (`document_series`) से मिलता है, जो record हटाने पर **वापस नहीं घटता**, और app में उसे बदलने की screen नहीं
     है। इसलिए testing में ऐसे documents **नंबर देकर save न करें**। ज़रूरी हो तो पहले owner से पूछें।
-  - कोई और नंबर (SRF आदि): उस हिस्से की जाँच से पहले session code में देखकर owner को बताए कि नंबर कैसे बनता
-    है, और हटाने पर खाली होगा या नहीं।
+  - कोई और क्रम वाला नंबर: उस हिस्से की जाँच से पहले session code में देखकर owner को बताए कि नंबर कैसे बनता
+    है, और test record हटाने पर अगला असली काम वही नंबर लेगा या नहीं।
 
 ### 3. Email और reminders
 
@@ -98,6 +96,18 @@ deploy)। Database की गड़बड़ी के लिए release से
    (Server की GitHub key अगर सिर्फ़ `deploy.sh` चला सकती है, तो preview उसी नई `deploy.sh` से होकर जाता है।
    इसलिए `testing` branch नई script के live होने से पहले नहीं बनती।)
 
+## Standards Library (अभी जैसा है वैसा)
+
+- Standards की PDF files owner के Mac पर हैं, और sync अभी Mac से ही चलता है (`deploy/standards-library/README.md`):
+  `~/Library/CloudStorage/OneDrive-Personal/Documents/All Standards Databse/Oracle Database`
+  (`standards-sync.sh` में `STANDARDS_SRC` का default)। यह folder path न बदलें।
+- आगे का plan (अभी नहीं): Standards Library को vector database में बदलना। तब भी sync इसी folder से होगा।
+
+## Server config की जाँच
+
+`deploy/oracle/` या workflows बदलने वाले हर PR पर GitHub "Check server config" चलाता है: Caddyfile
+(`caddy validate`), दोनों compose files और deploy scripts। लाल हो तो merge न करें।
+
 ## Files
 
 | File | काम |
@@ -108,4 +118,5 @@ deploy)। Database की गड़बड़ी के लिए release से
 | `deploy/oracle/scripts/preview-deploy.sh` | Server पर preview: `/opt/qe/preview` में `testing`, web build, preview backend |
 | `deploy/oracle/preview/docker-compose.yml` | `preview-functions`, `preview-pdf` (scheduled jobs बंद) |
 | `deploy/oracle/Caddyfile` | `preview.qengineering.in` site, preview origin के लिए CORS और routing |
+| `.github/workflows/check-server-config.yml` | PR पर Caddyfile, compose files और scripts की जाँच |
 | `deploy/oracle/release-plan.sh` | Release से पहले: कौन-सी migrations और कौन-से हिस्से बदलेंगे (सिर्फ़ पढ़ता है) |
