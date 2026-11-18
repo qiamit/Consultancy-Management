@@ -197,7 +197,8 @@ services:
       # Every /pdf request needs a signed-in user's token, checked against GoTrue.
       AUTH_URL: http://auth:9999
       AUTH_ANON_KEY: ${ANON_KEY}
-      PDF_CORS_ORIGINS: https://${APP_DOMAIN},https://www.${APP_DOMAIN}
+      # The preview site uses this live service while its own preview-pdf container is not running.
+      PDF_CORS_ORIGINS: https://${APP_DOMAIN},https://www.${APP_DOMAIN},https://${PREVIEW_DOMAIN:-preview.qengineering.in}
       ALLOW_LOCALHOST_ORIGINS: ${ALLOW_LOCALHOST_ORIGINS:-1}
       # The only URLs a rendered page may load (besides data: / blob:): stored files on the API.
       PDF_ALLOWED_URL_PREFIXES: https://${API_DOMAIN}/storage/v1/object/
@@ -240,9 +241,12 @@ services:
       API_DOMAIN: ${API_DOMAIN}
       MCP_DOMAIN: ${MCP_DOMAIN}
       PDF_DOMAIN: ${PDF_DOMAIN}
+      PREVIEW_DOMAIN: ${PREVIEW_DOMAIN:-preview.qengineering.in}
       ACME_EMAIL: ${ACME_EMAIL}
       ALLOW_LOCALHOST_ORIGINS: ${ALLOW_LOCALHOST_ORIGINS:-1}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ${DATA_DIR:-/opt/qe/data}/web:/srv/app:ro
+      # Preview web app (scripts/preview-deploy.sh swaps preview/web inside this folder, so no Caddy restart).
+      - ${DATA_DIR:-/opt/qe/data}/preview:/srv/preview:ro
       - ${DATA_DIR:-/opt/qe/data}/caddy:/data

@@ -1,10 +1,10 @@
-# Consultancy Pro (Railway)
+# Consultancy Pro
 
 Monorepo for **Consultancy Pro** by Q Engineering. Same technology stack as [Qirlpl_Lims_Railway](https://github.com/qiamit/Qirlpl_Lims_Railway):
 
 - React + TypeScript + Vite frontend (stone/amber LIMS theme)
-- Railway API gateway (Caddy) → GoTrue Auth / PostgREST / Storage / Functions
-- Railway Postgres + object storage + Playwright PDF
+- API gateway (Caddy) → GoTrue Auth / PostgREST / Storage / Functions, on one Oracle Cloud server (`deploy/oracle`)
+- Postgres 17 + files on the server's disk + Playwright PDF
 - Resend for outbound email (`@qengineering.in`)
 
 **Repository:** [https://github.com/qiamit/Consultancy-Management](https://github.com/qiamit/Consultancy-Management)
@@ -15,39 +15,28 @@ Monorepo for **Consultancy Pro** by Q Engineering. Same technology stack as [Qir
 Consultancy-Management/
 ├── frontend/web/             # React + TypeScript + Vite
 ├── frontend/extensions/      # QE Consultancy Chrome and Safari extension
-├── backend/database/         # Railway Postgres SQL migrations
-├── backend/services/gateway/ # Caddy API gateway
+├── backend/database/         # Postgres SQL migrations
+├── backend/services/gateway/ # Caddy API gateway (Railway era; the server uses deploy/oracle/Caddyfile)
 ├── backend/services/functions/ # Node functions (users, email/Resend, QI Assistant)
 ├── backend/services/pdf-service/ # PDF renderer
 ├── backend/services/storage-minio/ # Legacy MinIO image helper
+├── deploy/oracle/            # The live server: compose, Caddy, deploy / preview / backup scripts
 └── knowledge_engine/         # BIS PDF knowledge search (local, standalone)
 ```
 
-## Local Setup (fully local backend)
+## How we work
 
-Needs Docker. Runs Postgres, auth, REST, storage, functions and the gateway locally; see [backend/local-dev/README.md](backend/local-dev/README.md).
+All work happens in Claude cloud sessions and on GitHub; there is one database, the live one on the Oracle
+server. `main` is the live app (https://qengineering.in), `testing` is the preview (https://preview.qengineering.in,
+same database). Rules and steps: [docs/workflow.md](docs/workflow.md). Server: [deploy/oracle/README.md](deploy/oracle/README.md).
 
-1. `npm install && npm install --prefix frontend/web && npm install --prefix backend`
-2. `npm run local:up`
-3. `npm run dev` and open http://localhost:5173 — sign in as `admin@consultancy.local` / `Admin@12345`
-
-## Local Setup (against Railway)
-
-1. `npm install --prefix frontend/web`
-2. Copy `frontend/web/.env.example` to `frontend/web/.env`
-3. Set Railway API values:
-
-   - `VITE_SUPABASE_URL` = Railway API gateway URL
-   - `VITE_SUPABASE_ANON_KEY` = Railway anon JWT
-   - `VITE_PDF_SERVICE_URL` = Railway PDF service `/pdf`
-
-4. `npm run dev`
-5. Local knowledge search (optional): `npm run knowledge:api`
+`backend/local-dev/` (a throwaway local backend in Docker) still exists for code experiments, but it is not part
+of the release process.
 
 ## Notes
 
 - Never commit `.env` files.
 - Do not connect hosted Supabase Cloud or Vercel.
-- Schema changes: add SQL under `backend/database/migrations/` and apply with `npm run db:migrate` on Railway Postgres.
+- Schema changes: add SQL under `backend/database/migrations/`. It is applied by the release of `main` (docs/workflow.md, rule 1), never by hand.
 - Domain modules (BIS applications, renewals, etc.) are scaffolded; masters + finance quotation reuse the LIMS UI chrome.
 - BIS knowledge indexing (`knowledge_engine/`): configure paths in `knowledge_engine/.env` (from `.env.example`). Keep PDF sources and the vector index outside the repo; do not install or run bulk indexing until configured. Call the search API over HTTP. Contract: `knowledge_engine/API.md`.

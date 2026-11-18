@@ -1,19 +1,21 @@
-# Deploy Consultancy Pro to the Oracle server (deploy/oracle). It SSHes to the server and runs
-# deploy/oracle/scripts/deploy.sh, which pulls main, builds the web app, restarts the containers and applies
-# database migrations.
+# Deploy Consultancy Pro (main) to the Oracle server (deploy/oracle). It SSHes to the server and runs
+# deploy/oracle/scripts/deploy.sh: database backup first, then pull main, build the web app, restart the containers,
+# apply database migrations.
+#
+# main is the live app (docs/workflow.md): every push to main (a merge of `testing`, after the owner's OK) releases
+# it. It can also be run by hand: Actions -> Deploy to Oracle -> Run workflow.
 #
 # Needs two repository secrets: ORACLE_HOST (server IP or hostname) and ORACLE_SSH_KEY (a private key whose
 # public half is in the server's ~/.ssh/authorized_keys for the "ubuntu" user).
 # Recommended third secret: ORACLE_KNOWN_HOSTS — the server's host key line(s), so a swapped server is refused.
 # Get it once from a trusted network:  ssh-keyscan -t ed25519 <ORACLE_HOST>  (check the fingerprint against
 # `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on the server). Without it the first key seen is accepted.
-# The server key is limited to running deploy.sh (forced command in authorized_keys). It deploys origin/main.
-# Releases are run by hand only (QE - Live Production, after the owner's go-ahead; docs/local-and-live.md):
-#   gh workflow run deploy-oracle.yml --ref main      or Actions → Deploy to Oracle → Run workflow.
-# A merge to main deploys nothing by itself.
+# The server key may be limited to running deploy.sh (forced command in authorized_keys). It deploys origin/main.
 name: Deploy to Oracle
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 # The job never uses the GitHub token (it only SSHes to the server); keep it read-only.

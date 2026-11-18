@@ -31,8 +31,7 @@ App database: standard_docs + standard_pages  →  search_standard_pages() / sta
    ```
    A file whose date changed but whose text did not (OneDrive re-sync) only gets its date updated.
 3. Bring the changes into the app:
-   - **Local Host** (test copy): `python3 deploy/standards-index/sync_app.py`
-   - **Live**: QE - Live Production, with the owner's OK. It copies `standards.db` to the server (rsync sends only
+   - **Live**, with the owner's OK. It copies `standards.db` to the server (rsync sends only
      the changed parts) and runs `sync_app.py` there against the live database:
      ```bash
      rsync -az ~/standards_ocr/standards.db ubuntu@<server>:/opt/qe/standards/standards.db
@@ -82,7 +81,7 @@ the old `~/standards_ocr/ocr_pass.py` only knows the old layout).
 ## Size
 
 About 94,000 pages (5,864 files), about 245 MB of text. In Postgres with the search index: 354 MB (measured on
-Local Host after `VACUUM FULL`). A full reload (`--full`) needs about twice that until vacuum. The first load takes
+the former Mac test copy after `VACUUM FULL`). A full reload (`--full`) needs about twice that until vacuum. The first load takes
 about 7 minutes; later syncs send only the changed files. The nightly backup grows by the compressed size of the
 text.
 

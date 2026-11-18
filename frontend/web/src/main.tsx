@@ -13,6 +13,7 @@ import './styles/appThemes.css'
 import './index.css'
 import App from './App.tsx'
 import { startAutoCardLabels } from '@/lib/autoCardLabels'
+import { showPreviewChannelBadge } from '@/lib/previewChannelBadge'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -47,3 +48,4 @@ createRoot(document.getElementById('root')!).render(
 
 startAutoCardLabels()
 registerServiceWorker()
+showPreviewChannelBadge()

@@ -38,8 +38,9 @@ echo "$CHANGED" | grep -q '^deploy/oracle/docker-compose.yml' && echo "  docker-
 echo "$CHANGED" | grep -q '^deploy/oracle/env.template' && echo "  env.template: a new setting may be needed in the server's .env first"
 
 echo
-echo "Steps (only after the owner's go-ahead in chat):"
-[ -z "$MIG" ] || echo "  1. Before migrations: take a backup on the server (bash /opt/qe/app/deploy/oracle/scripts/backup.sh)"
-echo "  2. gh workflow run deploy-oracle.yml --ref main   (deploys origin/main: web build, containers, migrations)"
+echo "Steps (docs/workflow.md):"
+echo "  1. The owner has checked the changes on the preview site and said OK."
+echo "  2. Merge testing -> main. The \"Deploy to Oracle\" workflow then releases main by itself:"
+echo "     database backup first, web build, containers, migrations."
 echo "  3. gh run watch \$(gh run list --workflow deploy-oracle.yml --limit 1 --json databaseId --jq '.[0].databaseId') --exit-status"
-echo "  4. Check https://qengineering.in loads the new build, smoke-test the changed areas, report back to Local Host."
+echo "  4. Check https://qengineering.in loads the new build and smoke-test the changed areas."

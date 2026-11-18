@@ -12,8 +12,7 @@ Only what changed since the last run is read again:
 Every file is written in its own transaction, so a run that stops keeps what it finished; the next run goes on.
 Two runs never overlap (database lock). Each run is logged in standard_index_runs.
 
-Runs in its container (deploy/standards-library/Dockerfile): on the server after standards-sync.sh, on Local Host via
-deploy/test-copy/tc.sh index-standards.
+Runs in its container (deploy/standards-library/Dockerfile) on the server, after standards-sync.sh.
 
   indexer.py [--root /library] [--dry-run] [--workers N] [--only TEXT] [--limit N] [--trigger manual|weekly]
 Needs migration 20261112100000_standards_library.sql. Database: DATABASE_URL or PGHOST / PGUSER / PGPASSWORD of a
