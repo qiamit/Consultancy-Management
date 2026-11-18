@@ -1,0 +1,43 @@
+# Checks the Oracle server config before it is merged (docs/workflow.md): the Caddyfile with the same Caddy version
+# the server runs, both compose files, and the deploy scripts. Uses placeholder domains and keys only; it never
+# reaches the server.
+name: Check server config
+
+on:
+  pull_request:
+    paths:
+      - "deploy/oracle/**"
+      - ".github/workflows/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Caddyfile (caddy validate)
+        run: |
+          docker run --rm \
+            -e APP_DOMAIN=example.com -e API_DOMAIN=api.example.com -e MCP_DOMAIN=mcp.example.com \
+            -e PDF_DOMAIN=pdf.example.com -e PREVIEW_DOMAIN=preview.example.com \
+            -e ACME_EMAIL=ops@example.com -e ALLOW_LOCALHOST_ORIGINS=1 \
+            -v "$PWD/deploy/oracle/Caddyfile":/etc/caddy/Caddyfile:ro \
+            caddy:2.10.2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+
+      - name: Compose files
+        run: |
+          cp deploy/oracle/env.template /tmp/ci.env
+          docker compose -f deploy/oracle/docker-compose.yml --env-file /tmp/ci.env config -q
+          PREVIEW_SRC="$PWD" PREVIEW_DOMAIN=preview.example.com \
+            docker compose -f deploy/oracle/preview/docker-compose.yml --env-file /tmp/ci.env config -q
+
+      - name: Deploy scripts (bash -n)
+        run: |
+          for f in deploy/oracle/scripts/*.sh deploy/oracle/release-plan.sh; do
+            bash -n "$f" && echo "ok $f"
+          done

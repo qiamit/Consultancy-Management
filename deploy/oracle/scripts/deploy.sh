@@ -1,25 +1,50 @@
 #!/usr/bin/env bash
-# Deploy the latest main on the Oracle server: pull, build the web app, (re)start the containers, apply DB
-# migrations. Run on the server (GitHub Actions calls it over SSH after a merge to main):
+# Deploy the latest main on the Oracle server: database backup, pull, build the web app, (re)start the containers,
+# apply DB migrations. Run on the server (GitHub Actions calls it over SSH after a merge to main):
 #   bash /opt/qe/app/deploy/oracle/scripts/deploy.sh            # latest origin/main
 #   bash /opt/qe/app/deploy/oracle/scripts/deploy.sh --no-pull  # the checkout as it is
 set -euo pipefail
 
+# The GitHub key may be limited to this script (forced command in authorized_keys). The "Deploy preview" workflow
+# asks for preview-deploy.sh; hand that over before anything touches the live checkout.
+case "${SSH_ORIGINAL_COMMAND:-}" in
+  *preview-deploy.sh*) exec bash "$(dirname "$0")/preview-deploy.sh" ;;
+esac
+
 APP=/opt/qe/app
 ORACLE="$APP/deploy/oracle"
 cd "$APP"
+
+set -a
+# shellcheck disable=SC1091
+. "$ORACLE/.env"
+set +a
+PREVIEW_DOMAIN=${PREVIEW_DOMAIN:-preview.$APP_DOMAIN}
+export PREVIEW_DOMAIN
+compose() { docker compose -f "$ORACLE/docker-compose.yml" --env-file "$ORACLE/.env" "$@"; }
+
+# Every release starts with a database backup (docs/workflow.md): a failed backup stops the release.
+echo "== Database backup before the release"
+if compose ps --status running --services 2>/dev/null | grep -qx db; then
+  mkdir -p "$BACKUP_DIR/db"
+  STAMP=$(date +%Y-%m-%d_%H%M%S)
+  compose exec -T db pg_dump -U supabase_admin -d postgres -Fc \
+    -n public -n private -n auth -n storage -n vault > "$BACKUP_DIR/db/release-$STAMP.dump.part"
+  mv "$BACKUP_DIR/db/release-$STAMP.dump.part" "$BACKUP_DIR/db/release-$STAMP.dump"
+  echo "$BACKUP_DIR/db/release-$STAMP.dump ($(du -h "$BACKUP_DIR/db/release-$STAMP.dump" | cut -f1))"
+  # Keep the 15 newest release backups (the nightly ones are kept by backup.sh).
+  ls -1t "$BACKUP_DIR"/db/release-*.dump 2>/dev/null | tail -n +16 | xargs -r rm -f
+else
+  echo "Skipped: the database container is not running."
+fi
 
 if [ "${1:-}" != "--no-pull" ]; then
   git fetch --quiet origin main
   git reset --quiet --hard origin/main
 fi
 echo "== Deploying $(git log -1 --format='%h %s')"
-
-set -a
-# shellcheck disable=SC1091
-. "$ORACLE/.env"
-set +a
-compose() { docker compose -f "$ORACLE/docker-compose.yml" --env-file "$ORACLE/.env" "$@"; }
+# Caddy mounts this folder for the preview site; create it as this user before Docker would (as root).
+mkdir -p "$DATA_DIR/preview"
 
 echo "== Web app build"
 docker run --rm \

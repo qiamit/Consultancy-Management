@@ -1,0 +1,51 @@
+# Deploy the `testing` branch to the preview site (https://preview.qengineering.in) on the Oracle server.
+# It SSHes to the server with the same key as "Deploy to Oracle" and asks for
+# deploy/oracle/scripts/preview-deploy.sh (deploy.sh hands it over when the key is limited to deploy.sh).
+# The preview uses the live database; it never applies migrations (docs/workflow.md).
+#
+# Runs on every push to `testing`, or by hand: Actions -> Deploy preview -> Run workflow.
+name: Deploy preview
+
+on:
+  push:
+    branches: [testing]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Same group as the live deploy: the server builds one thing at a time.
+concurrency:
+  group: oracle-deploy
+  cancel-in-progress: false
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Deploy preview over SSH
+        env:
+          ORACLE_HOST: ${{ secrets.ORACLE_HOST }}
+          ORACLE_SSH_KEY: ${{ secrets.ORACLE_SSH_KEY }}
+          ORACLE_KNOWN_HOSTS: ${{ secrets.ORACLE_KNOWN_HOSTS }}
+        run: |
+          if [ -z "$ORACLE_HOST" ] || [ -z "$ORACLE_SSH_KEY" ]; then
+            echo "ORACLE_HOST / ORACLE_SSH_KEY secrets are not set."
+            exit 1
+          fi
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$ORACLE_SSH_KEY" > ~/.ssh/oracle
+          chmod 600 ~/.ssh/oracle
+          if [ -n "$ORACLE_KNOWN_HOSTS" ]; then
+            printf '%s\n' "$ORACLE_KNOWN_HOSTS" > ~/.ssh/known_hosts
+            chmod 600 ~/.ssh/known_hosts
+            HOST_KEY_CHECK=yes
+          else
+            echo "::warning::ORACLE_KNOWN_HOSTS secret is not set; accepting the server's host key on first use."
+            HOST_KEY_CHECK=accept-new
+          fi
+          ssh -o StrictHostKeyChecking="$HOST_KEY_CHECK" -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -o ServerAliveInterval=30 -i ~/.ssh/oracle "ubuntu@$ORACLE_HOST" \
+            'bash /opt/qe/app/deploy/oracle/scripts/preview-deploy.sh'

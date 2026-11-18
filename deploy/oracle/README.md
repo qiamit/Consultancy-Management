@@ -83,6 +83,11 @@ Renewal reminders यहाँ बंद रहते हैं (`RENEWAL_REMIND
 
 **Rollback:** DNS को वापस Railway पर कर दें — Railway का data cutover तक का है।
 
+## Release और preview
+
+`main` का हर merge अपने-आप live होता है (पहले database backup), `testing` का हर push
+https://preview.qengineering.in पर (वही live database, migrations नहीं)। पूरे नियम: `docs/workflow.md`।
+
 ## रोज़ का काम
 
 - कुछ नहीं। Security updates अपने-आप (unattended-upgrades), backups रोज़ 02:30 IST।

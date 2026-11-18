@@ -2,8 +2,7 @@
 # Standards Library: copy the Mac's "Oracle Database" folder and index what is new or changed.
 #
 #   standards-sync.sh server [--weekly] [--dry-run] [--allow-many-removals]   Mac -> live server, then index there
-#   standards-sync.sh local  [indexer args]                                  Mac -> Local Host test copy (tc.sh)
-#   standards-sync.sh poll [server|local]                                    run a "Sync Now" asked in the app
+#   standards-sync.sh poll [server]                                          run a "Sync Now" asked in the app
 #   standards-sync.sh server-status [--wait]                                 the last indexing run on the server
 #   standards-sync.sh install-schedule | remove-schedule                     Sunday 10 pm + the 10-minute check
 #
@@ -219,23 +218,14 @@ case "${1:-}" in
     printf '%s\n' "$OUT" | grep -E '^@@ (ID|RC|RUNNING|LOST|NONE)' | sed 's/^@@ //'
     ;;
 
-  local)
-    shift
-    STANDARDS_SRC="$SRC" exec "$ROOT/deploy/test-copy/tc.sh" index-standards "$@"
-    ;;
-
   poll)
     # "Sync Now" in the app (Settings -> Standards Library) only records a request in the database. This check runs
     # every 10 minutes on the Mac: it tells the server the Mac is there, takes the oldest waiting request, runs the
     # sync and writes the result back. Nothing happens when no request waits.
     WHERE=${2:-server}
-    case "$WHERE" in server|local) ;; *) stop "poll takes server or local" ;; esac
+    [ "$WHERE" = server ] || stop "poll takes server only (the Mac test copy was removed; docs/workflow.md)"
     sql() {
-      if [ "$WHERE" = local ]; then
-        docker exec -i qe-test-db-1 psql -U supabase_admin -d postgres -Atq -v ON_ERROR_STOP=1
-      else
-        "${SSH[@]}" "$SERVER" "cd $REMOTE_APP && $COMPOSE exec -T db psql -U supabase_admin -d postgres -Atq -v ON_ERROR_STOP=1"
-      fi
+      "${SSH[@]}" "$SERVER" "cd $REMOTE_APP && $COMPOSE exec -T db psql -U supabase_admin -d postgres -Atq -v ON_ERROR_STOP=1"
     }
     AGENT_HOST=$(scutil --get ComputerName 2>/dev/null || hostname -s)
     AGENT_HOST=${AGENT_HOST//\'/}
@@ -258,7 +248,7 @@ SQL
     echo "== $(date '+%Y-%m-%d %H:%M') Sync Now request $ID ($WHERE)"
     OUT=$(mktemp)
     RC=0
-    if [ "$WHERE" = local ]; then "$0" local --trigger app > "$OUT" 2>&1 || RC=$?; else QE_SYNC_HEARTBEAT=1 "$0" server --app > "$OUT" 2>&1 || RC=$?; fi
+    QE_SYNC_HEARTBEAT=1 "$0" server --app > "$OUT" 2>&1 || RC=$?
     cat "$OUT"
     # The indexer's summary line ("done: added …") or the reason the run stopped.
     MSG=$(grep -E '^(done:|STOP:)' "$OUT" | tail -1 || true)

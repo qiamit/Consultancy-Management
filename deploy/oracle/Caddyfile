@@ -3,6 +3,10 @@
 # the HTTPS certificates itself. API routes and CORS mirror backend/services/gateway/Caddyfile (Railway).
 # ALLOW_LOCALHOST_ORIGINS (default 1): 0 stops browsers on localhost / 127.0.0.1 from using the API (CORS) and
 # from framing stored files. The owner tests the SPA from http://localhost:5176 against this API, so it is on.
+# PREVIEW_DOMAIN (default preview.<APP_DOMAIN>, set by deploy.sh): the `testing` branch's web app, built by
+# scripts/preview-deploy.sh into ${DATA_DIR}/preview/web. It uses this same API and the live database
+# (docs/workflow.md). Its functions / PDF calls go to the preview containers (preview/docker-compose.yml) when they
+# run, else to the live ones.
 {
 	email {$ACME_EMAIL}
 }
@@ -17,6 +21,13 @@
 	header_down -Access-Control-Allow-Headers
 	header_down -Access-Control-Allow-Methods
 	header_down -Access-Control-Expose-Headers
+}
+
+# Preview container first; when it is not running (no DNS name / refused), the request goes to the live one.
+(preview_first) {
+	lb_policy first
+	lb_try_duration 3s
+	fail_duration 30s
 }
 
 # Web app (Vite build in /srv/app, single-page app).
@@ -50,6 +61,38 @@
 	file_server
 }
 
+# Preview web app (`testing` branch, same API and database as live). Never indexed by search engines.
+{$PREVIEW_DOMAIN} {
+	encode zstd gzip
+	root * /srv/preview/web
+
+	@assets path /assets/*
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+	@pages not path /assets/*
+	header @pages Cache-Control "no-cache"
+
+	import hsts
+	header {
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "DENY"
+		# microphone=(self): QE Assistant voice typing (speech recognition) on this site only.
+		Permissions-Policy "camera=(), microphone=(self), geolocation=(), payment=(), usb=()"
+		# Report-only for now (browser console shows what an enforcing policy would block). Built from what the
+		# app loads: API (auth/rest/storage/functions — AI calls go through it too) and PDF service; Wikipedia API
+		# (process flow chart web reference); OSRM routing (location map); Google map tiles mt0-3.google.com and
+		# the Google Maps embed (public home page); pdf.js worker and the service worker are same-origin.
+		# Known reports before enforcing: inline <script> in index.html and in print / preview windows (needs
+		# 'unsafe-inline' or hashes), and new Function in the Equipment Master formula field (needs a rewrite).
+		Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://{$API_DOMAIN} https://*.google.com https://*.gstatic.com https://*.googleapis.com; font-src 'self' data:; connect-src 'self' data: blob: https://{$API_DOMAIN} https://{$PDF_DOMAIN} https://en.wikipedia.org https://router.project-osrm.org https://routing.openstreetmap.de; frame-src 'self' blob: data: https://{$API_DOMAIN} https://maps.google.com https://www.google.com; worker-src 'self' blob:; manifest-src 'self'; media-src 'self' blob: data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+		X-Robots-Tag "noindex, nofollow"
+		-Server
+	}
+
+	try_files {path} /index.html
+	file_server
+}
+
 # API gateway: auth / rest / storage / functions.
 {$API_DOMAIN} {
 	import hsts
@@ -73,6 +116,9 @@
 	@appWww header Origin https://www.{$APP_DOMAIN}
 	header @appWww Access-Control-Allow-Origin "https://www.{$APP_DOMAIN}"
 
+	@preview header Origin https://{$PREVIEW_DOMAIN}
+	header @preview Access-Control-Allow-Origin "https://{$PREVIEW_DOMAIN}"
+
 	header {
 		Access-Control-Allow-Credentials "true"
 		Access-Control-Expose-Headers "Content-Range, Range, Content-Location, Content-Profile, Preference-Applied, X-Request-Id"
@@ -90,7 +136,7 @@
 	@storageFile path /storage/v1/object/sign/* /storage/v1/object/public/* /storage/v1/object/authenticated/*
 	header @storageFile {
 		-X-Frame-Options
-		Content-Security-Policy "frame-ancestors 'self' https://{$APP_DOMAIN} https://www.{$APP_DOMAIN} {local_frame_ancestors}"
+		Content-Security-Policy "frame-ancestors 'self' https://{$APP_DOMAIN} https://www.{$APP_DOMAIN} https://{$PREVIEW_DOMAIN} {local_frame_ancestors}"
 	}
 
 	@preflight method OPTIONS
@@ -127,6 +173,19 @@
 	handle @storage {
 		uri strip_prefix /storage/v1
 		reverse_proxy storage:5000 {
+			import strip_upstream_cors
+		}
+	}
+
+	# Calls from the preview site go to the preview functions container while it runs, else to the live one.
+	@previewFunctions {
+		path /functions/v1 /functions/v1/*
+		header Origin https://{$PREVIEW_DOMAIN}
+	}
+	handle @previewFunctions {
+		uri strip_prefix /functions/v1
+		reverse_proxy preview-functions:8080 functions:8080 {
+			import preview_first
 			import strip_upstream_cors
 		}
 	}
@@ -175,5 +234,9 @@
 		-Server
 	}
 	encode zstd gzip
+	@previewPdf header Origin https://{$PREVIEW_DOMAIN}
+	reverse_proxy @previewPdf preview-pdf:3847 pdf:3847 {
+		import preview_first
+	}
 	reverse_proxy pdf:3847
 }

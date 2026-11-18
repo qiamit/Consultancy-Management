@@ -1,5 +1,5 @@
 # Standards Library indexer (deploy/standards-library/indexer.py): poppler for text, tesseract for scanned pages.
-# Runs on demand (compose profile "tools"), on the server and on Local Host alike.
+# Runs on demand (compose profile "tools") on the server.
 FROM python:3.12-slim
 RUN apt-get update \
  && apt-get install -y --no-install-recommends poppler-utils tesseract-ocr tesseract-ocr-eng \

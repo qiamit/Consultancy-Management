@@ -1,0 +1,60 @@
+# Preview backend: the `testing` branch's functions and PDF service, next to the live ones on the same server.
+# scripts/preview-deploy.sh starts these only while the `testing` branch changes backend/services/functions or
+# backend/services/pdf-service; otherwise it stops them and the preview site uses the live services (Caddyfile,
+# "preview_first"). They talk to the live auth / rest / storage, so they work on the live database (docs/workflow.md).
+#
+# Scheduled jobs are OFF here (renewal reminders, QE Assistant tasks and mail sync): only the live functions run them.
+# Settings come from ../.env (the live one); the code comes from the preview checkout (PREVIEW_SRC).
+name: qe-preview
+
+x-service: &service
+  restart: unless-stopped
+  networks: [qe]
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "2"
+
+services:
+  preview-functions:
+    <<: *service
+    build: ${PREVIEW_SRC:-/opt/qe/preview}/backend/services/functions
+    mem_limit: 768m
+    environment:
+      PORT: 8080
+      REST_URL: http://rest:3000
+      AUTH_URL: http://auth:9999
+      SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-}
+      # renewalReminders.mjs stops its scheduler only on the exact value "true".
+      RENEWAL_REMINDERS_DISABLED: "true"
+      ASSISTANT_TASKS_DISABLED: "1"
+      ALLOW_LOCALHOST_ORIGINS: "0"
+      APP_URL: https://${PREVIEW_DOMAIN}
+      AUTH_PUBLIC_URL: https://${API_DOMAIN}/auth/v1
+      CUSTOMER_PORTAL_INVITES: "0"
+
+  preview-pdf:
+    <<: *service
+    build: ${PREVIEW_SRC:-/opt/qe/preview}/backend/services/pdf-service
+    init: true
+    mem_limit: 1536m
+    environment:
+      PDF_SERVICE_HOST: 0.0.0.0
+      PDF_SERVICE_PORT: 3847
+      PLAYWRIGHT_NO_SANDBOX: "1"
+      AUTH_URL: http://auth:9999
+      AUTH_ANON_KEY: ${ANON_KEY}
+      PDF_CORS_ORIGINS: https://${PREVIEW_DOMAIN}
+      ALLOW_LOCALHOST_ORIGINS: "0"
+      PDF_ALLOWED_URL_PREFIXES: https://${API_DOMAIN}/storage/v1/object/
+    shm_size: 512mb
+
+# The live stack's network (project "qe"), so Caddy reaches these by name and they reach auth / rest.
+networks:
+  qe:
+    external: true
+    name: qe_default

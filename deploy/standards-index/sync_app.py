@@ -4,7 +4,7 @@ standard_pages). Only what changed since the last sync is sent: new and changed 
 longer in the index are removed. Everything happens in one transaction, so a failed sync changes nothing.
 
 Usage:
-  sync_app.py                        # Local Host test copy (docker container qe-test-db-1)
+  sync_app.py                        # container qe-test-db-1 (the former Mac test copy, removed): use --psql
   sync_app.py --dry-run              # only count what would change
   sync_app.py --psql "<command>"     # any psql command that reads SQL from stdin, e.g. on the live server:
       --psql "docker exec -i <db container> psql -U postgres -d postgres"

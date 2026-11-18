@@ -65,7 +65,7 @@ documents only (`search_standard_pages(..., p_relpaths)`).
 - `Standards List.xlsx` at the root (S.No, IS Number, IS Title, Standard type, Technical Committee, Department,
   PM no.) is read on every run into `standard_list`; the app shows the listed numbers that have no file yet.
 
-First full run on Local Host (11 Nov 2026, 4 workers): 3,269 PDFs, 66,314 pages (4,368 by OCR), 22 minutes, no
+First full run on the former Mac test copy (11 Nov 2026, 4 workers): 3,269 PDFs, 66,314 pages (4,368 by OCR), 22 minutes, no
 errors. A run with nothing changed takes about 30 seconds. On the server (1 CPU) the first run takes a few hours:
 start it in the evening.
 
@@ -97,10 +97,6 @@ deploy/standards-library/standards-sync.sh server-status          # the last run
 deploy/standards-library/standards-sync.sh server-status --wait   # follow it to the end
 ```
 
-**Local Host** (test copy): `deploy/test-copy/tc.sh index-standards [--dry-run | --only "IS 2062 "]`. It first
-copies the folder to `~/qe-standards/library` (Docker never reads the OneDrive folder itself: the VM stalls on
-File Provider paths) and indexes that copy with 4 workers.
-
 ## The weekly run
 
 ```bash
@@ -123,8 +119,6 @@ check also updates the Mac's last check, and writing the result is tried for 10 
 unreachable. A request waits while another sync runs;
 one not finished within 6 hours is marked failed. The page shows the request, the Mac's last check (a check older
 than 25 minutes: the Mac is off, asleep or offline) and Cancel for a request not yet picked up.
-
-Local Host: `standards-sync.sh poll local` does the same against the test copy (`tc.sh index-standards`).
 
 ## The old index (removed)
 
