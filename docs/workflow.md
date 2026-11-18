@@ -20,7 +20,7 @@ preview का backend (functions / PDF) तभी अलग चलता है
    (`frontend/web`) और typecheck चलाता है (`npx tsc --noEmit -p tsconfig.app.json`, error count पहले जितना)।
 2. Session अपना काम **`testing` में merge** करता है (PR → `testing`)। GitHub अपने-आप preview deploy करता है
    (5–10 मिनट)।
-3. Owner **https://preview.qengineering.in** पर अपने असली login से जाँचते हैं, सिर्फ़ TEST client पर (नियम 2)।
+3. Owner **https://preview.qengineering.in** पर अपने असली login से जाँचते हैं, सिर्फ़ test client **Quality International** पर (नियम 2)।
 4. Owner OK कहें तो session **`testing` → `main`** का PR बनाता है, और owner के OK पर merge करता है।
    Merge होते ही "Deploy to Oracle" चलता है: **database backup** → web build → containers → migrations।
 5. Session https://qengineering.in पर बदला हुआ हिस्सा जाँचकर owner को बताता है।
@@ -43,7 +43,8 @@ deploy)। Database की गड़बड़ी के लिए release से
 
 ### 2. Test data
 
-- जाँच **सिर्फ़ एक TEST client** पर: नाम `TEST - Q Engineering`, email owner का अपना। असली client पर कभी नहीं।
+- जाँच **सिर्फ़ एक test client** पर: **Quality International** (owner ने 18 Nov 2026 को तय किया)। कोई भी काम
+  हो, उसकी जाँच इसी client पर। किसी और client पर कभी नहीं।
 - जाँच ख़त्म होते ही उसी समय test के records (sample, SRF, report, application, document …) हटाएँ।
 - **Numbering:** Consultancy Pro में Test Report No, NABL ULR No जैसे LIMS वाले नंबर इस्तेमाल नहीं होते।
   - Finance documents (invoice, quotation, payment, credit / debit note, purchase …): नंबर एक counter
@@ -54,8 +55,9 @@ deploy)। Database की गड़बड़ी के लिए release से
 
 ### 3. Email और reminders
 
-- Mail भेजने वाला हर काम (renewal reminder "send now", customer portal invite, QE Assistant mail …) सिर्फ़ TEST
-  client पर, जिसका email owner का अपना है।
+- Mail भेजने वाला हर काम (renewal reminder "send now", customer portal invite, QE Assistant mail …) सिर्फ़ test
+  client Quality International पर। ऐसी जाँच से पहले session owner से पक्का करे कि Quality International के
+  email (और contacts के email) owner के अपने हैं।
 - Preview के अपने functions container में renewal reminders, QE Assistant के scheduled tasks और mail sync
   **बंद** रहते हैं। वे सिर्फ़ live functions चलाते हैं।
 
