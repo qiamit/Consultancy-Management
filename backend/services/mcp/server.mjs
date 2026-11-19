@@ -12,6 +12,7 @@ import { createAuthorizationCode, provider, redirectAllowed, sessionFromGotrue, 
 import { renderLoginPage } from './lib/loginPage.mjs'
 import { moduleLevels, TOOLS } from './lib/tools.mjs'
 import { WRITE_TOOLS } from './lib/writeTools.mjs'
+import { READ_TOOLS } from './lib/readTools.mjs'
 import { hit } from './lib/rateLimit.mjs'
 
 assertConfig()
@@ -114,7 +115,7 @@ async function buildServer(auth) {
   const tokenId = String(auth.extra?.tokenId || '')
   const userId = String(auth.extra?.userId || '')
   const jwt = await userJwtFor(tokenId)
-  const tools = config.writeEnabled ? [...TOOLS, ...WRITE_TOOLS] : TOOLS
+  const tools = config.writeEnabled ? [...TOOLS, ...READ_TOOLS, ...WRITE_TOOLS] : [...TOOLS, ...READ_TOOLS]
   const levels = await moduleLevels(jwt, [config.mcpModulePath, ...tools.map((t) => t.path)])
   if ((levels[config.mcpModulePath] || 'none') === 'none') {
     throw new HttpError(403, 'Your Module Access no longer includes the Claude connector.')
