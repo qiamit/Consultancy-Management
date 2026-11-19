@@ -159,3 +159,22 @@ export async function cancelStandardsSync(id: number): Promise<boolean> {
   if (error) throw new Error(error.message)
   return Boolean(data)
 }
+
+/** Every missing reference (not only the most cited shown on the page), for the Excel export. */
+export async function fetchAllMissingReferences(): Promise<MissingReference[]> {
+  const out: MissingReference[] = []
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase
+      .from('standard_refs_status')
+      .select('ref_base, ref_part, cited_by, cites, cited_in, has_number')
+      .eq('has_part', false)
+      .order('cited_by', { ascending: false })
+      .order('cites', { ascending: false })
+      .order('ref_base')
+      .order('ref_part')
+      .range(from, from + 999)
+    if (error) throw new Error(error.message)
+    out.push(...((data ?? []) as MissingReference[]))
+    if (!data || data.length < 1000) return out
+  }
+}

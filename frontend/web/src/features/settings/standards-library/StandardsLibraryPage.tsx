@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import { Library, RefreshCw } from 'lucide-react'
+import { ChevronDown, ChevronRight, Download, Library, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import {
@@ -14,8 +14,8 @@ import {
   limsTableHeadClass,
 } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
-import { SyncNowPanel } from './SyncNowPanel'
-import { fetchStandardsLibraryStatus, type IndexRun, type IndexRunStatus, type StandardsLibraryStatus } from './standardsLibraryApi'
+import { SyncNowControls } from './SyncNowPanel'
+import { fetchAllMissingReferences, fetchStandardsLibraryStatus, type IndexRun, type IndexRunStatus, type StandardsLibraryStatus } from './standardsLibraryApi'
 
 const STATUS_TONE: Record<IndexRunStatus, string> = {
   done: 'bg-emerald-50 text-emerald-700',
@@ -41,14 +41,59 @@ function minutes(run: IndexRun): string {
   return m < 1 ? 'Under 1 Min' : `${Math.round(m)} Min`
 }
 
-function Section({ title, note, children }: { title: string; note?: ReactNode; children: ReactNode }) {
+/** Downloads rows as an Excel sheet ("Standards Library - Files to Review - 2026-11-19.xlsx"). */
+async function exportSheet(title: string, rows: Array<Record<string, string | number>>) {
+  const XLSX = await import('xlsx')
+  const book = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet(rows), title.slice(0, 31))
+  XLSX.writeFile(book, `Standards Library - ${title} - ${new Date().toISOString().slice(0, 10)}.xlsx`)
+}
+
+function Section({
+  title,
+  note,
+  onExport,
+  children,
+}: {
+  title: string
+  note?: ReactNode
+  onExport?: () => Promise<void> | void
+  children: ReactNode
+}) {
+  const [busy, setBusy] = useState(false)
+  const [open, setOpen] = useState(false)
+  const run = async () => {
+    if (!onExport) return
+    setBusy(true)
+    try {
+      await onExport()
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
   return (
     <section className={cn(limsPanelClass, 'overflow-x-auto')}>
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-stone-200 px-3 py-2">
-        <h2 className="text-sm font-semibold">{title}</h2>
-        {note ? <p className="text-xs text-muted-foreground">{note}</p> : null}
+      <div className={cn('flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2', open && 'border-b border-stone-200')}>
+        <button
+          type="button"
+          className="flex items-center gap-1.5 text-left text-sm font-semibold"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+        >
+          {open ? <ChevronDown className="h-4 w-4" aria-hidden /> : <ChevronRight className="h-4 w-4" aria-hidden />}
+          <h2>{title}</h2>
+        </button>
+        {note && open ? <p className="text-xs text-muted-foreground">{note}</p> : null}
+        {onExport ? (
+          <Button type="button" variant="outline" size="sm" className="ml-auto h-7 gap-1.5 text-xs" onClick={run} disabled={busy}>
+            <Download className="h-3.5 w-3.5" aria-hidden />
+            {busy ? 'Exporting…' : 'Export to Excel'}
+          </Button>
+        ) : null}
       </div>
-      {children}
+      {open ? children : null}
     </section>
   )
 }
@@ -126,6 +171,7 @@ export default function StandardsLibraryPage() {
         <div className="relative flex flex-wrap items-center gap-2">
           <Library className="h-5 w-5 text-amber-300" aria-hidden />
           <h1 className="mr-auto text-base font-semibold tracking-wide">Standards Library</h1>
+          <SyncNowControls onFinished={reload} />
           <Button type="button" variant="outline" className={limsDarkBarBtnClass} onClick={reload}>
             <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} aria-hidden />
             Refresh
@@ -134,13 +180,6 @@ export default function StandardsLibraryPage() {
       </div>
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
-
-      <p className="text-xs text-muted-foreground">
-        Source: The Oracle Database Folder on the Mac. Add or Replace PDFs There, Then Press Sync Now (Any Time). It Also
-        Runs Every Sunday at 10 PM. Only New and Changed Files Are Read Again.
-      </p>
-
-      <SyncNowPanel onFinished={reload} />
 
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-5">
         <Stat
@@ -154,27 +193,28 @@ export default function StandardsLibraryPage() {
               '—'
             )
           }
-          sub={latest ? `${formatWhen(latest.started_at)} · ${latest.host || '—'}` : 'Not Indexed Yet'}
         />
-        <Stat label="Files Indexed" value={num(totals.files)} sub={`${num(categories.length)} Categories`} />
-        <Stat label="Pages" value={num(totals.pages)} sub={`${num(totals.ocr)} Read by OCR`} />
+        <Stat label="Files Indexed" value={num(totals.files)} />
+        <Stat label="Pages" value={num(totals.pages)} />
         <Stat
           label="Standards List Coverage"
           value={listed ? `${num(listed - (data?.noStandard ?? 0))} / ${num(listed)}` : '—'}
-          sub={
-            listed
-              ? `${num(data?.noStandard ?? 0)} Without a Standard · ${num(data?.noManual ?? 0)} Without a Product Manual`
-              : 'No Standards List Read Yet'
-          }
         />
         <Stat
           label="Referenced Standards"
           value={data?.refs ? `${num(data.refsFound)} / ${num(data.refs)}` : '—'}
-          sub={data?.refs ? `In the Library · ${num(data.refsOtherPart)} Only in Another Part` : 'Not Scanned Yet'}
         />
       </div>
 
-      <Section title="Categories" note={lastDone ? `As of ${formatWhen(lastDone.finished_at)}` : undefined}>
+      <Section
+        title="Categories"
+        onExport={() =>
+          exportSheet(
+            'Categories',
+            categories.map(([name, c]) => ({ Category: name, Files: c.files, Pages: c.pages, 'OCR Pages': c.ocr_pages, 'To Review': c.review })),
+          )
+        }
+      >
         <Table className={limsTableClass}>
           <TableHeader>
             <TableRow>
@@ -203,7 +243,28 @@ export default function StandardsLibraryPage() {
         </Table>
       </Section>
 
-      <Section title="Recent Runs">
+      <Section
+        title="Recent Runs"
+        onExport={() =>
+          exportSheet(
+            'Recent Runs',
+            runs.map((r) => ({
+              Started: formatWhen(r.started_at),
+              Minutes: minutes(r) || '',
+              Where: r.host || '',
+              How: r.trigger === 'app' ? 'Sync Now' : r.trigger,
+              Status: STATUS_LABEL[r.status],
+              New: r.added,
+              Changed: r.changed,
+              Moved: r.moved,
+              Removed: r.removed,
+              'Pages Read': r.pages,
+              'OCR Pages': r.ocr_pages,
+              Errors: (r.errors ?? []).map((e) => `${e.file ? `${e.file.split('/').pop()}: ` : ''}${e.error}`).join('; '),
+            })),
+          )
+        }
+      >
         <Table className={limsTableClass}>
           <TableHeader>
             <TableRow>
@@ -264,7 +325,17 @@ export default function StandardsLibraryPage() {
 
       <Section
         title="Files to Review"
-        note="Indexed, but the Name or the Text Needs a Look: Rename the File in the Folder, or Replace a Bad Scan."
+        onExport={() =>
+          exportSheet(
+            'Files to Review',
+            (data?.review ?? []).map((d) => ({
+              Folder: d.relpath.split('/').slice(0, -1).join(' / '),
+              File: d.relpath.split('/').pop() ?? d.relpath,
+              Category: d.category || '',
+              Reason: d.review,
+            })),
+          )
+        }
       >
         <Table className={limsTableClass}>
           <TableHeader>
@@ -292,6 +363,18 @@ export default function StandardsLibraryPage() {
 
       <Section
         title="Listed IS Numbers Without a File"
+        onExport={() =>
+          exportSheet(
+            'Listed Without a File',
+            missing.map((m) => ({
+              'S.No': m.row_no ?? '',
+              'IS Number': m.is_number,
+              Title: m.title || '',
+              Type: m.standard_type || '',
+              Missing: [!m.has_standard && 'Standard', !m.has_manual && 'Product Manual'].filter(Boolean).join(' + '),
+            })),
+          )
+        }
         note="From Standards List.xlsx in the Folder. Without a Product Manual Here, Checks Use the One Uploaded in IS Code Master."
       >
         <Table className={limsTableClass}>
@@ -326,7 +409,17 @@ export default function StandardsLibraryPage() {
 
       <Section
         title="Referenced Standards Not in the Library"
-        note="Named in the Library's Standards, Most Cited First. Checks Read a Referenced Standard Only in the Part It Names, so Add the Missing Part Too."
+        onExport={async () =>
+          exportSheet(
+            'Referenced Not in Library',
+            (await fetchAllMissingReferences()).map((r) => ({
+              'Referenced Standard': `${r.ref_base}${r.ref_part ? ` Part ${r.ref_part}` : ''}`,
+              'Cited By (Standards)': r.cited_by,
+              'Cited In': (r.cited_in ?? []).join(', ') + (r.cited_by > (r.cited_in ?? []).length ? ' …' : ''),
+              'Library Has': r.has_number ? 'Another Part Only' : '',
+            })),
+          )
+        }
       >
         <Table className={limsTableClass}>
           <TableHeader>

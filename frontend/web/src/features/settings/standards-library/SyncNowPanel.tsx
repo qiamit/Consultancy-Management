@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { CloudDownload, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { limsOutlineBtnClass, limsPanelClass, limsPrimaryBtnClass } from '@/lib/limsThemeUi'
+import { limsOutlineBtnClass, limsPrimaryBtnClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import {
   cancelStandardsSync,
@@ -32,12 +32,6 @@ const LABEL: Record<SyncRequestStatus, string> = {
   cancelled: 'Cancelled',
 }
 
-function when(iso: string | null): string {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
-}
-
 function minutesAgo(iso: string | null): number | null {
   if (!iso) return null
   const t = new Date(iso).getTime()
@@ -45,10 +39,10 @@ function minutesAgo(iso: string | null): number | null {
 }
 
 /**
- * "Sync Now" (Standards Library page): asks the Mac that holds the Oracle Database folder to copy it to the server
+ * "Sync Now" (Standards Library page header, next to Refresh; the status badge's tooltip holds the Mac's message): asks the Mac that holds the Oracle Database folder to copy it to the server
  * and index what is new or changed. The app only records the request; the Mac picks it up within 10 minutes.
  */
-export function SyncNowPanel({ onFinished }: { onFinished: () => void }) {
+export function SyncNowControls({ onFinished }: { onFinished: () => void }) {
   const [state, setState] = useState<SyncState | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -121,41 +115,32 @@ export function SyncNowPanel({ onFinished }: { onFinished: () => void }) {
           macAway ? ': It Seems Off, Asleep or Offline. The Sync Starts When It Is Back.' : ''
         }`
 
+  const note = error || (macAway ? macText : undefined)
   return (
-    <div className={cn(limsPanelClass, 'flex flex-wrap items-center gap-x-4 gap-y-2 px-3 py-2')}>
-      <div className="mr-auto min-w-0 space-y-0.5">
-        <p className="text-sm font-semibold">Sync Now</p>
-        <p className="text-xs text-muted-foreground">
-          Added or Replaced PDFs in the Oracle Database Folder? Press Sync Now. The Mac Copies the Folder to the Server
-          and Indexes Only New and Changed Files.
-        </p>
-        <p className={cn('text-xs', macAway ? 'text-amber-700' : 'text-muted-foreground')}>{macText}</p>
-        {request ? (
-          <p className="flex flex-wrap items-center gap-2 text-xs">
-            <span className={cn('inline-flex rounded-md px-2 py-0.5 font-medium', TONE[request.status])}>
-              {LABEL[request.status]}
-            </span>
-            <span className="text-muted-foreground">
-              Asked {when(request.requested_at)}
-              {request.finished_at ? ` · Finished ${when(request.finished_at)}` : ''}
-            </span>
-            {request.message && !open ? <span className="text-muted-foreground">· {request.message}</span> : null}
-          </p>
-        ) : null}
-        {error ? <p className="text-xs text-destructive">{error}</p> : null}
-      </div>
-      <div className="flex gap-2">
-        {request?.status === 'pending' ? (
-          <Button type="button" variant="outline" className={limsOutlineBtnClass} onClick={cancel} disabled={busy}>
-            <X className="h-4 w-4" aria-hidden />
-            Cancel
-          </Button>
-        ) : null}
-        <Button type="button" className={limsPrimaryBtnClass} onClick={start} disabled={busy || open}>
-          <CloudDownload className="h-4 w-4" aria-hidden />
-          {open ? LABEL[request!.status] : 'Sync Now'}
+    <>
+      {request && request.status !== 'done' ? (
+        <span
+          className={cn('inline-flex rounded-md px-2 py-0.5 text-xs font-medium', TONE[request.status])}
+          title={request.message || undefined}
+        >
+          {LABEL[request.status]}
+        </span>
+      ) : null}
+      {note ? (
+        <span className="inline-flex rounded-md bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800" title={note}>
+          {error ? 'Sync State Not Read' : 'Mac Offline'}
+        </span>
+      ) : null}
+      {request?.status === 'pending' ? (
+        <Button type="button" variant="outline" className={limsOutlineBtnClass} onClick={cancel} disabled={busy}>
+          <X className="h-4 w-4" aria-hidden />
+          Cancel
         </Button>
-      </div>
-    </div>
+      ) : null}
+      <Button type="button" className={limsPrimaryBtnClass} onClick={start} disabled={busy || open}>
+        <CloudDownload className="h-4 w-4" aria-hidden />
+        {open ? LABEL[request!.status] : 'Sync Now'}
+      </Button>
+    </>
   )
 }
