@@ -639,11 +639,12 @@ export async function buildBisDocumentHtml(
   }
 
   if (kind === 'factory-test-report') {
-    // Drop snapshots for samples removed from Sample Offer / Requirements.
+    // Drop snapshots for samples removed from Sample Offer / Requirements, and for samples
+    // unticked from "In Offer Letter" (the FTR prints the same samples as the offer letter).
     const oslPayload = await fetchBisModulePayload(row.id, 'osl-sample-requirements').catch(() => null)
     const liveSamples = parseOslSampleRequirementsPayload(
       oslPayload && typeof oslPayload === 'object' ? oslPayload : null,
-    ).rows
+    ).rows.filter((sample) => sample.includeInPrint !== false)
     const parsedFtr = parseFactoryTestReportPayload(
       data.modulePayload && typeof data.modulePayload === 'object'
         ? (data.modulePayload as Record<string, unknown>)

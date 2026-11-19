@@ -180,6 +180,7 @@ METHOD (follow every step):
 3. Go through the LABORATORY REPORT PAGES and take EVERY test with its observed value, in the laboratory's order, one row each (the same test reported twice is one row). The Manak summary pages only list tests with "Test Report Attached": that text is never a result — take the value from the laboratory pages (chemical results may be on a separate laboratory page from the mechanical / dimensional ones; read all of them). Compare the reported value with the limit from step 2 yourself; never rely on the lab's own "conforms" remark. The report's own "specified requirement" column is a cross-check: where your limit differs from it, re-read the Standard's table row for this grade (for example Table 4 gives tensile strength, yield stress and elongation as separate columns) and say in notes which is right.
 4. Missing tests: tests the Product Manual / Standard require the LABORATORY to do on THIS sample (its conditions from step 1a) that are not in the report. A test whose requirement does not apply to this sample's conditions (other grade / size / killed type / coating) is NOT missing: if the report gives it anyway, give the row requirement "Not Applicable — <reason>" and verdict "Pass". Tests the Product Manual leaves to the factory (for example on every pipe during production) are not missing.
 4a. Sample Stage "SS": the Marking clause is not applicable — give the Marking row requirement "Not Applicable — SS Sample (No Licence Yet)", verdict "Pass", never list Marking as missing or as a failure.
+4b. PENDING AT THE LABORATORY: a test the report lists as under process / in progress / awaited / to be reported later (often a long-duration test such as accelerated weathering, salt spray or ageing) is NOT missing. Give it one row with the result as written (e.g. "Under Process — Expected 19/04/2027") and verdict "Not Clear". The properties measured by that test (e.g. gloss retention, colour retention and chalk resistance of the accelerated weathering test) are rows of it with the same result — never list them as missing tests.
 5. Verdict: "Yes" = every result passes and no test is missing. "No" = any result fails or any required test is missing. "Undecided" = a deciding value cannot be read at all.
 
 SCANNED REPORTS: the page pictures (each page may come as a top and a bottom half) are the primary source: read every value from the picture. The OCR text (read twice per page) is only a guide and may confuse digits (0↔8, 0↔6, 1↔7, 3↔8, 5↔S, "3.5"↔"15" when the decimal point is faint). PLAUSIBILITY: check each value against the sample's own size and the limit — e.g. a wall thickness reported for a 3.5 mm section cannot be 15 mm, a mass per metre must match the size — and when a reading is implausible, look at the picture again and take the reading that fits; say so in "notes". Use "Not Clear" only when neither the picture nor the OCR gives a plausible value.
@@ -262,6 +263,31 @@ export function setResultByHand(
   }
 }
 
+/** A result the laboratory has not given yet: "Under process; expected 19/04/2027", "Result awaited", "In progress". */
+export const PENDING_RESULT = /\bunder\s*process\b|\bin\s*progress\b|\bawaited\b|\bpending\b|\bto\s+be\s+reported\b|\bresult\s+(?:will\s+be\s+)?(?:sent|submitted)\s+later\b/i
+
+const NAME_STOP = new Set(['test', 'tests', 'and', 'the', 'for', 'with', 'clause', 'table', 'amd', 'determination', 'of'])
+const nameWords = (v: string) =>
+  normName(v.split(' (Clause')[0].split(' — ')[0])
+    .split(' ')
+    .filter((w) => w.length >= 3 && !NAME_STOP.has(w))
+
+/**
+ * A test the laboratory lists as under process is in the report, not missing: a missing test that names a pending row
+ * ("Weatherometer Corrosion And Blister" for the row "Corrosion And Blister — Under process") is dropped.
+ */
+export function dropPendingFromMissing(check: OslConformityCheck): { missingTests: string[]; pending: string[] } {
+  const pendingRows = check.results.filter((r) => PENDING_RESULT.test(r.result))
+  const pending = pendingRows.map((r) => r.parameter)
+  if (!pendingRows.length) return { missingTests: check.missingTests, pending }
+  const rowWords = pendingRows.map((r) => nameWords(r.parameter)).filter((w) => w.length)
+  const missingTests = check.missingTests.filter((m) => {
+    const mw = new Set(nameWords(m))
+    return !rowWords.some((rw) => rw.every((w) => mw.has(w)) || (mw.size > 0 && [...mw].every((w) => rw.includes(w))))
+  })
+  return { missingTests, pending }
+}
+
 /**
  * Makes the answer consistent whatever model wrote it: numeric limits are re-checked, and the overall verdict follows
  * the fixed rule (any Fail or missing test = No; otherwise Undecided when the AI could not decide; else Yes).
@@ -272,12 +298,16 @@ function settleCheck(check: OslConformityCheck, row: OslSampleRequirementRow): O
   const results = check.results.map((r) => {
     if (ss && MARKING.test(r.parameter)) return { ...r, requirement: SS_MARKING_REQUIREMENT, verdict: 'Pass' as const }
     if (/test\s*report\s*attached/i.test(r.result)) return { ...r, verdict: 'Not Clear' as const }
+    // Not reported yet by the laboratory: never Pass or Fail.
+    if (PENDING_RESULT.test(r.result)) return r.verdict === 'Not Clear' ? r : { ...r, verdict: 'Not Clear' as const }
     const computed = numericVerdict(r)
     if (!computed || computed === r.verdict || r.verdict === 'Not Clear') return r
     corrections.push(`${r.parameter}: ${r.result} against ${r.requirement} is ${computed === 'Pass' ? 'within' : 'outside'} the limit — verdict corrected to ${computed}.`)
     return { ...r, verdict: computed }
   })
-  const missingTests = ss ? check.missingTests.filter((t) => !MARKING.test(t)) : check.missingTests
+  const pendingCheck = dropPendingFromMissing({ ...check, results })
+  const droppedPending = check.missingTests.filter((m) => !pendingCheck.missingTests.includes(m))
+  const missingTests = ss ? pendingCheck.missingTests.filter((t) => !MARKING.test(t)) : pendingCheck.missingTests
   const failed = results.some((r) => r.verdict === 'Fail') || missingTests.length > 0
   // Not Clear rows keep an AI "No" (given for them) from turning into "Yes".
   const unclear = results.some((r) => r.verdict === 'Not Clear')
@@ -286,8 +316,12 @@ function settleCheck(check: OslConformityCheck, row: OslSampleRequirementRow): O
     ss && check.results.some((r) => MARKING.test(r.parameter))
       ? ['Marking is not applicable to an SS sample (no licence yet), so it is taken as Pass.']
       : []
-  const notes = (ss ? check.notes.filter((n) => !MARKING.test(n)) : check.notes).concat(ssNote, corrections)
-  const reasons = [...ssNote, ...corrections]
+  const pendingNote =
+    droppedPending.length
+      ? [`Not missing — the laboratory lists them as under process: ${droppedPending.join('; ')}.`]
+      : []
+  const notes = (ss ? check.notes.filter((n) => !MARKING.test(n)) : check.notes).filter((n) => !pendingNote.includes(n)).concat(ssNote, corrections, pendingNote)
+  const reasons = [...ssNote, ...corrections, ...pendingNote]
   const summary =
     reasons.length && verdict !== check.verdict
       ? `${verdict === 'Yes' ? 'Conforms' : verdict === 'No' ? 'Does not conform' : 'Undecided'} after the app's re-check: ${reasons.join(' ')}`
@@ -347,7 +381,7 @@ export function indexQueryWords(input: { requiredTests: RequiredTest[]; reportTe
   return `${REQUIREMENT_WORDS} ${input.grade} ${fromList} ${fromReport}`.replace(/\s+/g, ' ').trim()
 }
 
-const REQUIRED_RULES = `REQUIRED TESTS: the locked list below is authoritative for missing tests. For EVERY listed test give one entry in "required_check": {"test": the name exactly as listed, "applicable": false only when its "applies to" excludes this sample's grade / type / size (else true), "found": true when the laboratory report gives a result for it (under any name)}. "missing_tests" = the applicable listed tests with found false (add others only when the Standard clearly requires them). Use the listed requirement as the limit unless the Standard pages show an amended limit. Add "required_check" to the JSON answer.`
+const REQUIRED_RULES = `REQUIRED TESTS: the locked list below is authoritative for missing tests. For EVERY listed test give one entry in "required_check": {"test": the name exactly as listed, "applicable": false only when its "applies to" excludes this sample's grade / type / size (else true), "found": true when the laboratory report gives a result for it (under any name) or lists it as under process (its row is then "Not Clear")}. "missing_tests" = the applicable listed tests with found false (add others only when the Standard clearly requires them). Use the listed requirement as the limit unless the Standard pages show an amended limit. Add "required_check" to the JSON answer.`
 
 /** The locked list as prompt lines. */
 export function requiredTestsBlock(tests: RequiredTest[]): string {
@@ -434,7 +468,9 @@ export function referencedStandards(text: string, ownFolders: string[]): CitedSt
     t[field] += 1
     tally.set(key, t)
   }
-  const re = /\b(?:conform(?:ing|s)?\s+to|as\s+per|in\s+accordance\s+with|requirements?\s+of|specified\s+in|given\s+in|according\s+to|refer)\s+(?:the\s+)?(?:requirements?\s+of\s+)?IS\s*:?\s*(\d{2,5})(?:\s*\(\s*Part\s*(\d+)\s*\))?/gi
+  // "conforming to IS 737", and also with the grade named first: "conform to designation 31500B of IS 737",
+  // "as per Grade 5 of IS 10748".
+  const re = /\b(?:conform(?:ing|s)?\s+to|as\s+per|in\s+accordance\s+with|requirements?\s+of|specified\s+in|given\s+in|according\s+to|refer)\s+(?:the\s+)?(?:requirements?\s+of\s+)?(?:(?:grade|designation|alloy|type|class|variety)\s+[\w./-]+(?:\s+[\w./-]+){0,3}?\s+of\s+)?IS\s*:?\s*(\d{2,5})(?:\s*\(\s*Part\s*(\d+)\s*\))?/gi
   for (const m of text.matchAll(re)) {
     if (own.has(m[1])) continue
     const before = text.slice(Math.max(0, (m.index ?? 0) - 140), m.index ?? 0).toLowerCase()
@@ -444,7 +480,7 @@ export function referencedStandards(text: string, ownFolders: string[]): CitedSt
     else if (/\b(tests?|tested|testing|method|determin\w*|analysis|sampling|measured|procedure|practice|welding|weldability)\b/.test(near)) bump(key, 'method')
     else if (/toleranc|dimension/.test(before)) bump(key, 'tolerance')
     else if (/galvani|zinc|coat/.test(before)) bump(key, 'coating')
-    else if (/(manufactured|made|produced|rolled)\s+from|\b(steel|strip|sheet|coil|plate|billet|bloom|wire rod|raw material)\b/.test(before)) bump(key, 'material')
+    else if (/(manufactured|made|produced|rolled)\s+from|\b(steel|strip|sheet|coil|plate|billet|bloom|wire rod|raw material|aluminium|aluminum|alloy|copper|skin|base metal)\b/.test(before)) bump(key, 'material')
     else bump(key, 'other')
   }
   // Listed in the references but never cited with a lead phrase (IS 2633): still known by its title.
@@ -457,16 +493,18 @@ export function referencedStandards(text: string, ownFolders: string[]): CitedSt
       const isCoating = /zinc|coat|galvani/i.test(title)
       const isTolerance = /toleranc/i.test(title)
       const isDimension = !isTolerance && /\bdimensions?\b/i.test(title)
+      // "Wrought aluminium and aluminium alloy sheet and strip …", "Hot rolled steel strip …": a material specification.
+      const isMaterial = /\b(sheets?|strips?|plates?|coils?|bars?|rods?|billets?|ingots?)\b/i.test(title) && /\b(steel|alumini?um|alloy|copper|brass|wrought)\b/i.test(title)
       let role: CitedStandard['role']
       if (isDimension && !isMethod) role = 'dimension'
       else if ((isTolerance || (t.tolerance > 0 && t.tolerance >= t.material)) && !isMethod) role = 'tolerance'
       else if (isCoating) role = isMethod ? 'coating-method' : 'coating'
       else if (isMethod) role = 'method'
       else if (isGeneral) role = 'other'
-      else if (t.material) role = 'material'
+      else if (t.material || isMaterial) role = 'material'
       else if (t.coating) role = 'coating'
       else role = t.method > t.other ? 'method' : 'other'
-      return { key, role, score: t.material * 10 + t.coating * 3 + t.tolerance * 3 + t.other + t.method * 0.2 }
+      return { key, role, score: t.material * 10 + (isMaterial ? 5 : 0) + t.coating * 3 + t.tolerance * 3 + t.other + t.method * 0.2 }
     })
     .sort((x, y) => y.score - x.score)
 }
@@ -571,7 +609,11 @@ async function readFromStandardsIndex(
     // A referenced standard is read in its latest revision (its folder may hold old ones too), and only in the Part it
     // names: "IS 1367 Part 1" is never answered by IS 1367 Part 3. A Part the library does not have is not read.
     const refPick = await pickStandardDocs(refFolders, editionOfKey(ref.key), { strict: true }).catch(() => ({ standards: [] as string[], manuals: [] as string[] }))
-    if (!refPick.standards.length) continue
+    if (!refPick.standards.length) {
+      // Say so in the log: its limits (e.g. the aluminium sheet's chemistry and tensile values) could not be checked.
+      sources.push(`Referenced Standard ${ref.key} (${ref.why.split(' — ')[0]}): Not in the Standards Library — Its Limits Were Not Read`)
+      continue
+    }
     const pages = await searchStandardPages(refFolders, ref.words, ref.limits.pages, ['Standard', 'Amendment'], refPick.standards).catch(
       () => [] as StandardPage[],
     )
@@ -1138,11 +1180,16 @@ export async function checkSampleConformity(input: {
     throw err
   })
   const json = reply.match(/\{[\s\S]*\}/)?.[0]
+  // What the answer looked like, for the log when it cannot be read (an answer cut short ends mid-JSON).
+  const unreadable = (why: string) =>
+    new Error(
+      `The AI answer could not be read (${why}; AI model ${model ?? 'unknown'}, answer ${reply.length.toLocaleString('en-IN')} characters, sent ${message.length.toLocaleString('en-IN')} characters${images.length ? ` and ${images.length} page pictures` : ''}). Answer ends with: "${reply.slice(-160).replace(/\s+/g, ' ').trim()}". Try again, or Re-Check With Main Model.`,
+    )
   let raw: Record<string, unknown> = {}
   try {
     raw = json ? (JSON.parse(json) as Record<string, unknown>) : {}
-  } catch {
-    throw new Error('The AI answer could not be read. Try again.')
+  } catch (err) {
+    throw unreadable(`not valid JSON — ${err instanceof Error ? err.message : 'parse error'}; the answer may have been cut short`)
   }
   const parsed = parseOslConformityCheck({
     ...raw,
@@ -1152,7 +1199,7 @@ export async function checkSampleConformity(input: {
     model: model ?? '',
     reportPath: row.testReportStoragePath,
   })
-  if (!parsed) throw new Error('The AI answer could not be read. Try again.')
+  if (!parsed) throw unreadable(json ? 'the JSON has no verdict or results' : 'no JSON in the answer')
   // Sample details the AI could not read come from the sample row.
   const check = {
     ...parsed,

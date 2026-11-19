@@ -29,7 +29,14 @@
 
 Secret-looking keys (`password`, `secret`, `api_key`, `token`, …) are stripped from every result.
 
-## Edit tools (when `MCP_WRITE_ENABLED=true`)
+## Read tools for the whole app (since 19 Nov 2026)
+- `list_app_tables`: every app table the user can open (by Module Access), with what it holds.
+- `read_table`: rows of one of those tables — `select` columns (or one embedded table), up to 10 `filters` (`eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `like`, `ilike`, `is`, `in`), `order`, `limit` (≤ 100), `offset`. The table's Module Access path must not be None, and RLS applies (the user's JWT).
+- `get_required_tests`: an IS Code's Required Tests and whether the list is locked.
+- `find_standards`, `search_standard_pages`, `get_standard_page`: the Standards Library (documents of an IS Code or by name, the best-matching pages for some words, one page's text).
+- Left out on purpose: the QE Assistant's conversations, memories and mail, the `mcp_*` tables, and LIMS tables no menu opens. The table list is `READ_TABLES` in `lib/readTools.mjs`.
+
+## Edit tools (`MCP_WRITE_ENABLED=true`: on since 19 Nov 2026, set in deploy/oracle/docker-compose.yml)
 - Tools: `preview_update_project`, `preview_add_project_note`, `preview_update_client`, `preview_update_noncompliance_case`, `apply_change`.
 - **A preview saves nothing.**
   - It returns a before → after list and a single-use `confirm_token`, valid 5 minutes and bound to this user and this Claude connection.

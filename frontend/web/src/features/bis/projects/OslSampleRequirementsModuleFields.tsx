@@ -117,15 +117,36 @@ import {
   emptyOslSampleRequirementRow,
   normalizeImportedQrCodes,
   oslConformityDecided,
+  conformityLogText,
   oslSampleRowHasContent,
   parseOslSampleRequirementsPayload,
   oslSampleRowStatusTone,
   sampleForLabel,
+  type ConformityCheckError,
   type OslSampleConformity,
   type OslSampleRequirementRow,
   type OslSampleRequirementsModulePayload,
 } from './oslSampleRequirementsModel'
 import { formatDisplayDate } from './types'
+
+/** Text to the clipboard; falls back to a hidden text area where the Clipboard API is blocked. */
+async function copyText(value: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(value)
+    return true
+  } catch {
+    const area = document.createElement('textarea')
+    area.value = value
+    area.setAttribute('readonly', '')
+    area.style.position = 'fixed'
+    area.style.opacity = '0'
+    document.body.appendChild(area)
+    area.select()
+    const ok = document.execCommand('copy')
+    area.remove()
+    return ok
+  }
+}
 import { checkSampleConformity, setResultByHand } from './sampleConformityAi'
 import { fetchAiSettings } from '@/features/settings/ai-settings/aiSettingsApi'
 import {
@@ -1618,6 +1639,8 @@ export function OslSampleRequirementsModuleFields({
   // AI Conformity Check: progress text while running, and the sample whose check log is open.
   const [conformityBusy, setConformityBusy] = useState<string | null>(null)
   const [conformityLogId, setConformityLogId] = useState<string | null>(null)
+  // The last AI check of a sample that failed (by row id): shown in its log until a check succeeds.
+  const [conformityErrors, setConformityErrors] = useState<Record<string, ConformityCheckError>>({})
   const conformityLog = useMemo(() => {
     const row = conformityLogId ? rows.find((r) => r.id === conformityLogId) : undefined
     return row?.conformityCheck ? { row, check: row.conformityCheck } : null
@@ -1687,15 +1710,25 @@ export function OslSampleRequirementsModuleFields({
     for (const [i, row] of targets.entries()) {
       const label = `Sample ${i + 1} of ${targets.length} (${row.sampleCode || row.qrCode || 'No Code'})`
       setConformityBusy(`${label}: Starting…`)
+      let lastStep = 'Starting'
       try {
         const check = await checkSampleConformity({
           row,
           isCodeId,
           isLabel: isCodeLabel,
-          onStep: (step) => setConformityBusy(`${label}: ${step}`),
+          onStep: (step) => {
+            lastStep = step
+            setConformityBusy(`${label}: ${step}`)
+          },
           useMainModel: opts?.useMainModel,
         })
         tally[check.verdict] += 1
+        setConformityErrors((prev) => {
+          if (!prev[row.id]) return prev
+          const next = { ...prev }
+          delete next[row.id]
+          return next
+        })
         const current = valueRef.current
         onChangeRef.current({
           ...current,
@@ -1707,7 +1740,14 @@ export function OslSampleRequirementsModuleFields({
         })
       } catch (err) {
         tally.failed += 1
-        toast.error(`${label}: ${err instanceof Error ? err.message : 'AI Check Failed.'}`)
+        const message = err instanceof Error ? err.message : String(err || 'AI Check Failed.')
+        setConformityErrors((prev) => ({ ...prev, [row.id]: { message, step: lastStep, at: new Date().toISOString() } }))
+        // Stays until closed, so the reason can be read; it is also kept in the sample's log.
+        toast.error(`${label}: ${message}`, {
+          duration: Infinity,
+          closeButton: true,
+          description: `Failed at: ${lastStep}. The reason is also shown in the sample's AI Conformity Check Log.`,
+        })
       }
     }
     setConformityBusy(null)
@@ -3133,6 +3173,20 @@ export function OslSampleRequirementsModuleFields({
                   Checked {new Date(conformityLog.check.checkedAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
                   {conformityLog.check.model ? ` · AI Model: ${conformityLog.check.model}` : ''}
                 </span>
+                {conformityErrors[conformityLog.row.id] ? (
+                  <div role="alert" className="w-full border border-red-600 bg-red-50 px-3 py-2 text-xs text-red-800">
+                    <p className="font-semibold">
+                      The Last AI Check Failed (
+                      {new Date(conformityErrors[conformityLog.row.id].at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}) — This Log Is
+                      From the Earlier Check.
+                    </p>
+                    <p className="mt-1 break-words">
+                      Failed at: {conformityErrors[conformityLog.row.id].step}
+                      <br />
+                      Reason: {conformityErrors[conformityLog.row.id].message}
+                    </p>
+                  </div>
+                ) : null}
                 {conformityLog.check.reportPath && conformityLog.check.reportPath !== conformityLog.row.testReportStoragePath ? (
                   <span className="border border-amber-500 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
                     Out of Date — The Test Report Was Changed. Click Re-Check.
@@ -3279,6 +3333,24 @@ export function OslSampleRequirementsModuleFields({
           ) : null}
           <DialogFooter className="shrink-0 gap-2 border-t border-stone-300 bg-stone-100 px-4 py-3 sm:justify-between">
             <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className={cn(limsOutlineBtnClass, 'gap-1.5')}
+              disabled={!conformityLog}
+              title="Copy the Whole Log as Text (to Paste in a Chat or Email)"
+              onClick={() => {
+                if (!conformityLog) return
+                const sampleNo = rows.findIndex((r) => r.id === conformityLog.row.id) + 1
+                void copyText(
+                  conformityLogText(conformityLog.row, conformityLog.check, sampleNo || undefined, conformityErrors[conformityLog.row.id]),
+                ).then((ok) =>
+                  ok ? toast.success('Log Copied.') : toast.error('Could Not Copy the Log. Select the Text and Copy It by Hand.'),
+                )
+              }}
+            >
+              <Copy size={14} aria-hidden /> Copy Log
+            </Button>
             <Button
               type="button"
               variant="outline"
