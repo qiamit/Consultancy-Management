@@ -1180,11 +1180,16 @@ export async function checkSampleConformity(input: {
     throw err
   })
   const json = reply.match(/\{[\s\S]*\}/)?.[0]
+  // What the answer looked like, for the log when it cannot be read (an answer cut short ends mid-JSON).
+  const unreadable = (why: string) =>
+    new Error(
+      `The AI answer could not be read (${why}; AI model ${model ?? 'unknown'}, answer ${reply.length.toLocaleString('en-IN')} characters, sent ${message.length.toLocaleString('en-IN')} characters${images.length ? ` and ${images.length} page pictures` : ''}). Answer ends with: "${reply.slice(-160).replace(/\s+/g, ' ').trim()}". Try again, or Re-Check With Main Model.`,
+    )
   let raw: Record<string, unknown> = {}
   try {
     raw = json ? (JSON.parse(json) as Record<string, unknown>) : {}
-  } catch {
-    throw new Error('The AI answer could not be read. Try again.')
+  } catch (err) {
+    throw unreadable(`not valid JSON — ${err instanceof Error ? err.message : 'parse error'}; the answer may have been cut short`)
   }
   const parsed = parseOslConformityCheck({
     ...raw,
@@ -1194,7 +1199,7 @@ export async function checkSampleConformity(input: {
     model: model ?? '',
     reportPath: row.testReportStoragePath,
   })
-  if (!parsed) throw new Error('The AI answer could not be read. Try again.')
+  if (!parsed) throw unreadable(json ? 'the JSON has no verdict or results' : 'no JSON in the answer')
   // Sample details the AI could not read come from the sample row.
   const check = {
     ...parsed,
