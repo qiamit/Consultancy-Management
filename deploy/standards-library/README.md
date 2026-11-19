@@ -62,6 +62,11 @@ the library does not have is not read at all, never answered by another Part. Pa
 documents only (`search_standard_pages(..., p_relpaths)`).
 - Names that do not follow the pattern are indexed anyway and put on the review list (`standard_docs.review`).
   So are PDFs locked by DRM (FileOpen: no tool can open them; add an unlocked copy) and scans with almost no text.
+  An Indian adoption may keep its body in the name (`IS IEC 60071 Part 1 2006 - 00.pdf`, `IS ISO 16160 2012 - 00.pdf`),
+  and two Parts may share one file (`IS 274 Part 1 and 2 1981 - 00.pdf`).
+- `Reviewed Files.txt` at the root: file names (one per line, `#` for a comment) the owner has checked and found
+  right. Their name, content ("Content Shows IS …") and same-PDF notes are not shown again; reading notes (DRM, no
+  pages) stay.
 - `Standards List.xlsx` at the root (S.No, IS Number, IS Title, Standard type, Technical Committee, Department,
   PM no.) is read on every run into `standard_list`; the app shows the listed numbers that have no file yet.
 

@@ -41,8 +41,11 @@ AMENDMENT_NAME = re.compile(r"(?i)(^|[\s_.-])amd[\s_.-]*\d|amendment")
 SET_DIR = re.compile(r"(?i)^current official set\b")
 # "IS 10124 Part 1 2009 - 02.pdf": number, Part, Sec, edition year, amendments merged into the file.
 # A whole set in one file: "IS 1708 Parts 1 to 18 1986 - 02.pdf".
+# An Indian adoption keeps its body in the name: "IS IEC 60071 Part 1 2006 - 00.pdf", "IS ISO 16160 2012 - 00.pdf".
+# Two Parts in one file: "IS 274 Part 1 and 2 1981 - 00.pdf".
 STRICT_NAME = re.compile(
-    r"^(?:IS |ISO |IS ISO |ISO-IEC |IS ISO-IEC )\d+(?:(?: Part \d+[A-Z]?)?(?: Sec \d+[A-Z]?)?| Parts? \d+ to \d+) (?:19|20)\d{2} - \d{2}$"
+    r"^(?:IS |ISO |IEC |IS ISO |IS IEC |ISO-IEC |IS ISO-IEC )\d+"
+    r"(?:(?: Part \d+[A-Z]?)?(?: Sec \d+[A-Z]?)?| Parts? \d+ (?:to|and) \d+) (?:19|20)\d{2} - \d{2}$"
 )
 # The same form after another body's number: "ASTM E18 2025 - 00", "ASTM E1507 1998 (R2003) - 00".
 STRICT_TAIL = re.compile(r"^(?: Part \d+[A-Z]?)?(?: Sec \d+[A-Z]?)? (?:19|20)\d{2}(?: \(R(?:19|20)\d{2}\))? - \d{2}$")
@@ -74,6 +77,9 @@ BODY_BY_KEY = {re.sub(r"[\s/]+", "", b): b for b in BODIES}  # "GBT" -> "GB/T", 
 # Series letter written apart from the number in these bodies ("JIS B 7184", "KS D 3503"); joined elsewhere ("ASTM E18").
 SERIES_APART = {"JIS", "KS"}
 LIST_FILE = "Standards List.xlsx"  # at the root of the library: the IS numbers that should have a file
+# At the root of the library: file names (one per line, "#" for a comment) the owner has checked and found right.
+# Their name, content and same-PDF notes are not shown again.
+REVIEWED_FILE = "Reviewed Files.txt"
 
 # BSB download stamp on every page: "Free Standard provided by BIS via BSB Edge Private Limited to <buyer name>
 # (<email>) <IP> [for non-commercial use only]." It names a person and adds nothing to the requirements: removed.
@@ -464,7 +470,17 @@ def manual_covers_part(base, rel, text):
     return False
 
 
-def refresh_notes(conn):
+def reviewed_names(root):
+    """Lower-case file names listed in Reviewed Files.txt; empty when there is no such file."""
+    try:
+        with open(os.path.join(root, REVIEWED_FILE), encoding="utf-8-sig") as f:
+            lines = [ln.strip() for ln in f]
+    except OSError:
+        return set()
+    return {ln.split("/")[-1].lower() for ln in lines if ln and not ln.startswith("#")}
+
+
+def refresh_notes(conn, reviewed=frozenset()):
     """Number, category, year and review notes of every indexed file, from its name and its first pages as the
     indexer reads them now: a better rule reaches files already indexed without reading them again."""
     rows = conn.execute(
@@ -495,6 +511,8 @@ def refresh_notes(conn):
             if twins:
                 notes.append("Same PDF as " + ", ".join(sorted(twins)[:3]) + (" …" if len(twins) > 3 else ""))
         read_notes = [n for n in (review or "").split("; ") if n and not n.startswith(RUN_NOTES)]
+        if rel.split("/")[-1].lower() in reviewed:  # the owner checked this file: only reading notes (DRM …) stay
+            notes = []
         new_review = "; ".join(notes + read_notes) or None
         new_kind = kind if suffix else info["kind"]
         new_aka = [] if suffix or not re.match(r"^IS \d+$", info["folder"]) else sorted(
@@ -709,7 +727,7 @@ def main():
                         "UPDATE public.standard_index_runs SET added = %s, changed = %s, pages = %s, ocr_pages = %s WHERE id = %s",
                         (added, changed, pages_read, ocr_read, run_id),
                     )
-        renamed = refresh_notes(conn)
+        renamed = refresh_notes(conn, reviewed_names(root))
         if renamed:
             print(f"Names and first pages checked again: {renamed} documents updated")
         scanned, refs = scan_references(conn)
