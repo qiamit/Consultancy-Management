@@ -18,6 +18,8 @@ export type LibraryReference = {
   key: string
   cites: number
   file: LibraryFile | null
+  /** Added by hand (Add Reference), not found in the Standard's text. */
+  manual: boolean
 }
 
 export type IsLibraryFiles = {
@@ -39,6 +41,56 @@ const toFile = (d: DocRow): LibraryFile => ({
 })
 
 const byYearDesc = (a: LibraryFile, b: LibraryFile) => Number(b.year || 0) - Number(a.year || 0) || a.name.localeCompare(b.name)
+
+const refKey = (base: string, part: string | null | undefined) => `${base}${part ? ` Part ${part}` : ''}`
+
+/** References added by hand; none while the table is not there yet (before its release). */
+async function manualReferences(isCodeId: string): Promise<Array<{ ref_base: string; ref_part: string }>> {
+  const { data, error } = await supabase.from('is_code_reference_links').select('ref_base, ref_part').eq('is_code_id', isCodeId)
+  return error ? [] : ((data ?? []) as Array<{ ref_base: string; ref_part: string }>)
+}
+
+/** Adds a Reference Standard to this IS Code for good (by number and Part: a newer edition is picked up by itself). */
+export async function addReferenceLink(isCodeId: string, base: string, part: string): Promise<void> {
+  const { error } = await supabase
+    .from('is_code_reference_links')
+    .upsert({ is_code_id: isCodeId, ref_base: base, ref_part: part }, { onConflict: 'is_code_id,ref_base,ref_part', ignoreDuplicates: true })
+  if (error) throw new Error(error.message)
+}
+
+export type LibraryStandardHit = { base: string; part: string; key: string; file: LibraryFile; title: string }
+
+/** Standards in the library whose number matches what was typed ("1608", "IS 1608 Part 1"), latest edition per Part. */
+export async function searchLibraryStandards(text: string): Promise<LibraryStandardHit[]> {
+  const num = text.match(/\d{2,5}/)?.[0]
+  if (!num) return []
+  const part = text.match(/\bpart\s*-?\s*(\d+)/i)?.[1] ?? ''
+  const { data, error } = await supabase
+    .from('standard_docs')
+    .select('id, folder, relpath, kind, pages')
+    .eq('kind', 'Standard')
+    .ilike('folder', `%${num}%`)
+    .limit(300)
+  if (error) throw new Error(error.message)
+  const best = new Map<string, LibraryStandardHit>()
+  for (const d of ((data ?? []) as DocRow[]).filter((d) => !d.relpath.includes('::'))) {
+    const e = editionOf(d.relpath)
+    if (part && e.part !== part) continue
+    const key = refKey(d.folder, e.part)
+    const file = toFile(d)
+    const have = best.get(key)
+    if (!have || Number(file.year || 0) > Number(have.file.year || 0)) best.set(key, { base: d.folder, part: e.part, key, file, title: '' })
+  }
+  const hits = [...best.values()]
+    .sort((a, b) => Number(!a.base.endsWith(` ${num}`)) - Number(!b.base.endsWith(` ${num}`)) || a.key.localeCompare(b.key, undefined, { numeric: true }))
+    .slice(0, 30)
+  if (hits.length) {
+    const { data: list } = await supabase.from('standard_list').select('base, title').in('base', [...new Set(hits.map((h) => h.base))])
+    const titles = new Map(((list ?? []) as Array<{ base: string; title: string | null }>).map((l) => [l.base, l.title ?? '']))
+    for (const h of hits) h.title = titles.get(h.base) ?? ''
+  }
+  return hits
+}
 
 export const EMPTY_LIBRARY_FILES: IsLibraryFiles = { standards: [], amendments: [], manuals: [], references: [], older: [] }
 
@@ -67,18 +119,25 @@ export async function loadIsLibraryFiles(isCodeId: string): Promise<IsLibraryFil
     .map(toFile)
     .sort(byYearDesc)
 
-  // Standards the current Standard names, most cited first, each with its latest edition in the library (same Part).
+  // Standards the current Standard names, most cited first, each with its latest edition in the library (same Part),
+  // and the ones staff added by hand.
   const mainIds = docs.filter((d) => standards.some((s) => s.relpath === d.relpath)).map((d) => d.id)
   let references: LibraryReference[] = []
+  const merged = new Map<string, { base: string; part: string; cites: number; manual: boolean }>()
   if (mainIds.length) {
     const { data: refRows } = await supabase.from('standard_refs').select('ref_base, ref_part, cites').in('doc_id', mainIds)
-    const merged = new Map<string, { base: string; part: string; cites: number }>()
     for (const r of (refRows ?? []) as Array<{ ref_base: string; ref_part: string; cites: number }>) {
-      const key = `${r.ref_base}${r.ref_part ? ` Part ${r.ref_part}` : ''}`
-      const m = merged.get(key) ?? { base: r.ref_base, part: r.ref_part ?? '', cites: 0 }
+      const key = refKey(r.ref_base, r.ref_part)
+      const m = merged.get(key) ?? { base: r.ref_base, part: r.ref_part ?? '', cites: 0, manual: false }
       m.cites += r.cites ?? 1
       merged.set(key, m)
     }
+  }
+  for (const r of await manualReferences(isCodeId)) {
+    const key = refKey(r.ref_base, r.ref_part)
+    merged.set(key, { ...(merged.get(key) ?? { base: r.ref_base, part: r.ref_part, cites: 0 }), manual: true })
+  }
+  if (merged.size) {
     const bases = [...new Set([...merged.values()].map((m) => m.base))]
     const refDocs: DocRow[] = []
     for (let i = 0; i < bases.length; i += 80) {
@@ -99,9 +158,15 @@ export async function loadIsLibraryFiles(isCodeId: string): Promise<IsLibraryFil
           })
           .map(toFile)
           .sort((a, b) => (Number(b.pages ?? 0) > 0 ? 1 : 0) - (Number(a.pages ?? 0) > 0 ? 1 : 0) || byYearDesc(a, b))
-        return { key, cites: m.cites, file: candidates[0] ?? null }
+        return { key, cites: m.cites, file: candidates[0] ?? null, manual: m.manual }
       })
-      .sort((a, b) => Number(Boolean(b.file)) - Number(Boolean(a.file)) || b.cites - a.cites || a.key.localeCompare(b.key, undefined, { numeric: true }))
+      .sort(
+        (a, b) =>
+          Number(b.manual) - Number(a.manual) ||
+          Number(Boolean(b.file)) - Number(Boolean(a.file)) ||
+          b.cites - a.cites ||
+          a.key.localeCompare(b.key, undefined, { numeric: true }),
+      )
   }
   return { standards, amendments, manuals, references, older }
 }

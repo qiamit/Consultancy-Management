@@ -88,18 +88,18 @@ export async function askStandards(input: {
   useReferences: boolean
 }): Promise<AskAnswer> {
   const own: LibraryFile[] = [...input.files.standards, ...input.files.amendments, ...input.files.manuals]
-  if (!own.length) throw new Error('This IS Code Has No File in the Standards Library to Answer From.')
+  const refPaths = input.useReferences ? input.files.references.flatMap((r) => (r.file ? [r.file.relpath] : [])) : []
+  if (!own.length && !refPaths.length) throw new Error('No Standards Library File to Answer From.')
   const ownPaths = own.map((f) => f.relpath)
   const words = await searchWords(input.question, input.isLabel)
 
   // A short Standard is read whole; a long one by its best-matching pages.
   const ownPageCount = own.reduce((n, f) => n + (f.pages ?? 0), 0)
   const ownPages =
-    ownPageCount <= SMALL_STANDARD_PAGES ? await allPages(ownPaths) : await searchPages(ownPaths, words, 14)
+    !ownPaths.length ? [] : ownPageCount <= SMALL_STANDARD_PAGES ? await allPages(ownPaths) : await searchPages(ownPaths, words, 14)
   // The Standard first, then its Amendments, then the Product Manual (the source chips follow this order).
   if (ownPageCount <= SMALL_STANDARD_PAGES) ownPages.sort((a, b) => ownPaths.indexOf(a.relpath) - ownPaths.indexOf(b.relpath) || a.page - b.page)
-  const refPaths = input.useReferences ? input.files.references.flatMap((r) => (r.file ? [r.file.relpath] : [])) : []
-  const refPages = refPaths.length ? await searchPages(refPaths, words, 6) : []
+  const refPages = refPaths.length ? await searchPages(refPaths, words, ownPaths.length ? 6 : 14) : []
 
   const kindOf = new Map(own.map((f) => [f.relpath, f.kind]))
   let context = ''
