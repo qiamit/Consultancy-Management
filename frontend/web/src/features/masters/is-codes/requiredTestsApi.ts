@@ -215,7 +215,7 @@ export async function fetchIsCodeEdition(isCodeId: string): Promise<IsCodeEditio
 }
 
 /** Part / section / year written in an index file name: "IS 2062 Part 1 2025 - 00.pdf". */
-function editionOf(relpath: string): IsCodeEdition {
+export function editionOf(relpath: string): IsCodeEdition {
   const name = relpath.split('/').pop() ?? relpath
   const years = name.match(/\b(?:19|20)\d{2}\b/g) ?? []
   return {

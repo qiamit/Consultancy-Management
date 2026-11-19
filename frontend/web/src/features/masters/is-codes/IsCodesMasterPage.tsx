@@ -15,6 +15,7 @@ import { formatIsCodeLabel as formatRequiredTestsLabel } from './buildIsCodeAssi
 import { IsCodesTableFooterBar } from './IsCodesFooterBar'
 import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { IsCodesFilesDialog, type IsCodeViewFile } from './IsCodesFilesDialog'
+import { IsLibraryFilesDialog } from './IsLibraryFilesDialog'
 import { buildIsCodesListAssistantContext, formatIsCodeLabel } from './buildIsCodeAssistantContext'
 import { existingIsCodeStoragePaths, IS_CODE_MISSING_FILE_MESSAGE } from './loadIsCodeFileLinks'
 import {
@@ -418,6 +419,7 @@ export default function IsCodesMasterPage() {
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [idsWithFiles, setIdsWithFiles] = useState<Set<string>>(() => new Set())
+  const [libraryFor, setLibraryFor] = useState<IsCodeRow | null>(null)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [jumpTo, setJumpTo] = useState('')
@@ -1198,12 +1200,6 @@ export default function IsCodesMasterPage() {
     }
   }
 
-  const openFilesDialog = async (row: IsCodeRow) => {
-    hydratedViewRef.current = row.id
-    setView(row.id)
-    await loadFilesDialogContent(row)
-  }
-
   useEffect(() => {
     if (!viewId) {
       hydratedViewRef.current = null
@@ -1754,6 +1750,14 @@ export default function IsCodesMasterPage() {
         isCodeId={requiredTestsFor?.id ?? null}
         isLabel={requiredTestsFor ? formatRequiredTestsLabel(requiredTestsFor) : ''}
       />
+      <IsLibraryFilesDialog
+        open={libraryFor != null}
+        onOpenChange={(open) => {
+          if (!open) setLibraryFor(null)
+        }}
+        isCodeId={libraryFor?.id ?? null}
+        title={libraryFor ? formatRequiredTestsLabel(libraryFor) : ''}
+      />
       <IsCodesFilesDialog
         open={viewId != null}
         onOpenChange={(open) => {
@@ -1785,9 +1789,7 @@ export default function IsCodesMasterPage() {
           onToggle={toggleRow}
           onToggleAll={toggleAllOnPage}
           onEdit={handleEdit}
-          onViewFiles={(row) => {
-            void openFilesDialog(row)
-          }}
+          onViewFiles={(row) => setLibraryFor(row)}
           onRequiredTests={(row) => setRequiredTestsFor(row)}
           onAssistantDataChanged={() => void loadIsCodes()}
           idsWithFiles={idsWithFiles}
