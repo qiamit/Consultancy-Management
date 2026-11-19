@@ -1,7 +1,7 @@
 # Preview backend: the `testing` branch's functions and PDF service, next to the live ones on the same server.
-# scripts/preview-deploy.sh starts these only while the `testing` branch changes backend/services/functions or
-# backend/services/pdf-service; otherwise it stops them and the preview site uses the live services (Caddyfile,
-# "preview_first"). They talk to the live auth / rest / storage, so they work on the live database (docs/workflow.md).
+# scripts/preview-deploy.sh (re)starts these on every preview deploy and they always run: the Caddyfile sends every
+# functions / PDF call from the preview site to them ("preview_first"; its fallback to the live services did not work
+# for POST requests, which then got 502). They talk to the live auth / rest / storage, so they work on the live database (docs/workflow.md).
 #
 # Scheduled jobs are OFF here (renewal reminders, QE Assistant tasks and mail sync): only the live functions run them.
 # Settings come from ../.env (the live one); the code comes from the preview checkout (PREVIEW_SRC).

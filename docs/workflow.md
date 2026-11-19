@@ -70,11 +70,11 @@ deploy)। Database की गड़बड़ी के लिए release से
 
 ### 5. Backend बदलाव (functions, PDF service)
 
-- `testing` में `backend/services/functions` या `backend/services/pdf-service` बदला हो, तो preview deploy उनके
-  अलग containers (`preview-functions`, `preview-pdf`) चलाता है। Preview site की functions / PDF calls उन्हीं पर
+- हर preview deploy `testing` के functions और PDF service के अलग containers (`preview-functions`, `preview-pdf`)
+  चलाता है, और वे हमेशा चलते रहते हैं। Preview site की functions / PDF calls (AI checks, PDF बनाना) उन्हीं पर
   जाती हैं; live site पहले की तरह live containers पर।
-- `testing` उन्हें न बदले तो preview containers बंद रहते हैं और preview site live वाले इस्तेमाल करता है।
-- Preview containers भी live database पर काम करते हैं, इसलिए नियम 2 और 3 उन पर भी लागू हैं।
+- Preview containers भी live database पर काम करते हैं, इसलिए नियम 2 और 3 उन पर भी लागू हैं। उनमें renewal
+  reminders, QE Assistant के scheduled tasks और mail sync बंद रहते हैं।
 - MCP server और database की बाकी services का preview नहीं है: उनके बदलाव release के बाद live पर जाँचे जाते हैं।
 
 ### 6. Security

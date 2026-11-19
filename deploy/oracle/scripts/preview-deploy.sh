@@ -10,8 +10,8 @@
 #   1. Checks out origin/testing in its own folder (PREVIEW_SRC, default /opt/qe/preview); the live checkout
 #      (/opt/qe/app) is not touched.
 #   2. Builds the web app against the live API and swaps it into $DATA_DIR/preview/web (no Caddy restart).
-#   3. Starts the preview functions / PDF containers only while `testing` changes them; otherwise stops them, and the
-#      preview site uses the live ones.
+#   3. (Re)starts the preview functions / PDF containers from `testing`. They always run: Caddy sends every preview
+#      functions / PDF call to them, and its fallback to the live containers did not work for POST requests (502).
 #   4. Lists migrations that `testing` has and the database does not (they are NOT applied).
 set -euo pipefail
 
@@ -58,21 +58,12 @@ rm -rf "$DATA_DIR/preview/web.next" && cp -a "$PREVIEW_SRC/frontend/web/dist-pre
 rm -rf "$DATA_DIR/preview/web.prev" && { [ -d "$DATA_DIR/preview/web" ] && mv "$DATA_DIR/preview/web" "$DATA_DIR/preview/web.prev" || true; }
 mv "$DATA_DIR/preview/web.next" "$DATA_DIR/preview/web"
 
-echo "== Preview backend"
-BACKEND_CHANGED=0
+echo "== Preview backend (functions and PDF from $BRANCH; scheduled jobs off)"
 for dir in backend/services/functions backend/services/pdf-service; do
-  if ! git -C "$APP" diff --quiet "origin/main" "origin/$BRANCH" -- "$dir"; then
-    echo "  $BRANCH changes $dir"
-    BACKEND_CHANGED=1
-  fi
+  git -C "$APP" diff --quiet "origin/main" "origin/$BRANCH" -- "$dir" || echo "  $BRANCH changes $dir"
 done
-if [ "$BACKEND_CHANGED" = 1 ]; then
-  preview_compose up -d --build --remove-orphans
-  preview_compose ps --format 'table {{.Service}}\t{{.State}}\t{{.Status}}'
-else
-  preview_compose down --remove-orphans >/dev/null 2>&1 || true
-  echo "  No backend changes: the preview site uses the live functions and PDF service."
-fi
+preview_compose up -d --build --remove-orphans
+preview_compose ps --format 'table {{.Service}}\t{{.State}}\t{{.Status}}'
 
 echo "== Migrations in $BRANCH that the database does not have (NOT applied here)"
 APPLIED=$(compose exec -T db psql -U supabase_admin -d postgres -tAc "select filename from public.app_schema_migrations" 2>/dev/null || true)
