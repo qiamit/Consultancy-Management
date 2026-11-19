@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import { Download, Library, RefreshCw } from 'lucide-react'
+import { ChevronDown, ChevronRight, Download, Library, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import {
@@ -14,7 +14,7 @@ import {
   limsTableHeadClass,
 } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
-import { SyncNowPanel } from './SyncNowPanel'
+import { SyncNowControls } from './SyncNowPanel'
 import { fetchAllMissingReferences, fetchStandardsLibraryStatus, type IndexRun, type IndexRunStatus, type StandardsLibraryStatus } from './standardsLibraryApi'
 
 const STATUS_TONE: Record<IndexRunStatus, string> = {
@@ -61,6 +61,7 @@ function Section({
   children: ReactNode
 }) {
   const [busy, setBusy] = useState(false)
+  const [open, setOpen] = useState(false)
   const run = async () => {
     if (!onExport) return
     setBusy(true)
@@ -74,9 +75,17 @@ function Section({
   }
   return (
     <section className={cn(limsPanelClass, 'overflow-x-auto')}>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-stone-200 px-3 py-2">
-        <h2 className="text-sm font-semibold">{title}</h2>
-        {note ? <p className="text-xs text-muted-foreground">{note}</p> : null}
+      <div className={cn('flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2', open && 'border-b border-stone-200')}>
+        <button
+          type="button"
+          className="flex items-center gap-1.5 text-left text-sm font-semibold"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+        >
+          {open ? <ChevronDown className="h-4 w-4" aria-hidden /> : <ChevronRight className="h-4 w-4" aria-hidden />}
+          <h2>{title}</h2>
+        </button>
+        {note && open ? <p className="text-xs text-muted-foreground">{note}</p> : null}
         {onExport ? (
           <Button type="button" variant="outline" size="sm" className="ml-auto h-7 gap-1.5 text-xs" onClick={run} disabled={busy}>
             <Download className="h-3.5 w-3.5" aria-hidden />
@@ -84,7 +93,7 @@ function Section({
           </Button>
         ) : null}
       </div>
-      {children}
+      {open ? children : null}
     </section>
   )
 }
@@ -162,6 +171,7 @@ export default function StandardsLibraryPage() {
         <div className="relative flex flex-wrap items-center gap-2">
           <Library className="h-5 w-5 text-amber-300" aria-hidden />
           <h1 className="mr-auto text-base font-semibold tracking-wide">Standards Library</h1>
+          <SyncNowControls onFinished={reload} />
           <Button type="button" variant="outline" className={limsDarkBarBtnClass} onClick={reload}>
             <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} aria-hidden />
             Refresh
@@ -170,8 +180,6 @@ export default function StandardsLibraryPage() {
       </div>
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
-
-      <SyncNowPanel onFinished={reload} />
 
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-5">
         <Stat
