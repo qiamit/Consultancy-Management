@@ -40,7 +40,7 @@ function term(value) {
     .slice(0, 80)
 }
 
-function asResult(value, note) {
+export function asResult(value, note) {
   let text = JSON.stringify(stripSecrets(value), null, 1)
   if (text.length > MAX_TEXT) text = `${text.slice(0, MAX_TEXT)}\n…(truncated; narrow the request)`
   return { content: [{ type: 'text', text: note ? `${note}\n${text}` : text }] }
@@ -48,7 +48,7 @@ function asResult(value, note) {
 
 const limitSchema = z.number().int().min(1).max(50).optional().describe('Rows to return (default 20, max 50)')
 // Any 8-4-4-4-12 hex id: some rows use fixed ids that are not RFC version-4 UUIDs.
-const uuidSchema = (what) =>
+export const uuidSchema = (what) =>
   z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, 'Expected a uuid').describe(`${what} id (uuid)`)
 
 const PROJECT_LIST =
