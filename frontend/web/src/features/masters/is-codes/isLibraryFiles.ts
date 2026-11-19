@@ -107,7 +107,7 @@ export async function loadIsLibraryFiles(isCodeId: string): Promise<IsLibraryFil
 }
 
 /** Opens a library PDF in a new browser tab, or downloads it. */
-export async function openLibraryFile(relpath: string, download = false): Promise<void> {
+export async function openLibraryFile(relpath: string, download = false, page?: number): Promise<void> {
   // The tab is opened at once (inside the click), else the browser blocks it as a pop-up.
   const tab = download ? null : window.open('', '_blank')
   try {
@@ -127,7 +127,7 @@ export async function openLibraryFile(relpath: string, download = false): Promis
     })
     const body = (await res.json().catch(() => ({}))) as { token?: string; error?: string }
     if (!res.ok || !body.token) throw new Error(body.error || 'Could Not Open the File.')
-    const url = `${base}/standards/file?t=${encodeURIComponent(body.token)}${download ? '&download=1' : ''}`
+    const url = `${base}/standards/file?t=${encodeURIComponent(body.token)}${download ? '&download=1' : ''}${!download && page ? `#page=${page}` : ''}`
     if (tab) {
       tab.location.href = url
       return
