@@ -6,7 +6,11 @@ Mac पर सिर्फ़ app का frontend (`npm run dev`) चलता �
 **नहीं** चलता। Database **एक ही** है: Oracle server पर चल रहा live database। Cloud sessions भी इसी Git तरीके से
 काम कर सकते हैं (नीचे "Cloud session")।
 
-| | `testing` branch | `main` branch |
+**19 Nov 2026 से (owner का फ़ैसला):** सामान्य काम Mac पर बनता और जाँचा जाता है, फिर **PR सीधे `main` पर** →
+owner का OK → merge → live (पहले backup)। `testing` / preview सिर्फ़ जोखिम वाले काम के लिए है (नीचे "कब
+`testing` / preview")। `main` पर सीधे push कभी नहीं, हमेशा PR।
+
+| | `testing` branch (सिर्फ़ जोखिम वाला काम) | | `main` branch |
 |---|---|---|
 | किसलिए | सारी editing और जाँच | Live app |
 | कहाँ खुलता है | **https://preview.qengineering.in** (नीचे लाल "TESTING · live data" और tab में `[TEST]`) | **https://qengineering.in** |
@@ -37,13 +41,13 @@ preview का backend (functions / PDF) तभी अलग चलता है
 
 **हर काम:**
 
-1. काम शुरू करने से पहले code ताज़ा करें: `git checkout testing && git pull` (cloud sessions या दूसरे काम ने जो
+1. काम शुरू करने से पहले code ताज़ा करें: `git checkout main && git pull` (cloud sessions या दूसरे काम ने जो
    बदला वह आ जाता है)। फिर नई branch: `git checkout -b <काम-का-नाम>`।
 2. Session code बदलता है; `npm run dev` बदलाव 1–2 सेकंड में browser में दिखा देता है। Owner Design Mode से
    बताते हैं क्या बदलना है, और **TEST client** पर जाँचते हैं (नियम 2, 3 — यहाँ भी data live है)।
 3. काम पूरा: `npm run build --prefix frontend/web` और typecheck (`npx tsc --noEmit -p tsconfig.app.json`,
-   error count पहले जितना), commit, `git push`, PR → `testing`, merge।
-4. Owner के OK पर `testing` → `main` (live, backup पहले) — नीचे "Release"।
+   error count पहले जितना), commit, `git push`, **PR → `main`**।
+4. Owner के OK पर PR merge (live, backup पहले) — नीचे "Release"।
 5. Mac का folder अपने-आप update **नहीं** होता: हर नए काम से पहले कदम 1 (`git pull`)।
 
 **Mac पर क्या test नहीं होता:** backend का code (functions, PDF service, MCP) — Mac का app live server के
@@ -63,8 +67,17 @@ Check, AI prompts और सारे screens browser का code हैं, व
 
 ## Release (Mac और cloud दोनों के लिए)
 
-`testing` → `main` का PR, owner के OK पर merge। Merge होते ही "Deploy to Oracle": **database backup** → web build
-→ containers → migrations। उसके बाद `testing` को `main` के बराबर करें (`git push origin origin/main:testing`)।
+काम की branch → `main` का PR, owner के OK पर merge। Merge होते ही "Deploy to Oracle": **database backup** → web
+build → containers → migrations। Session https://qengineering.in पर बदला हुआ हिस्सा जाँचकर owner को बताता है।
+जोखिम वाला काम `testing` से आया हो तो release के बाद `testing` को `main` के बराबर करें
+(`git push origin origin/main:testing`)।
+
+### कब `testing` / preview
+
+सिर्फ़ तब, जब Mac पर पूरी जाँच न हो सके: ऐसी migration जो पहले से पड़ा data बदले, server / Docker / Caddy का
+setup, login या payment, या backend (functions, PDF service, MCP) का बड़ा बदलाव। ऐसा काम PR → `testing` →
+preview.qengineering.in पर जाँच → owner का OK → `testing` → `main`। Cloud session (Mac पास न हो) भी यही रास्ता
+ले सकता है।
 
 गलत release: owner को बताएँ, `main` पर revert का PR बनाएँ, owner के OK पर merge करें (फिर से backup +
 deploy)। Database की गड़बड़ी के लिए release से पहले वाला backup है (नियम 4)।
