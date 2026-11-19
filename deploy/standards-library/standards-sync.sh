@@ -162,7 +162,8 @@ case "${1:-}" in
                 echo "An earlier indexing run is still going on the server (${BUSY#BUSY }); waiting for it…"
                 wait_server_run "${BUSY#BUSY }" || echo "That run ended with code $?; going on." ;;
     esac
-    RS=(rsync -a --delete "${EXCLUDES[@]}" -e "ssh -i $KEY $SSH_OPTS")
+    # Readable by the app's functions container (it opens the PDFs for staff, read-only); OneDrive files are 700.
+    RS=(rsync -a --chmod=D755,F644 --delete "${EXCLUDES[@]}" -e "ssh -i $KEY $SSH_OPTS")
     # What would be removed on the server, before anything is copied.
     check_removals() {
       GONE=$("${RS[@]}" -n --itemize-changes "$SRC/" "$SERVER:$REMOTE_LIB/" | grep -c '^\*deleting.*\.pdf$' || true)

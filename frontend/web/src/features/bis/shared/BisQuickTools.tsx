@@ -1,8 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
-import { BookOpen, ExternalLink, FileText, Globe, KeyRound, LogIn } from 'lucide-react'
+import { BookOpen, ExternalLink, Globe, KeyRound, LogIn } from 'lucide-react'
 import { toast } from 'sonner'
-import { loadIsCodeFileLinks, type IsCodeFileLink } from '@/features/masters/is-codes/loadIsCodeFileLinks'
-import { usePdfViewer } from '@/components/ui/usePdfViewer'
+import { IsLibraryFilesDialog } from '@/features/masters/is-codes/IsLibraryFilesDialog'
 import { cn } from '@/lib/utils'
 import { fetchBisProjectById } from '../projects/bisProjectsApi'
 import { isQeExtensionPresent, openBsbPortalLogin, openManakEbisAssist } from '../projects/manakExtensionBridge'
@@ -13,18 +12,6 @@ const EXTENSION_MISSING_MSG =
 
 const toolBtn =
   'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-none border border-amber-500/40 bg-stone-800/80 text-amber-100 transition-colors hover:bg-amber-500/20 hover:text-amber-50 disabled:opacity-40'
-
-const isManualName = (name: string) => /product[_\s-]*manual|\bmanual\b|\bpm\b|^pm[_\s-]/i.test(name)
-
-/** The IS Code's specification (standard) or product manual among its attached files. */
-function pickIsFile(files: IsCodeFileLink[], kind: 'manual' | 'standard'): IsCodeFileLink | null {
-  const usable = files.filter((f) => Boolean(f.url?.trim()))
-  const pool = usable.length > 0 ? usable : files
-  if (pool.length === 0) return null
-  return kind === 'manual'
-    ? pool.find((f) => isManualName(f.file_name)) ?? null
-    : pool.find((f) => !isManualName(f.file_name)) ?? null
-}
 
 /** Opens BIS Product Manuals online; the QE extension searches the IS number when installed. */
 function openProductManualOnline(isNumber: string, setBusy: (busy: boolean) => void) {
@@ -81,10 +68,8 @@ export function BisQuickTools({
   isNumber?: string | null
   className?: string
 }) {
-  const [viewFile, viewer] = usePdfViewer()
   const [projectIs, setProjectIs] = useState<{ isCodeId: string; isNumber: string } | null>(null)
-  // Files of the IS Code they were loaded for; a different IS Code shows as loading until its files arrive.
-  const [loadedFiles, setLoadedFiles] = useState<{ codeId: string; files: IsCodeFileLink[] } | null>(null)
+  const [filesOpen, setFilesOpen] = useState(false)
   const [searchBusy, setSearchBusy] = useState(false)
   const [loginBusy, setLoginBusy] = useState<'manak' | 'bsb' | null>(null)
 
@@ -106,21 +91,6 @@ export function BisQuickTools({
   const codeId = (isCodeId ?? '').trim() || projectIs?.isCodeId || ''
   const number = (isNumber ?? '').trim() || projectIs?.isNumber || ''
 
-  useEffect(() => {
-    if (!codeId) return
-    let cancelled = false
-    void loadIsCodeFileLinks(codeId).then((files) => {
-      if (!cancelled) setLoadedFiles({ codeId, files })
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [codeId])
-  const isFiles = codeId && loadedFiles?.codeId === codeId ? loadedFiles.files : []
-  const filesLoading = Boolean(codeId) && loadedFiles?.codeId !== codeId
-
-  const standardFile = pickIsFile(isFiles, 'standard')
-  const manualFile = pickIsFile(isFiles, 'manual')
 
   const manakLogin = async () => {
     if (!id) return
@@ -159,23 +129,14 @@ export function BisQuickTools({
       <button
         type="button"
         className={toolBtn}
-        disabled={filesLoading || !standardFile?.url}
-        title={standardFile?.file_name ? `View Specification: ${standardFile.file_name}` : codeId ? 'No Specification Attached to This IS Code' : 'No IS Code'}
-        aria-label="View Specification"
-        onClick={() => viewFile(standardFile?.url, standardFile?.file_name || 'Specification', 'Specification File Not Found for This IS Code.')}
+        disabled={!codeId}
+        title={codeId ? `IS Files: ${number || 'This IS Code'} (Standard, Amendments, Product Manual, References)` : 'No IS Code'}
+        aria-label="IS Files"
+        onClick={() => setFilesOpen(true)}
       >
         <BookOpen size={15} aria-hidden />
       </button>
-      <button
-        type="button"
-        className={toolBtn}
-        disabled={filesLoading || !manualFile?.url}
-        title={manualFile?.file_name ? `View Product Manual: ${manualFile.file_name}` : codeId ? 'No Product Manual Attached to This IS Code' : 'No IS Code'}
-        aria-label="View Product Manual"
-        onClick={() => viewFile(manualFile?.url, manualFile?.file_name || 'Product Manual', 'Product Manual File Not Found for This IS Code.')}
-      >
-        <FileText size={15} aria-hidden />
-      </button>
+      <IsLibraryFilesDialog open={filesOpen} onOpenChange={setFilesOpen} isCodeId={codeId || null} title={number} />
       <button
         type="button"
         className={toolBtn}
@@ -216,7 +177,6 @@ export function BisQuickTools({
       >
         <LogIn size={15} aria-hidden />
       </button>
-      {viewer}
     </div>
   )
 }

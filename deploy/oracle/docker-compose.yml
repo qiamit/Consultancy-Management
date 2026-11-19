@@ -165,6 +165,10 @@ services:
       AUTH_PUBLIC_URL: https://${API_DOMAIN}/auth/v1
       # Customer Portal invites stay off until the owner opens the portal (after Railway shutdown + secrets rotation).
       CUSTOMER_PORTAL_INVITES: ${CUSTOMER_PORTAL_INVITES:-0}
+      # Standards Library PDFs opened from the app (IS Files): the synced folder, read-only.
+      STANDARDS_LIBRARY_DIR: /library
+    volumes:
+      - ${STANDARDS_DIR:-/opt/qe/standards/library}:/library:ro
 
   mcp:
     <<: *service

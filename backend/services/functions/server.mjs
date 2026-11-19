@@ -7,6 +7,7 @@ import { createQiAssistantHandler } from './qiAssistant.mjs'
 import { createRenewalReminders } from './renewalReminders.mjs'
 import { startAssistantScheduler } from './assistantScheduler.mjs'
 import { createAssistantMail } from './assistantMail.mjs'
+import { createStandardsFiles } from './standardsFiles.mjs'
 
 const PORT = Number(process.env.PORT || 8080)
 const MANAK_TTL_MS = 45 * 60 * 1000
@@ -1367,7 +1368,21 @@ async function handleAssistantMailSend(req, res) {
   json(res, 200, { ok: true, ...result })
 }
 
+// Standards Library PDFs (read-only mount of the synced "Oracle Database" folder): open in a tab or download.
+const standardsFiles = createStandardsFiles({
+  root: process.env.STANDARDS_LIBRARY_DIR || '/library',
+  secret: SERVICE_ROLE_KEY,
+  requireActiveUser,
+  userRestFor,
+  callerJwt,
+  readBody,
+  corsJson,
+  corsHeaders,
+})
+
 const routes = {
+  'POST /standards/file-link': standardsFiles.handleLink,
+  'GET /standards/file': standardsFiles.handleFile,
   'GET /health': async (_req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' })
     res.end('ok')
