@@ -1,7 +1,10 @@
-# काम करने का तरीका (Cloud + Git + Live database)
+# काम करने का तरीका (Mac पर app + Git + Live database)
 
-Consultancy Pro (QE Consultancy) का सारा काम **Claude के cloud sessions** में होता है। Mac या किसी local
-computer पर app, database या test copy नहीं चलती। Database **एक ही** है: Oracle server पर चल रहा live database।
+Consultancy Pro (QE Consultancy) का रोज़ का काम owner के **Mac पर Claude Desktop के Local session** में होता है:
+Mac पर सिर्फ़ app का frontend (`npm run dev`) चलता है, जो सीधे **live API और live database** से जुड़ता है, और owner
+उसे Claude के in-built browser (Design Mode के साथ) में देखते हैं। Mac पर database, Docker, test copy या server
+**नहीं** चलता। Database **एक ही** है: Oracle server पर चल रहा live database। Cloud sessions भी इसी Git तरीके से
+काम कर सकते हैं (नीचे "Cloud session")।
 
 | | `testing` branch | `main` branch |
 |---|---|---|
@@ -14,9 +17,42 @@ computer पर app, database या test copy नहीं चलती। Data
 Server: Oracle Cloud, `qe-consultancy` (129.225.118.1), 2 OCPU / 12 GB। Preview site सिर्फ़ static files है;
 preview का backend (functions / PDF) तभी अलग चलता है जब `testing` उसे बदलता है (नीचे "Backend बदलाव")।
 
-## रोज़ का काम
+## Mac पर app (रोज़ का काम)
 
-1. Owner cloud session में काम बताते हैं। Session अपनी branch पर code बदलता है, `npm run build`
+**एक बार का setup** (owner, Mac पर):
+
+1. Node.js 22 (nodejs.org से LTS installer) और Git (Terminal में `git --version`; न हो तो macOS खुद Command Line
+   Tools install करने को कहता है)।
+2. Claude Desktop → **Code** → New session → **Local** → folder: `~/Code/Consultancy-Management` (नाम में space
+   न हो; folder `~/Library` या OneDrive के अंदर न हो)। उस session से कहें:
+   "`qiamit/Consultancy-Management` इस folder में clone करो, `testing` branch लो, `docs/workflow.md` पढ़ो, फिर
+   Mac setup करो।"
+3. Session करता है: `git clone https://github.com/qiamit/Consultancy-Management.git .` (GitHub login पहली बार
+   browser में), `git checkout testing`, `npm install --prefix frontend/web`, और `frontend/web/.env`
+   `.env.example` से बनाता है। **Anon key** (public key, live website में भी है) owner खुद `.env` में डालते हैं
+   या session https://qengineering.in के build से लेता है; chat में कोई secret नहीं।
+4. App चलाना: `npm run dev --prefix frontend/web -- --port 5176` (या `.claude/launch.json` का `web` entry), फिर
+   in-built browser (Cmd+Shift+B) में **http://localhost:5176** → असली login (Two-Step के साथ)। Live server
+   localhost के ports 5173–5185 को पहले से मानता है (`ALLOW_LOCALHOST_ORIGINS=1`)।
+
+**हर काम:**
+
+1. काम शुरू करने से पहले code ताज़ा करें: `git checkout testing && git pull` (cloud sessions या दूसरे काम ने जो
+   बदला वह आ जाता है)। फिर नई branch: `git checkout -b <काम-का-नाम>`।
+2. Session code बदलता है; `npm run dev` बदलाव 1–2 सेकंड में browser में दिखा देता है। Owner Design Mode से
+   बताते हैं क्या बदलना है, और **TEST client** पर जाँचते हैं (नियम 2, 3 — यहाँ भी data live है)।
+3. काम पूरा: `npm run build --prefix frontend/web` और typecheck (`npx tsc --noEmit -p tsconfig.app.json`,
+   error count पहले जितना), commit, `git push`, PR → `testing`, merge।
+4. Owner के OK पर `testing` → `main` (live, backup पहले) — नीचे "Release"।
+5. Mac का folder अपने-आप update **नहीं** होता: हर नए काम से पहले कदम 1 (`git pull`)।
+
+**Mac पर क्या test नहीं होता:** backend का code (functions, PDF service, MCP) — Mac का app live server के
+functions / PDF से चलता है। ऐसे बदलाव preview (नीचे) या release के बाद live पर जाँचे जाते हैं। AI Conformity
+Check, AI prompts और सारे screens browser का code हैं, वे Mac पर तुरंत test होते हैं।
+
+## Cloud session और preview (ज़रूरत पर)
+
+1. Owner cloud session में काम बताते हैं (Mac पास न हो तब)। Session अपनी branch पर code बदलता है, `npm run build`
    (`frontend/web`) और typecheck चलाता है (`npx tsc --noEmit -p tsconfig.app.json`, error count पहले जितना)।
 2. Session अपना काम **`testing` में merge** करता है (PR → `testing`)। GitHub अपने-आप preview deploy करता है
    (5–10 मिनट)।
@@ -24,6 +60,11 @@ preview का backend (functions / PDF) तभी अलग चलता है
 4. Owner OK कहें तो session **`testing` → `main`** का PR बनाता है, और owner के OK पर merge करता है।
    Merge होते ही "Deploy to Oracle" चलता है: **database backup** → web build → containers → migrations।
 5. Session https://qengineering.in पर बदला हुआ हिस्सा जाँचकर owner को बताता है।
+
+## Release (Mac और cloud दोनों के लिए)
+
+`testing` → `main` का PR, owner के OK पर merge। Merge होते ही "Deploy to Oracle": **database backup** → web build
+→ containers → migrations। उसके बाद `testing` को `main` के बराबर करें (`git push origin origin/main:testing`)।
 
 गलत release: owner को बताएँ, `main` पर revert का PR बनाएँ, owner के OK पर merge करें (फिर से backup +
 deploy)। Database की गड़बड़ी के लिए release से पहले वाला backup है (नियम 4)।
@@ -88,7 +129,7 @@ deploy)। Database की गड़बड़ी के लिए release से
 
 - Owner को जवाब हिंदी में: क्या हो रहा है और owner को क्या करना है।
 - `main` में merge सिर्फ़ owner के OK पर। `testing` में merge build और typecheck पास होने पर।
-- कोई अलग test copy, local database या दूसरा server नहीं बनाना।
+- कोई अलग test copy, local database या दूसरा server नहीं बनाना। Mac पर सिर्फ़ frontend (`npm run dev`) चलता है।
 
 ## एक बार का setup (owner)
 
