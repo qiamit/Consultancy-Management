@@ -32,12 +32,6 @@ const LABEL: Record<SyncRequestStatus, string> = {
   cancelled: 'Cancelled',
 }
 
-function when(iso: string | null): string {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
-}
-
 function minutesAgo(iso: string | null): number | null {
   if (!iso) return null
   const t = new Date(iso).getTime()
@@ -125,21 +119,12 @@ export function SyncNowPanel({ onFinished }: { onFinished: () => void }) {
     <div className={cn(limsPanelClass, 'flex flex-wrap items-center gap-x-4 gap-y-2 px-3 py-2')}>
       <div className="mr-auto min-w-0 space-y-0.5">
         <p className="text-sm font-semibold">Sync Now</p>
-        <p className="text-xs text-muted-foreground">
-          Added or Replaced PDFs in the Oracle Database Folder? Press Sync Now. The Mac Copies the Folder to the Server
-          and Indexes Only New and Changed Files.
-        </p>
-        <p className={cn('text-xs', macAway ? 'text-amber-700' : 'text-muted-foreground')}>{macText}</p>
+        {macAway ? <p className="text-xs text-amber-700">{macText}</p> : null}
         {request ? (
           <p className="flex flex-wrap items-center gap-2 text-xs">
             <span className={cn('inline-flex rounded-md px-2 py-0.5 font-medium', TONE[request.status])}>
               {LABEL[request.status]}
             </span>
-            <span className="text-muted-foreground">
-              Asked {when(request.requested_at)}
-              {request.finished_at ? ` · Finished ${when(request.finished_at)}` : ''}
-            </span>
-            {request.message && !open ? <span className="text-muted-foreground">· {request.message}</span> : null}
           </p>
         ) : null}
         {error ? <p className="text-xs text-destructive">{error}</p> : null}

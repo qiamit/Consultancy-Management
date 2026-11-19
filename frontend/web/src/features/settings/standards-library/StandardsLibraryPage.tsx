@@ -135,11 +135,6 @@ export default function StandardsLibraryPage() {
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
-      <p className="text-xs text-muted-foreground">
-        Source: The Oracle Database Folder on the Mac. Add or Replace PDFs There, Then Press Sync Now (Any Time). It Also
-        Runs Every Sunday at 10 PM. Only New and Changed Files Are Read Again.
-      </p>
-
       <SyncNowPanel onFinished={reload} />
 
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-5">
@@ -154,27 +149,20 @@ export default function StandardsLibraryPage() {
               '—'
             )
           }
-          sub={latest ? `${formatWhen(latest.started_at)} · ${latest.host || '—'}` : 'Not Indexed Yet'}
         />
-        <Stat label="Files Indexed" value={num(totals.files)} sub={`${num(categories.length)} Categories`} />
-        <Stat label="Pages" value={num(totals.pages)} sub={`${num(totals.ocr)} Read by OCR`} />
+        <Stat label="Files Indexed" value={num(totals.files)} />
+        <Stat label="Pages" value={num(totals.pages)} />
         <Stat
           label="Standards List Coverage"
           value={listed ? `${num(listed - (data?.noStandard ?? 0))} / ${num(listed)}` : '—'}
-          sub={
-            listed
-              ? `${num(data?.noStandard ?? 0)} Without a Standard · ${num(data?.noManual ?? 0)} Without a Product Manual`
-              : 'No Standards List Read Yet'
-          }
         />
         <Stat
           label="Referenced Standards"
           value={data?.refs ? `${num(data.refsFound)} / ${num(data.refs)}` : '—'}
-          sub={data?.refs ? `In the Library · ${num(data.refsOtherPart)} Only in Another Part` : 'Not Scanned Yet'}
         />
       </div>
 
-      <Section title="Categories" note={lastDone ? `As of ${formatWhen(lastDone.finished_at)}` : undefined}>
+      <Section title="Categories">
         <Table className={limsTableClass}>
           <TableHeader>
             <TableRow>
@@ -262,10 +250,7 @@ export default function StandardsLibraryPage() {
         </Table>
       </Section>
 
-      <Section
-        title="Files to Review"
-        note="Indexed, but the Name or the Text Needs a Look: Rename the File in the Folder, or Replace a Bad Scan."
-      >
+      <Section title="Files to Review">
         <Table className={limsTableClass}>
           <TableHeader>
             <TableRow>
