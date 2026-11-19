@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Download, ExternalLink } from 'lucide-react'
+import { ChevronDown, ChevronRight, Download, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -38,13 +38,37 @@ function FileRow({ file, label }: { file: LibraryFile; label?: string }) {
   )
 }
 
-function Group({ title, count, children }: { title: string; count: number; children: React.ReactNode }) {
+function Group({
+  title,
+  count,
+  collapsible = false,
+  children,
+}: {
+  title: string
+  count: number
+  collapsible?: boolean
+  children: React.ReactNode
+}) {
+  const [open, setOpen] = useState(!collapsible)
+  const head = 'px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-stone-700'
   return (
     <section className="border border-stone-300 bg-white">
-      <h3 className="border-b border-stone-300 bg-stone-100 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-stone-700">
-        {title} <span className="font-normal text-stone-500">({count})</span>
-      </h3>
-      {children}
+      {collapsible ? (
+        <button
+          type="button"
+          className={cn('flex w-full items-center gap-1.5 bg-stone-100 text-left hover:bg-stone-200', head, open && 'border-b border-stone-300')}
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+        >
+          {open ? <ChevronDown className="h-3.5 w-3.5" aria-hidden /> : <ChevronRight className="h-3.5 w-3.5" aria-hidden />}
+          {title} <span className="font-normal text-stone-500">({count})</span>
+        </button>
+      ) : (
+        <h3 className={cn('border-b border-stone-300 bg-stone-100', head)}>
+          {title} <span className="font-normal text-stone-500">({count})</span>
+        </h3>
+      )}
+      {open ? children : null}
     </section>
   )
 }
@@ -126,7 +150,7 @@ export function IsLibraryFilesDialog({
               <Group title="Product Manual" count={f.manuals.length}>
                 {f.manuals.length ? f.manuals.map((s) => <FileRow key={s.relpath} file={s} />) : <Empty text="Not in the Library." />}
               </Group>
-              <Group title="Reference Standards" count={f.references.length}>
+              <Group title="Reference Standards" count={f.references.length} collapsible>
                 {f.references.length ? (
                   f.references.map((r) =>
                     r.file ? (
