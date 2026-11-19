@@ -359,3 +359,50 @@ export function parseOslSampleRequirementsPayload(
     signatoryDesignation: str(payload?.signatoryDesignation),
   }
 }
+
+/**
+ * The AI Conformity Check log of one sample as plain text, for the log's Copy button: everything the log window
+ * shows (sample, every result row, missing tests, observations, documents read), so it can be pasted for a review.
+ */
+export function conformityLogText(row: OslSampleRequirementRow, check: OslConformityCheck, sampleNo?: number): string {
+  const line = (label: string, value: string | undefined) => (value?.trim() ? `${label}: ${value.trim()}` : null)
+  const checked = new Date(check.checkedAt)
+  const lines = [
+    `AI Conformity Check Log${sampleNo ? ` — Sample ${sampleNo}` : ''}`,
+    line('Sample Code', row.sampleCode),
+    `Conformity: ${check.verdict}`,
+    line('Checked', Number.isNaN(checked.getTime()) ? check.checkedAt : checked.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })),
+    line('AI Model', check.model),
+    check.reportPath && check.reportPath !== row.testReportStoragePath ? 'Out of Date: the Test Report was changed after this check.' : null,
+    '',
+    'SAMPLE DETAILS',
+    line('Sample Description', check.sample.description || row.sampleDescription || row.gradeTypeVariety),
+    line('Grade / Type / Variety / Size', row.gradeTypeVariety),
+    line('Declared Values', check.sample.declaredValues || row.declaredValue),
+    line('Test Required', row.testRequired),
+    line('Batch Number', check.sample.batchNumber || row.batchNumber),
+    line('Date of Manufacturing', check.sample.manufactureDate),
+    line('Laboratory', row.laboratoryName),
+    line('Test Request', row.testRequestFileName),
+    line('Test Report', row.testReportFileName),
+    '',
+    'TEST RESULTS VS REQUIREMENTS (S. No. | Parameter | Clause | Requirement | Result | Verdict)',
+    ...(check.results.length
+      ? check.results.map((r, i) => [i + 1, r.parameter, r.clause, r.requirement, r.result, r.verdict].map((v) => String(v ?? '').trim() || '—').join(' | '))
+      : ['No Results Were Read From the Test Report.']),
+    '',
+    'MISSING TESTS',
+    ...(check.missingTests.length ? check.missingTests.map((t) => `- ${t}`) : ['No Required Test Is Missing.']),
+    '',
+    'OBSERVATIONS',
+    ...[check.summary, ...check.notes].filter((n) => n?.trim()).map((n) => `- ${n.trim()}`),
+    '',
+    `DOCUMENTS READ (${check.sources.length})`,
+    ...check.sources.map((s) => `- ${s}`),
+  ]
+  // null = a field with no value (left out); '' = a blank line between sections.
+  return lines
+    .filter((l): l is string => l !== null)
+    .join('\n')
+    .trim()
+}

@@ -117,6 +117,7 @@ import {
   emptyOslSampleRequirementRow,
   normalizeImportedQrCodes,
   oslConformityDecided,
+  conformityLogText,
   oslSampleRowHasContent,
   parseOslSampleRequirementsPayload,
   oslSampleRowStatusTone,
@@ -126,6 +127,25 @@ import {
   type OslSampleRequirementsModulePayload,
 } from './oslSampleRequirementsModel'
 import { formatDisplayDate } from './types'
+
+/** Text to the clipboard; falls back to a hidden text area where the Clipboard API is blocked. */
+async function copyText(value: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(value)
+    return true
+  } catch {
+    const area = document.createElement('textarea')
+    area.value = value
+    area.setAttribute('readonly', '')
+    area.style.position = 'fixed'
+    area.style.opacity = '0'
+    document.body.appendChild(area)
+    area.select()
+    const ok = document.execCommand('copy')
+    area.remove()
+    return ok
+  }
+}
 import { checkSampleConformity, setResultByHand } from './sampleConformityAi'
 import { fetchAiSettings } from '@/features/settings/ai-settings/aiSettingsApi'
 import {
@@ -3279,6 +3299,22 @@ export function OslSampleRequirementsModuleFields({
           ) : null}
           <DialogFooter className="shrink-0 gap-2 border-t border-stone-300 bg-stone-100 px-4 py-3 sm:justify-between">
             <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className={cn(limsOutlineBtnClass, 'gap-1.5')}
+              disabled={!conformityLog}
+              title="Copy the Whole Log as Text (to Paste in a Chat or Email)"
+              onClick={() => {
+                if (!conformityLog) return
+                const sampleNo = rows.findIndex((r) => r.id === conformityLog.row.id) + 1
+                void copyText(conformityLogText(conformityLog.row, conformityLog.check, sampleNo || undefined)).then((ok) =>
+                  ok ? toast.success('Log Copied.') : toast.error('Could Not Copy the Log. Select the Text and Copy It by Hand.'),
+                )
+              }}
+            >
+              <Copy size={14} aria-hidden /> Copy Log
+            </Button>
             <Button
               type="button"
               variant="outline"
