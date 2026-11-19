@@ -420,7 +420,6 @@ export default function StandardsLibraryPage() {
             })),
           )
         }
-        note="Named in the Library's Standards, Most Cited First. Checks Read a Referenced Standard Only in the Part It Names, so Add the Missing Part Too."
       >
         <Table className={limsTableClass}>
           <TableHeader>
