@@ -364,7 +364,15 @@ export function parseOslSampleRequirementsPayload(
  * The AI Conformity Check log of one sample as plain text, for the log's Copy button: everything the log window
  * shows (sample, every result row, missing tests, observations, documents read), so it can be pasted for a review.
  */
-export function conformityLogText(row: OslSampleRequirementRow, check: OslConformityCheck, sampleNo?: number): string {
+/** An AI check of a sample that failed: the step it reached and the reason (kept in the page, not saved). */
+export type ConformityCheckError = { message: string; step: string; at: string }
+
+export function conformityLogText(
+  row: OslSampleRequirementRow,
+  check: OslConformityCheck,
+  sampleNo?: number,
+  lastError?: ConformityCheckError,
+): string {
   const line = (label: string, value: string | undefined) => (value?.trim() ? `${label}: ${value.trim()}` : null)
   const checked = new Date(check.checkedAt)
   const lines = [
@@ -373,6 +381,14 @@ export function conformityLogText(row: OslSampleRequirementRow, check: OslConfor
     `Conformity: ${check.verdict}`,
     line('Checked', Number.isNaN(checked.getTime()) ? check.checkedAt : checked.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })),
     line('AI Model', check.model),
+    ...(lastError
+      ? [
+          '',
+          `LAST AI CHECK FAILED (${new Date(lastError.at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}) — the log below is from the earlier check`,
+          `Failed at: ${lastError.step}`,
+          `Reason: ${lastError.message}`,
+        ]
+      : []),
     check.reportPath && check.reportPath !== row.testReportStoragePath ? 'Out of Date: the Test Report was changed after this check.' : null,
     '',
     'SAMPLE DETAILS',
