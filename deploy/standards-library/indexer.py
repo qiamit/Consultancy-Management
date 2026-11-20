@@ -727,6 +727,150 @@ def scan_references(conn):
     return len(todo), total
 
 
+# ---------------------------------------------------------------- chunks (RAG step 2)
+
+# Raised when the chunking rules change: every document is chunked again on the next run (no PDF is read again,
+# apart from the quick column-layout pass for its tables).
+CHUNKS_VERSION = 1
+TABLE_TITLE = re.compile(r"^\s{0,140}Table\s+(\d+[A-Z]?)\b(.*)$", re.I)
+# A clause heading at the start of a line: "7", "7.2", "8.1.3" + a title word, or Foreword / Annex / Scope.
+CLAUSE_HEAD = re.compile(r"^\s*(?:(\d{1,2}(?:\.\d{1,2}){0,3})\s+(?=[A-Z(])|(FOREWORD|Foreword|ANNEX\s+[A-Z]|Annex\s+[A-Z])\b)")
+NUMBERY = re.compile(r"\d")
+CHUNK_MIN, CHUNK_MAX = 300, 1800
+
+
+def layout_pages(pdf):
+    """Column-layout text of each page (tables keep their rows); [] when the PDF cannot be read."""
+    out = run(["pdftotext", "-layout", "-enc", "UTF-8", pdf, "-"], 600).stdout
+    return [t for t in out.split("\f")]
+
+
+def table_chunks(layout):
+    """[(heading, text)] of the tables on one page in column layout: from a "Table N" title to the next title, a
+    run of blank lines or 70 lines; kept when it looks like a table (several lines with numbers in two columns)."""
+    lines = clean_text(layout).split("\n")
+    out, i = [], 0
+    while i < len(lines):
+        m = TABLE_TITLE.match(lines[i])
+        line = lines[i]
+        # A table title stands on its own, set in from the margin ("        Table 1 Chemical Composition"); a sentence
+        # that starts with "Table 1 and Table 3. For grades…" at the margin of a column is text, not a title.
+        if not m or len(line.strip()) > 160 or len(line) - len(line.lstrip()) < 8 or re.search(r"[.,;:]\s*$", line) \
+                or re.match(r"\s*Table\s+\d+[A-Z]?\s*(and|or|to|of|shall|gives?|is|are|see|for\s+the|without)\b", line, re.I):
+            i += 1
+            continue
+        start, j, blanks = i, i + 1, 0
+        while j < len(lines) and j - start < 70:
+            if TABLE_TITLE.match(lines[j]):
+                break
+            blanks = blanks + 1 if not lines[j].strip() else 0
+            if blanks >= 3:
+                break
+            j += 1
+        block = [l.rstrip() for l in lines[start:j]]
+        while block and not block[-1].strip():
+            block.pop()
+        # Rows: lines in columns (two or more gaps); a title set in from the margin is already a strong sign.
+        gaps = lambda l: len(re.findall(r"\S\s{2,}(?=\S)", l.strip()))
+        rows = [l for l in block[1:] if gaps(l) >= 2 or (gaps(l) >= 1 and len(NUMBERY.findall(l)) >= 2)]
+        if len(rows) >= 3:
+            indent = min((len(l) - len(l.lstrip()) for l in block if l.strip()), default=0)
+            text = "\n".join(l[indent:] for l in block)
+            text = re.sub(r" {4,}", "   ", text)[:6000]
+            out.append((re.sub(r"\s{2,}", " ", f"Table {m.group(1)}{m.group(2).rstrip()}")[:200], text))
+        i = j
+    return out
+
+
+def clause_chunks(text):
+    """[(heading, text)] of one page's text cut at clause headings, small pieces merged, long ones cut at a blank line."""
+    parts, head, buf = [], "", []
+    for line in text.split("\n"):
+        m = CLAUSE_HEAD.match(line)
+        if m and buf and sum(len(b) for b in buf) > 40:
+            parts.append((head, "\n".join(buf).strip()))
+            buf = []
+        if m:
+            head = line.strip()[:160]
+        buf.append(line)
+    if buf:
+        parts.append((head, "\n".join(buf).strip()))
+    merged = []
+    for h, t in parts:
+        if not t:
+            continue
+        if merged and (len(merged[-1][1]) < CHUNK_MIN or len(t) < 80) and len(merged[-1][1]) + len(t) < CHUNK_MAX:
+            merged[-1] = (merged[-1][0] or h, merged[-1][1] + "\n" + t)
+        else:
+            merged.append((h, t))
+    out = []
+    for h, t in merged:
+        while len(t) > CHUNK_MAX * 1.5:
+            cut = t.rfind("\n\n", CHUNK_MIN, CHUNK_MAX)
+            cut = cut if cut > 0 else t.rfind("\n", CHUNK_MIN, CHUNK_MAX)
+            cut = cut if cut > 0 else CHUNK_MAX
+            out.append((h, t[:cut].strip()))
+            t = t[cut:].strip()
+        out.append((h, t))
+    return out
+
+
+def chunks_of(pages, layouts):
+    """[(page, seq, kind, heading, text)] of one document: its tables (from the column layout of the page) and its
+    clauses (from the page text)."""
+    out = []
+    for no, text in pages:
+        seq = 0
+        lay = layouts[no - 1] if 0 < no <= len(layouts) else ""
+        for h, t in table_chunks(lay):
+            out.append((no, seq, "table", h, t))
+            seq += 1
+        pieces = clause_chunks(text or "")
+        has_heads = any(h for h, _ in pieces)
+        for h, t in pieces:
+            out.append((no, seq, "clause" if has_heads and h else "page", h, t))
+            seq += 1
+    return out
+
+
+def build_chunks(conn, root):
+    """Chunks of every library document whose chunks are missing or from older rules (new / changed files after a
+    read, every file once after CHUNKS_VERSION goes up)."""
+    todo = conn.execute(
+        """SELECT id, relpath FROM public.standard_docs
+           WHERE source = 'library' AND chunks_version < %s AND pages > 0 ORDER BY id""",
+        (CHUNKS_VERSION,),
+    ).fetchall()
+    made = 0
+    layout_cache = {}
+    for n, (doc_id, relpath) in enumerate(todo, start=1):
+        own, _, inner = relpath.partition("::")
+        layouts = []
+        if not inner:  # a file inside a PDF has no path of its own here: its tables come from its page text only
+            full = os.path.join(root, own)
+            if full not in layout_cache:
+                layout_cache.clear()
+                layout_cache[full] = layout_pages(full) if os.path.isfile(full) else []
+            layouts = layout_cache[full]
+        pages = conn.execute(
+            "SELECT page, text FROM public.standard_pages WHERE doc_id = %s ORDER BY page", (doc_id,)
+        ).fetchall()
+        rows = chunks_of(pages, layouts)
+        with conn.transaction():
+            conn.execute("DELETE FROM public.standard_chunks WHERE doc_id = %s", (doc_id,))
+            if rows:
+                with conn.cursor().copy(
+                    "COPY public.standard_chunks (doc_id, page, seq, kind, heading, text) FROM STDIN"
+                ) as cp:
+                    for r in rows:
+                        cp.write_row((doc_id, *r))
+            conn.execute("UPDATE public.standard_docs SET chunks_version = %s WHERE id = %s", (CHUNKS_VERSION, doc_id))
+        made += len(rows)
+        if n % 250 == 0:
+            print(f"  chunks: {n}/{len(todo)} documents, {made} chunks", flush=True)
+    return len(todo), made
+
+
 def summary(conn):
     rows = conn.execute(
         """SELECT coalesce(category, '(none)'), count(*) FILTER (WHERE relpath NOT LIKE '%%::%%'), coalesce(sum(pages), 0),
@@ -874,6 +1018,9 @@ def main():
         versions = refresh_versions(conn)
         if versions:
             print(f"Version facts: {versions} documents updated")
+        chunked, chunks = build_chunks(conn, root)
+        if chunked:
+            print(f"Chunks: {chunks} made for {chunked} documents")
         if renamed:
             print(f"Names and first pages checked again: {renamed} documents updated")
         scanned, refs = scan_references(conn)
