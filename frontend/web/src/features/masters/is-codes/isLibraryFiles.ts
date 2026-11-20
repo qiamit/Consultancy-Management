@@ -12,6 +12,9 @@ export type LibraryFile = {
   kind: string
   year: string
   pages: number | null
+  /** Current / Superseded / Withdrawn / Included (indexer, from names and Standards List); null before it is worked out. */
+  status: string | null
+  supersededBy: string | null
 }
 
 export type LibraryReference = {
@@ -30,7 +33,18 @@ export type IsLibraryFiles = {
   older: LibraryFile[]
 }
 
-type DocRow = { id: number; folder: string; relpath: string; kind: string; pages: number | null }
+type DocRow = {
+  id: number
+  folder: string
+  relpath: string
+  kind: string
+  pages: number | null
+  version_status?: string | null
+  superseded_by?: string | null
+}
+
+// '*' and not a column list: the version columns exist only after their release, and a list naming them would fail before.
+const DOC_COLUMNS = '*'
 
 const toFile = (d: DocRow): LibraryFile => ({
   relpath: d.relpath,
@@ -38,6 +52,8 @@ const toFile = (d: DocRow): LibraryFile => ({
   kind: d.kind,
   year: editionOf(d.relpath).year,
   pages: d.pages,
+  status: d.version_status ?? null,
+  supersededBy: d.superseded_by ?? null,
 })
 
 const byYearDesc = (a: LibraryFile, b: LibraryFile) => Number(b.year || 0) - Number(a.year || 0) || a.name.localeCompare(b.name)
@@ -67,7 +83,7 @@ export async function searchLibraryStandards(text: string): Promise<LibraryStand
   const part = text.match(/\bpart\s*-?\s*(\d+)/i)?.[1] ?? ''
   const { data, error } = await supabase
     .from('standard_docs')
-    .select('id, folder, relpath, kind, pages')
+    .select(DOC_COLUMNS)
     .eq('kind', 'Standard')
     .ilike('folder', `%${num}%`)
     .limit(300)
@@ -97,7 +113,7 @@ export const EMPTY_LIBRARY_FILES: IsLibraryFiles = { standards: [], amendments: 
 export async function loadIsLibraryFiles(isCodeId: string): Promise<IsLibraryFiles> {
   const [folders, edition] = await Promise.all([fetchStandardFolders(isCodeId), fetchIsCodeEdition(isCodeId)])
   if (!folders.length) return EMPTY_LIBRARY_FILES
-  const { data, error } = await supabase.from('standard_docs').select('id, folder, relpath, kind, pages').in('folder', folders)
+  const { data, error } = await supabase.from('standard_docs').select(DOC_COLUMNS).in('folder', folders)
   if (error) throw new Error(error.message)
   const docs = ((data ?? []) as DocRow[]).filter((d) => !d.relpath.includes('::'))
   // The latest edition of the IS Code's own Part / Section (the Master's revision year may be an older one).
@@ -143,7 +159,7 @@ export async function loadIsLibraryFiles(isCodeId: string): Promise<IsLibraryFil
     for (let i = 0; i < bases.length; i += 80) {
       const { data: rd } = await supabase
         .from('standard_docs')
-        .select('id, folder, relpath, kind, pages')
+        .select(DOC_COLUMNS)
         .in('folder', bases.slice(i, i + 80))
         .eq('kind', 'Standard')
       refDocs.push(...(((rd ?? []) as DocRow[]).filter((d) => !d.relpath.includes('::'))))

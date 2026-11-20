@@ -457,6 +457,13 @@ export default function IsCodesMasterPage() {
 
   const loadFilePresence = async () => {
     try {
+      // IS Codes with a Standard in the Standards Library (View Files opens the library); uploads only until that
+      // function is released.
+      const lib = await supabase.rpc('is_codes_with_library_files')
+      if (!lib.error) {
+        setIdsWithFiles(new Set(((lib.data ?? []) as unknown[]).map((v) => String(v))))
+        return
+      }
       const { data, error } = await supabase.from('is_code_files').select('is_code_id')
       if (error) throw error
       const next = new Set<string>()

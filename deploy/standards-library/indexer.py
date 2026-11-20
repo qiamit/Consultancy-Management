@@ -153,31 +153,80 @@ def match_number(text):
     return None
 
 
+# Standards List.xlsx columns, found by their header (case and extra words ignored); A–G are read by position when a
+# header is missing, as before the owner added the BIS columns (19 Nov 2026).
+LIST_COLUMNS = {
+    "row_no": ("s.no", "s. no", "sno", "sr"),
+    "is_number": ("is number",),
+    "title": ("is title", "title"),
+    "standard_type": ("standard type",),
+    "committee": ("technical committee",),
+    "department": ("department",),
+    "pm_ref": ("pm document", "pm no"),
+    "status": ("status",),
+    "part": ("part",),
+    "section": ("sec",),
+    "revision_year": ("revision year",),
+    "amendments": ("amendments",),
+    "reaffirmed_year": ("reaffirmed",),
+}
+
+
+def list_columns(header):
+    """{field: column index} from the header row."""
+    names = [str(h or "").strip().lower() for h in header]
+    found = {}
+    for field, keys in LIST_COLUMNS.items():
+        for i, name in enumerate(names):
+            if i in found.values():
+                continue
+            if any(name == k or name.startswith(k + " ") or name.startswith(k + "(") for k in keys):
+                found[field] = i
+                break
+    for i, field in enumerate(("row_no", "is_number", "title", "standard_type", "committee", "department", "pm_ref")):
+        found.setdefault(field, i)
+    return found
+
+
 def read_list(root):
-    """Rows of Standards List.xlsx (S.No, IS Number, IS Title, Standard type, Technical Committee, Department, PM)."""
+    """Rows of Standards List.xlsx as tuples in LIST_FIELDS order (header row read for the column of each field)."""
     path = os.path.join(root, LIST_FILE)
     if not os.path.isfile(path):
         return None
     import openpyxl
 
-    rows = []
+    rows, cols = [], None
     sheet = openpyxl.load_workbook(path, read_only=True, data_only=True).worksheets[0]
-    for i, r in enumerate(sheet.iter_rows(values_only=True)):
-        r = [("" if c is None else str(c).strip()) for c in (list(r) + [None] * 7)[:7]]
-        if i == 0 or not r[1]:
+    for r in sheet.iter_rows(values_only=True):
+        r = ["" if c is None else str(c).strip() for c in r]
+        if cols is None:
+            cols = list_columns(r)
             continue
-        m = match_number(r[1])
-        rows.append((int(r[0]) if r[0].isdigit() else None, r[1], m[0] if m else r[1],
-                     r[2] or None, r[3] or None, r[4] or None, r[5] or None, r[6] or None))
+        get = lambda f: r[cols[f]] if f in cols and cols[f] < len(r) else ""
+        number = get("is_number")
+        if not number:
+            continue
+        m = match_number(number)
+        digits = lambda v: int(re.search(r"\d{4}|\d+", v).group(0)) if re.search(r"\d", v or "") else None
+        part = re.search(r"\d+[A-Z]?", get("part") or "")
+        sec = re.search(r"\d+[A-Z]?", get("section") or "")
+        rows.append((
+            int(get("row_no")) if get("row_no").isdigit() else None, number, m[0] if m else number,
+            get("title") or None, get("standard_type") or None, get("committee") or None, get("department") or None,
+            get("pm_ref") or None, part.group(0) if part else "", sec.group(0) if sec else "", get("status") or None,
+            digits(get("revision_year")), digits(get("amendments")), digits(get("reaffirmed_year")),
+        ))
     return rows
+
+
+LIST_FIELDS = ("row_no", "is_number", "base", "title", "standard_type", "committee", "department", "pm_ref", "part",
+               "section", "status", "revision_year", "amendments", "reaffirmed_year")
 
 
 def write_list(conn, rows):
     with conn.transaction():
         conn.execute("DELETE FROM public.standard_list")
-        with conn.cursor().copy(
-            "COPY public.standard_list (row_no, is_number, base, title, standard_type, committee, department, pm_ref) FROM STDIN"
-        ) as cp:
+        with conn.cursor().copy(f"COPY public.standard_list ({', '.join(LIST_FIELDS)}) FROM STDIN") as cp:
             for row in rows:
                 cp.write_row(row)
 
@@ -532,6 +581,100 @@ def refresh_notes(conn, reviewed=frozenset()):
     return len(updates)
 
 
+# ---------------------------------------------------------------- versions (RAG step 1)
+
+AMENDMENT_NO = re.compile(r"(?i)\b(?:amd|amendment)[\s_.-]*(?:no\.?\s*)?(\d{1,2})\b")
+ORDINAL = {"first": 1, "second": 2, "third": 3, "fourth": 4, "fifth": 5, "sixth": 6, "seventh": 7, "eighth": 8}
+
+
+def edition_parts(name):
+    """(part, section, year) written in a file name: "IS 2062 Part 1 2025 - 00.pdf" -> ("1", "", 2025)."""
+    part = re.search(r"(?i)\bPart\s*-?\s*(\d+[A-Z]?)", name)
+    sec = re.search(r"(?i)\bSec(?:tion)?\s*-?\s*(\d+[A-Z]?)", name)
+    years = re.findall(r"\b((?:19|20)\d{2})\b", name)
+    return (part.group(1) if part else "", sec.group(1) if sec else "", int(years[-1]) if years else None)
+
+
+def amendment_number(name):
+    m = AMENDMENT_NO.search(name)
+    if m:
+        return int(m.group(1))
+    m = re.search(r"(?i)\b(" + "|".join(ORDINAL) + r")\s+amendment", name)
+    return ORDINAL[m.group(1).lower()] if m else None
+
+
+def label_of(folder, part, sec, year):
+    return f"{folder}{f' Part {part}' if part else ''}{f' Sec {sec}' if sec else ''}{f' {year}' if year else ''}"
+
+
+def refresh_versions(conn):
+    """Part, Section, amendment number and version status of every library document (see the migration
+    20261120100000_standards_versions.sql). Worked out again on every run from the names and Standards List."""
+    rows = conn.execute(
+        """SELECT id, folder, relpath, kind, edition_year, amendments_merged, part, section, amendment_no,
+                  version_status, superseded_by
+           FROM public.standard_docs WHERE source = 'library'"""
+    ).fetchall()
+    listed = {}
+    for base, part, sec, status in conn.execute(
+        "SELECT base, part, section, status FROM public.standard_list WHERE coalesce(status, '') <> ''"
+    ).fetchall():
+        listed[(base, part or "", sec or "")] = status.strip()
+
+    info = {}
+    for doc_id, folder, relpath, kind, year, merged, *_ in rows:
+        own, _, inner = relpath.partition("::")
+        name = own.split("/")[-1]
+        part, sec, name_year = edition_parts(name)
+        if inner:  # a file inside a PDF: its own name says Standard / Amendment, the outer file its edition
+            amd = amendment_number(inner) if kind == "Amendment" else None
+        else:
+            amd = amendment_number(name) if kind == "Amendment" else None
+        info[doc_id] = {"folder": folder, "kind": kind, "part": part, "sec": sec, "year": year or name_year,
+                        "merged": merged, "amd": amd, "inner": bool(inner)}
+
+    latest = {}  # (folder, part, sec, kind) -> latest edition year of Standards / Product Manuals
+    for d in info.values():
+        if d["kind"] in ("Standard", "Product Manual") and d["year"] and not d["inner"]:
+            key = (d["folder"], d["part"], d["sec"], d["kind"])
+            latest[key] = max(latest.get(key, 0), d["year"])
+    merged_into = {}  # (folder, part, sec, year) -> amendments merged into that edition's file
+    for d in info.values():
+        if d["kind"] == "Standard" and d["merged"] and not d["inner"]:
+            key = (d["folder"], d["part"], d["sec"], d["year"])
+            merged_into[key] = max(merged_into.get(key, 0), d["merged"])
+
+    updates = []
+    for doc_id, folder, relpath, kind, year, merged, part0, sec0, amd0, status0, by0 in rows:
+        d = info[doc_id]
+        status, by = None, None
+        if d["kind"] in ("Standard", "Product Manual", "Amendment"):
+            top = latest.get((d["folder"], d["part"], d["sec"], "Standard" if d["kind"] == "Amendment" else d["kind"]))
+            if top and d["year"] and d["year"] < top:
+                status, by = "Superseded", label_of(d["folder"], d["part"], d["sec"], top)
+            elif d["kind"] == "Amendment" and d["amd"] and merged_into.get((d["folder"], d["part"], d["sec"], d["year"]), 0) >= d["amd"]:
+                status = "Included"
+            else:
+                status = "Current"
+            bis = listed.get((d["folder"], d["part"], d["sec"])) or listed.get((d["folder"], "", ""))
+            if bis and status == "Current":
+                if bis.lower().startswith("withdrawn"):
+                    status = "Withdrawn"
+                elif bis.lower().startswith("superseded"):
+                    status, by = "Superseded", (bis.split("by", 1)[1].strip() if "by" in bis else None) or None
+        new = (d["part"], d["sec"], d["amd"], status, by)
+        if new != (part0 or "", sec0 or "", amd0, status0, by0):
+            updates.append((*new, doc_id))
+    if updates:
+        with conn.transaction(), conn.cursor() as cur:
+            cur.executemany(
+                """UPDATE public.standard_docs SET part = %s, section = %s, amendment_no = %s, version_status = %s,
+                   superseded_by = %s WHERE id = %s""",
+                updates,
+            )
+    return len(updates)
+
+
 def references_in(text, own):
     """{(number, part): times named} of the standards a Standard's text names; its own number left out."""
     found = {}
@@ -728,6 +871,9 @@ def main():
                         (added, changed, pages_read, ocr_read, run_id),
                     )
         renamed = refresh_notes(conn, reviewed_names(root))
+        versions = refresh_versions(conn)
+        if versions:
+            print(f"Version facts: {versions} documents updated")
         if renamed:
             print(f"Names and first pages checked again: {renamed} documents updated")
         scanned, refs = scan_references(conn)

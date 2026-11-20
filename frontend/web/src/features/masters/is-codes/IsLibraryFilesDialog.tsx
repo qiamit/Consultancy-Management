@@ -17,6 +17,12 @@ import {
   type LibraryStandardHit,
 } from './isLibraryFiles'
 
+const STATUS_TONE: Record<string, string> = {
+  Withdrawn: 'bg-red-100 text-red-800',
+  Superseded: 'bg-stone-200 text-stone-700',
+  Included: 'bg-sky-100 text-sky-800',
+}
+
 type Selection = { has: (relpath: string) => boolean; toggle: (relpath: string) => void }
 
 const act = (p: Promise<void>) => void p.catch((e: unknown) => toast.error(e instanceof Error ? e.message : String(e)))
@@ -38,6 +44,15 @@ function FileRow({ file, label, tag, sel }: { file: LibraryFile; label?: string;
         {label ? <span className="font-medium">{label}</span> : null}
         <span className={cn('break-all', label && 'block text-xs text-stone-500')}>{file.name}</span>
         {tag ? <span className="ml-1 inline-flex bg-amber-100 px-1.5 text-[10px] font-medium uppercase text-amber-800">{tag}</span> : null}
+        {file.status && file.status !== 'Current' ? (
+          <span
+            className={cn('ml-1 inline-flex px-1.5 text-[10px] font-medium uppercase', STATUS_TONE[file.status] ?? 'bg-stone-100 text-stone-600')}
+            title={file.supersededBy ? `Superseded by ${file.supersededBy}` : undefined}
+          >
+            {file.status}
+            {file.supersededBy ? ` → ${file.supersededBy}` : ''}
+          </span>
+        ) : null}
       </td>
       <td className="w-16 px-2 py-1.5 text-center align-middle text-xs tabular-nums text-stone-600">{file.year || '—'}</td>
       <td className="w-16 px-2 py-1.5 text-right align-middle text-xs tabular-nums text-stone-600">{file.pages ?? '—'}</td>
