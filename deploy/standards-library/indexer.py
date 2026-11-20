@@ -9,6 +9,8 @@ Only what changed since the last run is read again:
   - otherwise                                -> read: text page by page, OCR for scanned pages, BSB stamp removed
   - indexed but no longer in the folder      -> removed from the index
   - noted "Almost No Text" on the last read  -> read again on every run (few files; OCR may get their text now)
+  - --reread-garbled (or REREAD_GARBLED=1)   -> also read again every file with a garbled page (broken font map, or a
+                                               scan OCR'd the wrong way up); such pages are OCR'd, turned by OSD
 Every file is written in its own transaction, so a run that stops keeps what it finished; the next run goes on.
 Two runs never overlap (database lock). Each run is logged in standard_index_runs.
 
@@ -22,6 +24,7 @@ import argparse
 import concurrent.futures as cf
 import glob
 import hashlib
+import html
 import json
 import os
 import re
@@ -320,25 +323,95 @@ def page_texts(pdf):
     return (texts + [""] * n)[:n]
 
 
-def ocr_page(pdf, page):
+# Garbled text (RAG testing, 20 Nov 2026): some PDFs carry a text layer in a font without a Unicode map (IS 10500 2012:
+# "012342357891 9238 #$9%&18&'"), and some scanned pages are upside down or sideways, so their OCR is nonsense
+# ("SMITE 01-0 TOY 'CORLEY NOLLVIARC]"). Such a page is read again by OCR, turned the way tesseract's OSD says.
+COMMON_WORDS = frozenset(
+    "the of and shall to in for be with as or is by on at not than per from be are this that which when where any all "
+    "each its it an be may should under over above below between after before into other such these those than test "
+    "table clause sample samples standard requirements requirement method methods given specified specification "
+    "accordance minimum maximum material materials water steel temperature mass value values determined see annex".split()
+)
+ODD_CHARS = set('!"#$%&*+<=>?@[\\]^_`{|}~')
+
+
+def text_quality(text):
+    """(common English words, alphabetic words, odd tokens, tokens) of a page's text."""
+    tokens = text.split()
+    alpha = re.findall(r"[A-Za-z]{2,}", text)
+    common = sum(1 for w in alpha if w.lower() in COMMON_WORDS)
+    odd = sum(1 for t in tokens if any(c in ODD_CHARS for c in t) or re.search(r"[A-Za-z]\d[A-Za-z]|\d[A-Za-z]\d", t))
+    return common, len(alpha), odd, len(tokens)
+
+
+def looks_garbled(text):
+    """True for a page whose text is mostly not words: a broken font map, or OCR of a page turned the wrong way.
+    Strict on purpose: a committee list, a table of numbers or a German page has few common words but is fine."""
+    if len(text) < 200:
+        return False
+    if sum(1 for c in text if ord(c) < 32 and c not in "\n\t\r\f") > 0.02 * len(text):
+        return True  # control characters: a font without a Unicode map
+    common, alpha, odd, tokens = text_quality(text)
+    if tokens >= 40 and odd / tokens > 0.25:
+        return True
+    return alpha >= 60 and common / alpha < 0.015
+
+
+def _tesseract(img, env):
+    return run(["tesseract", img, "-", "-l", "eng", "--psm", "3"], 180, env).stdout
+
+
+def ocr_page(pdf, page, turn=False):
+    """OCR of one page; turn=True also tries the page turned the way tesseract's OSD says, keeping the better text."""
     with tempfile.TemporaryDirectory() as td:
         run(["pdftoppm", "-r", os.environ.get("OCR_DPI", "200"), "-f", str(page), "-l", str(page), "-png", pdf, td + "/pg"], 120)
         imgs = glob.glob(td + "/pg*.png")
         if not imgs:
             return ""
         env = dict(os.environ, OMP_THREAD_LIMIT="1")
-        return run(["tesseract", imgs[0], "-", "-l", "eng", "--psm", "3"], 180, env).stdout
+        text = _tesseract(imgs[0], env)
+        if not turn or not looks_garbled(text):
+            return text
+        osd = run(["tesseract", imgs[0], "-", "--psm", "0"], 120, env).stdout
+        m = re.search(r"Rotate:\s*(\d+)", osd)
+        angles = [int(m.group(1))] if m and int(m.group(1)) else []  # OSD sees no turn: a bad scan, OCR stays
+        try:
+            from PIL import Image
+        except ImportError:
+            return text
+        best, best_common = text, text_quality(text)[0]
+        for a in angles:
+            out = os.path.join(td, f"turn{a}.png")
+            with Image.open(imgs[0]) as im:
+                im.rotate(-a, expand=True).save(out)  # OSD "Rotate: a" = turn a degrees clockwise
+            t = _tesseract(out, env)
+            c = text_quality(t)[0]
+            if c > best_common:
+                best, best_common = t, c
+            if not looks_garbled(t):
+                break
+        return best
+
+
+def better_text(old, new):
+    """True when new has clearly more real words than old (so a good table page keeps its own text)."""
+    a, b = text_quality(old)[0], text_quality(new)[0]
+    return b >= max(8, 2 * a)
 
 
 def read_pdf(pdf):
-    """[(page no., text, ocr?)] of a PDF; scanned pages OCR'd."""
+    """[(page no., text, ocr?)] of a PDF; scanned or garbled pages OCR'd."""
     pages = []
     for i, raw in enumerate(page_texts(pdf), start=1):
         # Judged without the BSB stamp: a scanned page carrying the stamp's text line is still a scanned page.
         text, ocr = clean_text(raw).strip(), False
         if len(text) < BLANK_BELOW:
-            t = clean_text(ocr_page(pdf, i)).strip()
+            t = clean_text(ocr_page(pdf, i, turn=True)).strip()
             if len(t) > len(text):
+                text, ocr = t, True
+        elif looks_garbled(text):
+            t = clean_text(ocr_page(pdf, i, turn=True)).strip()
+            if better_text(text, t):
                 text, ocr = t, True
         pages.append((i, text, ocr))
     return pages
@@ -731,7 +804,7 @@ def scan_references(conn):
 
 # Raised when the chunking rules change: every document is chunked again on the next run (no PDF is read again,
 # apart from the quick column-layout pass for its tables).
-CHUNKS_VERSION = 2
+CHUNKS_VERSION = 3  # 3: tables keep their column alignment (squeeze_columns)
 TABLE_TITLE = re.compile(r"^\s{0,140}Table\s+(\d+[A-Z]?)\b(.*)$", re.I)
 # A clause heading at the start of a line: "7", "7.2", "8.1.3" + a title word, or Foreword / Annex / Scope.
 CLAUSE_HEAD = re.compile(r"^\s*(?:(\d{1,2}(?:\.\d{1,2}){0,3})\s+(?=[A-Z(])|(FOREWORD|Foreword|ANNEX\s+[A-Z]|Annex\s+[A-Z])\b)")
@@ -854,7 +927,107 @@ def free_of(cs, c):
     return not any(same_column(c, o) for o in cs)
 
 
-def table_chunks(layout):
+WORD_BOX = re.compile(r'<word xMin="([\d.]+)" yMin="([\d.]+)" xMax="([\d.]+)" yMax="([\d.]+)">(.*?)</word>')
+
+
+def box_pages(pdf):
+    """[(x0, y0, x1, y1, word)] of each page (PDF points): where every word sits, for reading tables by column."""
+    out = run(["pdftotext", "-bbox-layout", "-enc", "UTF-8", pdf, "-"], 600).stdout
+    return [
+        [(float(a), float(b), float(c), float(d), html.unescape(w)) for a, b, c, d, w in WORD_BOX.findall(page)]
+        for page in out.split("<page ")[1:]
+    ]
+
+
+def box_lines(words):
+    """Words grouped into printed lines (same height within 2.5 pt), top to bottom, each left to right."""
+    lines = []
+    for w in sorted(words, key=lambda w: ((w[1] + w[3]) / 2, w[0])):
+        y = (w[1] + w[3]) / 2
+        if lines and abs(lines[-1][0] - y) <= 2.5:
+            lines[-1][1].append(w)
+        else:
+            lines.append([y, [w]])
+    return [(y, sorted(ws)) for y, ws in lines]
+
+
+COLNO_WORD = re.compile(r"^\(\d{1,2}\)$")
+
+
+def cell_rows(words, number):
+    """Table "number" on a page read by position: each word goes to the column whose number "(1) (2) …" it sits
+    under, so a value printed a line higher or lower (IS 1786 Amd 3 Table 3: Fe 500 "≥ 1.08" above its row) stays in
+    its own column. One line per row mark ("iii) TS/YS ratio | Fe 500: ≥ 1.08 (but TS not less than 545 N/mm2) | …").
+    [] when the table has no column-number line or no row marks."""
+    lines = box_lines(words)
+    start = None
+    for i, (_, ws) in enumerate(lines):
+        for j, w in enumerate(ws[:-1]):
+            if w[4].lower() == "table" and ws[j + 1][4].rstrip(".:") == number:
+                start = i
+                break
+        if start is not None:
+            break
+    if start is None:
+        return []
+    colno = next((i for i in range(start + 1, min(start + 25, len(lines)))
+                  if sum(1 for w in lines[i][1] if COLNO_WORD.match(w[4])) >= 3
+                  and all(COLNO_WORD.match(w[4]) for w in lines[i][1])), None)
+    if colno is None:
+        return []
+    centres = [(w[0] + w[2]) / 2 for w in lines[colno][1]]
+    cuts = [(a + b) / 2 for a, b in zip(centres, centres[1:])]
+    col = lambda w: sum(1 for c in cuts if (w[0] + w[2]) / 2 > c)
+    n = len(centres)
+
+    def sentence(ws):  # a heading or paragraph run across several columns, not one cell per column
+        return len(ws) >= 4 and all(b[0] - a[2] < 6 for a, b in zip(ws, ws[1:])) and col(ws[-1]) - col(ws[0]) >= 2
+
+    head = [[] for _ in range(n)]
+    for _, ws in lines[start + 1:colno]:
+        if sentence(ws) or (ws and ws[0][4].startswith("(Clause")):
+            continue
+        for w in ws:
+            head[col(w)].append(w[4])
+    names = [" ".join(h) or f"({k + 1})" for k, h in enumerate(head)]
+    rows, current = [], None
+    for _, ws in lines[colno + 1:colno + 90]:
+        first = ws[0][4]
+        if re.match(r"(?i)^(notes?|table)\b", first) or first.startswith("[") or (sentence(ws) and not ROW_MARK.match(first)):
+            if re.match(r"(?i)^(notes?|table)\b", first) or first.startswith("["):
+                break
+            continue
+        if ROW_MARK.match(first) and col(ws[0]) == 0:
+            current = [first, [[] for _ in range(n)]]
+            rows.append(current)
+            ws = ws[1:]
+        if current is None:
+            continue
+        for w in ws:
+            current[1][col(w)].append(w[4])
+    out = []
+    for mark, cells in rows:
+        parts = [f"{names[k]}: {' '.join(c)}" if k else " ".join(c) for k, c in enumerate(cells) if c]
+        out.append(f"{mark} " + " | ".join(parts))
+    return out if len(rows) >= 2 else []
+
+
+def squeeze_columns(lines):
+    """The lines of a column-layout table with the character columns that are blank on every line cut down to two:
+    shorter, and each value still sits under its column head. (Squeezing every run of spaces to three, as before,
+    moved values printed a line higher or lower into the next column: IS 1786 Amd 3 Table 3 read Fe 500D's TS/YS as
+    1.08, the Fe 500 value; RAG testing, 20 Nov 2026.)"""
+    width = max((len(l) for l in lines), default=0)
+    padded = [l.ljust(width) for l in lines]
+    blank = [all(l[k] == " " for l in padded) for k in range(width)]
+    keep, run = [], 0
+    for k in range(width):
+        run = run + 1 if blank[k] else 0
+        keep.append(run <= 2)
+    return ["".join(ch for ch, kp in zip(l, keep) if kp).rstrip() for l in padded]
+
+
+def table_chunks(layout, words=None):
     """[(heading, text)] of the tables on one page in column layout: from a "Table N" title to the next title, a
     run of blank lines or 70 lines; kept when it looks like a table (several lines with numbers in two columns)."""
     lines = clean_text(layout).split("\n")
@@ -883,9 +1056,13 @@ def table_chunks(layout):
         gaps = lambda l: len(re.findall(r"\S\s{2,}(?=\S)", l.strip()))
         rows = [l for l in block[1:] if gaps(l) >= 2 or (gaps(l) >= 1 and len(NUMBERY.findall(l)) >= 2)]
         if len(rows) >= 3:
-            indent = min((len(l) - len(l.lstrip()) for l in block if l.strip()), default=0)
-            text = "\n".join(l[indent:] for l in block)
-            text = re.sub(r" {4,}", "   ", text)[:6000]
+            text = "\n".join(squeeze_columns(block))
+            by_position = cell_rows(words, m.group(1)) if words else []
+            if by_position:
+                # First, so a reader that cuts the block at 6,000 characters keeps them.
+                text = (f"{block[0].strip()}\nCELLS (one row per line; each column's name and its full text in that row, "
+                        "read from the page by position):\n" + "\n".join(by_position)[:5200] + "\n\nAS PRINTED:\n" + text)
+            text = text[:6000]
             joined = table_rows(block)
             if joined:
                 text += "\n\nROWS (one row per line; the grade / quality names printed above or below its values joined in):\n"
@@ -928,14 +1105,15 @@ def clause_chunks(text):
     return out
 
 
-def chunks_of(pages, layouts):
+def chunks_of(pages, layouts, boxes=()):
     """[(page, seq, kind, heading, text)] of one document: its tables (from the column layout of the page) and its
     clauses (from the page text)."""
     out = []
     for no, text in pages:
         seq = 0
         lay = layouts[no - 1] if 0 < no <= len(layouts) else ""
-        for h, t in table_chunks(lay):
+        words = boxes[no - 1] if 0 < no <= len(boxes) else None
+        for h, t in table_chunks(lay, words):
             out.append((no, seq, "table", h, t))
             seq += 1
         pieces = clause_chunks(text or "")
@@ -958,18 +1136,29 @@ def build_chunks(conn, root):
     layout_cache = {}
     for n, (doc_id, relpath) in enumerate(todo, start=1):
         own, _, inner = relpath.partition("::")
-        layouts = []
+        layouts, boxes = [], []
         if not inner:  # a file inside a PDF has no path of its own here: its tables come from its page text only
             full = os.path.join(root, own)
             if full not in layout_cache:
                 layout_cache.clear()
-                layout_cache[full] = layout_pages(full) if os.path.isfile(full) else []
-            layouts = layout_cache[full]
+                lay = layout_pages(full) if os.path.isfile(full) else []
+                # Word positions only for a file with a table title (the CELLS of its tables).
+                has_table = any(TABLE_TITLE.match(line) for page in lay for line in page.split("\n"))
+                layout_cache[full] = (lay, box_pages(full) if has_table else [])
+            layouts, boxes = layout_cache[full]
         pages = conn.execute(
             "SELECT page, text FROM public.standard_pages WHERE doc_id = %s ORDER BY page", (doc_id,)
         ).fetchall()
-        rows = chunks_of(pages, layouts)
+        rows = chunks_of(pages, layouts, boxes)
         with conn.transaction():
+            # A chunk whose text did not change keeps its embedding: a new chunking rule re-embeds only what it changed.
+            kept = {
+                (k, h, t): (e, m)
+                for k, h, t, e, m in conn.execute(
+                    "SELECT kind, heading, text, embedding::text, embed_model FROM public.standard_chunks"
+                    " WHERE doc_id = %s AND embedding IS NOT NULL", (doc_id,)
+                ).fetchall()
+            }
             conn.execute("DELETE FROM public.standard_chunks WHERE doc_id = %s", (doc_id,))
             if rows:
                 with conn.cursor().copy(
@@ -977,6 +1166,13 @@ def build_chunks(conn, root):
                 ) as cp:
                     for r in rows:
                         cp.write_row((doc_id, *r))
+                if kept:
+                    with conn.cursor() as cur:
+                        cur.executemany(
+                            "UPDATE public.standard_chunks SET embedding = %s::extensions.vector, embed_model = %s"
+                            " WHERE doc_id = %s AND page = %s AND seq = %s",
+                            [(*kept[(r[2], r[3], r[4])], doc_id, r[0], r[1]) for r in rows if (r[2], r[3], r[4]) in kept],
+                        )
             conn.execute("UPDATE public.standard_docs SET chunks_version = %s WHERE id = %s", (CHUNKS_VERSION, doc_id))
         made += len(rows)
         if n % 250 == 0:
@@ -1072,6 +1268,8 @@ def main():
     ap.add_argument("--limit", type=int, help="read at most this many new / changed files in this run")
     ap.add_argument("--trigger", default=os.environ.get("INDEX_TRIGGER", "manual"))
     ap.add_argument("--host", default=os.environ.get("INDEX_HOST", ""))
+    ap.add_argument("--reread-garbled", action="store_true",
+                    help="read again the files that have a page of garbled text (broken font map, scan turned the wrong way)")
     args = ap.parse_args()
 
     global ROOT_DIR
@@ -1097,6 +1295,20 @@ def main():
             indexed[rel] = (size, mtime, sha)
             if "Almost No Text" in (review or ""):
                 no_text.add(rel)
+
+    if args.reread_garbled or os.environ.get("REREAD_GARBLED") == "1":
+        garbled = set()
+        with conn.transaction(), conn.cursor(name="garbled") as cur:
+            cur.execute(
+                """SELECT d.relpath, p.text FROM public.standard_pages p JOIN public.standard_docs d ON d.id = p.doc_id
+                   WHERE d.source = 'library' AND length(p.text) >= 200"""
+            )
+            for rp, text in cur:
+                rel = rp.split("::")[0]
+                if rel in indexed and rel not in garbled and looks_garbled(text):
+                    garbled.add(rel)
+        print(f"Garbled text: {len(garbled)} files to read again")
+        no_text |= garbled
 
     unchanged, touched, to_read = [], [], []
     for rel, (full, size, mtime) in found.items():
