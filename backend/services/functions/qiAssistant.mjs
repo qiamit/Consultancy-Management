@@ -310,6 +310,15 @@ export function isDocumentTaskPage(page) {
   )
 }
 
+/**
+ * Pages that run on the Model for Document Checks when one is set: the document checks, and Ask AI over the
+ * Standards Library (Library Ask, IS Files Ask) — owner's decision, 20 Nov 2026: standards questions use the cheaper
+ * model (Haiku) so they do not use up the API credit. Ask AI keeps the normal chat output budget.
+ */
+export function usesDocumentModel(page) {
+  return isDocumentTaskPage(page) || page === 'standards/library-ask' || page === 'masters/is-files-ask'
+}
+
 export function createQiAssistantHandler(deps) {
   const { requireUser, requireAdmin, userRestFor, storageFor, rest, readBody, corsJson } = deps
 
@@ -406,7 +415,7 @@ export function createQiAssistantHandler(deps) {
     let model = null
     // A document check uses the Model for Document Checks when one is set (and active), unless the user asked to
     // re-check with the main model.
-    const useDocumentModel = !agentMode && isDocumentTaskPage(body.page) && body.useMainModel !== true
+    const useDocumentModel = !agentMode && usesDocumentModel(body.page) && body.useMainModel !== true
     try {
       if (useDocumentModel && settings?.document_model_id) {
         const rows = await rest(
