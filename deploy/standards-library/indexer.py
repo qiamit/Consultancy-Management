@@ -731,7 +731,7 @@ def scan_references(conn):
 
 # Raised when the chunking rules change: every document is chunked again on the next run (no PDF is read again,
 # apart from the quick column-layout pass for its tables).
-CHUNKS_VERSION = 1
+CHUNKS_VERSION = 2
 TABLE_TITLE = re.compile(r"^\s{0,140}Table\s+(\d+[A-Z]?)\b(.*)$", re.I)
 # A clause heading at the start of a line: "7", "7.2", "8.1.3" + a title word, or Foreword / Annex / Scope.
 CLAUSE_HEAD = re.compile(r"^\s*(?:(\d{1,2}(?:\.\d{1,2}){0,3})\s+(?=[A-Z(])|(FOREWORD|Foreword|ANNEX\s+[A-Z]|Annex\s+[A-Z])\b)")
@@ -743,6 +743,115 @@ def layout_pages(pdf):
     """Column-layout text of each page (tables keep their rows); [] when the PDF cannot be read."""
     out = run(["pdftotext", "-layout", "-enc", "UTF-8", pdf, "-"], 600).stdout
     return [t for t in out.split("\f")]
+
+
+ROW_MARK = re.compile(r"^(?:[ivxlc]+\)|\d{1,2}\)|\d{1,2}\.)$", re.I)  # "i)", "ii)", "3)", "3."
+COLUMN_NO = re.compile(r"^\(\d{1,2}\)$")  # the "(1) (2) (3)" line under a table head
+VALUE = re.compile(r"\d")
+
+
+def cells(line):
+    """[(start column, end column, text)] of a column-layout line (cells are split at two or more spaces)."""
+    return [(m.start(), m.end(), m.group(0)) for m in re.finditer(r"\S+(?: \S+)*", line)]
+
+
+def same_column(a, b):
+    """Two cells in one column: their spans overlap or their centres are within 4 characters."""
+    return not (a[1] <= b[0] or b[1] <= a[0]) or abs((a[0] + a[1]) / 2 - (b[0] + b[1]) / 2) <= 4
+
+
+NUMBER_CELL = re.compile(r"^[\d.,\-–()≤≥<>%+/ ]+$")  # a value, not a name ("0.22", "≤ 16", "(-)20")
+GRADE_LIKE = re.compile(r"^[A-Z]{1,4}\s?\d{2,4}[A-Z]{0,3}$")  # "E 250", "Fe 500D", "YSt 310"
+
+
+def table_rows(block):
+    """The rows of a column-layout table, each with the labels printed above or below its values joined in:
+    "ii) | E 250 | BR, B0 | 0.22 | 1.50 …". In IS tables a grade / quality name often sits on its own line between
+    value lines (IS 2062 Table 1: "E 250  BR" above the 0.22 row, "B0" below it). [] when it is not that kind of table."""
+    lines = []
+    for l in block[1:]:
+        if re.match(r"\s*NOTES?\b", l):  # the notes under a table are text, not rows
+            break
+        if l.strip():
+            lines.append(l)
+    kinds = []
+    for l in lines:
+        cs = cells(l)
+        values = [c for c in cs if VALUE.search(c[2]) and not ROW_MARK.match(c[2]) and not GRADE_LIKE.match(c[2])]
+        if cs and all(COLUMN_NO.match(c[2]) for c in cs):
+            kinds.append("colno")
+        elif len(values) >= 2:
+            kinds.append("value")
+        else:
+            kinds.append("label")
+    if "value" not in kinds:
+        return []
+    head_end = max((i for i, k in enumerate(kinds) if k == "colno"), default=kinds.index("value") - 1)
+    body = [(i, lines[i], kinds[i]) for i in range(head_end + 1, len(lines))]
+    vals = [i for i, _, k in body if k == "value"]
+    if len(vals) < 2:
+        return []
+    printed = {i: cells(lines[i]) for i in vals}
+    own = {i: list(printed[i]) for i in vals}
+
+    def free(i, c):  # the value line itself has nothing in this column (labels joined to it do not count)
+        return not any(same_column(c, o) for o in printed[i])
+
+    joined = 0
+    for i, line, kind in body:
+        if kind != "label":
+            continue
+        joined += 1
+        above = max((v for v in vals if v < i), default=None)
+        below = min((v for v in vals if v > i), default=None)
+        for c in cells(line):
+            if below is not None and free(below, c) and (above is None or i - above >= below - i or not free(above, c)):
+                own[below].append(c)
+            elif above is not None and free(above, c):
+                own[above].append(c)
+            elif below is not None:
+                own[below].append(c)
+            elif above is not None:
+                own[above].append(c)
+    if not joined:  # every row already on one line: the column text says it all
+        return []
+    # Rows between two row marks ("ii)" … "iii)") are one group: a label printed once for the group (the row mark,
+    # the grade "E 250") goes to each of its rows; a label printed for one row (a quality) stays there.
+    groups, current = [], []
+    for i in vals:
+        if current and any(ROW_MARK.match(c[2]) for c in own[i]):
+            groups.append(current)
+            current = []
+        current.append(i)
+    if current:
+        groups.append(current)
+    out = []
+    for g in groups:
+        once = [c for i in g for c in own[i] if ROW_MARK.match(c[2]) or GRADE_LIKE.match(c[2])]
+        for i in g:
+            mine = list(own[i])
+            for c in once:
+                if free_of(mine, c):
+                    mine.append(c)
+            mine.sort()
+            merged = []
+            for b, e, t in mine:
+                if merged and same_column((b, e), merged[-1]) and not NUMBER_CELL.match(t) and not NUMBER_CELL.match(merged[-1][2]):
+                    pb, pe, pt = merged[-1]
+                    merged[-1] = (min(pb, b), max(pe, e), f"{pt}, {t}")
+                else:
+                    merged.append((b, e, t))
+            out.append(" | ".join(t for _, _, t in merged))
+    # A row this cannot follow (notes or a list of names joined into one cell) is left to the column text alone; a
+    # table with several such rows gets no ROWS at all.
+    bad = [r for r in out if len(r) > 260 or r.count(", ") > 6]
+    if len(bad) > max(1, len(out) // 5):
+        return []
+    return [r for r in out if r not in bad]
+
+
+def free_of(cs, c):
+    return not any(same_column(c, o) for o in cs)
 
 
 def table_chunks(layout):
@@ -777,6 +886,10 @@ def table_chunks(layout):
             indent = min((len(l) - len(l.lstrip()) for l in block if l.strip()), default=0)
             text = "\n".join(l[indent:] for l in block)
             text = re.sub(r" {4,}", "   ", text)[:6000]
+            joined = table_rows(block)
+            if joined:
+                text += "\n\nROWS (one row per line; the grade / quality names printed above or below its values joined in):\n"
+                text += "\n".join(joined)[:5000]
             out.append((re.sub(r"\s{2,}", " ", f"Table {m.group(1)}{m.group(2).rstrip()}")[:200], text))
         i = j
     return out
