@@ -179,7 +179,11 @@ export async function askStandards(input: {
     page: 'masters/is-files-ask',
     context:
       `IS Code: ${input.isLabel}\n` +
-      (tableText ? `TABLES (column layout: each line is one row; read a row's values from its own line):\n\n${tableText}\n` : '') +
+      (tableText
+        ? `TABLES (column layout: each line is one row; read a row's values from its own line; when a table has CELLS, ` +
+          `take values from them — each CELLS line gives a row's columns as "Column name: text", read from the page by ` +
+          `position):\n\n${tableText}\n`
+        : '') +
       `STANDARD PAGES (the only source you may use, with the TABLES above; a table inside page text may have its rows mixed — use the TABLES for numbers):\n\n${context}`,
     message:
       `${input.question}\n\n` +
@@ -453,7 +457,9 @@ export async function askLibrary(input: { question: string; history: AskTurn[]; 
       'Rules: Answer only from the STANDARDS LIBRARY EXTRACTS above. For every fact name the standard, the clause or ' +
       'table and the page, e.g. "(IS 1786 2008, Table 3, p. 8)". When several standards answer, give each one ' +
       'separately and compare them in a short table if that helps. A "Table" block keeps one row per line: read a ' +
-      "row's values from its own line (ROWS lines join the grade / quality names). Mention when a block is from a " +
+      "row's values from its own line (ROWS lines join the grade / quality names). When a Table block has CELLS, take " +
+      "a value from its CELLS line: each gives a row's columns as 'Column name: text', read from the page by position " +
+      '(the printed layout below it can shift a value into the next column). Mention when a block is from a ' +
       'Superseded or Withdrawn edition. If the extracts do not answer the question, say so plainly — never use outside ' +
       'knowledge or guess. Do not suggest uploading files or app features; when something is missing, name the ' +
       'standard, clause or table to open in the library. Reply in the language of the question (Hindi, Hinglish or ' +
