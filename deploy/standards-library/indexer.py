@@ -988,6 +988,12 @@ def build_chunks(conn, root):
 
 EMBED_MODEL = os.environ.get("EMBED_MODEL", "BAAI/bge-small-en-v1.5")
 EMBED_BATCH = 64
+# "current": only the current editions of Standards and Amendments (the part search needs first); "all": every chunk.
+EMBED_SCOPE = os.environ.get("EMBED_SCOPE", "all").strip().lower()
+SCOPE_SQL = (
+    " AND coalesce(d.version_status, 'Current') IN ('Current', 'Included') AND d.kind IN ('Standard', 'Amendment')"
+    if EMBED_SCOPE == "current" else ""
+)
 
 
 def embed_chunks(conn, stop_after_min=None):
@@ -1000,18 +1006,19 @@ def embed_chunks(conn, stop_after_min=None):
         return 0, None
     model = TextEmbedding(EMBED_MODEL, threads=max(1, int(os.environ.get("EMBED_THREADS", "1"))))
     left = conn.execute(
-        "SELECT count(*) FROM public.standard_chunks WHERE embedding IS NULL OR embed_model IS DISTINCT FROM %s",
+        "SELECT count(*) FROM public.standard_chunks c JOIN public.standard_docs d ON d.id = c.doc_id"
+        " WHERE (c.embedding IS NULL OR c.embed_model IS DISTINCT FROM %s)" + SCOPE_SQL,
         (EMBED_MODEL,),
     ).fetchone()[0]
     if not left:
         return 0, 0
-    print(f"Embeddings: {left} chunks to embed with {EMBED_MODEL}", flush=True)
+    print(f"Embeddings: {left} chunks to embed with {EMBED_MODEL} (scope: {EMBED_SCOPE})", flush=True)
     started, done = time.time(), 0
     while True:
         rows = conn.execute(
             """SELECT c.id, c.heading, c.text FROM public.standard_chunks c
                JOIN public.standard_docs d ON d.id = c.doc_id
-               WHERE c.embedding IS NULL OR c.embed_model IS DISTINCT FROM %s
+               WHERE (c.embedding IS NULL OR c.embed_model IS DISTINCT FROM %s)""" + SCOPE_SQL + """
                ORDER BY (coalesce(d.version_status, 'Current') = 'Current') DESC,
                         CASE d.kind WHEN 'Standard' THEN 0 WHEN 'Amendment' THEN 1 WHEN 'Product Manual' THEN 2 ELSE 3 END,
                         c.id
