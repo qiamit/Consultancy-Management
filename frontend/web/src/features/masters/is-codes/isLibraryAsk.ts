@@ -200,6 +200,7 @@ type LibraryChunk = {
   version_status: string | null
   kind: string
   page: number
+  seq?: number
   heading: string
   text: string
 }
@@ -231,6 +232,81 @@ async function embedQuestion(text: string): Promise<{ vector: string; model: str
   }
 }
 
+/**
+ * A question without an IS number: English search words in the standards' own terms ("TMT bars" -> "high strength
+ * deformed steel bars") and the IS numbers that most likely cover it. The numbers are only where to look: the
+ * answer still comes from the extracts (RAG testing, 20 Nov 2026: "scale of sampling for TMT bars" missed IS 1786).
+ */
+async function libraryPlan(question: string, previous: string): Promise<{ words: string; standards: string[] }> {
+  try {
+    const { reply } = await sendQiAssistantMessage({
+      page: 'masters/is-files-ask',
+      message:
+        (previous ? `Earlier question in this chat: ${previous}\n` : '') +
+        `Question about Indian Standards: ${question}\n\n` +
+        (previous ? 'If the question is a follow-up ("and for Fe 600?"), read it together with the earlier question.\n' : '') +
+        'Give (1) 3 to 7 English words to search the standards\' text for the answer, using the words an Indian ' +
+        'Standard itself uses: the product or material first (trade names turned into the standard\'s name, e.g. ' +
+        '"TMT bars" -> "high strength deformed steel bars", "LPG cylinder" -> "welded low carbon steel cylinders ' +
+        'liquefied petroleum gases"), then the property or topic; no general words such as standard, requirement, ' +
+        'value; and (2) up to 3 IS numbers that most likely cover this product or test (e.g. "IS 1786"), or none if ' +
+        'unsure. Answer as JSON: {"words": ["..."], "standards": ["IS ..."]}',
+      responseFormat: 'json_object',
+      history: [],
+    })
+    const plan = JSON.parse(reply.match(/\{[\s\S]*\}/)?.[0] ?? '{}') as { words?: unknown; standards?: unknown }
+    const words = Array.isArray(plan.words) && plan.words.length ? plan.words.map(String).join(' ') : question
+    const standards = Array.isArray(plan.standards) ? namedStandards(plan.standards.map(String).join(' ')).slice(0, 3) : []
+    return { words, standards }
+  } catch {
+    return { words: question, standards: [] }
+  }
+}
+
+const SMALL_DOC_PAGES = 12
+const AMENDMENT_WORDS = /\b(amd|amendment|amended|amendments)\b|संशोधन/i
+
+/**
+ * Short documents of these standards read whole (as in IS Files' Ask AI): a 10-page scanned standard's table may hold
+ * none of the question's words ("carbon" printed "c" by OCR in IS 2879 Table 1), and a one-page amendment is split
+ * into chunks of which the search found only the first (RAG testing, 20 Nov 2026). The documents the hits came from
+ * come first; amendments only when the question asks about one. At most 3 documents.
+ */
+async function wholeSmallDocs(folders: string[], hits: LibraryChunk[], question: string, includeOld: boolean): Promise<LibraryChunk[]> {
+  if (!folders.length) return []
+  const { data } = await supabase
+    .from('standard_docs')
+    .select('id, relpath, folder, kind, pages, version_status')
+    .in('folder', folders)
+    .in('kind', AMENDMENT_WORDS.test(question) ? ['Standard', 'Amendment'] : ['Standard'])
+    .lte('pages', SMALL_DOC_PAGES)
+  const hitRank = new Map<string, number>()
+  hits.forEach((c, i) => {
+    if (!hitRank.has(c.relpath)) hitRank.set(c.relpath, i)
+  })
+  type Doc = { id: number; relpath: string; folder: string; kind: string; pages: number; version_status: string | null }
+  const docs = ((data ?? []) as Doc[])
+    .filter((d) => includeOld || ['Current', 'Included'].includes(d.version_status ?? 'Current'))
+    .filter((d) => d.kind === 'Amendment' || hitRank.has(d.relpath))
+    // Asked about an amendment: the newest amendments first (the question names "Amendment 4", not the base text).
+    .sort((a, b) => (a.kind === b.kind ? (hitRank.get(a.relpath) ?? 99) - (hitRank.get(b.relpath) ?? 99) || b.relpath.localeCompare(a.relpath) : a.kind === 'Amendment' ? -1 : 1))
+    .slice(0, 3)
+  if (!docs.length) return []
+  const byId = new Map(docs.map((d) => [d.id, d]))
+  const { data: rows } = await supabase
+    .from('standard_chunks')
+    .select('doc_id, page, seq, kind, heading, text')
+    .in('doc_id', [...byId.keys()])
+    .order('doc_id')
+    .order('page')
+    .order('seq')
+    .limit(150)
+  return ((rows ?? []) as Array<{ doc_id: number; page: number; seq: number; kind: string; heading: string; text: string }>).map((c) => {
+    const d = byId.get(c.doc_id)!
+    return { relpath: d.relpath, folder: d.folder, doc_kind: d.kind, version_status: d.version_status, kind: c.kind, page: c.page, seq: c.seq, heading: c.heading, text: c.text }
+  })
+}
+
 export function namedStandards(question: string): string[] {
   const out = new Set<string>()
   for (const m of question.matchAll(/\bIS\s*[:/-]?\s*(\d{2,5})(?!\d)/gi)) out.add(`IS ${Number(m[1])}`)
@@ -243,7 +319,11 @@ export function namedStandards(question: string): string[] {
  */
 export async function askLibrary(input: { question: string; history: AskTurn[]; includeOld: boolean }): Promise<AskAnswer> {
   const folders = namedStandards(input.question)
-  const words = await searchWords(input.question, folders.join(', ') || 'Indian Standards')
+  // A follow-up without an IS number ("and for Fe 600?") keeps the standards of the earlier questions as hints.
+  const earlier = input.history.filter((t) => t.role === 'user').slice(-3).map((t) => t.content)
+  const earlierStandards = folders.length ? [] : namedStandards(earlier.join(' '))
+  const plan = folders.length ? null : await libraryPlan(input.question, earlier[earlier.length - 1] ?? '')
+  const words = plan ? plan.words : await searchWords(input.question, folders.join(', '))
   // Meaning search (embeddings) with the word search when the embed service answers; words alone otherwise.
   const meaning = await embedQuestion(`${words} ${/^[\x20-\x7e]+$/.test(input.question) ? input.question : ''}`.trim())
   const call = async (limit: number, perDoc: number, only: string[] | null) => {
@@ -271,21 +351,67 @@ export async function askLibrary(input: { question: string; history: AskTurn[]; 
     const current = ((docs ?? []) as Array<{ relpath: string; version_status: string | null }>)
       .filter((d) => input.includeOld || (d.version_status ?? 'Current') === 'Current')
       .map((d) => d.relpath)
-    const have = new Set(chunks.map((c) => `${c.relpath}#${c.page}#${c.heading}`))
+    const have = new Set(chunks.map((c) => `${c.relpath}#${c.page}#${c.seq ?? c.heading}`))
     for (const t of await tableChunks(current)) {
       const key = `${t.relpath}#${t.page}#${t.heading}`
       if (have.has(key)) continue
+      have.add(key)
       chunks.push({ relpath: t.relpath, folder: '', doc_kind: 'Standard', version_status: null, kind: 'table', page: t.page, heading: t.heading, text: t.text })
+    }
+    for (const c of await wholeSmallDocs(folders, chunks, input.question, input.includeOld)) {
+      const key = `${c.relpath}#${c.page}#${c.seq ?? c.heading}`
+      if (have.has(key)) continue
+      have.add(key)
+      chunks.push(c)
     }
   } else {
     const r = await call(28, 3, null)
     if (r.error) throw new Error(r.error.message)
-    chunks.push(...((r.data ?? []) as LibraryChunk[]))
+    const found = (r.data ?? []) as LibraryChunk[]
+    chunks.push(...found)
+    // No IS number named: the standards the best hits come from are read once more on their own, with their tables,
+    // so "which standard covers X and what is its limit" gets the limit too (RAG testing, 20 Nov 2026: the first
+    // pass found IS 14543 for packaged drinking water but not its pH row).
+    const score = new Map<string, number>()
+    found.slice(0, 10).forEach((c, i) => {
+      if (c.folder) score.set(c.folder, (score.get(c.folder) ?? 0) + 1 / (i + 1))
+    })
+    const best = Math.max(0, ...score.values())
+    const fromHits = [...score.entries()]
+      .filter(([, v]) => v >= best / 2)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 2)
+      .map(([f]) => f)
+    // The planner's IS numbers first, when the library has them; then the standards the hits point to.
+    const hinted = plan?.standards.length
+      ? [...new Set(((await supabase.from('standard_docs').select('folder').in('folder', plan.standards)).data ?? []).map((d) => (d as { folder: string }).folder))]
+      : []
+    const lead = [...new Set([...earlierStandards, ...hinted, ...fromHits])].slice(0, 3)
+    if (lead.length) {
+      const have = new Set(found.map((c) => `${c.relpath}#${c.page}#${c.seq ?? c.heading}`))
+      const add = (c: LibraryChunk) => {
+        const key = `${c.relpath}#${c.page}#${c.seq ?? c.heading}`
+        if (have.has(key)) return
+        have.add(key)
+        chunks.push(c)
+      }
+      const more = await Promise.all(lead.map((f) => call(10, 6, [f])))
+      for (const m of more) if (!m.error) ((m.data ?? []) as LibraryChunk[]).forEach(add)
+      const { data: docs } = await supabase.from('standard_docs').select('relpath, version_status').in('folder', lead).eq('kind', 'Standard')
+      const current = ((docs ?? []) as Array<{ relpath: string; version_status: string | null }>)
+        .filter((d) => input.includeOld || (d.version_status ?? 'Current') === 'Current')
+        .map((d) => d.relpath)
+      for (const t of await tableChunks(current)) {
+        add({ relpath: t.relpath, folder: '', doc_kind: 'Standard', version_status: null, kind: 'table', page: t.page, heading: t.heading, text: t.text })
+      }
+      for (const c of await wholeSmallDocs(lead, chunks, input.question, input.includeOld)) add(c)
+    }
   }
   if (!chunks.length) {
     return {
-      answer:
-        'Standards Library में इस सवाल से मिलता कुछ नहीं मिला। सवाल में IS नंबर, test या property का नाम (जैसे "tensile strength", "marking") लिखकर पूछें।',
+      answer: /^[\x20-\x7e]+$/.test(input.question)
+        ? 'Nothing in the Standards Library matches this question. Ask again with the IS number, or the name of the test or property (e.g. "tensile strength", "marking").'
+        : 'Standards Library में इस सवाल से मिलता कुछ नहीं मिला। सवाल में IS नंबर, test या property का नाम (जैसे "tensile strength", "marking") लिखकर पूछें।',
       sources: [],
       model: null,
     }
@@ -309,8 +435,9 @@ export async function askLibrary(input: { question: string; history: AskTurn[]; 
       'separately and compare them in a short table if that helps. A "Table" block keeps one row per line: read a ' +
       "row's values from its own line (ROWS lines join the grade / quality names). Mention when a block is from a " +
       'Superseded or Withdrawn edition. If the extracts do not answer the question, say so plainly — never use outside ' +
-      'knowledge or guess. Reply in the language of the question (Hindi, Hinglish or English); keep numbers, units and ' +
-      'clause numbers exactly as written.',
+      'knowledge or guess. Do not suggest uploading files or app features; when something is missing, name the ' +
+      'standard, clause or table to open in the library. Reply in the language of the question (Hindi, Hinglish or ' +
+      'English); keep numbers, units and clause numbers exactly as written.',
     history: input.history.slice(-8),
   })
   return { answer: reply, sources, model: model ?? null }
