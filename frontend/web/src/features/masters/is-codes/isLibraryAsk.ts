@@ -108,6 +108,33 @@ async function tableChunks(relpaths: string[]): Promise<ChunkHit[]> {
   }))
 }
 
+/**
+ * Best chunks of these files by words and meaning (the Library Ask search), with their pages' other chunks; null when
+ * the meaning search is not there (the word search answers). RAG testing, 21 Nov 2026: by words alone IS Files' Ask
+ * missed IS 14543 5.2.6 Aerobic Microbial Count, as the Product Manual's many pages came first.
+ */
+async function hybridChunks(relpaths: string[], words: string, question: string, limit: number): Promise<PageHit[] | null> {
+  const { data: docs } = await supabase.from('standard_docs').select('folder').in('relpath', relpaths)
+  const folders = [...new Set(((docs ?? []) as Array<{ folder: string }>).map((d) => d.folder))]
+  if (!folders.length) return null
+  const meaning = await embedQuestion(`${words} ${/^[\x20-\x7e]+$/.test(question) ? question : ''}`.trim())
+  if (!meaning) return null
+  const { data, error } = await supabase.rpc('search_library_hybrid', {
+    p_query: words,
+    p_embedding: meaning.vector,
+    p_model: meaning.model,
+    p_limit: 60,
+    p_per_doc: 10,
+    p_current_only: false,
+    p_folders: folders,
+  })
+  if (error) return null
+  const hits = ((data ?? []) as LibraryChunk[]).filter((c) => relpaths.includes(c.relpath)).slice(0, limit)
+  if (!hits.length) return null
+  withSamePage(hits, await samePageChunks(hits))
+  return hits.map((c) => ({ relpath: c.relpath, page: c.page, text: `${c.heading ? `${c.heading}\n` : ''}${c.text}` }))
+}
+
 /** Best clause / table chunks for the words; null when chunk search is not there yet (the page search answers). */
 async function searchChunks(relpaths: string[], words: string, limit: number): Promise<PageHit[] | null> {
   const { data, error } = await supabase.rpc('search_standard_chunks', { p_relpaths: relpaths, p_query: words, p_limit: limit })
@@ -151,7 +178,9 @@ export async function askStandards(input: {
       ? []
       : ownPageCount <= SMALL_STANDARD_PAGES
         ? await allPages(ownPaths)
-        : ((await searchChunks(ownPaths, words, 18)) ?? (await searchPages(ownPaths, words, 14)))
+        : ((await hybridChunks(ownPaths, words, input.question, 18)) ??
+          (await searchChunks(ownPaths, words, 18)) ??
+          (await searchPages(ownPaths, words, 14)))
   // The Standard first, then its Amendments, then the Product Manual (the source chips follow this order).
   if (ownPageCount <= SMALL_STANDARD_PAGES) ownPages.sort((a, b) => ownPaths.indexOf(a.relpath) - ownPaths.indexOf(b.relpath) || a.page - b.page)
   const refPages = refPaths.length
