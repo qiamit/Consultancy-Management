@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
-import { ChevronDown, ChevronRight, Download, ExternalLink, FolderOpen, Loader2, Plus, Send, Sparkles } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { ChevronDown, ChevronRight, Download, ExternalLink, FolderOpen, Plus, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { limsDarkBarGlowStyle, limsDialogClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
-import { askStandards, type AskSource, type AskTurn } from './isLibraryAsk'
+import { askStandards } from './isLibraryAsk'
+import { StandardsAskPanel } from './StandardsAskPanel'
 import {
   addReferenceLink,
   EMPTY_LIBRARY_FILES,
@@ -237,116 +238,15 @@ function AddReferenceDialog({
   )
 }
 
-type ChatItem = AskTurn & { sources?: AskSource[]; model?: string | null }
-
-/** The pages the answer names ("p. 5", "page 5"), else the first few it was given. */
-function citedSources(answer: string, sources: AskSource[]): AskSource[] {
-  const unique = [...new Map(sources.map((s) => [`${s.relpath}#${s.page}`, s])).values()]
-  const pages = new Set([...answer.matchAll(/\b(?:p\.?|pages?)\s*(\d{1,3})\b/gi)].map((m) => Number(m[1])))
-  const named = unique.filter((s) => {
-    if (!pages.has(s.page)) return false
-    const stem = s.name.replace(/\.pdf$/i, '')
-    // A page number alone may belong to another file: keep it when that file is named, or when only one file is given.
-    return answer.includes(stem) || new Set(unique.map((u) => u.relpath)).size === 1 || !/Product Manual/i.test(stem)
-  })
-  return (named.length ? named : unique).slice(0, 8)
-}
-
-function AskPanel({ isLabel, files, selectedCount }: { isLabel: string; files: IsLibraryFiles; selectedCount: number }) {
-  const [items, setItems] = useState<ChatItem[]>([])
-  const [question, setQuestion] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [useReferences, setUseReferences] = useState(false)
-  const end = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    // Braces: newer browsers return a Promise from scrollIntoView, which React would take as a clean-up.
-    end.current?.scrollIntoView({ block: 'end' })
-  }, [items, busy])
-
-  const ask = async () => {
-    const q = question.trim()
-    if (!q || busy) return
-    const history = items.map(({ role, content }) => ({ role, content }))
-    setItems((list) => [...list, { role: 'user', content: q }])
-    setQuestion('')
-    setBusy(true)
-    try {
-      const a = await askStandards({ isLabel, files, question: q, history, useReferences: useReferences || selectedCount > 0 })
-      setItems((list) => [...list, { role: 'assistant', content: a.answer, sources: a.sources, model: a.model }])
-    } catch (e) {
-      setItems((list) => [...list, { role: 'assistant', content: e instanceof Error ? e.message : String(e) }])
-    } finally {
-      setBusy(false)
-    }
-  }
-
+function IsAskPanel({ isLabel, files, selectedCount }: { isLabel: string; files: IsLibraryFiles; selectedCount: number }) {
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <div className="min-h-[16rem] flex-1 space-y-3 overflow-y-auto">
-        {!items.length ? (
-          <p className="text-sm text-muted-foreground">
-            Ask Anything About {isLabel || 'This Standard'}: Requirements, Tests, Tables, Marking, Sampling … The Answer Comes Only From
-            Its Files in the Standards Library, With Clause and Page.
-          </p>
-        ) : null}
-        {items.map((m, i) => (
-          <div key={i} className={cn('border px-3 py-2 text-sm', m.role === 'user' ? 'ml-10 border-amber-300 bg-amber-50' : 'mr-4 border-stone-300 bg-white')}>
-            <p className="whitespace-pre-wrap break-words">{m.content}</p>
-            {m.sources?.length ? (
-              <div className="mt-2 flex flex-wrap gap-1">
-                {citedSources(m.content, m.sources).map((s) => (
-                  <button
-                    key={`${s.relpath}#${s.page}`}
-                    type="button"
-                    className="border border-stone-300 bg-stone-50 px-1.5 py-0.5 text-[11px] text-stone-700 hover:bg-amber-50"
-                    title="Open This Page in a New Tab"
-                    onClick={() =>
-                      void openLibraryFile(s.relpath, false, s.page).catch((e: unknown) => toast.error(e instanceof Error ? e.message : String(e)))
-                    }
-                  >
-                    {s.name.replace(/\.pdf$/i, '')} p{s.page}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        ))}
-        {busy ? (
-          <p className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Reading the Standard…
-          </p>
-        ) : null}
-        <div ref={end} />
-      </div>
-      <div className="space-y-1.5 border-t border-stone-200 pt-2">
-        {selectedCount ? (
-          <p className="text-xs text-stone-700">Reading Only the {selectedCount} Selected Files.</p>
-        ) : (
-          <label className="flex items-center gap-2 text-xs text-stone-700">
-            <input type="checkbox" checked={useReferences} onChange={(e) => setUseReferences(e.target.checked)} />
-            Also Read the Reference Standards
-          </label>
-        )}
-        <div className="flex gap-2">
-          <textarea
-            className="min-h-[2.5rem] flex-1 resize-y border border-stone-300 bg-white px-2 py-1.5 text-sm outline-none focus:border-amber-600"
-            rows={2}
-            placeholder="Ask About This Standard…"
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault()
-                void ask()
-              }
-            }}
-          />
-          <Button type="button" className="h-auto rounded-none bg-amber-700 px-3 text-white hover:bg-amber-800" onClick={() => void ask()} disabled={busy || !question.trim()}>
-            <Send className="h-4 w-4" aria-hidden />
-          </Button>
-        </div>
-      </div>
-    </div>
+    <StandardsAskPanel
+      intro={`Ask Anything About ${isLabel || 'This Standard'}: Requirements, Tests, Tables, Marking, Sampling … The Answer Comes Only From Its Files in the Standards Library, With Clause and Page.`}
+      placeholder="Ask About This Standard…"
+      flagLabel={selectedCount ? undefined : 'Also Read the Reference Standards'}
+      note={selectedCount ? `Reading Only the ${selectedCount} Selected Files.` : undefined}
+      ask={(question, history, flag) => askStandards({ isLabel, files, question, history, useReferences: flag || selectedCount > 0 })}
+    />
   )
 }
 
@@ -464,7 +364,7 @@ export function IsLibraryFilesDialog({
             </p>
           ) : null}
           {mode === 'ask' && !loading && !error && !nothing ? (
-            <AskPanel key={isCodeId ?? ''} isLabel={title} files={askFiles} selectedCount={selected.size} />
+            <IsAskPanel key={isCodeId ?? ''} isLabel={title} files={askFiles} selectedCount={selected.size} />
           ) : null}
           {mode === 'files' && !loading && !error && !nothing ? (
             <>

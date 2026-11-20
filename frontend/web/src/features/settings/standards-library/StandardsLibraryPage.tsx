@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import { ChevronDown, ChevronRight, Download, Library, RefreshCw } from 'lucide-react'
+import { BookOpenText, ChevronDown, ChevronRight, Download, Library, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import {
@@ -15,6 +15,7 @@ import {
 } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import { SyncNowControls } from './SyncNowPanel'
+import { LibraryAskDialog } from '@/features/masters/is-codes/LibraryAskDialog'
 import { fetchAllMissingReferences, fetchStandardsLibraryStatus, type IndexRun, type IndexRunStatus, type StandardsLibraryStatus } from './standardsLibraryApi'
 
 const STATUS_TONE: Record<IndexRunStatus, string> = {
@@ -127,6 +128,7 @@ export default function StandardsLibraryPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
+  const [askOpen, setAskOpen] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -171,6 +173,11 @@ export default function StandardsLibraryPage() {
         <div className="relative flex flex-wrap items-center gap-2">
           <Library className="h-5 w-5 text-amber-300" aria-hidden />
           <h1 className="mr-auto text-base font-semibold tracking-wide">Standards Library</h1>
+          <Button type="button" variant="outline" className={limsDarkBarBtnClass} onClick={() => setAskOpen(true)}>
+            <BookOpenText className="h-4 w-4" aria-hidden />
+            Ask AI
+          </Button>
+          <LibraryAskDialog open={askOpen} onOpenChange={setAskOpen} />
           <SyncNowControls onFinished={reload} />
           <Button type="button" variant="outline" className={limsDarkBarBtnClass} onClick={reload}>
             <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} aria-hidden />

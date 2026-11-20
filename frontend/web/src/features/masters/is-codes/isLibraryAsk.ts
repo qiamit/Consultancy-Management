@@ -20,7 +20,7 @@ const PAGE_CHARS = 6_000
 const nameOf = (relpath: string) => relpath.split('/').pop() ?? relpath
 
 /** English search words for the index (the question may be in Hindi / Hinglish). */
-async function searchWords(question: string, isLabel: string): Promise<string> {
+export async function searchWords(question: string, isLabel: string): Promise<string> {
   if (/^[\x20-\x7e]+$/.test(question) && question.split(/\s+/).length <= 12) return question
   const { reply } = await sendQiAssistantMessage({
     page: 'masters/is-files-ask',
@@ -187,6 +187,103 @@ export async function askStandards(input: {
       'and say so. If the pages do not answer the question, say clearly that it is not in these standards — never use ' +
       'outside knowledge or guess. Reply in the language of the question (Hindi, Hinglish or English); keep numbers, ' +
       'units and clause numbers exactly as in the standard.',
+    history: input.history.slice(-8),
+  })
+  return { answer: reply, sources, model: model ?? null }
+}
+
+type LibraryChunk = {
+  relpath: string
+  folder: string
+  doc_kind: string
+  version_status: string | null
+  kind: string
+  page: number
+  heading: string
+  text: string
+}
+
+const LIBRARY_BUDGET = 80_000
+
+/** IS numbers the question names ("IS 2062", "IS:1786", "IS 2062 Part 1"): their folders in the index. */
+export function namedStandards(question: string): string[] {
+  const out = new Set<string>()
+  for (const m of question.matchAll(/\bIS\s*[:/-]?\s*(\d{2,5})(?!\d)/gi)) out.add(`IS ${Number(m[1])}`)
+  return [...out].slice(0, 8)
+}
+
+/**
+ * Ask AI over the whole Standards Library: the best chunks from every current standard (a few each, so several
+ * standards answer together), or — when the question names IS numbers — the chunks and tables of those standards.
+ */
+export async function askLibrary(input: { question: string; history: AskTurn[]; includeOld: boolean }): Promise<AskAnswer> {
+  const folders = namedStandards(input.question)
+  const words = await searchWords(input.question, folders.join(', ') || 'Indian Standards')
+  const call = (limit: number, perDoc: number, only: string[] | null) =>
+    supabase.rpc('search_library_chunks', {
+      p_query: words,
+      p_limit: limit,
+      p_per_doc: perDoc,
+      p_current_only: !input.includeOld,
+      ...(only ? { p_folders: only } : {}),
+    })
+  const chunks: LibraryChunk[] = []
+  if (folders.length) {
+    // Each named standard gets its own share, so one long standard does not crowd the others out.
+    const each = await Promise.all(folders.map((f) => call(Math.max(6, Math.floor(30 / folders.length)), 8, [f])))
+    for (const r of each) {
+      if (r.error) throw new Error(r.error.message)
+      chunks.push(...((r.data ?? []) as LibraryChunk[]))
+    }
+    // Their tables in column layout, for numbers.
+    const { data: docs } = await supabase
+      .from('standard_docs')
+      .select('relpath, version_status, kind')
+      .in('folder', folders)
+      .eq('kind', 'Standard')
+    const current = ((docs ?? []) as Array<{ relpath: string; version_status: string | null }>)
+      .filter((d) => input.includeOld || (d.version_status ?? 'Current') === 'Current')
+      .map((d) => d.relpath)
+    const have = new Set(chunks.map((c) => `${c.relpath}#${c.page}#${c.heading}`))
+    for (const t of await tableChunks(current)) {
+      const key = `${t.relpath}#${t.page}#${t.heading}`
+      if (have.has(key)) continue
+      chunks.push({ relpath: t.relpath, folder: '', doc_kind: 'Standard', version_status: null, kind: 'table', page: t.page, heading: t.heading, text: t.text })
+    }
+  } else {
+    const r = await call(28, 3, null)
+    if (r.error) throw new Error(r.error.message)
+    chunks.push(...((r.data ?? []) as LibraryChunk[]))
+  }
+  if (!chunks.length) {
+    return {
+      answer:
+        'Standards Library में इस सवाल से मिलता कुछ नहीं मिला। सवाल में IS नंबर, test या property का नाम (जैसे "tensile strength", "marking") लिखकर पूछें।',
+      sources: [],
+      model: null,
+    }
+  }
+  let context = ''
+  const sources: AskSource[] = []
+  for (const c of chunks) {
+    const tag = c.version_status && c.version_status !== 'Current' ? ` (${c.version_status})` : ''
+    const b = `[${c.kind === 'table' ? 'Table' : c.doc_kind} — ${nameOf(c.relpath)}${tag} — page ${c.page}${c.heading ? ` — ${c.heading.slice(0, 80)}` : ''}]\n${c.text.slice(0, PAGE_CHARS)}\n\n`
+    if (context.length + b.length > LIBRARY_BUDGET) continue
+    context += b
+    sources.push({ relpath: c.relpath, name: nameOf(c.relpath), page: c.page })
+  }
+  const { reply, model } = await sendQiAssistantMessage({
+    page: 'standards/library-ask',
+    context: `STANDARDS LIBRARY EXTRACTS (the only source you may use; each block names its file and page):\n\n${context}`,
+    message:
+      `${input.question}\n\n` +
+      'Rules: Answer only from the STANDARDS LIBRARY EXTRACTS above. For every fact name the standard, the clause or ' +
+      'table and the page, e.g. "(IS 1786 2008, Table 3, p. 8)". When several standards answer, give each one ' +
+      'separately and compare them in a short table if that helps. A "Table" block keeps one row per line: read a ' +
+      "row's values from its own line (ROWS lines join the grade / quality names). Mention when a block is from a " +
+      'Superseded or Withdrawn edition. If the extracts do not answer the question, say so plainly — never use outside ' +
+      'knowledge or guess. Reply in the language of the question (Hindi, Hinglish or English); keep numbers, units and ' +
+      'clause numbers exactly as written.',
     history: input.history.slice(-8),
   })
   return { answer: reply, sources, model: model ?? null }

@@ -8,7 +8,8 @@ import {
   limsPanelClass,
   limsDarkBarGlowStyle,
 } from '@/lib/limsThemeUi'
-import { Plus, Search } from 'lucide-react'
+import { useState } from 'react'
+import { BookOpenText, Plus, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -19,6 +20,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { QiAssistant } from '@/components/qi-assistant/QiAssistant'
+import { LibraryAskDialog } from './LibraryAskDialog'
 
 export function IsCodesHeaderBar({
   search,
@@ -41,6 +43,7 @@ export function IsCodesHeaderBar({
   assistantContext: string
   onAssistantDataChanged?: () => void
 }) {
+  const [askOpen, setAskOpen] = useState(false)
   return (
     <div className={cn(limsPanelClass)}>
       <div className="relative overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-2 py-2 text-white sm:px-4 sm:py-2.5 md:px-5">
@@ -102,6 +105,19 @@ export function IsCodesHeaderBar({
             triggerVariant="icon"
             triggerClassName={cn(limsAiTriggerClass, 'h-8 w-8 shrink-0')}
           />
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className={cn(limsDarkBarBtnClass, 'h-8 shrink-0 gap-1.5 px-2 sm:px-3')}
+            onClick={() => setAskOpen(true)}
+            title="Ask AI Over the Whole Standards Library (One or Several IS)"
+          >
+            <BookOpenText size={14} className="shrink-0" aria-hidden />
+            <span className="hidden sm:inline">Ask Standards</span>
+          </Button>
+          <LibraryAskDialog open={askOpen} onOpenChange={setAskOpen} />
 
           <Button
             type="button"
