@@ -21,7 +21,9 @@ const nameOf = (relpath: string) => relpath.split('/').pop() ?? relpath
 
 /** English search words for the index (the question may be in Hindi / Hinglish). */
 export async function searchWords(question: string, isLabel: string): Promise<string> {
-  if (/^[\x20-\x7e]+$/.test(question) && question.split(/\s+/).length <= 12) return question
+  // A short English question searches with its own words; Hinglish goes through the model too ("IS 808 me ISMB 200 ka
+  // weight kitna hai" searched for "me", "ka", "kitna", "hai" and missed the beam table; RAG testing, 20 Nov 2026).
+  if (answerLanguage(question) === 'English' && question.split(/\s+/).length <= 12) return question
   const { reply } = await sendQiAssistantMessage({
     page: 'masters/is-files-ask',
     message:
@@ -376,7 +378,9 @@ export async function askLibrary(input: { question: string; history: AskTurn[]; 
     const parts = namedParts(input.question)
     const share = Math.max(6, Math.floor(30 / folders.length))
     // A named Part: more hits asked for, then only that Part's files kept.
-    const each = await Promise.all(folders.map((f) => call(parts.has(f) ? Math.min(80, share * 4) : share, 8, [f])))
+    // One named standard may give up to 10 chunks per file (the search's own limit), several get 8 each.
+    const perDoc = folders.length === 1 ? 10 : 8
+    const each = await Promise.all(folders.map((f) => call(parts.has(f) ? Math.min(80, share * 4) : share, perDoc, [f])))
     for (const [n, r] of each.entries()) {
       if (r.error) throw new Error(r.error.message)
       const f = folders[n]
