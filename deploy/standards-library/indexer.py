@@ -984,6 +984,61 @@ def build_chunks(conn, root):
     return len(todo), made
 
 
+# ---------------------------------------------------------------- embeddings (RAG step 3)
+
+EMBED_MODEL = os.environ.get("EMBED_MODEL", "BAAI/bge-small-en-v1.5")
+EMBED_BATCH = 64
+
+
+def embed_chunks(conn, stop_after_min=None):
+    """Embeds every chunk with no vector of EMBED_MODEL yet: the current Standards first, then amendments, manuals and
+    older editions. Saved batch by batch, so a stopped run goes on where it left off. Returns (done, left)."""
+    try:
+        from fastembed import TextEmbedding
+    except ImportError:
+        print("Embeddings: fastembed not installed, skipped")
+        return 0, None
+    model = TextEmbedding(EMBED_MODEL, threads=max(1, int(os.environ.get("EMBED_THREADS", "1"))))
+    left = conn.execute(
+        "SELECT count(*) FROM public.standard_chunks WHERE embedding IS NULL OR embed_model IS DISTINCT FROM %s",
+        (EMBED_MODEL,),
+    ).fetchone()[0]
+    if not left:
+        return 0, 0
+    print(f"Embeddings: {left} chunks to embed with {EMBED_MODEL}", flush=True)
+    started, done = time.time(), 0
+    while True:
+        rows = conn.execute(
+            """SELECT c.id, c.heading, c.text FROM public.standard_chunks c
+               JOIN public.standard_docs d ON d.id = c.doc_id
+               WHERE c.embedding IS NULL OR c.embed_model IS DISTINCT FROM %s
+               ORDER BY (coalesce(d.version_status, 'Current') = 'Current') DESC,
+                        CASE d.kind WHEN 'Standard' THEN 0 WHEN 'Amendment' THEN 1 WHEN 'Product Manual' THEN 2 ELSE 3 END,
+                        c.id
+               LIMIT %s""",
+            (EMBED_MODEL, EMBED_BATCH),
+        ).fetchall()
+        if not rows:
+            break
+        texts = [((h + "\n") if h else "") + (t or "")[:1800] for _, h, t in rows]
+        vectors = list(model.embed(texts, batch_size=EMBED_BATCH))
+        with conn.transaction(), conn.cursor() as cur:
+            cur.executemany(
+                "UPDATE public.standard_chunks SET embedding = %s::extensions.vector, embed_model = %s WHERE id = %s",
+                [("[" + ",".join(f"{x:.6f}" for x in v) + "]", EMBED_MODEL, cid) for (cid, _, _), v in zip(rows, vectors)],
+            )
+        done += len(rows)
+        mins = (time.time() - started) / 60
+        if done % (EMBED_BATCH * 40) == 0:
+            rate = done / max(mins * 60, 1)
+            print(f"  embeddings: {done}/{left}, {rate:.1f} per s, about {(left - done) / max(rate, 0.1) / 3600:.1f} h left",
+                  flush=True)
+        if stop_after_min and mins >= stop_after_min:
+            print(f"  embeddings: stopped after {stop_after_min} min ({done} done); the next run goes on", flush=True)
+            break
+    return done, left - done
+
+
 def summary(conn):
     rows = conn.execute(
         """SELECT coalesce(category, '(none)'), count(*) FILTER (WHERE relpath NOT LIKE '%%::%%'), coalesce(sum(pages), 0),
@@ -1134,6 +1189,10 @@ def main():
         chunked, chunks = build_chunks(conn, root)
         if chunked:
             print(f"Chunks: {chunks} made for {chunked} documents")
+        limit = float(os.environ.get("EMBED_MAX_MINUTES", "0") or 0) or None
+        embedded, left = embed_chunks(conn, limit)
+        if embedded:
+            print(f"Embeddings: {embedded} chunks embedded" + (f", {left} left for the next run" if left else ""))
         if renamed:
             print(f"Names and first pages checked again: {renamed} documents updated")
         scanned, refs = scan_references(conn)

@@ -207,6 +207,30 @@ type LibraryChunk = {
 const LIBRARY_BUDGET = 80_000
 
 /** IS numbers the question names ("IS 2062", "IS:1786", "IS 2062 Part 1"): their folders in the index. */
+/** The question's embedding from the server (local model); null when the service is not there or fails. */
+async function embedQuestion(text: string): Promise<{ vector: string; model: string } | null> {
+  try {
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+    if (!token || !text) return null
+    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/standards/embed`, {
+      method: 'POST',
+      headers: {
+        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY as string,
+        Authorization: `Bearer ${token}`,
+        'X-User-Jwt': token,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ text }),
+    })
+    const body = (await res.json().catch(() => ({}))) as { vector?: number[]; model?: string }
+    if (!res.ok || !Array.isArray(body.vector) || !body.model) return null
+    return { vector: `[${body.vector.join(',')}]`, model: body.model }
+  } catch {
+    return null
+  }
+}
+
 export function namedStandards(question: string): string[] {
   const out = new Set<string>()
   for (const m of question.matchAll(/\bIS\s*[:/-]?\s*(\d{2,5})(?!\d)/gi)) out.add(`IS ${Number(m[1])}`)
@@ -220,14 +244,16 @@ export function namedStandards(question: string): string[] {
 export async function askLibrary(input: { question: string; history: AskTurn[]; includeOld: boolean }): Promise<AskAnswer> {
   const folders = namedStandards(input.question)
   const words = await searchWords(input.question, folders.join(', ') || 'Indian Standards')
-  const call = (limit: number, perDoc: number, only: string[] | null) =>
-    supabase.rpc('search_library_chunks', {
-      p_query: words,
-      p_limit: limit,
-      p_per_doc: perDoc,
-      p_current_only: !input.includeOld,
-      ...(only ? { p_folders: only } : {}),
-    })
+  // Meaning search (embeddings) with the word search when the embed service answers; words alone otherwise.
+  const meaning = await embedQuestion(`${words} ${/^[\x20-\x7e]+$/.test(input.question) ? input.question : ''}`.trim())
+  const call = async (limit: number, perDoc: number, only: string[] | null) => {
+    const common = { p_query: words, p_limit: limit, p_per_doc: perDoc, p_current_only: !input.includeOld, ...(only ? { p_folders: only } : {}) }
+    if (meaning) {
+      const r = await supabase.rpc('search_library_hybrid', { ...common, p_embedding: meaning.vector, p_model: meaning.model })
+      if (!r.error) return r
+    }
+    return supabase.rpc('search_library_chunks', common)
+  }
   const chunks: LibraryChunk[] = []
   if (folders.length) {
     // Each named standard gets its own share, so one long standard does not crowd the others out.

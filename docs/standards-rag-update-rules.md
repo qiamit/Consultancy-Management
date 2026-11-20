@@ -49,6 +49,9 @@ number, status, and for an amendment the base edition it belongs to.
 2. Clause / table chunks with these tags. **Done 20 Nov 2026:** `standard_chunks` (table = column layout from
    `pdftotext -layout`, clause = page text cut at clause headings, page = no heading), built by `build_chunks`
    (`CHUNKS_VERSION`), word search `search_standard_chunks`; Ask AI reads the tables from here.
-3. pgvector embeddings in the same Postgres (incremental by sha256).
+3. pgvector embeddings in the same Postgres (incremental by sha256). **20 Nov 2026:** local BAAI/bge-small-en-v1.5
+   (owner's choice: free, nothing leaves the server) — `standard_chunks.embedding` / `embed_model`, embedded by the
+   indexer (`embed_chunks`, current Standards first, resumable); questions by the `standards-embed` service;
+   `search_library_hybrid` merges word and meaning search (reciprocal rank).
 4. Hybrid search (words + codes + meaning), Current-only by default.
 5. App Search Window with Standard, page and clause in every answer.

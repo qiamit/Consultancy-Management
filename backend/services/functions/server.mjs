@@ -1383,6 +1383,7 @@ const standardsFiles = createStandardsFiles({
 const routes = {
   'POST /standards/file-link': standardsFiles.handleLink,
   'GET /standards/file': standardsFiles.handleFile,
+  'POST /standards/embed': standardsFiles.handleEmbed,
   'GET /health': async (_req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' })
     res.end('ok')
