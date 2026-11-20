@@ -224,6 +224,7 @@ type LibraryChunk = {
 }
 
 const LIBRARY_BUDGET = 80_000
+const SAME_PAGE_CHARS = 16_000
 
 /** IS numbers the question names ("IS 2062", "IS:1786", "IS 2062 Part 1"): their folders in the index. */
 /** The question's embedding from the server (local model); null when the service is not there or fails. */
@@ -350,12 +351,26 @@ async function samePageChunks(hits: LibraryChunk[]): Promise<LibraryChunk[]> {
     .order('page')
     .order('seq')
     .limit(150)
-  const out: LibraryChunk[] = []
+  // At most SAME_PAGE_CHARS of new text, best pages first: more crowded the tables out of the budget (RAG testing,
+  // 21 Nov 2026: IS 14543 arsenic, Table 3, was dropped).
+  const have = new Set(hits.map((c) => `${c.relpath}#${c.page}#${c.seq ?? c.heading}`))
+  const byPage = new Map<string, LibraryChunk[]>()
   for (const r of (rows ?? []) as Array<{ doc_id: number; page: number; seq: number; kind: string; heading: string; text: string }>) {
     const relpath = relOf.get(r.doc_id) ?? ''
     const p = pages.find((x) => x.relpath === relpath && x.page === r.page)
-    if (!p) continue
-    out.push({ ...p.c, kind: r.kind, seq: r.seq, heading: r.heading, text: r.text })
+    if (!p || have.has(`${relpath}#${r.page}#${r.seq}`)) continue
+    const k = `${relpath}#${r.page}`
+    byPage.set(k, [...(byPage.get(k) ?? []), { ...p.c, kind: r.kind, seq: r.seq, heading: r.heading, text: r.text }])
+  }
+  const out: LibraryChunk[] = []
+  let used = 0
+  for (const p of pages) {
+    for (const c of byPage.get(`${p.relpath}#${p.page}`) ?? []) {
+      const n = Math.min(c.text.length, PAGE_CHARS)
+      if (used + n > SAME_PAGE_CHARS) continue
+      used += n
+      out.push(c)
+    }
   }
   return out
 }
@@ -469,7 +484,9 @@ export async function askLibrary(input: { question: string; history: AskTurn[]; 
     const r = await call(28, 3, null)
     if (r.error) throw new Error(r.error.message)
     const found = (r.data ?? []) as LibraryChunk[]
-    chunks.push(...found)
+    // The best 8 hits first; the rest go after the lead standards' own chunks and tables, which otherwise lost their
+    // place in the budget to forewords of other standards (RAG testing, 21 Nov 2026: IS 14543 arsenic, Table 3).
+    chunks.push(...found.slice(0, 8))
     // No IS number named: the standards the best hits come from are read once more on their own, with their tables,
     // so "which standard covers X and what is its limit" gets the limit too (RAG testing, 20 Nov 2026: the first
     // pass found IS 14543 for packaged drinking water but not its pH row).
@@ -488,26 +505,33 @@ export async function askLibrary(input: { question: string; history: AskTurn[]; 
       ? [...new Set(((await supabase.from('standard_docs').select('folder').in('folder', plan.standards)).data ?? []).map((d) => (d as { folder: string }).folder))]
       : []
     const lead = [...new Set([...earlierStandards, ...hinted, ...fromHits])].slice(0, 3)
+    const have = new Set(chunks.map((c) => `${c.relpath}#${c.page}#${c.seq ?? c.heading}`))
+    const add = (c: LibraryChunk) => {
+      const key = `${c.relpath}#${c.page}#${c.seq ?? c.heading}`
+      if (have.has(key)) return
+      have.add(key)
+      chunks.push(c)
+    }
     if (lead.length) {
-      const have = new Set(found.map((c) => `${c.relpath}#${c.page}#${c.seq ?? c.heading}`))
-      const add = (c: LibraryChunk) => {
-        const key = `${c.relpath}#${c.page}#${c.seq ?? c.heading}`
-        if (have.has(key)) return
-        have.add(key)
-        chunks.push(c)
-      }
       const more = await Promise.all(lead.map((f) => call(10, 6, [f])))
       for (const m of more) if (!m.error) ((m.data ?? []) as LibraryChunk[]).forEach(add)
-      for (const c of await samePageChunks(chunks.filter((c) => lead.includes(c.folder)))) add(c)
-      const { data: docs } = await supabase.from('standard_docs').select('relpath, version_status').in('folder', lead).eq('kind', 'Standard')
-      const current = ((docs ?? []) as Array<{ relpath: string; version_status: string | null }>)
+      const samePage = await samePageChunks(chunks.filter((c) => lead.includes(c.folder)))
+      const { data: docs } = await supabase.from('standard_docs').select('relpath, version_status, folder').in('folder', lead).eq('kind', 'Standard')
+      // The lead standards' tables in lead order (the best standard's first), not by file id: IS 13428's tables
+      // filled the budget before IS 14543's Table 3 (RAG testing, 21 Nov 2026).
+      const current = ((docs ?? []) as Array<{ relpath: string; version_status: string | null; folder: string }>)
         .filter((d) => input.includeOld || (d.version_status ?? 'Current') === 'Current')
+        .sort((a, b) => lead.indexOf(a.folder) - lead.indexOf(b.folder))
         .map((d) => d.relpath)
-      for (const t of await tableChunks(current)) {
+      const tables = (await tableChunks(current)).sort((a, b) => current.indexOf(a.relpath) - current.indexOf(b.relpath))
+      for (const t of tables) {
         add({ relpath: t.relpath, folder: '', doc_kind: 'Standard', version_status: null, kind: 'table', page: t.page, heading: t.heading, text: t.text })
       }
       for (const c of await wholeSmallDocs(lead, chunks, input.question, input.includeOld)) add(c)
+      // After the tables, so they keep their place in the budget.
+      samePage.forEach(add)
     }
+    found.slice(8).forEach(add)
   }
   if (!chunks.length && folders.length && !input.includeOld) {
     // A named standard with no current edition (RAG testing, 20 Nov 2026: "IS 8052" answered "nothing matches"
