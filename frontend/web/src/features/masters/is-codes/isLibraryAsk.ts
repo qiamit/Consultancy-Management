@@ -407,6 +407,26 @@ export async function askLibrary(input: { question: string; history: AskTurn[]; 
       for (const c of await wholeSmallDocs(lead, chunks, input.question, input.includeOld)) add(c)
     }
   }
+  if (!chunks.length && folders.length && !input.includeOld) {
+    // A named standard with no current edition (RAG testing, 20 Nov 2026: "IS 8052" answered "nothing matches"
+    // though the library has it, Withdrawn): say so and point to the Include Older Editions tick.
+    const { data: old } = await supabase.from('standard_docs').select('relpath, version_status, superseded_by').in('folder', folders).in('version_status', ['Withdrawn', 'Superseded'])
+    const rows = (old ?? []) as Array<{ relpath: string; version_status: string; superseded_by: string | null }>
+    if (rows.length) {
+      const list = rows
+        .slice(0, 6)
+        .map((r) => `${nameOf(r.relpath).replace(/\.pdf$/i, '')} — ${r.version_status}${r.superseded_by ? ` (by ${r.superseded_by})` : ''}`)
+        .join('\n')
+      const english = /^[\x20-\x7e]+$/.test(input.question)
+      return {
+        answer: english
+          ? `${folders.join(', ')} has no current edition in the Standards Library. The library holds:\n${list}\n\nTick “Include Older Editions (Superseded / Withdrawn)” and ask again to get the answer from these editions.`
+          : `${folders.join(', ')} का कोई current edition Standards Library में नहीं है। Library में ये हैं:\n${list}\n\n“Include Older Editions (Superseded / Withdrawn)” पर tick करके फिर पूछें, तो जवाब इन्हीं editions से मिलेगा।`,
+        sources: rows.slice(0, 6).map((r) => ({ relpath: r.relpath, name: nameOf(r.relpath), page: 1 })),
+        model: null,
+      }
+    }
+  }
   if (!chunks.length) {
     return {
       answer: /^[\x20-\x7e]+$/.test(input.question)
