@@ -462,7 +462,7 @@ export async function askLibrary(input: { question: string; history: AskTurn[]; 
         .slice(0, 6)
         .map((r) => `${nameOf(r.relpath).replace(/\.pdf$/i, '')} — ${r.version_status}${r.superseded_by ? ` (by ${r.superseded_by})` : ''}`)
         .join('\n')
-      const english = /^[\x20-\x7e]+$/.test(input.question)
+      const english = answerLanguage(input.question) === 'English'
       return {
         answer: english
           ? `${folders.join(', ')} has no current edition in the Standards Library. The library holds:\n${list}\n\nTick “Include Older Editions (Superseded / Withdrawn)” and ask again to get the answer from these editions.`
@@ -474,7 +474,7 @@ export async function askLibrary(input: { question: string; history: AskTurn[]; 
   }
   if (!chunks.length) {
     return {
-      answer: /^[\x20-\x7e]+$/.test(input.question)
+      answer: answerLanguage(input.question) === 'English'
         ? 'Nothing in the Standards Library matches this question. Ask again with the IS number, or the name of the test or property (e.g. "tensile strength", "marking").'
         : 'Standards Library में इस सवाल से मिलता कुछ नहीं मिला। सवाल में IS नंबर, test या property का नाम (जैसे "tensile strength", "marking") लिखकर पूछें।',
       sources: [],
