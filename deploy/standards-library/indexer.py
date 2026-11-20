@@ -987,7 +987,8 @@ def build_chunks(conn, root):
 # ---------------------------------------------------------------- embeddings (RAG step 3)
 
 EMBED_MODEL = os.environ.get("EMBED_MODEL", "BAAI/bge-small-en-v1.5")
-EMBED_BATCH = 64
+EMBED_BATCH = 32
+EMBED_FETCH = 1024  # rows taken per round, sorted by length and embedded EMBED_BATCH at a time
 # "current": only the current editions of Standards and Amendments (the part search needs first); "all": every chunk.
 EMBED_SCOPE = os.environ.get("EMBED_SCOPE", "all").strip().lower()
 SCOPE_SQL = (
@@ -1005,6 +1006,12 @@ def embed_chunks(conn, stop_after_min=None):
         print("Embeddings: fastembed not installed, skipped")
         return 0, None
     model = TextEmbedding(EMBED_MODEL, threads=max(1, int(os.environ.get("EMBED_THREADS", "1"))))
+    # The first 256 tokens of a chunk (its heading and opening) are what a search needs; the model's 512 made the first
+    # run ~60 h on the server's ARM CPU. With texts of like length batched together (less padding): ~5 chunks/s on 2 CPUs.
+    try:
+        model.model.tokenizer.enable_truncation(int(os.environ.get("EMBED_MAX_TOKENS", "256")))
+    except Exception:  # another fastembed version: its own limit applies
+        pass
     left = conn.execute(
         "SELECT count(*) FROM public.standard_chunks c JOIN public.standard_docs d ON d.id = c.doc_id"
         " WHERE (c.embedding IS NULL OR c.embed_model IS DISTINCT FROM %s)" + SCOPE_SQL,
@@ -1023,10 +1030,11 @@ def embed_chunks(conn, stop_after_min=None):
                         CASE d.kind WHEN 'Standard' THEN 0 WHEN 'Amendment' THEN 1 WHEN 'Product Manual' THEN 2 ELSE 3 END,
                         c.id
                LIMIT %s""",
-            (EMBED_MODEL, EMBED_BATCH),
+            (EMBED_MODEL, EMBED_FETCH),
         ).fetchall()
         if not rows:
             break
+        rows.sort(key=lambda r: len(r[1] or "") + len(r[2] or ""))
         texts = [((h + "\n") if h else "") + (t or "")[:1800] for _, h, t in rows]
         vectors = list(model.embed(texts, batch_size=EMBED_BATCH))
         with conn.transaction(), conn.cursor() as cur:
@@ -1036,7 +1044,7 @@ def embed_chunks(conn, stop_after_min=None):
             )
         done += len(rows)
         mins = (time.time() - started) / 60
-        if done % (EMBED_BATCH * 40) == 0:
+        if done % (EMBED_FETCH * 5) == 0:
             rate = done / max(mins * 60, 1)
             print(f"  embeddings: {done}/{left}, {rate:.1f} per s, about {(left - done) / max(rate, 0.1) / 3600:.1f} h left",
                   flush=True)
