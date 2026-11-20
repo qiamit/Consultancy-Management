@@ -167,6 +167,7 @@ services:
       CUSTOMER_PORTAL_INVITES: ${CUSTOMER_PORTAL_INVITES:-0}
       # Standards Library PDFs opened from the app (IS Files): the synced folder, read-only.
       STANDARDS_LIBRARY_DIR: /library
+      STANDARDS_EMBED_URL: http://standards-embed:8000
     volumes:
       - ${STANDARDS_DIR:-/opt/qe/standards/library}:/library:ro
 
@@ -210,6 +211,18 @@ services:
       PDF_ALLOWED_URL_PREFIXES: https://${API_DOMAIN}/storage/v1/object/
     shm_size: 1gb
 
+  # Turns a question into its embedding for the Standards Library meaning search (same local model as the indexer's
+  # chunk embeddings). Internal only: the functions service calls it.
+  standards-embed:
+    <<: *service
+    build: ../standards-library
+    entrypoint: ["python3", "-u", "/app/embed_server.py"]
+    cpus: 0.5
+    mem_limit: 700m
+    environment:
+      PORT: 8000
+      EMBED_THREADS: 1
+
   # Standards Library indexer (deploy/standards-library): not a running service, started on demand by
   # standards-sync.sh after the Mac's "Oracle Database" folder is copied to ${STANDARDS_DIR}:
   #   docker compose --profile tools run --rm standards-indexer [--dry-run]
@@ -226,6 +239,8 @@ services:
       PGDATABASE: postgres
       INDEX_HOST: ${INDEX_HOST:-Server}
       INDEXER_WORKERS: ${INDEXER_WORKERS:-1}
+      EMBED_THREADS: ${INDEXER_EMBED_THREADS:-1}
+      EMBED_MAX_MINUTES: ${INDEXER_EMBED_MAX_MINUTES:-0}
     volumes:
       - ${STANDARDS_DIR:-/opt/qe/standards/library}:/library:ro
     logging:

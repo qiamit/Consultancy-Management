@@ -90,5 +90,28 @@ export function createStandardsFiles({ root, secret, requireActiveUser, userRest
       .pipe(res)
   }
 
-  return { handleLink, handleFile }
+  /** POST /standards/embed {text}: the question's embedding for the meaning search (signed-in users only). */
+  async function handleEmbed(req, res) {
+    await requireActiveUser(req)
+    const body = await readBody(req, 16 * 1024)
+    const text = String(body?.text ?? '').trim().slice(0, 2000)
+    if (!text) return corsJson(res, 400, { error: 'Text Required' })
+    const url = process.env.STANDARDS_EMBED_URL || 'http://standards-embed:8000'
+    let r
+    try {
+      r = await fetch(`${url}/embed`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texts: [text] }),
+        signal: AbortSignal.timeout(15_000),
+      })
+    } catch {
+      return corsJson(res, 503, { error: 'Meaning Search Is Not Available Right Now.' })
+    }
+    const data = await r.json().catch(() => ({}))
+    if (!r.ok || !Array.isArray(data?.vectors?.[0])) return corsJson(res, 503, { error: 'Meaning Search Is Not Available Right Now.' })
+    return corsJson(res, 200, { model: data.model, vector: data.vectors[0] })
+  }
+
+  return { handleLink, handleFile, handleEmbed }
 }
