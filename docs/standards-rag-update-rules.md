@@ -42,7 +42,10 @@ number, status, and for an amendment the base edition it belongs to.
   **"Standard Revised — Review"** with what changed (new edition / Amd K), until an admin reviews it.
 
 ## Order of Work
-1. Version facts + status rules in the index (this document).
+1. Version facts + status rules in the index (this document). **Done 20 Nov 2026:** `standard_docs.part`,
+   `section`, `amendment_no`, `version_status` (Current / Superseded / Withdrawn / Included), `superseded_by`, worked
+   out by `refresh_versions` on every sync; Standards List read by header (Status, Revision Year, Amendments,
+   Reaffirmed Year into `standard_list`). Shown as tags in IS Files.
 2. Clause / table chunks with these tags.
 3. pgvector embeddings in the same Postgres (incremental by sha256).
 4. Hybrid search (words + codes + meaning), Current-only by default.
