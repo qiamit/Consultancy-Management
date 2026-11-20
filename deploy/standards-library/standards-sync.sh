@@ -162,8 +162,7 @@ case "${1:-}" in
                 echo "An earlier indexing run is still going on the server (${BUSY#BUSY }); waiting for it…"
                 wait_server_run "${BUSY#BUSY }" || echo "That run ended with code $?; going on." ;;
     esac
-    # Readable by the app's functions container (it opens the PDFs for staff, read-only); OneDrive files are 700.
-    RS=(rsync -a --chmod=D755,F644 --delete "${EXCLUDES[@]}" -e "ssh -i $KEY $SSH_OPTS")
+    RS=(rsync -a --delete "${EXCLUDES[@]}" -e "ssh -i $KEY $SSH_OPTS")
     # What would be removed on the server, before anything is copied.
     check_removals() {
       GONE=$("${RS[@]}" -n --itemize-changes "$SRC/" "$SERVER:$REMOTE_LIB/" | grep -c '^\*deleting.*\.pdf$' || true)
@@ -198,6 +197,10 @@ case "${1:-}" in
       TRY=$((TRY + 1)); sleep "${QE_RETRY_WAIT:-60}"
       check_removals
     done
+    # Readable by the app's functions container (it opens the PDFs for staff, read-only): OneDrive files arrive as 700.
+    # Done on the server, as the Mac's rsync (openrsync) has no --chmod.
+    "${SSH[@]}" "$SERVER" "find '$REMOTE_LIB' \\( -type d ! -perm -0555 -exec chmod a+rx {} + \\) -o \\( -type f ! -perm -0444 -exec chmod a+r {} + \\)" ||
+      echo "Note: could not make the copied files readable for the app (IS Files may not open new files)."
     RUN_ID=$(date +%Y%m%d-%H%M%S)-$TRIGGER
     STARTED=$(remote "$REMOTE_START" "$REMOTE_RUNS" "$RUN_ID" "$TRIGGER" "$REMOTE_APP" "$COMPOSE") ||
       stop "could not start the indexing on the server"
