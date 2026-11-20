@@ -25,8 +25,9 @@ export async function searchWords(question: string, isLabel: string): Promise<st
   const { reply } = await sendQiAssistantMessage({
     page: 'masters/is-files-ask',
     message:
-      `Standard: ${isLabel}\nQuestion: ${question}\n\nGive 4 to 10 English words or short technical terms to search ` +
-      `this standard's text for the answer (e.g. "tensile strength", "chemical composition", "marking", "sampling"). ` +
+      `Standard: ${isLabel}\nQuestion: ${question}\n\nGive 3 to 6 English words to search the standards' text for the ` +
+      `answer: the product or material first (e.g. "steel tube"), then the property or topic (e.g. "tensile strength", ` +
+      `"scale of sampling", "marking"). No general words such as standard, requirement, number, value, selected. ` +
       `Answer as JSON: {"words": ["...", "..."]}`,
     responseFormat: 'json_object',
     history: [],
