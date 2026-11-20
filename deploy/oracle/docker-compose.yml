@@ -241,6 +241,7 @@ services:
       INDEXER_WORKERS: ${INDEXER_WORKERS:-1}
       EMBED_THREADS: ${INDEXER_EMBED_THREADS:-1}
       EMBED_MAX_MINUTES: ${INDEXER_EMBED_MAX_MINUTES:-0}
+      EMBED_SCOPE: ${INDEXER_EMBED_SCOPE:-all}
     volumes:
       - ${STANDARDS_DIR:-/opt/qe/standards/library}:/library:ro
     logging:
