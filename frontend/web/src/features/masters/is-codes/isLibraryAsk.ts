@@ -76,6 +76,42 @@ async function searchPages(relpaths: string[], words: string, limit: number): Pr
   return ((data ?? []) as Array<{ relpath: string; page: number; text: string }>).map((p) => ({ relpath: p.relpath, page: p.page, text: p.text }))
 }
 
+type ChunkHit = { relpath: string; page: number; kind: string; heading: string; text: string }
+
+const TABLE_BUDGET = 30_000
+
+/** The tables of these documents in column layout (each row keeps its grade and values); [] before chunks exist. */
+async function tableChunks(relpaths: string[]): Promise<ChunkHit[]> {
+  if (!relpaths.length) return []
+  const { data: docs } = await supabase.from('standard_docs').select('id, relpath').in('relpath', relpaths)
+  const byId = new Map(((docs ?? []) as Array<{ id: number; relpath: string }>).map((d) => [d.id, d.relpath]))
+  if (!byId.size) return []
+  const { data, error } = await supabase
+    .from('standard_chunks')
+    .select('doc_id, page, seq, kind, heading, text')
+    .in('doc_id', [...byId.keys()])
+    .eq('kind', 'table')
+    .order('doc_id')
+    .order('page')
+    .order('seq')
+    .limit(60)
+  if (error) return []
+  return ((data ?? []) as Array<{ doc_id: number; page: number; kind: string; heading: string; text: string }>).map((c) => ({
+    relpath: byId.get(c.doc_id) ?? '',
+    page: c.page,
+    kind: c.kind,
+    heading: c.heading,
+    text: c.text,
+  }))
+}
+
+/** Best clause / table chunks for the words; null when chunk search is not there yet (the page search answers). */
+async function searchChunks(relpaths: string[], words: string, limit: number): Promise<PageHit[] | null> {
+  const { data, error } = await supabase.rpc('search_standard_chunks', { p_relpaths: relpaths, p_query: words, p_limit: limit })
+  if (error) return null
+  return ((data ?? []) as ChunkHit[]).map((c) => ({ relpath: c.relpath, page: c.page, text: `${c.heading ? `${c.heading}\n` : ''}${c.text}` }))
+}
+
 function block(p: PageHit, label: string) {
   return `[${label} — ${nameOf(p.relpath)} — page ${p.page}]\n${p.text.replace(/[ \t]+/g, ' ').trim().slice(0, PAGE_CHARS)}\n\n`
 }
@@ -96,14 +132,29 @@ export async function askStandards(input: {
   // A short Standard is read whole; a long one by its best-matching pages.
   const ownPageCount = own.reduce((n, f) => n + (f.pages ?? 0), 0)
   const ownPages =
-    !ownPaths.length ? [] : ownPageCount <= SMALL_STANDARD_PAGES ? await allPages(ownPaths) : await searchPages(ownPaths, words, 14)
+    !ownPaths.length
+      ? []
+      : ownPageCount <= SMALL_STANDARD_PAGES
+        ? await allPages(ownPaths)
+        : ((await searchChunks(ownPaths, words, 18)) ?? (await searchPages(ownPaths, words, 14)))
   // The Standard first, then its Amendments, then the Product Manual (the source chips follow this order).
   if (ownPageCount <= SMALL_STANDARD_PAGES) ownPages.sort((a, b) => ownPaths.indexOf(a.relpath) - ownPaths.indexOf(b.relpath) || a.page - b.page)
-  const refPages = refPaths.length ? await searchPages(refPaths, words, ownPaths.length ? 6 : 14) : []
+  const refPages = refPaths.length
+    ? ((await searchChunks(refPaths, words, ownPaths.length ? 8 : 18)) ?? (await searchPages(refPaths, words, ownPaths.length ? 6 : 14)))
+    : []
+  // Tables in column layout: page text mixes a table's rows, so a limit is read from here.
+  const tables = await tableChunks(ownPaths.length ? ownPaths : refPaths)
 
   const kindOf = new Map(own.map((f) => [f.relpath, f.kind]))
   let context = ''
   const sources: AskSource[] = []
+  let tableText = ''
+  for (const t of tables) {
+    const b = `[Table — ${nameOf(t.relpath)} — page ${t.page} — ${t.heading}]\n${t.text}\n\n`
+    if (tableText.length + b.length > TABLE_BUDGET) continue
+    tableText += b
+    sources.push({ relpath: t.relpath, name: nameOf(t.relpath), page: t.page })
+  }
   for (const [list, ref] of [
     [ownPages, false],
     [refPages, true],
@@ -115,7 +166,7 @@ export async function askStandards(input: {
       sources.push({ relpath: p.relpath, name: nameOf(p.relpath), page: p.page })
     }
   }
-  if (!context) {
+  if (!context && !tableText) {
     return {
       answer: 'इन Standards के text में इस सवाल से जुड़ा कुछ नहीं मिला। सवाल दूसरे शब्दों में (Clause, Table या Test का नाम लेकर) पूछें।',
       sources: [],
@@ -127,10 +178,11 @@ export async function askStandards(input: {
     page: 'masters/is-files-ask',
     context:
       `IS Code: ${input.isLabel}\n` +
-      `STANDARD PAGES (the only source you may use):\n\n${context}`,
+      (tableText ? `TABLES (column layout: each line is one row; read a row's values from its own line):\n\n${tableText}\n` : '') +
+      `STANDARD PAGES (the only source you may use, with the TABLES above; a table inside page text may have its rows mixed — use the TABLES for numbers):\n\n${context}`,
     message:
       `${input.question}\n\n` +
-      'Rules: Answer only from the STANDARD PAGES above. Name the clause / table and the file and page for every fact, ' +
+      'Rules: Answer only from the TABLES and STANDARD PAGES above. Name the clause / table and the file and page for every fact, ' +
       'e.g. "(Clause 7.2, IS 2062 Part 1 2025 - 00.pdf p. 5)". If an Amendment changes a clause, give the amended text ' +
       'and say so. If the pages do not answer the question, say clearly that it is not in these standards — never use ' +
       'outside knowledge or guess. Reply in the language of the question (Hindi, Hinglish or English); keep numbers, ' +
