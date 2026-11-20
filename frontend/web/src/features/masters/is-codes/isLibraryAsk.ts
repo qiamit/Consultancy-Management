@@ -305,7 +305,8 @@ async function wholeSmallDocs(folders: string[], hits: LibraryChunk[], question:
   type Doc = { id: number; relpath: string; folder: string; kind: string; pages: number; version_status: string | null }
   const docs = ((data ?? []) as Doc[])
     .filter((d) => includeOld || ['Current', 'Included'].includes(d.version_status ?? 'Current'))
-    .filter((d) => d.kind === 'Amendment' || hitRank.has(d.relpath))
+    // A named standard with no hits at all ("Compare IS 7863 1975 and 2025") still gets its short Standards read.
+    .filter((d) => d.kind === 'Amendment' || hitRank.has(d.relpath) || !hits.some((c) => c.folder === d.folder))
     // Asked about an amendment: the newest amendments first (the question names "Amendment 4", not the base text).
     .sort((a, b) => (a.kind === b.kind ? (hitRank.get(a.relpath) ?? 99) - (hitRank.get(b.relpath) ?? 99) || b.relpath.localeCompare(a.relpath) : a.kind === 'Amendment' ? -1 : 1))
     .slice(0, 3)
@@ -323,6 +324,60 @@ async function wholeSmallDocs(folders: string[], hits: LibraryChunk[], question:
     const d = byId.get(c.doc_id)!
     return { relpath: d.relpath, folder: d.folder, doc_kind: d.kind, version_status: d.version_status, kind: c.kind, page: c.page, seq: c.seq, heading: c.heading, text: c.text }
   })
+}
+
+/**
+ * The other chunks of the best pages: a table page is cut into several chunks and the search often found only one
+ * (RAG testing, 21 Nov 2026: IS 10500 p. 17 seq 1 came, the Lead row in seq 0 did not). Up to 10 pages.
+ */
+async function samePageChunks(hits: LibraryChunk[]): Promise<LibraryChunk[]> {
+  const pages: Array<{ relpath: string; page: number; c: LibraryChunk }> = []
+  for (const c of hits) {
+    if (pages.length >= 10) break
+    if (!pages.some((p) => p.relpath === c.relpath && p.page === c.page)) pages.push({ relpath: c.relpath, page: c.page, c })
+  }
+  if (!pages.length) return []
+  const { data: docs } = await supabase.from('standard_docs').select('id, relpath').in('relpath', [...new Set(pages.map((p) => p.relpath))])
+  const idOf = new Map(((docs ?? []) as Array<{ id: number; relpath: string }>).map((d) => [d.relpath, d.id]))
+  const relOf = new Map([...idOf].map(([r, id]) => [id, r]))
+  if (!idOf.size) return []
+  const { data: rows } = await supabase
+    .from('standard_chunks')
+    .select('doc_id, page, seq, kind, heading, text')
+    .in('doc_id', [...idOf.values()])
+    .in('page', [...new Set(pages.map((p) => p.page))])
+    .order('doc_id')
+    .order('page')
+    .order('seq')
+    .limit(150)
+  const out: LibraryChunk[] = []
+  for (const r of (rows ?? []) as Array<{ doc_id: number; page: number; seq: number; kind: string; heading: string; text: string }>) {
+    const relpath = relOf.get(r.doc_id) ?? ''
+    const p = pages.find((x) => x.relpath === relpath && x.page === r.page)
+    if (!p) continue
+    out.push({ ...p.c, kind: r.kind, seq: r.seq, heading: r.heading, text: r.text })
+  }
+  return out
+}
+
+/** Puts each page's other chunks right after the first hit on that page (in place), skipping ones already there. */
+function withSamePage(chunks: LibraryChunk[], extra: LibraryChunk[]) {
+  const key = (c: LibraryChunk) => `${c.relpath}#${c.page}#${c.seq ?? c.heading}`
+  const have = new Set(chunks.map(key))
+  const out: LibraryChunk[] = []
+  const placed = new Set<string>()
+  for (const c of chunks) {
+    out.push(c)
+    const pk = `${c.relpath}#${c.page}`
+    if (placed.has(pk)) continue
+    placed.add(pk)
+    for (const e of extra) {
+      if (e.relpath !== c.relpath || e.page !== c.page || have.has(key(e))) continue
+      have.add(key(e))
+      out.push(e)
+    }
+  }
+  chunks.splice(0, chunks.length, ...out)
 }
 
 /**
@@ -386,6 +441,7 @@ export async function askLibrary(input: { question: string; history: AskTurn[]; 
       const f = folders[n]
       chunks.push(...((r.data ?? []) as LibraryChunk[]).filter((c) => inNamedPart(c.relpath, f, parts)).slice(0, share))
     }
+    withSamePage(chunks, await samePageChunks(chunks))
     // Their tables in column layout, for numbers.
     const { data: docs } = await supabase
       .from('standard_docs')
@@ -442,6 +498,7 @@ export async function askLibrary(input: { question: string; history: AskTurn[]; 
       }
       const more = await Promise.all(lead.map((f) => call(10, 6, [f])))
       for (const m of more) if (!m.error) ((m.data ?? []) as LibraryChunk[]).forEach(add)
+      for (const c of await samePageChunks(chunks.filter((c) => lead.includes(c.folder)))) add(c)
       const { data: docs } = await supabase.from('standard_docs').select('relpath, version_status').in('folder', lead).eq('kind', 'Standard')
       const current = ((docs ?? []) as Array<{ relpath: string; version_status: string | null }>)
         .filter((d) => input.includeOld || (d.version_status ?? 'Current') === 'Current')
