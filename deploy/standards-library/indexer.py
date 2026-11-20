@@ -9,6 +9,8 @@ Only what changed since the last run is read again:
   - otherwise                                -> read: text page by page, OCR for scanned pages, BSB stamp removed
   - indexed but no longer in the folder      -> removed from the index
   - noted "Almost No Text" on the last read  -> read again on every run (few files; OCR may get their text now)
+  - --reread-garbled (or REREAD_GARBLED=1)   -> also read again every file with a garbled page (broken font map, or a
+                                               scan OCR'd the wrong way up); such pages are OCR'd, turned by OSD
 Every file is written in its own transaction, so a run that stops keeps what it finished; the next run goes on.
 Two runs never overlap (database lock). Each run is logged in standard_index_runs.
 
@@ -320,25 +322,95 @@ def page_texts(pdf):
     return (texts + [""] * n)[:n]
 
 
-def ocr_page(pdf, page):
+# Garbled text (RAG testing, 20 Nov 2026): some PDFs carry a text layer in a font without a Unicode map (IS 10500 2012:
+# "012342357891 9238 #$9%&18&'"), and some scanned pages are upside down or sideways, so their OCR is nonsense
+# ("SMITE 01-0 TOY 'CORLEY NOLLVIARC]"). Such a page is read again by OCR, turned the way tesseract's OSD says.
+COMMON_WORDS = frozenset(
+    "the of and shall to in for be with as or is by on at not than per from be are this that which when where any all "
+    "each its it an be may should under over above below between after before into other such these those than test "
+    "table clause sample samples standard requirements requirement method methods given specified specification "
+    "accordance minimum maximum material materials water steel temperature mass value values determined see annex".split()
+)
+ODD_CHARS = set('!"#$%&*+<=>?@[\\]^_`{|}~')
+
+
+def text_quality(text):
+    """(common English words, alphabetic words, odd tokens, tokens) of a page's text."""
+    tokens = text.split()
+    alpha = re.findall(r"[A-Za-z]{2,}", text)
+    common = sum(1 for w in alpha if w.lower() in COMMON_WORDS)
+    odd = sum(1 for t in tokens if any(c in ODD_CHARS for c in t) or re.search(r"[A-Za-z]\d[A-Za-z]|\d[A-Za-z]\d", t))
+    return common, len(alpha), odd, len(tokens)
+
+
+def looks_garbled(text):
+    """True for a page whose text is mostly not words: a broken font map, or OCR of a page turned the wrong way.
+    Strict on purpose: a committee list, a table of numbers or a German page has few common words but is fine."""
+    if len(text) < 200:
+        return False
+    if sum(1 for c in text if ord(c) < 32 and c not in "\n\t\r\f") > 0.02 * len(text):
+        return True  # control characters: a font without a Unicode map
+    common, alpha, odd, tokens = text_quality(text)
+    if tokens >= 40 and odd / tokens > 0.25:
+        return True
+    return alpha >= 60 and common / alpha < 0.015
+
+
+def _tesseract(img, env):
+    return run(["tesseract", img, "-", "-l", "eng", "--psm", "3"], 180, env).stdout
+
+
+def ocr_page(pdf, page, turn=False):
+    """OCR of one page; turn=True also tries the page turned the way tesseract's OSD says, keeping the better text."""
     with tempfile.TemporaryDirectory() as td:
         run(["pdftoppm", "-r", os.environ.get("OCR_DPI", "200"), "-f", str(page), "-l", str(page), "-png", pdf, td + "/pg"], 120)
         imgs = glob.glob(td + "/pg*.png")
         if not imgs:
             return ""
         env = dict(os.environ, OMP_THREAD_LIMIT="1")
-        return run(["tesseract", imgs[0], "-", "-l", "eng", "--psm", "3"], 180, env).stdout
+        text = _tesseract(imgs[0], env)
+        if not turn or not looks_garbled(text):
+            return text
+        osd = run(["tesseract", imgs[0], "-", "--psm", "0"], 120, env).stdout
+        m = re.search(r"Rotate:\s*(\d+)", osd)
+        angles = [int(m.group(1))] if m and int(m.group(1)) else []  # OSD sees no turn: a bad scan, OCR stays
+        try:
+            from PIL import Image
+        except ImportError:
+            return text
+        best, best_common = text, text_quality(text)[0]
+        for a in angles:
+            out = os.path.join(td, f"turn{a}.png")
+            with Image.open(imgs[0]) as im:
+                im.rotate(-a, expand=True).save(out)  # OSD "Rotate: a" = turn a degrees clockwise
+            t = _tesseract(out, env)
+            c = text_quality(t)[0]
+            if c > best_common:
+                best, best_common = t, c
+            if not looks_garbled(t):
+                break
+        return best
+
+
+def better_text(old, new):
+    """True when new has clearly more real words than old (so a good table page keeps its own text)."""
+    a, b = text_quality(old)[0], text_quality(new)[0]
+    return b >= max(8, 2 * a)
 
 
 def read_pdf(pdf):
-    """[(page no., text, ocr?)] of a PDF; scanned pages OCR'd."""
+    """[(page no., text, ocr?)] of a PDF; scanned or garbled pages OCR'd."""
     pages = []
     for i, raw in enumerate(page_texts(pdf), start=1):
         # Judged without the BSB stamp: a scanned page carrying the stamp's text line is still a scanned page.
         text, ocr = clean_text(raw).strip(), False
         if len(text) < BLANK_BELOW:
-            t = clean_text(ocr_page(pdf, i)).strip()
+            t = clean_text(ocr_page(pdf, i, turn=True)).strip()
             if len(t) > len(text):
+                text, ocr = t, True
+        elif looks_garbled(text):
+            t = clean_text(ocr_page(pdf, i, turn=True)).strip()
+            if better_text(text, t):
                 text, ocr = t, True
         pages.append((i, text, ocr))
     return pages
@@ -1072,6 +1144,8 @@ def main():
     ap.add_argument("--limit", type=int, help="read at most this many new / changed files in this run")
     ap.add_argument("--trigger", default=os.environ.get("INDEX_TRIGGER", "manual"))
     ap.add_argument("--host", default=os.environ.get("INDEX_HOST", ""))
+    ap.add_argument("--reread-garbled", action="store_true",
+                    help="read again the files that have a page of garbled text (broken font map, scan turned the wrong way)")
     args = ap.parse_args()
 
     global ROOT_DIR
@@ -1097,6 +1171,20 @@ def main():
             indexed[rel] = (size, mtime, sha)
             if "Almost No Text" in (review or ""):
                 no_text.add(rel)
+
+    if args.reread_garbled or os.environ.get("REREAD_GARBLED") == "1":
+        garbled = set()
+        with conn.transaction(), conn.cursor(name="garbled") as cur:
+            cur.execute(
+                """SELECT d.relpath, p.text FROM public.standard_pages p JOIN public.standard_docs d ON d.id = p.doc_id
+                   WHERE d.source = 'library' AND length(p.text) >= 200"""
+            )
+            for rp, text in cur:
+                rel = rp.split("::")[0]
+                if rel in indexed and rel not in garbled and looks_garbled(text):
+                    garbled.add(rel)
+        print(f"Garbled text: {len(garbled)} files to read again")
+        no_text |= garbled
 
     unchanged, touched, to_read = [], [], []
     for rel, (full, size, mtime) in found.items():
