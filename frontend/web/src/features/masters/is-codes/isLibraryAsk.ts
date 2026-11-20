@@ -113,6 +113,18 @@ async function searchChunks(relpaths: string[], words: string, limit: number): P
   return ((data ?? []) as ChunkHit[]).map((c) => ({ relpath: c.relpath, page: c.page, text: `${c.heading ? `${c.heading}\n` : ''}${c.text}` }))
 }
 
+const HINGLISH = /\b(kya|hai|hain|ka|ki|ke|me|mein|kitna|kitni|kitne|hona|chahiye|batao|bataiye|kaun|kaise|kab|aur|nahi|kar|karna|liye)\b/i
+
+/**
+ * The answer's language, decided here: Haiku sometimes answered an English question in Hindi when the extracts
+ * carried Hindi text (RAG testing, 20 Nov 2026, IS 3025 Part 11).
+ */
+export function answerLanguage(question: string): string {
+  if (/[\u0900-\u097F]/.test(question)) return 'Hindi (Devanagari script)'
+  if ((question.match(new RegExp(HINGLISH.source, 'gi')) ?? []).length >= 2) return 'Hinglish (Hindi in Latin letters)'
+  return 'English'
+}
+
 function block(p: PageHit, label: string) {
   return `[${label} — ${nameOf(p.relpath)} — page ${p.page}]\n${p.text.replace(/[ \t]+/g, ' ').trim().slice(0, PAGE_CHARS)}\n\n`
 }
@@ -190,8 +202,8 @@ export async function askStandards(input: {
       'Rules: Answer only from the TABLES and STANDARD PAGES above. Name the clause / table and the file and page for every fact, ' +
       'e.g. "(Clause 7.2, IS 2062 Part 1 2025 - 00.pdf p. 5)". If an Amendment changes a clause, give the amended text ' +
       'and say so. If the pages do not answer the question, say clearly that it is not in these standards — never use ' +
-      'outside knowledge or guess. Reply in the language of the question (Hindi, Hinglish or English); keep numbers, ' +
-      'units and clause numbers exactly as in the standard.',
+      `outside knowledge or guess. Write the whole answer in ${answerLanguage(input.question)}, even where the pages ` +
+      'are in another language; keep numbers, units and clause numbers exactly as in the standard.',
     history: input.history.slice(-8),
   })
   return { answer: reply, sources, model: model ?? null }
@@ -311,6 +323,26 @@ async function wholeSmallDocs(folders: string[], hits: LibraryChunk[], question:
   })
 }
 
+/**
+ * The Part a question names for a standard ("IS 3025 Part 11", "IS 1239 (Part 1)"): folder -> part. A folder such as
+ * IS 3025 holds some 60 Parts; without this the search spread over all of them (RAG testing, 20 Nov 2026).
+ */
+export function namedParts(question: string): Map<string, string> {
+  const out = new Map<string, string>()
+  for (const m of question.matchAll(/\bIS\s*[:/-]?\s*(\d{2,5})\s*\(?\s*(?:Part|Pt\.?|भाग)\s*[-:]?\s*(\d{1,3})\b/gi)) {
+    out.set(`IS ${Number(m[1])}`, String(Number(m[2])))
+  }
+  return out
+}
+
+/** True when the file is of the named Part, or the folder has no Part named, or the file names no Part at all. */
+function inNamedPart(relpath: string, folder: string, parts: Map<string, string>): boolean {
+  const part = parts.get(folder)
+  if (!part) return true
+  const name = nameOf(relpath)
+  return new RegExp(`\\bPart ${part}\\b`, 'i').test(name) || !/\bParts?\b/i.test(name)
+}
+
 export function namedStandards(question: string): string[] {
   const out = new Set<string>()
   for (const m of question.matchAll(/\bIS\s*[:/-]?\s*(\d{2,5})(?!\d)/gi)) out.add(`IS ${Number(m[1])}`)
@@ -341,19 +373,24 @@ export async function askLibrary(input: { question: string; history: AskTurn[]; 
   const chunks: LibraryChunk[] = []
   if (folders.length) {
     // Each named standard gets its own share, so one long standard does not crowd the others out.
-    const each = await Promise.all(folders.map((f) => call(Math.max(6, Math.floor(30 / folders.length)), 8, [f])))
-    for (const r of each) {
+    const parts = namedParts(input.question)
+    const share = Math.max(6, Math.floor(30 / folders.length))
+    // A named Part: more hits asked for, then only that Part's files kept.
+    const each = await Promise.all(folders.map((f) => call(parts.has(f) ? Math.min(80, share * 4) : share, 8, [f])))
+    for (const [n, r] of each.entries()) {
       if (r.error) throw new Error(r.error.message)
-      chunks.push(...((r.data ?? []) as LibraryChunk[]))
+      const f = folders[n]
+      chunks.push(...((r.data ?? []) as LibraryChunk[]).filter((c) => inNamedPart(c.relpath, f, parts)).slice(0, share))
     }
     // Their tables in column layout, for numbers.
     const { data: docs } = await supabase
       .from('standard_docs')
-      .select('relpath, version_status, kind')
+      .select('relpath, version_status, kind, folder')
       .in('folder', folders)
       .eq('kind', 'Standard')
-    const current = ((docs ?? []) as Array<{ relpath: string; version_status: string | null }>)
+    const current = ((docs ?? []) as Array<{ relpath: string; version_status: string | null; folder: string }>)
       .filter((d) => input.includeOld || (d.version_status ?? 'Current') === 'Current')
+      .filter((d) => inNamedPart(d.relpath, d.folder, parts))
       .map((d) => d.relpath)
     const have = new Set(chunks.map((c) => `${c.relpath}#${c.page}#${c.seq ?? c.heading}`))
     for (const t of await tableChunks(current)) {
@@ -462,8 +499,9 @@ export async function askLibrary(input: { question: string; history: AskTurn[]; 
       '(the printed layout below it can shift a value into the next column). Mention when a block is from a ' +
       'Superseded or Withdrawn edition. If the extracts do not answer the question, say so plainly — never use outside ' +
       'knowledge or guess. Do not suggest uploading files or app features; when something is missing, name the ' +
-      'standard, clause or table to open in the library. Reply in the language of the question (Hindi, Hinglish or ' +
-      'English); keep numbers, units and clause numbers exactly as written.',
+      'standard, clause or table to open in the library. ' +
+      `Write the whole answer in ${answerLanguage(input.question)}, even where the extracts are in another language; ` +
+      'keep numbers, units and clause numbers exactly as written.',
     history: input.history.slice(-8),
   })
   return { answer: reply, sources, model: model ?? null }
