@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, CheckCircle2, Loader2, Pencil, Plus, Trash2, XCircle } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, FileText, Loader2, Pencil, Plus, Printer, Trash2, XCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -10,12 +10,16 @@ import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { formatDisplayDate } from '@/features/bis/projects/types'
 import { limsDarkBarGlowStyle, limsDialogClass, limsOutlineBtnClass, limsPrimaryBtnClass } from '@/lib/limsThemeUi'
 import { todayLocalIso } from '@/lib/localDate'
+import { printHtmlInFrame } from '@/lib/printHtmlInFrame'
 import { cn } from '@/lib/utils'
 import {
   deletePortalEntry,
   fetchLinkOptions,
   fetchPortalEntries,
+  fetchPortalLicence,
   fetchPortalSection,
+  formatCmL,
+  isLabel,
   savePortalEntry,
   serviceLabel,
   type PortalEntry,
@@ -23,55 +27,21 @@ import {
   type PortalSection,
 } from './portalApi'
 import { usePortalData } from './portalDataContext'
+import { cellText, REF_LABEL } from './recordDisplay'
+import { buildRecordPrintHtml, type PrintHeader } from './recordPrint'
 import {
   computeEntry,
   defaultEntryValues,
-  formatDateValue,
-  formatNumberValue,
   limitsText,
   passFailWords,
   toNumber,
   validateValue,
   withinLimits,
-  type RecordColumn,
 } from './recordLogic'
-
-const REF_LABEL: Record<string, string> = {
-  raw_material: 'Lot / Heat No',
-  in_process: 'Ref No',
-  final_test: 'Sample / Batch No',
-  batch: 'Batch No',
-}
 
 const th = 'border border-stone-700 bg-stone-800 px-2 py-1.5 text-left text-[11px] font-bold uppercase tracking-[0.06em] text-amber-200 whitespace-nowrap'
 const td = 'border border-stone-200 px-2 py-1.5 align-top text-sm text-stone-800'
 const iconBtn = 'inline-flex h-7 w-7 items-center justify-center border border-stone-300 bg-white text-amber-800 hover:bg-amber-50 disabled:opacity-40'
-
-function linkLabel(o: PortalLinkOption | undefined, col?: RecordColumn): string {
-  if (!o) return '—'
-  const how = String(col?.config.link_label ?? '')
-  if (how === 'ref') return o.ref_no || formatDisplayDate(o.entry_date)
-  if (how === 'date') return formatDisplayDate(o.entry_date)
-  return [o.ref_no, formatDisplayDate(o.entry_date)].filter(Boolean).join(' · ')
-}
-
-function cellText(col: RecordColumn, v: unknown, links: Record<string, PortalLinkOption[]>): string {
-  if (v == null || v === '') return ''
-  if (col.col_type === 'date') return formatDateValue(col, String(v))
-  if (col.col_type === 'link') {
-    const ids = Array.isArray(v) ? v.map(String) : [String(v)]
-    const opts = links[col.config.section_id ?? ''] ?? []
-    return ids.map((id) => linkLabel(opts.find((o) => o.id === id), col)).join(', ')
-  }
-  if (col.col_type === 'select' && Array.isArray(v)) return v.map(String).join(', ')
-  if (col.col_type === 'pass_fail') {
-    const [good, bad] = passFailWords(col.config)
-    return String(v).toLowerCase() === 'fail' ? bad : String(v).toLowerCase() === 'pass' ? good : String(v)
-  }
-  if (typeof v === 'boolean') return v ? 'Yes' : 'No'
-  const n = typeof v === 'number' ? v : (col.col_type === 'number' || col.col_type === 'spec') ? toNumber(v) : null
-  return n != null ? formatNumberValue(col, n) : String(v)
-}
 
 function ResultBadge({ result }: { result: 'pass' | 'fail' | null }) {
   if (result === 'pass') return <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700"><CheckCircle2 size={14} /> Pass</span>
@@ -398,6 +368,23 @@ function SectionRecords({ licenceId, sectionId }: { licenceId: string; sectionId
     }
   }
   const fails = entries?.filter((e) => e.result === 'fail').length ?? 0
+  const printRegister = async (blank: boolean) => {
+    try {
+      const lic = await fetchPortalLicence(licenceId)
+      const f = lic.factory ?? {}
+      const header: PrintHeader = {
+        company: lic.company_name ?? '',
+        address: [f.address, f.city, f.district, f.state, f.pin_code].map((x) => String(x ?? '').trim()).filter(Boolean).join(', '),
+        licence: lic.cm_l_digits ? formatCmL(lic.cm_l_digits) : lic.license_number ?? '',
+        isLabel: lic.is_number ? isLabel(lic) : '',
+        isTitle: lic.is_title ?? '',
+      }
+      const html = buildRecordPrintHtml({ section, header, entries: blank ? null : entries ?? [], links, period: { from, to } })
+      if (!printHtmlInFrame(html)) toast.error('Could Not Open the Print Window.')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could Not Print')
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -407,6 +394,14 @@ function SectionRecords({ licenceId, sectionId }: { licenceId: string; sectionId
         <h1 className="text-lg font-semibold tracking-tight text-stone-900 sm:text-xl">{section.name}</h1>
         <span className={cn('border px-1.5 py-0.5 text-[11px] font-medium', service.className)}>{service.label}</span>
         <div className="ml-auto flex flex-wrap items-center gap-2">
+          <Button type="button" variant="outline" className={cn(limsOutlineBtnClass, 'h-9 gap-1.5')} disabled={section.columns.length === 0 || !entries}
+            title="Print the Entries Shown (or Save as PDF)" onClick={() => void printRegister(false)}>
+            <Printer size={15} aria-hidden /> Print / PDF
+          </Button>
+          <Button type="button" variant="outline" className={cn(limsOutlineBtnClass, 'h-9 gap-1.5')} disabled={section.columns.length === 0}
+            title="Print an Empty Register to Fill by Hand" onClick={() => void printRegister(true)}>
+            <FileText size={15} aria-hidden /> Blank Format
+          </Button>
           <Input type="date" aria-label="From Date" className="h-9 w-[9.5rem]" value={from} onChange={(e) => setFrom(e.target.value)} />
           <Input type="date" aria-label="To Date" className="h-9 w-[9.5rem]" value={to} onChange={(e) => setTo(e.target.value)} />
           <Button type="button" className={cn(limsPrimaryBtnClass, 'h-9 gap-1.5')} disabled={!canWrite || section.columns.length === 0} onClick={() => setEditing('new')}>

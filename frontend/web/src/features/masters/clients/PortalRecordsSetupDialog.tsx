@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ArrowDown, ArrowUp, Calculator, Download, Save, FlaskConical, Loader2, Pencil, Plus, Power, Sparkles, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, Calculator, Download, Save, FlaskConical, Loader2, Pencil, Plus, Power, Printer, Sparkles, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -13,6 +13,7 @@ import type { BisProjectRow } from '@/features/bis/projects/types'
 import { formulaProblem } from '@/lib/recordFormula'
 import { limsDarkBarBtnClass, limsDarkBarGlowStyle, limsDialogClass, limsOutlineBtnClass, limsPrimaryBtnClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
+import { PortalPrintSettingsDialog } from './PortalPrintSettingsDialog'
 import {
   COLUMN_TYPE_LABEL,
   SECTION_KIND_LABEL,
@@ -466,6 +467,7 @@ export function PortalRecordsSetupDialog({
   const [editing, setEditing] = useState<Draft | null>(null)
   const [addingSection, setAddingSection] = useState(false)
   const [importTarget, setImportTarget] = useState<BisProjectRow | null>(null)
+  const [printing, setPrinting] = useState(false)
   const licenceId = licence?.id ?? ''
 
   const load = useCallback(
@@ -505,6 +507,9 @@ export function PortalRecordsSetupDialog({
     <Dialog open={licence != null} onOpenChange={onOpenChange}>
       <DialogContent aria-describedby={undefined} className={cn(limsDialogClass, 'flex max-h-[92dvh] w-[min(64rem,calc(100vw-1rem))] max-w-none flex-col gap-0 overflow-hidden bg-white p-0')}>
         {confirmDialog}
+        {printing && active ? (
+          <PortalPrintSettingsDialog section={active} licenceId={licenceId} onClose={() => setPrinting(false)} onSaved={() => void load()} />
+        ) : null}
         <BisModuleImportDialog
           open={importTarget != null}
           onOpenChange={(open) => !open && setImportTarget(null)}
@@ -606,6 +611,12 @@ export function PortalRecordsSetupDialog({
                           toast.success(n ? `${n} Columns Added` : 'No Test Parameters for This IS Code')
                         })}>
                         <FlaskConical size={16} aria-hidden />
+                      </Button>
+                    ) : null}
+                    {active ? (
+                      <Button type="button" variant="outline" className={cn(limsOutlineBtnClass, 'h-10 w-10 p-0 text-amber-800')} disabled={busy != null}
+                        title="Print Settings of This Section" aria-label="Print Settings of This Section" onClick={() => setPrinting(true)}>
+                        <Printer size={16} aria-hidden />
                       </Button>
                     ) : null}
                     <Button

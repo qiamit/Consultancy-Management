@@ -156,6 +156,8 @@ export type PortalSection = {
   kind: string
   service: { state: PortalServiceState; valid_till: string | null }
   columns: RecordColumn[]
+  /** Print settings from Records Setup (see recordPrint.ts). */
+  print_settings?: unknown
 }
 
 export type PortalEntry = {
