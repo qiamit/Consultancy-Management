@@ -14,6 +14,8 @@ export const config = {
   authUrl: url(process.env.AUTH_URL, 'http://auth.railway.internal:9999'),
   restUrl: url(process.env.REST_URL, 'http://rest.railway.internal:3000'),
   storageUrl: url(process.env.STORAGE_URL, 'http://storage.railway.internal:5000'),
+  /** Standards Library embedding service (same compose network), for search_library's meaning search. */
+  embedUrl: url(process.env.STANDARDS_EMBED_URL, 'http://standards-embed:8000'),
   serviceRoleKey: String(process.env.SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || ''),
   anonKey: String(process.env.ANON_KEY || process.env.SUPABASE_ANON_KEY || ''),
   /** 32+ random bytes (hex or base64). Encrypts stored GoTrue sessions and signs login forms. */
