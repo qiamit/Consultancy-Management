@@ -31,6 +31,28 @@ function dateToIso(value: unknown): string {
   return ''
 }
 
+/**
+ * A date cell of the client workbook as ISO. Excel keeps a date as a day number whatever format it shows: a sheet
+ * opened and saved again in another app (or another locale) shows "9/3/25" for 3 Sep 2025, which the shown text
+ * could not be read from (owner, 21 Nov 2026). The day number decides; the shown text only when the cell holds text.
+ */
+function cellDateToIso(raw: unknown, shown: unknown): string {
+  if (typeof raw === 'number' && raw > 20_000 && raw < 80_000) {
+    const d = XLSX.SSF.parse_date_code(raw)
+    if (d?.y && d.m && d.d) return `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}`
+  }
+  return dateToIso(raw instanceof Date ? raw : shown)
+}
+
+/** A number cell as entered (full precision), or the shown text when the cell holds text. */
+function cellAmount(raw: unknown, shown: unknown): number | null {
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    if (raw < 0) throw new Error(`Invalid non-negative number: ${raw}`)
+    return raw
+  }
+  return amount(String(shown ?? ''))
+}
+
 /** A number entered in the Renewal Sheet, or null when the field is blank. */
 function entered(value: string): number | null {
   if (!String(value ?? '').trim()) return null
@@ -309,10 +331,12 @@ export async function importRenewalClientWorkbook(
   file: File,
   form: BisRenewalForm,
 ): Promise<{ basicUnitRate: string; productionRows: RenewalProductionRow[] }> {
-  const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true })
+  const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' })
   const sheet = workbook.Sheets[SHEET_NAME] ?? workbook.Sheets[workbook.SheetNames[0]]
   if (!sheet) throw new Error('The selected workbook has no worksheet.')
-  const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '', raw: false, dateNF: 'dd/mm/yyyy' })
+  // Shown text (labels, headings) and the values themselves (date day numbers, full-precision quantities), row by row.
+  const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '', raw: false, dateNF: 'dd/mm/yyyy', blankrows: true })
+  const rawMatrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '', raw: true, blankrows: true })
   const headerIndex = matrix.findIndex((row) => {
     const values = row.map(normalize)
     return values.includes('periodstart') && values.includes('periodend')
@@ -330,17 +354,25 @@ export async function importRenewalClientWorkbook(
     rejection: headers.findIndex((value) => value.startsWith('rejection')),
     covered: headers.findIndex((value) => value.startsWith('coveredproduction')),
   }
-  const basicUnitRateRow = matrix.find((row) => ['basicunitrateperunit', 'basicunitrateapproxperunit'].includes(normalize(row[0])))
-  if (!basicUnitRateRow) throw new Error('Basic Unit Rate field is missing. Please use the downloaded renewal workbook.')
+  const basicUnitRateIndex = matrix.findIndex((row) => ['basicunitrateperunit', 'basicunitrateapproxperunit'].includes(normalize(row[0])))
+  if (basicUnitRateIndex < 0) throw new Error('Basic Unit Rate field is missing. Please use the downloaded renewal workbook.')
   // Merged label/value cells may leave blank columns in the parsed row. Read the first populated cell after the label.
-  const importedRate = amount(String(basicUnitRateRow.slice(1).find((value) => String(value ?? '').trim() !== '') ?? ''))
+  const rateColumn = matrix[basicUnitRateIndex].findIndex((value, i) => i > 0 && String(value ?? '').trim() !== '')
+  const importedRate = rateColumn < 0 ? null : cellAmount(rawMatrix[basicUnitRateIndex]?.[rateColumn], matrix[basicUnitRateIndex][rateColumn])
   if (importedRate === null) throw new Error('Enter the Basic Unit Rate in the client workbook before importing it.')
 
   const existingByDates = new Map(form.productionRows.map((row) => [`${row.periodFrom}|${row.periodTo}`, row]))
-  const dataRows = matrix.slice(headerIndex + 1)
+  const dataRows = matrix
+    .map((source, i) => ({ source, raw: rawMatrix[i] ?? [] }))
+    .slice(headerIndex + 1)
     // The Total row under the periods is only for display.
-    .filter((source) => normalize(source[indexes.start]) !== 'total')
-    .map((source) => ({ source, periodFrom: dateToIso(source[indexes.start]), periodTo: dateToIso(source[indexes.end]) }))
+    .filter(({ source }) => normalize(source[indexes.start]) !== 'total')
+    .map(({ source, raw }) => ({
+      source,
+      raw,
+      periodFrom: cellDateToIso(raw[indexes.start], source[indexes.start]),
+      periodTo: cellDateToIso(raw[indexes.end], source[indexes.end]),
+    }))
     .filter((row) => row.periodFrom || row.periodTo)
   // Sheets downloaded before the UTC date fix show every date one day early (21/07 as 20/07). When every
   // row matches this renewal only after moving it one day on, read them that way.
@@ -350,7 +382,7 @@ export async function importRenewalClientWorkbook(
     && dataRows.every((row) => existingByDates.has(`${nextDay(row.periodFrom)}|${nextDay(row.periodTo)}`))
   const updated = new Map<string, RenewalProductionRow>()
   for (const row of dataRows) {
-    const source = row.source
+    const { source, raw } = row
     const periodFrom = shifted ? nextDay(row.periodFrom) : row.periodFrom
     const periodTo = shifted ? nextDay(row.periodTo) : row.periodTo
     const key = `${periodFrom}|${periodTo}`
@@ -359,9 +391,9 @@ export async function importRenewalClientWorkbook(
       throw new Error(`The workbook period ${formatDisplayDate(periodFrom) || '—'} to ${formatDisplayDate(periodTo) || '—'} does not match the periods in this Renewal Sheet. If you split periods or changed the dates after downloading, download a fresh Blank Sheet and enter the data again.`)
     }
     if (updated.has(key)) throw new Error(`Duplicate period found in workbook: ${periodFrom} to ${periodTo}.`)
-    const total = amount(String(source[indexes.total] ?? ''))
-    const rejection = indexes.rejection >= 0 ? amount(String(source[indexes.rejection] ?? '')) : null
-    const legacyCovered = indexes.rejection < 0 ? amount(String(source[indexes.covered] ?? '')) : null
+    const total = cellAmount(raw[indexes.total], source[indexes.total])
+    const rejection = indexes.rejection >= 0 ? cellAmount(raw[indexes.rejection], source[indexes.rejection]) : null
+    const legacyCovered = indexes.rejection < 0 ? cellAmount(raw[indexes.covered], source[indexes.covered]) : null
     if (indexes.rejection >= 0 && rejection !== null && total === null) {
       throw new Error(`Enter Total Production before Rejection for ${periodFrom} to ${periodTo}.`)
     }
