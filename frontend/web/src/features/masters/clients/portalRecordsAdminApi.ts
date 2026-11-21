@@ -20,7 +20,7 @@ export type RecordsService = {
   notes: string | null
 }
 
-export type AdminSection = { id: string; project_id: string; kind: string; name: string; sort_order: number; hidden?: boolean; columns: AdminColumn[] }
+export type AdminSection = { id: string; project_id: string; kind: string; name: string; sort_order: number; hidden?: boolean; print_settings?: unknown; columns: AdminColumn[] }
 export type AdminColumn = RecordColumn & { section_id: string; sort_order: number }
 
 export async function getRecordsService(projectId: string): Promise<RecordsService | null> {
@@ -92,7 +92,7 @@ export async function createSection(projectId: string, kind: string, name: strin
   return String(data.id)
 }
 
-export async function updateSection(id: string, patch: { name?: string; sort_order?: number; hidden?: boolean }): Promise<void> {
+export async function updateSection(id: string, patch: { name?: string; sort_order?: number; hidden?: boolean; print_settings?: Record<string, unknown> }): Promise<void> {
   const { error } = await supabase.from('portal_rec_sections').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id)
   if (error) throw error
 }
