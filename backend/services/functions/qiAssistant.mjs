@@ -561,6 +561,9 @@ export function createQiAssistantHandler(deps) {
     const systemParts = [
       settings?.system_prompt_prefix ? String(settings.system_prompt_prefix) : '',
       'You are QE Assistant, a helpful assistant inside Consultancy Pro / Q Engineering (BIS licensing & LIMS). Answer clearly and concisely in English unless the user writes in Hindi.',
+      // Today's date (India time): without it the model guessed "today" from old chat turns (21 Nov 2026: "licences
+      // due in 30 days" counted from 18 Nov).
+      `Now: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'full', timeStyle: 'short' })} (India time).`,
       body.page ? `The user is on the "${body.page}" page.` : '',
       agentMode
         ? AGENT_SYSTEM_PROMPT
