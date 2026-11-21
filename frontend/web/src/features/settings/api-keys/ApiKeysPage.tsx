@@ -232,17 +232,19 @@ export default function ApiKeysPage() {
         <p>
           Another app of yours (e.g. qirlpl.com) calls these addresses from its server with the header{' '}
           <code className="rounded bg-stone-100 px-1">X-API-Key</code>. The API returns the matching passages of the Standards
-          Library (IS number, document, clause or table, page, text) and PDF links; it does not write an answer. PDF links work for
+          Library (standard, Part, document, clause or table, page, text) and PDF links; it does not write an answer. PDF links work for
           1 hour without a key, so show them only to that app's signed-in users. Each key may make 120 requests a minute.
         </p>
         <ul className="list-disc space-y-1 pl-5">
           <li>
-            <code className="rounded bg-stone-100 px-1">POST {base}/search</code>: {'{'}query, folders (IS numbers, optional),
-            include_old, limit (up to 40), per_doc{'}'}. Passages with PDF links.
+            <code className="rounded bg-stone-100 px-1">POST {base}/search</code>: {'{'}query, folders (standard numbers, optional,
+            e.g. "IS 1786", "IS 3025 Part 11", "ASTM D445"), include_old, limit (up to 40), per_doc{'}'}. Passages with Part,
+            edition year and PDF links; names not in the library come back in not_found.
           </li>
           <li>
-            <code className="rounded bg-stone-100 px-1">POST {base}/documents</code>: {'{'}query: "IS 1786"{'}'}. Every document
-            of that standard (editions, amendments, Product Manual) with PDF links.
+            <code className="rounded bg-stone-100 px-1">POST {base}/documents</code>: {'{'}query: "IS 1786"{'}'} (or "IS 3025 Part
+            11", "ISO/IEC 17025"). Every document of that standard (editions, amendments, Product Manual) with PDF links; count 0
+            when it is not in the library.
           </li>
           <li>
             <code className="rounded bg-stone-100 px-1">POST {base}/file-link</code>: {'{'}relpath, page{'}'}. A fresh PDF link.
