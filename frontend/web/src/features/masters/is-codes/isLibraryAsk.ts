@@ -234,7 +234,8 @@ export async function askStandards(input: {
       'e.g. "(Clause 7.2, IS 2062 Part 1 2025 - 00.pdf p. 5)". If an Amendment changes a clause, give the amended text ' +
       'and say so. If the pages do not answer the question, say clearly that it is not in these standards — never use ' +
       `outside knowledge or guess. Write the whole answer in ${answerLanguage(input.question)}, even where the pages ` +
-      'are in another language; keep numbers, units and clause numbers exactly as in the standard.',
+      'are in another language, in a plain professional tone (no greeting or slang such as "Bhai"); keep numbers, ' +
+      'units and clause numbers exactly as in the standard.',
     history: input.history.slice(-8),
   })
   return { answer: reply, sources, model: model ?? null }
@@ -614,8 +615,9 @@ export async function askLibrary(input: { question: string; history: AskTurn[]; 
       'Superseded or Withdrawn edition. If the extracts do not answer the question, say so plainly — never use outside ' +
       'knowledge or guess. Do not suggest uploading files or app features; when something is missing, name the ' +
       'standard, clause or table to open in the library. ' +
-      `Write the whole answer in ${answerLanguage(input.question)}, even where the extracts are in another language; ` +
-      'keep numbers, units and clause numbers exactly as written.',
+      `Write the whole answer in ${answerLanguage(input.question)}, even where the extracts are in another language, ` +
+      'in a plain professional tone (no greeting or slang such as "Bhai"); keep numbers, units and clause numbers ' +
+      'exactly as written.',
     history: input.history.slice(-8),
   })
   return { answer: reply, sources, model: model ?? null }

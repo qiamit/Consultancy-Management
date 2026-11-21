@@ -654,6 +654,10 @@ export function createQiAssistantHandler(deps) {
     // Sample conformity is a judgement over long documents: DeepSeek reasons first (its reasoning counts towards
     // max_tokens, so the budget is larger), at a low temperature, with more time.
     const reasonedCheck = body.page === 'bis/sample-conformity' && provider === 'deepseek'
+    // Ask AI over the Standards Library reads its answer from the passages it is given, so DeepSeek answers straight
+    // away: its hidden reasoning counts towards max_tokens, and on 21 Nov 2026 a two-standard comparison spent all
+    // 4096 tokens reasoning (53 s) and gave no answer at all.
+    const standardsAsk = provider === 'deepseek' && (body.page === 'standards/library-ask' || body.page === 'masters/is-files-ask')
     // Claude writes long, well-spaced JSON: a conformity table of a scanned report can pass 8192 tokens and be cut off.
     // Claude 5 models allow far more output (only the tokens used are billed), so long tasks get a larger budget and time.
     const longClaudeTask = isLongExtraction && provider === 'anthropic'
@@ -682,7 +686,7 @@ export function createQiAssistantHandler(deps) {
           ? { max_completion_tokens: chatMaxTokens }
           : { ...(acceptsTemperature(modelId) ? { temperature: chatTemperature } : {}), max_tokens: chatMaxTokens }),
         ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
-        ...(provider === 'deepseek' && isLongExtraction ? { thinking: { type: reasonedCheck ? 'enabled' : 'disabled' } } : {}),
+        ...(provider === 'deepseek' && (isLongExtraction || standardsAsk) ? { thinking: { type: reasonedCheck ? 'enabled' : 'disabled' } } : {}),
       }),
     })
 
@@ -801,7 +805,12 @@ export function createQiAssistantHandler(deps) {
       const finishReason = String(choice?.finish_reason ?? 'unknown')
       const diagnostic = isCmpf311Request
         ? `AI provider returned an empty response for CMPF-311 (provider: ${provider}, model: ${modelId || 'unspecified'}, finish reason: ${finishReason}, message fields: ${messageFields}). Check the active model's output limit and provider response format in AI Settings.`
-        : 'No response from model.'
+        : finishReason === 'length'
+          ? `The AI used its whole output limit (${chatMaxTokens} tokens) before it wrote an answer. Please ask again, or ask a narrower question.`
+          : 'No response from model.'
+      if (finishReason === 'length') {
+        console.warn(`[qi-assistant] empty answer at the output limit (${chatMaxTokens} tokens; page ${pageName || '-'}, provider ${provider}, model ${modelId})`)
+      }
       corsJson(res, isCmpf311Request ? 502 : 200, isCmpf311Request ? { error: diagnostic } : { reply: diagnostic })
       return
     }
