@@ -244,8 +244,9 @@ function IsAskPanel({ isLabel, files, selectedCount }: { isLabel: string; files:
       intro={`Ask Anything About ${isLabel || 'This Standard'}: Requirements, Tests, Tables, Marking, Sampling … The Answer Comes Only From Its Files in the Standards Library, With Clause and Page.`}
       placeholder="Ask About This Standard…"
       flagLabel={selectedCount ? undefined : 'Also Read the Reference Standards'}
+      flagDefault
       note={selectedCount ? `Reading Only the ${selectedCount} Selected Files.` : undefined}
-      ask={(question, history, flag) => askStandards({ isLabel, files, question, history, useReferences: flag || selectedCount > 0 })}
+      ask={(question, history, flag, attached) => askStandards({ isLabel, files, question, history, useReferences: flag || selectedCount > 0, attached })}
     />
   )
 }
