@@ -33,7 +33,7 @@ export function LibraryAskDialog({ open, onOpenChange }: { open: boolean; onOpen
               intro='Ask About Any Standard, or Several Together: "IS 1786 aur IS 2062 me tensile strength compare karo", "Which Standards Give the Sampling Plan for Steel Tubes?", "IS 4035 me marking kya honi chahiye?" The Answer Comes Only From the Library, With Standard, Clause and Page.'
               placeholder="Ask the Standards Library…"
               flagLabel="Include Older Editions (Superseded / Withdrawn)"
-              ask={(question, history, includeOld) => askLibrary({ question, history, includeOld })}
+              ask={(question, history, includeOld, attached) => askLibrary({ question, history, includeOld, attached })}
             />
           ) : null}
         </div>

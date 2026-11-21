@@ -161,6 +161,20 @@ export function answerLanguage(question: string): string {
   return 'English'
 }
 
+/**
+ * Files the user attached to the question (their own test report, drawing or label, read in the browser): data to
+ * check against the standard, never a source of requirements (owner, 21 Nov 2026).
+ */
+function attachedBlock(attached?: string): string {
+  return attached?.trim()
+    ? `\n\nUSER'S ATTACHED FILES (the user's own documents, e.g. a test report — not standards; use them only as the ` +
+        `data to check, never as requirements):\n\n${attached.trim()}`
+    : ''
+}
+const ATTACHED_RULE =
+  ' When the user attached files, compare their values with the requirements from the standard, item by item, and ' +
+  'say for each whether it conforms, does not conform, or cannot be judged from what is given.'
+
 function block(p: PageHit, label: string) {
   return `[${label} — ${nameOf(p.relpath)} — page ${p.page}]\n${p.text.replace(/[ \t]+/g, ' ').trim().slice(0, PAGE_CHARS)}\n\n`
 }
@@ -171,6 +185,8 @@ export async function askStandards(input: {
   question: string
   history: AskTurn[]
   useReferences: boolean
+  /** Text of the files attached to this question (read in the browser), if any. */
+  attached?: string
 }): Promise<AskAnswer> {
   const own: LibraryFile[] = [...input.files.standards, ...input.files.amendments, ...input.files.manuals]
   const refPaths = input.useReferences ? input.files.references.flatMap((r) => (r.file ? [r.file.relpath] : [])) : []
@@ -234,7 +250,8 @@ export async function askStandards(input: {
           `take values from them — each CELLS line gives a row's columns as "Column name: text", read from the page by ` +
           `position):\n\n${tableText}\n`
         : '') +
-      `STANDARD PAGES (the only source you may use, with the TABLES above; a table inside page text may have its rows mixed — use the TABLES for numbers):\n\n${context}`,
+      `STANDARD PAGES (the only source you may use, with the TABLES above; a table inside page text may have its rows mixed — use the TABLES for numbers):\n\n${context}` +
+      attachedBlock(input.attached),
     message:
       `${input.question}\n\n` +
       'Rules: Answer only from the TABLES and STANDARD PAGES above. Name the clause / table and the file and page for every fact, ' +
@@ -242,7 +259,8 @@ export async function askStandards(input: {
       'and say so. If the pages do not answer the question, say clearly that it is not in these standards — never use ' +
       `outside knowledge or guess. Write the whole answer in ${answerLanguage(input.question)}, even where the pages ` +
       'are in another language, in a plain professional tone (no greeting or slang such as "Bhai"); keep numbers, ' +
-      'units and clause numbers exactly as in the standard.',
+      'units and clause numbers exactly as in the standard.' +
+      (input.attached?.trim() ? ATTACHED_RULE : ''),
     history: input.history.slice(-8),
   })
   return { answer: reply, sources, model: model ?? null }
@@ -462,7 +480,7 @@ export function namedStandards(question: string): string[] {
  * Ask AI over the whole Standards Library: the best chunks from every current standard (a few each, so several
  * standards answer together), or — when the question names IS numbers — the chunks and tables of those standards.
  */
-export async function askLibrary(input: { question: string; history: AskTurn[]; includeOld: boolean }): Promise<AskAnswer> {
+export async function askLibrary(input: { question: string; history: AskTurn[]; includeOld: boolean; attached?: string }): Promise<AskAnswer> {
   const folders = namedStandards(input.question)
   // A follow-up without an IS number ("and for Fe 600?") keeps the standards of the earlier questions as hints.
   const earlier = input.history.filter((t) => t.role === 'user').slice(-3).map((t) => t.content)
@@ -610,7 +628,7 @@ export async function askLibrary(input: { question: string; history: AskTurn[]; 
   }
   const { reply, model } = await sendQiAssistantMessage({
     page: 'standards/library-ask',
-    context: `STANDARDS LIBRARY EXTRACTS (the only source you may use; each block names its file and page):\n\n${context}`,
+    context: `STANDARDS LIBRARY EXTRACTS (the only source you may use; each block names its file and page):\n\n${context}${attachedBlock(input.attached)}`,
     message:
       `${input.question}\n\n` +
       'Rules: Answer only from the STANDARDS LIBRARY EXTRACTS above. For every fact name the standard, the clause or ' +
@@ -624,7 +642,8 @@ export async function askLibrary(input: { question: string; history: AskTurn[]; 
       'standard, clause or table to open in the library. ' +
       `Write the whole answer in ${answerLanguage(input.question)}, even where the extracts are in another language, ` +
       'in a plain professional tone (no greeting or slang such as "Bhai"); keep numbers, units and clause numbers ' +
-      'exactly as written.',
+      'exactly as written.' +
+      (input.attached?.trim() ? ATTACHED_RULE : ''),
     history: input.history.slice(-8),
   })
   return { answer: reply, sources, model: model ?? null }
