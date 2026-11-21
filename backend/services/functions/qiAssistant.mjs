@@ -222,8 +222,9 @@ export function acceptsTemperature(modelId) {
 }
 
 /** Chat completions with tools (OpenAI-compatible); returns the provider's choice.message. */
-export function createToolCaller({ apiBase, apiKey, modelId, provider, maxTokens, temperature, reasoning = false }) {
+export function createToolCaller({ apiBase, apiKey, modelId, provider, maxTokens, temperature, reasoning = false, onUsage = null }) {
   return async (messages, tools, { final = false } = {}) => {
+    const startedAt = Date.now()
     const r = await fetch(`${apiBase}/chat/completions`, {
       method: 'POST',
       redirect: 'error',
@@ -240,6 +241,7 @@ export function createToolCaller({ apiBase, apiKey, modelId, provider, maxTokens
       }),
     })
     const payload = await r.json().catch(() => ({}))
+    onUsage?.({ usage: payload?.usage, ms: Date.now() - startedAt, error: r.ok ? '' : extractAiError(payload, r.status) })
     if (!r.ok) {
       console.warn(
         `[qi-assistant] agent provider error ${r.status} (provider ${provider}, model ${modelId}): ${extractAiError(payload, r.status).slice(0, 500)}`,
@@ -321,6 +323,28 @@ export function usesDocumentModel(page) {
 
 export function createQiAssistantHandler(deps) {
   const { requireUser, requireAdmin, userRestFor, storageFor, rest, readBody, corsJson } = deps
+
+  /** One row in ai_usage_log per provider call (no text kept); never blocks or fails the answer. */
+  function logUsage(row) {
+    const u = row.usage ?? {}
+    const tokens = (v) => (Number.isFinite(Number(v)) ? Math.round(Number(v)) : null)
+    rest('/ai_usage_log', {
+      method: 'POST',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        user_id: row.userId || null,
+        page: String(row.page || '').slice(0, 80) || null,
+        provider: row.provider || null,
+        model_id: row.modelId || null,
+        agent: Boolean(row.agent),
+        input_tokens: tokens(u.prompt_tokens ?? u.input_tokens),
+        output_tokens: tokens(u.completion_tokens ?? u.output_tokens),
+        ms: tokens(row.ms),
+        status: row.error ? 'error' : 'ok',
+        error: row.error ? String(row.error).slice(0, 300) : null,
+      }),
+    }).catch(() => {})
+  }
 
   return async function handleQiAssistant(req, res) {
     if (req.method === 'OPTIONS') {
@@ -671,6 +695,7 @@ export function createQiAssistantHandler(deps) {
         maxTokens: chatMaxTokens,
         temperature: Math.min(chatTemperature, 0.3),
         reasoning: openAiReasoning,
+        onUsage: (u) => logUsage({ ...u, userId, page: body.page, provider, modelId, agent: true }),
       })
       try {
         const result = await runAgent({
@@ -726,6 +751,15 @@ export function createQiAssistantHandler(deps) {
       })
       return
     }
+    logUsage({
+      usage: aiPayload?.usage,
+      ms: Date.now() - startedAt,
+      error: aiRes.ok ? '' : extractAiError(aiPayload, aiRes.status),
+      userId,
+      page: body.page,
+      provider,
+      modelId,
+    })
     if (!aiRes.ok) {
       console.warn(
         `[qi-assistant] provider error ${aiRes.status} (provider ${provider}, model ${modelId}): ${extractAiError(aiPayload, aiRes.status).slice(0, 500)}`,
