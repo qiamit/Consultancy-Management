@@ -146,6 +146,46 @@ export async function setRequiredTestsLocked(isCodeId: string, locked: boolean):
   if (error) throw error
 }
 
+/** What the library held for the IS Code's own Standard (latest edition + its amendments). */
+export type StandardBasis = { folder: string; edition: number; amendments: number; file: string }
+
+/**
+ * "Standard Revised — Review" (owner's RAG update rules, 19 Nov 2026): a locked list whose own Standard got a new
+ * edition or amendment in the library after it was locked (or last reviewed by an admin).
+ */
+export type StandardRevision = {
+  isCodeId: string
+  basis: StandardBasis | null
+  now: StandardBasis | null
+  revised: boolean
+  reviewedAt: string | null
+}
+
+/** Locked lists (the given IS Codes, or all); none before the release of the check. */
+export async function fetchStandardRevisions(isCodeIds?: string[]): Promise<StandardRevision[]> {
+  const { data, error } = await supabase.rpc('required_tests_standard_check', isCodeIds ? { p_is_code_ids: isCodeIds } : {})
+  if (error) return []
+  return ((data ?? []) as Array<{ is_code_id: string; basis: StandardBasis | null; library_now: StandardBasis | null; revised: boolean; reviewed_at: string | null }>).map(
+    (r) => ({ isCodeId: r.is_code_id, basis: r.basis, now: r.library_now, revised: Boolean(r.revised), reviewedAt: r.reviewed_at }),
+  )
+}
+
+/** Admin: the revised Standard was looked at; the library as it is now becomes the list's basis. */
+export async function markStandardReviewed(isCodeId: string): Promise<void> {
+  const { error } = await supabase.rpc('mark_required_tests_standard_reviewed', { p_is_code_id: isCodeId })
+  if (error) throw new Error(error.message)
+}
+
+const amendmentsText = (n: number) => (n ? `${n} ${n === 1 ? 'Amendment' : 'Amendments'}` : 'No Amendments')
+
+/** "New Edition: 2024 (Locked on 2008)" / "New Amendment: 5 Amendments Now, 4 When Locked". */
+export function standardRevisionText(r: StandardRevision): string {
+  if (!r.basis || !r.now) return ''
+  const name = r.now.folder || 'The Standard'
+  if (r.now.edition > r.basis.edition) return `${name}: New Edition ${r.now.edition} in the Library (the List Was Locked on the ${r.basis.edition} Edition).`
+  return `${name} ${r.now.edition}: ${amendmentsText(r.now.amendments)} in the Library Now, ${amendmentsText(r.basis.amendments)} When the List Was Locked.`
+}
+
 export type PastCheckTest = { testName: string; clause: string; requirement: string; checks: number }
 
 /** Tests reported in past AI Conformity Checks of samples of this IS Code, most frequent first. */

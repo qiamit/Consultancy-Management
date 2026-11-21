@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { History, Lock, Plus, Save, Sparkles, Trash2, Unlock, Wand2 } from 'lucide-react'
+import { AlertTriangle, CheckCheck, History, Lock, Plus, Save, Sparkles, Trash2, Unlock, Wand2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useIsLaboratoryDirector } from '@/components/lims/LaboratoryDirectorOnly'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -14,10 +15,14 @@ import {
 import { cn } from '@/lib/utils'
 import {
   fetchRequiredTests,
+  fetchStandardRevisions,
   fetchTestsFromPastChecks,
+  markStandardReviewed,
   saveRequiredTests,
   setRequiredTestsLocked,
+  standardRevisionText,
   type RequiredTest,
+  type StandardRevision,
 } from './requiredTestsApi'
 import { suggestRequiredTests } from './requiredTestsAi'
 import { finalProductTestName, formatRequirement } from './requirementText'
@@ -62,6 +67,7 @@ export function IsCodeRequiredTestsDialog({
   selection,
   sampleAi,
   onListChange,
+  onRevisedChange,
   readOnly = false,
   layer = 'stacked',
 }: {
@@ -79,12 +85,16 @@ export function IsCodeRequiredTestsDialog({
   sampleAi?: { label: string; run: (tests: RequiredTest[], onStep: (step: string) => void) => Promise<string> }
   /** After loading and after saving: the list in order, and the saved tests whose fields changed. */
   onListChange?: (tests: RequiredTest[], changed: RequiredTest[]) => void
+  /** The "Standard Revised — Review" flag of this list changed (loaded, reviewed, unlocked). */
+  onRevisedChange?: (isCodeId: string, revised: boolean) => void
   readOnly?: boolean
   layer?: 'stacked' | 'overlay'
 }) {
   const [tests, setTests] = useState<RequiredTest[]>([])
   const [notes, setNotes] = useState('')
   const [lockedAt, setLockedAt] = useState<string | null>(null)
+  const [revision, setRevision] = useState<StandardRevision | null>(null)
+  const isAdmin = useIsLaboratoryDirector()
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [dirty, setDirty] = useState(false)
@@ -93,6 +103,28 @@ export function IsCodeRequiredTestsDialog({
   const savedRef = useRef(new Map<string, string>())
   const snapshot = (list: RequiredTest[]) =>
     new Map(list.filter((t) => t.id).map((t) => [t.id!, JSON.stringify([t.testName, t.clause, t.testMethod, t.unit, t.requirement])]))
+
+  /** "Standard Revised — Review": did the library get a new edition / amendment of the own Standard since the lock? */
+  const loadRevision = async (id: string, stillOpen: () => boolean = () => true) => {
+    const [r] = await fetchStandardRevisions([id])
+    if (!stillOpen()) return
+    setRevision(r ?? null)
+    onRevisedChange?.(id, Boolean(r?.revised))
+  }
+
+  const markReviewed = async () => {
+    if (!isCodeId) return
+    setBusy('Marking the Revised Standard as Reviewed…')
+    try {
+      await markStandardReviewed(isCodeId)
+      toast.success('Marked as Reviewed — the List Now Follows the Standard in the Library.')
+      await loadRevision(isCodeId)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could Not Mark It as Reviewed.')
+    } finally {
+      setBusy(null)
+    }
+  }
 
   useEffect(() => {
     if (!open || !isCodeId) return
@@ -108,6 +140,8 @@ export function IsCodeRequiredTestsDialog({
         setLockedAt(list.lockedAt)
         savedRef.current = snapshot(list.tests)
         onListChange?.(list.tests, [])
+        setRevision(null)
+        if (list.lockedAt) void loadRevision(isCodeId, () => live)
       })
       .catch((err: unknown) => toast.error(err instanceof Error ? err.message : 'Could Not Load the Required Tests.'))
       .finally(() => live && setLoading(false))
@@ -211,6 +245,12 @@ export function IsCodeRequiredTestsDialog({
     try {
       await setRequiredTestsLocked(isCodeId, !locked)
       setLockedAt(locked ? null : new Date().toISOString())
+      if (locked) {
+        setRevision(null)
+        onRevisedChange?.(isCodeId, false)
+      } else {
+        void loadRevision(isCodeId)
+      }
       toast.success(locked ? 'List Unlocked — It Can Be Changed Now.' : 'List Locked — The Conformity Check Will Rely on It.')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could Not Change the Lock.')
@@ -263,6 +303,9 @@ export function IsCodeRequiredTestsDialog({
               >
                 {locked ? 'Locked' : 'Not Locked'}
               </span>
+              {locked && revision?.revised ? (
+                <span className="border border-red-300 bg-red-600/40 px-2 py-0.5 text-[11px] font-semibold text-red-50">Standard Revised — Review</span>
+              ) : null}
               {dirty ? <span className="text-[11px] font-medium text-amber-200">Unsaved Changes</span> : null}
             </DialogTitle>
             <p className="mt-0.5 line-clamp-2 break-words text-xs text-stone-300">
@@ -311,7 +354,28 @@ export function IsCodeRequiredTestsDialog({
           </div>
 
           {busy ? <p className="border-l-2 border-amber-600 bg-amber-50 px-3 py-1.5 text-xs text-amber-900">{busy}</p> : null}
-          {locked ? (
+          {locked && revision?.revised ? (
+            <div className="flex flex-wrap items-center gap-2 border-l-2 border-red-600 bg-red-50 px-3 py-2 text-xs text-red-900">
+              <AlertTriangle size={15} className="shrink-0" aria-hidden />
+              <p className="min-w-0 flex-1">
+                <span className="font-semibold">Standard Revised — Review.</span> {standardRevisionText(revision)} Check These Tests
+                Against the Revised Standard: Unlock the List to Change It, or Mark It Reviewed if Nothing Changes.
+              </p>
+              {isAdmin ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className={cn(limsOutlineBtnClass, 'h-7 gap-1.5 text-xs')}
+                  disabled={readOnly || busy !== null}
+                  onClick={() => void markReviewed()}
+                >
+                  <CheckCheck size={14} aria-hidden /> Mark Reviewed
+                </Button>
+              ) : (
+                <span className="text-[11px] text-red-800">An Admin Marks It Reviewed.</span>
+              )}
+            </div>
+          ) : locked ? (
             <p className="border-l-2 border-emerald-600 bg-emerald-50 px-3 py-1.5 text-xs text-emerald-900">
               This List Is Locked. Unlock It to Make Changes.
             </p>
