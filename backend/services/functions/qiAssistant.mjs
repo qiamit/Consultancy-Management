@@ -13,18 +13,44 @@ const AI_SETTINGS_ID = '00000000-0000-0000-0000-000000000002'
 /** Per-user QE Assistant limits (in memory, per functions instance). */
 const QI_LIMIT_HOUR = Number(process.env.QI_ASSISTANT_LIMIT_HOUR || 60)
 const QI_IMAGE_LIMIT_HOUR = Number(process.env.QI_ASSISTANT_IMAGE_LIMIT_HOUR || 20)
+/** Ask AI's search step has its own, larger hourly allowance (it is not counted in QI_LIMIT_HOUR). */
+const QI_SEARCH_LIMIT_HOUR = Number(process.env.QI_ASSISTANT_SEARCH_LIMIT_HOUR || 200)
 const HOUR_MS = 60 * 60 * 1000
-/** @type {Map<string, { all: number[]; images: number[] }>} */
+/** @type {Map<string, { all: number[]; images: number[]; search: number[] }>} */
 const usage = new Map()
 
+/**
+ * Ask AI's small search step (owner, 21 Nov 2026: one question should count once): the search words / plan that
+ * Library Ask and IS Files Ask ask for as JSON before the answer. Short, no pictures, no history, no context; anything
+ * else on those pages (the answer itself) counts as usual.
+ */
+export function isAskSearchStep(body, imageCount = 0) {
+  return (
+    (body?.page === 'masters/is-files-ask' || body?.page === 'standards/library-ask') &&
+    body?.responseFormat === 'json_object' &&
+    imageCount === 0 &&
+    String(body?.message || '').length <= 3000 &&
+    !String(body?.context || '').trim() &&
+    !(Array.isArray(body?.history) && body.history.length)
+  )
+}
+
 /** Records one request; returns an error message when the user is over a limit (nothing is recorded then). */
-function takeQuota(userId, withImages) {
+function takeQuota(userId, withImages, searchStep = false) {
   const now = Date.now()
   const cutoff = now - HOUR_MS
-  const entry = usage.get(userId) ?? { all: [], images: [] }
+  const entry = usage.get(userId) ?? { all: [], images: [], search: [] }
   entry.all = entry.all.filter((t) => t > cutoff)
   entry.images = entry.images.filter((t) => t > cutoff)
+  entry.search = (entry.search ?? []).filter((t) => t > cutoff)
   usage.set(userId, entry)
+  if (searchStep) {
+    if (entry.search.length >= QI_SEARCH_LIMIT_HOUR) {
+      return `QE Assistant limit reached: ${QI_SEARCH_LIMIT_HOUR} Ask AI searches per hour. Try again later.`
+    }
+    entry.search.push(now)
+    return ''
+  }
   if (entry.all.length >= QI_LIMIT_HOUR) {
     return `QE Assistant limit reached: ${QI_LIMIT_HOUR} requests per hour. Try again later.`
   }
@@ -34,7 +60,7 @@ function takeQuota(userId, withImages) {
   entry.all.push(now)
   if (withImages) entry.images.push(now)
   if (usage.size > 10_000) {
-    for (const [id, e] of usage) if (!e.all.some((t) => t > cutoff)) usage.delete(id)
+    for (const [id, e] of usage) if (!e.all.some((t) => t > cutoff) && !e.search.some((t) => t > cutoff)) usage.delete(id)
   }
   return ''
 }
@@ -420,7 +446,7 @@ export function createQiAssistantHandler(deps) {
       return
     }
 
-    const overLimit = takeQuota(userId, images.length > 0)
+    const overLimit = takeQuota(userId, images.length > 0, isAskSearchStep(body, images.length))
     if (overLimit) {
       corsJson(res, 429, { error: overLimit })
       return
