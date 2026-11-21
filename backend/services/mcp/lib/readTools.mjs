@@ -3,6 +3,7 @@
 // table's Module Access path is also checked, so a table of a module set to None is refused. Nothing here writes.
 import * as z from 'zod/v4'
 import { userRest, userRpc } from './backend.mjs'
+import { config } from './config.mjs'
 import { asResult, moduleLevels, uuidSchema } from './tools.mjs'
 
 const enc = encodeURIComponent
@@ -156,6 +157,29 @@ async function foldersFor(ctx, isCodeId) {
   return Array.isArray(data) ? data.map(String) : []
 }
 
+/** "IS:1786", "is 1786", "IS 3025 Part 11" -> "IS 1786" (library folders are "IS <number>"). */
+function libraryFolder(name) {
+  const m = String(name).match(/\bIS\s*[:/-]?\s*(\d{1,5})\b/i)
+  return m ? `IS ${Number(m[1])}` : String(name).trim()
+}
+
+/** The query's embedding from the standards-embed service; null when it is not there (word search only then). */
+async function embedQuery(text) {
+  try {
+    const r = await fetch(`${config.embedUrl}/embed`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ texts: [String(text).slice(0, 2000)] }),
+      signal: AbortSignal.timeout(15_000),
+    })
+    const data = await r.json().catch(() => ({}))
+    if (!r.ok || !Array.isArray(data?.vectors?.[0]) || !data.model) return null
+    return { vector: `[${data.vectors[0].join(',')}]`, model: String(data.model) }
+  } catch {
+    return null
+  }
+}
+
 export const READ_TOOLS = [
   {
     name: 'list_app_tables',
@@ -219,6 +243,51 @@ export const READ_TOOLS = [
       ])
       const meta = Array.isArray(list.data) ? list.data[0] ?? null : null
       return asResult({ locked: Boolean(meta?.locked_at), locked_at: meta?.locked_at ?? null, notes: meta?.notes ?? '', tests: tests.data })
+    },
+  },
+  {
+    name: 'search_library',
+    path: '/settings/standards-library',
+    title: 'Search the Standards Library (words + meaning)',
+    description:
+      'The search behind the app\'s Ask AI: best-matching passages (clauses, table rows, page text) of the whole ' +
+      'Standards Library, found by words and by meaning together. Put the IS numbers the question names in "folders" ' +
+      'to stay within those standards; leave it out for questions without an IS number. Current editions only unless ' +
+      'include_old. A table passage may hold CELLS lines (each row\'s columns as "Column: value", read by position): ' +
+      'take numbers from them. Use English words in the standard\'s own terms (e.g. "high strength deformed steel ' +
+      'bars elongation", not "TMT"). Answer only from the passages and name the IS, clause / table and page; read a ' +
+      'whole page with get_standard_page when a passage is cut.',
+    inputSchema: {
+      query: z.string().min(2).max(500).describe('English search words or the question, e.g. "Fe 500D elongation TS/YS ratio"'),
+      folders: z.array(z.string().max(80)).max(10).optional().describe('IS numbers / library folders, e.g. ["IS 1786"]'),
+      include_old: z.boolean().optional().describe('Also Superseded / Withdrawn editions'),
+      limit: z.number().int().min(1).max(40).optional().describe('Passages (default 20)'),
+      per_doc: z.number().int().min(1).max(10).optional().describe('At most this many per document (default 6 with folders, 3 without)'),
+    },
+    run: async ({ query, folders, include_old, limit, per_doc }, ctx) => {
+      const list = [...new Set((folders ?? []).map(libraryFolder).filter(Boolean))]
+      const common = {
+        p_query: query,
+        p_limit: limit ?? 20,
+        p_per_doc: per_doc ?? (list.length ? 6 : 3),
+        p_current_only: !include_old,
+        ...(list.length ? { p_folders: list } : {}),
+      }
+      const meaning = await embedQuery(query)
+      const data = meaning
+        ? await userRpc(ctx.jwt, 'search_library_hybrid', { ...common, p_embedding: meaning.vector, p_model: meaning.model })
+        : await userRpc(ctx.jwt, 'search_library_chunks', common)
+      const passages = (Array.isArray(data) ? data : []).map((c) => ({
+        folder: c.folder,
+        relpath: c.relpath,
+        document: c.doc_kind,
+        edition: c.version_status ?? 'Current',
+        kind: c.kind,
+        page: c.page,
+        heading: c.heading || undefined,
+        text: String(c.text ?? '').slice(0, 4000),
+      }))
+      return asResult({ search: meaning ? 'words + meaning' : 'words only', folders: list, passages })
     },
   },
   {
