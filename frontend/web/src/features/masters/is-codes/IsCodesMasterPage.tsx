@@ -11,6 +11,7 @@ import { IsCodesHeaderBar } from './IsCodesHeaderBar'
 import { IsCodesForm } from './IsCodesForm'
 import { IsCodesTable, type IsCodeSortDir, type IsCodeSortKey } from './IsCodesTable'
 import { IsCodeRequiredTestsDialog } from './IsCodeRequiredTestsDialog'
+import { fetchStandardRevisions } from './requiredTestsApi'
 import { formatIsCodeLabel as formatRequiredTestsLabel } from './buildIsCodeAssistantContext'
 import { IsCodesTableFooterBar } from './IsCodesFooterBar'
 import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
@@ -386,6 +387,25 @@ function rowToIsCodeForm(row: IsCodeRow): IsCodeForm {
 export default function IsCodesMasterPage() {
   const [confirmAction, confirmDialog] = useConfirmDialog()
   const [requiredTestsFor, setRequiredTestsFor] = useState<IsCodeRow | null>(null)
+  /** IS Codes whose locked Required Tests have "Standard Revised — Review" (a newer edition / amendment in the library). */
+  const [revisedIds, setRevisedIds] = useState<Set<string>>(() => new Set())
+  useEffect(() => {
+    let live = true
+    void fetchStandardRevisions().then((list) => {
+      if (live) setRevisedIds(new Set(list.filter((r) => r.revised).map((r) => r.isCodeId)))
+    })
+    return () => {
+      live = false
+    }
+  }, [])
+  const setRevised = (id: string, revised: boolean) =>
+    setRevisedIds((prev) => {
+      if (prev.has(id) === revised) return prev
+      const next = new Set(prev)
+      if (revised) next.add(id)
+      else next.delete(id)
+      return next
+    })
   const { editId, viewId, setEdit, setView } = useMasterUiSearchState()
   const [saveLoading, setSaveLoading] = useState(false)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
@@ -1756,6 +1776,7 @@ export default function IsCodesMasterPage() {
         }}
         isCodeId={requiredTestsFor?.id ?? null}
         isLabel={requiredTestsFor ? formatRequiredTestsLabel(requiredTestsFor) : ''}
+        onRevisedChange={setRevised}
       />
       <IsLibraryFilesDialog
         open={libraryFor != null}
@@ -1798,6 +1819,7 @@ export default function IsCodesMasterPage() {
           onEdit={handleEdit}
           onViewFiles={(row) => setLibraryFor(row)}
           onRequiredTests={(row) => setRequiredTestsFor(row)}
+          revisedIds={revisedIds}
           onAssistantDataChanged={() => void loadIsCodes()}
           idsWithFiles={idsWithFiles}
           sortKey={sortKey}

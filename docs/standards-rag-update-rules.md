@@ -40,6 +40,11 @@ number, status, and for an amendment the base edition it belongs to.
 ## When a Standard Changes (owner: Review flag on Required Tests)
 - When an IS Code's own Standard gets a new revision or amendment, its locked Required Tests list shows
   **"Standard Revised — Review"** with what changed (new edition / Amd K), until an admin reviews it.
+  **Done 21 Nov 2026:** locking a list saves the library's basis (latest Current edition of the own folder + Part +
+  Sec, and its amendment count: amendment files or the "- 0N" of a merged file, whichever is more) in
+  `is_code_required_test_lists.standard_basis`; `required_tests_standard_check` compares it with the library now;
+  the Required Tests window shows the red flag and an admin's **Mark Reviewed** (`mark_required_tests_standard_reviewed`)
+  takes the library as it is now. Unlocking drops the basis. IS Code Master marks the Required Tests icon with a red dot.
 
 ## Order of Work
 1. Version facts + status rules in the index (this document). **Done 20 Nov 2026:** `standard_docs.part`,
@@ -53,5 +58,9 @@ number, status, and for an amendment the base edition it belongs to.
    (owner's choice: free, nothing leaves the server) — `standard_chunks.embedding` / `embed_model`, embedded by the
    indexer (`embed_chunks`, current Standards first, resumable); questions by the `standards-embed` service;
    `search_library_hybrid` merges word and meaning search (reciprocal rank).
-4. Hybrid search (words + codes + meaning), Current-only by default.
-5. App Search Window with Standard, page and clause in every answer.
+4. Hybrid search (words + codes + meaning), Current-only by default. **Done 21 Nov 2026** (PRs #154–#164): Ask AI
+   (Library + IS Files) uses `search_library_hybrid`; a folder search scans that folder exactly (HNSW + folder filter
+   returned nothing).
+5. App Search Window with Standard, page and clause in every answer. **Done:** Ask the Library and IS Files → Ask AI
+   (PRs #146–#149, #154–#164). Outside the app: MCP `search_library` (PR #166) and the Library API for qirlpl.com
+   with keys from Settings → API Keys (PR #168); ASTM / ISO / JIS / EN folders and Part filter (PR #172).

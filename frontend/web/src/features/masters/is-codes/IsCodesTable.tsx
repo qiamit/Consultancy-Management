@@ -108,6 +108,7 @@ function RowActions({
   onEdit,
   onViewFiles,
   onRequiredTests,
+  standardRevised = false,
   onAssistantDataChanged,
 }: {
   row: IsCodeRow
@@ -115,6 +116,8 @@ function RowActions({
   onEdit: (row: IsCodeRow) => void
   onViewFiles: (row: IsCodeRow) => void
   onRequiredTests?: (row: IsCodeRow) => void
+  /** Its locked Required Tests list has a "Standard Revised — Review" flag. */
+  standardRevised?: boolean
   onAssistantDataChanged?: () => void
 }) {
   return (
@@ -134,12 +137,16 @@ function RowActions({
           type="button"
           size="sm"
           variant="ghost"
-          className="h-8 w-8 rounded-none p-0 text-[#92400e] hover:bg-[#f3e9d8] hover:text-[#78350f]"
-          aria-label={`Required Tests of ${formatIsCodeLabel(row)}`}
-          title="Required Tests"
+          className={cn(
+            'relative h-8 w-8 rounded-none p-0 hover:bg-[#f3e9d8]',
+            standardRevised ? 'text-red-700 hover:text-red-800' : 'text-[#92400e] hover:text-[#78350f]',
+          )}
+          aria-label={`Required Tests of ${formatIsCodeLabel(row)}${standardRevised ? ' (Standard Revised — Review)' : ''}`}
+          title={standardRevised ? 'Required Tests — Standard Revised, Review' : 'Required Tests'}
           onClick={() => onRequiredTests(row)}
         >
           <ListChecks size={16} />
+          {standardRevised ? <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-red-600 ring-1 ring-white" aria-hidden /> : null}
         </Button>
       ) : null}
       <QiAssistant
@@ -186,6 +193,7 @@ export function IsCodesTable({
   onEdit,
   onViewFiles,
   onRequiredTests,
+  revisedIds,
   onAssistantDataChanged,
 }: {
   rows: IsCodeRow[]
@@ -200,6 +208,8 @@ export function IsCodesTable({
   onEdit: (row: IsCodeRow) => void
   onViewFiles: (row: IsCodeRow) => void
   onRequiredTests?: (row: IsCodeRow) => void
+  /** IS Codes whose locked Required Tests have a "Standard Revised — Review" flag. */
+  revisedIds?: Set<string>
   onAssistantDataChanged?: () => void
 }) {
   const allChecked = rows.length > 0 && rows.every((r) => selectedIds.has(r.id))
@@ -343,6 +353,7 @@ export function IsCodesTable({
                           onEdit={onEdit}
                           onViewFiles={onViewFiles}
                           onRequiredTests={onRequiredTests}
+                          standardRevised={revisedIds?.has(r.id) ?? false}
                           onAssistantDataChanged={onAssistantDataChanged}
                         />
                       </div>
@@ -516,6 +527,7 @@ export function IsCodesTable({
                             onEdit={onEdit}
                             onViewFiles={onViewFiles}
                             onRequiredTests={onRequiredTests}
+                            standardRevised={revisedIds?.has(r.id) ?? false}
                             onAssistantDataChanged={onAssistantDataChanged}
                           />
                         </div>
