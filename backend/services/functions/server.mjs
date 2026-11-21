@@ -1394,6 +1394,7 @@ const libraryApi = createLibraryApi({
 const routes = {
   'POST /library/search': libraryApi.handleSearch,
   'POST /library/documents': libraryApi.handleDocuments,
+  'POST /library/standards': libraryApi.handleStandards,
   'POST /library/file-link': libraryApi.handleFileLink,
   'POST /standards/file-link': standardsFiles.handleLink,
   'GET /standards/file': standardsFiles.handleFile,

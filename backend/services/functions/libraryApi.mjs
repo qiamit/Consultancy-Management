@@ -6,7 +6,9 @@ import crypto from 'node:crypto'
  * clause / table, page, text) and PDF links; it writes no answer (the calling app does that with its own AI).
  *
  *   POST /library/search     {query, folders?, include_old?, limit?, per_doc?}  -> passages + PDF links
- *   POST /library/documents  {query}                                             -> documents of a standard
+ *   POST /library/documents  {query, extra_references?}                          -> documents of a standard, grouped
+ *                                                                                   as IS Files, with references + title
+ *   POST /library/standards  {query}                                             -> standards matching a number
  *   POST /library/file-link  {relpath, page?}                                    -> fresh PDF links
  *
  * PDF links work without a key for LINK_TTL_MS (anyone holding the link can open the file until then), so the calling
@@ -51,6 +53,73 @@ export function resolveLibraryName(name, otherFolders = []) {
     }
   }
   return best ? { folder: best, part: '', section: '' } : null
+}
+
+/** Part / Sec / year written in a library file name: "IS 2062 Part 1 2025 - 00.pdf" (same as the app's editionOf). */
+export function editionOf(relpath) {
+  const name = String(relpath).split('/').pop() ?? String(relpath)
+  const years = name.match(/\b(?:19|20)\d{2}\b/g) ?? []
+  return {
+    part: name.match(/\bPart\s*-?\s*(\d+)/i)?.[1] ?? '',
+    section: name.match(/\bSec(?:tion)?\s*-?\s*(\d+)/i)?.[1] ?? '',
+    year: years[years.length - 1] ?? '',
+  }
+}
+
+const byYearDesc = (a, b) =>
+  Number(editionOf(b.relpath).year || 0) - Number(editionOf(a.relpath).year || 0) ||
+  String(a.relpath).split('/').pop().localeCompare(String(b.relpath).split('/').pop())
+
+/**
+ * The IS Files grouping of one standard's folder, as the app's IS Files window shows it (isLibraryFiles.ts:
+ * loadIsLibraryFiles + requiredTestsApi.ts: pickStandardDocs): the latest readable edition of the asked Part / Sec,
+ * the amendments of that edition, the Product Manual, and the older editions of the same Part.
+ */
+export function groupStandardDocs(rows, edition) {
+  const docs = rows.filter((d) => !String(d.relpath).includes('::'))
+  const ask = { part: edition?.part ?? '', section: edition?.section ?? '' }
+  const partScore = (e) =>
+    (ask.part ? (e.part === ask.part ? 3 : e.part ? -10 : -1) : e.part ? -10 : 0) +
+    (ask.section ? (e.section === ask.section ? 2 : e.section ? -10 : -1) : e.section ? -10 : 0)
+  const best = (list) => {
+    const ok = list.filter((d) => d.score > -5)
+    if (!ok.length) return list.map((d) => d.relpath)
+    const top = Math.max(...ok.map((d) => d.score))
+    return ok.filter((d) => d.score === top).map((d) => d.relpath)
+  }
+  const allStandards = docs.filter((d) => d.kind === 'Standard')
+  // A file no page could be read from (DRM, damaged) is not the edition to read while a readable one exists.
+  const readable = allStandards.filter((d) => (d.pages ?? 0) > 0)
+  const standardDocs = readable.length ? readable : allStandards
+  const topPart = Math.max(-5, ...standardDocs.map((d) => partScore(editionOf(d.relpath))))
+  const latestYear = Math.max(
+    0,
+    ...standardDocs.filter((d) => partScore(editionOf(d.relpath)) === topPart).map((d) => Number(editionOf(d.relpath).year) || 0),
+  )
+  const pickedStandards = new Set(
+    best(standardDocs.map((d) => ({ relpath: d.relpath, score: partScore(editionOf(d.relpath)) + (Number(editionOf(d.relpath).year) === latestYear ? 1 : 0) }))),
+  )
+  const manualDocs = docs.filter((d) => d.kind === 'Product Manual')
+  const mains = manualDocs.filter((d) => !/\/_Extra\//.test(d.relpath))
+  const pool = (mains.length ? mains : manualDocs).map((d) => ({ relpath: d.relpath, e: editionOf(d.relpath) }))
+  const topManualPart = Math.max(-5, ...pool.map((m) => partScore(m.e)))
+  const latestManual = Math.max(0, ...pool.filter((m) => partScore(m.e) === topManualPart).map((m) => Number(m.e.year) || 0))
+  const pickedManuals = new Set(best(pool.map((m) => ({ relpath: m.relpath, score: partScore(m.e) + (Number(m.e.year) === latestManual ? 0.3 : 0) }))))
+
+  const standards = docs.filter((d) => d.kind === 'Standard' && pickedStandards.has(d.relpath)).sort(byYearDesc)
+  const mainYears = new Set(standards.map((d) => editionOf(d.relpath).year))
+  const main = standards[0] ? editionOf(standards[0].relpath) : ask
+  const samePart = (relpath) => {
+    const e = editionOf(relpath)
+    return e.part === (main.part ?? '') && e.section === (main.section ?? '')
+  }
+  const amendments = docs
+    .filter((d) => d.kind === 'Amendment' && samePart(d.relpath) && mainYears.has(editionOf(d.relpath).year))
+    .sort((a, b) => String(a.relpath).localeCompare(String(b.relpath), undefined, { numeric: true }))
+  const manuals = docs.filter((d) => d.kind === 'Product Manual' && pickedManuals.has(d.relpath)).sort(byYearDesc)
+  const shown = new Set([...standards, ...amendments, ...manuals].map((d) => d.relpath))
+  const older = docs.filter((d) => !shown.has(d.relpath) && samePart(d.relpath) && !/\/_Extra\//.test(d.relpath)).sort(byYearDesc)
+  return { standards, amendments, manuals, older }
 }
 
 export function createLibraryApi({ rest, readBody, json, standardsFiles, publicFunctionsUrl, embedUrl }) {
@@ -214,25 +283,11 @@ export function createLibraryApi({ rest, readBody, json, standardsFiles, publicF
     })
   }
 
-  async function handleDocuments(req, res) {
-    await checkKey(req)
-    const body = (await readBody(req, 8 * 1024)) || {}
-    const asked = String(body.query ?? '').trim().slice(0, 120)
-    if (!/\d/.test(asked)) throw fail(400, 'Give "query": a standard number, e.g. "IS 1786", "IS 3025 Part 11" or "ASTM D445".')
-    const pick = await resolve(asked)
-    if (!pick) {
-      json(res, 200, { query: asked, is: null, count: 0, documents: [], note: 'Not in the Standards Library.' })
-      return
-    }
-    const folder = pick.folder
-    const rows = await rest(
-      `/standard_docs?folder=eq.${encodeURIComponent(folder)}&source=eq.library&active=eq.true` +
-        '&select=relpath,kind,pages,edition_year,part,section,amendment_no,version_status,superseded_by&order=relpath.asc&limit=200',
-    )
-    // Asked with a Part ("IS 3025 Part 11"): only that Part's documents (and Sec, when asked).
-    const documents = (Array.isArray(rows) ? rows : [])
-      .filter((d) => !pick.part || (String(d.part ?? '') === pick.part && (!pick.section || String(d.section ?? '') === pick.section)))
-      .map((d) => ({
+  const DOC_SELECT = 'id,folder,relpath,kind,pages,edition_year,part,section,amendment_no,version_status,superseded_by'
+  const inList = (values) => values.map((v) => `"${String(v).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`).join(',')
+
+  function docOut(d) {
+    return {
       document: String(d.relpath).split('/').pop(),
       relpath: d.relpath,
       document_kind: d.kind,
@@ -244,8 +299,147 @@ export function createLibraryApi({ rest, readBody, json, standardsFiles, publicF
       edition_status: d.version_status ?? 'Current',
       superseded_by: d.superseded_by,
       pdf: links(d.relpath, null),
-    }))
-    json(res, 200, { is: folder, ...(pick.part ? { part: pick.part } : {}), ...(pick.section ? { section: pick.section } : {}), count: documents.length, documents })
+    }
+  }
+
+  /** Titles from the Standards List, by number and Part (else by number). */
+  async function titlesFor(keys) {
+    const bases = [...new Set(keys.map((k) => k.base))].slice(0, 200)
+    if (!bases.length) return () => ''
+    const rows = await rest(`/standard_list?base=in.(${encodeURIComponent(inList(bases))})&select=base,part,title&limit=2000`).catch(() => [])
+    const list = Array.isArray(rows) ? rows : []
+    return (base, part) => {
+      const digits = (v) => String(v ?? '').match(/\d+/)?.[0] ?? ''
+      const same = list.filter((r) => r.base === base)
+      return String((same.find((r) => digits(r.part) === (part ?? '')) ?? same.find((r) => !digits(r.part)) ?? same[0])?.title ?? '')
+    }
+  }
+
+  /**
+   * The standards the main Standard names (standard_refs, most cited first) and the ones the caller links by hand
+   * (`extra`), each with its latest readable edition of that Part in the library, or file null.
+   */
+  async function referencesOf(mainIds, extra) {
+    const merged = new Map()
+    const key = (base, part) => `${base}${part ? ` Part ${part}` : ''}`
+    if (mainIds.length) {
+      const rows = await rest(`/standard_refs?doc_id=in.(${mainIds.join(',')})&select=ref_base,ref_part,cites&limit=2000`)
+      for (const r of Array.isArray(rows) ? rows : []) {
+        const k = key(r.ref_base, r.ref_part)
+        const m = merged.get(k) ?? { base: r.ref_base, part: r.ref_part ?? '', cites: 0, manual: false }
+        m.cites += r.cites ?? 1
+        merged.set(k, m)
+      }
+    }
+    for (const r of extra) {
+      const k = key(r.base, r.part)
+      merged.set(k, { ...(merged.get(k) ?? { base: r.base, part: r.part, cites: 0 }), manual: true })
+    }
+    if (!merged.size) return []
+    // A non-IS reference is found by its library folder ("ISO 17025" -> "ISO-IEC 17025"); IS numbers are the folder.
+    const others = await nonIsFolders()
+    for (const m of merged.values()) {
+      m.folder = /^IS \d/.test(m.base) ? m.base : (resolveLibraryName(m.base, others)?.folder ?? m.base)
+    }
+    const bases = [...new Set([...merged.values()].map((m) => m.folder))]
+    const refDocs = []
+    for (let i = 0; i < bases.length; i += 80) {
+      const rows = await rest(
+        `/standard_docs?folder=in.(${encodeURIComponent(inList(bases.slice(i, i + 80)))})&kind=eq.Standard&source=eq.library&active=eq.true&select=${DOC_SELECT}&limit=5000`,
+      )
+      refDocs.push(...(Array.isArray(rows) ? rows : []).filter((d) => !String(d.relpath).includes('::')))
+    }
+    const title = await titlesFor([...merged.values()])
+    return [...merged.entries()]
+      .map(([k, m]) => {
+        const candidates = refDocs
+          .filter((d) => d.folder === m.folder && (m.part ? editionOf(d.relpath).part === m.part : !editionOf(d.relpath).part))
+          .sort((a, b) => (Number(b.pages ?? 0) > 0 ? 1 : 0) - (Number(a.pages ?? 0) > 0 ? 1 : 0) || byYearDesc(a, b))
+        return { key: k, base: m.base, part: m.part || null, cites: m.cites, manual: m.manual, title: title(m.base, m.part), file: candidates[0] ? docOut(candidates[0]) : null }
+      })
+      .sort(
+        (a, b) =>
+          Number(b.manual) - Number(a.manual) ||
+          Number(Boolean(b.file)) - Number(Boolean(a.file)) ||
+          b.cites - a.cites ||
+          a.key.localeCompare(b.key, undefined, { numeric: true }),
+      )
+  }
+
+  async function handleDocuments(req, res) {
+    await checkKey(req)
+    const body = (await readBody(req, 16 * 1024)) || {}
+    const asked = String(body.query ?? '').trim().slice(0, 120)
+    if (!/\d/.test(asked)) throw fail(400, 'Give "query": a standard number, e.g. "IS 1786", "IS 3025 Part 11" or "ASTM D445".')
+    const pick = await resolve(asked)
+    if (!pick) {
+      json(res, 200, { query: asked, is: null, count: 0, documents: [], groups: null, note: 'Not in the Standards Library.' })
+      return
+    }
+    const folder = pick.folder
+    const rows = await rest(
+      `/standard_docs?folder=eq.${encodeURIComponent(folder)}&source=eq.library&active=eq.true&select=${DOC_SELECT}&order=relpath.asc&limit=500`,
+    )
+    const all = (Array.isArray(rows) ? rows : []).filter((d) => !String(d.relpath).includes('::'))
+    // Asked with a Part ("IS 3025 Part 11"): only that Part's documents (and Sec, when asked).
+    const documents = all
+      .filter((d) => !pick.part || (String(d.part ?? '') === pick.part && (!pick.section || String(d.section ?? '') === pick.section)))
+      .map(docOut)
+    // The IS Files grouping (as the app's IS Files window) with the Reference Standards and the title.
+    const g = groupStandardDocs(all, pick)
+    const extra = []
+    for (const x of (Array.isArray(body.extra_references) ? body.extra_references : []).slice(0, 50)) {
+      const name = typeof x === 'string' ? x : `${x?.base ?? ''}${x?.part ? ` Part ${x.part}` : ''}${x?.section ? ` Sec ${x.section}` : ''}`
+      const r = await resolve(name)
+      if (r) extra.push({ base: r.folder, part: r.part })
+    }
+    const references = await referencesOf(g.standards.map((d) => d.id), extra)
+    const title = (await titlesFor([{ base: folder }]))(folder, pick.part)
+    json(res, 200, {
+      is: folder,
+      ...(pick.part ? { part: pick.part } : {}),
+      ...(pick.section ? { section: pick.section } : {}),
+      title: title || null,
+      count: documents.length,
+      documents,
+      groups: {
+        standards: g.standards.map(docOut),
+        amendments: g.amendments.map(docOut),
+        manuals: g.manuals.map(docOut),
+        older: g.older.map(docOut),
+        references,
+      },
+    })
+  }
+
+  /** Standards whose number matches what was typed ("1608", "IS 1608 Part 1"): latest edition per Part, with title. */
+  async function handleStandards(req, res) {
+    await checkKey(req)
+    const body = (await readBody(req, 8 * 1024)) || {}
+    const text = String(body.query ?? '').trim().slice(0, 80)
+    const num = text.match(/\d{2,5}/)?.[0]
+    if (!num) throw fail(400, 'Give "query": a standard number, e.g. "1608" or "IS 1608 Part 1".')
+    const part = text.match(/\bpart\s*-?\s*(\d+)/i)?.[1] ?? ''
+    const rows = await rest(
+      `/standard_docs?folder=ilike.${encodeURIComponent(`*${num}*`)}&kind=eq.Standard&source=eq.library&active=eq.true&select=${DOC_SELECT}&limit=300`,
+    )
+    const bestOf = new Map()
+    for (const d of (Array.isArray(rows) ? rows : []).filter((x) => !String(x.relpath).includes('::'))) {
+      const e = editionOf(d.relpath)
+      if (part && e.part !== part) continue
+      const key = `${d.folder}${e.part ? ` Part ${e.part}` : ''}`
+      const have = bestOf.get(key)
+      if (!have || Number(e.year || 0) > Number(editionOf(have.doc.relpath).year || 0)) bestOf.set(key, { base: d.folder, part: e.part, key, doc: d })
+    }
+    const hits = [...bestOf.values()]
+      .sort((a, b) => Number(!a.base.endsWith(` ${num}`)) - Number(!b.base.endsWith(` ${num}`)) || a.key.localeCompare(b.key, undefined, { numeric: true }))
+      .slice(0, 30)
+    const title = await titlesFor(hits)
+    json(res, 200, {
+      query: text,
+      count: hits.length,
+      standards: hits.map((h) => ({ key: h.key, base: h.base, part: h.part || null, title: title(h.base, h.part) || null, file: docOut(h.doc) })),
+    })
   }
 
   async function handleFileLink(req, res) {
@@ -260,5 +454,5 @@ export function createLibraryApi({ rest, readBody, json, standardsFiles, publicF
     json(res, 200, { relpath, pdf })
   }
 
-  return { handleSearch, handleDocuments, handleFileLink }
+  return { handleSearch, handleDocuments, handleStandards, handleFileLink }
 }
