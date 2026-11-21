@@ -243,8 +243,13 @@ export default function ApiKeysPage() {
           </li>
           <li>
             <code className="rounded bg-stone-100 px-1">POST {base}/documents</code>: {'{'}query: "IS 1786"{'}'} (or "IS 3025 Part
-            11", "ISO/IEC 17025"). Every document of that standard (editions, amendments, Product Manual) with PDF links; count 0
-            when it is not in the library.
+            11", "ISO/IEC 17025"), extra_references (optional). Every document of that standard with PDF links, and groups as
+            in IS Files: the current Standard, its Amendments, the Product Manual, older editions and the Reference Standards,
+            with the title; count 0 when it is not in the library.
+          </li>
+          <li>
+            <code className="rounded bg-stone-100 px-1">POST {base}/standards</code>: {'{'}query: "1608"{'}'}. Standards whose number
+            matches, the latest edition of each Part, with title (for an Add Reference search).
           </li>
           <li>
             <code className="rounded bg-stone-100 px-1">POST {base}/file-link</code>: {'{'}relpath, page{'}'}. A fresh PDF link.
