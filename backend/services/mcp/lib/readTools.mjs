@@ -3,6 +3,7 @@
 // table's Module Access path is also checked, so a table of a module set to None is refused. Nothing here writes.
 import * as z from 'zod/v4'
 import { userRest, userRpc } from './backend.mjs'
+import { resolveLibraryName } from './libraryFolders.mjs'
 import { config } from './config.mjs'
 import { asResult, moduleLevels, uuidSchema } from './tools.mjs'
 
@@ -157,10 +158,24 @@ async function foldersFor(ctx, isCodeId) {
   return Array.isArray(data) ? data.map(String) : []
 }
 
-/** "IS:1786", "is 1786", "IS 3025 Part 11" -> "IS 1786" (library folders are "IS <number>"). */
-function libraryFolder(name) {
-  const m = String(name).match(/\bIS\s*[:/-]?\s*(\d{1,5})\b/i)
-  return m ? `IS ${Number(m[1])}` : String(name).trim()
+let otherFolders = { at: 0, list: [] }
+
+/** "IS:1786", "IS 3025 Part 11" -> "IS 1786" / "IS 3025"; "ASTM E415-21", "ISO/IEC 17025:2017" -> their library folder. */
+async function libraryFolder(ctx, name) {
+  const quick = resolveLibraryName(name)
+  if (quick) return quick.folder
+  if (Date.now() - otherFolders.at > 10 * 60_000) {
+    try {
+      const { data } = await userRest(
+        ctx.jwt,
+        `/standard_docs?source=eq.library&folder=not.match.${enc('^IS [0-9]')}&select=folder&limit=5000`,
+      )
+      otherFolders = { at: Date.now(), list: [...new Set((Array.isArray(data) ? data : []).map((r) => String(r.folder)))] }
+    } catch {
+      /* the name as given is tried */
+    }
+  }
+  return resolveLibraryName(name, otherFolders.list)?.folder ?? String(name).trim()
 }
 
 /** The query's embedding from the standards-embed service; null when it is not there (word search only then). */
@@ -259,13 +274,13 @@ export const READ_TOOLS = [
       'whole page with get_standard_page when a passage is cut.',
     inputSchema: {
       query: z.string().min(2).max(500).describe('English search words or the question, e.g. "Fe 500D elongation TS/YS ratio"'),
-      folders: z.array(z.string().max(80)).max(10).optional().describe('IS numbers / library folders, e.g. ["IS 1786"]'),
+      folders: z.array(z.string().max(80)).max(10).optional().describe('Standard numbers, e.g. ["IS 1786"], ["IS 3025 Part 11"], ["ASTM D445"], ["ISO/IEC 17025"]'),
       include_old: z.boolean().optional().describe('Also Superseded / Withdrawn editions'),
       limit: z.number().int().min(1).max(40).optional().describe('Passages (default 20)'),
       per_doc: z.number().int().min(1).max(10).optional().describe('At most this many per document (default 6 with folders, 3 without)'),
     },
     run: async ({ query, folders, include_old, limit, per_doc }, ctx) => {
-      const list = [...new Set((folders ?? []).map(libraryFolder).filter(Boolean))]
+      const list = [...new Set((await Promise.all((folders ?? []).map((f) => libraryFolder(ctx, f)))).filter(Boolean))]
       const common = {
         p_query: query,
         p_limit: limit ?? 20,

@@ -33,7 +33,7 @@ Secret-looking keys (`password`, `secret`, `api_key`, `token`, …) are stripped
 - `list_app_tables`: every app table the user can open (by Module Access), with what it holds.
 - `read_table`: rows of one of those tables — `select` columns (or one embedded table), up to 10 `filters` (`eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `like`, `ilike`, `is`, `in`), `order`, `limit` (≤ 100), `offset`. The table's Module Access path must not be None, and RLS applies (the user's JWT).
 - `get_required_tests`: an IS Code's Required Tests and whether the list is locked.
-- `search_library` (since 21 Nov 2026): the Ask AI search, words + meaning (search_library_hybrid; the query is embedded by `standards-embed`, `STANDARDS_EMBED_URL`), whole library or named IS folders, current editions unless `include_old`. Falls back to words only.
+- `search_library` (since 21 Nov 2026): the Ask AI search, words + meaning (search_library_hybrid; the query is embedded by `standards-embed`, `STANDARDS_EMBED_URL`), whole library or named standards ("IS 1786", "ASTM D445-19", "ISO/IEC 17025:2017" are matched to their library folder by `lib/libraryFolders.mjs`), current editions unless `include_old`. Falls back to words only.
 - `find_standards`, `search_standard_pages`, `get_standard_page`: the Standards Library (documents of an IS Code or by name, the best-matching pages for some words, one page's text).
 - Left out on purpose: the QE Assistant's conversations, memories and mail, the `mcp_*` tables, and LIMS tables no menu opens. The table list is `READ_TABLES` in `lib/readTools.mjs`.
 
