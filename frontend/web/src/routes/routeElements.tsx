@@ -6,6 +6,7 @@ import ModuleAccessPage from '@/features/settings/ModuleAccessPage'
 import AiSettingsPage from '@/features/settings/AiSettingsPage'
 import EmailLogPage from '@/features/settings/email-log/EmailLogPage'
 import StandardsLibraryPage from '@/features/settings/standards-library/StandardsLibraryPage'
+import ApiKeysPage from '@/features/settings/api-keys/ApiKeysPage'
 import HelpPage from '@/features/help/HelpPage'
 import ContactUsPage from '@/features/contact/ContactUsPage'
 import ClientsPage from '@/features/masters/ClientsPage'
@@ -216,6 +217,14 @@ export function StandardsLibraryRoute() {
   return (
     <RequireLaboratoryDirector>
       <StandardsLibraryPage />
+    </RequireLaboratoryDirector>
+  )
+}
+
+export function ApiKeysRoute() {
+  return (
+    <RequireLaboratoryDirector>
+      <ApiKeysPage />
     </RequireLaboratoryDirector>
   )
 }

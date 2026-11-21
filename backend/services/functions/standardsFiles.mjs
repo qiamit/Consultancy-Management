@@ -19,8 +19,8 @@ export function createStandardsFiles({ root, secret, requireActiveUser, userRest
 
   const sign = (payload) => crypto.createHmac('sha256', key).update(payload).digest('base64url')
 
-  function makeToken(relpath) {
-    const payload = Buffer.from(JSON.stringify({ p: relpath, e: Date.now() + LINK_TTL_MS })).toString('base64url')
+  function makeToken(relpath, ttlMs = LINK_TTL_MS) {
+    const payload = Buffer.from(JSON.stringify({ p: relpath, e: Date.now() + ttlMs })).toString('base64url')
     return `${payload}.${sign(payload)}`
   }
 
@@ -113,5 +113,13 @@ export function createStandardsFiles({ root, secret, requireActiveUser, userRest
     return corsJson(res, 200, { model: data.model, vector: data.vectors[0] })
   }
 
-  return { handleLink, handleFile, handleEmbed }
+  /**
+   * A link token for the Library API (the caller's API key was checked): null when the path is not a library PDF.
+   * The file must still be listed in standard_docs; the API looks it up first.
+   */
+  function apiLinkToken(relpath, ttlMs) {
+    return secret && fullPath(relpath) ? makeToken(relpath, ttlMs) : null
+  }
+
+  return { handleLink, handleFile, handleEmbed, apiLinkToken }
 }

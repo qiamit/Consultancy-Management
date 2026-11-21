@@ -23,6 +23,7 @@ import {
   Settings,
   HelpCircle,
   Library,
+  KeyRound,
 } from 'lucide-react'
 
 /** Sidebar navigation. Module Access catalog is generated from this tree. */
@@ -335,6 +336,12 @@ export const PROFILE_MENU_SECTIONS: NavSection[] = [
         to: '/settings/standards-library',
         icon: Library,
         clause: 'standards-library',
+      },
+      {
+        label: 'API Keys',
+        to: '/settings/api-keys',
+        icon: KeyRound,
+        clause: 'api-keys',
       },
       {
         label: 'Help',

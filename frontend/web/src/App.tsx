@@ -15,6 +15,7 @@ import {
   AiSettingsRoute,
   EmailLogRoute,
   StandardsLibraryRoute,
+  ApiKeysRoute,
   AuthenticatedShell,
   PortalShell,
   BisLicenseRenewalsRoute,
@@ -137,6 +138,7 @@ export default function App() {
           <Route path="/settings/ai" element={<AiSettingsRoute />} />
           <Route path="/settings/email-log" element={<EmailLogRoute />} />
           <Route path="/settings/standards-library" element={<StandardsLibraryRoute />} />
+          <Route path="/settings/api-keys" element={<ApiKeysRoute />} />
           <Route path="/help" element={<HelpRoute />} />
           <Route path="/contact" element={<ContactUsRoute />} />
         </Route>
