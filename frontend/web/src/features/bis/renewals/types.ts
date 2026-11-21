@@ -364,6 +364,57 @@ export function renewalSlabForQuantity(
   return active.length === 1 ? active[0].slab : null
 }
 
+export type RenewalSlabBand = { min: number | null; max: number | null; rate: number }
+
+/**
+ * renewalSlabForQuantity's rules as ordered bands: the first band holding the quantity gives the rate, else
+ * `fallback` (null: no rate). Used to write the same slab choice as an Excel formula in the client Blank Sheet.
+ * Returns null when no slab can be told for any quantity.
+ */
+export function renewalSlabBands(slabs: RenewalSlabRate[]): { bands: RenewalSlabBand[]; fallback: number | null } | null {
+  const active = slabs.flatMap((slab, index) => {
+    const rate = finiteNumber(slab.rate)
+    const label = slab.quantity.trim().toLowerCase()
+    return rate !== null && label && label !== 'n/a' ? [{ index, rate, label }] : []
+  })
+  if (active.length === 0) return null
+  const allQuantities = active.find((slab) => /\ball\s+quantit(?:y|ies)\b/.test(slab.label))
+  if (allQuantities) return { bands: [], fallback: allQuantities.rate }
+  const numbersOf = (label: string) =>
+    [...label.matchAll(/(\d[\d,]*(?:\.\d+)?)/g)].map((match) => Number(match[0].replace(/,/g, ''))).filter(Number.isFinite)
+  const bands: RenewalSlabBand[] = []
+  let sawExplicitBand = false
+  for (const slab of active) {
+    const nums = numbersOf(slab.label)
+    if (nums.length >= 2 && /-|–|—|\bto\b|\bbetween\b/.test(slab.label)) {
+      sawExplicitBand = true
+      bands.push({ min: Math.min(nums[0], nums[1]), max: Math.max(nums[0], nums[1]), rate: slab.rate })
+    } else if (nums.length >= 1 && /\b(up\s*to|upto|below|under|less\s+than|max(?:imum)?)\b|<=|</.test(slab.label)) {
+      sawExplicitBand = true
+      bands.push({ min: null, max: nums[0], rate: slab.rate })
+    } else if (nums.length >= 1 && /\b(above|over|more\s+than|greater\s+than|min(?:imum)?)\b|>=|>/.test(slab.label)) {
+      sawExplicitBand = true
+      bands.push({ min: nums[0], max: null, rate: slab.rate })
+    }
+  }
+  if (sawExplicitBand) return { bands, fallback: null }
+  const thresholds = active.flatMap((slab) => {
+    const nums = numbersOf(slab.label)
+    return nums.length === 1 ? [{ threshold: nums[0], rate: slab.rate, index: slab.index }] : []
+  }).sort((a, b) => a.threshold - b.threshold || a.index - b.index)
+  if (thresholds.length === active.length) {
+    return { bands: thresholds.map((t) => ({ min: null, max: t.threshold, rate: t.rate })), fallback: thresholds.at(-1)?.rate ?? null }
+  }
+  return active.length === 1 ? { bands: [], fallback: active[0].rate } : null
+}
+
+/** The slab rate for a quantity from renewalSlabBands (same answer as renewalSlabForQuantity). */
+export function renewalSlabBandRate(slab: { bands: RenewalSlabBand[]; fallback: number | null } | null, quantity: number): number | null {
+  if (!slab) return null
+  const band = slab.bands.find((b) => (b.min === null || quantity >= b.min) && (b.max === null || quantity <= b.max))
+  return band ? band.rate : slab.fallback
+}
+
 export function calculateRenewalProductionRow(
   row: RenewalProductionRow,
   basicUnitRate: string,

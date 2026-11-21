@@ -3,7 +3,7 @@ import { renderPdfViaPlaywright, triggerPdfDownload } from '@/lib/playwrightPdfC
 import { blobToBase64, sendAppEmail } from '@/lib/sendAppEmail'
 import { supabase } from '@/lib/supabaseClient'
 import { resolveClientEmail } from '../shared/emailHtmlToClient'
-import { calculateRenewalProductionRow, formatDisplayDate, renewalMarkingFeeSummary, renewalSlabForQuantity, type BisRenewalForm, type RenewalProductionRow } from './types'
+import { calculateRenewalProductionRow, formatDisplayDate, renewalMarkingFeeSummary, renewalSlabBands, renewalSlabForQuantity, type BisRenewalForm, type RenewalProductionRow } from './types'
 
 const SHEET_NAME = 'Production Data'
 const normalize = (value: unknown) => String(value ?? '').normalize('NFKD').toLowerCase().replace(/[^a-z0-9]/g, '')
@@ -101,29 +101,35 @@ export async function createRenewalClientWorkbook(form: BisRenewalForm): Promise
     },
     views: [{ state: 'frozen', ySplit: 13 }],
   })
+  // Owner, 21 Nov 2026: each period's production value, slab rate and marking fee, and the fee payable, worked out in
+  // the sheet as the client types (the same rules as the Renewal Sheet); only the highlighted input cells open.
   sheet.columns = [
-    { key: 'start', width: 16 }, { key: 'end', width: 16 }, { key: 'total', width: 24 },
-    { key: 'rejection', width: 18 }, { key: 'covered', width: 25 },
+    { key: 'start', width: 13 }, { key: 'end', width: 13 }, { key: 'total', width: 17 }, { key: 'rejection', width: 14 },
+    { key: 'covered', width: 17 }, { key: 'pvalue', width: 18 }, { key: 'cvalue', width: 18 }, { key: 'cpercent', width: 11 },
+    { key: 'slab', width: 15 }, { key: 'fee', width: 17 },
   ]
+  const LAST = 'J'
   const dark = '292524'
   const amber = 'B45309'
   const border = { style: 'thin' as const, color: { argb: 'FFD6D3D1' } }
   const allBorders = { top: border, left: border, bottom: border, right: border }
+  const rupees = '₹ #,##0.00;[Red]-₹ #,##0.00;"–"'
+  const qty = '#,##0.000;[Red]-#,##0.000;0'
   const setMergedPair = (row: number, label: string, value: string) => {
     sheet.mergeCells(`A${row}:B${row}`)
-    sheet.mergeCells(`C${row}:E${row}`)
+    sheet.mergeCells(`C${row}:${LAST}${row}`)
     sheet.getCell(`A${row}`).value = label
     sheet.getCell(`C${row}`).value = value
   }
 
-  sheet.mergeCells('A1:E1')
+  sheet.mergeCells(`A1:${LAST}1`)
   sheet.getCell('A1').value = 'BIS LICENSE RENEWAL — CLIENT PRODUCTION STATEMENT'
   sheet.getRow(1).height = 32
   sheet.getCell('A1').font = { name: 'Aptos Display', size: 16, bold: true, color: { argb: 'FFFFFFFF' } }
   sheet.getCell('A1').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${dark}` } }
   sheet.getCell('A1').alignment = { vertical: 'middle', horizontal: 'center' }
 
-  sheet.mergeCells('A2:E2')
+  sheet.mergeCells(`A2:${LAST}2`)
   sheet.getCell('A2').value = `${form.clientLabel || 'Client'}  •  ${form.isCodeLabel || 'IS Code'}  •  CM/L ${form.cmLDigits || '—'}`
   sheet.getCell('A2').font = { name: 'Aptos', size: 11, bold: true, color: { argb: `FF${dark}` } }
   sheet.getCell('A2').alignment = { vertical: 'middle', horizontal: 'center' }
@@ -136,10 +142,11 @@ export async function createRenewalClientWorkbook(form: BisRenewalForm): Promise
   setMergedPair(8, 'Renewal Period', `${formatDisplayDate(form.renewalPeriodFrom)} to ${formatDisplayDate(form.renewalPeriodTo)}`)
   setMergedPair(9, 'Renewal Term', `${form.renewalTermYears || '5'} year(s)`)
   sheet.mergeCells('A10:B10')
-  sheet.mergeCells('C10:E10')
+  sheet.mergeCells(`C10:${LAST}10`)
   sheet.getCell('A10').value = 'Basic Unit Rate Approx (₹ per unit)'
-  // Always blank for the manufacturer — production value rate, not IS Code marking-fee slab rate.
-  sheet.getCell('C10').value = ''
+  // Blank for the manufacturer unless already entered: production value rate, not the IS Code marking-fee slab rate.
+  const knownRate = entered(form.basicUnitRate)
+  sheet.getCell('C10').value = knownRate ?? ''
   for (let row = 4; row <= 10; row += 1) {
     const label = sheet.getCell(`A${row}`)
     const value = sheet.getCell(`C${row}`)
@@ -147,10 +154,8 @@ export async function createRenewalClientWorkbook(form: BisRenewalForm): Promise
     label.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F5F4' } }
     label.alignment = { vertical: 'middle' }
     value.font = { name: 'Aptos', size: 10, color: { argb: `FF${dark}` } }
-    value.alignment = { vertical: 'middle' }
-    for (const cell of [label, sheet.getCell(`B${row}`), value, sheet.getCell(`D${row}`), sheet.getCell(`E${row}`)]) {
-      cell.border = allBorders
-    }
+    value.alignment = { vertical: 'middle', horizontal: 'left' }
+    for (let column = 1; column <= 10; column += 1) sheet.getCell(row, column).border = allBorders
   }
   sheet.getRow(10).height = 27
   sheet.getCell('C10').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF7D6' } }
@@ -162,20 +167,26 @@ export async function createRenewalClientWorkbook(form: BisRenewalForm): Promise
     showErrorMessage: true, errorTitle: 'Invalid rate', error: 'Enter zero or a positive rate.',
   }
 
-  sheet.mergeCells('A11:E11')
-  sheet.getCell('A11').value = 'Enter Basic Unit Rate Approx (your selling / production rate per unit — not the BIS marking fee rate), Total Production and Rejection in the highlighted cells. Covered Production is calculated automatically; keep period dates and reference fields unchanged.'
+  sheet.mergeCells(`A11:${LAST}11`)
+  sheet.getCell('A11').value =
+    'Enter only the highlighted cells: Basic Unit Rate Approx (your selling / production rate per unit — not the BIS marking fee rate), ' +
+    'Total Production and Rejection for each period. Covered Production, values, the IS Code slab rate, the marking fee of each period ' +
+    'and the fee payable below are calculated automatically. Keep period dates unchanged and send this same file back for import.'
   sheet.getCell('A11').font = { name: 'Aptos', size: 9, italic: true, color: { argb: 'FF57534E' } }
   sheet.getCell('A11').alignment = { vertical: 'middle', wrapText: true }
   sheet.getCell('A11').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFAFAF9' } }
   sheet.getCell('A11').border = allBorders
-  sheet.getRow(11).height = 30
+  sheet.getRow(11).height = 40
   sheet.getRow(12).height = 8
 
   const headerRow = 13
-  const headers = ['Period Start', 'Period End', `Total Production (${unit})`, `Rejection (${unit})`, `Covered Production (${unit})`]
+  const headers = [
+    'Period Start', 'Period End', `Total Production (${unit})`, `Rejection (${unit})`, `Covered Production (${unit})`,
+    'Production Value (₹)', 'Covered Value (₹)', 'Covered (%)', `Slab Rate (₹ per ${unit})`, 'Marking Fee (₹)',
+  ]
   sheet.addRow(headers)
   const header = sheet.getRow(headerRow)
-  header.height = 34
+  header.height = 36
   header.eachCell((cell) => {
     cell.font = { name: 'Aptos', size: 10, bold: true, color: { argb: 'FFFFFFFF' } }
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${dark}` } }
@@ -183,8 +194,23 @@ export async function createRenewalClientWorkbook(form: BisRenewalForm): Promise
     cell.border = { top: { style: 'medium', color: { argb: `FF${amber}` } }, left: border, bottom: border, right: border }
   })
 
+  // The IS Code slab rate of a period, chosen by its covered quantity exactly as the Renewal Sheet does.
+  const slab = renewalSlabBands(form.slabRates)
+  const slabFormula = (q: string) => {
+    if (!slab) return '""'
+    let formula = slab.fallback === null ? '""' : String(slab.fallback)
+    for (const band of [...slab.bands].reverse()) {
+      const parts = [band.min !== null ? `${q}>=${band.min}` : '', band.max !== null ? `${q}<=${band.max}` : ''].filter(Boolean)
+      const test = parts.length === 2 ? `AND(${parts.join(',')})` : parts[0] ?? 'TRUE'
+      formula = `IF(${test},${band.rate},${formula})`
+    }
+    return formula
+  }
+  const rate = '$C$10'
+
   // Values already entered in the Renewal Sheet go into the workbook (rejection = total − covered).
   form.productionRows.forEach((row, index) => {
+    const r = headerRow + index + 1
     const total = entered(row.productionUnit)
     const covered = entered(row.coveredUnit)
     const excelRow = sheet.addRow([
@@ -193,7 +219,12 @@ export async function createRenewalClientWorkbook(form: BisRenewalForm): Promise
       row.periodTo ? new Date(`${row.periodTo}T00:00:00Z`) : '',
       total ?? '',
       total !== null && covered !== null ? Math.max(0, total - covered) : '',
-      { formula: `IF(C${headerRow + index + 1}="","",MAX(0,C${headerRow + index + 1}-IF(D${headerRow + index + 1}="",0,D${headerRow + index + 1})))`, result: '' },
+      { formula: `IF(C${r}="","",MAX(0,C${r}-IF(D${r}="",0,D${r})))`, result: '' },
+      { formula: `IF(OR(C${r}="",${rate}=""),"",ROUND(C${r}*${rate},2))`, result: '' },
+      { formula: `IF(OR(E${r}="",${rate}=""),"",ROUND(E${r}*${rate},2))`, result: '' },
+      { formula: `IF(OR(E${r}="",N(C${r})<=0),"",ROUND(E${r}/C${r}*100,2))`, result: '' },
+      { formula: `IF(E${r}="","",${slabFormula(`E${r}`)})`, result: '' },
+      { formula: `IF(OR(E${r}="",I${r}=""),"",ROUND(E${r}*I${r},2))`, result: '' },
     ])
     excelRow.height = 25
     excelRow.eachCell({ includeEmpty: true }, (cell, column) => {
@@ -204,9 +235,10 @@ export async function createRenewalClientWorkbook(form: BisRenewalForm): Promise
     })
     excelRow.getCell(1).numFmt = 'dd/mm/yyyy'
     excelRow.getCell(2).numFmt = 'dd/mm/yyyy'
-    excelRow.getCell(3).numFmt = '#,##0.00;[Red]-#,##0.00;0'
-    excelRow.getCell(4).numFmt = '#,##0.00;[Red]-#,##0.00;0'
-    excelRow.getCell(5).numFmt = '#,##0.00;[Red]-#,##0.00;0'
+    for (const column of [3, 4, 5]) excelRow.getCell(column).numFmt = qty
+    for (const column of [6, 7, 10]) excelRow.getCell(column).numFmt = rupees
+    excelRow.getCell(8).numFmt = '0.00"%";;"–"'
+    excelRow.getCell(9).numFmt = rupees
     // Stock-marking break rows take quantities like any other period (owner, 14 Nov 2026).
     for (const column of [3, 4]) {
       const cell = excelRow.getCell(column)
@@ -221,33 +253,88 @@ export async function createRenewalClientWorkbook(form: BisRenewalForm): Promise
       type: 'decimal', operator: 'lessThanOrEqual', formulae: [`C${excelRow.number}`], allowBlank: true,
       showErrorMessage: true, errorTitle: 'Rejection exceeds production', error: 'Rejection must be equal to or less than Total Production.',
     }
-    excelRow.getCell(5).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFF6FF' } }
-    excelRow.getCell(5).font = { name: 'Aptos', size: 10, italic: true, color: { argb: 'FF44403C' } }
+    for (const column of [5, 6, 7, 8, 9, 10]) {
+      excelRow.getCell(column).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: column === 10 ? 'FFECFDF5' : 'FFEFF6FF' } }
+      excelRow.getCell(column).font = { name: 'Aptos', size: 10, italic: column !== 10, bold: column === 10, color: { argb: 'FF44403C' } }
+    }
   })
-  // Total row under the periods (only for the client to see the sum; Import skips it).
+  // Total row under the periods (Import skips it).
   const firstDataRow = headerRow + 1
   const lastDataRow = headerRow + form.productionRows.length
   const totalRow = sheet.getRow(lastDataRow + 1)
   sheet.mergeCells(`A${totalRow.number}:B${totalRow.number}`)
   totalRow.getCell(1).value = 'Total'
-  for (const column of [3, 4, 5]) {
+  for (const column of [3, 4, 5, 6, 7, 10]) {
     const letter = String.fromCharCode(64 + column)
     totalRow.getCell(column).value = { formula: `SUM(${letter}${firstDataRow}:${letter}${lastDataRow})`, result: 0 }
-    totalRow.getCell(column).numFmt = '#,##0.00;[Red]-#,##0.00;0'
+    totalRow.getCell(column).numFmt = column <= 5 ? qty : rupees
   }
+  totalRow.getCell(8).value = { formula: `IF(N(C${totalRow.number})<=0,"",ROUND(E${totalRow.number}/C${totalRow.number}*100,2))`, result: '' }
+  totalRow.getCell(8).numFmt = '0.00"%";;"–"'
   totalRow.height = 27
-  for (let column = 1; column <= 5; column += 1) {
+  for (let column = 1; column <= 10; column += 1) {
     const cell = totalRow.getCell(column)
     cell.font = { name: 'Aptos', size: 11, bold: true, color: { argb: `FF${dark}` } }
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } }
     cell.alignment = { vertical: 'middle', horizontal: column <= 2 ? 'center' : 'right' }
     cell.border = { top: { style: 'medium', color: { argb: `FF${amber}` } }, left: border, bottom: { style: 'medium', color: { argb: `FF${amber}` } }, right: border }
   }
-  sheet.autoFilter = { from: { row: headerRow, column: 1 }, to: { row: lastDataRow, column: 5 } }
-  sheet.pageSetup.printArea = `A1:E${totalRow.number}`
+
+  // Fee payable, as the Renewal Sheet works it out: the higher of the calculated and the minimum marking fee, plus
+  // the application, licence and late fees and GST.
+  const fee = renewalMarkingFeeSummary([], form)
+  const money2 = new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  let summaryRow = totalRow.number + 2
+  sheet.mergeCells(`A${summaryRow}:${LAST}${summaryRow}`)
+  sheet.getCell(`A${summaryRow}`).value = 'MARKING FEE CALCULATION'
+  sheet.getCell(`A${summaryRow}`).font = { name: 'Aptos', size: 11, bold: true, color: { argb: 'FFFFFFFF' } }
+  sheet.getCell(`A${summaryRow}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${dark}` } }
+  sheet.getCell(`A${summaryRow}`).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 }
+  sheet.getRow(summaryRow).height = 24
+  const at: Record<string, string> = {}
+  const line = (keyName: string, label: string, value: number | { formula: string }, opts: { bold?: boolean; grand?: boolean } = {}) => {
+    summaryRow += 1
+    sheet.mergeCells(`A${summaryRow}:G${summaryRow}`)
+    sheet.mergeCells(`H${summaryRow}:${LAST}${summaryRow}`)
+    const labelCell = sheet.getCell(`A${summaryRow}`)
+    const valueCell = sheet.getCell(`H${summaryRow}`)
+    labelCell.value = label
+    valueCell.value = typeof value === 'number' ? value : { formula: value.formula, result: 0 }
+    valueCell.numFmt = '₹ #,##0.00'
+    const fill = opts.grand ? 'FFFEF3C7' : opts.bold ? 'FFF5F5F4' : 'FFFFFFFF'
+    for (let column = 1; column <= 10; column += 1) {
+      const cell = sheet.getCell(summaryRow, column)
+      cell.border = allBorders
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fill } }
+    }
+    labelCell.font = { name: 'Aptos', size: opts.grand ? 11 : 10, bold: opts.bold || opts.grand, color: { argb: `FF${dark}` } }
+    labelCell.alignment = { vertical: 'middle', wrapText: true, indent: 1 }
+    valueCell.font = { name: 'Aptos', size: opts.grand ? 12 : 10, bold: opts.bold || opts.grand, color: { argb: opts.grand ? 'FF92400E' : `FF${dark}` } }
+    valueCell.alignment = { vertical: 'middle', horizontal: 'right' }
+    sheet.getRow(summaryRow).height = opts.grand ? 26 : 22
+    at[keyName] = `H${summaryRow}`
+  }
+  line('calculated', '1. Calculated Marking Fee — Σ (each period\'s covered production × IS Code slab rate)', { formula: `J${totalRow.number}` })
+  const minimumLabel = !fee.scale
+    ? '2. Minimum Marking Fee — firm scale not set in Client Master, minimum not applied'
+    : fee.minimumPerYear === null
+      ? `2. Minimum Marking Fee — no ${fee.scale} scale minimum in IS Code Master, not applied`
+      : `2. Minimum Marking Fee — ${fee.scale} scale: ₹ ${money2.format(fee.minimumPerYear)} per year${fee.years > 1 ? ` × ${fee.years} years` : ''}`
+  line('minimum', minimumLabel, fee.minimumTotal)
+  line('payable', '3. Marking Fee Payable — the higher of 1 and 2', { formula: `MAX(${at.calculated},${at.minimum})` }, { bold: true })
+  line('application', 'Renewal Application Fee', fee.applicationFee)
+  line('licence', `Annual Licence Fee${fee.years > 1 ? ` (₹ ${money2.format(fee.licenceFee / fee.years)} × ${fee.years} years)` : ''}`, fee.licenceFee)
+  if (fee.lateFee) line('late', 'Late Fee (Deferred Renewal)', fee.lateFee)
+  const parts = ['payable', 'application', 'licence', ...(fee.lateFee ? ['late'] : [])].map((k) => at[k])
+  line('subtotal', 'Subtotal', { formula: `SUM(${parts.join(',')})` }, { bold: true })
+  line('gst', `GST @ ${fee.gstRate}%`, { formula: `ROUND(${at.subtotal}*${fee.gstRate},0)/100` })
+  line('total', 'Total Fee Payable (incl. GST)', { formula: `${at.subtotal}+${at.gst}` }, { grand: true })
+
+  sheet.autoFilter = { from: { row: headerRow, column: 1 }, to: { row: lastDataRow, column: 10 } }
+  sheet.pageSetup.printArea = `A1:${LAST}${summaryRow}`
   sheet.pageSetup.printTitlesRow = '13:13'
   await sheet.protect('QE-Renewal-Client-Input', {
-    selectLockedCells: false,
+    selectLockedCells: true,
     selectUnlockedCells: true,
     formatCells: false,
     formatColumns: false,
