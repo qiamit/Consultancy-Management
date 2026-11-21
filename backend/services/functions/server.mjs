@@ -8,6 +8,7 @@ import { createRenewalReminders } from './renewalReminders.mjs'
 import { startAssistantScheduler } from './assistantScheduler.mjs'
 import { createAssistantMail } from './assistantMail.mjs'
 import { createStandardsFiles } from './standardsFiles.mjs'
+import { createLibraryApi } from './libraryApi.mjs'
 
 const PORT = Number(process.env.PORT || 8080)
 const MANAK_TTL_MS = 45 * 60 * 1000
@@ -1380,7 +1381,20 @@ const standardsFiles = createStandardsFiles({
   corsHeaders,
 })
 
+// Library API for the owner's own apps (qirlpl.com): API key from Settings -> API Keys; passages + PDF links only.
+const libraryApi = createLibraryApi({
+  rest,
+  readBody,
+  json,
+  standardsFiles,
+  publicFunctionsUrl: AUTH_PUBLIC_URL.replace(/\/auth\/v1$/, '/functions/v1'),
+  embedUrl: (process.env.STANDARDS_EMBED_URL || 'http://standards-embed:8000').replace(/\/$/, ''),
+})
+
 const routes = {
+  'POST /library/search': libraryApi.handleSearch,
+  'POST /library/documents': libraryApi.handleDocuments,
+  'POST /library/file-link': libraryApi.handleFileLink,
   'POST /standards/file-link': standardsFiles.handleLink,
   'GET /standards/file': standardsFiles.handleFile,
   'POST /standards/embed': standardsFiles.handleEmbed,
