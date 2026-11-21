@@ -21,15 +21,22 @@ const nameOf = (relpath: string) => relpath.split('/').pop() ?? relpath
 
 /** English search words for the index (the question may be in Hindi / Hinglish). */
 export async function searchWords(question: string, isLabel: string): Promise<string> {
-  // A short English question searches with its own words; Hinglish goes through the model too ("IS 808 me ISMB 200 ka
-  // weight kitna hai" searched for "me", "ka", "kitna", "hai" and missed the beam table; RAG testing, 20 Nov 2026).
-  if (answerLanguage(question) === 'English' && question.split(/\s+/).length <= 12) return question
+  // Every question goes through the model, English too: its own words drown the one that matters in the words every
+  // page has ("What is the acceptable limit of lead in drinking water as per IS 10500?" found the amendment pages full
+  // of "acceptable limit" and never Table 3; the model's "lead limit drinking water toxic substances" finds the lead
+  // row first; RAG testing, 21 Nov 2026). Hinglish never searched with its own words ("me", "ka", "kitna", "hai").
   const { reply } = await sendQiAssistantMessage({
     page: 'masters/is-files-ask',
     message:
-      `Standard: ${isLabel}\nQuestion: ${question}\n\nGive 3 to 6 English words to search the standards' text for the ` +
-      `answer: the product or material first (e.g. "steel tube"), then the property or topic (e.g. "tensile strength", ` +
-      `"scale of sampling", "marking"). No general words such as standard, requirement, number, value, selected. ` +
+      `Standard: ${isLabel}\nQuestion: ${question}\n\nGive 2 to 6 English words to search the standards' text for the ` +
+      (isLabel.trim()
+        ? // Within a named standard every page is about its product: "drinking water lead" missed IS 10500's lead row.
+          `answer: only the property, test or topic asked, in the words the standard itself uses (e.g. "elongation", ` +
+          `"bend test", "scale of sampling", "marking"; a chemical by its name, e.g. "arsenic"); not the product the ` +
+          `standard covers. `
+        : `answer: the product or material first (e.g. "steel tube"), then the property or topic (e.g. "tensile strength", ` +
+          `"scale of sampling", "marking"). `) +
+      `No general words such as standard, requirement, number, value, selected, limit. ` +
       `Answer as JSON: {"words": ["...", "..."]}`,
     responseFormat: 'json_object',
     history: [],
