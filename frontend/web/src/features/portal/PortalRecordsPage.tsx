@@ -27,7 +27,7 @@ import {
   type PortalSection,
 } from './portalApi'
 import { usePortalData } from './portalDataContext'
-import { cellText, REF_LABEL } from './recordDisplay'
+import { cellText, linkLabel, REF_LABEL } from './recordDisplay'
 import { buildRecordPrintHtml, type PrintHeader } from './recordPrint'
 import {
   computeEntry,
