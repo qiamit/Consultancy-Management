@@ -1,12 +1,18 @@
-// MCP edit tools: preview → user confirms → apply_change. A preview stores the exact change
-// and the current values it was based on, behind a single-use token (5 min, this user and
-// this Claude connection only). apply_change refuses if any of those values changed since
-// the preview. Writes run with the user's own JWT, so RLS and Module Access edit rights apply.
-// There are no delete tools.
+// MCP edit tools. Every write runs with the user's own JWT, so RLS and Module Access edit rights apply.
+// - preview_* (project, client, Non-Conformity case) → user confirms → apply_change: a preview stores the exact change
+//   and the values it was based on behind a single-use token (5 min, this user and this Claude connection only);
+//   apply_change refuses if any of those values changed since the preview.
+// - Any app table (owner, 22 Nov 2026: "Create, Update, Read, Delete … Save bhi auto kar de"): create_record and
+//   update_record save at once (each kept with its before / after values in mcp_pending_changes as the history);
+//   delete goes through preview_delete_record → apply_change, and master tables only through the app's safe delete.
+import { randomUUID } from 'node:crypto'
 import * as z from 'zod/v4'
 import { config } from './config.mjs'
 import { randomToken, sha256 } from './crypto.mjs'
-import { svc, userRest } from './backend.mjs'
+import { svc, userRest, userRpc } from './backend.mjs'
+import { READ_TABLES } from './readTools.mjs'
+import { moduleLevels, stripSecrets } from './tools.mjs'
+import { checkValues, mustGive, tableDefinition } from './tableSchema.mjs'
 
 const enc = encodeURIComponent
 const PENDING_TTL_SEC = 5 * 60
@@ -228,6 +234,204 @@ async function previewUpdate(ctx, target, id, fields, title) {
   return stage(ctx, { kind: `update_${target}`, target, targetId: id, title, changes, before })
 }
 
+/**
+ * Tables Claude may change: every app table it can read, except these (owner, 22 Nov 2026).
+ */
+const NO_WRITE = new Set([
+  // Users, permissions and AI keys
+  'user_profiles', 'module_access_rules', 'ai_settings', 'ai_models', 'ai_skills',
+  // Logs and audit trails
+  'email_send_log', 'finance_transaction_audit',
+  // The Standards Library index (written by the indexer from the owner's folder)
+  'standard_docs', 'standard_pages', 'standard_list', 'standard_refs_status', 'standard_index_runs', 'standard_sync_requests',
+  // Customer Portal logins and what each login sees
+  'portal_customers', 'portal_licence_access',
+  // File rows (files are uploaded in the app) and document numbering
+  'bis_project_files', 'client_certificate_files', 'is_code_files', 'lab_documents', 'lab_letterheads', 'document_series', 'lab_prefixes',
+])
+/** Settings: changed only, never created or deleted from here. */
+const UPDATE_ONLY = new Set(['lab_settings', 'company_settings', 'website_settings', 'bis_renewal_reminder_settings', 'sale_document_signature_defaults'])
+/** Masters are deleted only through the app's own safe delete: admins only, and a row still used elsewhere is kept. */
+const MASTER_DELETE = new Set(['clients', 'is_codes', 'test_parameters', 'products_services_master'])
+
+export const RECORD_TABLES = Object.fromEntries(
+  Object.entries(READ_TABLES)
+    .filter(([name]) => !NO_WRITE.has(name))
+    .map(([name, spec]) => [name, { ...spec, ops: UPDATE_ONLY.has(name) ? ['update'] : ['create', 'update', 'delete'] }]),
+)
+const RECORD_NAMES = Object.keys(RECORD_TABLES)
+export const RECORD_PATHS = [...new Set(Object.values(RECORD_TABLES).map((t) => t.path))]
+
+const valuesSchema = z
+  .record(z.string().regex(/^[a-z_][a-z0-9_]*$/, 'Column names are lower case'), z.any())
+  .describe('Column → value (see describe_table for the columns, their types and which are required). Dates as YYYY-MM-DD.')
+
+/** The table's spec for this operation, after checking the user has edit on its module. */
+async function recordTable(ctx, table, op) {
+  const spec = RECORD_TABLES[table]
+  if (!spec) throw new Error(`${table} cannot be changed from Claude.`)
+  if (!spec.ops.includes(op)) throw new Error(`${table} can only be ${spec.ops.join(' / ')}d from Claude.`)
+  const level = (await moduleLevels(ctx.jwt, [spec.path]))[spec.path] || 'none'
+  if (level !== 'edit') {
+    const err = new Error(`Your Module Access for ${spec.path} is ${level}: edit is needed to change ${table}.`)
+    err.status = 403
+    throw err
+  }
+  return spec
+}
+
+/** History of an automatic save: the same table as the previews, already used, with the before / after values. */
+async function keepHistory(ctx, kind, targetId, changes, before, summary) {
+  await svc('/mcp_pending_changes', {
+    method: 'POST',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({
+      token_hash: sha256(randomToken('qeh')),
+      user_id: ctx.userId,
+      client_id: ctx.clientId,
+      kind,
+      target_id: targetId,
+      changes,
+      before,
+      summary: summary.slice(0, 4000),
+      expires_at: new Date().toISOString(),
+      used_at: new Date().toISOString(),
+    }),
+  }).catch(() => {})
+}
+
+/** The few columns that name a row in a summary. */
+function rowLabel(row) {
+  const keys = ['title', 'name', 'company_name', 'is_number', 'test_name', 'item_name', 'quotation_number', 'invoice_number', 'document_number', 'label', 'code']
+  const k = keys.find((x) => row?.[x])
+  return k ? `${k} "${show(row[k])}"` : ''
+}
+
+async function applyRecord(pending, ctx) {
+  const table = pending.changes?.table
+  if (pending.kind !== 'delete_record' || !RECORD_TABLES[table]) return asText('Unknown change type.')
+  await recordTable(ctx, table, 'delete')
+  const id = pending.target_id
+  const { data: rows } = await userRest(ctx.jwt, `/${table}?id=eq.${enc(id)}&select=*`)
+  const row = Array.isArray(rows) ? rows[0] : null
+  if (!row) return asText(`That ${table} row is no longer there or not visible to you. Nothing was deleted.`)
+  if (!same(stripSecrets(row), pending.before)) return asText('Not deleted: the row changed after the preview. Make a new preview.')
+  if (MASTER_DELETE.has(table)) {
+    const result = await userRpc(ctx.jwt, 'delete_master_rows', { p_table: table, p_ids: [id] })
+    const deleted = Array.isArray(result?.deleted) ? result.deleted.map(String) : []
+    if (deleted.includes(id)) return asText(`Deleted.\n${pending.summary}`)
+    const refs = (Array.isArray(result?.blocked) ? result.blocked : []).find((b) => String(b.id) === id)?.refs
+    return asText(
+      `Not deleted: this ${table} row is still used${refs ? ` (${Object.entries(refs).map(([t, n]) => `${n} in ${t}`).join(', ')})` : ''}. ` +
+        'Remove or move those first, or keep the row.',
+    )
+  }
+  const { data } = await userRest(ctx.jwt, `/${table}?id=eq.${enc(id)}`, { method: 'DELETE', headers: { Prefer: 'return=representation' } })
+  if (!Array.isArray(data) || !data.length) return asText('Not deleted: the database refused (no delete permission on this row).')
+  return asText(`Deleted.\n${pending.summary}`)
+}
+
+const RECORD_TOOLS = [
+  {
+    name: 'create_record',
+    path: null,
+    title: 'Create a record in any app table',
+    description:
+      'Add one row to a Consultancy Pro table (any module you have edit on; see list_app_tables and describe_table for the columns). ' +
+      'Saved at once, as you — Module Access and row-level security apply. Give every required column; ids, created / updated stamps ' +
+      'and secret fields are set by the app. Prefer the dedicated tools (e.g. preview_update_project) where one exists. ' +
+      'Read first to avoid duplicates, and never invent facts: ask the user for missing values.',
+    inputSchema: { table: z.enum(RECORD_NAMES).describe('Table name'), values: valuesSchema },
+    run: async ({ table, values }, ctx) => {
+      await recordTable(ctx, table, 'create')
+      const def = await tableDefinition(ctx, table)
+      const clean = checkValues(def, values)
+      const missing = mustGive(def).filter((c) => clean[c] === undefined || clean[c] === null || clean[c] === '')
+      if (missing.length) return asText(`Not saved: give ${missing.join(', ')} (required for a new ${table} row).`)
+      if (!Object.keys(clean).length) return asText('No values given, nothing to save.')
+      const id = def.properties.id && String(def.properties.id.format) === 'uuid' ? randomUUID() : null
+      const body = { ...(id ? { id } : {}), ...clean }
+      const createdBy = def.properties.created_by
+      if (createdBy && String(createdBy.format) === 'uuid') body.created_by = ctx.userId
+      const { data } = await userRest(ctx.jwt, `/${table}`, { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(body) })
+      const row = Array.isArray(data) ? data[0] : null
+      if (!row) return asText('Not saved: the database refused the new row (no permission).')
+      const summary = `Created ${table} ${row.id ?? ''} ${rowLabel(row)}\n${Object.keys(clean).map((k) => `- ${k}: ${show(clean[k])}`).join('\n')}`
+      await keepHistory(ctx, 'create_record', row.id && /^[0-9a-f-]{36}$/i.test(String(row.id)) ? row.id : randomUUID(), { table, values: clean }, {}, summary)
+      return asText(`Saved.\n${summary}\n\nNew row: ${JSON.stringify(stripSecrets(row)).slice(0, 3000)}`)
+    },
+  },
+  {
+    name: 'update_record',
+    path: null,
+    title: 'Update a record in any app table',
+    description:
+      'Change columns of one row (by id) of a Consultancy Pro table you have edit on. Saved at once, as you — Module Access and ' +
+      'row-level security apply; the reply shows before → after. Only the columns given change. Read the row first (read_table) ' +
+      'and never invent facts.',
+    inputSchema: { table: z.enum(RECORD_NAMES).describe('Table name'), id: uuid('Row'), values: valuesSchema },
+    run: async ({ table, id, values }, ctx) => {
+      await recordTable(ctx, table, 'update')
+      const def = await tableDefinition(ctx, table)
+      if (!def.properties.id) return asText(`${table} has no id column, so its rows cannot be changed here.`)
+      const clean = checkValues(def, values)
+      const keys = Object.keys(clean)
+      if (!keys.length) return asText('No values given, nothing to change.')
+      const { data: rows } = await userRest(ctx.jwt, `/${table}?id=eq.${enc(id)}&select=${['id', ...keys].join(',')}`)
+      const row = Array.isArray(rows) ? rows[0] : null
+      if (!row) return asText(`That ${table} row was not found or is not visible to you.`)
+      const changes = {}
+      const before = {}
+      for (const k of keys) {
+        if (!same(row[k], clean[k])) {
+          changes[k] = clean[k]
+          before[k] = row[k] ?? null
+        }
+      }
+      if (!Object.keys(changes).length) return asText('Every value already matches; nothing changed.')
+      const { data } = await userRest(ctx.jwt, `/${table}?id=eq.${enc(id)}`, {
+        method: 'PATCH',
+        headers: { Prefer: 'return=representation' },
+        body: JSON.stringify(changes),
+      })
+      if (!Array.isArray(data) || !data.length) return asText('Not saved: the database refused the change (no edit permission on this row).')
+      const summary = `Updated ${table} ${id} ${rowLabel(data[0])}\n${Object.keys(changes).map((k) => `- ${k}: ${show(before[k])} → ${show(changes[k])}`).join('\n')}`
+      await keepHistory(ctx, 'update_record', id, { table, values: changes }, before, summary)
+      return asText(`Saved.\n${summary}`)
+    },
+  },
+  {
+    name: 'preview_delete_record',
+    path: null,
+    title: 'Preview deleting a record',
+    description:
+      'Prepare the PERMANENT delete of one row (by id) of a Consultancy Pro table you have edit on. Nothing is deleted: it shows the ' +
+      'row and returns a confirm token; call apply_change only after the user clearly confirms the delete. Client, IS Code, test and ' +
+      'product masters use the app\'s safe delete (admins only; a row still used elsewhere is kept).',
+    inputSchema: { table: z.enum(RECORD_NAMES).describe('Table name'), id: uuid('Row') },
+    run: async ({ table, id }, ctx) => {
+      await recordTable(ctx, table, 'delete')
+      const { data: rows } = await userRest(ctx.jwt, `/${table}?id=eq.${enc(id)}&select=*`)
+      const row = Array.isArray(rows) ? rows[0] : null
+      if (!row) return asText(`That ${table} row was not found or is not visible to you.`)
+      const before = stripSecrets(row)
+      const lines = Object.entries(before)
+        .filter(([, v]) => v !== null && v !== '' && typeof v !== 'object')
+        .slice(0, 14)
+        .map(([k, v]) => `- ${k}: ${show(v)}`)
+      return stage(ctx, {
+        kind: 'delete_record',
+        target: null,
+        targetId: id,
+        title: `DELETE ${table} ${id} ${rowLabel(row)} — permanent, cannot be undone${MASTER_DELETE.has(table) ? ' (admins only; kept if still used elsewhere)' : ''}:`,
+        changes: { table },
+        before,
+        lines,
+      })
+    },
+  },
+]
+
 export const WRITE_TOOLS = [
   {
     name: 'preview_update_project',
@@ -348,7 +552,7 @@ export const WRITE_TOOLS = [
     path: null,
     title: 'Apply a confirmed change',
     description:
-      'Save a change prepared by a preview_* tool. Call it ONLY after the user has seen the preview and clearly said yes. ' +
+      'Save a change prepared by a preview_* tool (including preview_delete_record). Call it ONLY after the user has seen the preview and clearly said yes. ' +
       'It fails if the token expired, was used, or the record changed since the preview.',
     inputSchema: { confirm_token: z.string().regex(/^qep_[A-Za-z0-9_-]{20,}$/, 'Use the confirm_token from the preview') },
     destructive: true,
@@ -361,6 +565,7 @@ export const WRITE_TOOLS = [
       )
       const pending = Array.isArray(claimed) ? claimed[0] : null
       if (!pending) return asText('This confirm token is invalid, expired or already used. Make a new preview.')
+      if (pending.kind === 'delete_record') return applyRecord(pending, ctx)
       const target = pending.kind === 'update_project' ? 'project' : pending.kind === 'update_client' ? 'client' : pending.kind === 'update_noncompliance' ? 'noncompliance' : null
       if (!target) return asText('Unknown change type.')
       if ((ctx.levels[TARGETS[target].path] || 'none') !== 'edit') {
@@ -385,6 +590,8 @@ export const WRITE_TOOLS = [
     },
   },
 ]
+
+WRITE_TOOLS.push(...RECORD_TOOLS)
 
 export function writesEnabled() {
   return config.writeEnabled

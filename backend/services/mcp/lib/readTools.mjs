@@ -6,6 +6,7 @@ import { userRest, userRpc } from './backend.mjs'
 import { resolveLibraryName } from './libraryFolders.mjs'
 import { config } from './config.mjs'
 import { asResult, moduleLevels, uuidSchema } from './tools.mjs'
+import { describeColumns, tableDefinition } from './tableSchema.mjs'
 
 const enc = encodeURIComponent
 
@@ -201,17 +202,34 @@ export const READ_TOOLS = [
     path: null,
     title: 'List app tables',
     description:
-      'Every Consultancy Pro table read_table can read, with what it holds and the menu (Module Access path) it belongs to; tables of a module set to None for you are left out.',
+      'Every Consultancy Pro table read_table can read, with what it holds, the menu (Module Access path) it belongs to and what you can change in it (can_change: create / update / delete); tables of a module set to None for you are left out.',
     inputSchema: {},
     run: async (_args, ctx) => {
       const levels = await moduleLevels(ctx.jwt, Object.values(READ_TABLES).map((t) => t.path))
+      // Loaded here: writeTools imports this file.
+      const { RECORD_TABLES } = config.writeEnabled ? await import('./writeTools.mjs') : { RECORD_TABLES: {} }
       const tables = TABLE_NAMES.filter((n) => (levels[READ_TABLES[n].path] || 'none') !== 'none').map((n) => ({
         table: n,
         module: READ_TABLES[n].path,
         access: levels[READ_TABLES[n].path],
         about: READ_TABLES[n].about,
+        can_change: levels[READ_TABLES[n].path] === 'edit' && RECORD_TABLES[n] ? RECORD_TABLES[n].ops : [],
       }))
       return asResult({ tables })
+    },
+  },
+  {
+    name: 'describe_table',
+    path: null,
+    title: 'Describe an app table',
+    description:
+      'The columns of one Consultancy Pro table (see list_app_tables): type, allowed values, which are required for a new row, ' +
+      'defaults and which can be set. Use it before create_record / update_record.',
+    inputSchema: { table: z.enum(TABLE_NAMES).describe('Table name from list_app_tables') },
+    run: async ({ table }, ctx) => {
+      const spec = await requireLevel(ctx, table)
+      const def = await tableDefinition(ctx, table)
+      return asResult({ table, module: spec.path, about: spec.about, columns: describeColumns(def) })
     },
   },
   {
