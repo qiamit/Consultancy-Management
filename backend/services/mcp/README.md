@@ -52,9 +52,23 @@ Secret-looking keys (`password`, `secret`, `api_key`, `token`, …) are stripped
   - Client: contact details.
   - Not editable: firm name, client or IS code links, portal or Manak credentials, finance fields.
 - Non-Conformity case (module `/bis/stop-marking`, edit): BIS letter facts, test report sample details, failed parameters (replaces the list), observations, and the reply letter section by section (`reply_sections`, merged with what is there; `reply_draft` is kept in sync). Closing a case, files and the case's own sample / factory test report module are not editable here.
-- Notes are appended (existing notes are kept). No delete tools.
+- Notes are appended (existing notes are kept). Deletes: see below.
 - A user sees the edit tools only for modules where they have **edit**.
 - `apply_change` is limited to 10 per minute per user.
+
+## Any app table: create, update, delete (since 22 Nov 2026, owner: "Create, Update, Read, Delete … Save bhi auto kar de")
+- `describe_table`: the columns of a table (type, allowed values, required for a new row, default, settable).
+- `create_record` / `update_record`: **saved at once** (no confirm step, as the owner asked). The reply shows what was saved (before → after for an update).
+- `preview_delete_record` → `apply_change`: deleting is permanent, so it still needs the user's confirmation.
+  - Client, IS Code, test and product masters go through the app's own `delete_master_rows`: admins only, and a row still used elsewhere is kept.
+  - Other tables use a plain DELETE as the user, so RLS decides.
+- **Who can change what:**
+  - The table's Module Access path must be **edit** for the user, and every write runs with the user's JWT (RLS).
+  - Columns come from PostgREST's OpenAPI description (`lib/tableSchema.mjs`), checked by type. Unknown columns, ids, created / updated stamps and secret-looking columns are refused, and `created_by` is set to the user.
+- **Never changed from Claude (`NO_WRITE` in `lib/writeTools.mjs`):** users, Module Access, AI settings / models / skills, email and audit logs, the Standards Library index, Customer Portal logins and their licence access, file rows, document number series and prefixes.
+- **Update only:** lab / company / website / renewal-reminder settings and sale document signature defaults.
+- **History:** every automatic save is also written to `mcp_pending_changes` (kind `create_record` / `update_record`, already used) with its before / after values. With `mcp_audit_log`, that shows who changed what, and the old values to put back.
+- **Limits:** `create_record`, `update_record` and `apply_change` together are limited to 30 per minute per user.
 
 ## Railway service `mcp`
 - Source: this repo, branch `main`, root directory `backend/services/mcp` (Dockerfile build, `/health` healthcheck).
