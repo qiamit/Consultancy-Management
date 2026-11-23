@@ -141,6 +141,7 @@ export type RenewalProjectSummary = {
   currentValidity: string
   cmLDigits: string
   isCodeLabel: string
+  isCodeTitle: string
   unitOfIs: string
   slabRates: RenewalSlabRate[]
   firmScale: string
@@ -185,7 +186,7 @@ export async function fetchRenewalProjectSummary(
   const { data, error } = await supabase
     .from('bis_projects')
     .select(
-      'id, title, client_id, is_code_id, cm_l_digits, license_validity_date, client:clients(company_name, address, email, company_scale), is_code:is_codes(id, is_number, revision_year, part_no, section_no, standard_prefix, unit_of_is, slab_1_quantity, slab_1_rate, slab_2_quantity, slab_2_rate, slab_3_quantity, slab_3_rate, mmf_large_scale, mmf_medium_scale, mmf_small_scale, mmf_micro_scale)',
+      'id, title, client_id, is_code_id, cm_l_digits, license_validity_date, client:clients(company_name, address, email, company_scale), is_code:is_codes(id, is_number, title, revision_year, part_no, section_no, standard_prefix, unit_of_is, slab_1_quantity, slab_1_rate, slab_2_quantity, slab_2_rate, slab_3_quantity, slab_3_rate, mmf_large_scale, mmf_medium_scale, mmf_small_scale, mmf_micro_scale)',
     )
     .eq('id', projectId)
     .maybeSingle()
@@ -200,6 +201,7 @@ export async function fetchRenewalProjectSummary(
     client: { company_name: string | null; address: string | null; email: string | null; company_scale?: string | null } | null
     is_code: {
       is_number: string | null
+      title?: string | null
       revision_year: string | null
       part_no?: string | null
       section_no?: string | null
@@ -245,6 +247,7 @@ export async function fetchRenewalProjectSummary(
     isCodeLabel: row.is_code
       ? formatIsCodeLabel(row.is_code)
       : '',
+    isCodeTitle: row.is_code?.title?.trim() ?? '',
     unitOfIs,
     slabRates,
     firmScale: row.client?.company_scale?.trim() ?? '',

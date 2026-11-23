@@ -177,6 +177,7 @@ export default function BisRenewalsMasterPage({ dialogOnly = false }: { dialogOn
           currentValidity: summary.currentValidity,
           cmLDigits: summary.cmLDigits,
           isCodeLabel: summary.isCodeLabel,
+          isCodeTitle: summary.isCodeTitle,
           unitOfIs: summary.unitOfIs,
           slabRates: summary.slabRates,
           firmScale: summary.firmScale,

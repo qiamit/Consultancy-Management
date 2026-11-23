@@ -99,7 +99,7 @@ export async function createRenewalClientWorkbook(form: BisRenewalForm): Promise
       fitToHeight: 0,
       margins: { left: 0.3, right: 0.3, top: 0.45, bottom: 0.45, header: 0.2, footer: 0.2 },
     },
-    views: [{ state: 'frozen', ySplit: 13 }],
+    views: [{ state: 'frozen', ySplit: 14 }],
   })
   // Owner, 21 Nov 2026: each period's production value, slab rate and marking fee, and the fee payable, worked out in
   // the sheet as the client types (the same rules as the Renewal Sheet); only the highlighted input cells open.
@@ -138,16 +138,18 @@ export async function createRenewalClientWorkbook(form: BisRenewalForm): Promise
   setMergedPair(4, 'Client', form.clientLabel || '')
   setMergedPair(5, 'Project', form.projectLabel || '')
   setMergedPair(6, 'IS Code', form.isCodeLabel || '')
-  setMergedPair(7, 'CM/L Number', form.cmLDigits || '')
-  setMergedPair(8, 'Renewal Period', `${formatDisplayDate(form.renewalPeriodFrom)} to ${formatDisplayDate(form.renewalPeriodTo)}`)
-  setMergedPair(9, 'Renewal Term', `${form.renewalTermYears || '5'} year(s)`)
-  sheet.mergeCells('A10:B10')
-  sheet.mergeCells(`C10:${LAST}10`)
-  sheet.getCell('A10').value = 'Basic Unit Rate Approx (₹ per unit)'
+  // The standard's title (IS Code Master) on its own row (owner, 23 Nov 2026).
+  setMergedPair(7, 'Standard Title', form.isCodeTitle || '')
+  setMergedPair(8, 'CM/L Number', form.cmLDigits || '')
+  setMergedPair(9, 'Renewal Period', `${formatDisplayDate(form.renewalPeriodFrom)} to ${formatDisplayDate(form.renewalPeriodTo)}`)
+  setMergedPair(10, 'Renewal Term', `${form.renewalTermYears || '5'} year(s)`)
+  sheet.mergeCells('A11:B11')
+  sheet.mergeCells(`C11:${LAST}11`)
+  sheet.getCell('A11').value = 'Basic Unit Rate Approx (₹ per unit)'
   // Blank for the manufacturer unless already entered: production value rate, not the IS Code marking-fee slab rate.
   const knownRate = entered(form.basicUnitRate)
-  sheet.getCell('C10').value = knownRate ?? ''
-  for (let row = 4; row <= 10; row += 1) {
+  sheet.getCell('C11').value = knownRate ?? ''
+  for (let row = 4; row <= 11; row += 1) {
     const label = sheet.getCell(`A${row}`)
     const value = sheet.getCell(`C${row}`)
     label.font = { name: 'Aptos', size: 10, bold: true, color: { argb: `FF${dark}` } }
@@ -157,29 +159,32 @@ export async function createRenewalClientWorkbook(form: BisRenewalForm): Promise
     value.alignment = { vertical: 'middle', horizontal: 'left' }
     for (let column = 1; column <= 10; column += 1) sheet.getCell(row, column).border = allBorders
   }
-  sheet.getRow(10).height = 27
-  sheet.getCell('C10').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF7D6' } }
-  sheet.getCell('C10').font = { name: 'Aptos', size: 11, bold: true, color: { argb: 'FF92400E' } }
-  sheet.getCell('C10').protection = { locked: false }
-  sheet.getCell('C10').numFmt = '₹ #,##0.00'
-  sheet.getCell('C10').dataValidation = {
+  // A long title wraps onto a second line.
+  sheet.getCell('C7').alignment = { vertical: 'middle', horizontal: 'left', wrapText: true }
+  if ((form.isCodeTitle || '').length > 90) sheet.getRow(7).height = 34
+  sheet.getRow(11).height = 27
+  sheet.getCell('C11').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF7D6' } }
+  sheet.getCell('C11').font = { name: 'Aptos', size: 11, bold: true, color: { argb: 'FF92400E' } }
+  sheet.getCell('C11').protection = { locked: false }
+  sheet.getCell('C11').numFmt = '₹ #,##0.00'
+  sheet.getCell('C11').dataValidation = {
     type: 'decimal', operator: 'greaterThanOrEqual', formulae: [0],
     showErrorMessage: true, errorTitle: 'Invalid rate', error: 'Enter zero or a positive rate.',
   }
 
-  sheet.mergeCells(`A11:${LAST}11`)
-  sheet.getCell('A11').value =
+  sheet.mergeCells(`A12:${LAST}12`)
+  sheet.getCell('A12').value =
     'Enter only the highlighted cells: Basic Unit Rate Approx (your selling / production rate per unit — not the BIS marking fee rate), ' +
     'Total Production and Rejection for each period. Covered Production, values, the IS Code slab rate, the marking fee of each period ' +
     'and the fee payable below are calculated automatically. Keep period dates unchanged and send this same file back for import.'
-  sheet.getCell('A11').font = { name: 'Aptos', size: 9, italic: true, color: { argb: 'FF57534E' } }
-  sheet.getCell('A11').alignment = { vertical: 'middle', wrapText: true }
-  sheet.getCell('A11').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFAFAF9' } }
-  sheet.getCell('A11').border = allBorders
-  sheet.getRow(11).height = 40
-  sheet.getRow(12).height = 8
+  sheet.getCell('A12').font = { name: 'Aptos', size: 9, italic: true, color: { argb: 'FF57534E' } }
+  sheet.getCell('A12').alignment = { vertical: 'middle', wrapText: true }
+  sheet.getCell('A12').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFAFAF9' } }
+  sheet.getCell('A12').border = allBorders
+  sheet.getRow(12).height = 40
+  sheet.getRow(13).height = 8
 
-  const headerRow = 13
+  const headerRow = 14
   const headers = [
     'Period Start', 'Period End', `Total Production (${unit})`, `Rejection (${unit})`, `Covered Production (${unit})`,
     'Production Value (₹)', 'Covered Value (₹)', 'Covered (%)', `Slab Rate (₹ per ${unit})`, 'Marking Fee (₹)',
@@ -206,7 +211,7 @@ export async function createRenewalClientWorkbook(form: BisRenewalForm): Promise
     }
     return formula
   }
-  const rate = '$C$10'
+  const rate = '$C$11'
 
   // Values already entered in the Renewal Sheet go into the workbook (rejection = total − covered).
   form.productionRows.forEach((row, index) => {
@@ -332,7 +337,7 @@ export async function createRenewalClientWorkbook(form: BisRenewalForm): Promise
 
   sheet.autoFilter = { from: { row: headerRow, column: 1 }, to: { row: lastDataRow, column: 10 } }
   sheet.pageSetup.printArea = `A1:${LAST}${summaryRow}`
-  sheet.pageSetup.printTitlesRow = '13:13'
+  sheet.pageSetup.printTitlesRow = '14:14'
   await sheet.protect('QE-Renewal-Client-Input', {
     selectLockedCells: true,
     selectUnlockedCells: true,
