@@ -489,6 +489,8 @@ export type BisRenewalForm = {
   currentValidity: string
   cmLDigits: string
   isCodeLabel: string
+  /** The standard's title (IS Code Master). */
+  isCodeTitle: string
   unitOfIs: string
   slabRates: RenewalSlabRate[]
   /** Client Master company scale (Large / Medium / Small / Micro). */
@@ -537,6 +539,7 @@ export function emptyRenewalForm(): BisRenewalForm {
     currentValidity: '',
     cmLDigits: '',
     isCodeLabel: '',
+    isCodeTitle: '',
     unitOfIs: '',
     slabRates: [],
     firmScale: '',
@@ -601,6 +604,7 @@ export function rowToRenewalForm(row: BisRenewalRow): BisRenewalForm {
     currentValidity: row.project?.license_validity_date ?? '',
     cmLDigits: String(row.project?.cm_l_digits ?? '').replace(/\D/g, ''),
     isCodeLabel: renewalIsCodeLabel(row),
+    isCodeTitle: row.project?.is_code?.title?.trim() ?? '',
     unitOfIs: row.project?.is_code?.unit_of_is?.trim() ?? '',
     slabRates: row.project?.is_code ? [
       { quantity: row.project.is_code.slab_1_quantity ?? '', rate: moneyToString(row.project.is_code.slab_1_rate) },
