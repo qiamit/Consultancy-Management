@@ -237,6 +237,8 @@ def write_list(conn, rows):
 def describe(rel):
     """What a library path is: number (folder in the index), kind, edition year, merged amendments, review note."""
     parts = rel.split("/")
+    if parts[0] in GUIDELINE_CATEGORIES:
+        return describe_guideline(parts)
     name = parts[-1]
     stem = re.sub(r"(?i)\.pdf$", "", name)
     in_set = len(parts) > 2 and SET_DIR.match(parts[-2] or "")
@@ -273,11 +275,31 @@ def describe(rel):
     }
 
 
+# Folders of BIS documents that are not standards (Act and Rules, Schemes, fees, QCO gazettes, 858 PDFs added on
+# 21 Nov 2026): read and searched like the standards, filed under their topic folder ("BIS Guidelines: Fees & Marking
+# Fee"), never Superseded by a later year and never asked to follow the standards' file-name form.
+GUIDELINE_CATEGORIES = ("BIS Guidelines",)
+
+
+def describe_guideline(parts):
+    topic = re.sub(r"^\d{1,2}\s+", "", parts[1]).strip() if len(parts) > 2 else ""
+    year = re.search(r"\b((?:19|20)\d{2})\b", parts[-1])
+    return {
+        "folder": f"{parts[0]}: {topic}" if topic else parts[0],
+        "category": parts[0],
+        "kind": "Guideline",
+        "edition_year": int(year.group(1)) if year else None,
+        "amendments_merged": None,
+        "review": [],
+    }
+
+
 def scan(root):
-    """{relpath: (full path, bytes, mtime)} of every PDF under the root (hidden files and Office lock files left out)."""
+    """{relpath: (full path, bytes, mtime)} of every PDF under the root (hidden files and Office lock files left out,
+    and folders whose name starts with "_": the owner's "_to_delete" and other set-aside folders)."""
     found = {}
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = sorted(d for d in dirnames if not d.startswith((".", "~$")))
+        dirnames[:] = sorted(d for d in dirnames if not d.startswith((".", "~$", "_")))
         for f in sorted(filenames):
             if f.startswith((".", "~$")) or not f.lower().endswith(".pdf"):
                 continue
@@ -1153,9 +1175,9 @@ def build_chunks(conn, root):
         with conn.transaction():
             # A chunk whose text did not change keeps its embedding: a new chunking rule re-embeds only what it changed.
             kept = {
-                (k, h, t): (e, m)
-                for k, h, t, e, m in conn.execute(
-                    "SELECT kind, heading, text, embedding::text, embed_model FROM public.standard_chunks"
+                (k, h, t): (e, m, v)
+                for k, h, t, e, m, v in conn.execute(
+                    "SELECT kind, heading, text, embedding::text, embed_model, embed_version FROM public.standard_chunks"
                     " WHERE doc_id = %s AND embedding IS NOT NULL", (doc_id,)
                 ).fetchall()
             }
@@ -1169,8 +1191,8 @@ def build_chunks(conn, root):
                 if kept:
                     with conn.cursor() as cur:
                         cur.executemany(
-                            "UPDATE public.standard_chunks SET embedding = %s::extensions.vector, embed_model = %s"
-                            " WHERE doc_id = %s AND page = %s AND seq = %s",
+                            "UPDATE public.standard_chunks SET embedding = %s::extensions.vector, embed_model = %s,"
+                            " embed_version = %s WHERE doc_id = %s AND page = %s AND seq = %s",
                             [(*kept[(r[2], r[3], r[4])], doc_id, r[0], r[1]) for r in rows if (r[2], r[3], r[4]) in kept],
                         )
             conn.execute("UPDATE public.standard_docs SET chunks_version = %s WHERE id = %s", (CHUNKS_VERSION, doc_id))
@@ -1180,9 +1202,118 @@ def build_chunks(conn, root):
     return len(todo), made
 
 
+# ---------------------------------------------------------------- titles
+
+# A title line on page 1 ends at the revision note, the ICS / UDC number, the price or the committee.
+TITLE_END = re.compile(
+    r"\(\s*\.?\s*(?:First|Second|Third|Fourth|Fifth|Sixth|Seventh|Eighth|Ninth)\s+Revision|\bICS\b|\bUDC\b|©|\bPrice\b|"
+    r"BUREAU OF INDIAN|Superseding|Reprint|Sectional\s+Committee|Chairman|Representing|\bAMENDMENT\b", re.I)
+TITLE_SKIP = re.compile(r"^(?:IS|ISO|IEC)\s*[:/\d]|Reaffirm|Ruffism|^\(+\s*\)*$", re.I)
+# Hindi printed in a legacy font comes out as Latin letters ("rkih; m\"ekjksèkh"): not an English title.
+LEGACY_HINDI = re.compile(r"[ØèÞ¼½]|[a-z][A-Z][a-z]|[;\"{}]\w|\w[;\"{}]")
+
+
+def title_from_text(text):
+    """The English title printed after "Indian Standard" on a standard's first pages; "" when there is none."""
+    m = re.search(r"Indian\s+Standard\s*\n(.*)", text or "", re.S | re.I)
+    if not m:
+        return ""
+    out = []
+    for line in m.group(1).split("\n")[:40]:
+        s = re.sub(r"\s+", " ", line).strip()
+        if not s:
+            if out:
+                break
+            continue
+        if TITLE_END.search(s):
+            if out:
+                break
+            continue
+        letters = sum(ch.isalpha() for ch in s)
+        latin = sum(ch.isascii() and ch.isalpha() for ch in s)
+        if (TITLE_SKIP.search(s) or LEGACY_HINDI.search(s) or latin < 0.6 * letters
+                or not re.search(r"[A-Za-z]{4}", s)):  # "xxx) )", "2010": scan noise around the title
+            if out:
+                break
+            continue
+        out.append(s)
+        if len(" ".join(out)) > 160 or len(out) >= 5:
+            break
+    title = re.sub(r"\s+", " ", " ".join(out)).strip(" -—:.")
+    return title if 6 <= len(title) <= 200 else ""
+
+
+def refresh_titles(conn):
+    """standard_docs.title of every library file: its row in Standards List (same number and Part), else the title on
+    its first pages; a guideline's own file name. A file whose title changed gets its chunks embedded again (the title
+    is part of every chunk's embedding)."""
+    listed = {}
+    for base, part, title in conn.execute(
+        "SELECT base, coalesce(part, ''), title FROM public.standard_list WHERE coalesce(title, '') <> ''"
+    ).fetchall():
+        listed.setdefault(base, []).append((re.sub(r"\D", "", part), title.strip()))
+
+    def from_list(base, part):
+        p = re.sub(r"\D", "", part or "")
+        return next((t for rp, t in listed.get(base) or [] if rp == p), "")
+
+    rows = conn.execute(
+        """SELECT d.id, d.relpath, d.base, coalesce(d.part, ''), d.kind, d.title,
+                  (SELECT string_agg(left(p.text, 4000), E'\n' ORDER BY p.page) FROM public.standard_pages p
+                   WHERE p.doc_id = d.id AND p.page <= 3)
+           FROM public.standard_docs d WHERE d.source = 'library'"""
+    ).fetchall()
+    titles = {}
+    for doc_id, relpath, base, part, kind, old, first in rows:
+        if kind == "Guideline":
+            titles[doc_id] = re.sub(r"[\s_-]+", " ", re.sub(r"(?i)\.pdf$", "", relpath.partition("::")[0].split("/")[-1])).strip()
+        else:
+            titles[doc_id] = from_list(base, part) or title_from_text(first)
+    # An amendment prints no title of its own: its standard's (same number and Part).
+    standard_title = {}
+    for doc_id, _, base, part, kind, _, _ in rows:
+        if kind == "Standard" and titles[doc_id]:
+            standard_title.setdefault((base, part), titles[doc_id])
+    updates = []
+    for doc_id, _, base, part, kind, old, _ in rows:
+        title = titles[doc_id] or (standard_title.get((base, part), "") if kind == "Amendment" else "")
+        title = title[:200] or None
+        if title != old:
+            updates.append((title, doc_id))
+    if updates:
+        with conn.transaction(), conn.cursor() as cur:
+            cur.executemany("UPDATE public.standard_docs SET title = %s WHERE id = %s", updates)
+            # Only chunks already embedded with a title: every row update also writes the vector index.
+            cur.execute("UPDATE public.standard_chunks SET embed_version = NULL WHERE doc_id = ANY(%s) AND embed_version IS NOT NULL",
+                        ([d for _, d in updates],))
+    return len(updates)
+
+
+def embed_text(heading, text, prefix):
+    return prefix + "\n" + ((heading + "\n") if heading else "") + (text or "")[:1800]
+
+
+def chunk_prefix(folder, base, part, section, kind, amendment_no, title):
+    """What a chunk belongs to, put in front of its text for the embedding: "IS 10500: Drinking Water -
+    Specification", "Product Manual for IS 2062 Part 1: …", "BIS Guidelines: Fees & Marking Fee: …"."""
+    if kind == "Guideline":
+        name = folder
+    else:
+        name = (base or folder) + (f" Part {part}" if part else "") + (f" Sec {section}" if section else "")
+        if kind == "Product Manual":
+            name = f"Product Manual for {name}"
+        elif kind == "Amendment":
+            name = f"{name} Amendment" + (f" {amendment_no}" if amendment_no else "")
+    return f"{name}: {title}" if title else name
+
+
 # ---------------------------------------------------------------- embeddings (RAG step 3)
 
 EMBED_MODEL = os.environ.get("EMBED_MODEL", "BAAI/bge-small-en-v1.5")
+# 2 (23 Nov 2026): the file's number and title in front of each chunk ("IS 10500: Drinking Water - Specification").
+# Without it a chunk such as IS 10500's lead row (heading "1 In case of dispute …") says nothing about drinking water,
+# and a question without an IS number did not find it by meaning. Raising it embeds every chunk again.
+EMBED_VERSION = 2
 EMBED_BATCH = 32
 EMBED_FETCH = 1024  # rows taken per round, sorted by length and embedded EMBED_BATCH at a time
 # "current": only the current editions of Standards and Amendments (the part search needs first); "all": every chunk.
@@ -1194,8 +1325,9 @@ SCOPE_SQL = (
 
 
 def embed_chunks(conn, stop_after_min=None):
-    """Embeds every chunk with no vector of EMBED_MODEL yet: the current Standards first, then amendments, manuals and
-    older editions. Saved batch by batch, so a stopped run goes on where it left off. Returns (done, left)."""
+    """Embeds every chunk with no vector of EMBED_MODEL and EMBED_VERSION yet: the current Standards first, then
+    amendments, manuals, guidelines and older editions. Saved batch by batch, so a stopped run goes on where it left
+    off; until a chunk is embedded again its older vector (same model) keeps answering. Returns (done, left)."""
     try:
         from fastembed import TextEmbedding
     except ImportError:
@@ -1208,35 +1340,38 @@ def embed_chunks(conn, stop_after_min=None):
         model.model.tokenizer.enable_truncation(int(os.environ.get("EMBED_MAX_TOKENS", "256")))
     except Exception:  # another fastembed version: its own limit applies
         pass
+    todo = (" WHERE (c.embedding IS NULL OR c.embed_model IS DISTINCT FROM %s OR coalesce(c.embed_version, 1) < %s)"
+            + SCOPE_SQL)
     left = conn.execute(
-        "SELECT count(*) FROM public.standard_chunks c JOIN public.standard_docs d ON d.id = c.doc_id"
-        " WHERE (c.embedding IS NULL OR c.embed_model IS DISTINCT FROM %s)" + SCOPE_SQL,
-        (EMBED_MODEL,),
+        "SELECT count(*) FROM public.standard_chunks c JOIN public.standard_docs d ON d.id = c.doc_id" + todo,
+        (EMBED_MODEL, EMBED_VERSION),
     ).fetchone()[0]
     if not left:
         return 0, 0
-    print(f"Embeddings: {left} chunks to embed with {EMBED_MODEL} (scope: {EMBED_SCOPE})", flush=True)
+    print(f"Embeddings: {left} chunks to embed with {EMBED_MODEL}, version {EMBED_VERSION} (scope: {EMBED_SCOPE})", flush=True)
     started, done = time.time(), 0
     while True:
         rows = conn.execute(
-            """SELECT c.id, c.heading, c.text FROM public.standard_chunks c
-               JOIN public.standard_docs d ON d.id = c.doc_id
-               WHERE (c.embedding IS NULL OR c.embed_model IS DISTINCT FROM %s)""" + SCOPE_SQL + """
+            """SELECT c.id, c.heading, c.text, d.folder, d.base, coalesce(d.part, ''), coalesce(d.section, ''), d.kind,
+                      d.amendment_no, d.title
+               FROM public.standard_chunks c
+               JOIN public.standard_docs d ON d.id = c.doc_id""" + todo + """
                ORDER BY (coalesce(d.version_status, 'Current') = 'Current') DESC,
                         CASE d.kind WHEN 'Standard' THEN 0 WHEN 'Amendment' THEN 1 WHEN 'Product Manual' THEN 2 ELSE 3 END,
                         c.id
                LIMIT %s""",
-            (EMBED_MODEL, EMBED_FETCH),
+            (EMBED_MODEL, EMBED_VERSION, EMBED_FETCH),
         ).fetchall()
         if not rows:
             break
-        rows.sort(key=lambda r: len(r[1] or "") + len(r[2] or ""))
-        texts = [((h + "\n") if h else "") + (t or "")[:1800] for _, h, t in rows]
-        vectors = list(model.embed(texts, batch_size=EMBED_BATCH))
+        texts = {r[0]: embed_text(r[1], r[2], chunk_prefix(*r[3:])) for r in rows}
+        ids = sorted(texts, key=lambda i: len(texts[i]))
+        vectors = list(model.embed([texts[i] for i in ids], batch_size=EMBED_BATCH))
         with conn.transaction(), conn.cursor() as cur:
             cur.executemany(
-                "UPDATE public.standard_chunks SET embedding = %s::extensions.vector, embed_model = %s WHERE id = %s",
-                [("[" + ",".join(f"{x:.6f}" for x in v) + "]", EMBED_MODEL, cid) for (cid, _, _), v in zip(rows, vectors)],
+                "UPDATE public.standard_chunks SET embedding = %s::extensions.vector, embed_model = %s, embed_version = %s"
+                " WHERE id = %s",
+                [("[" + ",".join(f"{x:.6f}" for x in v) + "]", EMBED_MODEL, EMBED_VERSION, cid) for cid, v in zip(ids, vectors)],
             )
         done += len(rows)
         mins = (time.time() - started) / 60
@@ -1413,6 +1548,9 @@ def main():
         versions = refresh_versions(conn)
         if versions:
             print(f"Version facts: {versions} documents updated")
+        titled = refresh_titles(conn)
+        if titled:
+            print(f"Titles: {titled} documents updated (their chunks are embedded again)")
         chunked, chunks = build_chunks(conn, root)
         if chunked:
             print(f"Chunks: {chunks} made for {chunked} documents")
