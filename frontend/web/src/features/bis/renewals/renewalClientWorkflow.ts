@@ -60,6 +60,23 @@ function entered(value: string): number | null {
   return Number.isFinite(n) ? n : null
 }
 
+/**
+ * The standard's title for the sheet: the form's, else read from the licence's IS Code. A renewal opened from a draft
+ * saved before the title was kept (or a form open while the app updated) has none (owner, 23 Nov 2026).
+ */
+async function standardTitleOf(form: BisRenewalForm): Promise<string> {
+  const known = (form.isCodeTitle ?? '').trim()
+  if (known || !form.projectId) return known
+  try {
+    const { data } = await supabase.from('bis_projects').select('is_code:is_codes(title)').eq('id', form.projectId).maybeSingle()
+    const isCode = (data as { is_code?: { title?: string | null } | Array<{ title?: string | null }> | null } | null)?.is_code
+    const title = Array.isArray(isCode) ? isCode[0]?.title : isCode?.title
+    return String(title ?? '').trim()
+  } catch {
+    return ''
+  }
+}
+
 function renewalWorkbookFilename(form: BisRenewalForm): string {
   return `${safeBaseName(form.clientLabel || form.projectLabel)}_Renewal_Production.xlsx`
 }
@@ -139,7 +156,8 @@ export async function createRenewalClientWorkbook(form: BisRenewalForm): Promise
   setMergedPair(5, 'Project', form.projectLabel || '')
   setMergedPair(6, 'IS Code', form.isCodeLabel || '')
   // The standard's title (IS Code Master) on its own row (owner, 23 Nov 2026).
-  setMergedPair(7, 'Standard Title', form.isCodeTitle || '')
+  const standardTitle = await standardTitleOf(form)
+  setMergedPair(7, 'Standard Title', standardTitle)
   setMergedPair(8, 'CM/L Number', form.cmLDigits || '')
   setMergedPair(9, 'Renewal Period', `${formatDisplayDate(form.renewalPeriodFrom)} to ${formatDisplayDate(form.renewalPeriodTo)}`)
   setMergedPair(10, 'Renewal Term', `${form.renewalTermYears || '5'} year(s)`)
@@ -161,7 +179,7 @@ export async function createRenewalClientWorkbook(form: BisRenewalForm): Promise
   }
   // A long title wraps onto a second line.
   sheet.getCell('C7').alignment = { vertical: 'middle', horizontal: 'left', wrapText: true }
-  if ((form.isCodeTitle || '').length > 90) sheet.getRow(7).height = 34
+  if (standardTitle.length > 90) sheet.getRow(7).height = 34
   sheet.getRow(11).height = 27
   sheet.getCell('C11').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF7D6' } }
   sheet.getCell('C11').font = { name: 'Aptos', size: 11, bold: true, color: { argb: 'FF92400E' } }
