@@ -32,6 +32,13 @@ standard_docs + standard_pages (+ standard_index_runs: one row per run)
   `BS EN 10002 Part 1 2001 - 00`, `DIN EN ISO 6892 Part 1 2020 - 00`, `SAE J1939 2021 - 00`, and
   `ASTM E1507 1998 (R2003) - 00` for a reapproved edition. A slash is written `_` or `-` in a file name
   (`GB_T 228 …` → `GB/T 228`, `AS-NZS 4020 …` → `AS/NZS 4020`). The list of bodies is `BODIES` in `indexer.py`.
+- `BIS Guidelines/<NN Topic>/…` (Act and Rules, Schemes, fees, QCO gazettes): kind Guideline, filed under its topic
+  (`BIS Guidelines: Fees & Marking Fee`), any file name, never Superseded by a later year.
+- A folder whose name starts with `_` (`_to_delete`, set-aside copies) is left out of the index.
+- Every file gets a title (`standard_docs.title`): its row in Standards List, else the title printed after "Indian
+  Standard" on its first pages; an amendment its standard's; a guideline its file name. The number and title are put
+  in front of each chunk for its embedding (`EMBED_VERSION` 2), so a chunk such as a table row is found by meaning
+  for its product ("drinking water") even when its own words never name it.
 - The number, category, year and name notes of every file are worked out again from its name on each run, so a
   better name rule reaches files already indexed without reading them again.
 - Each run also checks every file against its content: first pages that never name the file's own number but name
@@ -112,6 +119,10 @@ deploy/standards-library/standards-sync.sh remove-schedule
 The schedule runs a copy of the script in `~/qe-standards/`. A Mac that is asleep at 10 pm runs it at the next
 wake. The first scheduled run may ask macOS for access to the OneDrive folder: allow it. When nothing changed
 the run only compares and finishes in about a minute.
+
+The schedule runs `/bin/bash`, which needs **Full Disk Access** (System Settings → Privacy & Security → Full Disk
+Access → `+` → Cmd+Shift+G → `/bin/bash`). Without it every run stops at once with "Operation not permitted" in
+`sync.log` (the runs of 15 and 22 Nov 2026 did, so nothing reached the server).
 
 ## Sync Now (from the app)
 
