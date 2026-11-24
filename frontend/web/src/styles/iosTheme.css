@@ -328,6 +328,11 @@ html[data-ui='ios'] :is(button, a):is(.lims-dark-bar-btn, [class~='bg-stone-800/
 html[data-ui='ios'] :is(button, a):is(.lims-dark-bar-btn, [class~='bg-stone-800/80'], [class~='bg-stone-800']):hover {
   background-color: rgb(var(--ios-blue) / 0.2) !important;
 }
+/* A solid count badge inside a button (QE Assistant's red unread count) keeps its white number: the blue label of
+   the button above made it blue on red (owner, 24 Nov 2026). */
+html[data-ui='ios'] :is(button, a) :is([class~='bg-red-500'], [class~='bg-red-600'], [class~='bg-rose-600'], [class~='bg-emerald-600'], [class~='bg-green-600'], [class~='bg-blue-600'], [class~='bg-sky-600'], [class~='bg-orange-500'], [class~='bg-amber-600'])[class~='text-white'] {
+  color: #fff !important;
+}
 
 /* ---------------------------------------------------------------------------------------------------------------
    4. Sidebar (iPad style): light grouped list, blue selected row
@@ -808,6 +813,53 @@ html[data-ui='ios'] :is([class~='bg-sky-50'], [class~='bg-blue-50']) {
 html.dark[data-ui='ios'] :is(.bg-red-50, .bg-emerald-50, .bg-rose-50, .bg-sky-50, .bg-orange-50, .bg-yellow-50) {
   color: rgb(var(--ios-label)) !important;
 }
+
+/* Status tints written with an opacity or on hover ("bg-emerald-100/90", "hover:bg-red-200/80": rows coloured by
+   status, as in Sample Requirements). Tailwind's light shades stayed light in dark mode under white text (owner,
+   24 Nov 2026); they become the iOS system colour at tint strength, a little stronger on hover. Slate / gray tints
+   become the iOS gray fill. */
+html[data-ui='ios'] {
+  --ios-purple: 175 82 222;
+}
+html.dark[data-ui='ios'] {
+  --ios-purple: 191 90 242;
+}
+html[data-ui='ios'] :is([class~='bg-red-50'], [class^='bg-red-50/'], [class*=' bg-red-50/'], [class~='bg-red-100'], [class^='bg-red-100/'], [class*=' bg-red-100/'], [class~='bg-red-200'], [class^='bg-red-200/'], [class*=' bg-red-200/'], [class~='bg-rose-50'], [class^='bg-rose-50/'], [class*=' bg-rose-50/'], [class~='bg-rose-100'], [class^='bg-rose-100/'], [class*=' bg-rose-100/'], [class~='bg-rose-200'], [class^='bg-rose-200/'], [class*=' bg-rose-200/'], [class~='bg-pink-50'], [class^='bg-pink-50/'], [class*=' bg-pink-50/'], [class~='bg-pink-100'], [class^='bg-pink-100/'], [class*=' bg-pink-100/'], [class~='bg-pink-200'], [class^='bg-pink-200/'], [class*=' bg-pink-200/']) {
+  background-color: rgb(var(--ios-red) / var(--ios-tint-a)) !important;
+}
+html[data-ui='ios'] :is([class~='hover:bg-red-50'], [class^='hover:bg-red-50/'], [class*=' hover:bg-red-50/'], [class~='hover:bg-red-100'], [class^='hover:bg-red-100/'], [class*=' hover:bg-red-100/'], [class~='hover:bg-red-200'], [class^='hover:bg-red-200/'], [class*=' hover:bg-red-200/'], [class~='hover:bg-rose-50'], [class^='hover:bg-rose-50/'], [class*=' hover:bg-rose-50/'], [class~='hover:bg-rose-100'], [class^='hover:bg-rose-100/'], [class*=' hover:bg-rose-100/'], [class~='hover:bg-rose-200'], [class^='hover:bg-rose-200/'], [class*=' hover:bg-rose-200/'], [class~='hover:bg-pink-50'], [class^='hover:bg-pink-50/'], [class*=' hover:bg-pink-50/'], [class~='hover:bg-pink-100'], [class^='hover:bg-pink-100/'], [class*=' hover:bg-pink-100/'], [class~='hover:bg-pink-200'], [class^='hover:bg-pink-200/'], [class*=' hover:bg-pink-200/']):hover {
+  background-color: rgb(var(--ios-red) / calc(var(--ios-tint-a) * 1.6)) !important;
+}
+html[data-ui='ios'] :is([class~='bg-emerald-50'], [class^='bg-emerald-50/'], [class*=' bg-emerald-50/'], [class~='bg-emerald-100'], [class^='bg-emerald-100/'], [class*=' bg-emerald-100/'], [class~='bg-emerald-200'], [class^='bg-emerald-200/'], [class*=' bg-emerald-200/'], [class~='bg-green-50'], [class^='bg-green-50/'], [class*=' bg-green-50/'], [class~='bg-green-100'], [class^='bg-green-100/'], [class*=' bg-green-100/'], [class~='bg-green-200'], [class^='bg-green-200/'], [class*=' bg-green-200/'], [class~='bg-lime-50'], [class^='bg-lime-50/'], [class*=' bg-lime-50/'], [class~='bg-lime-100'], [class^='bg-lime-100/'], [class*=' bg-lime-100/'], [class~='bg-lime-200'], [class^='bg-lime-200/'], [class*=' bg-lime-200/'], [class~='bg-teal-50'], [class^='bg-teal-50/'], [class*=' bg-teal-50/'], [class~='bg-teal-100'], [class^='bg-teal-100/'], [class*=' bg-teal-100/'], [class~='bg-teal-200'], [class^='bg-teal-200/'], [class*=' bg-teal-200/']) {
+  background-color: rgb(var(--ios-green) / var(--ios-tint-a)) !important;
+}
+html[data-ui='ios'] :is([class~='hover:bg-emerald-50'], [class^='hover:bg-emerald-50/'], [class*=' hover:bg-emerald-50/'], [class~='hover:bg-emerald-100'], [class^='hover:bg-emerald-100/'], [class*=' hover:bg-emerald-100/'], [class~='hover:bg-emerald-200'], [class^='hover:bg-emerald-200/'], [class*=' hover:bg-emerald-200/'], [class~='hover:bg-green-50'], [class^='hover:bg-green-50/'], [class*=' hover:bg-green-50/'], [class~='hover:bg-green-100'], [class^='hover:bg-green-100/'], [class*=' hover:bg-green-100/'], [class~='hover:bg-green-200'], [class^='hover:bg-green-200/'], [class*=' hover:bg-green-200/'], [class~='hover:bg-lime-50'], [class^='hover:bg-lime-50/'], [class*=' hover:bg-lime-50/'], [class~='hover:bg-lime-100'], [class^='hover:bg-lime-100/'], [class*=' hover:bg-lime-100/'], [class~='hover:bg-lime-200'], [class^='hover:bg-lime-200/'], [class*=' hover:bg-lime-200/'], [class~='hover:bg-teal-50'], [class^='hover:bg-teal-50/'], [class*=' hover:bg-teal-50/'], [class~='hover:bg-teal-100'], [class^='hover:bg-teal-100/'], [class*=' hover:bg-teal-100/'], [class~='hover:bg-teal-200'], [class^='hover:bg-teal-200/'], [class*=' hover:bg-teal-200/']):hover {
+  background-color: rgb(var(--ios-green) / calc(var(--ios-tint-a) * 1.6)) !important;
+}
+html[data-ui='ios'] :is([class~='bg-orange-50'], [class^='bg-orange-50/'], [class*=' bg-orange-50/'], [class~='bg-orange-100'], [class^='bg-orange-100/'], [class*=' bg-orange-100/'], [class~='bg-orange-200'], [class^='bg-orange-200/'], [class*=' bg-orange-200/'], [class~='bg-yellow-50'], [class^='bg-yellow-50/'], [class*=' bg-yellow-50/'], [class~='bg-yellow-100'], [class^='bg-yellow-100/'], [class*=' bg-yellow-100/'], [class~='bg-yellow-200'], [class^='bg-yellow-200/'], [class*=' bg-yellow-200/']) {
+  background-color: rgb(var(--ios-orange) / var(--ios-tint-a)) !important;
+}
+html[data-ui='ios'] :is([class~='hover:bg-orange-50'], [class^='hover:bg-orange-50/'], [class*=' hover:bg-orange-50/'], [class~='hover:bg-orange-100'], [class^='hover:bg-orange-100/'], [class*=' hover:bg-orange-100/'], [class~='hover:bg-orange-200'], [class^='hover:bg-orange-200/'], [class*=' hover:bg-orange-200/'], [class~='hover:bg-yellow-50'], [class^='hover:bg-yellow-50/'], [class*=' hover:bg-yellow-50/'], [class~='hover:bg-yellow-100'], [class^='hover:bg-yellow-100/'], [class*=' hover:bg-yellow-100/'], [class~='hover:bg-yellow-200'], [class^='hover:bg-yellow-200/'], [class*=' hover:bg-yellow-200/']):hover {
+  background-color: rgb(var(--ios-orange) / calc(var(--ios-tint-a) * 1.6)) !important;
+}
+html[data-ui='ios'] :is([class~='bg-sky-50'], [class^='bg-sky-50/'], [class*=' bg-sky-50/'], [class~='bg-sky-100'], [class^='bg-sky-100/'], [class*=' bg-sky-100/'], [class~='bg-sky-200'], [class^='bg-sky-200/'], [class*=' bg-sky-200/'], [class~='bg-blue-50'], [class^='bg-blue-50/'], [class*=' bg-blue-50/'], [class~='bg-blue-100'], [class^='bg-blue-100/'], [class*=' bg-blue-100/'], [class~='bg-blue-200'], [class^='bg-blue-200/'], [class*=' bg-blue-200/'], [class~='bg-cyan-50'], [class^='bg-cyan-50/'], [class*=' bg-cyan-50/'], [class~='bg-cyan-100'], [class^='bg-cyan-100/'], [class*=' bg-cyan-100/'], [class~='bg-cyan-200'], [class^='bg-cyan-200/'], [class*=' bg-cyan-200/']) {
+  background-color: rgb(var(--ios-blue) / var(--ios-tint-a)) !important;
+}
+html[data-ui='ios'] :is([class~='hover:bg-sky-50'], [class^='hover:bg-sky-50/'], [class*=' hover:bg-sky-50/'], [class~='hover:bg-sky-100'], [class^='hover:bg-sky-100/'], [class*=' hover:bg-sky-100/'], [class~='hover:bg-sky-200'], [class^='hover:bg-sky-200/'], [class*=' hover:bg-sky-200/'], [class~='hover:bg-blue-50'], [class^='hover:bg-blue-50/'], [class*=' hover:bg-blue-50/'], [class~='hover:bg-blue-100'], [class^='hover:bg-blue-100/'], [class*=' hover:bg-blue-100/'], [class~='hover:bg-blue-200'], [class^='hover:bg-blue-200/'], [class*=' hover:bg-blue-200/'], [class~='hover:bg-cyan-50'], [class^='hover:bg-cyan-50/'], [class*=' hover:bg-cyan-50/'], [class~='hover:bg-cyan-100'], [class^='hover:bg-cyan-100/'], [class*=' hover:bg-cyan-100/'], [class~='hover:bg-cyan-200'], [class^='hover:bg-cyan-200/'], [class*=' hover:bg-cyan-200/']):hover {
+  background-color: rgb(var(--ios-blue) / calc(var(--ios-tint-a) * 1.6)) !important;
+}
+html[data-ui='ios'] :is([class~='bg-violet-50'], [class^='bg-violet-50/'], [class*=' bg-violet-50/'], [class~='bg-violet-100'], [class^='bg-violet-100/'], [class*=' bg-violet-100/'], [class~='bg-violet-200'], [class^='bg-violet-200/'], [class*=' bg-violet-200/'], [class~='bg-purple-50'], [class^='bg-purple-50/'], [class*=' bg-purple-50/'], [class~='bg-purple-100'], [class^='bg-purple-100/'], [class*=' bg-purple-100/'], [class~='bg-purple-200'], [class^='bg-purple-200/'], [class*=' bg-purple-200/'], [class~='bg-indigo-50'], [class^='bg-indigo-50/'], [class*=' bg-indigo-50/'], [class~='bg-indigo-100'], [class^='bg-indigo-100/'], [class*=' bg-indigo-100/'], [class~='bg-indigo-200'], [class^='bg-indigo-200/'], [class*=' bg-indigo-200/']) {
+  background-color: rgb(var(--ios-purple) / var(--ios-tint-a)) !important;
+}
+html[data-ui='ios'] :is([class~='hover:bg-violet-50'], [class^='hover:bg-violet-50/'], [class*=' hover:bg-violet-50/'], [class~='hover:bg-violet-100'], [class^='hover:bg-violet-100/'], [class*=' hover:bg-violet-100/'], [class~='hover:bg-violet-200'], [class^='hover:bg-violet-200/'], [class*=' hover:bg-violet-200/'], [class~='hover:bg-purple-50'], [class^='hover:bg-purple-50/'], [class*=' hover:bg-purple-50/'], [class~='hover:bg-purple-100'], [class^='hover:bg-purple-100/'], [class*=' hover:bg-purple-100/'], [class~='hover:bg-purple-200'], [class^='hover:bg-purple-200/'], [class*=' hover:bg-purple-200/'], [class~='hover:bg-indigo-50'], [class^='hover:bg-indigo-50/'], [class*=' hover:bg-indigo-50/'], [class~='hover:bg-indigo-100'], [class^='hover:bg-indigo-100/'], [class*=' hover:bg-indigo-100/'], [class~='hover:bg-indigo-200'], [class^='hover:bg-indigo-200/'], [class*=' hover:bg-indigo-200/']):hover {
+  background-color: rgb(var(--ios-purple) / calc(var(--ios-tint-a) * 1.6)) !important;
+}
+html[data-ui='ios'] :is([class~='bg-slate-50'], [class^='bg-slate-50/'], [class*=' bg-slate-50/'], [class~='bg-slate-100'], [class^='bg-slate-100/'], [class*=' bg-slate-100/'], [class~='bg-slate-200'], [class^='bg-slate-200/'], [class*=' bg-slate-200/'], [class~='bg-gray-50'], [class^='bg-gray-50/'], [class*=' bg-gray-50/'], [class~='bg-gray-100'], [class^='bg-gray-100/'], [class*=' bg-gray-100/'], [class~='bg-gray-200'], [class^='bg-gray-200/'], [class*=' bg-gray-200/'], [class~='bg-zinc-50'], [class^='bg-zinc-50/'], [class*=' bg-zinc-50/'], [class~='bg-zinc-100'], [class^='bg-zinc-100/'], [class*=' bg-zinc-100/'], [class~='bg-zinc-200'], [class^='bg-zinc-200/'], [class*=' bg-zinc-200/']) {
+  background-color: rgb(var(--ios-fill) / var(--ios-fill-a)) !important;
+}
+html[data-ui='ios'] :is([class~='hover:bg-slate-50'], [class^='hover:bg-slate-50/'], [class*=' hover:bg-slate-50/'], [class~='hover:bg-slate-100'], [class^='hover:bg-slate-100/'], [class*=' hover:bg-slate-100/'], [class~='hover:bg-slate-200'], [class^='hover:bg-slate-200/'], [class*=' hover:bg-slate-200/'], [class~='hover:bg-gray-50'], [class^='hover:bg-gray-50/'], [class*=' hover:bg-gray-50/'], [class~='hover:bg-gray-100'], [class^='hover:bg-gray-100/'], [class*=' hover:bg-gray-100/'], [class~='hover:bg-gray-200'], [class^='hover:bg-gray-200/'], [class*=' hover:bg-gray-200/'], [class~='hover:bg-zinc-50'], [class^='hover:bg-zinc-50/'], [class*=' hover:bg-zinc-50/'], [class~='hover:bg-zinc-100'], [class^='hover:bg-zinc-100/'], [class*=' hover:bg-zinc-100/'], [class~='hover:bg-zinc-200'], [class^='hover:bg-zinc-200/'], [class*=' hover:bg-zinc-200/']):hover {
+  background-color: rgb(var(--ios-fill) / calc(var(--ios-fill-a) * 1.6)) !important;
+}
 html[data-ui='ios'] :is(button, a):is([class~='bg-green-600'], [class~='bg-green-700'], [class~='bg-emerald-600'], [class~='bg-emerald-700']) {
   background-color: rgb(var(--ios-green)) !important;
   border-color: transparent !important;
@@ -837,4 +889,67 @@ html[data-ui='ios'] [data-sonner-toast][data-type='success'] [data-icon] {
 }
 html[data-ui='ios'] [data-sonner-toast][data-type='info'] [data-icon] {
   color: rgb(var(--ios-blue));
+}
+
+/* ---------------------------------------------------------------------------------------------------------------
+   8. ☰ hover menu and profile menu (Qirlpl style, 24 Nov 2026): iOS menus — card colour, rounded outer corner,
+      blue selected row
+   --------------------------------------------------------------------------------------------------------------- */
+
+html[data-ui='ios'] :is(.nav-hover-menu, .profile-menu) {
+  background-image: none !important;
+  background-color: hsl(var(--popover)) !important;
+  border-color: rgb(var(--ios-sep)) !important;
+  box-shadow: 0 12px 40px rgb(0 0 0 / 0.18) !important;
+}
+html[data-ui='ios'] .nav-hover-menu {
+  border-radius: 0 0 12px 0 !important;
+}
+html[data-ui='ios'] .profile-menu {
+  border-radius: 0 0 0 12px !important;
+}
+html[data-ui='ios'] .profile-menu > div:first-child {
+  background-image: none !important;
+  background-color: transparent !important;
+}
+html[data-ui='ios'] :is(.nav-hover-menu, .profile-menu) :is(.sidebar-nav-item, [role='menuitem']) {
+  color: rgb(var(--ios-label)) !important;
+  border-radius: 8px !important;
+}
+html[data-ui='ios'] :is(.nav-hover-menu, .profile-menu) :is(.sidebar-nav-item, [role='menuitem']):is(:hover, :focus, [data-highlighted]) {
+  background-color: rgb(var(--ios-fill) / var(--ios-fill-a)) !important;
+  color: rgb(var(--ios-label)) !important;
+}
+html[data-ui='ios'] :is(.nav-hover-menu, .profile-menu) :is(.sidebar-nav-item, [role='menuitem']):is(:hover, :focus, [data-highlighted]) * {
+  color: inherit;
+}
+html[data-ui='ios'] :is(.nav-hover-menu, .profile-menu) .sidebar-nav-item svg {
+  color: rgb(var(--ios-blue));
+}
+html[data-ui='ios'] :is(.nav-hover-menu, .profile-menu) .sidebar-nav-active,
+html[data-ui='ios'] :is(.nav-hover-menu, .profile-menu) .sidebar-nav-active:is(:hover, :focus, [data-highlighted]) {
+  background-color: rgb(var(--ios-blue)) !important;
+  color: #fff !important;
+}
+html[data-ui='ios'] :is(.nav-hover-menu, .profile-menu) .sidebar-nav-active :is(*, svg) {
+  color: #fff !important;
+}
+html[data-ui='ios'] :is(.nav-hover-menu, .profile-menu) .sidebar-nav-active::before {
+  display: none;
+}
+html[data-ui='ios'] :is(.nav-hover-menu, .profile-menu) :is([class~='text-stone-400'], [class~='text-stone-300'], [class~='text-amber-200/80']) {
+  color: rgb(var(--ios-label2) / var(--ios-label2-a)) !important;
+}
+html[data-ui='ios'] .profile-menu [class~='text-red-300'] {
+  color: rgb(var(--ios-red)) !important;
+}
+html[data-ui='ios'] .profile-menu [class~='bg-black/20'] {
+  background-color: transparent !important;
+}
+/* The ☰ trigger while its menu is open, or lit while the sidebar is kept open (its classes switch to bg-stone-700,
+   which is not a bar colour) */
+html[data-ui='ios'] header button[data-nav-trigger]:is([aria-expanded='true'], [aria-pressed='true']) {
+  background-color: rgb(var(--ios-blue) / 0.2) !important;
+  border-color: transparent !important;
+  color: rgb(var(--ios-blue)) !important;
 }

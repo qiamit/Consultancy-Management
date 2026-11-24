@@ -7,14 +7,6 @@ import { cn } from '@/lib/utils'
 
 export type Tone = 'neutral' | 'good' | 'warning' | 'serious' | 'critical'
 
-const TONE_BAR: Record<Tone, string> = {
-  neutral: 'bg-[var(--dash-accent)]',
-  good: 'bg-[var(--dash-good)]',
-  warning: 'bg-[var(--dash-warning)]',
-  serious: 'bg-[var(--dash-serious)]',
-  critical: 'bg-[var(--dash-critical)]',
-}
-
 const TONE_ICON: Record<Tone, string> = {
   neutral: 'text-amber-300',
   good: 'text-[var(--dash-good)]',
@@ -65,12 +57,13 @@ export type KpiTileProps = {
   href?: string | null
   spark?: number[]
   ariaLabel?: string
+  /** Slimmer tile for the fit-to-screen dashboard. */
+  compact?: boolean
 }
 
-export function KpiTile({ label, value, icon: Icon, tone = 'neutral', href, spark, ariaLabel }: KpiTileProps) {
+export function KpiTile({ label, value, icon: Icon, tone = 'neutral', href, spark, ariaLabel, compact = false }: KpiTileProps) {
   const body = (
     <>
-      <span aria-hidden="true" className={cn('absolute inset-y-0 left-0 w-1', TONE_BAR[tone])} />
       <div className="flex min-w-0 items-start justify-between gap-2">
         <p className="min-w-0 text-[11px] font-semibold uppercase leading-tight tracking-wide text-muted-foreground">
           {label}
@@ -83,16 +76,22 @@ export function KpiTile({ label, value, icon: Icon, tone = 'neutral', href, spar
         </span>
       </div>
       <div className="mt-0.5 flex min-w-0 items-end justify-between gap-2">
-        <p className="min-w-0 truncate font-jakarta text-2xl font-bold tabular-nums text-foreground sm:text-[1.7rem]">
+        <p
+          className={cn(
+            'min-w-0 truncate font-jakarta font-bold tabular-nums text-foreground',
+            compact ? 'text-xl' : 'text-2xl sm:text-[1.7rem]',
+          )}
+        >
           {value}
         </p>
-        {spark ? <Sparkline values={spark} className="mb-1" /> : null}
+        {spark ? <Sparkline values={spark} className={compact ? 'mb-0.5 h-6 w-16' : 'mb-1'} /> : null}
       </div>
     </>
   )
   const cls = cn(
     limsPanelClass,
-    'relative block py-2 pl-4 pr-3 transition',
+    'relative block pl-3 pr-3 transition',
+    compact ? 'py-1.5' : 'py-2',
     href && 'hover:border-amber-600/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600',
   )
   if (href) {
@@ -165,7 +164,7 @@ export function CardHeader({
   right?: ReactNode
 }) {
   return (
-    <div className="flex min-w-0 flex-wrap items-start justify-between gap-x-3 gap-y-1 border-b border-[rgb(var(--lims-paper-border))] px-4 py-3">
+    <div className="dash-card-header flex min-w-0 flex-wrap items-start justify-between gap-x-3 gap-y-1 border-b border-[rgb(var(--lims-paper-border))] px-4 py-3">
       <div className="min-w-0">
         <h2 className="font-jakarta text-sm font-bold text-foreground sm:text-base">{title}</h2>
       </div>

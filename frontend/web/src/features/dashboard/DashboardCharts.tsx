@@ -2,12 +2,13 @@
  * Recharts-based dashboard charts. Loaded lazily from DashboardPage so the chart library
  * stays out of the main bundle.
  */
-import { useMemo, useSyncExternalStore, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react'
 import {
   Bar,
   BarChart,
   CartesianGrid,
   Cell,
+  LabelList,
   Legend,
   Line,
   LineChart,
@@ -133,13 +134,14 @@ export default function DashboardChart(props: DashboardChartProps) {
   if (props.kind === 'pipeline') {
     const { data, onSelect, height } = props
     return (
+      // Slim rounded bars with their count on top and no value axis, like iPhone's Health / Screen Time charts
+      // (owner, 24 Nov 2026: the bars looked too thick).
       <ResponsiveContainer width="100%" height={height}>
-        <BarChart data={data} margin={{ top: 12, right: 12, bottom: 0, left: -12 }}>
-          <CartesianGrid {...GRID_PROPS} />
+        <BarChart data={data} margin={{ top: 16, right: 6, bottom: 0, left: 6 }} barCategoryGap="34%">
           <XAxis dataKey="label" tick={AXIS_TICK} tickLine={false} axisLine={{ stroke: 'var(--dash-grid)' }} interval="preserveStartEnd" minTickGap={4} />
-          <YAxis allowDecimals={false} tick={AXIS_TICK} tickLine={false} axisLine={false} width={44} />
+          <YAxis hide allowDecimals={false} domain={[0, 'dataMax']} />
           <Tooltip
-            cursor={{ fill: 'var(--dash-accent-soft)' }}
+            cursor={{ fill: 'var(--dash-accent-soft)', radius: 6 }}
             content={({ active, payload }) =>
               active && payload?.length ? (
                 <TooltipBox
@@ -154,12 +156,21 @@ export default function DashboardChart(props: DashboardChartProps) {
             dataKey="count"
             name="Renewals Due"
             fill="var(--dash-accent)"
-            radius={[4, 4, 0, 0]}
-            maxBarSize={40}
+            radius={[6, 6, 2, 2]}
+            maxBarSize={20}
             isAnimationActive={animate}
             cursor={cursor}
             onClick={(entry) => onSelect?.(monthKeyFromPayload((entry as { payload?: unknown }).payload))}
-          />
+          >
+            <LabelList
+              dataKey="count"
+              position="top"
+              offset={4}
+              fill="var(--dash-axis)"
+              fontSize={10}
+              formatter={(value: unknown) => (Number(value) ? formatCount(Number(value)) : '')}
+            />
+          </Bar>
         </BarChart>
       </ResponsiveContainer>
     )
@@ -235,7 +246,7 @@ export default function DashboardChart(props: DashboardChartProps) {
     const onSelect = props.onSelect as ((id: string) => void) | undefined
     return (
       <ResponsiveContainer width="100%" height={props.height}>
-        <BarChart data={rows} layout="vertical" margin={{ top: 4, right: 36, bottom: 4, left: 4 }} barCategoryGap={6}>
+        <BarChart data={rows} layout="vertical" margin={{ top: 4, right: 36, bottom: 4, left: 4 }} barCategoryGap="18%">
           <CartesianGrid stroke="var(--dash-grid)" strokeDasharray="3 3" horizontal={false} />
           <XAxis type="number" allowDecimals={false} tick={AXIS_TICK} tickLine={false} axisLine={false} />
           <YAxis
@@ -342,8 +353,22 @@ function StatusDonut({
     [counts],
   )
   const total = data.reduce((a, d) => a + d.value, 0)
+  // The centre text is sized from the ring's hole, so it stays inside it however small the card makes the donut
+  // (owner, 24 Nov 2026: "1,034 LICENCES" ran out of the inner circle). The ring's outer edge is 94 % of half the
+  // smaller side, its hole 70 % of that.
+  const [box, setBox] = useState<HTMLDivElement | null>(null)
+  const [width, setWidth] = useState(0)
+  useEffect(() => {
+    if (!box) return
+    const ro = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width))
+    ro.observe(box)
+    return () => ro.disconnect()
+  }, [box])
+  const hole = 0.94 * 0.7 * Math.min(width || height, height)
+  const valuePx = Math.max(12, Math.min(24, Math.round(hole * 0.27)))
+  const labelPx = Math.max(8, Math.min(11, Math.round(valuePx * 0.45)))
   return (
-    <div className="relative" style={{ height }}>
+    <div ref={setBox} className="relative" style={{ height }}>
       <ResponsiveContainer width="100%" height={height}>
         <PieChart>
           <Tooltip
@@ -365,8 +390,8 @@ function StatusDonut({
             data={data}
             dataKey="value"
             nameKey="label"
-            innerRadius="62%"
-            outerRadius="92%"
+            innerRadius="70%"
+            outerRadius="94%"
             startAngle={90}
             endAngle={-270}
             stroke="var(--dash-surface)"
@@ -385,8 +410,14 @@ function StatusDonut({
         </PieChart>
       </ResponsiveContainer>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center" aria-hidden="true">
-        <span className="font-jakarta text-2xl font-bold tabular-nums text-foreground">{formatCount(total)}</span>
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Licences</span>
+        <span className="font-jakarta font-bold leading-none tabular-nums text-foreground" style={{ fontSize: valuePx }}>
+          {formatCount(total)}
+        </span>
+        {hole >= 56 ? (
+          <span className="mt-0.5 font-semibold uppercase leading-none tracking-wide text-muted-foreground" style={{ fontSize: labelPx }}>
+            Licences
+          </span>
+        ) : null}
       </div>
     </div>
   )

@@ -4,6 +4,7 @@ import { BsbPortalLoginSettings } from './lab-settings/BsbPortalLoginSettings'
 import { limsPageShellClass } from '@/lib/limsThemeUi'
 import { getThemeSelectOptions, normalizeAppThemeId } from '@/lib/appTheme'
 import { useAppTheme } from '@/lib/AppThemeProvider'
+import { useSidebarMode, writeSidebarMode } from '@/lib/sidebarMode'
 import { useAppDateFormat } from '@/lib/AppDateFormatProvider'
 import { useAppCurrency } from '@/lib/AppCurrencyProvider'
 import {
@@ -102,6 +103,7 @@ export default function LabSettingsPage() {
   const { theme: selectedTheme, setTheme: setSelectedTheme, customThemes, saveCustomTheme, removeCustomTheme } =
     useAppTheme()
   const [themeDialogOpen, setThemeDialogOpen] = useState(false)
+  const sidebarPinned = useSidebarMode() === 'pinned'
   const {
     dateFormat: selectedDateFormat,
     setDateFormat: setSelectedDateFormat,
@@ -2155,6 +2157,35 @@ export default function LabSettingsPage() {
                     />
                   </Dialog>
                 </div>
+              </div>
+
+              <div className="mt-6 space-y-2 border-t border-stone-300 pt-5">
+                <Label htmlFor="sidebar-always-shown">Sidebar - Always Show</Label>
+                <label
+                  htmlFor="sidebar-always-shown"
+                  className="flex max-w-xs cursor-pointer items-center justify-between gap-3 rounded-none border border-stone-500 bg-stone-50 px-3 py-2.5 transition-colors hover:bg-white"
+                >
+                  <span className="text-xs font-semibold uppercase tracking-wide text-stone-700">
+                    {sidebarPinned ? 'On' : 'Off'}
+                  </span>
+                  <span className="relative inline-flex h-5 w-9 shrink-0 items-center">
+                    <input
+                      id="sidebar-always-shown"
+                      type="checkbox"
+                      className="peer sr-only"
+                      checked={sidebarPinned}
+                      onChange={(e) => writeSidebarMode(e.target.checked ? 'pinned' : 'menu')}
+                    />
+                    <span className="absolute inset-0 rounded-full bg-stone-300 transition-colors peer-checked:bg-amber-700 peer-focus-visible:ring-2 peer-focus-visible:ring-amber-500/40" />
+                    <span className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform peer-checked:translate-x-4" />
+                  </span>
+                </label>
+                <p className="max-w-xl text-[12px] text-stone-600">
+                  Off: The Sidebar Stays Hidden and Pages Use the Full Screen. Point at ☰ at the Top Left to Open the
+                  Menu; Each Module's Options Open to Its Right. On: The Sidebar Stays on the Left. Applies at Once on
+                  This Computer (No Save Needed). Anyone Can Also Switch It: "Keep Open" in the ☰ Menu, or the Hide
+                  Button at the Top of the Sidebar. Screens Narrower Than 1280px Always Use the ☰ Slide-In Menu.
+                </p>
               </div>
 
               <div className="mt-6 space-y-2 border-t border-stone-300 pt-5">

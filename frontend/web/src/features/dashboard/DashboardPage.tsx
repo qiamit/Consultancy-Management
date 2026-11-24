@@ -1,4 +1,16 @@
-import { lazy, Suspense, useCallback, useMemo, type ReactNode } from 'react'
+import {
+  createContext,
+  lazy,
+  Suspense,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   Ban,
@@ -78,6 +90,58 @@ const PATHS = {
 
 type PathKey = keyof typeof PATHS
 
+/**
+ * Fit to screen (owner, 24 Nov 2026): on a desktop screen the whole dashboard shows at once, without scrolling the
+ * page: a slim title bar, the eight figures in one row, and the cards in three rows that share the rest of the height
+ * (charts take their card's height, long lists scroll inside their card). Smaller screens scroll as before.
+ */
+// From 780px of height: below that three rows of cards are too short for their charts (1280 × 720: axis labels ran
+// into each other), so such screens scroll as before.
+const FIT_QUERY = '(min-width: 1280px) and (min-height: 780px)'
+
+function subscribeFit(onChange: () => void) {
+  const mq = window.matchMedia(FIT_QUERY)
+  mq.addEventListener('change', onChange)
+  return () => mq.removeEventListener('change', onChange)
+}
+
+function useDashFit(): boolean {
+  return useSyncExternalStore(subscribeFit, () => window.matchMedia(FIT_QUERY).matches, () => false)
+}
+
+const DashFitContext = createContext(false)
+/** Fit to screen with room for all eight figures in one row (no pinned sidebar beside a mid-size screen). */
+const DashWideContext = createContext(false)
+const WIDE_PX = 1300
+
+/** Width of an element, kept up to date (0 until measured). A callback ref: the page's element appears only once
+ * the data has loaded. */
+function useBoxWidth() {
+  const [el, setEl] = useState<HTMLDivElement | null>(null)
+  const [width, setWidth] = useState(0)
+  useEffect(() => {
+    if (!el) return
+    const ro = new ResizeObserver(([entry]) => setWidth(Math.floor(entry.contentRect.width)))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [el])
+  return { ref: setEl, width }
+}
+
+/** Height of an element, kept up to date (0 until measured). */
+function useBoxHeight(active: boolean) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [height, setHeight] = useState(0)
+  useEffect(() => {
+    const el = ref.current
+    if (!active || !el) return
+    const ro = new ResizeObserver(([entry]) => setHeight(Math.floor(entry.contentRect.height)))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [active])
+  return { ref, height }
+}
+
 function useDashboardAccess() {
   const moduleAccess = useModuleAccessOptional()
   const { user, designation, departmentName, role, profileReady } = useAuth()
@@ -141,8 +205,24 @@ function ChartBody({
   chart: DashboardChartProps | null
   table: SrTable | null
 }) {
-  if (section?.error) return <SectionError message={section.error} onRetry={onRetry} height={height} />
-  if (empty || !chart) return <EmptyState title={empty?.title ?? 'No Data Yet'} hint={empty?.hint} height={height} />
+  const fit = useContext(DashFitContext)
+  const box = useBoxHeight(fit && !section?.error && !empty && Boolean(chart))
+  if (section?.error) return <SectionError message={section.error} onRetry={onRetry} height={fit ? undefined : height} />
+  if (empty || !chart) return <EmptyState title={empty?.title ?? 'No Data Yet'} hint={empty?.hint} height={fit ? undefined : height} />
+  if (fit) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col px-2 pb-1.5 pt-1">
+        <div ref={box.ref} role="img" aria-label={table?.caption} className="min-h-0 flex-1">
+          {box.height > 40 ? (
+            <Suspense fallback={<ChartSkeleton height={box.height} />}>
+              <DashboardChart {...chart} height={box.height} />
+            </Suspense>
+          ) : null}
+        </div>
+        {table ? <SrDataTable table={table} /> : null}
+      </div>
+    )
+  }
   return (
     <div className="px-2 pb-3 pt-2 sm:px-3">
       <div role="img" aria-label={table?.caption}>
@@ -179,11 +259,12 @@ function ListBody({
   emptyHint?: string
   footer?: ReactNode
 }) {
+  const fit = useContext(DashFitContext)
   if (section?.error) return <SectionError message={section.error} onRetry={onRetry} />
   if (!items.length) return <EmptyState title={emptyTitle} hint={emptyHint} />
   return (
     <>
-      <ul className="divide-y divide-[rgb(var(--lims-paper-border))]">
+      <ul className={cn('divide-y divide-[rgb(var(--lims-paper-border))]', fit && 'min-h-0 flex-1 overflow-y-auto')}>
         {items.map((item) => {
           const content = (
             <>
@@ -202,22 +283,123 @@ function ListBody({
               {item.href ? (
                 <NavLink
                   to={item.href}
-                  className="flex min-h-[3.25rem] items-center gap-3 px-4 py-2.5 transition hover:bg-amber-500/10 focus-visible:bg-amber-500/10 focus-visible:outline-none"
+                  className={cn(
+                    'flex items-center gap-3 px-4 transition hover:bg-amber-500/10 focus-visible:bg-amber-500/10 focus-visible:outline-none',
+                    fit ? 'min-h-11 py-1.5' : 'min-h-[3.25rem] py-2.5',
+                  )}
                 >
                   {content}
                 </NavLink>
               ) : (
-                <div className="flex min-h-[3.25rem] items-center gap-3 px-4 py-2.5">{content}</div>
+                <div className={cn('flex items-center gap-3 px-4', fit ? 'min-h-11 py-1.5' : 'min-h-[3.25rem] py-2.5')}>{content}</div>
               )}
             </li>
           )
         })}
       </ul>
       {footer ? (
-        <div className="mt-auto border-t border-[rgb(var(--lims-paper-border))] px-4 py-2 text-xs text-muted-foreground">
+        <div className={cn('mt-auto shrink-0 border-t border-[rgb(var(--lims-paper-border))] px-4 text-xs text-muted-foreground', fit ? 'py-1' : 'py-2')}>
           {footer}
         </div>
       ) : null}
+    </>
+  )
+}
+
+type RankRow = { id: string; label: string; count: number }
+
+/**
+ * A ranked list with a bar under each row, like iPhone's Screen Time (owner, 24 Nov 2026): the full name on the
+ * left, the count on the right and a rounded bar showing its share of the largest. Replaces the horizontal bar
+ * charts of Applications by Stage and Top 10 IS Codes, whose names were cut ("Test Request Submi…") and whose ten
+ * rows crowded together. On the fit-to-screen dashboard the rows run in two columns, so all of them show.
+ */
+function RankBody({
+  section,
+  rows,
+  onRetry,
+  empty,
+  numbered = false,
+  hrefFor,
+  unit,
+  table,
+}: {
+  section: Section<unknown> | undefined
+  rows: RankRow[]
+  onRetry: () => void
+  empty: string
+  numbered?: boolean
+  hrefFor: (row: RankRow) => string | null
+  unit: string
+  table: SrTable
+}) {
+  const fit = useContext(DashFitContext)
+  if (section?.error) return <SectionError message={section.error} onRetry={onRetry} />
+  if (!rows.length) return <EmptyState title={empty} />
+  const max = Math.max(1, ...rows.map((r) => r.count))
+  const twoColumns = fit && rows.length >= 5
+  return (
+    <>
+      <ol
+        className={cn(
+          'grid gap-x-5 px-4',
+          fit ? 'min-h-0 flex-1 content-evenly gap-y-0 overflow-y-auto py-1.5' : 'gap-y-2 py-3',
+          twoColumns && 'grid-flow-col grid-cols-2',
+        )}
+        style={twoColumns ? { gridTemplateRows: `repeat(${Math.ceil(rows.length / 2)}, auto)` } : undefined}
+      >
+        {rows.map((row, i) => {
+          const to = hrefFor(row)
+          const inner = (
+            <>
+              <span className="flex min-w-0 items-baseline gap-2">
+                {numbered ? (
+                  <span className="w-4 shrink-0 text-right text-[11px] font-semibold tabular-nums text-muted-foreground">
+                    {i + 1}
+                  </span>
+                ) : null}
+                <span className={cn('min-w-0 flex-1 truncate font-medium text-foreground', fit ? 'text-xs' : 'text-[13px]')} title={row.label}>
+                  {row.label}
+                </span>
+                <span className={cn('shrink-0 font-semibold tabular-nums text-foreground', fit ? 'text-xs' : 'text-[13px]')}>
+                  {formatCount(row.count)}
+                </span>
+              </span>
+              <span
+                className={cn(
+                  'block overflow-hidden rounded-full bg-[var(--dash-accent-soft)]',
+                  fit ? 'mt-0.5 h-1' : 'mt-1 h-1.5',
+                  numbered && 'ml-6',
+                )}
+              >
+                <span
+                  className="block h-full rounded-full bg-[var(--dash-accent)]"
+                  style={{ width: `${Math.max(3, Math.round((row.count / max) * 100))}%` }}
+                />
+              </span>
+            </>
+          )
+          return (
+            <li key={row.id} className="min-w-0">
+              {to ? (
+                <NavLink
+                  to={to}
+                  className={cn(
+                    '-mx-1.5 block rounded-lg px-1.5 transition hover:bg-amber-500/10 focus-visible:bg-amber-500/10 focus-visible:outline-none',
+                    fit ? 'py-0.5' : 'py-1',
+                  )}
+                  aria-label={`${row.label}: ${formatCount(row.count)} ${unit}`}
+                >
+                  {inner}
+                </NavLink>
+              ) : (
+                <div className={fit ? 'py-0.5' : 'py-1'}>{inner}</div>
+              )}
+            </li>
+          )
+        })}
+      </ol>
+      <SrDataTable table={table} />
     </>
   )
 }
@@ -246,6 +428,8 @@ export default function DashboardPage() {
   const { profileName, user } = useAuth()
   const navigate = useNavigate()
   const { ready, access, href, userId } = useDashboardAccess()
+  const fit = useDashFit()
+  const pageBox = useBoxWidth()
 
   const accessKey = useMemo(() => JSON.stringify(access), [access])
   const query = useQuery({
@@ -269,15 +453,15 @@ export default function DashboardPage() {
   })
 
   const header = (
-    <header className={cn(limsDarkBarClass, 'border-2 border-stone-700 px-4 py-4 sm:px-6 sm:py-5')}>
+    <header className={cn(limsDarkBarClass, 'border-2 border-stone-700', fit ? 'shrink-0 px-4 py-1.5' : 'px-4 py-4 sm:px-6 sm:py-5')}>
       <div className="pointer-events-none absolute inset-0 opacity-70" style={limsDarkBarGlowStyle} aria-hidden="true" />
       <div className={limsDarkBarAccentClass} aria-hidden="true" />
-      <div className="relative flex min-w-0 flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div className="min-w-0">
+      <div className={cn('relative flex min-w-0 gap-3', fit ? 'flex-row items-center justify-between' : 'flex-col lg:flex-row lg:items-end lg:justify-between')}>
+        <div className={cn('min-w-0', fit && 'flex items-baseline gap-3')}>
           <h1 className="break-words font-jakarta text-xl font-bold tracking-tight text-white sm:text-2xl">
             Welcome{greetingName ? `, ${greetingName}` : ''}
           </h1>
-          <p className="mt-0.5 text-xs text-white/70 sm:text-sm">{todayLabel}</p>
+          <p className={cn('text-xs text-white/70 sm:text-sm', !fit && 'mt-0.5')}>{todayLabel}</p>
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           {data ? <HeaderStats data={data} href={href} /> : null}
@@ -337,10 +521,21 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className={cn(limsPageShellClass, 'dash-root')}>
-      {header}
-      <DashboardBody data={data} href={href} go={go} retry={retry} />
-    </div>
+    <DashFitContext.Provider value={fit}>
+      <DashWideContext.Provider value={fit && pageBox.width >= WIDE_PX}>
+      <div
+        ref={pageBox.ref}
+        className={cn(
+          limsPageShellClass,
+          'dash-root',
+          fit && 'dash-fit flex h-full flex-col gap-2 space-y-0 overflow-hidden sm:space-y-0 lg:space-y-0 xl:p-2.5',
+        )}
+      >
+        {header}
+        <DashboardBody data={data} href={href} go={go} retry={retry} />
+      </div>
+      </DashWideContext.Provider>
+    </DashFitContext.Provider>
   )
 }
 
@@ -389,6 +584,8 @@ function DashboardBody({
   go: (to: string | null) => void
   retry: () => void
 }) {
+  const fit = useContext(DashFitContext)
+  const wide = useContext(DashWideContext)
   const lic = data.licences
   const apps = data.applications
   const fin = data.finance
@@ -600,15 +797,16 @@ function DashboardBody({
 
   const stageRows = apps?.data?.byStage ?? []
   const isRows = licData?.topIsCodes ?? []
-  // Applications by Stage and Top IS Codes sit side by side: one shared height keeps the row even.
-  const barHeight = Math.max(180, Math.max(apps ? stageRows.length : 0, lic ? isRows.length : 0) * 30 + 30)
 
   return (
     <>
       {kpis.length ? (
-        <section aria-label="Key Figures" className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 lg:grid-cols-4">
+        <section
+          aria-label="Key Figures"
+          className={cn('grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 lg:grid-cols-4', fit && 'shrink-0 xl:gap-2', wide && 'xl:grid-cols-8')}
+        >
           {kpis.map((k) => (
-            <KpiTile key={k.label} {...k} />
+            <KpiTile key={k.label} {...k} compact={fit} />
           ))}
         </section>
       ) : null}
@@ -623,10 +821,16 @@ function DashboardBody({
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-12 xl:gap-4">
+      <div
+        className={cn(
+          'grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-12 xl:gap-4',
+          // Three rows sharing the height; each card fills its cell.
+          fit && 'min-h-0 flex-1 xl:grid-rows-3 xl:gap-2 [&>*]:min-h-0',
+        )}
+      >
         {lic ? (
           <>
-            <DashCard className={cn('md:col-span-2', XL_SPAN[8])}>
+            <DashCard className={cn('md:col-span-2', fit ? (wide ? 'xl:col-span-5' : 'xl:col-span-4') : XL_SPAN[8])}>
               <CardHeader
                 title="Renewal Pipeline — Next 12 Months"
                 href={renewalsHref}
@@ -646,8 +850,10 @@ function DashboardBody({
               />
             </DashCard>
 
-            <DashCard className={cn('md:col-span-1', XL_SPAN[4])}>
+            <DashCard className={cn('md:col-span-1', fit ? (wide ? 'xl:col-span-3' : 'xl:col-span-4') : XL_SPAN[4])}>
               <CardHeader title="Licence Status" href={href('licences')} />
+              {/* Fit to screen: the legend sits beside the donut, so the donut keeps its size in a short card. */}
+              <div className={cn(fit && 'flex min-h-0 flex-1 items-stretch')}>
               <ChartBody
                 section={lic}
                 height={200}
@@ -661,7 +867,12 @@ function DashboardBody({
                 } : null}
               />
               {licData && statusTotal > 0 ? (
-                <ul className="grid grid-cols-1 gap-x-3 border-t border-[rgb(var(--lims-paper-border))] px-3 py-2 min-[420px]:grid-cols-2 md:grid-cols-1 xl:grid-cols-2">
+                <ul
+                  className={cn(
+                    'grid grid-cols-1 gap-x-3 border-t border-[rgb(var(--lims-paper-border))] px-3 min-[420px]:grid-cols-2 md:grid-cols-1 xl:grid-cols-2',
+                    fit ? 'w-44 shrink-0 self-center border-l border-t-0 !grid-cols-1 py-1' : 'py-2',
+                  )}
+                >
                   {STATUS_META.map((m) => {
                     const n = licData.status[m.key]
                     const pct = statusTotal ? Math.round((n / statusTotal) * 100) : 0
@@ -677,17 +888,18 @@ function DashboardBody({
                     return (
                       <li key={m.key}>
                         {to ? (
-                          <NavLink to={to} className="flex min-h-9 items-center gap-2 px-1 hover:bg-amber-500/10" aria-label={`${m.label}: ${n} licences (${pct}%). ${m.hint}`}>
+                          <NavLink to={to} className={cn('flex items-center gap-2 px-1 hover:bg-amber-500/10', fit ? 'min-h-7' : 'min-h-9')} aria-label={`${m.label}: ${n} licences (${pct}%). ${m.hint}`}>
                             {inner}
                           </NavLink>
                         ) : (
-                          <div className="flex min-h-9 items-center gap-2 px-1">{inner}</div>
+                          <div className={cn('flex items-center gap-2 px-1', fit ? 'min-h-7' : 'min-h-9')}>{inner}</div>
                         )}
                       </li>
                     )
                   })}
                 </ul>
               ) : null}
+              </div>
             </DashCard>
           </>
         ) : null}
@@ -696,8 +908,8 @@ function DashboardBody({
           <div
             key={i}
             className={cn(
-              'flex min-w-0 [&>section]:flex-1',
-              listSpan,
+              'flex min-w-0 [&>section]:min-h-0 [&>section]:flex-1',
+              fit ? 'xl:col-span-4' : listSpan,
               // Tablet: 2 columns; the last card spans both when the donut + lists leave it alone.
               i === listCards.length - 1 && ((lic ? 1 : 0) + listCards.length) % 2 === 1 && 'md:col-span-2',
             )}
@@ -707,53 +919,46 @@ function DashboardBody({
         ))}
 
         {apps ? (
-          <DashCard className={cn('md:col-span-1', XL_SPAN[lic ? 6 : 12])}>
+          <DashCard className={cn('md:col-span-1', fit ? 'xl:col-span-4' : XL_SPAN[lic ? 6 : 12])}>
             <CardHeader title="Applications by Stage" href={href('applications')} />
-            <ChartBody
+            <RankBody
               section={apps}
-              height={barHeight}
+              rows={stageRows.map((r) => ({ id: r.stage, label: r.stage, count: r.count }))}
               onRetry={retry}
-              empty={apps.data && !stageRows.length ? { title: 'No Open Applications' } : null}
-              chart={apps.data ? {
-                kind: 'stages',
-                data: stageRows,
-                height: barHeight,
-                onSelect: href('applications') ? () => go(href('applications')) : undefined,
-              } : null}
-              table={apps.data ? {
+              empty="No Open Applications"
+              hrefFor={() => href('applications')}
+              unit="applications"
+              table={{
                 caption: 'Open applications by stage',
                 columns: ['Stage', 'Applications'],
-                rows: stageRows.map((s) => [s.stage, s.count]),
-              } : null}
+                rows: stageRows.map((r) => [r.stage, r.count]),
+              }}
             />
           </DashCard>
         ) : null}
 
         {lic ? (
-          <DashCard className={cn('md:col-span-1', XL_SPAN[apps ? 6 : 12])}>
+          <DashCard className={cn('md:col-span-1', fit ? 'xl:col-span-4' : XL_SPAN[apps ? 6 : 12])}>
             <CardHeader title="Top 10 IS Codes" href={href('licences')} linkLabel="Licences" />
-            <ChartBody
+            <RankBody
               section={lic}
-              height={barHeight}
+              rows={isRows}
               onRetry={retry}
-              empty={licData && !isRows.length ? { title: 'No IS Codes Linked Yet' } : null}
-              chart={licData ? {
-                kind: 'isCodes',
-                data: isRows,
-                height: barHeight,
-                onSelect: href('licences') ? () => go(href('licences')) : undefined,
-              } : null}
-              table={licData ? {
+              empty="No IS Codes Linked Yet"
+              numbered
+              hrefFor={() => href('licences')}
+              unit="licences"
+              table={{
                 caption: 'Top 10 IS codes by number of licences',
                 columns: ['IS Code', 'Licences'],
                 rows: isRows.map((r) => [r.label, r.count]),
-              } : null}
+              }}
             />
           </DashCard>
         ) : null}
 
         {lic ? (
-          <DashCard className={cn('md:col-span-2', XL_SPAN[showFinance ? 6 : 12])}>
+          <DashCard className={cn('md:col-span-2', fit ? (showFinance ? 'xl:col-span-4' : 'xl:col-span-8') : XL_SPAN[showFinance ? 6 : 12])}>
             <CardHeader
               title={filedAny ? 'Licences Granted & Applications Filed' : 'Licences Granted per Month'}
               href={href('licences')}
@@ -780,7 +985,7 @@ function DashboardBody({
         ) : null}
 
         {fin && showFinance ? (
-          <DashCard className={cn('md:col-span-2', XL_SPAN[lic ? 6 : 12])}>
+          <DashCard className={cn('md:col-span-2', fit ? 'xl:col-span-4' : XL_SPAN[lic ? 6 : 12])}>
             <CardHeader
               title="Finance — Last 12 Months"
               href={href('quotations') ?? href('invoices') ?? href('receipts')}
