@@ -67,7 +67,7 @@ const DialogOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      'fixed inset-0 bg-background/80 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
+      'ui-dialog-overlay fixed inset-0 bg-background/80 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
       dialogLayerZClass(layer),
       className,
     )}
@@ -150,7 +150,7 @@ const DialogContent = React.forwardRef<
         }}
         className={cn(
           // Center in main content area (--app-dialog-center-x). Full-bleed sheets override left/top/translate.
-          'fixed grid w-[min(32rem,calc(100vw-1.5rem))] max-w-lg max-h-[92dvh] gap-4 overflow-y-auto rounded-none border-2 border-stone-600 bg-background p-6 shadow-lg ring-1 ring-amber-700/20 duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-bottom-5 data-[state=open]:slide-in-from-bottom-5 sm:rounded-none',
+          'ui-dialog fixed grid w-[min(32rem,calc(100vw-1.5rem))] max-w-lg max-h-[92dvh] gap-4 overflow-y-auto rounded-none border-2 border-stone-600 bg-background p-6 shadow-lg ring-1 ring-amber-700/20 duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-bottom-5 data-[state=open]:slide-in-from-bottom-5 sm:rounded-none',
           limsDialogCenterClass,
           dialogLayerZClass(layer),
           className,
@@ -160,7 +160,7 @@ const DialogContent = React.forwardRef<
         {children}
         {showCloseButton ? (
           <DialogPrimitive.Close
-            className="absolute right-2 top-2 z-10 flex h-9 w-9 items-center sm:h-7 sm:w-7 justify-center rounded-none border !border-red-600 !bg-red-600 !text-white shadow-sm ring-offset-background transition-colors hover:!border-red-700 hover:!bg-red-700 hover:!text-white focus:outline-none focus:ring-2 focus:!ring-red-500 focus:ring-offset-2 disabled:pointer-events-none"
+            className="ui-dialog-close absolute right-2 top-2 z-10 flex h-9 w-9 items-center sm:h-7 sm:w-7 justify-center rounded-none border !border-red-600 !bg-red-600 !text-white shadow-sm ring-offset-background transition-colors hover:!border-red-700 hover:!bg-red-700 hover:!text-white focus:outline-none focus:ring-2 focus:!ring-red-500 focus:ring-offset-2 disabled:pointer-events-none"
             aria-label="Close"
           >
             <X className="h-3.5 w-3.5 !text-white" strokeWidth={2.75} aria-hidden />

@@ -1,12 +1,24 @@
-/** App-wide visual theme (Lab Settings → Theme), including user custom themes. */
+/**
+ * App-wide visual theme (Lab Settings → Theme), including user custom themes.
+ *
+ * Since 24 Nov 2026 the default look is iPhone (iOS): `light` = iOS Light, `dark` = iOS Dark, `system` = iOS
+ * Automatic (follows the phone / Mac setting, the default for every device). The former warm stone + amber look
+ * is kept as `amber` (Classic Amber) and `amber-night` (Amber Night).
+ */
 
 export const APP_THEME_STORAGE_KEY = 'consultancy.appTheme'
 export const CUSTOM_THEMES_STORAGE_KEY = 'consultancy.customThemes'
+/** Set once a device has been moved to the iOS default (see migrateToIosDefault). */
+export const IOS_DEFAULT_STORAGE_KEY = 'consultancy.appTheme.iosDefault'
+
+export const DEFAULT_APP_THEME = 'system'
 
 export const BUILTIN_THEME_IDS = [
   'light',
   'dark',
   'system',
+  'amber',
+  'amber-night',
   'ocean',
   'forest',
   'steel',
@@ -32,9 +44,11 @@ export type CustomThemeDef = {
 }
 
 export const APP_THEME_OPTIONS: Array<{ value: BuiltinThemeId; label: string }> = [
-  { value: 'light', label: 'Classic Amber' },
-  { value: 'dark', label: 'Amber Night' },
-  { value: 'system', label: 'System Default' },
+  { value: 'system', label: 'iOS (Automatic)' },
+  { value: 'light', label: 'iOS Light' },
+  { value: 'dark', label: 'iOS Dark' },
+  { value: 'amber', label: 'Classic Amber' },
+  { value: 'amber-night', label: 'Amber Night' },
   { value: 'ocean', label: 'Ocean Blue' },
   { value: 'forest', label: 'Forest Green' },
   { value: 'steel', label: 'Slate Steel' },
@@ -47,6 +61,11 @@ const BUILTIN_SET = new Set<string>(BUILTIN_THEME_IDS)
 
 export function isBuiltinThemeId(value: string): value is BuiltinThemeId {
   return BUILTIN_SET.has(value)
+}
+
+/** The iPhone look: iOS Light / iOS Dark (and Automatic, which resolves to one of them). */
+export function isIosResolvedTheme(resolved: string): boolean {
+  return resolved === 'light' || resolved === 'dark'
 }
 
 export function isCustomThemeId(value: string): boolean {
@@ -323,8 +342,7 @@ export function normalizeAppThemeId(value: string | null | undefined): AppThemeI
   const raw = String(value ?? '').trim().toLowerCase()
   if (isBuiltinThemeId(raw)) return raw
   if (isCustomThemeId(raw) && findCustomTheme(raw)) return raw
-  if (isCustomThemeId(raw)) return 'light'
-  return 'light'
+  return DEFAULT_APP_THEME
 }
 
 export function resolveAppThemeId(
@@ -338,20 +356,51 @@ export function resolveAppThemeId(
 }
 
 export function isDarkResolvedTheme(resolved: ResolvedAppThemeId, customs = readCustomThemes()): boolean {
-  if (resolved === 'dark') return true
+  if (resolved === 'dark' || resolved === 'amber-night') return true
   if (isCustomThemeId(String(resolved))) {
     return findCustomTheme(String(resolved), customs)?.mode === 'dark'
   }
   return false
 }
 
-export function readStoredAppTheme(): AppThemeId {
-  if (typeof window === 'undefined') return 'light'
+/**
+ * One-time move of a device to the iOS default (24 Nov 2026): a device still on the old default (`light`, which was
+ * Classic Amber) goes to iOS Automatic. Any other choice (iOS Dark, Ocean Blue, a custom theme …) is kept.
+ * index.html does the same before React mounts.
+ */
+export function migrateToIosDefault() {
+  if (typeof window === 'undefined') return
   try {
+    if (window.localStorage.getItem(IOS_DEFAULT_STORAGE_KEY)) return
+    const stored = window.localStorage.getItem(APP_THEME_STORAGE_KEY)
+    if (!stored || stored === 'light') window.localStorage.setItem(APP_THEME_STORAGE_KEY, DEFAULT_APP_THEME)
+    window.localStorage.setItem(IOS_DEFAULT_STORAGE_KEY, '1')
+  } catch {
+    /* ignore */
+  }
+}
+
+export function readStoredAppTheme(): AppThemeId {
+  if (typeof window === 'undefined') return DEFAULT_APP_THEME
+  try {
+    migrateToIosDefault()
     return normalizeAppThemeId(window.localStorage.getItem(APP_THEME_STORAGE_KEY))
   } catch {
-    return 'light'
+    return DEFAULT_APP_THEME
   }
+}
+
+/** Browser / PWA bar colour per theme (iOS: the grouped background, so the status bar blends in). */
+const THEME_COLOR: Record<string, string> = {
+  light: '#f2f2f7',
+  dark: '#000000',
+  amber: '#0c416a',
+  'amber-night': '#0c0a09',
+}
+
+function applyThemeColorMeta(resolved: string) {
+  const meta = document.querySelector('meta[name="theme-color"]')
+  if (meta) meta.setAttribute('content', THEME_COLOR[resolved] ?? '#0c416a')
 }
 
 export function persistAppTheme(theme: AppThemeId) {
@@ -376,6 +425,8 @@ export function applyAppTheme(preference: AppThemeId, customs = readCustomThemes
       root.setAttribute('data-app-theme', 'custom')
       root.setAttribute('data-custom-theme-id', def.id)
       root.classList.toggle('dark', def.mode === 'dark')
+      root.removeAttribute('data-ui')
+      applyThemeColorMeta('custom')
       applyCustomThemeCssVars(def)
       persistAppTheme(preference)
       return
@@ -387,6 +438,9 @@ export function applyAppTheme(preference: AppThemeId, customs = readCustomThemes
   root.setAttribute('data-app-theme-pref', preference)
   root.setAttribute('data-app-theme', String(resolved))
   root.classList.toggle('dark', isDarkResolvedTheme(resolved, customs))
+  if (isIosResolvedTheme(String(resolved))) root.setAttribute('data-ui', 'ios')
+  else root.removeAttribute('data-ui')
+  applyThemeColorMeta(String(resolved))
   persistAppTheme(preference)
 }
 

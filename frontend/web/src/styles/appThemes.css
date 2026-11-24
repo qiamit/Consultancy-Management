@@ -2,7 +2,7 @@
    RGB channels so Tailwind opacity modifiers keep working. */
 
 :root,
-[data-app-theme='light'] {
+[data-app-theme='amber'] {
   color-scheme: light;
 
   --color-stone-50: 250 250 249;
@@ -179,7 +179,7 @@ html.dark .hover\:text-amber-900:hover {
 [data-app-theme='copper'],
 [data-app-theme='teal'],
 [data-app-theme='rose'],
-[data-app-theme='light'] {
+[data-app-theme='amber'] {
   color-scheme: light;
 }
 

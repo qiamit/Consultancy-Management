@@ -1,0 +1,715 @@
+/*
+  iPhone (iOS) look — the default theme since 24 Nov 2026 (Lab Settings → Theme: iOS Automatic / Light / Dark).
+
+  html[data-ui='ios'] is set by applyAppTheme() / index.html when the theme resolves to iOS Light (data-app-theme
+  'light') or iOS Dark ('dark' + html.dark). Everything here is scoped to it, so Classic Amber, Amber Night, Ocean
+  Blue … and custom themes look exactly as before.
+
+  How it works:
+  1. The stone (neutral) and amber (accent) scales the whole app is built on are remapped to iOS system grays and
+     iOS Blue, and the shadcn tokens (--background, --card, --primary …) to iOS system colours.
+  2. The app's dark "chrome" (page title bars, table heads, the top bar and sidebar: bg-stone-800 / from-stone-800
+     …) becomes iOS's light translucent bars, with its light text flipped to iOS label colours.
+  3. Controls get iOS shapes: rounded buttons and fields on a gray fill, segmented tabs, round check circles, green
+     switches, rounded sheets with a gray close button, pill badges, rounded menus.
+  Class names are matched as whole tokens ([class~='…']) so hover: / focus: variants are never caught.
+*/
+
+/* ---------------------------------------------------------------------------------------------------------------
+   1. Colours
+   --------------------------------------------------------------------------------------------------------------- */
+
+html[data-ui='ios'] {
+  --ios-blue: 0 122 255;
+  --ios-green: 52 199 89;
+  --ios-red: 255 59 48;
+  --ios-orange: 255 149 0;
+  --ios-label: 0 0 0;
+  --ios-label2: 60 60 67;
+  --ios-label2-a: 0.6;
+  --ios-sep: 198 198 200;
+  --ios-fill: 118 118 128;
+  --ios-fill-a: 0.12;
+  --ios-bar: 249 249 249;
+  --ios-bar-a: 0.94;
+  --ios-bg: 242 242 247;
+  --ios-card: 255 255 255;
+  --ios-head: 242 242 247;
+  --ios-seg-active: 255 255 255;
+  --ios-gray3: 199 199 204;
+  --ios-switch-off: 120 120 128;
+  --ios-switch-off-a: 0.16;
+  --ios-font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', 'Segoe UI',
+    Roboto, Arial, sans-serif;
+}
+
+html[data-ui='ios'][data-app-theme='light'] {
+  color-scheme: light;
+
+  --color-stone-50: 242 242 247;
+  --color-stone-100: 229 229 234;
+  --color-stone-200: 209 209 214;
+  --color-stone-300: 199 199 204;
+  --color-stone-400: 174 174 178;
+  --color-stone-500: 142 142 147;
+  --color-stone-600: 99 99 102;
+  --color-stone-700: 72 72 74;
+  --color-stone-800: 28 28 30;
+  --color-stone-900: 0 0 0;
+  --color-stone-950: 0 0 0;
+
+  --color-amber-50: 240 247 255;
+  --color-amber-100: 224 238 255;
+  --color-amber-200: 191 222 255;
+  --color-amber-300: 138 193 255;
+  --color-amber-400: 64 156 255;
+  --color-amber-500: 10 132 255;
+  --color-amber-600: 0 122 255;
+  --color-amber-700: 0 122 255;
+  --color-amber-800: 0 100 214;
+  --color-amber-900: 0 82 178;
+  --color-amber-950: 0 50 110;
+
+  --lims-paper: 255 255 255;
+  --lims-paper-border: 198 198 200;
+
+  --background: 240 24% 96%;
+  --foreground: 0 0% 0%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 0%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 0% 0%;
+  --primary: 211 100% 50%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 240 11% 91%;
+  --secondary-foreground: 211 100% 50%;
+  --muted: 240 24% 96%;
+  --muted-foreground: 240 2% 54%;
+  --accent: 211 100% 95%;
+  --accent-foreground: 211 100% 45%;
+  --destructive: 3 100% 59%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 135 59% 49%;
+  --success-foreground: 0 0% 100%;
+  --warning: 35 100% 50%;
+  --warning-foreground: 0 0% 100%;
+  --info: 211 100% 50%;
+  --info-foreground: 0 0% 100%;
+  --border: 240 2% 78%;
+  --input: 240 2% 78%;
+  --ring: 211 100% 50%;
+  --radius: 10px;
+  --sidebar: 240 24% 96%;
+  --sidebar-foreground: 0 0% 0%;
+  --sidebar-border: 240 2% 78%;
+  --sidebar-accent: 211 100% 50%;
+  --sidebar-accent-foreground: 0 0% 100%;
+  --sidebar-muted: 240 11% 91%;
+  --sidebar-ring: 211 100% 50%;
+}
+
+html.dark[data-ui='ios'][data-app-theme='dark'] {
+  color-scheme: dark;
+
+  --ios-blue: 10 132 255;
+  --ios-green: 48 209 88;
+  --ios-red: 255 69 58;
+  --ios-orange: 255 159 10;
+  --ios-label: 255 255 255;
+  --ios-label2: 235 235 245;
+  --ios-sep: 56 56 58;
+  --ios-fill-a: 0.24;
+  --ios-bar: 28 28 30;
+  --ios-bar-a: 0.92;
+  --ios-bg: 0 0 0;
+  --ios-card: 28 28 30;
+  --ios-head: 44 44 46;
+  --ios-seg-active: 99 99 102;
+  --ios-gray3: 72 72 74;
+  --ios-switch-off-a: 0.32;
+
+  /* 50–200 dark surfaces, 300–700 lighter inks, 800–950 near black (same roles as Amber Night). */
+  --color-stone-50: 28 28 30;
+  --color-stone-100: 44 44 46;
+  --color-stone-200: 58 58 60;
+  --color-stone-300: 72 72 74;
+  --color-stone-400: 99 99 102;
+  --color-stone-500: 142 142 147;
+  --color-stone-600: 174 174 178;
+  --color-stone-700: 209 209 214;
+  --color-stone-800: 28 28 30;
+  --color-stone-900: 18 18 18;
+  --color-stone-950: 0 0 0;
+
+  --color-amber-50: 13 38 66;
+  --color-amber-100: 16 52 92;
+  --color-amber-200: 30 80 140;
+  --color-amber-300: 100 170 255;
+  --color-amber-400: 64 156 255;
+  --color-amber-500: 10 132 255;
+  --color-amber-600: 10 132 255;
+  --color-amber-700: 10 132 255;
+  --color-amber-800: 100 170 255;
+  --color-amber-900: 140 192 255;
+  --color-amber-950: 191 222 255;
+
+  --lims-paper: 28 28 30;
+  --lims-paper-border: 56 56 58;
+
+  --background: 0 0% 0%;
+  --foreground: 0 0% 100%;
+  --card: 240 3% 11%;
+  --card-foreground: 0 0% 100%;
+  --popover: 240 2% 18%;
+  --popover-foreground: 0 0% 100%;
+  --primary: 211 100% 52%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 240 2% 18%;
+  --secondary-foreground: 211 100% 60%;
+  --muted: 240 3% 11%;
+  --muted-foreground: 240 3% 57%;
+  --accent: 211 60% 18%;
+  --accent-foreground: 211 100% 70%;
+  --destructive: 3 100% 61%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 135 64% 50%;
+  --warning: 36 100% 52%;
+  --info: 211 100% 52%;
+  --border: 240 2% 22%;
+  --input: 240 2% 22%;
+  --ring: 211 100% 52%;
+  --radius: 10px;
+  --sidebar: 240 3% 11%;
+  --sidebar-foreground: 0 0% 100%;
+  --sidebar-border: 240 2% 22%;
+  --sidebar-accent: 211 100% 52%;
+  --sidebar-accent-foreground: 0 0% 100%;
+  --sidebar-muted: 240 2% 18%;
+  --sidebar-ring: 211 100% 52%;
+}
+
+/* Amber Night's warm ink and yellow links → iOS neutral ink and blue links. */
+html.dark[data-ui='ios'] :is(.text-stone-700, .text-stone-800, .text-stone-900, .text-black) {
+  color: rgb(var(--ios-label)) !important;
+}
+html.dark[data-ui='ios'] :is(.hover\:text-stone-900:hover, .hover\:text-stone-800:hover) {
+  color: rgb(var(--ios-label)) !important;
+}
+html.dark[data-ui='ios'] :is(.text-amber-800, .text-amber-900, .text-amber-950) {
+  color: rgb(100 170 255) !important;
+}
+html.dark[data-ui='ios'] :is(.hover\:text-amber-950:hover, .hover\:text-amber-900:hover) {
+  color: rgb(140 192 255) !important;
+}
+html.dark[data-ui='ios'] :is(.bg-amber-50, .bg-amber-100) {
+  color: rgb(var(--ios-label));
+}
+html.dark[data-ui='ios'] .bg-amber-50 :is(.text-stone-700, .text-stone-800, .text-stone-900, .text-black),
+html.dark[data-ui='ios'] [class*='bg-amber-50'].text-stone-900 {
+  color: rgb(var(--ios-label)) !important;
+}
+html.dark[data-ui='ios'] .placeholder\:text-stone-400::placeholder,
+html.dark[data-ui='ios'] .placeholder\:text-muted-foreground::placeholder {
+  color: rgb(var(--ios-label2) / 0.3) !important;
+}
+
+/* ---------------------------------------------------------------------------------------------------------------
+   2. Type and page
+   --------------------------------------------------------------------------------------------------------------- */
+
+html[data-ui='ios'] body,
+html[data-ui='ios'] :is(.font-sans, .font-jakarta) {
+  font-family: var(--ios-font);
+}
+html[data-ui='ios'] body {
+  background-color: rgb(var(--ios-bg));
+  letter-spacing: -0.005em;
+}
+html[data-ui='ios'] :is([class~='tracking-[0.14em]'], [class~='tracking-[0.12em]'], [class~='tracking-[0.18em]'], [class~='tracking-[0.2em]'], .tracking-widest) {
+  letter-spacing: 0.02em !important;
+}
+
+/* Page backgrounds: flat iOS grouped background instead of the stone gradient. */
+html[data-ui='ios'] .app-shell-main,
+html[data-ui='ios'] .lims-page-shell,
+html[data-ui='ios'] [class~='from-stone-100/90'] {
+  background-image: none !important;
+  background-color: rgb(var(--ios-bg)) !important;
+}
+
+html[data-ui='ios'] ::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background-color: rgb(var(--ios-label2) / 0.25);
+}
+
+/* ---------------------------------------------------------------------------------------------------------------
+   3. Chrome: the dark bars become light (dark: near-black) iOS bars
+   --------------------------------------------------------------------------------------------------------------- */
+
+html[data-ui='ios'] :is(.lims-dark-bar, [class~='bg-stone-800'], [class~='bg-stone-800/80'], [class~='bg-stone-800/60'], [class~='bg-stone-900'], [class~='bg-stone-900/50'], [class~='bg-stone-900/60'], [class~='bg-stone-900/80'], [class~='bg-stone-900/85'], [class~='bg-stone-950/40'], [class~='bg-stone-950/50'], [class~='from-stone-800'], [class~='from-stone-800/90'], [class~='from-stone-900']) {
+  background-image: none !important;
+  background-color: rgb(var(--ios-bar) / var(--ios-bar-a)) !important;
+  color: rgb(var(--ios-label));
+  border-color: rgb(var(--ios-sep)) !important;
+  --tw-shadow: 0 0 #0000 !important;
+  --tw-shadow-colored: 0 0 #0000 !important;
+  box-shadow: none !important;
+}
+
+/* Light ink on the bars → iOS label; dim ink → secondary label; amber ink → iOS Blue. Solid coloured buttons and
+   badges (blue, red, green) keep their white text, and so does everything inside them. */
+html[data-ui='ios'] :is(.lims-dark-bar, [class~='bg-stone-800'], [class~='bg-stone-800/80'], [class~='bg-stone-800/60'], [class~='bg-stone-900'], [class~='bg-stone-900/50'], [class~='bg-stone-900/60'], [class~='bg-stone-900/80'], [class~='bg-stone-900/85'], [class~='bg-stone-950/40'], [class~='bg-stone-950/50'], [class~='from-stone-800'], [class~='from-stone-800/90'], [class~='from-stone-900']) :is(.text-white, [class~='text-white/90'], [class~='text-white/80'], [class~='text-stone-50'], [class~='text-stone-100'], [class~='text-stone-200'], [class~='text-stone-300']):not(:is([class~='bg-amber-500'], [class~='bg-amber-600'], [class~='bg-amber-700'], [class~='bg-amber-800'], [class~='bg-primary'], [class~='bg-destructive'], [class~='bg-red-500'], [class~='bg-red-600'], [class~='bg-red-700'], [class~='!bg-red-600'], [class~='bg-emerald-500'], [class~='bg-emerald-600'], [class~='bg-emerald-700'], [class~='bg-green-600'], [class~='bg-sky-600'], [class~='bg-blue-600'])):not(:is([class~='bg-amber-500'], [class~='bg-amber-600'], [class~='bg-amber-700'], [class~='bg-amber-800'], [class~='bg-primary'], [class~='bg-destructive'], [class~='bg-red-500'], [class~='bg-red-600'], [class~='bg-red-700'], [class~='!bg-red-600'], [class~='bg-emerald-500'], [class~='bg-emerald-600'], [class~='bg-emerald-700'], [class~='bg-green-600'], [class~='bg-sky-600'], [class~='bg-blue-600']) *),
+html[data-ui='ios'] :is(.lims-dark-bar, [class~='bg-stone-800'], [class~='bg-stone-900'], [class~='from-stone-800'], [class~='from-stone-900']):is(.text-white, [class~='text-stone-100'], [class~='text-stone-200']) {
+  color: rgb(var(--ios-label)) !important;
+}
+html[data-ui='ios'] :is(.lims-dark-bar, [class~='bg-stone-800'], [class~='bg-stone-800/80'], [class~='bg-stone-800/60'], [class~='bg-stone-900'], [class~='bg-stone-900/50'], [class~='bg-stone-900/60'], [class~='bg-stone-900/80'], [class~='bg-stone-900/85'], [class~='bg-stone-950/40'], [class~='bg-stone-950/50'], [class~='from-stone-800'], [class~='from-stone-800/90'], [class~='from-stone-900']) :is([class~='text-stone-400'], [class~='text-stone-500'], [class~='text-white/70'], [class~='text-white/60'], [class~='text-white/50']) {
+  color: rgb(var(--ios-label2) / var(--ios-label2-a)) !important;
+}
+html[data-ui='ios'] :is(.lims-dark-bar, [class~='bg-stone-800'], [class~='bg-stone-800/80'], [class~='bg-stone-800/60'], [class~='bg-stone-900'], [class~='bg-stone-900/50'], [class~='bg-stone-900/60'], [class~='bg-stone-900/80'], [class~='bg-stone-900/85'], [class~='bg-stone-950/40'], [class~='bg-stone-950/50'], [class~='from-stone-800'], [class~='from-stone-800/90'], [class~='from-stone-900']) :is([class~='text-amber-50'], [class~='text-amber-100'], [class~='text-amber-200'], [class~='text-amber-300'], [class~='text-amber-400']),
+html[data-ui='ios'] :is(.lims-dark-bar, [class~='bg-stone-800'], [class~='bg-stone-800/80'], [class~='bg-stone-900'], [class~='from-stone-800'], [class~='from-stone-900']):is([class~='text-amber-50'], [class~='text-amber-100'], [class~='text-amber-200'], [class~='text-amber-300']) {
+  color: rgb(var(--ios-blue)) !important;
+}
+
+/* Table heads (bg-stone-800 + amber ink) → iOS section header: gray fill, secondary-label caps. */
+/* ([data-app-theme] only lifts these above the bar ink rules above.) */
+html[data-ui='ios'][data-app-theme] table :is(thead, thead tr, th):is([class~='bg-stone-800'], [class~='bg-stone-900'], [class~='from-stone-800'], .lims-table-head),
+html[data-ui='ios'][data-app-theme] table :is([class~='bg-stone-800'], [class~='bg-stone-900'], .lims-table-head) th {
+  background-color: rgb(var(--ios-head)) !important;
+  color: rgb(var(--ios-label2) / var(--ios-label2-a)) !important;
+  font-weight: 600 !important;
+}
+html[data-ui='ios'][data-app-theme] table :is(thead, thead tr, th):is([class~='bg-stone-800'], [class~='bg-stone-900'], .lims-table-head) *:not(input):not([role='combobox']) {
+  color: inherit !important;
+}
+
+/* Bars' decoration: amber underline strip and the warm radial glow are not iOS. */
+html[data-ui='ios'] :is(.lims-dark-bar-accent, [class~='from-amber-500'][class~='via-amber-300']) {
+  display: none !important;
+}
+html[data-ui='ios'] [style*='radial-gradient'] {
+  background-image: none !important;
+}
+
+/* The app's top bar: translucent with blur and a hairline, like a navigation bar. */
+html[data-ui='ios'] header[class~='sticky']:is([class~='from-stone-800'], [class~='bg-stone-800']) {
+  background-color: rgb(var(--ios-bar) / 0.82) !important;
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  border-width: 0 0 0.5px 0 !important;
+  border-bottom: 0.5px solid rgb(var(--ios-sep)) !important;
+}
+
+/* A page's own title bar (straight on the page, not inside a panel): iOS large title on the grouped background. */
+html[data-ui='ios'] .lims-page-shell > :is(.lims-dark-bar, [class~='from-stone-800'], [class~='bg-stone-800']) {
+  background-color: transparent !important;
+  border-color: transparent !important;
+}
+html[data-ui='ios'] .lims-page-shell > :is(.lims-dark-bar, [class~='from-stone-800'], [class~='bg-stone-800']) h1 {
+  font-size: 1.75rem !important;
+  line-height: 2.125rem !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.02em !important;
+}
+
+/* Initials avatars → circles */
+html[data-ui='ios'] :is([class~='h-8'], [class~='h-9'], [class~='h-10'])[class~='bg-amber-700'][class~='rounded-none']:not(button) {
+  border-radius: 999px !important;
+}
+
+/* Buttons sitting on a bar (Import, Export, Print …): iOS tinted buttons. */
+html[data-ui='ios'] :is(button, a):is(.lims-dark-bar-btn, [class~='bg-stone-800/80'], [class~='bg-stone-900/60'], [class~='bg-stone-800']) {
+  background-color: rgb(var(--ios-blue) / 0.12) !important;
+  border-color: transparent !important;
+  color: rgb(var(--ios-blue)) !important;
+}
+html[data-ui='ios'] :is(button, a):is(.lims-dark-bar-btn, [class~='bg-stone-800/80'], [class~='bg-stone-900/60'], [class~='bg-stone-800']) * {
+  color: inherit !important;
+}
+html[data-ui='ios'] :is(button, a):is(.lims-dark-bar-btn, [class~='bg-stone-800/80'], [class~='bg-stone-800']):hover {
+  background-color: rgb(var(--ios-blue) / 0.2) !important;
+}
+
+/* ---------------------------------------------------------------------------------------------------------------
+   4. Sidebar (iPad style): light grouped list, blue selected row
+   --------------------------------------------------------------------------------------------------------------- */
+
+html[data-ui='ios'] aside:is([class~='from-stone-800'], [class~='bg-stone-900']) {
+  background-color: hsl(var(--sidebar)) !important;
+  border-right: 0.5px solid rgb(var(--ios-sep)) !important;
+  --tw-shadow: 0 0 #0000 !important;
+  box-shadow: none !important;
+}
+html[data-ui='ios'] aside > div:first-child:is([class~='from-stone-800']) {
+  background-color: hsl(var(--sidebar)) !important;
+  border-bottom: 0 !important;
+}
+html[data-ui='ios'] aside :is(.sidebar-section-panel, [class~='bg-stone-900/50']) {
+  background-color: rgb(var(--ios-card)) !important;
+  border: 0 !important;
+  border-radius: 12px !important;
+  box-shadow: none !important;
+}
+html[data-ui='ios'] aside .sidebar-nav-item {
+  color: rgb(var(--ios-label)) !important;
+  border-radius: 8px !important;
+  font-size: 14px;
+}
+html[data-ui='ios'] aside .sidebar-nav-item:hover {
+  background-color: rgb(var(--ios-fill) / var(--ios-fill-a)) !important;
+}
+html[data-ui='ios'] aside .sidebar-nav-item svg {
+  color: rgb(var(--ios-blue));
+}
+html[data-ui='ios'] aside .sidebar-nav-active,
+html[data-ui='ios'] aside .sidebar-nav-active:hover {
+  background-color: rgb(var(--ios-blue)) !important;
+  color: #fff !important;
+  box-shadow: none !important;
+}
+html[data-ui='ios'] aside .sidebar-nav-active *,
+html[data-ui='ios'] aside .sidebar-nav-active svg {
+  color: #fff !important;
+}
+html[data-ui='ios'] aside .sidebar-nav-active::before {
+  display: none;
+}
+html[data-ui='ios'] aside :is([class~='text-stone-300'], [class~='text-stone-200'], [class~='text-white']):not(.sidebar-nav-active *) {
+  color: rgb(var(--ios-label)) !important;
+}
+html[data-ui='ios'] aside :is([class~='text-stone-400'], [class~='text-stone-500']):not(.sidebar-nav-active *) {
+  color: rgb(var(--ios-label2) / var(--ios-label2-a)) !important;
+}
+html[data-ui='ios'] aside [class~='hover:bg-white/10']:hover {
+  background-color: rgb(var(--ios-fill) / var(--ios-fill-a)) !important;
+}
+html[data-ui='ios'] aside [class~='bg-stone-600/80'] {
+  background-color: rgb(var(--ios-sep)) !important;
+}
+/* Logo tile on the sidebar head */
+html[data-ui='ios'] aside [class~='ring-amber-500/40'] {
+  --tw-ring-color: transparent !important;
+  border-radius: 12px !important;
+  box-shadow: none !important;
+}
+
+/* Dimmed backdrop behind the phone drawer */
+html[data-ui='ios'] [class~='bg-slate-900/50'] {
+  background-color: rgb(0 0 0 / 0.3) !important;
+}
+
+/* ---------------------------------------------------------------------------------------------------------------
+   5. Panels, cards, borders
+   --------------------------------------------------------------------------------------------------------------- */
+
+html[data-ui='ios'] :is(.lims-panel, .app-card, .ui-card, [class~='border-2'][class~='bg-card'], [class~='border-2'][class~='bg-white']) {
+  border-radius: 12px !important;
+  border-color: transparent !important;
+  --tw-ring-color: transparent !important;
+  --tw-shadow: 0 1px 2px rgb(0 0 0 / 0.04) !important;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04) !important;
+}
+/* Hand-written cards with the app's card signature (thick stone border, e.g. the phone list cards). */
+html[data-ui='ios'] :is(article, div, section, li):is([class~='border-2'], [class~='border-4'])[class~='border-stone-500'] {
+  border-radius: 12px !important;
+  border-color: transparent !important;
+  --tw-ring-color: transparent !important;
+}
+/* Bars with a full border standing on their own (list counters, filter strips) → rounded. */
+html[data-ui='ios'] :is(.lims-dark-bar, [class~='bg-stone-800'], [class~='bg-stone-900'], [class~='from-stone-800'])[class~='border']:not(header):not(aside):not(thead):not(tr):not(th):not(button) {
+  border-radius: 12px !important;
+}
+/* Small chips and icon tiles */
+html[data-ui='ios'] :is(span, div, p)[class~='border']:is([class~='text-[10px]'], [class~='text-[11px]'], [class~='text-xs'])[class~='py-0.5'] {
+  border-radius: 6px !important;
+}
+html[data-ui='ios'] :is(span, div):is([class~='h-6'], [class~='h-7'], [class~='h-8'], [class~='h-9'])[class~='border']:is([class~='w-6'], [class~='w-7'], [class~='w-8'], [class~='w-9']) {
+  border-radius: 8px !important;
+}
+
+html.dark[data-ui='ios'] :is(.lims-panel, .app-card, .ui-card) {
+  --tw-shadow: 0 0 #0000 !important;
+  box-shadow: none !important;
+}
+
+/* Heavy borders → iOS hairline separators */
+html[data-ui='ios'] :is([class~='border-stone-400'], [class~='border-stone-500'], [class~='border-stone-600'], [class~='border-stone-700'], [class~='border-stone-600/80'], [class~='border-stone-300']) {
+  border-color: rgb(var(--ios-sep)) !important;
+}
+html[data-ui='ios'] :is([class~='border-2'], [class~='border-4']):not(.lims-panel):not(.app-card):not(.ui-card):not(.ui-dialog) {
+  border-width: 1px !important;
+}
+html[data-ui='ios'] :is([class~='ring-amber-700/20'], [class~='ring-amber-700/40'], [class~='ring-amber-500/30'], [class~='ring-amber-500/40'], [class~='ring-amber-600/30']) {
+  --tw-ring-color: transparent !important;
+}
+
+/* Tables: hairline rows, faint columns */
+html[data-ui='ios'] table :is(td, th) {
+  border-color: rgb(var(--ios-sep) / 0.6) !important;
+}
+
+/* Warm paper colours written straight into class names (rows, cells, inks) → iOS neutrals and blue. */
+html[data-ui='ios'] {
+  --ios-zebra: 250 250 252;
+}
+html.dark[data-ui='ios'] {
+  --ios-zebra: 35 35 37;
+}
+html[data-ui='ios'] :is([class~='bg-[#fffcf7]'], [class~='bg-[#fffcf7]/95'], [class~='bg-[#fffdf8]'], [class~='bg-[#fffbeb]'], [class~='bg-[#faf8f3]']) {
+  background-color: rgb(var(--ios-zebra)) !important;
+}
+html[data-ui='ios'] :is([class~='from-[#fffcf7]'], [class~='from-[#f7f3eb]']) {
+  background-image: none !important;
+  background-color: rgb(var(--ios-card)) !important;
+}
+html[data-ui='ios'] :is([class~='bg-[#faf7f1]'], [class~='bg-[#f5f1ea]'], [class~='bg-[#f3eee6]'], [class~='bg-[#f3ebe0]']) {
+  background-color: rgb(var(--ios-card)) !important;
+}
+html[data-ui='ios'] :is([class~='bg-[#f3e9d8]'], [class~='bg-[#e7e0d4]']) {
+  background-color: rgb(var(--ios-fill) / var(--ios-fill-a)) !important;
+}
+html[data-ui='ios'] :is([class~='hover:bg-[#f3e9d8]'], [class~='hover:bg-[#f7f3eb]']):hover {
+  background-color: rgb(var(--ios-fill) / 0.1) !important;
+}
+html[data-ui='ios'] :is([class~='bg-[#fde68a]/80'], [class~='bg-[#fde68a]/70'], [class~='bg-[#fde68a]/60'], [class~='bg-[#fde68a]/50']),
+html[data-ui='ios'] [data-state='selected']:is([class~='data-[state=selected]:bg-[#fde68a]/80']),
+html[data-ui='ios'] [class~='hover:bg-[#fde68a]/80']:hover {
+  background-color: rgb(var(--ios-blue) / 0.14) !important;
+}
+html[data-ui='ios'] :is([class~='border-[#e7e0d4]'], [class~='border-[#d6d3d1]']) {
+  border-color: rgb(var(--ios-sep)) !important;
+}
+html[data-ui='ios'] :is([class~='text-[#292524]'], [class~='text-[#1c1917]'], [class~='text-[#44403c]']) {
+  color: rgb(var(--ios-label)) !important;
+}
+html[data-ui='ios'] :is([class~='text-[#78716c]'], [class~='text-[#57534e]'], [class~='text-[#a8a29e]'], [class~='text-[#a16207]']) {
+  color: rgb(var(--ios-label2) / var(--ios-label2-a)) !important;
+}
+html[data-ui='ios'] :is([class~='text-[#92400e]'], [class~='text-[#b45309]'], [class~='text-[#78350f]']) {
+  color: rgb(var(--ios-blue)) !important;
+}
+html[data-ui='ios'] [class~='hover:text-[#78350f]']:hover {
+  color: rgb(var(--ios-blue) / 0.8) !important;
+}
+
+/* Pill badges */
+html[data-ui='ios'] .ui-badge {
+  border-radius: 999px !important;
+}
+
+/* ---------------------------------------------------------------------------------------------------------------
+   6. Controls
+   --------------------------------------------------------------------------------------------------------------- */
+
+/* Buttons: rounded; primary = filled iOS Blue (via the amber/primary remap) in semibold. */
+html[data-ui='ios'] :is(button, [role='button'], a.ui-button):not([role='tab']):not([role='combobox']):not([role='switch']):not([role='option']):not([role='menuitem']):not([role='menuitemcheckbox']):not([role='checkbox']):not(.sidebar-nav-item) {
+  border-radius: 10px;
+}
+html[data-ui='ios'] button:is([class~='bg-amber-700'], [class~='bg-amber-600'], [class~='bg-primary'], [class~='bg-destructive'], [class~='bg-red-600'], [class~='bg-red-700']) {
+  font-weight: 600;
+}
+html[data-ui='ios'] :is(button, a):is([class~='bg-red-600'], [class~='bg-red-700'], .lims-delete-btn) {
+  background-color: rgb(var(--ios-red)) !important;
+  border-color: transparent !important;
+}
+
+/* Outline / secondary buttons → iOS gray buttons: blue label on a gray fill, no border. */
+html[data-ui='ios'] button:is(.lims-btn-outline, .ui-button-outline, .ui-button-secondary, [class~='bg-stone-50'][class~='h-10'], [class~='bg-stone-50'][class~='h-8'], [class~='bg-stone-50'][class~='h-9'], [class~='bg-background'][class~='border']):not([role='combobox']):not([role='tab']) {
+  background-color: rgb(var(--ios-fill) / var(--ios-fill-a)) !important;
+  border-color: transparent !important;
+  color: rgb(var(--ios-blue)) !important;
+  box-shadow: none !important;
+}
+html[data-ui='ios'] button:is(.lims-btn-outline, .ui-button-outline, .ui-button-secondary, [class~='bg-stone-50'][class~='h-10'], [class~='bg-stone-50'][class~='h-8'], [class~='bg-stone-50'][class~='h-9'], [class~='bg-background'][class~='border']):not([role='combobox']):not([role='tab']):hover {
+  background-color: rgb(var(--ios-fill) / calc(var(--ios-fill-a) + 0.08)) !important;
+}
+
+/* Fields: gray fill, no border, rounded (iOS search / form fields). */
+html[data-ui='ios'] :is(input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']):not([type='color']):not([type='hidden']), textarea, select, button[role='combobox']) {
+  background-color: rgb(var(--ios-fill) / var(--ios-fill-a)) !important;
+  border-color: transparent !important;
+  border-radius: 10px !important;
+  color: rgb(var(--ios-label)) !important;
+  box-shadow: none !important;
+}
+html[data-ui='ios'] :is(input:not([type='checkbox']):not([type='radio']):not([type='file']), textarea, select, button[role='combobox']):focus-visible {
+  box-shadow: 0 0 0 3px rgb(var(--ios-blue) / 0.28) !important;
+}
+html[data-ui='ios'] :is(input, textarea)::placeholder {
+  color: rgb(var(--ios-label2) / 0.3) !important;
+}
+html[data-ui='ios'] :is(input:disabled, textarea:disabled, select:disabled, button[role='combobox']:disabled) {
+  opacity: 0.5;
+}
+/* A field with a + button: the shell carries the fill, the inner field is clear. */
+html[data-ui='ios'] :is(.lims-field-shell, [class~='focus-within:border-amber-600']) {
+  background-color: rgb(var(--ios-fill) / var(--ios-fill-a)) !important;
+  border-color: transparent !important;
+  border-radius: 10px !important;
+  box-shadow: none !important;
+}
+/* (Same selector list as the field rule above, so it outranks it.) */
+html[data-ui='ios'] :is(.lims-field-shell, [class~='focus-within:border-amber-600']) :is(input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']):not([type='color']):not([type='hidden']), textarea, select, button[role='combobox']) {
+  background-color: transparent !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+html[data-ui='ios'] :is(.lims-field-shell, [class~='focus-within:border-amber-600']):focus-within {
+  box-shadow: 0 0 0 3px rgb(var(--ios-blue) / 0.28) !important;
+}
+html[data-ui='ios'] .lims-field-add-btn {
+  background-color: transparent !important;
+  border-color: rgb(var(--ios-sep)) !important;
+  color: rgb(var(--ios-blue)) !important;
+  border-radius: 0 !important;
+}
+
+/* Check boxes and radios → iOS round check circles. */
+html[data-ui='ios'] :is(input[type='checkbox'], input[type='radio']):not(.sr-only) {
+  -webkit-appearance: none;
+  appearance: none;
+  flex-shrink: 0;
+  width: 1.125rem;
+  height: 1.125rem;
+  margin: 0;
+  border: 1.5px solid rgb(var(--ios-gray3));
+  border-radius: 50%;
+  background-color: transparent;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 70%;
+  cursor: pointer;
+  vertical-align: middle;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+html[data-ui='ios'] input[type='checkbox']:checked {
+  border-color: rgb(var(--ios-blue));
+  background-color: rgb(var(--ios-blue));
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5l3 3 6-7' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+html[data-ui='ios'] input[type='checkbox']:indeterminate {
+  border-color: rgb(var(--ios-blue));
+  background-color: rgb(var(--ios-blue));
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 8h8' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+html[data-ui='ios'] input[type='radio']:checked {
+  border-color: rgb(var(--ios-blue));
+  background-color: rgb(var(--ios-blue));
+  background-image: radial-gradient(circle, #fff 0 30%, transparent 33%);
+  background-size: 100%;
+}
+html[data-ui='ios'] :is(input[type='checkbox'], input[type='radio']):disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+html[data-ui='ios'] :is(input[type='checkbox'], input[type='radio']):focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(var(--ios-blue) / 0.28);
+}
+
+/* Switches → iOS green switch with a white knob (role=switch buttons, and check boxes drawn as switches). */
+html[data-ui='ios'] .peer:checked ~ [class~='peer-checked:bg-amber-700'] {
+  background-color: rgb(var(--ios-green)) !important;
+  border-color: transparent !important;
+}
+html[data-ui='ios'] button[role='switch'] {
+  border-color: transparent !important;
+  border-radius: 999px !important;
+  background-color: rgb(var(--ios-switch-off) / var(--ios-switch-off-a)) !important;
+  transition: background-color 0.2s;
+}
+html[data-ui='ios'] button[role='switch'][aria-checked='true'] {
+  background-color: rgb(var(--ios-green)) !important;
+}
+html[data-ui='ios'] button[role='switch'] > span {
+  background-color: #fff !important;
+  box-shadow: 0 3px 8px rgb(0 0 0 / 0.15), 0 3px 1px rgb(0 0 0 / 0.06) !important;
+}
+
+/* Tabs → iOS segmented control. */
+html[data-ui='ios'] [role='tablist'] {
+  background-color: rgb(var(--ios-fill) / var(--ios-fill-a)) !important;
+  background-image: none !important;
+  border: 0 !important;
+  border-radius: 9px !important;
+  padding: 2px !important;
+  gap: 0 !important;
+  box-shadow: none !important;
+}
+html[data-ui='ios'] [role='tablist'] [role='tab'] {
+  border: 0 !important;
+  border-radius: 7px !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  color: rgb(var(--ios-label)) !important;
+  font-weight: 500;
+  box-shadow: none !important;
+}
+html[data-ui='ios'] [role='tablist'] [role='tab'] * {
+  color: inherit !important;
+}
+html[data-ui='ios'] [role='tablist'] [role='tab']:is([data-state='active'], [aria-selected='true']) {
+  background-color: rgb(var(--ios-seg-active)) !important;
+  font-weight: 600;
+  box-shadow: 0 3px 8px rgb(0 0 0 / 0.12), 0 3px 1px rgb(0 0 0 / 0.04) !important;
+}
+
+/* Dialogs → iOS sheets / alerts: rounded, borderless, soft shadow, gray round close button. */
+html[data-ui='ios'] .ui-dialog:not([class*='h-[100dvh]']) {
+  border-radius: 14px !important;
+  border-color: transparent !important;
+  --tw-ring-color: transparent !important;
+  box-shadow: 0 12px 48px rgb(0 0 0 / 0.22) !important;
+}
+html[data-ui='ios'] .ui-dialog[class*='h-[100dvh]'] {
+  border-radius: 0 !important;
+  border-color: transparent !important;
+}
+/* Sheets are white (dark: elevated gray) so the gray fields stand out, as in iOS forms. */
+html[data-ui='ios'] .ui-dialog {
+  background-color: rgb(var(--ios-card)) !important;
+}
+html[data-ui='ios'] .ui-dialog-overlay {
+  background-color: rgb(0 0 0 / 0.32) !important;
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+}
+html.dark[data-ui='ios'] .ui-dialog-overlay {
+  background-color: rgb(0 0 0 / 0.55) !important;
+}
+html[data-ui='ios'] .ui-dialog-close {
+  width: 30px !important;
+  height: 30px !important;
+  border-color: transparent !important;
+  border-radius: 999px !important;
+  background-color: rgb(var(--ios-fill) / var(--ios-fill-a)) !important;
+  color: rgb(var(--ios-label2) / var(--ios-label2-a)) !important;
+  box-shadow: none !important;
+}
+html[data-ui='ios'] .ui-dialog-close svg {
+  color: rgb(var(--ios-label2) / var(--ios-label2-a)) !important;
+}
+html[data-ui='ios'] .ui-dialog-close:hover {
+  background-color: rgb(var(--ios-fill) / calc(var(--ios-fill-a) + 0.08)) !important;
+}
+
+/* Menus, list boxes, popovers → rounded translucent iOS menus. */
+html[data-ui='ios'] :is([role='menu'], [role='listbox'], [data-radix-popper-content-wrapper] > [data-side]) {
+  border-radius: 12px !important;
+  border: 0.5px solid rgb(var(--ios-sep)) !important;
+  box-shadow: 0 10px 38px rgb(0 0 0 / 0.16), 0 2px 8px rgb(0 0 0 / 0.06) !important;
+}
+html[data-ui='ios'] :is([role='menuitem'], [role='option'], [role='menuitemcheckbox']) {
+  border-radius: 7px;
+}
+html[data-ui='ios'] :is([role='menuitem'], [role='option'])[data-highlighted] {
+  background-color: rgb(var(--ios-blue)) !important;
+  color: #fff !important;
+}
+html[data-ui='ios'] :is([role='menuitem'], [role='option'])[data-highlighted] * {
+  color: #fff !important;
+}
+
+/* Toasts */
+html[data-ui='ios'] [data-sonner-toast] {
+  border-radius: 14px !important;
+}

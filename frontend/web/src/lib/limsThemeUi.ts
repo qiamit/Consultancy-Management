@@ -3,20 +3,20 @@ import { cn } from '@/lib/utils'
 /** App-wide Client Master theme — visual only; do not encode business logic here. */
 
 export const limsPageShellClass =
-  'mx-auto w-full min-w-0 max-w-[1600px] space-y-3 bg-gradient-to-b from-stone-100/90 to-stone-50 p-2 sm:space-y-4 sm:p-3 md:p-4 lg:space-y-5 lg:p-[1%]'
+  'lims-page-shell mx-auto w-full min-w-0 max-w-[1600px] space-y-3 bg-gradient-to-b from-stone-100/90 to-stone-50 p-2 sm:space-y-4 sm:p-3 md:p-4 lg:space-y-5 lg:p-[1%]'
 
 export const limsPanelClass =
-  'min-w-0 overflow-hidden rounded-none border-2 border-stone-500 bg-card text-card-foreground shadow-sm ring-1 ring-amber-700/20'
+  'lims-panel min-w-0 overflow-hidden rounded-none border-2 border-stone-500 bg-card text-card-foreground shadow-sm ring-1 ring-amber-700/20'
 
 /** Horizontal action strip — keeps buttons reachable on narrow screens via scroll, never clipped. */
 export const limsToolbarScrollClass =
   'flex min-w-0 max-w-full flex-nowrap items-center gap-1 overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch] sm:gap-1.5'
 
 export const limsDarkBarClass =
-  'relative overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 text-white'
+  'lims-dark-bar relative overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 text-white'
 
 export const limsDarkBarAccentClass =
-  'absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent'
+  'lims-dark-bar-accent absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent'
 
 export const limsDarkBarGlowStyle = {
   backgroundImage:
@@ -25,25 +25,25 @@ export const limsDarkBarGlowStyle = {
 
 /** Interactive controls are at least 40px (min-h-10) for touch — APP-R01 / QE standards. */
 export const limsFieldClass =
-  'h-10 min-h-10 rounded-none border border-stone-500 bg-stone-50 text-foreground shadow-none focus-visible:border-amber-600 focus-visible:bg-card focus-visible:ring-2 focus-visible:ring-amber-500/20'
+  'lims-field h-10 min-h-10 rounded-none border border-stone-500 bg-stone-50 text-foreground shadow-none focus-visible:border-amber-600 focus-visible:bg-card focus-visible:ring-2 focus-visible:ring-amber-500/20'
 
 export const limsPrimaryBtnClass =
-  'h-10 min-h-10 rounded-none bg-amber-700 px-4 text-white shadow-sm hover:bg-amber-800'
+  'lims-btn-primary h-10 min-h-10 rounded-none bg-amber-700 px-4 text-white shadow-sm hover:bg-amber-800'
 
 export const limsOutlineBtnClass =
-  'h-10 min-h-10 rounded-none border-stone-500 bg-stone-50 text-foreground hover:bg-stone-100 hover:text-foreground'
+  'lims-btn-outline h-10 min-h-10 rounded-none border-stone-500 bg-stone-50 text-foreground hover:bg-stone-100 hover:text-foreground'
 
 /** Outline / action buttons on dark stone header & footer bars (Import, Export, Print, Jump, AI, etc.) */
 export const limsDarkBarBtnClass =
-  'h-10 min-h-10 rounded-none border border-amber-500/40 bg-stone-800/80 text-amber-100 shadow-none hover:bg-amber-500/20 hover:text-amber-50 disabled:opacity-50'
+  'lims-dark-bar-btn h-10 min-h-10 rounded-none border border-amber-500/40 bg-stone-800/80 text-amber-100 shadow-none hover:bg-amber-500/20 hover:text-amber-50 disabled:opacity-50'
 
 /** Inputs / selects on dark stone bars (page size, jump-to-page) */
 export const limsDarkBarFieldClass =
-  'h-10 min-h-10 rounded-none border border-stone-500 bg-stone-800/80 text-white shadow-none placeholder:text-stone-400 focus-visible:border-amber-500 focus-visible:bg-stone-900 focus-visible:ring-2 focus-visible:ring-amber-500/25'
+  'lims-dark-bar-field h-10 min-h-10 rounded-none border border-stone-500 bg-stone-800/80 text-white shadow-none placeholder:text-stone-400 focus-visible:border-amber-500 focus-visible:bg-stone-900 focus-visible:ring-2 focus-visible:ring-amber-500/25'
 
 /** Search field on dark header — always light island for contrast in every theme */
 export const limsDarkBarSearchClass =
-  'h-10 min-h-10 rounded-none border border-amber-500/50 bg-amber-50 text-[#1c1917] shadow-none placeholder:text-stone-500 focus-visible:border-amber-600 focus-visible:ring-2 focus-visible:ring-amber-500/20'
+  'lims-dark-bar-search h-10 min-h-10 rounded-none border border-amber-500/50 bg-amber-50 text-[#1c1917] shadow-none placeholder:text-stone-500 focus-visible:border-amber-600 focus-visible:ring-2 focus-visible:ring-amber-500/20'
 
 /** QE Assistant icon trigger on dark bars */
 export const limsAiTriggerClass =
@@ -51,13 +51,13 @@ export const limsAiTriggerClass =
 
 /** Destructive delete on dark footer */
 export const limsDeleteBtnClass =
-  'h-10 min-h-10 gap-1.5 rounded-none border border-red-500/50 bg-red-700 text-white hover:bg-red-600 disabled:opacity-50'
+  'lims-delete-btn h-10 min-h-10 gap-1.5 rounded-none border border-red-500/50 bg-red-700 text-white hover:bg-red-600 disabled:opacity-50'
 
 export const limsTableClass =
-  'w-full border-collapse font-jakarta [&_th]:border [&_td]:border [&_th]:border-stone-700 [&_td]:border-[rgb(var(--lims-paper-border))]'
+  'lims-table w-full border-collapse font-jakarta [&_th]:border [&_td]:border [&_th]:border-stone-700 [&_td]:border-[rgb(var(--lims-paper-border))]'
 
 export const limsTableHeadClass =
-  'bg-stone-800 text-center text-xs font-bold uppercase tracking-[0.14em] text-amber-200'
+  'lims-table-head bg-stone-800 text-center text-xs font-bold uppercase tracking-[0.14em] text-amber-200'
 
 export const limsTableBodyToneClass = 'bg-lims-paper text-foreground'
 
@@ -119,11 +119,11 @@ export const limsAddLinkClass =
 
 /** + button attached to the right edge of an input/select (Client Master field strip) */
 export const limsFieldAddBtnClass =
-  'inline-flex h-full w-9 shrink-0 items-center justify-center border-l border-stone-500 bg-stone-100 text-amber-800 transition-colors hover:bg-amber-500/15 hover:text-amber-950 disabled:pointer-events-none'
+  'lims-field-add-btn inline-flex h-full w-9 shrink-0 items-center justify-center border-l border-stone-500 bg-stone-100 text-amber-800 transition-colors hover:bg-amber-500/15 hover:text-amber-950 disabled:pointer-events-none'
 
 /** Outer shell that wraps a control + limsFieldAddBtnClass button */
 export const limsFieldWithAddShellClass =
-  'flex h-10 min-h-10 min-w-0 items-stretch overflow-hidden rounded-none border border-stone-500 bg-stone-50 text-foreground focus-within:border-amber-600 focus-within:bg-stone-50 focus-within:ring-2 focus-within:ring-amber-500/20'
+  'lims-field-shell flex h-10 min-h-10 min-w-0 items-stretch overflow-hidden rounded-none border border-stone-500 bg-stone-50 text-foreground focus-within:border-amber-600 focus-within:bg-stone-50 focus-within:ring-2 focus-within:ring-amber-500/20'
 
 /** Strip borders from nested input/select when inside limsFieldWithAddShellClass */
 export const limsFieldWithAddControlClass = cn(
