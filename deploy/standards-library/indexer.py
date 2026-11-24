@@ -698,13 +698,39 @@ def amendment_number(name):
     return ORDINAL[m.group(1).lower()] if m else None
 
 
+MERGED_FILE = "Merged Standards.txt"  # at the root of the library: "IS 8112 => IS 269", one standard per line
+# Standards that a later standard of another number took over, so their own files are no longer current. Ask AI test,
+# 24 Nov 2026: IS 8112 : 2013 (OPC 43) and IS 12269 : 2013 (OPC 53) still answered as current, though IS 269 : 2015
+# says in its foreword that it now covers both. More can be added in Merged Standards.txt.
+MERGED_DEFAULT = {"IS 8112": "IS 269", "IS 12269": "IS 269"}
+MERGED_LINE = re.compile(r"^\s*(IS\s*\d+)\s*(?:=>|->|→|=)\s*(IS\s*\d+[^#]*?)\s*(?:#.*)?$", re.I)
+
+
+def merged_standards(root):
+    """{old folder: the standard that took it over}: MERGED_DEFAULT plus the lines of Merged Standards.txt."""
+    out = dict(MERGED_DEFAULT)
+    try:
+        with open(os.path.join(root, MERGED_FILE), encoding="utf-8-sig") as f:
+            lines = list(f)
+    except (OSError, TypeError):
+        return out
+    for line in lines:
+        m = MERGED_LINE.match(line)
+        if m:
+            old = re.sub(r"(?i)^IS\s*", "IS ", m.group(1).strip())
+            out[old] = re.sub(r"(?i)^IS\s*", "IS ", m.group(2).strip())
+    return out
+
+
 def label_of(folder, part, sec, year):
     return f"{folder}{f' Part {part}' if part else ''}{f' Sec {sec}' if sec else ''}{f' {year}' if year else ''}"
 
 
-def refresh_versions(conn):
+def refresh_versions(conn, root=None):
     """Part, Section, amendment number and version status of every library document (see the migration
-    20261120100000_standards_versions.sql). Worked out again on every run from the names and Standards List."""
+    20261120100000_standards_versions.sql). Worked out again on every run from the names, Standards List and the
+    merged standards (MERGED_DEFAULT, Merged Standards.txt)."""
+    merged_map = merged_standards(root)
     rows = conn.execute(
         """SELECT id, folder, relpath, kind, edition_year, amendments_merged, part, section, amendment_no,
                   version_status, superseded_by
@@ -757,6 +783,8 @@ def refresh_versions(conn):
                     status = "Withdrawn"
                 elif bis.lower().startswith("superseded"):
                     status, by = "Superseded", (bis.split("by", 1)[1].strip() if "by" in bis else None) or None
+            if status == "Current" and d["folder"] in merged_map:
+                status, by = "Superseded", merged_map[d["folder"]]
         new = (d["part"], d["sec"], d["amd"], status, by)
         if new != (part0 or "", sec0 or "", amd0, status0, by0):
             updates.append((*new, doc_id))
@@ -826,7 +854,8 @@ def scan_references(conn):
 
 # Raised when the chunking rules change: every document is chunked again on the next run (no PDF is read again,
 # apart from the quick column-layout pass for its tables).
-CHUNKS_VERSION = 3  # 3: tables keep their column alignment (squeeze_columns)
+CHUNKS_VERSION = 4  # 3: tables keep their column alignment (squeeze_columns); 4: tables read from the page text when
+# the column layout has none, and a page that starts mid-sentence carries the sentence's start from the page before
 TABLE_TITLE = re.compile(r"^\s{0,140}Table\s+(\d+[A-Z]?)\b(.*)$", re.I)
 # A clause heading at the start of a line: "7", "7.2", "8.1.3" + a title word, or Foreword / Annex / Scope.
 CLAUSE_HEAD = re.compile(r"^\s*(?:(\d{1,2}(?:\.\d{1,2}){0,3})\s+(?=[A-Z(])|(FOREWORD|Foreword|ANNEX\s+[A-Z]|Annex\s+[A-Z])\b)")
@@ -1127,22 +1156,121 @@ def clause_chunks(text):
     return out
 
 
+TEXT_TABLE_TITLE = re.compile(r"^\s*Table\s+(\d+[A-Z]?)\b(.*)$", re.I)
+
+
+def text_table_title(line):
+    """The "Table N" match of a table's title line in page text, or None for a line that only names a table ("Table 1,
+    Sl No. iii)", "Table 2 shall be …", "Table 3 and 4 give …")."""
+    m = TEXT_TABLE_TITLE.match(line)
+    if not m:
+        return None
+    rest, line = m.group(2), line.strip()
+    if len(line) > 160 or re.search(r"[.,;]['’\"”]?\s*$", line) or re.match(r"\s*[,)]", rest) or re.match(r"\s*[—–:.-]?\s*[a-z]", rest):
+        return None
+    return m
+
+
+def text_tables(text, have):
+    """[(heading, text)] of the tables in a page's own text whose number the column layout did not give ("have"):
+    from a "Table N" title line to the next title, two blank lines or 60 lines, kept when at least three of its lines
+    carry numbers. Ask AI test of 50 questions, 24 Nov 2026: 4,001 pages with a table title had no table chunk, among
+    them IS 10500's Tables 1–6, whose font is unreadable to pdftotext (the page text there comes from OCR), so the lead
+    limit was never offered to Ask AI as a table."""
+    lines = (text or "").split("\n")
+    out, i = [], 0
+    while i < len(lines):
+        m = text_table_title(lines[i])
+        if not m or m.group(1) in have:
+            i += 1
+            continue
+        start, j, blanks = i, i + 1, 0
+        while j < len(lines) and j - start < 60:
+            if text_table_title(lines[j]):
+                break
+            blanks = blanks + 1 if not lines[j].strip() else 0
+            if blanks >= 2:
+                break
+            j += 1
+        block = [l.rstrip() for l in lines[start:j] if l.strip()]
+        if sum(1 for l in block[1:] if NUMBERY.search(l)) >= 3:
+            have.add(m.group(1))
+            out.append((re.sub(r"\s{2,}", " ", f"Table {m.group(1)}{m.group(2).rstrip()}")[:200], "\n".join(block)[:6000]))
+        i = j
+    return out
+
+
+# A running head / page number / sales watermark line at the top or bottom of a page ("IS 2347 : 2023", "12", "iv",
+# "For BIS use only, New Delhi:2022-04-13 10:46:45").
+RUNNING_HEAD = re.compile(
+    r"^\s*(?:(?:IS|ISO|IEC)\b[^\n]{0,40}:\s*(?:19|20)\d{2}\b.*|\d{1,4}|[ivxlc]{1,6}|\(?continued\)?"
+    r"|.*\b(?:For BIS use only|BSB Edge|Book Supply Bureau|Free Standard provided by BIS)\b.*)\s*$", re.I)
+
+
+def starts_mid_sentence(text):
+    """The page's first line of text (running heads skipped) starts with a small letter and holds at least three words:
+    a sentence from the page before goes on here. A list item ("a) …", "(ii) …") starts nothing of the kind."""
+    for line in text.split("\n"):
+        if not line.strip() or RUNNING_HEAD.match(line):
+            continue
+        return bool(re.match(r"\s*[a-z]", line)) and not re.match(r"\s*\(?[a-z]{1,4}\)", line) and len(line.split()) >= 3
+    return False
+
+
+# A line that starts a new sentence: a clause or annex clause number ("5.1.1", "B-5.3.1") or a list item ("a)", "iv)").
+SENTENCE_HEAD = re.compile(r"^\s*(?:\d{1,2}(?:\.\d{1,2}){0,3}|[A-Z]-\d{1,2}(?:\.\d{1,2}){0,3}|[a-z]\)|[ivx]{1,5}\))\s+\S")
+
+
+def unfinished_sentence(text):
+    """The unfinished sentence at the end of a page (at most 400 characters), or "" when the page ends at a sentence
+    end. It starts after the last full stop / colon / semicolon, or at the last line with a clause number or list mark.
+    Running heads and page numbers at the bottom are left out."""
+    lines = text.rstrip().split("\n")
+    while lines and (not lines[-1].strip() or RUNNING_HEAD.match(lines[-1]) or len(lines[-1].strip()) <= 3):
+        lines.pop()
+    tail = "\n".join(lines)[-600:]
+    if not tail.strip() or re.search(r"[.:;!?)\]]\s*$", tail):
+        return ""
+    cut = max(tail.rfind(". "), tail.rfind(".\n"), tail.rfind(":\n"), tail.rfind(";\n"))
+    for m in re.finditer(r"(?m)^.*$", tail):
+        if m.start() > cut and SENTENCE_HEAD.match(m.group(0)):
+            cut = m.start() - 1
+    out = re.sub(r"\s+", " ", tail[cut + 1:] if cut >= 0 else tail).strip()[-400:]
+    # Words, not a figure caption ("1 ARRANGEMENT FOR MOUNTING HOSE"), table cells ("± 1.0 ± 1.2 …") or a link.
+    letters = sum(ch.isalpha() for ch in out)
+    if len(out.split()) < 4 or not re.search(r"[a-z]{3}", out) or letters < 0.6 * len(out.replace(" ", "")) or "http" in out:
+        return ""
+    return out
+
+
 def chunks_of(pages, layouts, boxes=()):
-    """[(page, seq, kind, heading, text)] of one document: its tables (from the column layout of the page) and its
-    clauses (from the page text)."""
+    """[(page, seq, kind, heading, text)] of one document: its tables (from the column layout of the page, else from
+    the page text) and its clauses (from the page text). A page that starts in the middle of a sentence gets the
+    sentence's start from the page before in front of its first piece, so the piece says what it is about (Ask AI
+    test, 24 Nov 2026: 5,039 chunks in the library started mid-sentence, e.g. IS 14543 : 2024 p. 13 "absorbent,
+    washable and non-toxic materials …", whose subject "Buildings and facilities should be of sound" ends p. 12)."""
     out = []
+    before, before_no = "", None
     for no, text in pages:
         seq = 0
+        text = text or ""
         lay = layouts[no - 1] if 0 < no <= len(layouts) else ""
         words = boxes[no - 1] if 0 < no <= len(boxes) else None
-        for h, t in table_chunks(lay, words):
+        tables = table_chunks(lay, words)
+        have = {m.group(1) for m in (re.match(r"Table\s+(\d+[A-Z]?)", h) for h, _ in tables) if m}
+        for h, t in tables + text_tables(text, have):
             out.append((no, seq, "table", h, t))
             seq += 1
-        pieces = clause_chunks(text or "")
+        pieces = clause_chunks(text)
+        carry = unfinished_sentence(before) if before and before_no == no - 1 and starts_mid_sentence(text) else ""
+        if carry and pieces:
+            h0, t0 = pieces[0]
+            pieces[0] = (h0, f"(continued from page {before_no}) {carry}\n{t0}")
         has_heads = any(h for h, _ in pieces)
         for h, t in pieces:
             out.append((no, seq, "clause" if has_heads and h else "page", h, t))
             seq += 1
+        before, before_no = text, no
     return out
 
 
@@ -1545,7 +1673,7 @@ def main():
                         (added, changed, pages_read, ocr_read, run_id),
                     )
         renamed = refresh_notes(conn, reviewed_names(root))
-        versions = refresh_versions(conn)
+        versions = refresh_versions(conn, root)
         if versions:
             print(f"Version facts: {versions} documents updated")
         titled = refresh_titles(conn)
