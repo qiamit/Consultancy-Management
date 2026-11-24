@@ -2,7 +2,7 @@
  * Recharts-based dashboard charts. Loaded lazily from DashboardPage so the chart library
  * stays out of the main bundle.
  */
-import { useMemo, useSyncExternalStore, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react'
 import {
   Bar,
   BarChart,
@@ -353,8 +353,22 @@ function StatusDonut({
     [counts],
   )
   const total = data.reduce((a, d) => a + d.value, 0)
+  // The centre text is sized from the ring's hole, so it stays inside it however small the card makes the donut
+  // (owner, 24 Nov 2026: "1,034 LICENCES" ran out of the inner circle). The ring's outer edge is 94 % of half the
+  // smaller side, its hole 70 % of that.
+  const [box, setBox] = useState<HTMLDivElement | null>(null)
+  const [width, setWidth] = useState(0)
+  useEffect(() => {
+    if (!box) return
+    const ro = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width))
+    ro.observe(box)
+    return () => ro.disconnect()
+  }, [box])
+  const hole = 0.94 * 0.7 * Math.min(width || height, height)
+  const valuePx = Math.max(12, Math.min(24, Math.round(hole * 0.27)))
+  const labelPx = Math.max(8, Math.min(11, Math.round(valuePx * 0.45)))
   return (
-    <div className="relative" style={{ height }}>
+    <div ref={setBox} className="relative" style={{ height }}>
       <ResponsiveContainer width="100%" height={height}>
         <PieChart>
           <Tooltip
@@ -376,8 +390,8 @@ function StatusDonut({
             data={data}
             dataKey="value"
             nameKey="label"
-            innerRadius="62%"
-            outerRadius="92%"
+            innerRadius="70%"
+            outerRadius="94%"
             startAngle={90}
             endAngle={-270}
             stroke="var(--dash-surface)"
@@ -396,8 +410,14 @@ function StatusDonut({
         </PieChart>
       </ResponsiveContainer>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center" aria-hidden="true">
-        <span className="font-jakarta text-2xl font-bold tabular-nums text-foreground">{formatCount(total)}</span>
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Licences</span>
+        <span className="font-jakarta font-bold leading-none tabular-nums text-foreground" style={{ fontSize: valuePx }}>
+          {formatCount(total)}
+        </span>
+        {hole >= 56 ? (
+          <span className="mt-0.5 font-semibold uppercase leading-none tracking-wide text-muted-foreground" style={{ fontSize: labelPx }}>
+            Licences
+          </span>
+        ) : null}
       </div>
     </div>
   )
