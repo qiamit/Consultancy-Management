@@ -501,7 +501,7 @@ html[data-ui='ios'] .ui-badge {
    --------------------------------------------------------------------------------------------------------------- */
 
 /* Buttons: rounded; primary = filled iOS Blue (via the amber/primary remap) in semibold. */
-html[data-ui='ios'] :is(button, [role='button'], a.ui-button):not([role='tab']):not([role='combobox']):not([role='switch']):not([role='option']):not([role='menuitem']):not([role='menuitemcheckbox']):not([role='checkbox']):not(.sidebar-nav-item) {
+html[data-ui='ios'] :is(button, [role='button'], a.ui-button):not([role='tab']):not([role='combobox']):not([role='switch']):not([role='option']):not([role='menuitem']):not([role='menuitemcheckbox']):not([role='checkbox']):not(.sidebar-nav-item):not([class~='rounded-full']) {
   border-radius: 10px;
 }
 html[data-ui='ios'] button:is([class~='bg-amber-700'], [class~='bg-amber-600'], [class~='bg-primary'], [class~='bg-destructive'], [class~='bg-red-600'], [class~='bg-red-700']) {
@@ -527,11 +527,14 @@ html[data-ui='ios'] button:is(.lims-btn-outline, .ui-button-outline, .ui-button-
 html[data-ui='ios'] :is(input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']):not([type='color']):not([type='hidden']), textarea, select, button[role='combobox']) {
   background-color: rgb(var(--ios-fill) / var(--ios-fill-a)) !important;
   border-color: transparent !important;
-  border-radius: 10px !important;
   color: rgb(var(--ios-label)) !important;
   box-shadow: none !important;
 }
-html[data-ui='ios'] :is(input:not([type='checkbox']):not([type='radio']):not([type='file']), textarea, select, button[role='combobox']):focus-visible {
+html[data-ui='ios'] :is(input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']):not([type='color']):not([type='hidden']), textarea, select, button[role='combobox']):not([class~='rounded-full']) {
+  border-radius: 10px !important;
+}
+/* (Same selector list as the field rule, so the focus ring outranks its box-shadow: none.) */
+html[data-ui='ios'] :is(input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']):not([type='color']):not([type='hidden']), textarea, select, button[role='combobox']):focus-visible {
   box-shadow: 0 0 0 3px rgb(var(--ios-blue) / 0.28) !important;
 }
 html[data-ui='ios'] :is(input, textarea)::placeholder {
@@ -712,4 +715,126 @@ html[data-ui='ios'] :is([role='menuitem'], [role='option'])[data-highlighted] * 
 /* Toasts */
 html[data-ui='ios'] [data-sonner-toast] {
   border-radius: 14px !important;
+}
+
+/* ---------------------------------------------------------------------------------------------------------------
+   7. Review fixes (live review, 24 Nov 2026)
+   --------------------------------------------------------------------------------------------------------------- */
+
+/* Sheet bodies and strips drawn with a stone gradient → flat (the sheet's white shows through). */
+html[data-ui='ios'] :is([class~='from-stone-100/80'], [class~='from-stone-50'], [class~='from-stone-100'], [class~='from-white']) {
+  background-image: none !important;
+}
+/* Single amber accent gradients (left stripes on cards, vertical bars) → solid iOS Blue. */
+html[data-ui='ios'] :is([class~='from-amber-500'], [class~='from-amber-600'], [class~='from-amber-400'], [class~='from-amber-500/60']):not([class~='via-amber-300']) {
+  background-image: none !important;
+  background-color: rgb(var(--ios-blue)) !important;
+}
+
+/* Thick top / bottom / right rules (sheet footers, the assistant's input bar) → hairlines. Left accent stripes stay. */
+html[data-ui='ios'] :is([class~='border-t-2'], [class~='border-b-2'], [class~='border-r-2'], [class~='border-t-4'], [class~='border-b-4']) {
+  border-color: rgb(var(--ios-sep)) !important;
+}
+html[data-ui='ios'] :is([class~='border-t-2'], [class~='border-t-4']) {
+  border-top-width: 0.5px !important;
+}
+html[data-ui='ios'] :is([class~='border-b-2'], [class~='border-b-4']) {
+  border-bottom-width: 0.5px !important;
+}
+html[data-ui='ios'] [class~='border-r-2'] {
+  border-right-width: 0.5px !important;
+}
+/* Sheet footers / input bars (thick top rule on a gray or paper strip) → iOS toolbar. */
+html[data-ui='ios'] [class~='border-t-2']:is([class~='bg-stone-100'], [class~='bg-stone-50'], [class~='bg-[#fffcf7]']) {
+  background-color: rgb(var(--ios-bar) / var(--ios-bar-a)) !important;
+}
+
+/* Red square close buttons (QE Assistant, panels) → the gray round iOS close button. */
+html[data-ui='ios'] button[aria-label^='Close']:is([class~='bg-red-600'], [class~='!bg-red-600'], [class~='bg-red-700']) {
+  border-color: transparent !important;
+  border-radius: 999px !important;
+  background-color: rgb(var(--ios-fill) / var(--ios-fill-a)) !important;
+  color: rgb(var(--ios-label2) / var(--ios-label2-a)) !important;
+}
+html[data-ui='ios'] button[aria-label^='Close']:is([class~='bg-red-600'], [class~='!bg-red-600'], [class~='bg-red-700']) svg {
+  color: inherit !important;
+}
+
+/* Half-white buttons and chips: right on white, but light blobs in iOS Dark → gray fill. */
+html.dark[data-ui='ios'] :is([class~='bg-white/70'], [class~='bg-white/80'], [class~='bg-white/90'], [class~='bg-white/95']) {
+  background-color: rgb(var(--ios-fill) / var(--ios-fill-a)) !important;
+  color: rgb(var(--ios-label));
+}
+
+/* Status colours → iOS system red / green / orange / blue (text uses Apple's darker, readable shades on light). */
+html[data-ui='ios'] {
+  --ios-red-ink: 215 0 21;
+  --ios-green-ink: 36 138 61;
+  --ios-orange-ink: 201 52 0;
+  --ios-blue-ink: 0 64 221;
+  --ios-tint-a: 0.12;
+}
+html.dark[data-ui='ios'] {
+  --ios-red-ink: 255 105 97;
+  --ios-green-ink: 48 219 91;
+  --ios-orange-ink: 255 179 64;
+  --ios-blue-ink: 64 156 255;
+  --ios-tint-a: 0.2;
+}
+html[data-ui='ios'] :is([class~='text-red-600'], [class~='text-red-700'], [class~='text-red-800'], [class~='text-red-900'], [class~='text-rose-600'], [class~='text-rose-700'], [class~='text-red-300'], [class~='text-red-400']) {
+  color: rgb(var(--ios-red-ink)) !important;
+}
+html[data-ui='ios'] :is([class~='text-emerald-600'], [class~='text-emerald-700'], [class~='text-emerald-800'], [class~='text-emerald-900'], [class~='text-green-600'], [class~='text-green-700'], [class~='text-green-800'], [class~='text-emerald-300'], [class~='text-[#047857]']) {
+  color: rgb(var(--ios-green-ink)) !important;
+}
+html[data-ui='ios'] :is([class~='text-orange-600'], [class~='text-orange-700'], [class~='text-orange-800'], [class~='text-[#c2410c]'], [class~='text-yellow-700'], [class~='text-yellow-800']) {
+  color: rgb(var(--ios-orange-ink)) !important;
+}
+html[data-ui='ios'] :is([class~='text-sky-700'], [class~='text-sky-800'], [class~='text-sky-900'], [class~='text-blue-700'], [class~='text-blue-800']) {
+  color: rgb(var(--ios-blue-ink)) !important;
+}
+html[data-ui='ios'] :is([class~='bg-red-50'], [class~='bg-red-100'], [class~='bg-rose-50']) {
+  background-color: rgb(var(--ios-red) / var(--ios-tint-a)) !important;
+}
+html[data-ui='ios'] :is([class~='bg-emerald-50'], [class~='bg-green-50'], [class~='bg-emerald-100']) {
+  background-color: rgb(var(--ios-green) / var(--ios-tint-a)) !important;
+}
+html[data-ui='ios'] :is([class~='bg-orange-50'], [class~='bg-yellow-50'], [class~='bg-orange-100']) {
+  background-color: rgb(var(--ios-orange) / var(--ios-tint-a)) !important;
+}
+html[data-ui='ios'] :is([class~='bg-sky-50'], [class~='bg-blue-50']) {
+  background-color: rgb(var(--ios-blue) / var(--ios-tint-a)) !important;
+}
+html.dark[data-ui='ios'] :is(.bg-red-50, .bg-emerald-50, .bg-rose-50, .bg-sky-50, .bg-orange-50, .bg-yellow-50) {
+  color: rgb(var(--ios-label)) !important;
+}
+html[data-ui='ios'] :is(button, a):is([class~='bg-green-600'], [class~='bg-green-700'], [class~='bg-emerald-600'], [class~='bg-emerald-700']) {
+  background-color: rgb(var(--ios-green)) !important;
+  border-color: transparent !important;
+}
+html[data-ui='ios'] :is([class~='border-red-300'], [class~='border-red-200'], [class~='border-red-400']) {
+  border-color: rgb(var(--ios-red) / 0.45) !important;
+}
+html[data-ui='ios'] :is([class~='border-emerald-300'], [class~='border-emerald-200']) {
+  border-color: rgb(var(--ios-green) / 0.45) !important;
+}
+
+/* Toasts: neutral iOS banners; only the icon keeps the status colour. */
+html[data-ui='ios'] [data-sonner-toast][data-type] {
+  background: rgb(var(--ios-card)) !important;
+  color: rgb(var(--ios-label)) !important;
+  border: 0.5px solid rgb(var(--ios-sep)) !important;
+  box-shadow: 0 10px 38px rgb(0 0 0 / 0.16) !important;
+}
+html[data-ui='ios'] [data-sonner-toast][data-type='warning'] [data-icon] {
+  color: rgb(var(--ios-orange));
+}
+html[data-ui='ios'] [data-sonner-toast][data-type='error'] [data-icon] {
+  color: rgb(var(--ios-red));
+}
+html[data-ui='ios'] [data-sonner-toast][data-type='success'] [data-icon] {
+  color: rgb(var(--ios-green));
+}
+html[data-ui='ios'] [data-sonner-toast][data-type='info'] [data-icon] {
+  color: rgb(var(--ios-blue));
 }
