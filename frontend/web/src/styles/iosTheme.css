@@ -894,8 +894,9 @@ html[data-ui='ios'] .profile-menu [class~='text-red-300'] {
 html[data-ui='ios'] .profile-menu [class~='bg-black/20'] {
   background-color: transparent !important;
 }
-/* The ☰ trigger while its menu is open (its classes switch to bg-stone-700, which is not a bar colour) */
-html[data-ui='ios'] header button[aria-label='open menu' i][aria-expanded='true'] {
+/* The ☰ trigger while its menu is open, or lit while the sidebar is kept open (its classes switch to bg-stone-700,
+   which is not a bar colour) */
+html[data-ui='ios'] header button[data-nav-trigger]:is([aria-expanded='true'], [aria-pressed='true']) {
   background-color: rgb(var(--ios-blue) / 0.2) !important;
   border-color: transparent !important;
   color: rgb(var(--ios-blue)) !important;

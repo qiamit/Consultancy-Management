@@ -22,6 +22,9 @@ import { formatNavLabel, navItemAccessible, useNavCanAccess, visibleNavItems, ty
  * 24 Nov 2026). Pointing at ☰ drops the module list, flush with the screen's left edge; pointing at a module opens
  * its options to the right, and a group opens one more column. Clicking an option opens the page. Same modules and
  * Module Access rules as the sidebar. Keyboard: Down opens, arrows move, Right / Left go in and out, Escape closes.
+ * Clicking ☰ with the mouse brings the sidebar down and keeps it there (owner, 24 Nov 2026: "बटन पे क्लिक करेंगे तब
+ * जाके नीचे आएगी, लॉक होगी"); ☰ then stays lit in the header and a second click hides the sidebar again
+ * (SidebarLockButton). A touch screen has no pointing, so a tap there opens and closes the menu instead.
  */
 
 type MenuNode = {
@@ -85,6 +88,23 @@ function sameKeys(a: string[], b: string[]) {
 
 const triggerClass =
   'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-none border border-stone-500 bg-stone-800/80 text-white shadow-sm transition-colors hover:border-amber-500/50 hover:bg-stone-700'
+
+/** ☰ in the header while the sidebar is kept open: lit, and a click hides the sidebar (back to the ☰ menu). */
+export function SidebarLockButton() {
+  return (
+    <button
+      type="button"
+      data-nav-trigger=""
+      className={cn(triggerClass, 'border-amber-500/60 bg-stone-700')}
+      aria-label="Hide Sidebar"
+      aria-pressed="true"
+      title="Hide Sidebar (Point at ☰ to Open the Menu)"
+      onClick={() => writeSidebarMode('menu')}
+    >
+      <Menu size={18} aria-hidden />
+    </button>
+  )
+}
 
 export function NavHoverMenu() {
   const location = useLocation()
@@ -272,8 +292,9 @@ export function NavHoverMenu() {
         ref={triggerRef}
         type="button"
         className={cn(triggerClass, open && 'border-amber-500/60 bg-stone-700')}
-        aria-label="Open menu"
-        title="Menu"
+        data-nav-trigger=""
+        aria-label="Open Menu"
+        title="Menu (Click to Keep the Sidebar Open)"
         aria-haspopup="true"
         aria-expanded={open}
         onPointerEnter={onTriggerPointerEnter}
@@ -283,7 +304,13 @@ export function NavHoverMenu() {
         onPointerLeave={onPointerLeave}
         onClick={(event) => {
           const fromKeyboard = event.detail === 0
-          if (open && (fromKeyboard || lastPointer.current !== 'mouse')) {
+          if (!fromKeyboard && lastPointer.current === 'mouse') {
+            // Mouse: the menu already opened on pointing; a click keeps the sidebar open on the left.
+            closeMenu()
+            writeSidebarMode('pinned')
+            return
+          }
+          if (open) {
             closeMenu()
             return
           }

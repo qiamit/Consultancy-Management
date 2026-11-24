@@ -18,7 +18,7 @@ import { useIsNarrowScreen } from '@/hooks/useIsNarrowScreen'
 import { supabase } from '@/lib/supabaseClient'
 import { RequireModuleAccess } from '@/components/auth/RequireModuleAccess'
 import { DESKTOP_NAV_QUERY, useIsDesktopNav, useSidebarMode, writeSidebarMode } from '@/lib/sidebarMode'
-import { NavHoverMenu } from './NavHoverMenu'
+import { NavHoverMenu, SidebarLockButton } from './NavHoverMenu'
 import { ProfileMenu } from './ProfileMenu'
 import { formatNavLabel, navItemAccessible, navItemMatchesPath, useNavCanAccess } from './navAccess'
 import { getBrandShortName, LAB_NAME_CHANGED_EVENT, LAB_NAME_STORAGE_KEY } from '@/features/settings/lab-settings/brandMark'
@@ -344,8 +344,9 @@ export default function GlobalLayout() {
   const { profileName, profileReady, user, mustChangePassword, clearMustChangePassword } = useAuth()
   const [changePasswordOpen, setChangePasswordOpen] = useState(false)
   const [twoStepOpen, setTwoStepOpen] = useState(false)
-  // Desktop (1280px+), as in the Qirlpl LIMS (owner, 24 Nov 2026): the sidebar is hidden and the menu opens from ☰
-  // (default), or it is pinned on the left (Lab Settings → Setting → Sidebar - Always Show, "Keep open" in the menu).
+  // Desktop (1280px+), as in the Qirlpl LIMS (owner, 24 Nov 2026): the sidebar is hidden and the menu opens on
+  // pointing at ☰ (default), or it is pinned on the left: a click on ☰, "Keep Open" in the menu, or Lab Settings →
+  // Setting → Sidebar - Always Show. A click on the lit ☰ (or Hide Sidebar in the sidebar) hides it again.
   const sidebarPinned = useSidebarMode() === 'pinned'
   const isDesktopNav = useIsDesktopNav()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
@@ -585,9 +586,7 @@ export default function GlobalLayout() {
 
           <div className="relative flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
             {isDesktopNav ? (
-              sidebarPinned ? null : (
-                <NavHoverMenu />
-              )
+              sidebarPinned ? <SidebarLockButton /> : <NavHoverMenu />
             ) : (
               <button
                 type="button"
