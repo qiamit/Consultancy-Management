@@ -737,7 +737,8 @@ export async function askLibrary(input: { question: string; history: AskTurn[]; 
       'is missing, name only a standard, clause or table that appears in the extracts. ' +
       `Write the whole answer in ${answerLanguage(input.question)}, even where the extracts are in another language, ` +
       'in a plain professional tone (no greeting or slang such as "Bhai"); keep numbers, units and clause numbers ' +
-      'exactly as written.' +
+      'exactly as written. Write symbols as plain characters (≥, ≤, ±, ×, °C), never LaTeX or $…$ math, which the ' +
+      'app shows as raw code.' +
       (input.attached?.trim() ? ATTACHED_RULE : ''),
     history: input.history.slice(-8),
   })

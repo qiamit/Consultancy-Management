@@ -261,11 +261,31 @@ export function geminiReasoningEffort(provider, page) {
   return page === 'bis/sample-conformity' ? 'medium' : 'low'
 }
 
+/** Provider answers worth another try after a short wait: overloaded (503) or a passing server error. */
+const RETRY_STATUSES = new Set([500, 502, 503, 504])
+const RETRY_DELAYS_MS = [1500, 4000]
+
+/**
+ * Runs a provider request, and runs it again (up to twice, after 1.5 s and 4 s) while the provider answers 500 /
+ * 502 / 503 / 504. Gemini answers 503 when it is busy: in the first Ask AI check on 24 Nov 2026, 2 of 6 questions
+ * failed that way and the app showed "The AI provider could not answer (error 503)".
+ */
+export async function fetchWithProviderRetry(doFetch, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))) {
+  let res = await doFetch()
+  for (const delay of RETRY_DELAYS_MS) {
+    if (!RETRY_STATUSES.has(res.status)) break
+    await res.body?.cancel?.().catch(() => {})
+    await sleep(delay)
+    res = await doFetch()
+  }
+  return res
+}
+
 /** Chat completions with tools (OpenAI-compatible); returns the provider's choice.message. */
 export function createToolCaller({ apiBase, apiKey, modelId, provider, maxTokens, temperature, reasoning = false, reasoningEffort = null, onUsage = null }) {
   return async (messages, tools, { final = false } = {}) => {
     const startedAt = Date.now()
-    const r = await fetch(`${apiBase}/chat/completions`, {
+    const r = await fetchWithProviderRetry(() => fetch(`${apiBase}/chat/completions`, {
       method: 'POST',
       redirect: 'error',
       signal: AbortSignal.timeout(180_000),
@@ -280,7 +300,7 @@ export function createToolCaller({ apiBase, apiKey, modelId, provider, maxTokens
           : { ...(acceptsTemperature(modelId) ? { temperature } : {}), max_tokens: maxTokens }),
         ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
       }),
-    })
+    }))
     const payload = await r.json().catch(() => ({}))
     onUsage?.({ usage: payload?.usage, ms: Date.now() - startedAt, error: r.ok ? '' : extractAiError(payload, r.status) })
     if (!r.ok) {
@@ -719,7 +739,7 @@ export function createQiAssistantHandler(deps) {
     // (applied to picture requests, which may pick such a model as the vision fallback; text chat is unchanged).
     const openAiReasoning = images.length > 0 && provider === 'openai' && /^(?:o\d|gpt-5)/i.test(modelId)
 
-    const requestChatCompletion = (jsonMode) => fetch(`${apiBase}/chat/completions`, {
+    const requestChatCompletion = (jsonMode) => fetchWithProviderRetry(() => fetch(`${apiBase}/chat/completions`, {
       method: 'POST',
       // A provider must not bounce the request (and the API key) somewhere else.
       redirect: 'error',
@@ -738,7 +758,7 @@ export function createQiAssistantHandler(deps) {
         ...(provider === 'deepseek' && (isLongExtraction || standardsAsk) ? { thinking: { type: reasonedCheck ? 'enabled' : 'disabled' } } : {}),
         ...(geminiEffort && !openAiReasoning ? { reasoning_effort: geminiEffort } : {}),
       }),
-    })
+    }))
 
     if (agentMode) {
       const callModel = createToolCaller({
