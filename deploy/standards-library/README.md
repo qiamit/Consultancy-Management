@@ -44,6 +44,17 @@ standard_docs + standard_pages (+ standard_index_runs: one row per run)
 - Each run also checks every file against its content: first pages that never name the file's own number but name
   another IS number ("Content Shows IS 9762, Not IS 10931"), and the same PDF saved under two names ("Same PDF as …").
   Both go on the review list.
+- The same PDF under several names (a QCO gazette that covers several products, filed once under each IS) stays in
+  the library under every name, but a library search shows each of its chunks once: under the name that holds most
+  of the question's words (word search), or whose embedding is closest to the question (hybrid search). Migration
+  `20261125100000_library_same_pdf_once.sql`.
+- Chunks (`CHUNKS_VERSION` 4): a page's tables come from its column layout; a table the layout misses (a font
+  pdftotext cannot read, so the page text is OCR, as in IS 10500 : 2012 Tables 1–6) is taken from the page text, from
+  its "Table N" title to the next title or two blank lines, when at least three of its lines carry numbers. A page that
+  starts in the middle of a sentence gets that sentence's start from the page before in front of its first chunk:
+  `(continued from page 12) Buildings and facilities should be of sound …`. Raising `CHUNKS_VERSION` re-chunks every
+  file on the next run without reading its PDF again (only the column layout); only chunks whose text changed are
+  embedded again.
 
 ## Referenced standards
 
@@ -76,6 +87,10 @@ documents only (`search_standard_pages(..., p_relpaths)`).
   pages) stay.
 - `Standards List.xlsx` at the root (S.No, IS Number, IS Title, Standard type, Technical Committee, Department,
   PM no.) is read on every run into `standard_list`; the app shows the listed numbers that have no file yet.
+- `Merged Standards.txt` at the root: a standard that a later standard of another number took over, one per line
+  (`IS 8112 => IS 269`, `#` for a comment). Its files become Superseded by the new number, so search and Ask AI no
+  longer answer from them as current. IS 8112 and IS 12269 → IS 269 (IS 269 : 2015 covers OPC 33, 43 and 53) are
+  built in (`MERGED_DEFAULT` in `indexer.py`).
 
 First full run on the former Mac test copy (11 Nov 2026, 4 workers): 3,269 PDFs, 66,314 pages (4,368 by OCR), 22 minutes, no
 errors. A run with nothing changed takes about 30 seconds. On the server (1 CPU) the first run takes a few hours:
