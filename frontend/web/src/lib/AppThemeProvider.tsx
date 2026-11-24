@@ -10,6 +10,7 @@ import {
 } from 'react'
 import {
   applyAppTheme,
+  DEFAULT_APP_THEME,
   deleteCustomTheme,
   normalizeAppThemeId,
   readCustomThemes,
@@ -57,8 +58,8 @@ export function AppThemeProvider({ children }: { children: ReactNode }) {
       const next = deleteCustomTheme(id, customThemes)
       setCustomThemes(next)
       if (theme === id) {
-        setThemeState('light')
-        applyAppTheme('light', next)
+        setThemeState(DEFAULT_APP_THEME)
+        applyAppTheme(DEFAULT_APP_THEME, next)
       } else {
         applyAppTheme(theme, next)
       }

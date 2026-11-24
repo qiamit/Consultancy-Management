@@ -16,11 +16,21 @@
       (function () {
         try {
           var key = 'consultancy.appTheme'
-          var pref = localStorage.getItem(key) || 'light'
+          var root = document.documentElement
+          // One-time move to the iPhone (iOS) default, 24 Nov 2026: a device still on the old default 'light'
+          // (Classic Amber then; iOS Light now) goes to iOS Automatic. Same as migrateToIosDefault() in appTheme.ts.
+          if (!localStorage.getItem('consultancy.appTheme.iosDefault')) {
+            var old = localStorage.getItem(key)
+            if (!old || old === 'light') localStorage.setItem(key, 'system')
+            localStorage.setItem('consultancy.appTheme.iosDefault', '1')
+          }
+          var pref = localStorage.getItem(key) || 'system'
           var builtins = {
             light: 1,
             dark: 1,
             system: 1,
+            amber: 1,
+            'amber-night': 1,
             ocean: 1,
             forest: 1,
             steel: 1,
@@ -29,32 +39,36 @@
             rose: 1,
           }
           var isCustom = pref.indexOf('custom_') === 0
-          if (!builtins[pref] && !isCustom) pref = 'light'
+          if (!builtins[pref] && !isCustom) pref = 'system'
           var resolved = pref
           if (pref === 'system') {
             resolved = window.matchMedia('(prefers-color-scheme: dark)').matches
               ? 'dark'
               : 'light'
           }
-          document.documentElement.setAttribute('data-app-theme-pref', pref)
+          root.setAttribute('data-app-theme-pref', pref)
           if (isCustom) {
-            document.documentElement.setAttribute('data-app-theme', 'custom')
-            document.documentElement.setAttribute('data-custom-theme-id', pref)
+            root.setAttribute('data-app-theme', 'custom')
+            root.setAttribute('data-custom-theme-id', pref)
             try {
               var list = JSON.parse(localStorage.getItem('consultancy.customThemes') || '[]')
               var found = Array.isArray(list)
                 ? list.find(function (t) { return t && t.id === pref })
                 : null
-              if (found && found.mode === 'dark') document.documentElement.classList.add('dark')
-              else document.documentElement.classList.remove('dark')
+              if (found && found.mode === 'dark') root.classList.add('dark')
+              else root.classList.remove('dark')
             } catch (e2) {
-              document.documentElement.classList.remove('dark')
+              root.classList.remove('dark')
             }
           } else {
-            document.documentElement.setAttribute('data-app-theme', resolved)
-            document.documentElement.removeAttribute('data-custom-theme-id')
-            if (resolved === 'dark') document.documentElement.classList.add('dark')
-            else document.documentElement.classList.remove('dark')
+            root.setAttribute('data-app-theme', resolved)
+            root.removeAttribute('data-custom-theme-id')
+            if (resolved === 'dark' || resolved === 'amber-night') root.classList.add('dark')
+            else root.classList.remove('dark')
+            if (resolved === 'light' || resolved === 'dark') root.setAttribute('data-ui', 'ios')
+            var bar = { light: '#f2f2f7', dark: '#000000', 'amber-night': '#0c0a09' }[resolved]
+            var meta = document.querySelector('meta[name="theme-color"]')
+            if (bar && meta) meta.setAttribute('content', bar)
           }
         } catch (e) {}
       })()
