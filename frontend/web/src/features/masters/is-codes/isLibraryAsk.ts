@@ -293,13 +293,31 @@ const TABLE_SHARE_CHARS = 24_000
  * in packaged drinking water" said "not in the extracts" because the planner also named IS 3025, the tables of all its
  * Parts were fetched together with IS 14543's in one request of 60 rows, and IS 14543's Table 3 never came.
  */
-async function tablesOf(folders: string[], files: Array<{ relpath: string; folder: string }>, hitPaths: Set<string>): Promise<ChunkHit[]> {
+async function tablesOf(
+  folders: string[],
+  files: Array<{ relpath: string; folder: string }>,
+  hits: Array<{ relpath: string; page: number }>,
+  words: string,
+): Promise<ChunkHit[]> {
+  const hitPaths = new Set(hits.map((h) => h.relpath))
+  const hitPages = new Set(hits.map((h) => `${h.relpath}#${h.page}`))
+  const terms = [...new Set(words.toLowerCase().match(/[a-z0-9]{3,}/g) ?? [])]
+  // The tables holding most of the question's words first (one more for a page the search found), the rest in page
+  // order: IS 10500's first pages are amendment tables, and in page order they used up its share before Table 3
+  // (lead) on p. 17; nearly every table there says "water" and "limit", so it is the count that tells (Ask AI test,
+  // 24 Nov 2026).
+  const rank = (t: ChunkHit) => {
+    const text = `${t.heading} ${t.text}`.toLowerCase()
+    return -(terms.filter((w) => new RegExp(`\\b${w}`).test(text)).length + (hitPages.has(`${t.relpath}#${t.page}`) ? 1 : 0))
+  }
   const per = await Promise.all(
     folders.map(async (f) => {
       let paths = files.filter((d) => d.folder === f).map((d) => d.relpath)
       if (paths.length > MANY_PARTS) paths = paths.filter((p) => hitPaths.has(p))
       let used = 0
-      return (await tableChunks(paths)).filter((t) => {
+      const tables = (await tableChunks(paths)).map((t, i) => ({ t, i, r: rank(t) }))
+      tables.sort((a, b) => a.r - b.r || a.i - b.i)
+      return tables.map((x) => x.t).filter((t) => {
         if (used + t.text.length > TABLE_SHARE_CHARS) return false
         used += t.text.length
         return true
@@ -583,7 +601,7 @@ export async function askLibrary(input: { question: string; history: AskTurn[]; 
       .filter((d) => input.includeOld || (d.version_status ?? 'Current') === 'Current')
       .filter((d) => inNamedPart(d.relpath, d.folder, parts))
     const have = new Set(chunks.map((c) => `${c.relpath}#${c.page}#${c.seq ?? c.heading}`))
-    for (const t of await tablesOf(folders, current, new Set(chunks.map((c) => c.relpath)))) {
+    for (const t of await tablesOf(folders, current, chunks, words)) {
       const key = `${t.relpath}#${t.page}#${t.heading}`
       if (have.has(key)) continue
       have.add(key)
@@ -636,8 +654,7 @@ export async function askLibrary(input: { question: string; history: AskTurn[]; 
       // filled the budget before IS 14543's Table 3 (RAG testing, 21 Nov 2026). Each standard has its own share.
       const current = ((docs ?? []) as Array<{ relpath: string; version_status: string | null; folder: string }>)
         .filter((d) => input.includeOld || (d.version_status ?? 'Current') === 'Current')
-      const hitPaths = new Set([...chunks, ...found].map((c) => c.relpath))
-      for (const t of await tablesOf(lead, current, hitPaths)) {
+      for (const t of await tablesOf(lead, current, [...chunks, ...found], words)) {
         add({ relpath: t.relpath, folder: '', doc_kind: 'Standard', version_status: null, kind: 'table', page: t.page, heading: t.heading, text: t.text })
       }
       for (const c of await wholeSmallDocs(lead, chunks, input.question, input.includeOld)) add(c)
@@ -715,7 +732,8 @@ export async function askLibrary(input: { question: string; history: AskTurn[]; 
       'state it once and cite the latest source (the amendment or the amended edition); name an older source only ' +
       'where it differs. If the extracts do not answer the question, say so plainly — never use outside knowledge or ' +
       'guess. If the question names a standard that none of the extracts is from (e.g. an ASTM or ISO number), say ' +
-      'that the Standards Library does not have it. Do not suggest uploading files or app features; when something ' +
+      'only that this standard was not found in the Standards Library (do not say more about what the library holds). ' +
+      'Do not suggest uploading files or app features; when something ' +
       'is missing, name only a standard, clause or table that appears in the extracts. ' +
       `Write the whole answer in ${answerLanguage(input.question)}, even where the extracts are in another language, ` +
       'in a plain professional tone (no greeting or slang such as "Bhai"); keep numbers, units and clause numbers ' +
