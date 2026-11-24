@@ -306,6 +306,104 @@ function ListBody({
   )
 }
 
+type RankRow = { id: string; label: string; count: number }
+
+/**
+ * A ranked list with a bar under each row, like iPhone's Screen Time (owner, 24 Nov 2026): the full name on the
+ * left, the count on the right and a rounded bar showing its share of the largest. Replaces the horizontal bar
+ * charts of Applications by Stage and Top 10 IS Codes, whose names were cut ("Test Request Submi…") and whose ten
+ * rows crowded together. On the fit-to-screen dashboard the rows run in two columns, so all of them show.
+ */
+function RankBody({
+  section,
+  rows,
+  onRetry,
+  empty,
+  numbered = false,
+  hrefFor,
+  unit,
+  table,
+}: {
+  section: Section<unknown> | undefined
+  rows: RankRow[]
+  onRetry: () => void
+  empty: string
+  numbered?: boolean
+  hrefFor: (row: RankRow) => string | null
+  unit: string
+  table: SrTable
+}) {
+  const fit = useContext(DashFitContext)
+  if (section?.error) return <SectionError message={section.error} onRetry={onRetry} />
+  if (!rows.length) return <EmptyState title={empty} />
+  const max = Math.max(1, ...rows.map((r) => r.count))
+  const twoColumns = fit && rows.length >= 5
+  return (
+    <>
+      <ol
+        className={cn(
+          'grid gap-x-5 px-4',
+          fit ? 'min-h-0 flex-1 content-evenly gap-y-0 overflow-y-auto py-1.5' : 'gap-y-2 py-3',
+          twoColumns && 'grid-flow-col grid-cols-2',
+        )}
+        style={twoColumns ? { gridTemplateRows: `repeat(${Math.ceil(rows.length / 2)}, auto)` } : undefined}
+      >
+        {rows.map((row, i) => {
+          const to = hrefFor(row)
+          const inner = (
+            <>
+              <span className="flex min-w-0 items-baseline gap-2">
+                {numbered ? (
+                  <span className="w-4 shrink-0 text-right text-[11px] font-semibold tabular-nums text-muted-foreground">
+                    {i + 1}
+                  </span>
+                ) : null}
+                <span className={cn('min-w-0 flex-1 truncate font-medium text-foreground', fit ? 'text-xs' : 'text-[13px]')} title={row.label}>
+                  {row.label}
+                </span>
+                <span className={cn('shrink-0 font-semibold tabular-nums text-foreground', fit ? 'text-xs' : 'text-[13px]')}>
+                  {formatCount(row.count)}
+                </span>
+              </span>
+              <span
+                className={cn(
+                  'block overflow-hidden rounded-full bg-[var(--dash-accent-soft)]',
+                  fit ? 'mt-0.5 h-1' : 'mt-1 h-1.5',
+                  numbered && 'ml-6',
+                )}
+              >
+                <span
+                  className="block h-full rounded-full bg-[var(--dash-accent)]"
+                  style={{ width: `${Math.max(3, Math.round((row.count / max) * 100))}%` }}
+                />
+              </span>
+            </>
+          )
+          return (
+            <li key={row.id} className="min-w-0">
+              {to ? (
+                <NavLink
+                  to={to}
+                  className={cn(
+                    '-mx-1.5 block rounded-lg px-1.5 transition hover:bg-amber-500/10 focus-visible:bg-amber-500/10 focus-visible:outline-none',
+                    fit ? 'py-0.5' : 'py-1',
+                  )}
+                  aria-label={`${row.label}: ${formatCount(row.count)} ${unit}`}
+                >
+                  {inner}
+                </NavLink>
+              ) : (
+                <div className={fit ? 'py-0.5' : 'py-1'}>{inner}</div>
+              )}
+            </li>
+          )
+        })}
+      </ol>
+      <SrDataTable table={table} />
+    </>
+  )
+}
+
 function Badge({ tone, children }: { tone: 'warning' | 'critical' | 'serious' | 'neutral' | 'good'; children: ReactNode }) {
   const cls = {
     warning: 'border-[var(--dash-warning)] text-foreground',
@@ -699,8 +797,6 @@ function DashboardBody({
 
   const stageRows = apps?.data?.byStage ?? []
   const isRows = licData?.topIsCodes ?? []
-  // Applications by Stage and Top IS Codes sit side by side: one shared height keeps the row even.
-  const barHeight = Math.max(180, Math.max(apps ? stageRows.length : 0, lic ? isRows.length : 0) * 30 + 30)
 
   return (
     <>
@@ -825,22 +921,18 @@ function DashboardBody({
         {apps ? (
           <DashCard className={cn('md:col-span-1', fit ? 'xl:col-span-4' : XL_SPAN[lic ? 6 : 12])}>
             <CardHeader title="Applications by Stage" href={href('applications')} />
-            <ChartBody
+            <RankBody
               section={apps}
-              height={barHeight}
+              rows={stageRows.map((r) => ({ id: r.stage, label: r.stage, count: r.count }))}
               onRetry={retry}
-              empty={apps.data && !stageRows.length ? { title: 'No Open Applications' } : null}
-              chart={apps.data ? {
-                kind: 'stages',
-                data: stageRows,
-                height: barHeight,
-                onSelect: href('applications') ? () => go(href('applications')) : undefined,
-              } : null}
-              table={apps.data ? {
+              empty="No Open Applications"
+              hrefFor={() => href('applications')}
+              unit="applications"
+              table={{
                 caption: 'Open applications by stage',
                 columns: ['Stage', 'Applications'],
-                rows: stageRows.map((s) => [s.stage, s.count]),
-              } : null}
+                rows: stageRows.map((r) => [r.stage, r.count]),
+              }}
             />
           </DashCard>
         ) : null}
@@ -848,22 +940,19 @@ function DashboardBody({
         {lic ? (
           <DashCard className={cn('md:col-span-1', fit ? 'xl:col-span-4' : XL_SPAN[apps ? 6 : 12])}>
             <CardHeader title="Top 10 IS Codes" href={href('licences')} linkLabel="Licences" />
-            <ChartBody
+            <RankBody
               section={lic}
-              height={barHeight}
+              rows={isRows}
               onRetry={retry}
-              empty={licData && !isRows.length ? { title: 'No IS Codes Linked Yet' } : null}
-              chart={licData ? {
-                kind: 'isCodes',
-                data: isRows,
-                height: barHeight,
-                onSelect: href('licences') ? () => go(href('licences')) : undefined,
-              } : null}
-              table={licData ? {
+              empty="No IS Codes Linked Yet"
+              numbered
+              hrefFor={() => href('licences')}
+              unit="licences"
+              table={{
                 caption: 'Top 10 IS codes by number of licences',
                 columns: ['IS Code', 'Licences'],
                 rows: isRows.map((r) => [r.label, r.count]),
-              } : null}
+              }}
             />
           </DashCard>
         ) : null}
