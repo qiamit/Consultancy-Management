@@ -235,7 +235,7 @@ export default function DashboardChart(props: DashboardChartProps) {
     const onSelect = props.onSelect as ((id: string) => void) | undefined
     return (
       <ResponsiveContainer width="100%" height={props.height}>
-        <BarChart data={rows} layout="vertical" margin={{ top: 4, right: 36, bottom: 4, left: 4 }} barCategoryGap={6}>
+        <BarChart data={rows} layout="vertical" margin={{ top: 4, right: 36, bottom: 4, left: 4 }} barCategoryGap="18%">
           <CartesianGrid stroke="var(--dash-grid)" strokeDasharray="3 3" horizontal={false} />
           <XAxis type="number" allowDecimals={false} tick={AXIS_TICK} tickLine={false} axisLine={false} />
           <YAxis

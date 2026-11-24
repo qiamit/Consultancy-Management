@@ -1,21 +1,8 @@
-import { useCallback, useEffect, useMemo, useState, type ElementType } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAppDateFormat } from '@/lib/AppDateFormatProvider'
 import { useAppCurrency } from '@/lib/AppCurrencyProvider'
-import {
-  ChevronDown,
-  ChevronRight,
-  LayoutDashboard,
-  Menu,
-  X,
-  LogOut,
-  KeyRound,
-  ShieldCheck,
-  Bot,
-  Shield,
-  Globe,
-  Mail,
-} from 'lucide-react'
+import { ChevronDown, ChevronRight, LayoutDashboard, Menu, PanelLeftClose, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -23,56 +10,23 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useAuth, signOut } from '@/hooks/useAuth'
 import { useIsNarrowScreen } from '@/hooks/useIsNarrowScreen'
 import { supabase } from '@/lib/supabaseClient'
-import { isLaboratoryDirector } from '@/lib/isLaboratoryDirector'
-import { canAccessNavItem as checkNavAccess } from '@/lib/moduleAccess'
-import { useModuleAccessOptional } from '@/features/settings/module-access/ModuleAccessProvider'
 import { RequireModuleAccess } from '@/components/auth/RequireModuleAccess'
+import { DESKTOP_NAV_QUERY, useIsDesktopNav, useSidebarMode, writeSidebarMode } from '@/lib/sidebarMode'
+import { NavHoverMenu } from './NavHoverMenu'
+import { ProfileMenu } from './ProfileMenu'
+import { formatNavLabel, navItemAccessible, navItemMatchesPath, useNavCanAccess } from './navAccess'
 import { getBrandShortName, LAB_NAME_CHANGED_EVENT, LAB_NAME_STORAGE_KEY } from '@/features/settings/lab-settings/brandMark'
-import {
-  PROFILE_MENU_SECTIONS,
-  SIDEBAR_NAV_SECTIONS,
-  flattenNavModules,
-  type NavItem,
-  type NavSection,
-} from '@/lib/appNav'
+import { SIDEBAR_NAV_SECTIONS, flattenNavModules, type NavItem, type NavSection } from '@/lib/appNav'
 import { QiAssistant } from '@/components/qi-assistant/QiAssistant'
 import { ChangePasswordDialog } from '@/components/auth/ChangePasswordDialog'
 import { TwoStepLoginDialog } from '@/components/auth/TwoStepLoginDialog'
 import { OfflineBanner } from '@/components/OfflineBanner'
-import { toProperLabelText } from '@/lib/properLabelText'
-
-const formatNavLabel = (value: string) => toProperLabelText(value)
-
-function navItemAccessible(
-  item: NavItem,
-  canAccess: (requiredDesignations: string[] | undefined, to: string | undefined) => boolean,
-): boolean {
-  return canAccess(item.requiredDesignations, item.to)
-}
-
-function useNavCanAccess() {
-  const moduleAccess = useModuleAccessOptional()
-  const { designation, departmentName, role } = useAuth()
-  const legacyCtx = useMemo(
-    () => ({ designation: designation ?? '', departmentName: departmentName ?? '', role }),
-    [designation, departmentName, role],
-  )
-
-  return useCallback(
-    (requiredDesignations: string[] | undefined, to: string | undefined) => {
-      if (moduleAccess) return moduleAccess.canAccessNavItem(requiredDesignations, to)
-      return checkNavAccess(requiredDesignations, to, legacyCtx)
-    },
-    [moduleAccess, legacyCtx],
-  )
-}
 
 /** Expandable nav: starts closed; stays open until user collapses manually */
 function useNavSectionOpen(initialOpen = false) {
@@ -81,68 +35,8 @@ function useNavSectionOpen(initialOpen = false) {
   return { open, setOpen, toggleOpen }
 }
 
-function navItemMatchesPath(item: NavItem, pathname: string): boolean {
-  if (item.to && (pathname === item.to || pathname.startsWith(`${item.to}/`))) return true
-  return (item.children ?? []).some((c) => navItemMatchesPath(c, pathname))
-}
-
 function sectionContainsPath(section: NavSection, pathname: string): boolean {
   return section.items.some((item) => navItemMatchesPath(item, pathname))
-}
-
-const DIRECTOR_ONLY_PROFILE_PATHS = new Set([
-  '/settings/lab',
-  '/settings/users',
-  '/settings/module-access',
-  '/settings/ai',
-  '/settings/email-log',
-  '/settings/standards-library',
-])
-
-function profileMenuIcon(item: NavItem): ElementType {
-  if (item.to === '/settings/ai') return Bot
-  if (item.to === '/settings/email-log') return Mail
-  if (item.to === '/settings/module-access') return Shield
-  if (item.to === '/tools/cms') return Globe
-  return item.icon
-}
-
-function ProfileMenuSections() {
-  const canAccess = useNavCanAccess()
-  const { role } = useAuth()
-  const isDirector = isLaboratoryDirector(role)
-
-  return (
-    <>
-      {PROFILE_MENU_SECTIONS.map((section, sectionIndex) => {
-        const visibleItems = section.items.filter((item) => {
-          if (!item.to) return false
-          if (DIRECTOR_ONLY_PROFILE_PATHS.has(item.to) && !isDirector) return false
-          return navItemAccessible(item, canAccess)
-        })
-        if (visibleItems.length === 0) return null
-        return (
-          <div key={section.clause}>
-            {sectionIndex > 0 ? <DropdownMenuSeparator /> : null}
-            <DropdownMenuLabel className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              {section.title}
-            </DropdownMenuLabel>
-            {visibleItems.map((item) => {
-              const Icon = profileMenuIcon(item)
-              return (
-                <DropdownMenuItem key={item.to} asChild>
-                  <NavLink to={item.to!} className="flex items-center gap-2">
-                    <Icon size={14} />
-                    {item.label}
-                  </NavLink>
-                </DropdownMenuItem>
-              )
-            })}
-          </div>
-        )
-      })}
-    </>
-  )
 }
 
 function SidebarMainNav() {
@@ -419,9 +313,6 @@ function NavItemLink({
   return link
 }
 
-/** The sidebar docks beside the page from 1280 px (xl); narrower screens open it as a drawer, so tablets and
- * small laptops keep the full width for tables. Keep in step with the xl: classes below. */
-const SIDEBAR_DOCK_QUERY = '(min-width: 1280px)'
 
 export default function GlobalLayout() {
   // Re-render entire shell when Lab Settings date/time/currency preferences change
@@ -450,13 +341,13 @@ export default function GlobalLayout() {
     location.pathname.startsWith('/masters/is-codes/') ||
     location.pathname === '/masters/test-parameter' ||
     location.pathname.startsWith('/masters/test-parameter/')
-  const { profileName, designation, profileReady, user, mustChangePassword, clearMustChangePassword } = useAuth()
+  const { profileName, profileReady, user, mustChangePassword, clearMustChangePassword } = useAuth()
   const [changePasswordOpen, setChangePasswordOpen] = useState(false)
   const [twoStepOpen, setTwoStepOpen] = useState(false)
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
-    if (typeof window === 'undefined') return false
-    return window.localStorage.getItem('app.sidebarCollapsed') === '1'
-  })
+  // Desktop (1280px+), as in the Qirlpl LIMS (owner, 24 Nov 2026): the sidebar is hidden and the menu opens from ☰
+  // (default), or it is pinned on the left (Lab Settings → Setting → Sidebar - Always Show, "Keep open" in the menu).
+  const sidebarPinned = useSidebarMode() === 'pinned'
+  const isDesktopNav = useIsDesktopNav()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [labName, setLabName] = useState(() => {
     if (typeof window === 'undefined') return ''
@@ -467,10 +358,10 @@ export default function GlobalLayout() {
   // APP-R02: also listen to matchMedia + visualViewport so DevTools / phone rotate update CSS vars.
   useEffect(() => {
     const root = document.documentElement
-    const mq = window.matchMedia(SIDEBAR_DOCK_QUERY)
+    const mq = window.matchMedia(DESKTOP_NAV_QUERY)
     const syncDialogLayout = () => {
       const desktop = mq.matches
-      if (desktop && !sidebarCollapsed) {
+      if (desktop && sidebarPinned) {
         root.style.setProperty('--app-dialog-center-x', 'calc(268px + (100vw - 268px) / 2)')
         root.style.setProperty('--app-dialog-overlay-left', '268px')
         root.dataset.sidebarDocked = '1'
@@ -493,7 +384,7 @@ export default function GlobalLayout() {
       root.style.removeProperty('--app-dialog-overlay-left')
       delete root.dataset.sidebarDocked
     }
-  }, [sidebarCollapsed])
+  }, [sidebarPinned])
 
   useEffect(() => {
     let canceled = false
@@ -585,19 +476,9 @@ export default function GlobalLayout() {
     return 'U'
   }, [profileName])
 
-  const toggleSidebarCollapsed = () => {
-    setSidebarCollapsed((v) => {
-      const next = !v
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem('app.sidebarCollapsed', next ? '1' : '0')
-      }
-      return next
-    })
-  }
-
   const brandShortName = useMemo(() => getBrandShortName(labName), [labName])
 
-  const renderSidebar = (collapsed: boolean, options?: { showCollapseToggle?: boolean }) => {
+  const renderSidebar = (options?: { showCollapseToggle?: boolean }) => {
     const showCollapseToggle = options?.showCollapseToggle ?? false
     return (
     <>
@@ -632,12 +513,12 @@ export default function GlobalLayout() {
         {showCollapseToggle ? (
           <button
             type="button"
-            onClick={toggleSidebarCollapsed}
+            onClick={() => writeSidebarMode('menu')}
             className="relative z-10 shrink-0 rounded-none border border-transparent p-1.5 text-stone-200 transition-colors hover:border-amber-500/40 hover:bg-white/10 hover:text-white"
             aria-label="Hide Sidebar"
-            title="Hide Sidebar"
+            title="Hide Sidebar (Open the Menu From ☰ at the Top)"
           >
-            <Menu size={18} aria-hidden />
+            <PanelLeftClose size={18} aria-hidden />
           </button>
         ) : (
           <button
@@ -677,17 +558,17 @@ export default function GlobalLayout() {
           mobileNavOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >
-        {renderSidebar(false, { showCollapseToggle: false })}
+        {renderSidebar({ showCollapseToggle: false })}
       </aside>
 
-      {!sidebarCollapsed ? (
+      {sidebarPinned ? (
         <aside
           className={cn(
             'hidden w-[268px] min-w-0 max-w-[268px] flex-col overflow-hidden border-r border-stone-700 bg-gradient-to-b from-stone-800 via-stone-900 to-stone-950',
             'relative z-[55] shadow-lg shadow-stone-950/30 transition-[width] duration-300 ease-in-out xl:flex',
           )}
         >
-          {renderSidebar(false, { showCollapseToggle: true })}
+          {renderSidebar({ showCollapseToggle: true })}
         </aside>
       ) : null}
 
@@ -703,24 +584,21 @@ export default function GlobalLayout() {
           <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
 
           <div className="relative flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
-            <button
-              type="button"
-              className={cn(
-                'inline-flex h-9 w-9 items-center justify-center rounded-none border border-stone-500 bg-stone-800/80 text-white shadow-sm transition-colors hover:border-amber-500/50 hover:bg-stone-700',
-                !sidebarCollapsed && 'xl:hidden',
-              )}
-              onClick={() => {
-                if (typeof window !== 'undefined' && window.matchMedia(SIDEBAR_DOCK_QUERY).matches) {
-                  if (sidebarCollapsed) toggleSidebarCollapsed()
-                  return
-                }
-                setMobileNavOpen(true)
-              }}
-              aria-label={sidebarCollapsed ? 'Show sidebar' : 'Open navigation menu'}
-              title={sidebarCollapsed ? 'Show sidebar' : 'Open navigation menu'}
-            >
-              <Menu size={18} aria-hidden />
-            </button>
+            {isDesktopNav ? (
+              sidebarPinned ? null : (
+                <NavHoverMenu />
+              )
+            ) : (
+              <button
+                type="button"
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-none border border-stone-500 bg-stone-800/80 text-white shadow-sm transition-colors hover:border-amber-500/50 hover:bg-stone-700"
+                onClick={() => setMobileNavOpen(true)}
+                aria-label="Open Navigation Menu"
+                title="Open Navigation Menu"
+              >
+                <Menu size={18} aria-hidden />
+              </button>
+            )}
             <div className="min-w-0">
               <p
                 className="truncate text-sm font-semibold tracking-tight text-white sm:text-base"
@@ -742,58 +620,11 @@ export default function GlobalLayout() {
                 triggerClassName={narrowScreen ? undefined : 'h-8'}
               />
             )}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-2 rounded-none px-2 py-1.5 transition-colors hover:bg-white/10">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-none bg-amber-700 text-xs font-bold text-white shadow-sm">
-                    {initials}
-                  </div>
-                  <div className="hidden text-left leading-tight sm:block">
-                    <p className="max-w-[140px] truncate text-xs font-semibold text-white lg:max-w-[180px]">
-                      {profileReady ? profileName || 'User' : 'Loading profile…'}
-                    </p>
-                    <p className="max-w-[140px] truncate text-[11px] text-stone-300 sm:text-xs lg:max-w-[180px]">
-                      {profileReady ? designation || 'Staff' : ' '}
-                    </p>
-                  </div>
-                  <ChevronDown size={14} className="hidden text-stone-400 sm:block" />
-                </button>
-              </DropdownMenuTrigger>
-
-              <DropdownMenuContent align="end" className="w-56">
-                <div className="px-2 py-2 sm:hidden">
-                  <p className="text-sm font-semibold">{profileReady ? profileName || 'User' : 'Loading profile…'}</p>
-                  <p className="text-xs text-muted-foreground">{profileReady ? designation || 'Staff' : ' '}</p>
-                </div>
-                <DropdownMenuSeparator className="sm:hidden" />
-
-                <ProfileMenuSections />
-
-                <DropdownMenuSeparator />
-
-                <DropdownMenuItem onSelect={() => setChangePasswordOpen(true)}>
-                  <KeyRound size={14} />
-                  Change Password
-                </DropdownMenuItem>
-
-                <DropdownMenuItem onSelect={() => setTwoStepOpen(true)}>
-                  <ShieldCheck size={14} />
-                  Two-Step Login
-                </DropdownMenuItem>
-
-                <DropdownMenuItem
-                  className="text-destructive focus:text-destructive"
-                  onSelect={async (event) => {
-                    event.preventDefault()
-                    await signOut()
-                    navigate('/auth', { replace: true })
-                  }}
-                >
-                  <LogOut size={14} />
-                  Log Out
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <ProfileMenu
+              initials={initials}
+              onChangePassword={() => setChangePasswordOpen(true)}
+              onTwoStepLogin={() => setTwoStepOpen(true)}
+            />
           </div>
         </header>
 

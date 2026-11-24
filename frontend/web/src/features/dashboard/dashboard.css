@@ -39,3 +39,29 @@ html.dark .dash-root {
 .dash-root .recharts-surface:focus:not(:focus-visible) {
   outline: none;
 }
+
+/* Fit to screen (owner, 24 Nov 2026): the dashboard fills the main area exactly, so the page itself never scrolls. */
+.app-shell-main:has(.dash-fit) {
+  overflow: hidden;
+}
+.app-shell-main:has(.dash-fit) > * {
+  height: 100%;
+  min-height: 0;
+}
+.dash-fit .dash-card-header {
+  flex-shrink: 0;
+  padding-top: 0.4rem;
+  padding-bottom: 0.4rem;
+}
+.dash-fit .dash-card-header {
+  flex-wrap: nowrap;
+  align-items: center;
+}
+.dash-fit .dash-card-header h2 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dash-fit .dash-card-header a {
+  min-height: 1.5rem;
+}
