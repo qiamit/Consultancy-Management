@@ -5,7 +5,7 @@ import { ocrPdfPages } from '@/lib/ocrPdf'
 /*
  * Files attached to an Ask AI question (owner, 21 Nov 2026): the user's own documents (a test report, a drawing, a
  * photo of a label) to check against the standard. Everything is read in the browser and goes to the AI as text, so
- * the Model for Document Checks (DeepSeek, which reads no pictures) answers: PDFs by their text, scanned PDFs and
+ * the Model for Document Checks (it may read no pictures) answers: PDFs by their text, scanned PDFs and
  * photos by OCR, spreadsheets and text files as text.
  */
 

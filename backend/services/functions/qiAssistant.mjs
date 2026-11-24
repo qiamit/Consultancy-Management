@@ -243,15 +243,49 @@ function extractAiError(payload, status) {
  * called with their own default. Older Claude models and other providers still get it.
  */
 export function acceptsTemperature(modelId) {
-  const m = /claude-[a-z]+-(\d+)/i.exec(String(modelId || ''))
-  return !(m && Number(m[1]) >= 5)
+  const id = String(modelId || '')
+  const m = /claude-[a-z]+-(\d+)/i.exec(id)
+  if (m && Number(m[1]) >= 5) return false
+  // Gemini 3 and later: Google asks to keep its default temperature (lower values can make it loop or answer worse).
+  const g = /gemini-(\d+)/i.exec(id)
+  return !(g && Number(g[1]) >= 3)
+}
+
+/**
+ * Gemini always thinks before it answers (it cannot be turned off from Gemini 3), and the thinking is billed as
+ * output. reasoning_effort keeps it short where the answer is read from the text given (owner, 24 Nov 2026: Gemini
+ * replaces DeepSeek); a sample conformity judgement thinks a little more. Null for other providers.
+ */
+export function geminiReasoningEffort(provider, page) {
+  if (provider !== 'google') return null
+  return page === 'bis/sample-conformity' ? 'medium' : 'low'
+}
+
+/** Provider answers worth another try after a short wait: overloaded (503) or a passing server error. */
+const RETRY_STATUSES = new Set([500, 502, 503, 504])
+const RETRY_DELAYS_MS = [1500, 4000]
+
+/**
+ * Runs a provider request, and runs it again (up to twice, after 1.5 s and 4 s) while the provider answers 500 /
+ * 502 / 503 / 504. Gemini answers 503 when it is busy: in the first Ask AI check on 24 Nov 2026, 2 of 6 questions
+ * failed that way and the app showed "The AI provider could not answer (error 503)".
+ */
+export async function fetchWithProviderRetry(doFetch, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))) {
+  let res = await doFetch()
+  for (const delay of RETRY_DELAYS_MS) {
+    if (!RETRY_STATUSES.has(res.status)) break
+    await res.body?.cancel?.().catch(() => {})
+    await sleep(delay)
+    res = await doFetch()
+  }
+  return res
 }
 
 /** Chat completions with tools (OpenAI-compatible); returns the provider's choice.message. */
-export function createToolCaller({ apiBase, apiKey, modelId, provider, maxTokens, temperature, reasoning = false, onUsage = null }) {
+export function createToolCaller({ apiBase, apiKey, modelId, provider, maxTokens, temperature, reasoning = false, reasoningEffort = null, onUsage = null }) {
   return async (messages, tools, { final = false } = {}) => {
     const startedAt = Date.now()
-    const r = await fetch(`${apiBase}/chat/completions`, {
+    const r = await fetchWithProviderRetry(() => fetch(`${apiBase}/chat/completions`, {
       method: 'POST',
       redirect: 'error',
       signal: AbortSignal.timeout(180_000),
@@ -264,8 +298,9 @@ export function createToolCaller({ apiBase, apiKey, modelId, provider, maxTokens
         ...(reasoning
           ? { max_completion_tokens: maxTokens }
           : { ...(acceptsTemperature(modelId) ? { temperature } : {}), max_tokens: maxTokens }),
+        ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
       }),
-    })
+    }))
     const payload = await r.json().catch(() => ({}))
     onUsage?.({ usage: payload?.usage, ms: Date.now() - startedAt, error: r.ok ? '' : extractAiError(payload, r.status) })
     if (!r.ok) {
@@ -313,8 +348,9 @@ export async function loadAgentModel(rest) {
       apiKey: String(model.api_key).trim(),
       modelId: normalizeModelId(provider, String(model.model_id || '')),
       provider,
-      maxTokens: Number.isFinite(maxTokens) ? Math.min(maxTokens, 8192) : 4096,
+      maxTokens: provider === 'google' ? 8192 : Number.isFinite(maxTokens) ? Math.min(maxTokens, 8192) : 4096,
       temperature: 0.2,
+      reasoningEffort: geminiReasoningEffort(provider, 'agent'),
     }),
   }
 }
@@ -687,7 +723,14 @@ export function createQiAssistantHandler(deps) {
     // Claude writes long, well-spaced JSON: a conformity table of a scanned report can pass 8192 tokens and be cut off.
     // Claude 5 models allow far more output (only the tokens used are billed), so long tasks get a larger budget and time.
     const longClaudeTask = isLongExtraction && provider === 'anthropic'
-    const chatMaxTokens = reasonedCheck || longClaudeTask ? 32768 : isLongExtraction || agentMode ? 8192 : Number.isFinite(maxTokens) ? Math.min(maxTokens, 8192) : 4096
+    // Gemini's thinking is output too: long tasks get Claude's budget and time, and any other answer at least 8192.
+    const geminiEffort = geminiReasoningEffort(provider, body.page)
+    const longGeminiTask = provider === 'google' && (isLongExtraction || body.page === 'bis/sample-conformity')
+    const chatMaxTokens = reasonedCheck || longClaudeTask || longGeminiTask
+      ? 32768
+      : isLongExtraction || agentMode || provider === 'google'
+        ? 8192
+        : Number.isFinite(maxTokens) ? Math.min(maxTokens, 8192) : 4096
     // Drawing a layout from a sketch wants faithful positions, not creative variety.
     const chatTemperature = body.page === 'bis/plant-layout' || body.page === 'bis/sample-conformity'
       ? 0.2
@@ -696,11 +739,11 @@ export function createQiAssistantHandler(deps) {
     // (applied to picture requests, which may pick such a model as the vision fallback; text chat is unchanged).
     const openAiReasoning = images.length > 0 && provider === 'openai' && /^(?:o\d|gpt-5)/i.test(modelId)
 
-    const requestChatCompletion = (jsonMode) => fetch(`${apiBase}/chat/completions`, {
+    const requestChatCompletion = (jsonMode) => fetchWithProviderRetry(() => fetch(`${apiBase}/chat/completions`, {
       method: 'POST',
       // A provider must not bounce the request (and the API key) somewhere else.
       redirect: 'error',
-      signal: AbortSignal.timeout(reasonedCheck || longClaudeTask ? 420_000 : 180_000),
+      signal: AbortSignal.timeout(reasonedCheck || longClaudeTask || longGeminiTask ? 420_000 : 180_000),
       headers: {
         Authorization: `Bearer ${String(model.api_key).trim()}`,
         'Content-Type': 'application/json',
@@ -713,8 +756,9 @@ export function createQiAssistantHandler(deps) {
           : { ...(acceptsTemperature(modelId) ? { temperature: chatTemperature } : {}), max_tokens: chatMaxTokens }),
         ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
         ...(provider === 'deepseek' && (isLongExtraction || standardsAsk) ? { thinking: { type: reasonedCheck ? 'enabled' : 'disabled' } } : {}),
+        ...(geminiEffort && !openAiReasoning ? { reasoning_effort: geminiEffort } : {}),
       }),
-    })
+    }))
 
     if (agentMode) {
       const callModel = createToolCaller({
@@ -725,6 +769,7 @@ export function createQiAssistantHandler(deps) {
         maxTokens: chatMaxTokens,
         temperature: Math.min(chatTemperature, 0.3),
         reasoning: openAiReasoning,
+        reasoningEffort: geminiReasoningEffort(provider, 'agent'),
         onUsage: (u) => logUsage({ ...u, userId, page: body.page, provider, modelId, agent: true }),
       })
       try {

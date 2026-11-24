@@ -15,7 +15,7 @@ export type AiProvider = (typeof AI_PROVIDERS)[number]['value']
 export const AI_PROVIDER_MODEL_HINTS: Record<AiProvider, string> = {
   openai: 'gpt-4o',
   anthropic: 'claude-sonnet-5-5',
-  google: 'gemini-2.0-flash',
+  google: 'gemini-3.5-flash-lite',
   deepseek: 'deepseek-chat',
   openrouter: 'openai/gpt-4o',
   custom: 'model-id',
