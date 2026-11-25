@@ -2,8 +2,12 @@ import { cn } from '@/lib/utils'
 
 /** App-wide Client Master theme — visual only; do not encode business logic here. */
 
+/**
+ * Page wrapper. No max width (owner, 25 Nov 2026: pages must fit the screen): since the sidebar is hidden by default
+ * (PR #189) the page gets the whole window, and a 1600px cap left empty bands on both sides of a 1920px screen.
+ */
 export const limsPageShellClass =
-  'lims-page-shell mx-auto w-full min-w-0 max-w-[1600px] space-y-3 bg-gradient-to-b from-stone-100/90 to-stone-50 p-2 sm:space-y-4 sm:p-3 md:p-4 lg:space-y-5 lg:p-[1%]'
+  'lims-page-shell mx-auto w-full min-w-0 space-y-3 bg-gradient-to-b from-stone-100/90 to-stone-50 p-2 sm:space-y-4 sm:p-3 md:p-4 lg:space-y-5 lg:p-[1%]'
 
 export const limsPanelClass =
   'lims-panel min-w-0 overflow-hidden rounded-none border-2 border-stone-500 bg-card text-card-foreground shadow-sm ring-1 ring-amber-700/20'
