@@ -9,7 +9,7 @@ export function SaleModulePlaceholder({
   description: string
 }) {
   return (
-    <div className="mx-auto flex w-full max-w-[1600px] flex-1 items-center justify-center p-6">
+    <div className="mx-auto flex w-full flex-1 items-center justify-center p-6">
       <div className="flex max-w-md flex-col items-center gap-4 text-center">
         <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-teal-500/10 ring-1 ring-teal-500/20">
           <Receipt size={28} className="text-teal-700" aria-hidden />

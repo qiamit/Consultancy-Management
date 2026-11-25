@@ -172,7 +172,7 @@ export function TestReportPrepareDialog({
 
         <div className="min-h-0 flex-1 overflow-y-auto bg-gradient-to-b from-stone-100/90 to-stone-50 px-4 py-4 sm:px-5">
           {active && (
-            <div className="mx-auto w-full max-w-[1440px] space-y-4">
+            <div className="w-full space-y-4">
               {saveMessage && <p className="text-sm text-stone-600">{saveMessage}</p>}
 
               {coverLoading ? (

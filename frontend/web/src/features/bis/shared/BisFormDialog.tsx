@@ -82,7 +82,7 @@ export function BisFormDialog({
               {errorMessage}
             </p>
           ) : null}
-          <div className={cn(limsRegistryFormClass, 'mx-auto w-full max-w-[1440px]')}>
+          <div className={cn(limsRegistryFormClass, 'w-full')}>
             <div className="grid grid-cols-12 gap-4">{children}</div>
           </div>
         </div>
