@@ -14,6 +14,7 @@ import {
   Sparkles,
   Trash2,
   Unlock,
+  X,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useIsLaboratoryDirector } from '@/components/lims/LaboratoryDirectorOnly'
@@ -475,6 +476,8 @@ export function IsCodeRequiredTestsDialog({
         persistOnFocusLoss
         layer={layer}
         aria-describedby={undefined}
+        // The ✕ sits with the header buttons (the raised header hid the corner one; owner, 25 Nov 2026).
+        showCloseButton={false}
         className={cn(
           // Fills the content area beside the docked sidebar (full width on phones / with the sidebar collapsed).
           '!flex h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 bg-white p-0 shadow-none sm:rounded-none',
@@ -488,7 +491,7 @@ export function IsCodeRequiredTestsDialog({
           <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
           {/* One line: the title (with the IS) on the left, the icon buttons on the right. The lock state and Unsaved
               Changes are in the footer beside Lock List (owner, 25 Nov 2026). */}
-          <div className="relative flex flex-wrap items-center gap-x-4 gap-y-2 pr-10">
+          <div className="relative flex flex-wrap items-center gap-x-4 gap-y-2">
             <DialogHeader className="min-w-0 flex-1 text-left">
               <DialogTitle className="truncate text-base font-semibold tracking-tight text-white">
                 Required Tests{isLabel ? ` — ${isLabel}` : ''}
@@ -518,6 +521,17 @@ export function IsCodeRequiredTestsDialog({
                 <History size={16} aria-hidden />
               </Button>
               <InsertSymbolButton disabled={disabled} onInsert={insertSymbol} />
+              <Button
+                type="button"
+                variant="outline"
+                className={cn(iconBtnClass, 'ml-1 hover:!bg-red-500/20 hover:!text-red-600')}
+                disabled={busy !== null}
+                title="Close"
+                aria-label="Close"
+                onClick={() => onOpenChange(false)}
+              >
+                <X size={18} strokeWidth={2.4} aria-hidden />
+              </Button>
             </div>
           </div>
         </div>
