@@ -17,6 +17,7 @@ import {
   updateBisProjectFileName,
   uploadBisProjectFile,
   type BisProjectViewFile,
+  isScopeRowFile,
 } from './bisProjectFilesApi'
 import { supabase } from '@/lib/supabaseClient'
 import { saveBisProjectNotes } from './bisProjectsApi'
@@ -414,7 +415,8 @@ export function ManakVarietiesTable({
     let cancelled = false
     void listBisProjectFiles(projectId, filesDocKind)
       .then((files) => {
-        if (!cancelled) setScopeFiles(files)
+        // Only the rows' own files: the Notes / License Scope "Upload Scope" PDF shares this file type (isScopeRowFile).
+        if (!cancelled) setScopeFiles(files.filter((f) => isScopeRowFile(f.file_name)))
       })
       .catch(() => {
         if (!cancelled) setScopeFiles([])
