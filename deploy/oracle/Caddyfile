@@ -139,6 +139,15 @@
 		Content-Security-Policy "frame-ancestors 'self' https://{$APP_DOMAIN} https://www.{$APP_DOMAIN} https://{$PREVIEW_DOMAIN} {local_frame_ancestors}"
 	}
 
+	# Standards Library PDFs (a signed, short-lived link from /standards/file-link or the Library API) may also be
+	# shown inside the owner's own LIMS, Qirlpl (owner, 25 Nov 2026: "Library PDF ko Qirlpl ke andar dikhana hai").
+	# Only Qirlpl's own sites; never a public or third-party site.
+	@libraryFile path /functions/v1/standards/file
+	header @libraryFile {
+		-X-Frame-Options
+		Content-Security-Policy "frame-ancestors 'self' https://{$APP_DOMAIN} https://www.{$APP_DOMAIN} https://{$PREVIEW_DOMAIN} https://qirlpl.com https://www.qirlpl.com https://preview.qirlpl.com {local_frame_ancestors}"
+	}
+
 	@preflight method OPTIONS
 	handle @preflight {
 		header Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"
