@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
   cancelTotpEnrollment,
@@ -14,34 +13,119 @@ import {
 import { limsFieldClass, limsOutlineBtnClass, limsPrimaryBtnClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 
-/** 6-digit code box: digits only, phone keypad, browser one-time-code autofill. */
+/**
+ * The 6-digit code as six boxes (owner, 25 Nov 2026: "Code ko 6 Digit ke Box me Banao, Code Dalte hi Auto Login ho
+ * Jaye"). Typing moves to the next box, Backspace goes back, a pasted or auto-filled code (phone keypad,
+ * one-time-code) fills all six, and the sixth digit calls `onComplete` so the code is checked at once.
+ */
 export function TwoStepCodeField(props: {
   id: string
   value: string
   onChange: (value: string) => void
   onSubmit?: () => void
+  /** Called with the code when the sixth digit is entered. */
+  onComplete?: (code: string) => void
   autoFocus?: boolean
   disabled?: boolean
 }) {
+  const { value, disabled } = props
+  const boxes = useRef<Array<HTMLInputElement | null>>([])
+  // The code as just typed: focus moves before React renders the new value, and the box focused must not see the old one.
+  const latest = useRef(value)
+  useEffect(() => {
+    latest.current = value
+  }, [value])
+  const focusBox = (i: number) => {
+    const el = boxes.current[Math.max(0, Math.min(5, i))]
+    el?.focus()
+    el?.select()
+  }
+
+  // A cleared code (wrong code, back from busy) starts again at the first box.
+  useEffect(() => {
+    if (!disabled && value === '') boxes.current[0]?.focus()
+  }, [disabled, value])
+
+  const update = (next: string) => {
+    const code = next.replace(/\D/g, '').slice(0, 6)
+    const before = latest.current
+    latest.current = code
+    props.onChange(code)
+    if (code.length === 6 && code !== before) props.onComplete?.(code)
+    return code
+  }
+
+  /** Digits typed, pasted or auto-filled into box i (the code has no gaps: box i takes the place it shows). */
+  const put = (i: number, typed: string) => {
+    const digits = typed.replace(/\D/g, '')
+    if (!digits) return
+    const cur = latest.current
+    const at = Math.min(i, cur.length)
+    const code = update(cur.slice(0, at) + digits + cur.slice(at + digits.length))
+    focusBox(Math.min(at + digits.length, code.length === 6 ? 5 : code.length))
+  }
+
   return (
     <div className="space-y-2">
       <Label htmlFor={props.id}>6-Digit Code</Label>
-      <Input
-        id={props.id}
-        value={props.value}
-        onChange={(e) => props.onChange(e.target.value.replace(/\D/g, '').slice(0, 6))}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && isSixDigitCode(props.value)) props.onSubmit?.()
-        }}
-        inputMode="numeric"
-        autoComplete="one-time-code"
-        pattern="[0-9]*"
-        maxLength={6}
-        placeholder="123456"
-        autoFocus={props.autoFocus}
-        disabled={props.disabled}
-        className={cn(limsFieldClass, 'text-center font-mono text-lg tracking-[0.4em]')}
-      />
+      <div className="flex justify-center gap-2" role="group" aria-label="6-Digit Code">
+        {Array.from({ length: 6 }, (_, i) => (
+          <input
+            key={i}
+            ref={(el) => {
+              boxes.current[i] = el
+            }}
+            id={i === 0 ? props.id : `${props.id}-${i + 1}`}
+            value={value[i] ?? ''}
+            aria-label={`Digit ${i + 1} of 6`}
+            inputMode="numeric"
+            pattern="[0-9]*"
+            // The first box takes the whole code from the phone's or browser's one-time-code autofill.
+            autoComplete={i === 0 ? 'one-time-code' : 'off'}
+            autoFocus={props.autoFocus && i === 0}
+            disabled={disabled}
+            onFocus={(e) => {
+              // No gaps: a click past the code goes to the next empty box.
+              if (i > latest.current.length) focusBox(latest.current.length)
+              else e.currentTarget.select()
+            }}
+            onChange={(e) => {
+              const typed = e.target.value
+              // Typed next to the box's old digit: the new digit is the other one.
+              const old = latest.current[i] ?? ''
+              put(i, typed.length === 2 && old && typed.includes(old) ? typed.replace(old, '') : typed)
+            }}
+            onPaste={(e) => {
+              e.preventDefault()
+              put(i, e.clipboardData.getData('text'))
+            }}
+            onKeyDown={(e) => {
+              const cur = latest.current
+              if (e.key === 'Backspace') {
+                e.preventDefault()
+                if (cur[i]) update(cur.slice(0, i) + cur.slice(i + 1))
+                else if (i > 0) {
+                  update(cur.slice(0, i - 1) + cur.slice(i))
+                  focusBox(i - 1)
+                }
+              } else if (e.key === 'ArrowLeft') {
+                e.preventDefault()
+                focusBox(i - 1)
+              } else if (e.key === 'ArrowRight') {
+                e.preventDefault()
+                focusBox(Math.min(i + 1, cur.length))
+              } else if (e.key === 'Enter' && isSixDigitCode(cur)) {
+                props.onSubmit?.()
+              }
+            }}
+            className={cn(
+              limsFieldClass,
+              'h-12 w-11 px-0 text-center font-mono text-xl font-semibold sm:w-12',
+              value[i] && 'border-amber-600',
+            )}
+          />
+        ))}
+      </div>
     </div>
   )
 }
@@ -65,12 +149,12 @@ export function TwoStepChallengePanel(props: {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const submit = async () => {
-    if (!isSixDigitCode(code) || busy) return
+  const submit = async (value = code) => {
+    if (!isSixDigitCode(value) || busy) return
     setBusy(true)
     setError(null)
     try {
-      await verifyTwoStepCode(code)
+      await verifyTwoStepCode(value)
       props.onVerified()
     } catch (err) {
       setError(twoStepErrorText(err))
@@ -85,7 +169,15 @@ export function TwoStepChallengePanel(props: {
       <p className="text-sm text-stone-600">
         {props.intro ?? 'Open Your Authenticator App and Enter the 6-Digit Code Shown for Consultancy Pro.'}
       </p>
-      <TwoStepCodeField id="two-step-code" value={code} onChange={setCode} onSubmit={submit} autoFocus disabled={busy} />
+      <TwoStepCodeField
+        id="two-step-code"
+        value={code}
+        onChange={setCode}
+        onSubmit={() => void submit()}
+        onComplete={(value) => void submit(value)}
+        autoFocus
+        disabled={busy}
+      />
       <ErrorNote text={error} />
       <div className="flex items-center justify-between gap-3">
         {props.secondaryAction ? (
@@ -102,10 +194,10 @@ export function TwoStepChallengePanel(props: {
         <Button
           type="button"
           className={cn(limsPrimaryBtnClass, 'h-8 w-auto min-w-[7.5rem] px-5')}
-          onClick={submit}
+          onClick={() => void submit()}
           disabled={!isSixDigitCode(code) || busy}
         >
-          {busy ? 'Checking...' : 'Verify'}
+          {busy ? 'Checking…' : 'Verify'}
         </Button>
       </div>
     </div>
@@ -150,12 +242,12 @@ export function TwoStepEnrollPanel(props: {
     [],
   )
 
-  const submit = async () => {
-    if (!enrollment || !isSixDigitCode(code) || busy) return
+  const submit = async (value = code) => {
+    if (!enrollment || !isSixDigitCode(value) || busy) return
     setBusy(true)
     setError(null)
     try {
-      await finishTotpEnrollment(enrollment.factorId, code)
+      await finishTotpEnrollment(enrollment.factorId, value)
       doneRef.current = true
       props.onEnrolled()
     } catch (err) {
@@ -227,7 +319,14 @@ export function TwoStepEnrollPanel(props: {
               </div>
             ) : null}
           </div>
-          <TwoStepCodeField id="two-step-enroll-code" value={code} onChange={setCode} onSubmit={submit} disabled={busy} />
+          <TwoStepCodeField
+            id="two-step-enroll-code"
+            value={code}
+            onChange={setCode}
+            onSubmit={() => void submit()}
+            onComplete={(value) => void submit(value)}
+            disabled={busy}
+          />
           <ErrorNote text={error} />
         </>
       )}
@@ -247,10 +346,10 @@ export function TwoStepEnrollPanel(props: {
         <Button
           type="button"
           className={cn(limsPrimaryBtnClass, 'h-8 w-auto min-w-[7.5rem] px-5')}
-          onClick={submit}
+          onClick={() => void submit()}
           disabled={!enrollment || !isSixDigitCode(code) || busy}
         >
-          {busy ? 'Checking...' : 'Verify and Turn On'}
+          {busy ? 'Checking…' : 'Verify and Turn On'}
         </Button>
       </div>
     </div>
