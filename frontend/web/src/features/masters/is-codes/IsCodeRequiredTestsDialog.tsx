@@ -54,6 +54,25 @@ function mergeTests(list: RequiredTest[], extra: RequiredTest[]): { next: Requir
 }
 
 /**
+ * Clause order, small to big (owner, 25 Nov 2026): 7.1 < 7.2 < 7.10 < 10.1 < 11.5 < 12.1, numbers before words
+ * ("Annex B", "Table 2"), and rows without a clause last. Tests with the same clause keep their order.
+ */
+function compareClause(a: string, b: string): number {
+  const x = a.trim()
+  const y = b.trim()
+  if (!x || !y) return x ? -1 : y ? 1 : 0
+  return x.localeCompare(y, undefined, { numeric: true, sensitivity: 'base' })
+}
+
+/**
+ * The list in clause order: when it is loaded or saved, and after "Suggest With AI" / "From Past Checks" add rows. A
+ * row added by hand stays at the bottom while it is typed, and takes its place on Save.
+ */
+function sortByClause(list: RequiredTest[]): RequiredTest[] {
+  return [...list].sort((p, q) => compareClause(p.clause, q.clause))
+}
+
+/**
  * Required Tests of one IS Code: its one list of tests (public.test_parameters), reviewed once and locked. The same
  * rows feed the Factory Test Report of BIS Applications / Licences, the Customer Portal records and the AI Conformity
  * Check. Rows come from "Suggest With AI" (Product Manual + Standard from the standards index), "From Past Checks"
@@ -135,11 +154,11 @@ export function IsCodeRequiredTestsDialog({
     fetchRequiredTests(isCodeId)
       .then((list) => {
         if (!live) return
-        setTests(list.tests)
+        setTests(sortByClause(list.tests))
         setNotes(list.notes)
         setLockedAt(list.lockedAt)
         savedRef.current = snapshot(list.tests)
-        onListChange?.(list.tests, [])
+        onListChange?.(sortByClause(list.tests), [])
         setRevision(null)
         if (list.lockedAt) void loadRevision(isCodeId, () => live)
       })
@@ -163,7 +182,7 @@ export function IsCodeRequiredTestsDialog({
     try {
       const result = await suggestRequiredTests({ isCodeId, isLabel, description: '', onStep: setBusy })
       const { next, added } = mergeTests(tests, result.tests)
-      setTests(next)
+      setTests(sortByClause(next))
       setAiSources(result.sources)
       if (added) setDirty(true)
       toast.success(`AI Suggested ${result.tests.length} Tests — ${added} New Added. Review, Then Save.`, {
@@ -200,7 +219,7 @@ export function IsCodeRequiredTestsDialog({
           possibleInADay: false,
         })),
       )
-      setTests(next)
+      setTests(sortByClause(next))
       if (added) setDirty(true)
       toast.success(`${past.length} Tests Found in Past Checks — ${added} New Added. Review, Then Save.`)
     } catch (err) {
@@ -219,9 +238,9 @@ export function IsCodeRequiredTestsDialog({
       const before = savedRef.current
       const after = snapshot(list.tests)
       savedRef.current = after
-      setTests(list.tests)
+      setTests(sortByClause(list.tests))
       setDirty(false)
-      onListChange?.(list.tests, list.tests.filter((t) => t.id && before.has(t.id) && before.get(t.id) !== after.get(t.id)))
+      onListChange?.(sortByClause(list.tests), list.tests.filter((t) => t.id && before.has(t.id) && before.get(t.id) !== after.get(t.id)))
       toast.success(`Required Tests Saved — ${list.tests.length} Tests.`)
       if (kept.length) toast.message(`Still Used Elsewhere, So Not Removed: ${kept.join(', ')}`)
     } catch (err) {
@@ -292,67 +311,67 @@ export function IsCodeRequiredTestsDialog({
         <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white">
           <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={limsDarkBarGlowStyle} />
           <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
-          <DialogHeader className="relative pr-10 text-left">
-            <DialogTitle className="flex flex-wrap items-center gap-2 text-base font-semibold tracking-tight text-white">
-              Required Tests
-              <span
-                className={cn(
-                  'border px-2 py-0.5 text-[11px] font-semibold',
-                  locked ? 'border-emerald-400 bg-emerald-600/30 text-emerald-100' : 'border-amber-400 bg-amber-500/20 text-amber-100',
-                )}
-              >
-                {locked ? 'Locked' : 'Not Locked'}
-              </span>
-              {locked && revision?.revised ? (
-                <span className="border border-red-300 bg-red-600/40 px-2 py-0.5 text-[11px] font-semibold text-red-50">Standard Revised — Review</span>
+          {/* One row (owner, 25 Nov 2026: "ek hi line me arrange karo"): the title on the left, the actions on the right. */}
+          <div className="relative flex flex-wrap items-center gap-x-4 gap-y-2 pr-10">
+            <DialogHeader className="min-w-0 flex-1 text-left">
+              <DialogTitle className="flex flex-wrap items-center gap-2 text-base font-semibold tracking-tight text-white">
+                Required Tests
+                <span
+                  className={cn(
+                    'border px-2 py-0.5 text-[11px] font-semibold',
+                    locked ? 'border-emerald-400 bg-emerald-600/30 text-emerald-100' : 'border-amber-400 bg-amber-500/20 text-amber-100',
+                  )}
+                >
+                  {locked ? 'Locked' : 'Not Locked'}
+                </span>
+                {locked && revision?.revised ? (
+                  <span className="border border-red-300 bg-red-600/40 px-2 py-0.5 text-[11px] font-semibold text-red-50">Standard Revised — Review</span>
+                ) : null}
+                {dirty ? <span className="text-[11px] font-medium text-amber-200">Unsaved Changes</span> : null}
+              </DialogTitle>
+              <p className="mt-0.5 line-clamp-2 break-words text-xs text-stone-300">
+                {isLabel} — {labTests} Laboratory {labTests === 1 ? 'Test' : 'Tests'}
+                {selection
+                  ? ` · ${ticked.length} of ${saved.length} Selected for This Report${dirty ? ' — Save to Select New Tests' : ''}`
+                  : null}
+              </p>
+            </DialogHeader>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {sampleAi ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className={cn(limsOutlineBtnClass, 'gap-1.5')}
+                  disabled={busy !== null || loading || !ticked.length}
+                  title="AI Reads This Sample's Grade, Size and Declared Value and the Standard for the Selected Tests"
+                  onClick={() => void runSampleAi()}
+                >
+                  <Wand2 size={14} aria-hidden /> {sampleAi.label}
+                </Button>
               ) : null}
-              {dirty ? <span className="text-[11px] font-medium text-amber-200">Unsaved Changes</span> : null}
-            </DialogTitle>
-            <p className="mt-0.5 line-clamp-2 break-words text-xs text-stone-300">
-              {isLabel} — {labTests} Laboratory {labTests === 1 ? 'Test' : 'Tests'}
-            </p>
-          </DialogHeader>
-        </div>
-
-        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden bg-gradient-to-b from-stone-100/80 to-white px-4 py-3">
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            {selection ? (
-              <span className="mr-auto text-xs text-stone-600">
-                {ticked.length} of {saved.length} Selected for This Report{dirty ? ' — Save to Select New Tests' : ''}
-              </span>
-            ) : null}
-            {sampleAi ? (
+              <Button type="button" variant="outline" className={cn(limsOutlineBtnClass, 'gap-1.5')} disabled={disabled} onClick={() => void runAi()}>
+                <Sparkles size={14} aria-hidden /> Suggest With AI
+              </Button>
+              <Button type="button" variant="outline" className={cn(limsOutlineBtnClass, 'gap-1.5')} disabled={disabled} onClick={() => void runPastChecks()}>
+                <History size={14} aria-hidden /> From Past Checks
+              </Button>
               <Button
                 type="button"
                 variant="outline"
                 className={cn(limsOutlineBtnClass, 'gap-1.5')}
-                disabled={busy !== null || loading || !ticked.length}
-                title="AI Reads This Sample's Grade, Size and Declared Value and the Standard for the Selected Tests"
-                onClick={() => void runSampleAi()}
+                disabled={disabled}
+                onClick={() => {
+                  setTests((prev) => [...prev, emptyTest()])
+                  setDirty(true)
+                }}
               >
-                <Wand2 size={14} aria-hidden /> {sampleAi.label}
+                <Plus size={14} aria-hidden /> Add Test
               </Button>
-            ) : null}
-            <Button type="button" variant="outline" className={cn(limsOutlineBtnClass, 'gap-1.5')} disabled={disabled} onClick={() => void runAi()}>
-              <Sparkles size={14} aria-hidden /> Suggest With AI
-            </Button>
-            <Button type="button" variant="outline" className={cn(limsOutlineBtnClass, 'gap-1.5')} disabled={disabled} onClick={() => void runPastChecks()}>
-              <History size={14} aria-hidden /> From Past Checks
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className={cn(limsOutlineBtnClass, 'gap-1.5')}
-              disabled={disabled}
-              onClick={() => {
-                setTests((prev) => [...prev, emptyTest()])
-                setDirty(true)
-              }}
-            >
-              <Plus size={14} aria-hidden /> Add Test
-            </Button>
+            </div>
           </div>
+        </div>
 
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden bg-gradient-to-b from-stone-100/80 to-white px-4 py-3">
           {busy ? <p className="border-l-2 border-amber-600 bg-amber-50 px-3 py-1.5 text-xs text-amber-900">{busy}</p> : null}
           {locked && revision?.revised ? (
             <div className="flex flex-wrap items-center gap-2 border-l-2 border-red-600 bg-red-50 px-3 py-2 text-xs text-red-900">
