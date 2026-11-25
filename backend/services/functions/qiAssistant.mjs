@@ -290,6 +290,18 @@ export async function fetchWithProviderRetry(doFetch, sleep = (ms) => new Promis
 export const GEMINI_FALLBACK_MODEL = 'gemini-3.5-flash'
 export const GEMINI_FALLBACK_LABEL = 'Gemini 3.5 Flash (Fallback)'
 
+/**
+ * The Gemini model for the AI Conformity Check when the chosen Gemini model is a Flash-Lite (owner, 25 Nov 2026:
+ * "Haan, Conformity Flash par"). On an IS 814 sample, Gemini 3.5 Flash-Lite checked 9 tests and said "Yes", where
+ * Claude Haiku had checked 29 and found Cr, Ni and Mo not reported ("No"). Chat and Ask AI stay on the chosen model;
+ * a check costs about ₹5–12 on Flash. No Flash-Lite fallback: a shallow check is worse than "try again".
+ */
+export function conformityModelFor(provider, page, modelId) {
+  if (provider !== 'google' || page !== 'bis/sample-conformity') return null
+  return /flash-lite/i.test(String(modelId || '')) ? GEMINI_FALLBACK_MODEL : null
+}
+export const GEMINI_CHECK_LABEL = 'Gemini 3.5 Flash'
+
 /** Answers after which the fallback model is asked: busy or out of quota for this model (429), or a server error. */
 const FALLBACK_STATUSES = new Set([429, 500, 502, 503, 504])
 
@@ -915,7 +927,9 @@ export function createQiAssistantHandler(deps) {
         return
       }
     }
-    const modelId = normalizeModelId(provider, String(model.model_id || ''))
+    const chosenModelId = normalizeModelId(provider, String(model.model_id || ''))
+    const checkModelId = conformityModelFor(provider, body.page, chosenModelId)
+    const modelId = checkModelId ?? chosenModelId
     const temperature = Number(model.temperature)
     const maxTokens = Number(model.max_tokens)
     const isCmpf311Request = body.page === 'bis/cmpf-311-on-sit'
@@ -1112,7 +1126,7 @@ export function createQiAssistantHandler(deps) {
 
     corsJson(res, 200, {
       reply: plainMathReply(reply, requestJson),
-      model: answeredBy === modelId ? String(model.display_name || modelId) : GEMINI_FALLBACK_LABEL,
+      model: answeredBy !== modelId ? GEMINI_FALLBACK_LABEL : checkModelId ? GEMINI_CHECK_LABEL : String(model.display_name || modelId),
     })
   }
 }
