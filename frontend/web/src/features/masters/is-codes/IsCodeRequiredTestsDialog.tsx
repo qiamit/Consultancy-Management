@@ -491,30 +491,13 @@ export function IsCodeRequiredTestsDialog({
             </table>
           </div>
 
-          <div className="grid gap-2 md:grid-cols-[1fr_auto]">
-            <div className="space-y-0.5">
-              <label className="text-[11px] font-semibold text-stone-700" htmlFor="rt-notes">
-                Notes
-              </label>
-              <Input
-                id="rt-notes"
-                className={limsFieldClass}
-                value={notes}
-                disabled={disabled}
-                placeholder="E.g. Checked Against Amendment 3"
-                onChange={(e) => {
-                  setNotes(e.target.value)
-                  setDirty(true)
-                }}
-              />
-            </div>
-            {aiSources.length ? (
-              <details className="max-w-md self-end text-[11px] text-stone-600">
-                <summary className="cursor-pointer font-semibold">AI Read {aiSources.length} Pages</summary>
-                <p className="mt-1 leading-relaxed">{aiSources.join('; ')}</p>
-              </details>
-            ) : null}
-          </div>
+          {/* The Notes field was removed (owner, 25 Nov 2026: "isko remove karo"); a list's saved notes are kept as they are. */}
+          {aiSources.length ? (
+            <details className="max-w-md text-[11px] text-stone-600">
+              <summary className="cursor-pointer font-semibold">AI Read {aiSources.length} Pages</summary>
+              <p className="mt-1 leading-relaxed">{aiSources.join('; ')}</p>
+            </details>
+          ) : null}
         </div>
 
         <DialogFooter className="shrink-0 gap-2 border-t border-stone-300 bg-stone-100 px-4 py-3 sm:justify-between">
