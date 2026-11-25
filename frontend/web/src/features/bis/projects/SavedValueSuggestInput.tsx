@@ -253,7 +253,7 @@ export function SavedValueSuggestInput({
                       {...{ [FILTER_COMBOBOX_OPTION_INDEX_ATTR]: String(index) }}
                       aria-selected={active}
                       className={cn(
-                        'flex w-full items-center border-l-2 px-2.5 py-1.5 text-center transition-colors',
+                        'flex w-full items-center justify-start border-l-2 px-2.5 py-1.5 text-left transition-colors',
                         active
                           ? 'border-l-amber-600 bg-amber-100/90 text-stone-950'
                           : 'border-l-transparent text-stone-800 hover:border-l-amber-400/80 hover:bg-[#f3e9d8]',
@@ -265,7 +265,7 @@ export function SavedValueSuggestInput({
                       }}
                       onMouseEnter={() => setHighlightIndex(index)}
                     >
-                      <span className="w-full truncate font-medium">{opt}</span>
+                      <span className="w-full truncate text-left font-medium">{opt}</span>
                     </button>
                   </li>
                 )
