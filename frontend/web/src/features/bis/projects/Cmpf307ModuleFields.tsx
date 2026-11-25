@@ -34,11 +34,17 @@ function filePatch(key: AttachmentKey, file: BisProjectViewFile | null): Partial
     : { trademarkFileId: file?.id ?? '', trademarkFileName: file?.file_name ?? '', trademarkStoragePath: file?.storage_path ?? '' }
 }
 
-export function Cmpf307ModuleFields({ value, onChange, disabled = false, projectId }: {
+export function Cmpf307ModuleFields({ value, onChange, disabled = false, projectId, onFileReleased }: {
   value: Cmpf307ModulePayload
   onChange: (next: Cmpf307ModulePayload) => void
   disabled?: boolean
   projectId: string | null
+  /**
+   * An agreement copy / trademark certificate taken off a brand row (deleted, replaced, or its row deleted). When set,
+   * the file is not deleted here: the parent deletes it after the brands are saved, so a window closed without Save
+   * keeps the saved row and its PDF together. Without it the file is deleted at once.
+   */
+  onFileReleased?: (file: BisProjectViewFile) => void
 }) {
   const [confirm, confirmDialog] = useConfirmDialog()
   const [uploading, setUploading] = useState<string | null>(null)
@@ -47,6 +53,19 @@ export function Cmpf307ModuleFields({ value, onChange, disabled = false, project
     ...value,
     rows: value.rows.map((row) => row.rowId === rowId ? { ...row, ...patch } : row),
   })
+
+  /**
+   * A PDF taken off a brand row: handed to the parent to delete after Save, or deleted now without one. Until
+   * 25 Nov 2026 it was always deleted at once, so a window closed without Save left the saved brand pointing at a
+   * deleted PDF.
+   */
+  const releaseFile = async (file: BisProjectViewFile) => {
+    if (onFileReleased) {
+      onFileReleased(file)
+      return
+    }
+    await deleteBisProjectFile(file)
+  }
 
   const uploadAttachment = async (row: Cmpf307BrandRow, key: AttachmentKey, file?: File) => {
     if (!file) return
@@ -62,7 +81,7 @@ export function Cmpf307ModuleFields({ value, onChange, disabled = false, project
       const uploaded = await uploadBisProjectFile(projectId, file, docKind)
       const previous = fileFromRow(row, key)
       updateRow(row.rowId, filePatch(key, uploaded))
-      if (previous) await deleteBisProjectFile(previous)
+      if (previous) await releaseFile(previous)
       toast.success(key === 'agreement' ? 'Agreement copy uploaded.' : 'Trademark certificate uploaded.')
     } catch (error) {
       toast.error(formatBisProjectFilesError(error))
@@ -75,8 +94,9 @@ export function Cmpf307ModuleFields({ value, onChange, disabled = false, project
     const file = fileFromRow(row, key)
     if (!file) return
     try {
-      await deleteBisProjectFile(file)
+      await releaseFile(file)
       updateRow(row.rowId, filePatch(key, null))
+      if (onFileReleased) toast.success('PDF Removed. Click Save to Keep the Change.')
     } catch (error) { toast.error(formatBisProjectFilesError(error)) }
   }
 
@@ -148,7 +168,7 @@ export function Cmpf307ModuleFields({ value, onChange, disabled = false, project
           <td data-label="Date of Introduction" className="lc-wide border border-stone-300 p-1"><LimsDatePicker aria-label={`Date of introduction row ${index + 1}`} className="h-9 w-full" value={row.registrationDate} disabled={disabled} onChange={(registrationDate) => updateRow(row.rowId, { registrationDate })} /></td>
           <td className="lc-actions border border-stone-300 p-1 text-center"><div className="flex items-center justify-center gap-1"><Button type="button" variant="outline" size="icon" aria-label={`Add brand after row ${index + 1}`} className="h-8 w-8" disabled={disabled} onClick={() => onChange({ ...value, rows: [...value.rows.slice(0, index + 1), emptyCmpf307BrandRow(), ...value.rows.slice(index + 1)] })}><Plus className="h-4 w-4" aria-hidden /></Button><Button type="button" variant="outline" size="icon" aria-label={`Delete brand row ${index + 1}`} className="h-8 w-8" disabled={disabled || value.rows.length === 1} onClick={() => {
             const attachments = [fileFromRow(row, 'agreement'), fileFromRow(row, 'trademark')].filter((file): file is BisProjectViewFile => file !== null)
-            void Promise.all(attachments.map(deleteBisProjectFile)).then(() => onChange({ ...value, rows: value.rows.filter((item) => item.rowId !== row.rowId) })).catch((error: unknown) => toast.error(formatBisProjectFilesError(error)))
+            void Promise.all(attachments.map(releaseFile)).then(() => onChange({ ...value, rows: value.rows.filter((item) => item.rowId !== row.rowId) })).catch((error: unknown) => toast.error(formatBisProjectFilesError(error)))
           }}><Trash2 className="h-4 w-4 text-red-700" aria-hidden /></Button></div></td>
         </tr>)}
       </tbody></table></div>

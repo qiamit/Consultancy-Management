@@ -320,6 +320,16 @@ const UNDERTAKING_OPTIONS: Array<{
   },
 ]
 
+// Keys of a module's state for the unsaved-changes check on Close: only what the user edits, so on-mount
+// normalisation does not count as a change (25 Nov 2026).
+const oslSamplesKey = (payload: OslSampleRequirementsModulePayload) =>
+  JSON.stringify([payload.rows, payload.signatoryName, payload.signatoryDesignation])
+const technicalStaffKey = (payload: TechnicalStaffModulePayload) =>
+  JSON.stringify([payload.rows, payload.signatoryName, payload.signatoryDesignation])
+const topManagementKey = (payload: TopManagementModulePayload) => JSON.stringify(payload)
+const cmpf307Key = (payload: Cmpf307ModulePayload) =>
+  JSON.stringify([payload.rows, payload.brandsWithoutMarkReasons])
+
 type UndertakingPreviewOptions = Record<(typeof UNDERTAKING_OPTIONS)[number]['kind'], boolean>
 const DEFAULT_UNDERTAKING_PREVIEW_OPTIONS: UndertakingPreviewOptions = {
   'self-evaluation-form': true,
@@ -490,14 +500,27 @@ export function LegalDocumentsModuleDialog({
   const [oslSamples, setOslSamples] = useState<OslSampleRequirementsModulePayload>(() =>
     emptyOslSampleRequirementsPayload(),
   )
-  // Files taken off samples (Remove on a Test Request / Test Report / Declared Value): deleted from storage only
-  // after the samples are saved. Until 25 Nov 2026 they were deleted at once, and a window closed without Save left
-  // 63 sample rows pointing at deleted PDFs.
-  const releasedOslFilesRef = useRef<BisProjectViewFile[]>([])
-  // The samples as last loaded or saved, to warn before closing with unsaved sample changes.
-  const savedOslSamplesRef = useRef('')
-  const oslSamplesKey = (payload: OslSampleRequirementsModulePayload) =>
-    JSON.stringify([payload.rows, payload.signatoryName, payload.signatoryDesignation])
+  // Files taken off module rows (a removed or replaced Test Request / Test Report / Declared Value on samples, a
+  // replaced staff file or signature on Technical Staff / Top Management, a removed or replaced CMPF-307 brand PDF):
+  // deleted from storage only after the module is saved. Until 25 Nov 2026 they were deleted at once, and a window
+  // closed without Save left saved rows pointing at deleted files (63 sample rows on Live).
+  const releasedFilesRef = useRef<BisProjectViewFile[]>([])
+  const releaseFile = (file: BisProjectViewFile) => {
+    releasedFilesRef.current.push(file)
+  }
+  /** After the module is saved: delete the released files, unless a saved row still uses one (by id or storage path). */
+  const deleteReleasedFiles = async (savedFileRefs: Array<string | null | undefined>) => {
+    const released = releasedFilesRef.current
+    releasedFilesRef.current = []
+    const stillUsed = new Set(savedFileRefs.map((v) => (v ?? '').trim()).filter(Boolean))
+    await Promise.allSettled(
+      released
+        .filter((f) => !stillUsed.has(f.id.trim()) && !stillUsed.has(f.storage_path.trim()))
+        .map((f) => deleteBisProjectFile(f)),
+    )
+  }
+  // The module as last loaded or saved (its key; '' = not known), to warn before closing with unsaved changes.
+  const savedModuleKeyRef = useRef('')
   const [factoryTestReports, setFactoryTestReports] = useState<FactoryTestReportModulePayload>(
     () => emptyFactoryTestReportPayload(),
   )
@@ -621,8 +644,8 @@ export function LegalDocumentsModuleDialog({
       setTopManagement(emptyTopManagementPayload())
       setTechnicalStaff(emptyTechnicalStaffPayload())
       setOslSamples(emptyOslSampleRequirementsPayload())
-      releasedOslFilesRef.current = []
-      savedOslSamplesRef.current = ''
+      releasedFilesRef.current = []
+      savedModuleKeyRef.current = ''
       setFactoryTestReports(emptyFactoryTestReportPayload())
       setFactorySampleOptions([])
       setLocationMap(emptyLocationMapPayload())
@@ -785,6 +808,8 @@ export function LegalDocumentsModuleDialog({
       setFileNames({})
       setLoading(true)
       setStatus(null)
+      releasedFilesRef.current = []
+      savedModuleKeyRef.current = ''
       void (async () => {
         try {
           // Process Description opens the same merged payload as Process Flow Chart.
@@ -795,7 +820,7 @@ export function LegalDocumentsModuleDialog({
             : null
           if (showTopManagementFields) {
             const parsed = parseTopManagementPayload(payload)
-            setTopManagement(
+            const loaded: TopManagementModulePayload =
               parsed.rows.length > 0
                 ? parsed
                 : {
@@ -809,17 +834,19 @@ export function LegalDocumentsModuleDialog({
                           }
                         : r,
                     ),
-                  },
-            )
+                  }
+            savedModuleKeyRef.current = topManagementKey(loaded)
+            setTopManagement(loaded)
           }
           if (showTechnicalStaffFields) {
             const parsed = parseTechnicalStaffPayload(payload)
-            setTechnicalStaff(parsed.rows.length > 0 ? parsed : emptyTechnicalStaffPayload())
+            const loaded = parsed.rows.length > 0 ? parsed : emptyTechnicalStaffPayload()
+            savedModuleKeyRef.current = technicalStaffKey(loaded)
+            setTechnicalStaff(loaded)
           }
           if (showOslSampleFields) {
             const parsed = parseOslSampleRequirementsPayload(payload)
-            releasedOslFilesRef.current = []
-            savedOslSamplesRef.current = oslSamplesKey(parsed)
+            savedModuleKeyRef.current = oslSamplesKey(parsed)
             setOslSamples(parsed)
           }
           if (showFactoryTestFields) {
@@ -946,7 +973,9 @@ export function LegalDocumentsModuleDialog({
             setCmpf311(parsed)
           }
           if (showCmpf307Fields) {
-            setCmpf307(parseCmpf307Payload(payload))
+            const parsed = parseCmpf307Payload(payload)
+            savedModuleKeyRef.current = cmpf307Key(parsed)
+            setCmpf307(parsed)
           }
           if (showCmpf310Fields) setCmpf310(parseCmpf310Payload(payload))
           if (showRawMaterialReferenceFields) setRawMaterialReference(parseRawMaterialReferencePayload(payload))
@@ -955,6 +984,7 @@ export function LegalDocumentsModuleDialog({
           }
         } catch (err) {
           setStatus(formatBisApiError(err))
+          savedModuleKeyRef.current = ''
           if (showTopManagementFields) setTopManagement(emptyTopManagementPayload())
           if (showTechnicalStaffFields) setTechnicalStaff(emptyTechnicalStaffPayload())
           if (showOslSampleFields) setOslSamples(emptyOslSampleRequirementsPayload())
@@ -1254,11 +1284,12 @@ export function LegalDocumentsModuleDialog({
       }
 
       if (showTopManagementFields && printKind) {
-        const rows = topManagement.rows.filter((r) =>
+        const filled = topManagement.rows.filter((r) =>
           Object.values(r).some((v) => typeof v === 'string' && v.trim().length > 0),
         )
+        const rows = filled.length > 0 ? filled : topManagement.rows.slice(0, 1)
         await saveBisModulePayload(row.id, printKind, {
-          rows: rows.length > 0 ? rows : topManagement.rows.slice(0, 1),
+          rows,
           signatoryName: topManagement.signatoryName.trim(),
           signatoryDesignation: topManagement.signatoryDesignation.trim(),
           includeAuthorizedSignatory: topManagement.includeAuthorizedSignatory,
@@ -1277,23 +1308,40 @@ export function LegalDocumentsModuleDialog({
           applyAuthorizedSignatureToDocuments:
             topManagement.applyAuthorizedSignatureToDocuments,
         })
+        savedModuleKeyRef.current = topManagementKey(topManagement)
+        // Now delete the replaced signatures, unless a saved row still uses one.
+        await deleteReleasedFiles([
+          ...rows.flatMap((r) => [r.signatureFileId, r.signatureStoragePath]),
+          topManagement.authorizedSignatureFileId,
+          topManagement.authorizedSignatureStoragePath,
+        ])
         onProjectSaved?.()
         toast.success(`${title} saved.`)
         return
       }
 
       if (showTechnicalStaffFields && printKind) {
-        const rows = technicalStaff.rows.filter((r) =>
+        const filled = technicalStaff.rows.filter((r) =>
           Object.entries(r).some(([key, v]) => {
             if (key === 'applySignatureToDocuments') return Boolean(v)
             return typeof v === 'string' && v.trim().length > 0
           }),
         )
+        const rows = filled.length > 0 ? filled : technicalStaff.rows.slice(0, 1)
         await saveBisModulePayload(row.id, printKind, {
-          rows: rows.length > 0 ? rows : technicalStaff.rows.slice(0, 1),
+          rows,
           signatoryName: technicalStaff.signatoryName.trim(),
           signatoryDesignation: technicalStaff.signatoryDesignation.trim(),
         })
+        savedModuleKeyRef.current = technicalStaffKey(technicalStaff)
+        // Now delete the replaced staff files, unless a saved row still uses one.
+        await deleteReleasedFiles(
+          rows.flatMap((r) => [
+            r.appointmentLetterFileId, r.appointmentLetterStoragePath,
+            r.educationCertificateFileId, r.educationCertificateStoragePath,
+            r.photoFileId, r.photoStoragePath, r.signatureFileId, r.signatureStoragePath,
+          ]),
+        )
         onProjectSaved?.()
         toast.success(`${title} saved.`)
         return
@@ -1314,20 +1362,13 @@ export function LegalDocumentsModuleDialog({
           signatoryName: oslSamples.signatoryName.trim(),
           signatoryDesignation: oslSamples.signatoryDesignation.trim(),
         })
-        savedOslSamplesRef.current = oslSamplesKey(oslSamples)
+        savedModuleKeyRef.current = oslSamplesKey(oslSamples)
         // Now delete the files taken off samples, unless a saved sample still uses one (a copied sample row).
-        const released = releasedOslFilesRef.current
-        releasedOslFilesRef.current = []
-        const stillUsed = new Set(
+        await deleteReleasedFiles(
           rows.flatMap((r) => [
             r.testRequestFileId, r.testRequestStoragePath, r.testReportFileId, r.testReportStoragePath,
             r.declaredValueFileId, r.declaredValueStoragePath, r.courierSlipFileId, r.courierSlipStoragePath,
-          ].map((v) => v.trim()).filter(Boolean)),
-        )
-        await Promise.allSettled(
-          released
-            .filter((f) => !stillUsed.has(f.id.trim()) && !stillUsed.has(f.storage_path.trim()))
-            .map((f) => deleteBisProjectFile(f)),
+          ]),
         )
         // Prune Factory Test Report snapshots for samples removed from the offer letter.
         const ftrRaw = await fetchBisModulePayload(row.id, 'factory-test-report').catch(() => null)
@@ -1457,6 +1498,13 @@ export function LegalDocumentsModuleDialog({
           rows: completedBrandRows,
           brandsWithoutMarkReasons: cmpf307.brandsWithoutMarkReasons.trim(),
         })
+        savedModuleKeyRef.current = cmpf307Key(cmpf307)
+        // Now delete the PDFs taken off brands, unless a saved brand still uses one.
+        await deleteReleasedFiles(
+          completedBrandRows.flatMap((brand) => [
+            brand.agreementFileId, brand.agreementStoragePath, brand.trademarkFileId, brand.trademarkStoragePath,
+          ]),
+        )
         onProjectSaved?.()
         toast.success(`${title} saved.`)
         return
@@ -1863,15 +1911,27 @@ export function LegalDocumentsModuleDialog({
     }
   }
 
-  /** Close the window; with unsaved sample changes (a removed PDF, a conformity result, an edit) ask first. */
+  /** Key of the module shown, to compare with savedModuleKeyRef ('' = this module is not checked). */
+  const currentModuleKey = () => {
+    if (showOslSampleFields) return oslSamplesKey(oslSamples)
+    if (showTechnicalStaffFields) return technicalStaffKey(technicalStaff)
+    if (showTopManagementFields) return topManagementKey(topManagement)
+    if (showCmpf307Fields) return cmpf307Key(cmpf307)
+    return ''
+  }
+
+  /**
+   * Close the window; with unsaved changes (a removed or replaced file, a conformity result, an edit) ask first.
+   * Checked for Sample Requirements, Technical Staff, Top Management and CMPF-307 (25 Nov 2026).
+   */
   const requestClose = async () => {
-    const unsavedSamples =
-      showOslSampleFields &&
-      !loading &&
-      Boolean(savedOslSamplesRef.current) &&
-      oslSamplesKey(oslSamples) !== savedOslSamplesRef.current
-    if (unsavedSamples) {
-      const ok = await confirmAction('The Sample Changes Are Not Saved Yet. Close Without Saving?', {
+    const savedKey = savedModuleKeyRef.current
+    const unsaved = !loading && Boolean(savedKey) && currentModuleKey() !== savedKey
+    if (unsaved) {
+      const message = showOslSampleFields
+        ? 'The Sample Changes Are Not Saved Yet. Close Without Saving?'
+        : 'The Changes Are Not Saved Yet. Close Without Saving?'
+      const ok = await confirmAction(message, {
         title: 'Unsaved Changes',
         confirmLabel: 'Close Without Saving',
         destructive: true,
@@ -2365,6 +2425,7 @@ export function LegalDocumentsModuleDialog({
                 <TopManagementModuleFields
                   value={topManagement}
                   onChange={setTopManagement}
+                  onFileReleased={releaseFile}
                   disabled={busy || saving}
                   projectId={row?.id ?? null}
                 />
@@ -2378,6 +2439,7 @@ export function LegalDocumentsModuleDialog({
                 <TechnicalStaffModuleFields
                   value={technicalStaff}
                   onChange={setTechnicalStaff}
+                  onFileReleased={releaseFile}
                   disabled={busy || saving}
                   projectId={row?.id ?? null}
                   projectRow={row}
@@ -2408,9 +2470,7 @@ export function LegalDocumentsModuleDialog({
                 <OslSampleRequirementsModuleFields
                   value={oslSamples}
                   onChange={setOslSamples}
-                  onFileReleased={(file) => {
-                    releasedOslFilesRef.current.push(file)
-                  }}
+                  onFileReleased={releaseFile}
                   disabled={busy || saving}
                   projectId={row?.id ?? null}
                   clientId={row?.client_id ?? null}
@@ -2600,6 +2660,7 @@ export function LegalDocumentsModuleDialog({
             <Cmpf307ModuleFields
               value={cmpf307}
               onChange={setCmpf307}
+              onFileReleased={releaseFile}
               disabled={busy || saving}
               projectId={row?.id ?? null}
             />
