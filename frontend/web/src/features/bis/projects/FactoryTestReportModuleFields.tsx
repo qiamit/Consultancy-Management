@@ -1,6 +1,8 @@
-import { useMemo, useRef, useState, type ReactNode } from 'react'
-import { FileText, LayoutTemplate, PenLine, Plus, Printer, Settings2 } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Eraser, FileText, LayoutTemplate, PenLine, Plus, Printer, Settings2, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { LimsDatePicker } from '@/components/lims/LimsDatePicker'
@@ -15,7 +17,7 @@ import { cn } from '@/lib/utils'
 import type { BisDocumentPrintSettingsPanel } from '../print/bisDocumentPrintPageSettings'
 import { BisDocumentPrintSettingsDialog } from './BisDocumentPrintSettingsDialog'
 import { IsCodeRequiredTestsDialog } from '@/features/masters/is-codes/IsCodeRequiredTestsDialog'
-import type { RequiredTest } from '@/features/masters/is-codes/requiredTestsApi'
+import { fetchRequiredTests, type RequiredTest } from '@/features/masters/is-codes/requiredTestsApi'
 import { suggestSampleRequirements } from './ftrSampleRequirementsAi'
 import {
   applySampleToFactoryTestReport,
@@ -218,6 +220,58 @@ export function FactoryTestReportModuleFields({
     () => new Set(activeReport.parameters.map((p) => p.testParameterId).filter(Boolean)),
     [activeReport.parameters],
   )
+
+  /*
+   * Tests of the IS Code's Test Parameters (Required Tests), to find report rows whose parameter has since been
+   * removed there (owner, 25 Nov 2026): such a row is no longer in Add Test Parameter's list, so it could not be
+   * unticked and stayed on the report. Loaded once per IS Code and refreshed by the picker's own list.
+   */
+  const [confirmAction, confirmDialog] = useConfirmDialog({ layer: 'overlay' })
+  const masterIsCodeId = (isCodeId ?? '').trim()
+  const [masterTests, setMasterTests] = useState<{ isCodeId: string; ids: Set<string> } | null>(null)
+  useEffect(() => {
+    if (!masterIsCodeId) return
+    let cancelled = false
+    void fetchRequiredTests(masterIsCodeId)
+      .then((list) => {
+        if (!cancelled) setMasterTests({ isCodeId: masterIsCodeId, ids: new Set(list.tests.map((t) => t.id ?? '').filter(Boolean)) })
+      })
+      .catch(() => {
+        /* unknown: no row is marked as old */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [masterIsCodeId])
+  const masterIds = masterTests?.isCodeId === masterIsCodeId ? masterTests.ids : null
+  /** A row not in the Test Parameters any more, or never linked to one (copied from earlier results). */
+  const isOldParam = (p: FactoryTestReportParamRow) =>
+    masterIds != null && (!p.testParameterId || !masterIds.has(p.testParameterId))
+  const oldCount = masterIds ? activeReport.parameters.filter(isOldParam).length : 0
+
+  const removeOldTests = async () => {
+    const count = oldCount
+    if (!count) return
+    const ok = await confirmAction(
+      `Remove ${count} Test${count === 1 ? '' : 's'} No Longer in Test Parameters From This Report? Their Observed Values Are Removed Too.`,
+      { title: 'Remove Old Tests', confirmLabel: 'Remove', destructive: true },
+    )
+    if (!ok) return
+    patchActiveReport({ parameters: activeReport.parameters.filter((p) => !isOldParam(p)) })
+    toast.success(`${count} Old Test${count === 1 ? '' : 's'} Removed. Click Save to Keep the Change.`)
+  }
+
+  const clearAllTests = async () => {
+    const count = activeReport.parameters.length
+    if (!count) return
+    const ok = await confirmAction(
+      `Remove All ${count} Test${count === 1 ? '' : 's'} From This Report? Their Observed Values Are Removed Too.`,
+      { title: 'Clear All Tests', confirmLabel: 'Clear All', destructive: true },
+    )
+    if (!ok) return
+    patchActiveReport({ parameters: [] })
+    toast.success('All Tests Removed From This Report. Click Save to Keep the Change.')
+  }
 
   /** Master order of the IS (clause + drags in the picker); the report follows it. */
   const masterOrderRef = useRef<string[]>([])
@@ -523,6 +577,14 @@ export function FactoryTestReportModuleFields({
                                   .join(' · ')}
                               </span>
                             ) : null}
+                            {isOldParam(p) ? (
+                              <span
+                                className="mt-0.5 block w-fit border border-amber-500 bg-amber-50 px-1 text-[10px] font-semibold text-amber-900 print:hidden"
+                                title="This Test Is Not in the IS Code's Test Parameters (Removed There, or Copied From Earlier Results). Use Remove Old Tests in the Sidebar."
+                              >
+                                Removed From Test Parameters
+                              </span>
+                            ) : null}
                           </td>
                           <td className="border border-stone-800 px-2 py-1.5 text-center align-middle">
                             {p.unit || '—'}
@@ -703,6 +765,36 @@ export function FactoryTestReportModuleFields({
           <Plus size={14} aria-hidden />
           Add Test Parameter
         </Button>
+        {oldCount ? (
+          <Button
+            type="button"
+            variant="outline"
+            className={cn(
+              limsOutlineBtnClass,
+              'h-auto min-h-9 w-full justify-center gap-1.5 whitespace-normal border-amber-500 bg-amber-50 px-2 py-2 text-xs font-semibold text-amber-900',
+            )}
+            disabled={disabled}
+            title="Tests on This Report That Are Not in the IS Code's Test Parameters"
+            onClick={() => void removeOldTests()}
+          >
+            <Eraser size={14} aria-hidden />
+            Remove Old Tests ({oldCount})
+          </Button>
+        ) : null}
+        <Button
+          type="button"
+          variant="outline"
+          className={cn(
+            limsOutlineBtnClass,
+            'h-auto min-h-9 w-full justify-center gap-1.5 px-2 py-2 text-xs font-semibold',
+          )}
+          disabled={disabled || activeReport.parameters.length === 0}
+          title="Remove Every Test From This Report"
+          onClick={() => void clearAllTests()}
+        >
+          <Trash2 size={14} aria-hidden />
+          Clear All Tests
+        </Button>
         <Button
           type="button"
           variant="outline"
@@ -851,6 +943,7 @@ export function FactoryTestReportModuleFields({
         </DialogContent>
       </Dialog>
 
+      {confirmDialog}
       <IsCodeRequiredTestsDialog
         open={paramPickerOpen}
         onOpenChange={setParamPickerOpen}
@@ -864,6 +957,7 @@ export function FactoryTestReportModuleFields({
           onToggleMany: (list, checked) => toggleParams(list.filter((t) => t.id).map(masterOf), checked),
         }}
         onListChange={(list, changed) => {
+          if (masterIsCodeId) setMasterTests({ isCodeId: masterIsCodeId, ids: new Set(list.map((t) => t.id ?? '').filter(Boolean)) })
           applyMasterOrder(list.map((t) => t.id).filter((id): id is string => Boolean(id)))
           for (const t of changed) refreshParamFromMaster(masterOf(t))
         }}
