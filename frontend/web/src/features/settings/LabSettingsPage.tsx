@@ -2,7 +2,7 @@ import { useEffect, useState, type Dispatch, type SetStateAction } from 'react'
 import { RatePlansEditor, type RatePlanDraft } from './lab-settings/RatePlansEditor'
 import { BsbPortalLoginSettings } from './lab-settings/BsbPortalLoginSettings'
 import { limsPageShellClass } from '@/lib/limsThemeUi'
-import { getThemeSelectOptions, normalizeAppThemeId } from '@/lib/appTheme'
+import { findCustomTheme, getThemeSelectOptions, normalizeAppThemeId } from '@/lib/appTheme'
 import { useAppTheme } from '@/lib/AppThemeProvider'
 import { useSidebarMode, writeSidebarMode } from '@/lib/sidebarMode'
 import { useAppDateFormat } from '@/lib/AppDateFormatProvider'
@@ -1334,6 +1334,7 @@ export default function LabSettingsPage() {
             dateFormat: selectedDateFormat,
             timeFormat: selectedTimeFormat,
             theme: selectedTheme,
+            customTheme: findCustomTheme(selectedTheme, customThemes) ?? null,
             generateReportEnabled,
           }),
         )
@@ -2158,6 +2159,9 @@ export default function LabSettingsPage() {
                   </Dialog>
                 </div>
               </div>
+              <p className="mt-3 text-xs text-stone-500">
+                Currency, Date Format, Time Format and Theme Apply to All Users After Save (on Their Next Login or Reload).
+              </p>
 
               <div className="mt-6 space-y-2 border-t border-stone-300 pt-5">
                 <Label htmlFor="sidebar-always-shown">Sidebar - Always Show</Label>

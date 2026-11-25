@@ -6,6 +6,7 @@ import { AppErrorBoundary } from '@/components/AppErrorBoundary'
 import { AuthProvider } from '@/hooks/useAuth'
 import { ModuleAccessProvider } from '@/features/settings/module-access/ModuleAccessProvider'
 import { AppThemeProvider } from '@/lib/AppThemeProvider'
+import { OrgDisplaySettingsSync } from '@/features/settings/OrgDisplaySettingsSync'
 import { AppDateFormatProvider } from '@/lib/AppDateFormatProvider'
 import { AppCurrencyProvider } from '@/lib/AppCurrencyProvider'
 import { registerServiceWorker } from '@/lib/registerServiceWorker'
@@ -34,6 +35,7 @@ createRoot(document.getElementById('root')!).render(
           <AppDateFormatProvider>
             <AppCurrencyProvider>
               <AuthProvider>
+                <OrgDisplaySettingsSync />
                 <ModuleAccessProvider>
                   <App />
                   <Toaster richColors position="top-right" />
