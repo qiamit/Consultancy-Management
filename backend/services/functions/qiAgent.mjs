@@ -131,7 +131,7 @@ export const AGENT_TOOLS = [
     function: {
       name: 'query_rows',
       description:
-        'Read rows from a table. filters: [{column, op (eq|neq|gt|gte|lt|lte|like|ilike|is|in), value}]; use ilike with %word% for text search. order: "column asc|desc". limit ≤ 50. Set count=true to get the total matching rows.',
+        'Read rows from a table. filters: [{column, op (eq|neq|gt|gte|lt|lte|like|ilike|is|in), value}]; use ilike with %word% for text search. order: "column asc|desc". limit ≤ 50 (default 50). The result gives total (all matching rows) and, when more rows match than were returned, more: true and next_offset: call again with offset = next_offset (same filters and order) until more is false. Select only the columns you need.',
       parameters: {
         type: 'object',
         properties: {
@@ -151,7 +151,8 @@ export const AGENT_TOOLS = [
           },
           order: { type: 'string' },
           limit: { type: 'integer' },
-          count: { type: 'boolean' },
+          offset: { type: 'integer', description: 'Rows to skip: next_offset from the previous page.' },
+          count: { type: 'boolean', description: 'Kept for older prompts; the total is always given.' },
         },
         required: ['table'],
       },
@@ -417,15 +418,37 @@ export async function runAgent({ callModel, messages, userRest, routes, userEmai
       const cols = (await tables())[name]
       if (!cols) throw new Error(`Unknown table: ${name}`)
       const params = buildQuery(cols, args)
-      const limit = Math.max(1, Math.min(MAX_ROWS, Number(args.limit) || 20))
+      // Pages need a fixed order, or a row can show on two pages and another on none.
+      if (!args.order && cols.id) params.push('order=id.asc')
+      const limit = Math.max(1, Math.min(MAX_ROWS, Number(args.limit) || MAX_ROWS))
+      const offset = Math.max(0, Math.floor(Number(args.offset) || 0))
       params.push(`limit=${limit}`)
-      const { data, total } = await userRest(`/${name}?${params.join('&')}`, {
-        headers: args.count ? { Prefer: 'count=exact' } : {},
-        withCount: Boolean(args.count),
-      })
+      if (offset) params.push(`offset=${offset}`)
+      // The total always comes back, so a list is never cut off without the model knowing: on 25 Nov 2026 "licences
+      // due in 30 days" read five date ranges at the default 20 rows each and listed 86 of 99.
+      let page
+      try {
+        page = await userRest(`/${name}?${params.join('&')}`, {
+          headers: { Prefer: 'count=exact' },
+          withCount: true,
+        })
+      } catch (err) {
+        // An offset past the last row: PostgREST answers 416 instead of an empty page.
+        if (offset && /range not satisfiable/i.test(String(err?.message))) {
+          steps.push({ tool: 'query_rows', summary: `Read ${name} — no rows after ${offset}` })
+          return capJson({ more: false, note: `No rows after ${offset}: everything has been read.`, rows: [] })
+        }
+        throw err
+      }
+      const { data, total } = page
       const rows = (Array.isArray(data) ? data : []).map(cleanRow)
-      steps.push({ tool: 'query_rows', summary: `Read ${name} — ${rows.length} row${rows.length === 1 ? '' : 's'}${total != null ? ` of ${total}` : ''}` })
-      return capJson({ rows, ...(total != null ? { total } : {}) })
+      const more = total != null ? offset + rows.length < total : rows.length === limit
+      steps.push({ tool: 'query_rows', summary: `Read ${name} — ${rows.length} row${rows.length === 1 ? '' : 's'}${total != null ? ` of ${total}` : ''}${offset ? ` (from ${offset + 1})` : ''}` })
+      // Page facts first: a long result is cut at MAX_RESULT_CHARS, and they must survive the cut.
+      const note = more
+        ? `Only rows ${offset + 1}–${offset + rows.length}${total != null ? ` of ${total}` : ''} were read. Before you answer with a list or a count, read the rest: query_rows again with offset ${offset + rows.length}. Never present part of the rows as the full list.`
+        : undefined
+      return capJson({ ...(total != null ? { total } : {}), more, ...(more ? { next_offset: offset + rows.length, note } : {}), rows })
     },
     async propose_changes(args) {
       // All or nothing: one invalid change rejects the batch, so the model never thinks a change is pending when it is not.
@@ -689,7 +712,7 @@ export async function runAgent({ callModel, messages, userRest, routes, userEmai
 
 export const AGENT_SYSTEM_PROMPT = [
   'ADMIN AGENT MODE. You can work across the whole app for this admin with tools:',
-  '- list_tables / describe_table / query_rows to find and report any data (clients, BIS licences = bis_projects, IS codes, renewals, finance documents, users, settings …).',
+  '- list_tables / describe_table / query_rows to find and report any data (clients, BIS licences = bis_projects, IS codes, renewals, finance documents, users, settings …). For a list, read every matching row: query_rows says more: true until all are read (page with next_offset, one filter set), then write every row in the reply (never only "some", "the main" or "the first" ones, and never "and N more") with the total count; only for more than 150 rows give the count and offer the page instead.',
   '- propose_changes to create, update or delete records. Nothing is saved until the admin confirms each change in the app, so say so. Always look the record up first, use real ids and existing column names, and send only the columns that change.',
   '- open_page to take the admin to a page (use paths from the App Pages list).',
   '- remember / forget / list_memories to keep facts and standing instructions across chats. Follow the ADMIN MEMORY list.',
