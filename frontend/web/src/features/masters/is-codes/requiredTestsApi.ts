@@ -19,12 +19,18 @@ export type RequiredTest = {
   source: RequiredTestSource
   /** In the Product Manual's "possible tests in a day". */
   possibleInADay: boolean
+  /** When the row was added (saved rows), to find the last added test. */
+  createdAt?: string
+  /** Client-only key of a row on screen (select box, moves); not saved. */
+  rowKey?: string
 }
 
 export type RequiredTestList = {
   tests: RequiredTest[]
   lockedAt: string | null
   notes: string
+  /** The list was arranged by hand (Up / Down): keep its saved order instead of the default clause order. */
+  customOrder: boolean
 }
 
 type Row = {
@@ -39,18 +45,20 @@ type Row = {
   tested_by: RequiredTestedBy
   source: RequiredTestSource
   possible_in_a_day: boolean | null
+  created_at: string | null
 }
 
 export async function fetchRequiredTests(isCodeId: string): Promise<RequiredTestList> {
   const [{ data: rows, error }, { data: list, error: listError }] = await Promise.all([
     supabase
       .from('test_parameters')
-      .select('id, item_name, test_name, clause_no, test_method, unit_value, specific_requirement, applies_to, tested_by, source, possible_in_a_day')
+      .select('id, item_name, test_name, clause_no, test_method, unit_value, specific_requirement, applies_to, tested_by, source, possible_in_a_day, created_at')
       .eq('is_code_id', isCodeId)
       .is('archived_at', null)
       .order('display_order', { ascending: true, nullsFirst: true })
       .order('item_name', { ascending: true }),
-    supabase.from('is_code_required_test_lists').select('locked_at, notes').eq('is_code_id', isCodeId).maybeSingle(),
+    // '*' so the read works before and after the custom_order column exists (deploy order).
+    supabase.from('is_code_required_test_lists').select('*').eq('is_code_id', isCodeId).maybeSingle(),
   ])
   if (error) throw error
   if (listError) throw listError
@@ -66,9 +74,12 @@ export async function fetchRequiredTests(isCodeId: string): Promise<RequiredTest
       testedBy: r.tested_by ?? 'Lab',
       source: r.source ?? 'Manual Entry',
       possibleInADay: Boolean(r.possible_in_a_day),
+      createdAt: r.created_at ?? undefined,
+      rowKey: r.id,
     })),
     lockedAt: (list?.locked_at as string | null) ?? null,
     notes: String(list?.notes ?? ''),
+    customOrder: Boolean((list as Record<string, unknown> | null)?.custom_order),
   }
 }
 
@@ -81,6 +92,7 @@ export async function saveRequiredTests(
   isCodeLabel: string,
   tests: RequiredTest[],
   notes: string,
+  customOrder = false,
 ): Promise<{ kept: string[] }> {
   const clean = tests.map((t) => ({ ...t, testName: t.testName.trim() })).filter((t) => t.testName)
   const { data: current, error: curError } = await supabase
@@ -125,9 +137,14 @@ export async function saveRequiredTests(
       .insert(added.map(({ t, i }) => ({ is_code_id: isCodeId, is_code_label: isCodeLabel || null, ...fields(t, i) })))
     if (error) throw error
   }
-  const { error: listError } = await supabase
+  const listRow = { is_code_id: isCodeId, notes: notes.trim(), updated_at: new Date().toISOString() }
+  let { error: listError } = await supabase
     .from('is_code_required_test_lists')
-    .upsert({ is_code_id: isCodeId, notes: notes.trim(), updated_at: new Date().toISOString() }, { onConflict: 'is_code_id' })
+    .upsert({ ...listRow, custom_order: customOrder }, { onConflict: 'is_code_id' })
+  // Before the custom_order migration has run, save the rest of the list row without it.
+  if (listError && /custom_order/.test(listError.message ?? '')) {
+    ;({ error: listError } = await supabase.from('is_code_required_test_lists').upsert(listRow, { onConflict: 'is_code_id' }))
+  }
   if (listError) throw listError
   return { kept }
 }

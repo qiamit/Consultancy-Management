@@ -75,7 +75,7 @@ export async function suggestSampleRequirements(input: {
     '1. Use the limit of this sample\'s grade, type, class and size (thickness, diameter, width …) from the Standard\'s tables; an amendment replaces the clause it names.',
     '2. A dimension or mass with a declared / nominal value: the declared value with its tolerance from the Standard ("1.20 mm ± 0.04 mm"; a tolerance in another unit keeps its unit: "100 mm ± 2 %").',
     '3. Only the specified value, in words, never ≤ ≥ < >: "0.12 % Maximum", "500 MPa Minimum", "8.5 % - 10.5 %", or a plain statement. No variation, no notes.',
-    '4. Not in the pages, or the sample does not say which grade / size: requirement "" (the report keeps its value).',
+    '4. Not in the pages, or the sample does not say which grade / size: requirement "" (the report keeps its value). A plain statement without a number ("Free From Defects") is the same for every sample: requirement "".',
     'TESTS (id | name | clause | unit | current requirement):',
     ...input.tests.map((t) => `${t.id} | ${t.testName} | ${t.clause} | ${t.unit} | ${t.requirement}`),
     'ANSWER: JSON only: {"tests":[{"id":"","requirement":""}]}',
@@ -100,6 +100,9 @@ export async function suggestSampleRequirements(input: {
     .map((r) => {
       const id = typeof r.id === 'string' ? r.id.trim() : ''
       const req = typeof r.requirement === 'string' ? r.requirement.trim() : ''
+      const current = ids.get(id)?.requirement ?? ''
+      // A plain statement ("Free From Defects") is not sample-specific: it keeps its own wording (and Title Case).
+      if (req && !/\d/.test(req) && !/\d/.test(current) && current.trim()) return { id, requirement: '' }
       return { id, requirement: req ? formatRequirement(req, ids.get(id)?.unit ?? '') : '' }
     })
     .filter((r) => ids.has(r.id) && r.requirement)
