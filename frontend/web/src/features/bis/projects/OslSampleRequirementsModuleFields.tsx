@@ -97,8 +97,10 @@ import {
 import {
   createBisProjectFileUrls,
   deleteBisProjectFile,
+  findMissingBisProjectFileIds,
   listBisProjectFiles,
   uploadBisProjectFile,
+  type BisProjectViewFile,
 } from './bisProjectFilesApi'
 import { downloadMergedOslTestRequestPdfs } from './mergeOslTestRequestPdfs'
 import {
@@ -312,6 +314,8 @@ function SampleConformitySelect({
   )
 }
 
+const NO_MISSING_FILES: ReadonlySet<string> = new Set()
+
 export function OslSampleRequirementsModuleFields({
   value,
   onChange,
@@ -326,10 +330,17 @@ export function OslSampleRequirementsModuleFields({
   hasPortalPassword = false,
   qrOnlyFields = false,
   onAiFill,
+  onFileReleased,
 }: {
   value: OslSampleRequirementsModulePayload
   onChange: (next: OslSampleRequirementsModulePayload) => void
   disabled?: boolean
+  /**
+   * A file taken off a sample (Test Request, Test Report, Declared Value). When set, the file is not deleted here: the
+   * parent deletes it after the samples are saved, so a window closed without Save keeps the row and its file
+   * together. Without it the file is deleted at once.
+   */
+  onFileReleased?: (file: BisProjectViewFile) => void
   /** Current BIS project — used when transferring QR from sibling applications. */
   projectId?: string | null
   clientId?: string | null
@@ -630,6 +641,42 @@ export function OslSampleRequirementsModuleFields({
   const setRows = (next: OslSampleRequirementRow[]) => {
     onChange({ ...value, rows: next })
   }
+
+  /** A file taken off a sample: handed to the parent to delete after Save, or deleted now without one. */
+  const releaseFile = async (file: BisProjectViewFile) => {
+    if (onFileReleased) {
+      onFileReleased(file)
+      return
+    }
+    await deleteBisProjectFile(file)
+  }
+  const removedNote = onFileReleased ? ' Click Save to Keep the Change.' : ''
+
+  // Test Requests / Test Reports whose file record is gone (deleted while the row kept pointing at it): their
+  // buttons show the upload state with a note, so the PDF can be attached again.
+  const linkedFileKey = useMemo(
+    () =>
+      [...new Set(rows.flatMap((r) => [r.testRequestFileId.trim(), r.testReportFileId.trim()]).filter(Boolean))]
+        .sort()
+        .join(','),
+    [rows],
+  )
+  const [missingFiles, setMissingFiles] = useState<{ key: string; ids: Set<string> }>(() => ({ key: '', ids: new Set() }))
+  const missingFileIds = missingFiles.key === linkedFileKey ? missingFiles.ids : NO_MISSING_FILES
+  useEffect(() => {
+    if (!linkedFileKey) return
+    let cancelled = false
+    void findMissingBisProjectFileIds(linkedFileKey.split(','))
+      .then((ids) => {
+        if (!cancelled) setMissingFiles({ key: linkedFileKey, ids })
+      })
+      .catch(() => {
+        /* unknown: show the files as attached */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [linkedFileKey])
 
   const openEdit = (index: number) => {
     const row = rows[index]!
@@ -1033,7 +1080,7 @@ export function OslSampleRequirementsModuleFields({
     void (async () => {
       try {
         if (fileId) {
-          await deleteBisProjectFile({
+          await releaseFile({
             id: fileId,
             file_name: row.testRequestFileName || 'Test_Request.pdf',
             storage_path: storagePath,
@@ -1050,15 +1097,15 @@ export function OslSampleRequirementsModuleFields({
             (f) => f.id !== fileId && f.file_name === fileName && !linkedIds.has(f.id),
           )
           for (const copy of copies) {
-            await deleteBisProjectFile(copy)
+            await releaseFile(copy)
             extraRemoved += 1
           }
         }
         clearTestRequestOnRow(row.id)
         toast.success(
-          extraRemoved
-            ? `Test Request PDF removed (${extraRemoved} duplicate cop${extraRemoved === 1 ? 'y' : 'ies'} too).`
-            : 'Test Request PDF removed.',
+          (extraRemoved
+            ? `Test Request PDF Removed (${extraRemoved} Duplicate Cop${extraRemoved === 1 ? 'y' : 'ies'} Too).`
+            : 'Test Request PDF Removed.') + removedNote,
         )
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Could not delete Test Request PDF.')
@@ -1517,14 +1564,14 @@ export function OslSampleRequirementsModuleFields({
     void (async () => {
       try {
         if (fileId) {
-          await deleteBisProjectFile({
+          await releaseFile({
             id: fileId,
             file_name: row.testReportFileName || 'Test_Report.pdf',
             storage_path: storagePath,
           })
         }
         clearTestReportOnRow(row.id)
-        toast.success('Test Report PDF Removed.')
+        toast.success(`Test Report PDF Removed.${removedNote}`)
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Could not delete Test Report PDF.')
       }
@@ -1834,7 +1881,7 @@ export function OslSampleRequirementsModuleFields({
       .then((uploaded) => {
         updateDeclaredValueAttachment(row.id, uploaded)
         if (row.declaredValueFileId) {
-          void deleteBisProjectFile({
+          void releaseFile({
             id: row.declaredValueFileId,
             file_name: row.declaredValueFileName || 'Declared_Value.pdf',
             storage_path: row.declaredValueStoragePath,
@@ -1862,14 +1909,14 @@ export function OslSampleRequirementsModuleFields({
 
   const deleteDeclaredValueFile = (row: OslSampleRequirementRow) => {
     if (!row.declaredValueFileId) return
-    void deleteBisProjectFile({
+    void releaseFile({
       id: row.declaredValueFileId,
       file_name: row.declaredValueFileName || 'Declared_Value.pdf',
       storage_path: row.declaredValueStoragePath,
     })
       .then(() => {
         updateDeclaredValueAttachment(row.id, null)
-        toast.success('Attached PDF Removed.')
+        toast.success(`Attached PDF Removed.${removedNote}`)
       })
       .catch((err) => toast.error(err instanceof Error ? err.message : 'Could not delete the PDF.'))
   }
@@ -1945,6 +1992,7 @@ export function OslSampleRequirementsModuleFields({
     onDelete,
     onFetch,
     fetching = false,
+    missing = false,
   }: {
     key: string
     label: string
@@ -1955,14 +2003,18 @@ export function OslSampleRequirementsModuleFields({
     /** Red state: single click fetches (from Manak), double-click uploads from the computer. */
     onFetch?: () => void
     fetching?: boolean
+    /** The row points at a file that is no longer stored: shown as not attached, with a note. */
+    missing?: boolean
   }) => {
     const btn = 'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-none border p-0 text-white shadow-sm transition-colors disabled:opacity-60'
-    if (!hasFile && onFetch) {
+    const missingNote = hasFile && missing ? `${label} PDF Is Missing From Storage (Deleted Earlier) — ` : ''
+    const missingRing = hasFile && missing ? 'ring-2 ring-amber-400 ring-offset-1' : ''
+    if ((!hasFile || missing) && onFetch) {
       return (
         <button
           type="button"
-          className={cn(btn, 'border-red-700 bg-red-600 hover:bg-red-700', fetching && 'animate-pulse')}
-          title={fetching ? `${label} — Fetching From Manak…` : `${label} — Click to Fetch From Manak, Double-Click to Upload From the Computer`}
+          className={cn(btn, 'border-red-700 bg-red-600 hover:bg-red-700', fetching && 'animate-pulse', missingRing)}
+          title={fetching ? `${label} — Fetching From Manak…` : `${missingNote || `${label} — `}Click to Fetch From Manak, Double-Click to Upload From the Computer`}
           aria-label={`Fetch ${label} From Manak (double-click to upload)`}
           disabled={disabled}
           onClick={() => {
@@ -1978,12 +2030,12 @@ export function OslSampleRequirementsModuleFields({
         </button>
       )
     }
-    if (!hasFile) {
+    if (!hasFile || missing) {
       return (
         <button
           type="button"
-          className={cn(btn, 'border-red-700 bg-red-600 hover:bg-red-700')}
-          title={`Upload ${label} (PDF)`}
+          className={cn(btn, 'border-red-700 bg-red-600 hover:bg-red-700', missingRing)}
+          title={missingNote ? `${missingNote}Click to Upload It Again` : `Upload ${label} (PDF)`}
           aria-label={`Upload ${label}`}
           disabled={disabled}
           onClick={onUpload}
@@ -2018,6 +2070,7 @@ export function OslSampleRequirementsModuleFields({
       key: `${row.id}:request`,
       label: 'Test Request',
       hasFile: Boolean(row.testRequestStoragePath.trim() || row.testRequestFileId.trim()),
+      missing: missingFileIds.has(row.testRequestFileId.trim()),
       onUpload: () => openTestRequestUpload(row),
       onView: () => viewTestRequest(row),
       onDelete: () => deleteTestRequest(row),
@@ -2028,6 +2081,7 @@ export function OslSampleRequirementsModuleFields({
       key: `${row.id}:report`,
       label: 'Test Report',
       hasFile: Boolean(row.testReportStoragePath.trim() || row.testReportFileId.trim()),
+      missing: missingFileIds.has(row.testReportFileId.trim()),
       onUpload: () => openTestReportUpload(row),
       onView: () => viewTestReport(row),
       onDelete: () => deleteTestReport(row),
