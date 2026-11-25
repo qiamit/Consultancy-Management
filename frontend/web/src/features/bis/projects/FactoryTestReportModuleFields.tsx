@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Eraser, FileText, LayoutTemplate, PenLine, Plus, Printer, Settings2, Trash2 } from 'lucide-react'
+import { Eraser, FileText, LayoutTemplate, Loader2, PenLine, Plus, Printer, Settings2, Trash2, Wand2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useConfirmDialog } from '@/components/ui/useConfirmDialog'
@@ -19,6 +19,7 @@ import { BisDocumentPrintSettingsDialog } from './BisDocumentPrintSettingsDialog
 import { IsCodeRequiredTestsDialog } from '@/features/masters/is-codes/IsCodeRequiredTestsDialog'
 import { fetchRequiredTests, type RequiredTest } from '@/features/masters/is-codes/requiredTestsApi'
 import { suggestSampleRequirements } from './ftrSampleRequirementsAi'
+import { dummyObservedValue } from './dummyObservedValue'
 import {
   applySampleToFactoryTestReport,
   emptyFactoryTestReportEntry,
@@ -271,6 +272,80 @@ export function FactoryTestReportModuleFields({
     if (!ok) return
     patchActiveReport({ parameters: [] })
     toast.success('All Tests Removed From This Report. Click Save to Keep the Change.')
+  }
+
+  /*
+   * "Requirements for This Sample" (owner, 25 Nov 2026: moved here from the Add Test Parameter window, which only
+   * selects tests now). The AI reads this sample's grade, size and declared value and the Standard, and changes ONLY
+   * each test's Specified Requirement; then every test gets a dummy Observed Value that meets it. Nothing else changes.
+   */
+  const latestRef = useRef({ value, onChange })
+  useEffect(() => {
+    latestRef.current = { value, onChange }
+  })
+  const [sampleAiStep, setSampleAiStep] = useState<string | null>(null)
+  const runSampleRequirements = async () => {
+    const params = activeReport.parameters
+    if (activeIndex < 0 || !params.length || sampleAiStep) return
+    const filled = params.filter((p) => p.observedValue.trim()).length
+    let replaceObserved = true
+    if (filled) {
+      replaceObserved = await confirmAction(
+        `${filled} of ${params.length} Tests Already Have an Observed Value. Replace Them With Dummy Values Too? Cancel Keeps Them and Fills Only the Empty Ones.`,
+        { title: 'Observed Values', confirmLabel: 'Replace' },
+      )
+    }
+    const sample = usableSamples.find((s) => s.id === activeReport.sampleRowId)
+    const keyOf = (p: FactoryTestReportParamRow, i: number) => p.testParameterId || `row-${i}`
+    setSampleAiStep('Starting…')
+    try {
+      const { results, model } = await suggestSampleRequirements({
+        isCodeId: isCodeId?.trim() ?? '',
+        isLabel: isCodeLabel.trim() || isNumber,
+        sample: {
+          description: sample?.sampleDescription ?? '',
+          grade: activeReport.gradeTypeVariety || sample?.gradeTypeVariety || '',
+          declaredValue: activeReport.declaredValue || sample?.declaredValue || '',
+        },
+        tests: params.map((p, i) => ({
+          id: keyOf(p, i),
+          testName: p.testName,
+          clause: p.clauseNo,
+          unit: p.unit,
+          requirement: p.specifiedRequirement,
+        })),
+        onStep: setSampleAiStep,
+      })
+      const byKey = new Map(results.map((r) => [r.id, r.requirement]))
+      // The report as it is now (the AI takes a while): only Specified Requirement and Observed Value change.
+      const { value: latest, onChange: emit } = latestRef.current
+      const reportId = activeReport.id
+      emit({
+        ...latest,
+        reports: latest.reports.map((r) =>
+          r.id !== reportId
+            ? r
+            : {
+                ...r,
+                parameters: r.parameters.map((p, i) => {
+                  const key = keyOf(p, i)
+                  const requirement = byKey.get(key)?.trim() || p.specifiedRequirement
+                  const observedValue =
+                    replaceObserved || !p.observedValue.trim() ? dummyObservedValue(requirement, `${key}|${p.testName}`) : p.observedValue
+                  return { ...p, specifiedRequirement: requirement, observedValue }
+                }),
+              },
+        ),
+      })
+      toast.success(
+        `${results.length} of ${params.length} Specified Requirements Updated, Dummy Observed Values Filled. Click Save to Keep the Change.`,
+        { description: model ? `AI Model: ${model}` : undefined },
+      )
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'AI Could Not Read the Requirements.')
+    } finally {
+      setSampleAiStep(null)
+    }
   }
 
   /** Master order of the IS (clause + drags in the picker); the report follows it. */
@@ -767,6 +842,21 @@ export function FactoryTestReportModuleFields({
           <Plus size={14} aria-hidden />
           Add Test Parameter
         </Button>
+        <Button
+          type="button"
+          variant="outline"
+          className={cn(
+            limsOutlineBtnClass,
+            'h-auto min-h-9 w-full justify-center gap-1.5 whitespace-normal px-2 py-2 text-xs font-semibold',
+          )}
+          disabled={disabled || activeReport.parameters.length === 0 || sampleAiStep !== null}
+          title="AI Reads This Sample's Grade, Size and Declared Value and the Standard: Updates Only the Specified Requirements, and Fills Dummy Observed Values"
+          onClick={() => void runSampleRequirements()}
+        >
+          {sampleAiStep ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Wand2 size={14} aria-hidden />}
+          Requirements for This Sample
+        </Button>
+        {sampleAiStep ? <p className="text-[10px] leading-snug text-stone-600">{sampleAiStep}</p> : null}
         {oldCount ? (
           <Button
             type="button"
@@ -962,41 +1052,6 @@ export function FactoryTestReportModuleFields({
           if (masterIsCodeId) setMasterTests({ isCodeId: masterIsCodeId, ids: new Set(list.map((t) => t.id ?? '').filter(Boolean)) })
           applyMasterOrder(list.map((t) => t.id).filter((id): id is string => Boolean(id)))
           for (const t of changed) refreshParamFromMaster(masterOf(t))
-        }}
-        sampleAi={{
-          label: 'Requirements for This Sample',
-          run: async (list, onStep) => {
-            const sample = usableSamples.find((s) => s.id === activeReport.sampleRowId)
-            const { results, model } = await suggestSampleRequirements({
-              isCodeId: isCodeId?.trim() ?? '',
-              isLabel: isCodeLabel.trim() || isNumber,
-              sample: {
-                description: sample?.sampleDescription ?? '',
-                grade: activeReport.gradeTypeVariety || sample?.gradeTypeVariety || '',
-                declaredValue: activeReport.declaredValue || sample?.declaredValue || '',
-              },
-              tests: list.map((t) => {
-                const onReport = activeReport.parameters.find((p) => p.testParameterId === t.id)
-                return {
-                  id: t.id!,
-                  testName: t.testName,
-                  clause: t.clause,
-                  unit: onReport?.unit || t.unit,
-                  requirement: onReport?.specifiedRequirement || t.requirement,
-                }
-              }),
-              onStep,
-            })
-            if (results.length) {
-              const byId = new Map(results.map((r) => [r.id, r.requirement]))
-              patchActiveReport({
-                parameters: activeReport.parameters.map((p) =>
-                  byId.has(p.testParameterId) ? { ...p, specifiedRequirement: byId.get(p.testParameterId)! } : p,
-                ),
-              })
-            }
-            return `${results.length} of ${list.length} Specified Requirements Updated on This Report${model ? ` (AI Model: ${model})` : ''}.`
-          },
         }}
       />
     </div>
