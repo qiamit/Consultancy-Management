@@ -947,6 +947,7 @@ export function IsCodeRequiredTestsDialog({
           isCodeId={isCodeId}
           isLabel={isLabel}
           existingKey={(t) => tests.some((x) => keyOf(x) === keyOf(t))}
+          listNames={tests.map((t) => t.testName).filter(Boolean)}
           onAdd={addFromAi}
         />
       </DialogContent>
