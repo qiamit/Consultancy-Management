@@ -1,34 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Award, Eye, EyeOff, FlaskConical, Ruler, ShieldCheck } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { Eye, EyeOff, ShieldCheck } from 'lucide-react'
 import { signIn, signOut, useAuth } from '@/hooks/useAuth'
 import { requestPasswordReset } from '@/features/auth/passwordApi'
 import { readTwoStepState } from '@/features/auth/mfaApi'
 import { TwoStepChallengePanel } from '@/components/auth/TwoStepLoginPanels'
-import {
-  limsDarkBarAccentClass,
-  limsDarkBarClass,
-  limsDarkBarGlowStyle,
-  limsFieldClass,
-  limsPageShellClass,
-  limsPanelClass,
-  limsPrimaryBtnClass,
-  limsRegistryFormClass,
-} from '@/lib/limsThemeUi'
-import { cn } from '@/lib/utils'
-import { publicHeroPatternStyle } from '@/features/public-site/PublicChrome'
-import {
-  PUBLIC_EMAIL,
-  PUBLIC_LAB_NAME,
-  PUBLIC_NABL_CALIBRATION,
-  PUBLIC_NABL_TESTING,
-  PUBLIC_TAGLINE_ACCENT,
-  PUBLIC_TAGLINE_LEAD,
-} from '@/features/public-site/publicNav'
+import { LoginStepsStrip, LoginTilesPanel, LoginWidgetsPanel } from '@/features/auth/LoginSidePanels'
+import { usePublicPageTitle } from '@/features/public-site/publicPageUtils'
+import { PUBLIC_EMAIL, PUBLIC_LAB_NAME } from '@/features/public-site/publicNav'
 
+/**
+ * Sign-in page in the website's Apple style, the same layout as the Qirlpl login page (owner, 25 Nov 2026): tiles
+ * on the left, live widgets on the right, the sign-in box in the middle. Sign-in, two-step code and password reset
+ * work as before.
+ */
 export default function AuthPage() {
   const navigate = useNavigate()
   const { user, loading: authLoading } = useAuth()
@@ -123,8 +108,8 @@ export default function AuthPage() {
         })()
         setError(
           `${message}\n\n` +
-            `Unable to reach Railway API host: ${host}\n` +
-            `Check VITE_SUPABASE_URL in your .env and verify the Railway api service is running.\n` +
+            `Unable to reach the app's API host: ${host}\n` +
+            `Check VITE_SUPABASE_URL in your .env and verify the API service is running.\n` +
             `If URL is correct, this is usually DNS/firewall/proxy blocking in your network or IDE preview.\n` +
             `Try in system Chrome and/or switch DNS to 8.8.8.8 or 1.1.1.1.\n\n` +
             `Origin: ${window.location.origin}\n` +
@@ -170,257 +155,156 @@ export default function AuthPage() {
     }
   }
 
+  usePublicPageTitle(
+    codeStep ? 'Two-Step Login · Quality Engineering' : forgotMode ? 'Reset Password · Quality Engineering' : 'Sign In · Quality Engineering',
+  )
+
+  const textLink = (label: string, onClick: () => void) => (
+    <button type="button" className="qp-link" style={{ fontSize: 14 }} onClick={onClick}>
+      {label}
+    </button>
+  )
+
   return (
-    <div className="grid flex-1 lg:grid-cols-[25%_50%_25%]">
-      <aside className={cn(limsDarkBarClass, 'order-2 flex h-full flex-col p-0 lg:order-1')}>
-        <div className="pointer-events-none absolute inset-0 opacity-[0.22]" style={limsDarkBarGlowStyle} />
-        <div className="pointer-events-none absolute inset-0 opacity-[0.16]" style={publicHeroPatternStyle} />
-        <div className={limsDarkBarAccentClass} />
-        <div className="absolute right-0 top-0 hidden h-full w-[2px] bg-gradient-to-b from-amber-500 via-amber-300 to-transparent lg:block" />
+    <section className="qp-screen alt">
+      <div className="qp-wrap-wide qp-auth">
+        <LoginTilesPanel />
+        <div className="qp-auth-main qp-rise">
+          <div className="text-center">
+            <span className="qp-brand-mark mx-auto qp-auth-mark" aria-hidden>
+              <ShieldCheck size={26} />
+            </span>
+            <h1 className="qp-auth-title">
+              {codeStep ? 'Two-Step Login' : forgotMode ? 'Reset Your Password' : 'Sign In to Consultancy Pro'}
+            </h1>
+            <p className="qp-small" style={{ marginTop: 8 }}>
+              For the Team and Clients of {PUBLIC_LAB_NAME}
+            </p>
+          </div>
 
-        <div className="relative flex min-h-[220px] flex-1 flex-col justify-center px-4 py-6 text-center sm:px-5">
-          <p className="mb-3 inline-flex items-center justify-center gap-2 self-center border border-amber-500/40 bg-stone-900/60 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-100">
-            <Award size={14} className="shrink-0 text-amber-300" />
-            About the Company
-          </p>
-          <h1 className="text-xl font-extrabold tracking-tight text-white sm:text-2xl">
-            {PUBLIC_TAGLINE_LEAD} <span className="text-amber-300">{PUBLIC_TAGLINE_ACCENT}</span>
-          </h1>
-          <p className="mt-3 text-xs leading-relaxed text-stone-300 sm:text-sm">
-            {PUBLIC_LAB_NAME} (QIRLPL) is a NABL-accredited testing and calibration laboratory in Raipur, Chhattisgarh.
-            We deliver independent, traceable results for manufacturing, construction and quality-conscious industry.
-          </p>
-        </div>
+          <div className="qp-panel qp-auth-panel">
+            {authNotice ? (
+              <p
+                className="qp-body"
+                style={{ fontSize: 15, background: 'rgba(0,113,227,0.08)', color: '#0058b0', padding: '10px 14px', borderRadius: 12, marginBottom: 16 }}
+              >
+                {authNotice}
+              </p>
+            ) : null}
 
-        <div className="relative h-px shrink-0 bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
-
-        <div className="relative flex min-h-[220px] flex-1 flex-col justify-center px-4 py-6 text-center sm:px-5">
-          <p className="mb-3 inline-flex items-center justify-center gap-2 self-center border border-amber-500/40 bg-stone-900/60 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-100">
-            <Ruler size={14} className="shrink-0 text-amber-300" />
-            Calibration
-          </p>
-          <p className="text-sm font-semibold text-white">ISO 17025 Recognized Calibration</p>
-          <p className="mt-1 text-[11px] font-medium tracking-wide text-amber-200">{PUBLIC_NABL_CALIBRATION}</p>
-          <p className="mt-3 text-xs leading-relaxed text-stone-300 sm:text-sm">
-            Traceable calibration of measuring equipment with certificates for quality systems and audits. All
-            calibrations follow ISO/IEC 17025:2017 and national / international measurement standards, with efficient
-            turnaround so instruments return to service quickly.
-          </p>
-        </div>
-      </aside>
-
-      <div
-        className={cn(
-          limsPageShellClass,
-          'order-1 flex max-w-none min-w-0 flex-col items-center justify-center gap-8 lg:order-2',
-        )}
-      >
-        <div className="max-w-lg px-2 text-center">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-800">QIRLPL Laboratory</p>
-          <p className="mt-2 text-2xl font-extrabold tracking-tight text-stone-900 sm:text-3xl">
-            Precision You Can Prove
-          </p>
-          <p className="mt-2 text-sm leading-relaxed text-stone-600">
-            Independent Testing and Calibration — Accurate, Traceable and Audit-Ready.
-          </p>
-          <div className="mx-auto mt-3 h-[2px] w-14 bg-amber-600" />
-        </div>
-
-        <div className="w-full max-w-md">
-          <div className={limsPanelClass}>
-            <div className={cn(limsDarkBarClass, 'px-5 py-3.5')}>
-              <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={limsDarkBarGlowStyle} />
-              <div className={limsDarkBarAccentClass} />
-              <div className="relative flex items-center justify-center gap-2">
-                <ShieldCheck size={18} className="text-amber-300" />
-                <h2 className="text-lg font-semibold tracking-tight text-white">
-                  {codeStep ? 'Two-Step Login' : forgotMode ? 'Reset Password' : 'Sign In'}
-                </h2>
-              </div>
-            </div>
-
-            <div className={cn(limsRegistryFormClass, 'space-y-5 p-5')}>
-              {authNotice ? (
-                <div className="rounded-none border border-amber-500/50 bg-amber-50 px-3 py-2.5">
-                  <p className="text-sm text-amber-900">{authNotice}</p>
-                </div>
-              ) : null}
-              {codeStep ? (
-                <TwoStepChallengePanel
-                  onVerified={goAfterAuth}
-                  secondaryAction={{ label: 'Back to Sign In', onClick: () => void backToSignIn() }}
-                />
-              ) : forgotMode ? (
-                <div className="space-y-4">
-                  {resetSent ? (
-                    <div className="rounded-none border border-emerald-600/40 bg-emerald-50 px-3 py-2.5">
-                      <p className="text-sm text-emerald-800">
-                        If an account exists for {email.trim()}, a password reset link has been sent. Check your
-                        inbox (and spam folder). The link works once and expires in about an hour.
-                      </p>
-                    </div>
-                  ) : (
-                    <>
-                      <p className="text-sm text-stone-600">
-                        Enter your account email. We will send you a link to set a new password.
-                      </p>
-                      <div className="space-y-2">
-                        <Label htmlFor="reset-email">Email Address</Label>
-                        <Input
-                          id="reset-email"
-                          type="email"
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' && !resetSending) void handleSendReset()
-                          }}
-                          placeholder={PUBLIC_EMAIL}
-                          autoComplete="email"
-                          autoFocus
-                          className={limsFieldClass}
-                        />
-                      </div>
-                      {resetError && (
-                        <div className="rounded-none border border-red-500/40 bg-red-50 px-3 py-2.5">
-                          <p className="text-sm text-red-700">{resetError}</p>
-                        </div>
-                      )}
-                    </>
-                  )}
-                  <div className="flex items-center justify-between gap-3">
-                    <button
-                      type="button"
-                      className="text-xs font-medium text-amber-800 hover:underline"
-                      onClick={() => setForgotMode(false)}
-                    >
-                      Back to sign in
-                    </button>
-                    {!resetSent && (
-                      <Button
-                        type="button"
-                        className={cn(limsPrimaryBtnClass, 'h-8 w-auto min-w-[7.5rem] px-5')}
-                        onClick={handleSendReset}
-                        disabled={!email.trim() || resetSending}
-                      >
-                        {resetSending ? 'Sending...' : 'Send reset link'}
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <>
-                <div className="space-y-4" onKeyDown={handleKeyDown}>
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email Address</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder={PUBLIC_EMAIL}
-                      autoComplete="email"
-                      autoFocus
-                      className={limsFieldClass}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="password">Password</Label>
-                    <div className="relative">
-                      <Input
-                        id="password"
-                        type={showPassword ? 'text' : 'password'}
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="Enter Your Password"
-                        autoComplete="current-password"
-                        className={cn(limsFieldClass, 'pr-10')}
+            {codeStep ? (
+              <TwoStepChallengePanel
+                onVerified={goAfterAuth}
+                secondaryAction={{ label: 'Back to Sign In', onClick: () => void backToSignIn() }}
+              />
+            ) : forgotMode ? (
+              <div className="qp-form">
+                {resetSent ? (
+                  <p className="qp-body" style={{ fontSize: 15 }}>
+                    If an account exists for {email.trim()}, a password reset link has been sent. Check your inbox (and
+                    spam folder). The link works once and expires in about an hour.
+                  </p>
+                ) : (
+                  <>
+                    <p className="qp-small" style={{ margin: 0 }}>
+                      Enter your account email. We will send you a link to set a new password.
+                    </p>
+                    <div className="qp-field">
+                      <label htmlFor="reset-email">Email Address</label>
+                      <input
+                        id="reset-email"
+                        type="email"
+                        className="qp-input"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !resetSending) void handleSendReset()
+                        }}
+                        placeholder={PUBLIC_EMAIL}
+                        autoComplete="email"
+                        autoFocus
                       />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword((v) => !v)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-500 transition-colors hover:text-stone-800"
-                        aria-label={showPassword ? 'Hide password' : 'Show password'}
-                        tabIndex={-1}
-                      >
-                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                      </button>
                     </div>
-                  </div>
-                </div>
-
-                {error && (
-                  <div className="rounded-none border border-red-500/40 bg-red-50 px-3 py-2.5">
-                    <p className="whitespace-pre-line text-sm text-red-700">{error}</p>
-                  </div>
+                  </>
                 )}
-
-                <div className="flex items-center justify-between gap-3">
+                {resetError ? <p className="qp-error">{resetError}</p> : null}
+                {resetSent ? null : (
                   <button
                     type="button"
-                    className="text-xs font-medium text-amber-800 hover:underline"
-                    onClick={openForgot}
+                    className="qp-btn w-full"
+                    onClick={() => void handleSendReset()}
+                    disabled={!email.trim() || resetSending}
                   >
-                    Forgot password?
+                    {resetSending ? 'Sending…' : 'Send Reset Link'}
                   </button>
-                  <Button
-                    type="button"
-                    className={cn(limsPrimaryBtnClass, 'h-8 w-auto min-w-[7.5rem] px-5')}
-                    onClick={handleSubmit}
-                    disabled={!canSubmit || loading}
-                  >
-                    {loading ? 'Signing in...' : 'Sign In'}
-                  </Button>
+                )}
+                <div className="text-center">{textLink('Back to Sign In', () => setForgotMode(false))}</div>
+              </div>
+            ) : (
+              <div className="qp-form" onKeyDown={handleKeyDown}>
+                <div className="qp-field">
+                  <label htmlFor="email">Email Address</label>
+                  <input
+                    id="email"
+                    type="email"
+                    className="qp-input"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder={PUBLIC_EMAIL}
+                    autoComplete="email"
+                    autoFocus
+                  />
                 </div>
-                </>
-              )}
-
-              <p className="text-center text-xs text-stone-500">
-                For Login Access Issues, Contact your Laboratory Director
-                <br />
-                or Write to{' '}
-                <a href={`mailto:${PUBLIC_EMAIL}`} className="font-medium text-amber-800 hover:underline">
-                  {PUBLIC_EMAIL}
-                </a>
-              </p>
-            </div>
+                <div className="qp-field">
+                  <label htmlFor="password">Password</label>
+                  <div className="relative">
+                    <input
+                      id="password"
+                      type={showPassword ? 'text' : 'password'}
+                      className="qp-input"
+                      style={{ paddingRight: 48 }}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Enter Your Password"
+                      autoComplete="current-password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((v) => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2"
+                      style={{ color: '#86868b', background: 'none', border: 0, cursor: 'pointer', padding: 4 }}
+                      aria-label={showPassword ? 'Hide Password' : 'Show Password'}
+                      tabIndex={-1}
+                    >
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                </div>
+                {error ? <p className="qp-error whitespace-pre-line">{error}</p> : null}
+                <button
+                  type="button"
+                  className="qp-btn w-full"
+                  style={{ marginTop: 4 }}
+                  onClick={handleSubmit}
+                  disabled={!canSubmit || loading}
+                >
+                  {loading ? 'Signing In…' : 'Sign In'}
+                </button>
+                <div className="text-center">{textLink('Forgot Password?', openForgot)}</div>
+              </div>
+            )}
           </div>
-        </div>
 
-        <div className="w-full max-w-lg px-2 text-center">
-          <div className="grid gap-2 sm:grid-cols-3">
-            {['Traceable Results', 'Audit-Ready Reports', 'Industry Trusted'].map((slogan) => (
-              <p
-                key={slogan}
-                className="border border-stone-500 bg-stone-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-stone-700"
-              >
-                {slogan}
-              </p>
-            ))}
-          </div>
-          <p className="mt-4 text-sm font-medium text-stone-700">Measured with Care. Reported with Confidence.</p>
+          <LoginStepsStrip />
+          <p className="qp-small text-center qp-auth-help-line">
+            Login Help: Your Admin or{' '}
+            <a href={`mailto:${PUBLIC_EMAIL}`} className="qp-link" style={{ fontSize: 13 }}>
+              {PUBLIC_EMAIL}
+            </a>
+          </p>
         </div>
+        <LoginWidgetsPanel />
       </div>
-
-      <aside className={cn(limsDarkBarClass, 'order-3 flex h-full flex-col p-0')}>
-        <div className="pointer-events-none absolute inset-0 opacity-[0.22]" style={limsDarkBarGlowStyle} />
-        <div className="pointer-events-none absolute inset-0 opacity-[0.16]" style={publicHeroPatternStyle} />
-        <div className={limsDarkBarAccentClass} />
-        <div className="absolute left-0 top-0 hidden h-full w-[2px] bg-gradient-to-b from-amber-500 via-amber-300 to-transparent lg:block" />
-
-        <div className="relative z-[1] flex h-full min-h-[280px] flex-col items-center justify-center px-4 py-8 text-center sm:px-6">
-          <p className="mb-4 inline-flex items-center justify-center gap-2 border border-amber-500/40 bg-stone-900/60 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-100">
-            <FlaskConical size={14} className="shrink-0 text-amber-300" />
-            Testing
-          </p>
-          <p className="text-lg font-bold leading-snug text-white sm:text-xl">ISO 17025 Recognized Testing</p>
-          <p className="mt-2 text-[11px] font-medium tracking-wide text-amber-200">{PUBLIC_NABL_TESTING}</p>
-          <p className="mt-4 max-w-sm text-xs leading-relaxed text-stone-300 sm:text-sm">
-            Independent testing of metals, TMT bars, construction materials, plywood and textiles — with full
-            traceability for compliance and quality assurance. BIS authorized testing centre.
-          </p>
-        </div>
-      </aside>
-    </div>
+    </section>
   )
 }

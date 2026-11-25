@@ -1,141 +1,115 @@
-import { useState } from 'react'
-import { FlaskConical, LayoutDashboard, Menu, X } from 'lucide-react'
-import { NavLink, Outlet } from 'react-router-dom'
-import { Button } from '@/components/ui/button'
+import { useEffect, useState } from 'react'
+import { BadgeCheck, LayoutDashboard, Menu, X } from 'lucide-react'
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
-import { limsDarkBarAccentClass, limsDarkBarBtnClass, limsDarkBarClass, limsDarkBarGlowStyle } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
-import { PUBLIC_LAB_NAME, PUBLIC_NAV_ITEMS } from './publicNav'
+import { PUBLIC_EMAIL, PUBLIC_LAB_NAME, PUBLIC_LAB_SHORT, PUBLIC_PHONE_PRIMARY, PUBLIC_TABS } from './publicNav'
 import { useCompanyLogoUrl } from './useCompanyLogoUrl'
+import './publicSite.css'
 
-function navClass(isActive: boolean, isLogin: boolean) {
-  if (isLogin) {
-    return cn(
-      limsDarkBarBtnClass,
-      'inline-flex items-center px-3',
-      isActive && 'bg-amber-500/25 text-amber-50',
-    )
-  }
-  return cn(
-    'inline-flex h-8 items-center rounded-none px-3 text-sm font-medium',
-    isActive ? 'bg-amber-500/20 text-amber-50' : 'text-stone-200 hover:bg-amber-500/15 hover:text-amber-50',
-  )
-}
+const telHref = (phone: string) => `tel:${phone.replace(/[^+\d]/g, '')}`
 
+/** Public website frame (Apple-style, the same as the Qirlpl website): top bar with the tabs, page, slim footer. */
 export default function PublicSiteLayout() {
-  const { user } = useAuth()
+  const { user, role } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
   const companyLogoUrl = useCompanyLogoUrl()
+  const { pathname } = useLocation()
+  const appHome = role === 'customer' ? '/portal' : '/'
+  const appLabel = role === 'customer' ? 'Open Portal' : 'Open App'
+
+  // Each tab is its own page: start it at the top.
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior })
+  }, [pathname])
+
+  // Stop the page behind the phone menu from scrolling while it is open (every link in it closes it).
+  useEffect(() => {
+    if (!menuOpen) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [menuOpen])
+
+  const closeMenu = () => setMenuOpen(false)
 
   return (
-    <div className="flex min-h-screen flex-col bg-gradient-to-b from-stone-100/90 to-stone-50">
-      <header className={cn(limsDarkBarClass, 'z-20')}>
-        <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={limsDarkBarGlowStyle} />
-        <div className={limsDarkBarAccentClass} />
-        <div className="relative mx-auto flex w-full max-w-[1600px] items-center gap-3 px-3 py-2.5 sm:px-5">
-          <div className="flex min-w-0 flex-1 items-center gap-3">
-            <NavLink
-              to="/home"
-              className="flex min-w-0 max-w-[min(28rem,52%)] items-center gap-2 text-white"
-              onClick={() => setMenuOpen(false)}
-            >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center border border-amber-500/45 bg-stone-800/80">
-                <FlaskConical size={18} className="text-amber-300" />
+    <div className="qp" id="top">
+      <header className="qp-nav">
+        <div className="qp-wrap-wide qp-nav-inner">
+          <Link to="/home" className="qp-brand" aria-label={`${PUBLIC_LAB_NAME}, home`} onClick={closeMenu}>
+            {companyLogoUrl ? (
+              <img src={companyLogoUrl} alt="" className="h-[30px] w-auto max-w-[96px] object-contain" />
+            ) : (
+              <span className="qp-brand-mark" aria-hidden>
+                <BadgeCheck size={17} />
               </span>
-              <span className="min-w-0 leading-tight">
-                <span className="block text-[11px] font-semibold tracking-tight sm:text-sm">
-                  {PUBLIC_LAB_NAME}
-                </span>
-                <span className="hidden text-[10px] uppercase tracking-[0.14em] text-amber-200 sm:block">
-                  Testing & Calibration
-                </span>
-              </span>
-            </NavLink>
+            )}
+            <span className="min-w-0 leading-tight">
+              <span className="qp-brand-name">{PUBLIC_LAB_SHORT}</span>
+              <span className="qp-brand-sub">BIS &amp; ISO Certification Consultants</span>
+            </span>
+          </Link>
 
-            <nav className="ml-auto hidden flex-wrap items-center justify-end gap-1 lg:flex" aria-label="Public Site">
-              {PUBLIC_NAV_ITEMS.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  className={({ isActive }) => navClass(isActive, item.to === '/auth')}
-                >
-                  {item.label}
-                </NavLink>
-              ))}
+          <nav className="qp-nav-links" aria-label="Website">
+            {PUBLIC_TABS.map((tab) => (
+              <NavLink key={tab.to} to={tab.to} className={({ isActive }) => cn('qp-nav-link', isActive && 'active')}>
+                {tab.label}
+              </NavLink>
+            ))}
+            <NavLink to={user ? appHome : '/auth'} className="qp-btn small" style={{ marginLeft: 8 }}>
               {user ? (
-                <NavLink to="/" className={cn(limsDarkBarBtnClass, 'inline-flex items-center gap-1.5 px-3')}>
-                  <LayoutDashboard size={14} />
-                  Open LIMS
-                </NavLink>
-              ) : null}
-            </nav>
-
-            <Button
-              type="button"
-              className={cn(limsDarkBarBtnClass, 'ml-auto h-8 w-8 px-0 lg:hidden')}
-              aria-label={menuOpen ? 'Close menu' : 'Open menu'}
-              aria-expanded={menuOpen}
-              onClick={() => setMenuOpen((open) => !open)}
-            >
-              {menuOpen ? <X size={16} /> : <Menu size={16} />}
-            </Button>
-          </div>
-
-          {companyLogoUrl ? (
-            <NavLink
-              to="/home"
-              className="flex h-11 max-w-[200px] shrink-0 items-center border border-amber-500/35 bg-white px-2"
-              aria-label="Company Logo"
-            >
-              <img
-                src={companyLogoUrl}
-                alt="Company Logo"
-                className="h-9 w-auto max-w-[180px] object-contain"
-              />
+                <>
+                  <LayoutDashboard size={14} /> {appLabel}
+                </>
+              ) : (
+                'Login'
+              )}
             </NavLink>
-          ) : null}
-        </div>
-
-        {menuOpen ? (
-          <nav className="relative border-t border-amber-500/20 px-3 py-2 lg:hidden" aria-label="Public Site Mobile">
-            <div className="flex flex-col gap-1">
-              {PUBLIC_NAV_ITEMS.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  onClick={() => setMenuOpen(false)}
-                  className={({ isActive }) =>
-                    cn(navClass(isActive, item.to === '/auth'), 'w-full justify-center')
-                  }
-                >
-                  {item.label}
-                </NavLink>
-              ))}
-              {user ? (
-                <NavLink
-                  to="/"
-                  onClick={() => setMenuOpen(false)}
-                  className={cn(limsDarkBarBtnClass, 'inline-flex w-full items-center justify-center gap-1.5')}
-                >
-                  <LayoutDashboard size={14} />
-                  Open LIMS
-                </NavLink>
-              ) : null}
-            </div>
           </nav>
-        ) : null}
+
+          <button
+            type="button"
+            className="qp-menu-btn"
+            aria-label={menuOpen ? 'Close Menu' : 'Open Menu'}
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            {menuOpen ? <X size={22} /> : <Menu size={22} />}
+          </button>
+        </div>
       </header>
 
-      <main className="flex min-h-0 flex-1 flex-col">
+      {menuOpen ? (
+        <nav className="qp-mobile-menu" aria-label="Website (Phone)">
+          {PUBLIC_TABS.map((tab) => (
+            <NavLink key={tab.to} to={tab.to} onClick={closeMenu} className={({ isActive }) => cn(isActive && 'active')}>
+              {tab.label}
+            </NavLink>
+          ))}
+          <Link to={user ? appHome : '/auth'} onClick={closeMenu}>
+            {user ? appLabel : 'Login'}
+          </Link>
+        </nav>
+      ) : null}
+
+      <main className="qp-main">
         <Outlet />
       </main>
 
-      <footer className={cn(limsDarkBarClass, 'mt-auto')}>
-        <div className="pointer-events-none absolute inset-0 opacity-[0.16]" style={limsDarkBarGlowStyle} />
-        <div className="absolute left-0 top-0 h-[2px] w-full bg-gradient-to-r from-amber-600 via-amber-300 to-transparent" />
-        <p className="relative px-4 py-3 text-center text-[11px] text-stone-400 sm:px-6">
-          © {new Date().getFullYear()} {PUBLIC_LAB_NAME}. All rights reserved.
-        </p>
+      <footer className="qp-footbar">
+        <div className="qp-wrap-wide qp-footbar-inner">
+          <span>
+            © {new Date().getFullYear()} {PUBLIC_LAB_NAME} · Raipur, Chhattisgarh
+          </span>
+          <span className="qp-footbar-links">
+            <Link to="/enquiry">Contact</Link>
+            <a href={`mailto:${PUBLIC_EMAIL}`}>{PUBLIC_EMAIL}</a>
+            <a href={telHref(PUBLIC_PHONE_PRIMARY)}>{PUBLIC_PHONE_PRIMARY}</a>
+          </span>
+        </div>
       </footer>
     </div>
   )
