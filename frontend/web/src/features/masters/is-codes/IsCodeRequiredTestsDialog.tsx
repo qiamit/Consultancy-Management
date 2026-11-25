@@ -577,11 +577,9 @@ export function IsCodeRequiredTestsDialog({
                 <span className="text-[11px] text-red-800">An Admin Marks It Reviewed.</span>
               )}
             </div>
-          ) : locked ? (
-            <p className="border-l-2 border-emerald-600 bg-emerald-50 px-3 py-1.5 text-xs text-emerald-900">
-              This List Is Locked. Unlock It to Make Changes.
-            </p>
           ) : null}
+          {/* No "This List Is Locked" banner (owner, 25 Nov 2026: "isko bhi remove kar do"): the Locked badge beside
+              Unlock List in the footer says it. */}
 
           <div
             className="min-h-0 flex-1 overflow-auto border border-stone-400 bg-white"
