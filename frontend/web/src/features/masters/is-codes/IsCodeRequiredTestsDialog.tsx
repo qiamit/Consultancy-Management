@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, CheckCheck, History, Lock, Plus, Save, Sparkles, Trash2, Unlock, Wand2 } from 'lucide-react'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { AlertTriangle, Check, CheckCheck, History, Lock, Pencil, Plus, Save, Sparkles, Trash2, Unlock, Wand2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useIsLaboratoryDirector } from '@/components/lims/LaboratoryDirectorOnly'
 import { Button } from '@/components/ui/button'
@@ -26,6 +26,8 @@ import {
 } from './requiredTestsApi'
 import { suggestRequiredTests } from './requiredTestsAi'
 import { finalProductTestName, formatRequirement } from './requirementText'
+import { InsertSymbolButton } from './InsertSymbolButton'
+import { insertIntoInput } from './scientificSymbols'
 
 const emptyTest = (): RequiredTest => ({
   testName: '',
@@ -118,6 +120,15 @@ export function IsCodeRequiredTestsDialog({
   const [busy, setBusy] = useState<string | null>(null)
   const [dirty, setDirty] = useState(false)
   const [aiSources, setAiSources] = useState<string[]>([])
+  /**
+   * Owner, 25 Nov 2026: a blank entry row above the first test with "+", and Edit / Delete on the tests below (the
+   * pattern of the other module tables). `draft` is that entry row; `editingIndex` the one test open for editing.
+   */
+  const [draft, setDraft] = useState<RequiredTest>(emptyTest)
+  const [editingIndex, setEditingIndex] = useState<number | null>(null)
+  /** The field "Insert Symbol" writes into: the last one typed in, else the entry row's Requirement. */
+  const lastFieldRef = useRef<HTMLInputElement | null>(null)
+  const draftRequirementRef = useRef<HTMLInputElement | null>(null)
   /** The saved list as loaded, to tell which tests a save changed. */
   const savedRef = useRef(new Map<string, string>())
   const snapshot = (list: RequiredTest[]) =>
@@ -151,6 +162,8 @@ export function IsCodeRequiredTestsDialog({
     setLoading(true)
     setDirty(false)
     setAiSources([])
+    setDraft(emptyTest())
+    setEditingIndex(null)
     fetchRequiredTests(isCodeId)
       .then((list) => {
         if (!live) return
@@ -175,6 +188,50 @@ export function IsCodeRequiredTestsDialog({
   const update = (i: number, patch: Partial<RequiredTest>) => {
     setTests((prev) => prev.map((t, k) => (k === i ? { ...t, ...patch } : t)))
     setDirty(true)
+  }
+
+  const updateDraft = (patch: Partial<RequiredTest>) => {
+    setDraft((prev) => ({ ...prev, ...patch }))
+    setDirty(true)
+  }
+
+  /** The entry row as a test, with its requirement in the usual form ("≤ 0.12 %" → "0.12 % Maximum"). */
+  const draftTest = (): RequiredTest | null =>
+    draft.testName.trim() ? { ...draft, requirement: formatRequirement(draft.requirement, draft.unit) } : null
+
+  /** "+": the entry row joins the list in its clause place, and the entry row is blank again. */
+  const addDraft = () => {
+    const row = draftTest()
+    if (!row) {
+      toast.error('Enter the Test Name First.')
+      return
+    }
+    if (tests.some((t) => keyOf(t) === keyOf(row))) {
+      toast.error(`${row.testName.trim()} Is Already in the List.`)
+      return
+    }
+    setTests((prev) => sortByClause([...prev, row]))
+    setDraft(emptyTest())
+    setEditingIndex(null)
+    setDirty(true)
+  }
+
+  /** Edit opens a test's fields; the second click (✓) closes them and the test moves to its clause place. */
+  const toggleEdit = (i: number) => {
+    if (editingIndex === i) {
+      setEditingIndex(null)
+      setTests((prev) => sortByClause(prev))
+    } else {
+      setEditingIndex(i)
+    }
+  }
+
+  const insertSymbol = (symbol: string) => {
+    let el = lastFieldRef.current
+    if (!el || !el.isConnected || el.readOnly || el.disabled) el = draftRequirementRef.current
+    if (!el || el.disabled) return
+    lastFieldRef.current = el
+    insertIntoInput(el, symbol)
   }
 
   const runAi = async () => {
@@ -233,12 +290,17 @@ export function IsCodeRequiredTestsDialog({
     if (!isCodeId) return
     setBusy('Saving…')
     try {
-      const { kept } = await saveRequiredTests(isCodeId, isLabel, tests, notes)
+      // A filled entry row not yet added with "+" is saved too.
+      const pending = draftTest()
+      const list0 = pending && !tests.some((t) => keyOf(t) === keyOf(pending)) ? sortByClause([...tests, pending]) : tests
+      const { kept } = await saveRequiredTests(isCodeId, isLabel, list0, notes)
       const list = await fetchRequiredTests(isCodeId)
       const before = savedRef.current
       const after = snapshot(list.tests)
       savedRef.current = after
       setTests(sortByClause(list.tests))
+      setDraft(emptyTest())
+      setEditingIndex(null)
       setDirty(false)
       onListChange?.(sortByClause(list.tests), list.tests.filter((t) => t.id && before.has(t.id) && before.get(t.id) !== after.get(t.id)))
       toast.success(`Required Tests Saved — ${list.tests.length} Tests.`)
@@ -308,7 +370,7 @@ export function IsCodeRequiredTestsDialog({
           '[&>button]:!rounded-none [&>button]:text-white [&>button]:opacity-100 [&>button]:hover:bg-white/10',
         )}
       >
-        <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white">
+        <div className="relative z-20 shrink-0 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white">
           <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={limsDarkBarGlowStyle} />
           <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
           {/* One row (owner, 25 Nov 2026: "ek hi line me arrange karo"): the title on the left, the actions on the right. */}
@@ -355,18 +417,8 @@ export function IsCodeRequiredTestsDialog({
               <Button type="button" variant="outline" className={cn(limsOutlineBtnClass, 'gap-1.5')} disabled={disabled} onClick={() => void runPastChecks()}>
                 <History size={14} aria-hidden /> From Past Checks
               </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className={cn(limsOutlineBtnClass, 'gap-1.5')}
-                disabled={disabled}
-                onClick={() => {
-                  setTests((prev) => [...prev, emptyTest()])
-                  setDirty(true)
-                }}
-              >
-                <Plus size={14} aria-hidden /> Add Test
-              </Button>
+              {/* Add Test moved into the table's entry row; its place holds Insert Symbol (owner, 25 Nov 2026). */}
+              <InsertSymbolButton disabled={disabled} onInsert={insertSymbol} />
             </div>
           </div>
         </div>
@@ -400,7 +452,13 @@ export function IsCodeRequiredTestsDialog({
             </p>
           ) : null}
 
-          <div className="min-h-0 flex-1 overflow-auto border border-stone-400 bg-white">
+          <div
+            className="min-h-0 flex-1 overflow-auto border border-stone-400 bg-white"
+            onFocusCapture={(e) => {
+              const el = e.target
+              if (el instanceof HTMLInputElement && el.type === 'text' && !el.readOnly) lastFieldRef.current = el
+            }}
+          >
             <table className="w-full min-w-[60rem] border-collapse text-xs">
               <thead className="sticky top-0 z-10 bg-stone-800 text-left text-[11px] uppercase tracking-wide text-stone-100">
                 <tr>
@@ -423,7 +481,7 @@ export function IsCodeRequiredTestsDialog({
                   <th className="w-24 px-2 py-1.5 text-center">Unit</th>
                   <th className="px-2 py-1.5 text-center">Requirement</th>
                   <th className="w-24 px-2 py-1.5 text-center" title="Possible Test in a Day">PT in a Day</th>
-                  <th className="w-10 px-2 py-1.5" />
+                  <th className="w-20 px-2 py-1.5 text-center">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -433,78 +491,232 @@ export function IsCodeRequiredTestsDialog({
                       Loading…
                     </td>
                   </tr>
-                ) : tests.length === 0 ? (
-                  <tr>
-                    <td colSpan={selection ? 9 : 8} className="px-3 py-6 text-center text-stone-500">
-                      No Tests Yet. Use Suggest With AI, From Past Checks or Add Test.
-                    </td>
-                  </tr>
                 ) : (
-                  tests.map((t, i) => (
-                    <tr key={t.id ?? `new-${i}`} className="border-t border-stone-200 align-top odd:bg-stone-50/60">
-                      {selection ? (
-                        <td className="px-2 py-1 text-center align-middle">
+                  <>
+                    {/* The entry row: fill it and click "+" (or press Enter) to add the test in its clause place. */}
+                    {!readOnly && !locked ? (
+                      <tr className="border-t border-stone-300 bg-amber-50/70 align-top">
+                        {selection ? <td /> : null}
+                        <td className="px-2 py-1 align-middle text-[10px] font-semibold uppercase text-amber-800">New</td>
+                        <td className="px-1 py-1">
+                          <Input
+                            className={cn(limsFieldClass, 'h-7 text-xs')}
+                            value={draft.testName}
+                            placeholder="Test Name"
+                            aria-label="New Test Name"
+                            disabled={disabled}
+                            onChange={(e) => updateDraft({ testName: e.target.value })}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault()
+                                addDraft()
+                              }
+                            }}
+                          />
+                        </td>
+                        <td className="px-1 py-1">
+                          <Input
+                            className={cn(limsFieldClass, 'h-7 text-center text-xs')}
+                            value={draft.clause}
+                            placeholder="Clause"
+                            aria-label="New Test Clause"
+                            disabled={disabled}
+                            onChange={(e) => updateDraft({ clause: e.target.value })}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault()
+                                addDraft()
+                              }
+                            }}
+                          />
+                        </td>
+                        <td className="px-1 py-1">
+                          <Input
+                            className={cn(limsFieldClass, 'h-7 text-center text-xs')}
+                            value={draft.testMethod}
+                            placeholder="Test Method"
+                            aria-label="New Test Method"
+                            disabled={disabled}
+                            onChange={(e) => updateDraft({ testMethod: e.target.value })}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault()
+                                addDraft()
+                              }
+                            }}
+                          />
+                        </td>
+                        <td className="px-1 py-1">
+                          <Input
+                            className={cn(limsFieldClass, 'h-7 text-center text-xs')}
+                            value={draft.unit}
+                            placeholder="Unit"
+                            aria-label="New Test Unit"
+                            disabled={disabled}
+                            onChange={(e) => updateDraft({ unit: e.target.value })}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault()
+                                addDraft()
+                              }
+                            }}
+                          />
+                        </td>
+                        <td className="px-1 py-1">
+                          <Input
+                            ref={draftRequirementRef}
+                            className={cn(limsFieldClass, 'h-7 text-center text-xs')}
+                            value={draft.requirement}
+                            placeholder="Requirement"
+                            aria-label="New Test Requirement"
+                            disabled={disabled}
+                            onChange={(e) => updateDraft({ requirement: e.target.value })}
+                            onBlur={(e) => {
+                              const next = formatRequirement(e.target.value, draft.unit)
+                              if (next !== e.target.value) updateDraft({ requirement: next })
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault()
+                                addDraft()
+                              }
+                            }}
+                          />
+                        </td>
+                        <td className="px-1 py-1 text-center align-middle">
                           <input
                             type="checkbox"
                             className="h-4 w-4 accent-amber-700"
-                            aria-label={`Select ${t.testName || 'Test'} for This Report`}
-                            title={t.id ? undefined : 'Save the List First'}
-                            disabled={readOnly || !t.id}
-                            checked={Boolean(t.id && selection.selectedIds.has(t.id))}
-                            onChange={(e) => selection.onToggle(t, e.target.checked)}
+                            checked={draft.possibleInADay}
+                            disabled={disabled}
+                            aria-label="New Test: Possible Test in a Day"
+                            onChange={(e) => updateDraft({ possibleInADay: e.target.checked })}
                           />
                         </td>
-                      ) : null}
-                      <td className="px-2 py-1 text-stone-500 tabular-nums">{i + 1}</td>
-                      <td className="px-1 py-1">
-                        <Input className={cn(limsFieldClass, 'h-7 text-xs')} value={t.testName} disabled={disabled} onChange={(e) => update(i, { testName: e.target.value })} />
-                      </td>
-                      <td className="px-1 py-1">
-                        <Input className={cn(limsFieldClass, 'h-7 text-center text-xs')} value={t.clause} disabled={disabled} onChange={(e) => update(i, { clause: e.target.value })} />
-                      </td>
-                      <td className="px-1 py-1">
-                        <Input className={cn(limsFieldClass, 'h-7 text-center text-xs')} value={t.testMethod} disabled={disabled} aria-label="Test Method" onChange={(e) => update(i, { testMethod: e.target.value })} />
-                      </td>
-                      <td className="px-1 py-1">
-                        <Input className={cn(limsFieldClass, 'h-7 text-center text-xs')} value={t.unit} disabled={disabled} aria-label="Unit" onChange={(e) => update(i, { unit: e.target.value })} />
-                      </td>
-                      <td className="px-1 py-1">
-                        <Input className={cn(limsFieldClass, 'h-7 text-center text-xs')} value={t.requirement} disabled={disabled} onChange={(e) => update(i, { requirement: e.target.value })}
-                          // "≤ 0.12 %" typed by hand becomes "0.12 % Maximum"; "8.5 - 10.5 %" becomes "8.5 % - 10.5 %".
-                          onBlur={(e) => {
-                            const next = formatRequirement(e.target.value, t.unit)
-                            if (next !== e.target.value) update(i, { requirement: next })
-                          }}
-                        />
-                      </td>
-                      <td className="px-1 py-1 text-center align-middle">
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4 accent-amber-700"
-                          checked={t.possibleInADay}
-                          disabled={disabled}
-                          aria-label={`${t.testName || 'Test'}: Possible Test in a Day`}
-                          onChange={(e) => update(i, { possibleInADay: e.target.checked })}
-                        />
-                      </td>
-                      <td className="px-1 py-1">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 w-7 rounded-none p-0 text-red-700 hover:bg-red-50"
-                          disabled={disabled}
-                          aria-label={`Remove ${t.testName || 'Test'}`}
-                          onClick={() => {
-                            setTests((prev) => prev.filter((_, k) => k !== i))
-                            setDirty(true)
-                          }}
-                        >
-                          <Trash2 size={14} />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))
+                        <td className="px-1 py-1">
+                          <div className="flex items-center justify-center">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 w-7 rounded-none p-0 text-amber-800 hover:bg-amber-100"
+                              disabled={disabled || !draft.testName.trim()}
+                              title="Add Test"
+                              aria-label="Add Test"
+                              onClick={addDraft}
+                            >
+                              <Plus size={15} />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : null}
+                    {tests.length === 0 ? (
+                      <tr>
+                        <td colSpan={selection ? 9 : 8} className="px-3 py-6 text-center text-stone-500">
+                          {readOnly || locked
+                            ? 'No Tests Yet.'
+                            : 'No Tests Yet. Fill the New Row Above and Click +, or Use Suggest With AI or From Past Checks.'}
+                        </td>
+                      </tr>
+                    ) : (
+                      tests.map((t, i) => {
+                        const editing = editingIndex === i
+                        const fieldClass = cn(limsFieldClass, 'h-7 text-xs', !editing && 'cursor-default focus-visible:ring-0')
+                        const doneOnEnter = (e: KeyboardEvent<HTMLInputElement>) => {
+                          if (editing && e.key === 'Enter') {
+                            e.preventDefault()
+                            toggleEdit(i)
+                          }
+                        }
+                        return (
+                          <tr
+                            key={t.id ?? `new-${i}`}
+                            className={cn('border-t border-stone-200 align-top odd:bg-stone-50/60', editing && '!bg-amber-50/70')}
+                          >
+                            {selection ? (
+                              <td className="px-2 py-1 text-center align-middle">
+                                <input
+                                  type="checkbox"
+                                  className="h-4 w-4 accent-amber-700"
+                                  aria-label={`Select ${t.testName || 'Test'} for This Report`}
+                                  title={t.id ? undefined : 'Save the List First'}
+                                  disabled={readOnly || !t.id}
+                                  checked={Boolean(t.id && selection.selectedIds.has(t.id))}
+                                  onChange={(e) => selection.onToggle(t, e.target.checked)}
+                                />
+                              </td>
+                            ) : null}
+                            <td className="px-2 py-1 text-stone-500 tabular-nums">{i + 1}</td>
+                            <td className="px-1 py-1">
+                              <Input className={fieldClass} value={t.testName} readOnly={!editing} disabled={disabled} onKeyDown={doneOnEnter} onChange={(e) => update(i, { testName: e.target.value })} />
+                            </td>
+                            <td className="px-1 py-1">
+                              <Input className={cn(fieldClass, 'text-center')} value={t.clause} readOnly={!editing} disabled={disabled} onKeyDown={doneOnEnter} onChange={(e) => update(i, { clause: e.target.value })} />
+                            </td>
+                            <td className="px-1 py-1">
+                              <Input className={cn(fieldClass, 'text-center')} value={t.testMethod} readOnly={!editing} disabled={disabled} aria-label="Test Method" onKeyDown={doneOnEnter} onChange={(e) => update(i, { testMethod: e.target.value })} />
+                            </td>
+                            <td className="px-1 py-1">
+                              <Input className={cn(fieldClass, 'text-center')} value={t.unit} readOnly={!editing} disabled={disabled} aria-label="Unit" onKeyDown={doneOnEnter} onChange={(e) => update(i, { unit: e.target.value })} />
+                            </td>
+                            <td className="px-1 py-1">
+                              <Input className={cn(fieldClass, 'text-center')} value={t.requirement} readOnly={!editing} disabled={disabled} onKeyDown={doneOnEnter} onChange={(e) => update(i, { requirement: e.target.value })}
+                                // "≤ 0.12 %" typed by hand becomes "0.12 % Maximum"; "8.5 - 10.5 %" becomes "8.5 % - 10.5 %".
+                                onBlur={(e) => {
+                                  if (!editing) return
+                                  const next = formatRequirement(e.target.value, t.unit)
+                                  if (next !== e.target.value) update(i, { requirement: next })
+                                }}
+                              />
+                            </td>
+                            <td className="px-1 py-1 text-center align-middle">
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 accent-amber-700"
+                                checked={t.possibleInADay}
+                                disabled={disabled}
+                                aria-label={`${t.testName || 'Test'}: Possible Test in a Day`}
+                                onChange={(e) => update(i, { possibleInADay: e.target.checked })}
+                              />
+                            </td>
+                            <td className="px-1 py-1">
+                              <div className="flex items-center justify-center gap-0.5">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 w-7 rounded-none p-0 text-stone-700 hover:bg-stone-100"
+                                  disabled={disabled}
+                                  title={editing ? 'Done Editing' : 'Edit Test'}
+                                  aria-label={editing ? `Done Editing ${t.testName || 'Test'}` : `Edit ${t.testName || 'Test'}`}
+                                  onClick={() => toggleEdit(i)}
+                                >
+                                  {editing ? <Check size={14} /> : <Pencil size={14} />}
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 w-7 rounded-none p-0 text-red-700 hover:bg-red-50"
+                                  disabled={disabled}
+                                  title="Delete Test"
+                                  aria-label={`Remove ${t.testName || 'Test'}`}
+                                  onClick={() => {
+                                    setTests((prev) => prev.filter((_, k) => k !== i))
+                                    setEditingIndex(null)
+                                    setDirty(true)
+                                  }}
+                                >
+                                  <Trash2 size={14} />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })
+                    )}
+                  </>
                 )}
               </tbody>
             </table>
