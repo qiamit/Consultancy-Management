@@ -14,7 +14,6 @@ import {
   Sparkles,
   Trash2,
   Unlock,
-  Wand2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useIsLaboratoryDirector } from '@/components/lims/LaboratoryDirectorOnly'
@@ -41,7 +40,7 @@ import {
   type RequiredTest,
   type StandardRevision,
 } from './requiredTestsApi'
-import { suggestRequiredTests } from './requiredTestsAi'
+import { RequiredTestsAiDialog } from './RequiredTestsAiDialog'
 import { finalProductTestName, formatRequirement } from './requirementText'
 import { InsertSymbolButton } from './InsertSymbolButton'
 import { insertIntoInput } from './scientificSymbols'
@@ -139,7 +138,6 @@ export function IsCodeRequiredTestsDialog({
   isCodeId,
   isLabel,
   selection,
-  sampleAi,
   onListChange,
   onRevisedChange,
   readOnly = false,
@@ -155,8 +153,6 @@ export function IsCodeRequiredTestsDialog({
     onToggle: (test: RequiredTest, checked: boolean) => void
     onToggleMany: (tests: RequiredTest[], checked: boolean) => void
   }
-  /** Factory Test Report: the AI reads this sample's requirement for the ticked tests (returns a message). */
-  sampleAi?: { label: string; run: (tests: RequiredTest[], onStep: (step: string) => void) => Promise<string> }
   /** After loading and after saving: the list in order, and the saved tests whose fields changed. */
   onListChange?: (tests: RequiredTest[], changed: RequiredTest[]) => void
   /** The "Standard Revised — Review" flag of this list changed (loaded, reviewed, unlocked). */
@@ -345,22 +341,19 @@ export function IsCodeRequiredTestsDialog({
     insertIntoInput(el, symbol)
   }
 
-  const runAi = async () => {
-    if (!isCodeId) return
-    try {
-      const result = await suggestRequiredTests({ isCodeId, isLabel, description: '', onStep: setBusy })
-      const { next, added } = mergeTests(tests, result.tests)
-      setTests(placeNew(next, added))
-      setAiSources(result.sources)
-      if (added) setDirty(true)
-      toast.success(`AI Suggested ${result.tests.length} Tests — ${added} New Added. Review, Then Save.`, {
-        description: result.model ? `AI Model: ${result.model}` : undefined,
-      })
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'AI Suggestion Failed.')
-    } finally {
-      setBusy(null)
-    }
+  /**
+   * "Suggest With AI" opens its own window (owner, 25 Nov 2026): instructions by text or voice, the sources, the steps,
+   * and the tests found. The ticked ones join the list here, in clause order (or slotted in by clause).
+   */
+  const [aiOpen, setAiOpen] = useState(false)
+  const addFromAi = (found: RequiredTest[], sources: string[], model?: string) => {
+    const { next, added } = mergeTests(tests, found)
+    setTests(placeNew(next, added))
+    setAiSources(sources)
+    if (added) setDirty(true)
+    toast.success(`${added} ${added === 1 ? 'Test' : 'Tests'} Added From AI. Review, Then Save.`, {
+      description: model ? `AI Model: ${model}` : undefined,
+    })
   }
 
   const runPastChecks = async () => {
@@ -456,18 +449,6 @@ export function IsCodeRequiredTestsDialog({
   const saved = tests.filter((t) => t.id)
   const ticked = selection ? saved.filter((t) => selection.selectedIds.has(t.id!)) : []
 
-  const runSampleAi = async () => {
-    if (!sampleAi || !ticked.length) return
-    try {
-      const msg = await sampleAi.run(ticked, setBusy)
-      toast.success(msg)
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'AI Could Not Read the Requirements.')
-    } finally {
-      setBusy(null)
-    }
-  }
-
   // Header buttons show only their icon (owner, 25 Nov 2026: "label hata kar only button"); the name is the tooltip.
   const iconBtnClass = cn(limsOutlineBtnClass, 'w-10 px-0')
   // Every value in the table is centred, except Test Name, which starts at the left (owner, 25 Nov 2026).
@@ -514,19 +495,6 @@ export function IsCodeRequiredTestsDialog({
               </DialogTitle>
             </DialogHeader>
             <div className="flex flex-wrap items-center justify-end gap-2">
-              {sampleAi ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className={iconBtnClass}
-                  disabled={busy !== null || loading || !ticked.length}
-                  title={`${sampleAi.label}: AI Reads This Sample's Grade, Size and Declared Value and the Standard for the Selected Tests`}
-                  aria-label={sampleAi.label}
-                  onClick={() => void runSampleAi()}
-                >
-                  <Wand2 size={16} aria-hidden />
-                </Button>
-              ) : null}
               <Button
                 type="button"
                 variant="outline"
@@ -534,7 +502,7 @@ export function IsCodeRequiredTestsDialog({
                 disabled={disabled}
                 title="Suggest With AI"
                 aria-label="Suggest With AI"
-                onClick={() => void runAi()}
+                onClick={() => setAiOpen(true)}
               >
                 <Sparkles size={16} aria-hidden />
               </Button>
@@ -959,6 +927,14 @@ export function IsCodeRequiredTestsDialog({
             </Button>
           </div>
         </DialogFooter>
+        <RequiredTestsAiDialog
+          open={aiOpen}
+          onOpenChange={setAiOpen}
+          isCodeId={isCodeId}
+          isLabel={isLabel}
+          existingKey={(t) => tests.some((x) => keyOf(x) === keyOf(t))}
+          onAdd={addFromAi}
+        />
       </DialogContent>
     </Dialog>
   )
