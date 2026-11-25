@@ -1,4 +1,5 @@
 import { parseRatePlans } from '@/lib/ratePlans'
+import { parseCustomThemeDef, type CustomThemeDef } from '@/lib/appTheme'
 /** Maps LabSettingsPage fields ↔ public.lab_settings and related lab tables */
 
 import type { SupabaseClient } from '@/lib/supabaseClient'
@@ -163,6 +164,8 @@ export function labSystemPayload(input: {
   dateFormat: string
   timeFormat: string
   theme: string
+  /** The chosen theme's definition when it is a custom one, so every user's app can draw it. */
+  customTheme: CustomThemeDef | null
   generateReportEnabled: boolean
 }): LabSettingsRow {
   return {
@@ -171,7 +174,40 @@ export function labSystemPayload(input: {
     date_format: input.dateFormat,
     time_format: input.timeFormat,
     theme: input.theme,
+    custom_theme: input.customTheme,
     generate_report_enabled: input.generateReportEnabled,
+  }
+}
+
+/** The company-wide look saved by the admin in Company Settings → Settings (theme, date / time format, currency). */
+export type OrgDisplaySettings = {
+  theme: string
+  customTheme: CustomThemeDef | null
+  currency: string
+  dateFormat: string
+  timeFormat: string
+}
+
+/**
+ * Reads the admin's saved display settings, so every user (Inspection Engineer and other staff, who cannot open
+ * Company Settings) gets the same theme and formats. Null when the row cannot be read (a customer, or offline).
+ */
+export async function fetchOrgDisplaySettings(client: SupabaseClient): Promise<OrgDisplaySettings | null> {
+  const id = await resolveLabSettingsRowId(client)
+  const { data, error } = await client
+    .from('lab_settings')
+    // '*' so the read still works where the custom_theme column is not there yet (deploy order).
+    .select('*')
+    .eq('id', id)
+    .maybeSingle()
+  if (error || !data) return null
+  const row = data as Record<string, unknown>
+  return {
+    theme: String(row.theme ?? '').trim(),
+    customTheme: parseCustomThemeDef(row.custom_theme),
+    currency: String(row.currency ?? '').trim(),
+    dateFormat: String(row.date_format ?? '').trim(),
+    timeFormat: String(row.time_format ?? '').trim(),
   }
 }
 

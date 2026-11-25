@@ -290,23 +290,24 @@ export function readCustomThemes(): CustomThemeDef[] {
     if (!raw) return []
     const parsed = JSON.parse(raw) as unknown
     if (!Array.isArray(parsed)) return []
-    return parsed
-      .map((item) => {
-        if (!item || typeof item !== 'object') return null
-        const row = item as Record<string, unknown>
-        const id = String(row.id ?? '')
-        const name = String(row.name ?? '').trim()
-        if (!isCustomThemeId(id) || !name) return null
-        return {
-          id,
-          name,
-          accent: normalizeHexColor(String(row.accent ?? '#0d9488')),
-          mode: row.mode === 'dark' ? 'dark' : 'light',
-        } satisfies CustomThemeDef
-      })
-      .filter((x): x is CustomThemeDef => Boolean(x))
+    return parsed.map(parseCustomThemeDef).filter((x): x is CustomThemeDef => Boolean(x))
   } catch {
     return []
+  }
+}
+
+/** A custom theme definition from storage or the database, or null when it is not one. */
+export function parseCustomThemeDef(item: unknown): CustomThemeDef | null {
+  if (!item || typeof item !== 'object') return null
+  const row = item as Record<string, unknown>
+  const id = String(row.id ?? '')
+  const name = String(row.name ?? '').trim()
+  if (!isCustomThemeId(id) || !name) return null
+  return {
+    id,
+    name,
+    accent: normalizeHexColor(String(row.accent ?? '#0d9488')),
+    mode: row.mode === 'dark' ? 'dark' : 'light',
   }
 }
 
