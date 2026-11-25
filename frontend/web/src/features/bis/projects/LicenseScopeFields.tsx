@@ -37,6 +37,7 @@ import {
   listBisProjectFiles,
   uploadBisProjectFile,
   type BisProjectViewFile,
+  isScopeRowFile,
 } from './bisProjectFilesApi'
 import {
   BIS_NOTES_COLUMN_COUNT_OPTIONS,
@@ -129,7 +130,8 @@ export function LicenseScopeFields({
     void listBisProjectFiles(scopeProjectId, 'manufacturing-scope')
       .then((files) => {
         if (!cancelled) {
-          setScopeFiles(files)
+          // Only the Scope PDF: the Manak Varieties' row attachments share this file type (isScopeRowFile).
+          setScopeFiles(files.filter((f) => !isScopeRowFile(f.file_name)))
           setScopeFilesProjectId(scopeProjectId)
         }
       })

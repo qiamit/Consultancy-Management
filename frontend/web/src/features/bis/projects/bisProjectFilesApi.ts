@@ -77,6 +77,16 @@ async function signedUrl(
   return data.signedUrl
 }
 
+/**
+ * Manak Varieties scope-row attachments ("[r0] Copy of Scope - x.pdf", "[draft] Drawing - y.pdf", "Other - z.pdf").
+ * They share the 'manufacturing-scope' file type with the Notes / License Scope "Upload Scope" PDF
+ * ("Manufacturing Scope.pdf"), so each side tells its own files by name (25 Nov 2026: "Upload Scope" deleted every
+ * other file of the type, the varieties' drawings included, and a row's new Copy of Scope could delete the Scope PDF).
+ */
+export function isScopeRowFile(fileName: string): boolean {
+  return /^\[(draft|r\d+)\] |^(Copy of Scope|Drawing|Other) - /.test(fileName)
+}
+
 export async function listBisProjectFiles(
   projectId: string,
   docKind: BisProjectDocKind = 'legal',
