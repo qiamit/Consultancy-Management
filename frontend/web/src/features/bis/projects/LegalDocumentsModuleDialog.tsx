@@ -490,6 +490,14 @@ export function LegalDocumentsModuleDialog({
   const [oslSamples, setOslSamples] = useState<OslSampleRequirementsModulePayload>(() =>
     emptyOslSampleRequirementsPayload(),
   )
+  // Files taken off samples (Remove on a Test Request / Test Report / Declared Value): deleted from storage only
+  // after the samples are saved. Until 25 Nov 2026 they were deleted at once, and a window closed without Save left
+  // 63 sample rows pointing at deleted PDFs.
+  const releasedOslFilesRef = useRef<BisProjectViewFile[]>([])
+  // The samples as last loaded or saved, to warn before closing with unsaved sample changes.
+  const savedOslSamplesRef = useRef('')
+  const oslSamplesKey = (payload: OslSampleRequirementsModulePayload) =>
+    JSON.stringify([payload.rows, payload.signatoryName, payload.signatoryDesignation])
   const [factoryTestReports, setFactoryTestReports] = useState<FactoryTestReportModulePayload>(
     () => emptyFactoryTestReportPayload(),
   )
@@ -613,6 +621,8 @@ export function LegalDocumentsModuleDialog({
       setTopManagement(emptyTopManagementPayload())
       setTechnicalStaff(emptyTechnicalStaffPayload())
       setOslSamples(emptyOslSampleRequirementsPayload())
+      releasedOslFilesRef.current = []
+      savedOslSamplesRef.current = ''
       setFactoryTestReports(emptyFactoryTestReportPayload())
       setFactorySampleOptions([])
       setLocationMap(emptyLocationMapPayload())
@@ -807,7 +817,10 @@ export function LegalDocumentsModuleDialog({
             setTechnicalStaff(parsed.rows.length > 0 ? parsed : emptyTechnicalStaffPayload())
           }
           if (showOslSampleFields) {
-            setOslSamples(parseOslSampleRequirementsPayload(payload))
+            const parsed = parseOslSampleRequirementsPayload(payload)
+            releasedOslFilesRef.current = []
+            savedOslSamplesRef.current = oslSamplesKey(parsed)
+            setOslSamples(parsed)
           }
           if (showFactoryTestFields) {
             const parsed = parseFactoryTestReportPayload(payload)
@@ -1301,6 +1314,21 @@ export function LegalDocumentsModuleDialog({
           signatoryName: oslSamples.signatoryName.trim(),
           signatoryDesignation: oslSamples.signatoryDesignation.trim(),
         })
+        savedOslSamplesRef.current = oslSamplesKey(oslSamples)
+        // Now delete the files taken off samples, unless a saved sample still uses one (a copied sample row).
+        const released = releasedOslFilesRef.current
+        releasedOslFilesRef.current = []
+        const stillUsed = new Set(
+          rows.flatMap((r) => [
+            r.testRequestFileId, r.testRequestStoragePath, r.testReportFileId, r.testReportStoragePath,
+            r.declaredValueFileId, r.declaredValueStoragePath, r.courierSlipFileId, r.courierSlipStoragePath,
+          ].map((v) => v.trim()).filter(Boolean)),
+        )
+        await Promise.allSettled(
+          released
+            .filter((f) => !stillUsed.has(f.id.trim()) && !stillUsed.has(f.storage_path.trim()))
+            .map((f) => deleteBisProjectFile(f)),
+        )
         // Prune Factory Test Report snapshots for samples removed from the offer letter.
         const ftrRaw = await fetchBisModulePayload(row.id, 'factory-test-report').catch(() => null)
         const ftr = parseFactoryTestReportPayload(ftrRaw)
@@ -1835,9 +1863,27 @@ export function LegalDocumentsModuleDialog({
     }
   }
 
+  /** Close the window; with unsaved sample changes (a removed PDF, a conformity result, an edit) ask first. */
+  const requestClose = async () => {
+    const unsavedSamples =
+      showOslSampleFields &&
+      !loading &&
+      Boolean(savedOslSamplesRef.current) &&
+      oslSamplesKey(oslSamples) !== savedOslSamplesRef.current
+    if (unsavedSamples) {
+      const ok = await confirmAction('The Sample Changes Are Not Saved Yet. Close Without Saving?', {
+        title: 'Unsaved Changes',
+        confirmLabel: 'Close Without Saving',
+        destructive: true,
+      })
+      if (!ok) return
+    }
+    onOpenChange(false)
+  }
+
   return (
     <>
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : void requestClose())}>
       <DialogContent
         persistOnFocusLoss
         layer="nested"
@@ -2362,6 +2408,9 @@ export function LegalDocumentsModuleDialog({
                 <OslSampleRequirementsModuleFields
                   value={oslSamples}
                   onChange={setOslSamples}
+                  onFileReleased={(file) => {
+                    releasedOslFilesRef.current.push(file)
+                  }}
                   disabled={busy || saving}
                   projectId={row?.id ?? null}
                   clientId={row?.client_id ?? null}
@@ -2783,7 +2832,7 @@ export function LegalDocumentsModuleDialog({
             type="button"
             className={cn(limsPrimaryBtnClass, 'h-9 px-4 text-sm')}
             disabled={busy || saving}
-            onClick={() => onOpenChange(false)}
+            onClick={() => void requestClose()}
           >
             Close
           </Button>

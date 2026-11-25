@@ -131,11 +131,43 @@ export async function createBisProjectFileUrls(
 ): Promise<{ viewUrl?: string; downloadUrl?: string }> {
   const path = storagePath.trim()
   if (!path) return {}
-  const [viewUrl, downloadUrl] = await Promise.all([
-    signedUrl(path, undefined, bucket),
-    signedUrl(path, { download: fileName.trim() || true }, bucket),
-  ])
-  return { viewUrl, downloadUrl }
+  try {
+    const [viewUrl, downloadUrl] = await Promise.all([
+      signedUrl(path, undefined, bucket),
+      signedUrl(path, { download: fileName.trim() || true }, bucket),
+    ])
+    return { viewUrl, downloadUrl }
+  } catch (err) {
+    // Storage says only "Object not found" for a file that was deleted while a row still points at it.
+    if (isMissingObjectError(err)) {
+      throw new Error(`${fileName.trim() || 'This File'} Is No Longer in Storage. Attach It Again.`)
+    }
+    throw err
+  }
+}
+
+function isMissingObjectError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false
+  const e = err as { message?: unknown; statusCode?: unknown; status?: unknown }
+  return /object not found|not_found|no such/i.test(String(e.message ?? '')) || String(e.statusCode ?? e.status ?? '') === '404'
+}
+
+const FILE_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * Of these file ids, the ones whose file record is gone: the file was deleted while a row still points at it (until
+ * 25 Nov 2026 a removed Sample Test Report / Test Request was deleted at once, even when the window was then closed
+ * without Save). Ids that are not file ids are left out.
+ */
+export async function findMissingBisProjectFileIds(ids: string[]): Promise<Set<string>> {
+  const wanted = [...new Set(ids.map((id) => id.trim()).filter((id) => FILE_ID_RE.test(id)))]
+  const found = new Set<string>()
+  for (let i = 0; i < wanted.length; i += 100) {
+    const { data, error } = await supabase.from('bis_project_files').select('id').in('id', wanted.slice(i, i + 100))
+    if (error) throw new Error(formatApiError(error))
+    for (const row of data ?? []) found.add(String((row as { id: unknown }).id))
+  }
+  return new Set(wanted.filter((id) => !found.has(id)))
 }
 
 /** Upload one file and return metadata + signed URLs. */
