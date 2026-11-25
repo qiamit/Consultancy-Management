@@ -402,7 +402,10 @@ async function libraryPlan(question: string, previous: string): Promise<{ words:
         'Standard itself uses: the product or material first (trade names turned into the standard\'s name, e.g. ' +
         '"TMT bars" -> "high strength deformed steel bars", "LPG cylinder" -> "welded low carbon steel cylinders ' +
         'liquefied petroleum gases"), then the property or topic; no general words such as standard, requirement, ' +
-        'value; and (2) up to 3 IS numbers that most likely cover this product or test (e.g. "IS 1786"), or none if ' +
+        'value. For a question on the BIS Act, its rules or regulations, licences, fees or compulsory certification, ' +
+        'use the words such a law or order uses, not the question\'s (e.g. "penalty for misuse of the Standard Mark" -> ' +
+        '"punishable imprisonment fine contravenes Standard Mark"; "is X under compulsory certification" -> "X Quality ' +
+        'Control Order Standard Mark licence"); and (2) up to 3 IS numbers that most likely cover this product or test (e.g. "IS 1786"), or none if ' +
         'unsure. Answer as JSON: {"words": ["..."], "standards": ["IS ..."]}',
       responseFormat: 'json_object',
       history: [],
@@ -455,6 +458,54 @@ async function wholeSmallDocs(folders: string[], hits: LibraryChunk[], question:
     .order('page')
     .order('seq')
     .limit(150)
+  return ((rows ?? []) as Array<{ doc_id: number; page: number; seq: number; kind: string; heading: string; text: string }>).map((c) => {
+    const d = byId.get(c.doc_id)!
+    return { relpath: d.relpath, folder: d.folder, doc_kind: d.kind, version_status: d.version_status, kind: c.kind, page: c.page, seq: c.seq, heading: c.heading, text: c.text }
+  })
+}
+
+/** A certification question: is a product under a Quality Control Order (compulsory BIS certification)? */
+const QCO_QUESTION = /\b(qco|quality control order|compulsory|mandatory|mandated)\b|अनिवार्य|ज़रूरी|jaruri|zaruri/i
+
+/**
+ * The Quality Control Order gazettes of these standards, read whole (a few pages each). BIS Guidelines file each QCO
+ * under the IS numbers it covers ("IS 1554(Part 1) - Cables_28012020.pdf"), but a product question searches only the
+ * standard's own folder. Ask AI test, 25 Nov 2026 (F03): "Are PVC insulated cables under a QCO?" read IS 1554 and
+ * IS 694 only and answered that the extracts do not say. At most 2 gazettes per standard, 4 in all.
+ */
+async function qcoGazettes(standards: string[], includeOld: boolean): Promise<LibraryChunk[]> {
+  if (!standards.length) return []
+  const quoted = standards.map((s) => `title.ilike."${s.replace(/"/g, '')}*"`).join(',')
+  const { data } = await supabase
+    .from('standard_docs')
+    .select('id, relpath, folder, kind, pages, version_status, title')
+    .eq('kind', 'Guideline')
+    .ilike('folder', '%QCO%')
+    .or(quoted)
+    .lte('pages', SMALL_DOC_PAGES)
+  type Doc = { id: number; relpath: string; folder: string; kind: string; pages: number; version_status: string | null; title: string | null }
+  const docs: Doc[] = []
+  for (const s of standards) {
+    // "IS 1554" must not take "IS 15540": the number ends where the title's next character is not a digit.
+    const own = new RegExp(`^${s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?!\\d)`, 'i')
+    docs.push(
+      ...((data ?? []) as Doc[])
+        .filter((d) => own.test(d.title ?? '') && (includeOld || ['Current', 'Included'].includes(d.version_status ?? 'Current')))
+        .sort((a, b) => b.relpath.localeCompare(a.relpath))
+        .slice(0, 2),
+    )
+  }
+  const picked = [...new Map(docs.map((d) => [d.id, d])).values()].slice(0, 4)
+  if (!picked.length) return []
+  const byId = new Map(picked.map((d) => [d.id, d]))
+  const { data: rows } = await supabase
+    .from('standard_chunks')
+    .select('doc_id, page, seq, kind, heading, text')
+    .in('doc_id', [...byId.keys()])
+    .order('doc_id')
+    .order('page')
+    .order('seq')
+    .limit(60)
   return ((rows ?? []) as Array<{ doc_id: number; page: number; seq: number; kind: string; heading: string; text: string }>).map((c) => {
     const d = byId.get(c.doc_id)!
     return { relpath: d.relpath, folder: d.folder, doc_kind: d.kind, version_status: d.version_status, kind: c.kind, page: c.page, seq: c.seq, heading: c.heading, text: c.text }
@@ -591,6 +642,17 @@ export async function askLibrary(input: { question: string; history: AskTurn[]; 
       chunks.push(...((r.data ?? []) as LibraryChunk[]).filter((c) => inNamedPart(c.relpath, f, parts)).slice(0, share))
     }
     withSamePage(chunks, await samePageChunks(chunks))
+    // "Is IS 1554 under a QCO?": the gazettes filed under these numbers come before the tables.
+    if (QCO_QUESTION.test(input.question)) {
+      const seen = new Set(chunks.map((c) => `${c.relpath}#${c.page}#${c.seq ?? c.heading}`))
+      for (const c of await qcoGazettes(folders, input.includeOld)) {
+        const key = `${c.relpath}#${c.page}#${c.seq ?? c.heading}`
+        if (!seen.has(key)) {
+          seen.add(key)
+          chunks.push(c)
+        }
+      }
+    }
     // Their tables in column layout, for numbers.
     const { data: docs } = await supabase
       .from('standard_docs')
@@ -648,6 +710,8 @@ export async function askLibrary(input: { question: string; history: AskTurn[]; 
     if (lead.length) {
       const more = await Promise.all(lead.map((f) => call(10, 6, [f])))
       for (const m of more) if (!m.error) ((m.data ?? []) as LibraryChunk[]).forEach(add)
+      // A certification question: the QCO gazettes filed under the lead standards' numbers (see qcoGazettes).
+      if (QCO_QUESTION.test(input.question)) (await qcoGazettes(lead, input.includeOld)).forEach(add)
       const samePage = await samePageChunks(chunks.filter((c) => lead.includes(c.folder)))
       const { data: docs } = await supabase.from('standard_docs').select('relpath, version_status, folder').in('folder', lead).eq('kind', 'Standard')
       // The lead standards' tables in lead order (the best standard's first), not by file id: IS 13428's tables
