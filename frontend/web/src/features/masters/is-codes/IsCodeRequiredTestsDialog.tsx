@@ -1,10 +1,27 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
-import { AlertTriangle, Check, CheckCheck, History, Lock, Pencil, Plus, Save, Sparkles, Trash2, Unlock, Wand2 } from 'lucide-react'
+import {
+  AlertTriangle,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  Check,
+  CheckCheck,
+  History,
+  Lock,
+  Pencil,
+  Plus,
+  Save,
+  Sparkles,
+  Trash2,
+  Unlock,
+  Wand2,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { useIsLaboratoryDirector } from '@/components/lims/LaboratoryDirectorOnly'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { SavedValueSuggestInput, uniqueSavedColumnValues } from '@/features/bis/projects/SavedValueSuggestInput'
 import {
   limsDarkBarGlowStyle,
   limsFullscreenDialogClass,
@@ -43,6 +60,36 @@ const emptyTest = (): RequiredTest => ({
 
 const keyOf = (t: RequiredTest) => `${t.testName.trim().toLowerCase()}|${t.appliesTo.trim().toLowerCase()}`
 
+let rowSeq = 0
+/** A key for a row on screen that is not saved yet (select box, Up / Down). */
+const newRowKey = () => `new-${Date.now().toString(36)}-${(rowSeq += 1)}`
+const withKey = (t: RequiredTest): RequiredTest => (t.rowKey ? t : { ...t, rowKey: t.id ?? newRowKey() })
+const rowKeyOf = (t: RequiredTest, i: number) => t.rowKey ?? t.id ?? `row-${i}`
+
+/**
+ * The entry row's starting values: those of the last added test (owner, 25 Nov 2026), except its name. Clear a field
+ * and type to pick from the values the list already has.
+ */
+const defaultsFrom = (t: RequiredTest | undefined): RequiredTest =>
+  t
+    ? {
+        ...emptyTest(),
+        clause: t.clause,
+        testMethod: t.testMethod,
+        unit: t.unit,
+        requirement: t.requirement,
+        testedBy: t.testedBy,
+        possibleInADay: t.possibleInADay,
+      }
+    : emptyTest()
+
+/** The test added last: the newest saved row (created_at), else the last row. */
+function lastAddedOf(list: RequiredTest[]): RequiredTest | undefined {
+  let best: RequiredTest | undefined
+  for (const t of list) if (!best || (t.createdAt ?? '') >= (best.createdAt ?? '')) best = t
+  return best
+}
+
 /** Adds the tests that are not in the list yet; returns the new list and how many were added. */
 function mergeTests(list: RequiredTest[], extra: RequiredTest[]): { next: RequiredTest[]; added: number } {
   const have = new Set(list.map(keyOf))
@@ -52,7 +99,7 @@ function mergeTests(list: RequiredTest[], extra: RequiredTest[]): { next: Requir
     have.add(k)
     return true
   })
-  return { next: [...list.filter((t) => t.testName.trim() || t.clause || t.requirement), ...fresh], added: fresh.length }
+  return { next: [...list.filter((t) => t.testName.trim() || t.clause || t.requirement), ...fresh.map(withKey)], added: fresh.length }
 }
 
 /**
@@ -72,6 +119,12 @@ function compareClause(a: string, b: string): number {
  */
 function sortByClause(list: RequiredTest[]): RequiredTest[] {
   return [...list].sort((p, q) => compareClause(p.clause, q.clause))
+}
+
+/** Puts a row before the first row with a later clause and leaves the others where they are (a hand-made order). */
+function insertByClause(list: RequiredTest[], row: RequiredTest): RequiredTest[] {
+  const at = list.findIndex((t) => compareClause(row.clause, t.clause) < 0)
+  return at < 0 ? [...list, row] : [...list.slice(0, at), row, ...list.slice(at)]
 }
 
 /**
@@ -126,6 +179,10 @@ export function IsCodeRequiredTestsDialog({
    */
   const [draft, setDraft] = useState<RequiredTest>(emptyTest)
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
+  /** Rows moved Up / Down by hand: keep that order (saved with the list) instead of the default clause order. */
+  const [customOrder, setCustomOrder] = useState(false)
+  /** The select box of each row (Delete Selected). */
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(() => new Set())
   /** The field "Insert Symbol" writes into: the last one typed in, else the entry row's Requirement. */
   const lastFieldRef = useRef<HTMLInputElement | null>(null)
   const draftRequirementRef = useRef<HTMLInputElement | null>(null)
@@ -164,14 +221,18 @@ export function IsCodeRequiredTestsDialog({
     setAiSources([])
     setDraft(emptyTest())
     setEditingIndex(null)
+    setSelectedKeys(new Set())
     fetchRequiredTests(isCodeId)
       .then((list) => {
         if (!live) return
-        setTests(sortByClause(list.tests))
+        const shown = list.customOrder ? list.tests : sortByClause(list.tests)
+        setTests(shown)
+        setCustomOrder(list.customOrder)
+        setDraft(defaultsFrom(lastAddedOf(list.tests)))
         setNotes(list.notes)
         setLockedAt(list.lockedAt)
         savedRef.current = snapshot(list.tests)
-        onListChange?.(sortByClause(list.tests), [])
+        onListChange?.(shown, [])
         setRevision(null)
         if (list.lockedAt) void loadRevision(isCodeId, () => live)
       })
@@ -210,8 +271,9 @@ export function IsCodeRequiredTestsDialog({
       toast.error(`${row.testName.trim()} Is Already in the List.`)
       return
     }
-    setTests((prev) => sortByClause([...prev, row]))
-    setDraft(emptyTest())
+    const added = { ...row, rowKey: newRowKey() }
+    setTests((prev) => insertByClause(prev, added))
+    setDraft(defaultsFrom(added))
     setEditingIndex(null)
     setDirty(true)
   }
@@ -220,10 +282,59 @@ export function IsCodeRequiredTestsDialog({
   const toggleEdit = (i: number) => {
     if (editingIndex === i) {
       setEditingIndex(null)
-      setTests((prev) => sortByClause(prev))
+      if (!customOrder) setTests((prev) => sortByClause(prev))
     } else {
       setEditingIndex(i)
     }
+  }
+
+  /** Up / Down (in place of the serial number): the list keeps this hand-made order from now on. */
+  const moveRow = (i: number, dir: -1 | 1) => {
+    const j = i + dir
+    if (j < 0 || j >= tests.length) return
+    setTests((prev) => {
+      const next = [...prev]
+      ;[next[i], next[j]] = [next[j], next[i]]
+      return next
+    })
+    setEditingIndex((e) => (e === i ? j : e === j ? i : e))
+    setCustomOrder(true)
+    setDirty(true)
+  }
+
+  /** The Clause header: back to the default clause order. */
+  const sortNow = () => {
+    const next = sortByClause(tests)
+    const changed = next.some((t, k) => t !== tests[k])
+    setTests(next)
+    setEditingIndex(null)
+    if (changed || customOrder) setDirty(true)
+    setCustomOrder(false)
+  }
+
+  /** New rows from AI / Past Checks: in clause order, or slotted in by clause when the list is arranged by hand. */
+  const placeNew = (next: RequiredTest[], added: number) => {
+    if (!customOrder) return sortByClause(next)
+    const kept = next.slice(0, next.length - added)
+    return next.slice(next.length - added).reduce((acc, r) => insertByClause(acc, r), kept)
+  }
+
+  const toggleSelected = (key: string, checked: boolean) =>
+    setSelectedKeys((prev) => {
+      const next = new Set(prev)
+      if (checked) next.add(key)
+      else next.delete(key)
+      return next
+    })
+
+  const deleteSelected = () => {
+    const n = selectedKeys.size
+    if (!n) return
+    setTests((prev) => prev.filter((t, i) => !selectedKeys.has(rowKeyOf(t, i))))
+    setSelectedKeys(new Set())
+    setEditingIndex(null)
+    setDirty(true)
+    toast.success(`${n} ${n === 1 ? 'Test' : 'Tests'} Removed. Click Save to Keep the Change.`)
   }
 
   const insertSymbol = (symbol: string) => {
@@ -239,7 +350,7 @@ export function IsCodeRequiredTestsDialog({
     try {
       const result = await suggestRequiredTests({ isCodeId, isLabel, description: '', onStep: setBusy })
       const { next, added } = mergeTests(tests, result.tests)
-      setTests(sortByClause(next))
+      setTests(placeNew(next, added))
       setAiSources(result.sources)
       if (added) setDirty(true)
       toast.success(`AI Suggested ${result.tests.length} Tests — ${added} New Added. Review, Then Save.`, {
@@ -276,7 +387,7 @@ export function IsCodeRequiredTestsDialog({
           possibleInADay: false,
         })),
       )
-      setTests(sortByClause(next))
+      setTests(placeNew(next, added))
       if (added) setDirty(true)
       toast.success(`${past.length} Tests Found in Past Checks — ${added} New Added. Review, Then Save.`)
     } catch (err) {
@@ -292,17 +403,19 @@ export function IsCodeRequiredTestsDialog({
     try {
       // A filled entry row not yet added with "+" is saved too.
       const pending = draftTest()
-      const list0 = pending && !tests.some((t) => keyOf(t) === keyOf(pending)) ? sortByClause([...tests, pending]) : tests
-      const { kept } = await saveRequiredTests(isCodeId, isLabel, list0, notes)
+      const list0 = pending && !tests.some((t) => keyOf(t) === keyOf(pending)) ? insertByClause(tests, pending) : tests
+      const { kept } = await saveRequiredTests(isCodeId, isLabel, list0, notes, customOrder)
       const list = await fetchRequiredTests(isCodeId)
       const before = savedRef.current
       const after = snapshot(list.tests)
       savedRef.current = after
-      setTests(sortByClause(list.tests))
-      setDraft(emptyTest())
+      const shown = customOrder ? list.tests : sortByClause(list.tests)
+      setTests(shown)
+      setDraft(defaultsFrom(lastAddedOf(list.tests)))
       setEditingIndex(null)
+      setSelectedKeys(new Set())
       setDirty(false)
-      onListChange?.(sortByClause(list.tests), list.tests.filter((t) => t.id && before.has(t.id) && before.get(t.id) !== after.get(t.id)))
+      onListChange?.(shown, list.tests.filter((t) => t.id && before.has(t.id) && before.get(t.id) !== after.get(t.id)))
       toast.success(`Required Tests Saved — ${list.tests.length} Tests.`)
       if (kept.length) toast.message(`Still Used Elsewhere, So Not Removed: ${kept.join(', ')}`)
     } catch (err) {
@@ -340,7 +453,6 @@ export function IsCodeRequiredTestsDialog({
     }
   }
 
-  const labTests = tests.filter((t) => t.testName.trim() && t.testedBy === 'Lab').length
   const saved = tests.filter((t) => t.id)
   const ticked = selection ? saved.filter((t) => selection.selectedIds.has(t.id!)) : []
 
@@ -355,6 +467,26 @@ export function IsCodeRequiredTestsDialog({
       setBusy(null)
     }
   }
+
+  // Header buttons show only their icon (owner, 25 Nov 2026: "label hata kar only button"); the name is the tooltip.
+  const iconBtnClass = cn(limsOutlineBtnClass, 'w-10 px-0')
+  // Every value in the table is centred (owner, 25 Nov 2026).
+  const cellInputClass = cn(limsFieldClass, 'h-7 text-center text-xs')
+  const suggestions = {
+    testName: uniqueSavedColumnValues(tests.map((t) => t.testName)),
+    clause: uniqueSavedColumnValues(tests.map((t) => t.clause)),
+    testMethod: uniqueSavedColumnValues(tests.map((t) => t.testMethod)),
+    unit: uniqueSavedColumnValues(tests.map((t) => t.unit)),
+    requirement: uniqueSavedColumnValues(tests.map((t) => t.requirement)),
+  }
+  const addOnEnter = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && !e.defaultPrevented) {
+      e.preventDefault()
+      addDraft()
+    }
+  }
+  const allKeys = tests.map(rowKeyOf)
+  const allSelected = allKeys.length > 0 && allKeys.every((k) => selectedKeys.has(k))
 
   return (
     <Dialog open={open} onOpenChange={(next) => busy === null && onOpenChange(next)}>
@@ -373,51 +505,50 @@ export function IsCodeRequiredTestsDialog({
         <div className="relative z-20 shrink-0 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2.5 text-white">
           <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={limsDarkBarGlowStyle} />
           <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
-          {/* One row (owner, 25 Nov 2026: "ek hi line me arrange karo"): the title on the left, the actions on the right. */}
+          {/* One line: the title (with the IS) on the left, the icon buttons on the right. The lock state and Unsaved
+              Changes are in the footer beside Lock List (owner, 25 Nov 2026). */}
           <div className="relative flex flex-wrap items-center gap-x-4 gap-y-2 pr-10">
             <DialogHeader className="min-w-0 flex-1 text-left">
-              <DialogTitle className="flex flex-wrap items-center gap-2 text-base font-semibold tracking-tight text-white">
-                Required Tests
-                <span
-                  className={cn(
-                    'border px-2 py-0.5 text-[11px] font-semibold',
-                    locked ? 'border-emerald-400 bg-emerald-600/30 text-emerald-100' : 'border-amber-400 bg-amber-500/20 text-amber-100',
-                  )}
-                >
-                  {locked ? 'Locked' : 'Not Locked'}
-                </span>
-                {locked && revision?.revised ? (
-                  <span className="border border-red-300 bg-red-600/40 px-2 py-0.5 text-[11px] font-semibold text-red-50">Standard Revised — Review</span>
-                ) : null}
-                {dirty ? <span className="text-[11px] font-medium text-amber-200">Unsaved Changes</span> : null}
+              <DialogTitle className="truncate text-base font-semibold tracking-tight text-white">
+                Required Tests{isLabel ? ` — ${isLabel}` : ''}
               </DialogTitle>
-              <p className="mt-0.5 line-clamp-2 break-words text-xs text-stone-300">
-                {isLabel} — {labTests} Laboratory {labTests === 1 ? 'Test' : 'Tests'}
-                {selection
-                  ? ` · ${ticked.length} of ${saved.length} Selected for This Report${dirty ? ' — Save to Select New Tests' : ''}`
-                  : null}
-              </p>
             </DialogHeader>
             <div className="flex flex-wrap items-center justify-end gap-2">
               {sampleAi ? (
                 <Button
                   type="button"
                   variant="outline"
-                  className={cn(limsOutlineBtnClass, 'gap-1.5')}
+                  className={iconBtnClass}
                   disabled={busy !== null || loading || !ticked.length}
-                  title="AI Reads This Sample's Grade, Size and Declared Value and the Standard for the Selected Tests"
+                  title={`${sampleAi.label}: AI Reads This Sample's Grade, Size and Declared Value and the Standard for the Selected Tests`}
+                  aria-label={sampleAi.label}
                   onClick={() => void runSampleAi()}
                 >
-                  <Wand2 size={14} aria-hidden /> {sampleAi.label}
+                  <Wand2 size={16} aria-hidden />
                 </Button>
               ) : null}
-              <Button type="button" variant="outline" className={cn(limsOutlineBtnClass, 'gap-1.5')} disabled={disabled} onClick={() => void runAi()}>
-                <Sparkles size={14} aria-hidden /> Suggest With AI
+              <Button
+                type="button"
+                variant="outline"
+                className={iconBtnClass}
+                disabled={disabled}
+                title="Suggest With AI"
+                aria-label="Suggest With AI"
+                onClick={() => void runAi()}
+              >
+                <Sparkles size={16} aria-hidden />
               </Button>
-              <Button type="button" variant="outline" className={cn(limsOutlineBtnClass, 'gap-1.5')} disabled={disabled} onClick={() => void runPastChecks()}>
-                <History size={14} aria-hidden /> From Past Checks
+              <Button
+                type="button"
+                variant="outline"
+                className={iconBtnClass}
+                disabled={disabled}
+                title="From Past Checks"
+                aria-label="From Past Checks"
+                onClick={() => void runPastChecks()}
+              >
+                <History size={16} aria-hidden />
               </Button>
-              {/* Add Test moved into the table's entry row; its place holds Insert Symbol (owner, 25 Nov 2026). */}
               <InsertSymbolButton disabled={disabled} onInsert={insertSymbol} />
             </div>
           </div>
@@ -460,23 +591,42 @@ export function IsCodeRequiredTestsDialog({
             }}
           >
             <table className="w-full min-w-[60rem] border-collapse text-xs">
-              <thead className="sticky top-0 z-10 bg-stone-800 text-left text-[11px] uppercase tracking-wide text-stone-100">
+              <thead className="sticky top-0 z-10 bg-stone-800 text-[11px] uppercase tracking-wide text-stone-100">
                 <tr>
-                  {selection ? (
-                    <th className="w-8 px-2 py-1.5 text-center">
+                  <th className="w-8 px-2 py-1.5 text-center">
+                    {selection ? (
                       <input
                         type="checkbox"
                         className="h-4 w-4 accent-amber-600"
-                        aria-label="Select All Tests"
+                        aria-label="Select All Tests for This Report"
                         disabled={readOnly || !saved.length}
                         checked={saved.length > 0 && ticked.length === saved.length}
                         onChange={(e) => selection.onToggleMany(saved, e.target.checked)}
                       />
-                    </th>
-                  ) : null}
-                  <th className="w-8 px-2 py-1.5">#</th>
-                  <th className="px-2 py-1.5">Test Name</th>
-                  <th className="w-32 px-2 py-1.5 text-center">Clause</th>
+                    ) : (
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-amber-600"
+                        aria-label="Select All Tests"
+                        disabled={disabled || !tests.length}
+                        checked={allSelected}
+                        onChange={(e) => setSelectedKeys(e.target.checked ? new Set(allKeys) : new Set())}
+                      />
+                    )}
+                  </th>
+                  <th className="w-16 px-2 py-1.5 text-center" title="Move a Test Up or Down">Move</th>
+                  <th className="px-2 py-1.5 text-center">Test Name</th>
+                  <th className="w-32 px-2 py-1.5 text-center">
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 uppercase tracking-wide disabled:opacity-60"
+                      title="Sort by Clause, Small to Big"
+                      disabled={disabled}
+                      onClick={sortNow}
+                    >
+                      Clause <ArrowUpDown size={12} aria-hidden />
+                    </button>
+                  </th>
                   <th className="w-40 px-2 py-1.5 text-center">Test Method</th>
                   <th className="w-24 px-2 py-1.5 text-center">Unit</th>
                   <th className="px-2 py-1.5 text-center">Requirement</th>
@@ -487,103 +637,84 @@ export function IsCodeRequiredTestsDialog({
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={selection ? 9 : 8} className="px-3 py-6 text-center text-stone-500">
+                    <td colSpan={9} className="px-3 py-6 text-center text-stone-500">
                       Loading…
                     </td>
                   </tr>
                 ) : (
                   <>
-                    {/* The entry row: fill it and click "+" (or press Enter) to add the test in its clause place. */}
+                    {/* The entry row: it starts with the last added test's values; clear a field and type to pick a value
+                        the list already has. "+" or Enter adds the test in its clause place. */}
                     {!readOnly && !locked ? (
-                      <tr className="border-t border-stone-300 bg-amber-50/70 align-top">
-                        {selection ? <td /> : null}
-                        <td className="px-2 py-1 align-middle text-[10px] font-semibold uppercase text-amber-800">New</td>
+                      <tr className="border-t border-stone-300 bg-amber-50/70 align-middle">
+                        <td />
+                        <td className="px-2 py-1 text-center text-[10px] font-semibold uppercase text-amber-800">New</td>
                         <td className="px-1 py-1">
-                          <Input
-                            className={cn(limsFieldClass, 'h-7 text-xs')}
+                          <SavedValueSuggestInput
+                            className={cellInputClass}
                             value={draft.testName}
+                            suggestions={suggestions.testName}
                             placeholder="Test Name"
-                            aria-label="New Test Name"
+                            ariaLabel="New Test Name"
                             disabled={disabled}
-                            onChange={(e) => updateDraft({ testName: e.target.value })}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault()
-                                addDraft()
-                              }
-                            }}
+                            onChange={(v) => updateDraft({ testName: v })}
+                            onKeyDown={addOnEnter}
                           />
                         </td>
                         <td className="px-1 py-1">
-                          <Input
-                            className={cn(limsFieldClass, 'h-7 text-center text-xs')}
+                          <SavedValueSuggestInput
+                            className={cellInputClass}
                             value={draft.clause}
+                            suggestions={suggestions.clause}
                             placeholder="Clause"
-                            aria-label="New Test Clause"
+                            ariaLabel="New Test Clause"
                             disabled={disabled}
-                            onChange={(e) => updateDraft({ clause: e.target.value })}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault()
-                                addDraft()
-                              }
-                            }}
+                            onChange={(v) => updateDraft({ clause: v })}
+                            onKeyDown={addOnEnter}
                           />
                         </td>
                         <td className="px-1 py-1">
-                          <Input
-                            className={cn(limsFieldClass, 'h-7 text-center text-xs')}
+                          <SavedValueSuggestInput
+                            className={cellInputClass}
                             value={draft.testMethod}
+                            suggestions={suggestions.testMethod}
                             placeholder="Test Method"
-                            aria-label="New Test Method"
+                            ariaLabel="New Test Method"
                             disabled={disabled}
-                            onChange={(e) => updateDraft({ testMethod: e.target.value })}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault()
-                                addDraft()
-                              }
-                            }}
+                            onChange={(v) => updateDraft({ testMethod: v })}
+                            onKeyDown={addOnEnter}
                           />
                         </td>
                         <td className="px-1 py-1">
-                          <Input
-                            className={cn(limsFieldClass, 'h-7 text-center text-xs')}
+                          <SavedValueSuggestInput
+                            className={cellInputClass}
                             value={draft.unit}
+                            suggestions={suggestions.unit}
                             placeholder="Unit"
-                            aria-label="New Test Unit"
+                            ariaLabel="New Test Unit"
                             disabled={disabled}
-                            onChange={(e) => updateDraft({ unit: e.target.value })}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault()
-                                addDraft()
-                              }
-                            }}
+                            onChange={(v) => updateDraft({ unit: v })}
+                            onKeyDown={addOnEnter}
                           />
                         </td>
                         <td className="px-1 py-1">
-                          <Input
-                            ref={draftRequirementRef}
-                            className={cn(limsFieldClass, 'h-7 text-center text-xs')}
+                          <SavedValueSuggestInput
+                            inputRef={draftRequirementRef}
+                            className={cellInputClass}
                             value={draft.requirement}
+                            suggestions={suggestions.requirement}
                             placeholder="Requirement"
-                            aria-label="New Test Requirement"
+                            ariaLabel="New Test Requirement"
                             disabled={disabled}
-                            onChange={(e) => updateDraft({ requirement: e.target.value })}
+                            onChange={(v) => updateDraft({ requirement: v })}
                             onBlur={(e) => {
                               const next = formatRequirement(e.target.value, draft.unit)
                               if (next !== e.target.value) updateDraft({ requirement: next })
                             }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault()
-                                addDraft()
-                              }
-                            }}
+                            onKeyDown={addOnEnter}
                           />
                         </td>
-                        <td className="px-1 py-1 text-center align-middle">
+                        <td className="px-1 py-1 text-center">
                           <input
                             type="checkbox"
                             className="h-4 w-4 accent-amber-700"
@@ -613,7 +744,7 @@ export function IsCodeRequiredTestsDialog({
                     ) : null}
                     {tests.length === 0 ? (
                       <tr>
-                        <td colSpan={selection ? 9 : 8} className="px-3 py-6 text-center text-stone-500">
+                        <td colSpan={9} className="px-3 py-6 text-center text-stone-500">
                           {readOnly || locked
                             ? 'No Tests Yet.'
                             : 'No Tests Yet. Fill the New Row Above and Click +, or Use Suggest With AI or From Past Checks.'}
@@ -621,8 +752,9 @@ export function IsCodeRequiredTestsDialog({
                       </tr>
                     ) : (
                       tests.map((t, i) => {
+                        const key = rowKeyOf(t, i)
                         const editing = editingIndex === i
-                        const fieldClass = cn(limsFieldClass, 'h-7 text-xs', !editing && 'cursor-default focus-visible:ring-0')
+                        const fieldClass = cn(cellInputClass, !editing && 'cursor-default focus-visible:ring-0')
                         const doneOnEnter = (e: KeyboardEvent<HTMLInputElement>) => {
                           if (editing && e.key === 'Enter') {
                             e.preventDefault()
@@ -631,11 +763,14 @@ export function IsCodeRequiredTestsDialog({
                         }
                         return (
                           <tr
-                            key={t.id ?? `new-${i}`}
-                            className={cn('border-t border-stone-200 align-top odd:bg-stone-50/60', editing && '!bg-amber-50/70')}
+                            key={key}
+                            className={cn(
+                              'border-t border-stone-200 align-middle odd:bg-stone-50/60',
+                              (editing || (!selection && selectedKeys.has(key))) && '!bg-amber-50/70',
+                            )}
                           >
-                            {selection ? (
-                              <td className="px-2 py-1 text-center align-middle">
+                            <td className="px-2 py-1 text-center">
+                              {selection ? (
                                 <input
                                   type="checkbox"
                                   className="h-4 w-4 accent-amber-700"
@@ -645,23 +780,66 @@ export function IsCodeRequiredTestsDialog({
                                   checked={Boolean(t.id && selection.selectedIds.has(t.id))}
                                   onChange={(e) => selection.onToggle(t, e.target.checked)}
                                 />
-                              </td>
-                            ) : null}
-                            <td className="px-2 py-1 text-stone-500 tabular-nums">{i + 1}</td>
-                            <td className="px-1 py-1">
-                              <Input className={fieldClass} value={t.testName} readOnly={!editing} disabled={disabled} onKeyDown={doneOnEnter} onChange={(e) => update(i, { testName: e.target.value })} />
+                              ) : (
+                                <input
+                                  type="checkbox"
+                                  className="h-4 w-4 accent-amber-700"
+                                  aria-label={`Select ${t.testName || 'Test'}`}
+                                  disabled={disabled}
+                                  checked={selectedKeys.has(key)}
+                                  onChange={(e) => toggleSelected(key, e.target.checked)}
+                                />
+                              )}
                             </td>
                             <td className="px-1 py-1">
-                              <Input className={cn(fieldClass, 'text-center')} value={t.clause} readOnly={!editing} disabled={disabled} onKeyDown={doneOnEnter} onChange={(e) => update(i, { clause: e.target.value })} />
+                              <div className="flex items-center justify-center gap-0.5">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-6 w-6 rounded-none p-0 text-stone-700 hover:bg-stone-100"
+                                  disabled={disabled || i === 0}
+                                  title="Move Up"
+                                  aria-label={`Move ${t.testName || 'Test'} Up`}
+                                  onClick={() => moveRow(i, -1)}
+                                >
+                                  <ArrowUp size={13} />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-6 w-6 rounded-none p-0 text-stone-700 hover:bg-stone-100"
+                                  disabled={disabled || i === tests.length - 1}
+                                  title="Move Down"
+                                  aria-label={`Move ${t.testName || 'Test'} Down`}
+                                  onClick={() => moveRow(i, 1)}
+                                >
+                                  <ArrowDown size={13} />
+                                </Button>
+                              </div>
                             </td>
                             <td className="px-1 py-1">
-                              <Input className={cn(fieldClass, 'text-center')} value={t.testMethod} readOnly={!editing} disabled={disabled} aria-label="Test Method" onKeyDown={doneOnEnter} onChange={(e) => update(i, { testMethod: e.target.value })} />
+                              <Input className={fieldClass} value={t.testName} readOnly={!editing} disabled={disabled} aria-label="Test Name" onKeyDown={doneOnEnter} onChange={(e) => update(i, { testName: e.target.value })} />
                             </td>
                             <td className="px-1 py-1">
-                              <Input className={cn(fieldClass, 'text-center')} value={t.unit} readOnly={!editing} disabled={disabled} aria-label="Unit" onKeyDown={doneOnEnter} onChange={(e) => update(i, { unit: e.target.value })} />
+                              <Input className={fieldClass} value={t.clause} readOnly={!editing} disabled={disabled} aria-label="Clause" onKeyDown={doneOnEnter} onChange={(e) => update(i, { clause: e.target.value })} />
                             </td>
                             <td className="px-1 py-1">
-                              <Input className={cn(fieldClass, 'text-center')} value={t.requirement} readOnly={!editing} disabled={disabled} onKeyDown={doneOnEnter} onChange={(e) => update(i, { requirement: e.target.value })}
+                              <Input className={fieldClass} value={t.testMethod} readOnly={!editing} disabled={disabled} aria-label="Test Method" onKeyDown={doneOnEnter} onChange={(e) => update(i, { testMethod: e.target.value })} />
+                            </td>
+                            <td className="px-1 py-1">
+                              <Input className={fieldClass} value={t.unit} readOnly={!editing} disabled={disabled} aria-label="Unit" onKeyDown={doneOnEnter} onChange={(e) => update(i, { unit: e.target.value })} />
+                            </td>
+                            <td className="px-1 py-1">
+                              <Input
+                                className={fieldClass}
+                                value={t.requirement}
+                                readOnly={!editing}
+                                disabled={disabled}
+                                aria-label="Requirement"
+                                onKeyDown={doneOnEnter}
+                                onChange={(e) => update(i, { requirement: e.target.value })}
                                 // "≤ 0.12 %" typed by hand becomes "0.12 % Maximum"; "8.5 - 10.5 %" becomes "8.5 % - 10.5 %".
                                 onBlur={(e) => {
                                   if (!editing) return
@@ -670,7 +848,7 @@ export function IsCodeRequiredTestsDialog({
                                 }}
                               />
                             </td>
-                            <td className="px-1 py-1 text-center align-middle">
+                            <td className="px-1 py-1 text-center">
                               <input
                                 type="checkbox"
                                 className="h-4 w-4 accent-amber-700"
@@ -704,6 +882,7 @@ export function IsCodeRequiredTestsDialog({
                                   aria-label={`Remove ${t.testName || 'Test'}`}
                                   onClick={() => {
                                     setTests((prev) => prev.filter((_, k) => k !== i))
+                                    toggleSelected(key, false)
                                     setEditingIndex(null)
                                     setDirty(true)
                                   }}
@@ -732,16 +911,47 @@ export function IsCodeRequiredTestsDialog({
         </div>
 
         <DialogFooter className="shrink-0 gap-2 border-t border-stone-300 bg-stone-100 px-4 py-3 sm:justify-between">
-          <Button
-            type="button"
-            variant="outline"
-            className={cn(limsOutlineBtnClass, 'gap-1.5')}
-            disabled={readOnly || loading || busy !== null}
-            onClick={() => void toggleLock()}
-          >
-            {locked ? <Unlock size={14} aria-hidden /> : <Lock size={14} aria-hidden />}
-            {locked ? 'Unlock List' : 'Lock List'}
-          </Button>
+          {/* The lock state and reminders sit beside Lock List (owner, 25 Nov 2026: "ek hi jagah"). */}
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className={cn(limsOutlineBtnClass, 'gap-1.5')}
+              disabled={readOnly || loading || busy !== null}
+              onClick={() => void toggleLock()}
+            >
+              {locked ? <Unlock size={14} aria-hidden /> : <Lock size={14} aria-hidden />}
+              {locked ? 'Unlock List' : 'Lock List'}
+            </Button>
+            <span
+              className={cn(
+                'border px-2 py-0.5 text-[11px] font-semibold',
+                locked ? 'border-emerald-600 bg-emerald-50 text-emerald-800' : 'border-amber-500 bg-amber-50 text-amber-800',
+              )}
+            >
+              {locked ? 'Locked' : 'Not Locked'}
+            </span>
+            {locked && revision?.revised ? (
+              <span className="border border-red-500 bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-800">Standard Revised — Review</span>
+            ) : null}
+            {dirty ? <span className="text-[11px] font-semibold text-amber-800">Unsaved Changes</span> : null}
+            {selection ? (
+              <span className="text-[11px] text-stone-600">
+                {ticked.length} of {saved.length} Selected for This Report{dirty ? ' — Save to Select New Tests' : ''}
+              </span>
+            ) : null}
+            {!selection && selectedKeys.size ? (
+              <Button
+                type="button"
+                variant="outline"
+                className={cn(limsOutlineBtnClass, 'gap-1.5 text-red-700')}
+                disabled={disabled}
+                onClick={deleteSelected}
+              >
+                <Trash2 size={14} aria-hidden /> Delete Selected ({selectedKeys.size})
+              </Button>
+            ) : null}
+          </div>
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="outline" className={limsOutlineBtnClass} disabled={busy !== null} onClick={() => onOpenChange(false)}>
               Close

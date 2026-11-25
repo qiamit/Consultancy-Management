@@ -4,6 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type FocusEvent,
   type KeyboardEvent,
   type Ref,
 } from 'react'
@@ -52,6 +53,8 @@ export function SavedValueSuggestInput({
   className,
   inputRef,
   onKeyDown,
+  onBlur,
+  ariaLabel,
   maxSuggestions = 12,
 }: {
   value: string
@@ -62,6 +65,9 @@ export function SavedValueSuggestInput({
   className?: string
   inputRef?: Ref<HTMLInputElement>
   onKeyDown?: (e: KeyboardEvent<HTMLInputElement>) => void
+  /** Called after the field loses focus (the dropdown closes on its own). */
+  onBlur?: (e: FocusEvent<HTMLInputElement>) => void
+  ariaLabel?: string
   maxSuggestions?: number
 }) {
   const localRef = useRef<HTMLInputElement | null>(null)
@@ -278,6 +284,7 @@ export function SavedValueSuggestInput({
         value={value}
         disabled={disabled}
         placeholder={placeholder}
+        aria-label={ariaLabel}
         autoComplete="off"
         role="combobox"
         aria-expanded={open && filtered.length > 0}
@@ -291,7 +298,8 @@ export function SavedValueSuggestInput({
         onFocus={() => {
           if (suggestions.length > 0) setOpen(true)
         }}
-        onBlur={() => {
+        onBlur={(e) => {
+          onBlur?.(e)
           window.setTimeout(() => {
             if (selectingRef.current) return
             const active = document.activeElement

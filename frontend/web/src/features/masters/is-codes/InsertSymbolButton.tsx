@@ -39,19 +39,20 @@ export function InsertSymbolButton({ disabled, onInsert }: { disabled?: boolean;
       <Button
         type="button"
         variant="outline"
-        className={cn(limsOutlineBtnClass, 'gap-1.5')}
+        className={cn(limsOutlineBtnClass, 'w-10 px-0')}
         disabled={disabled}
         aria-expanded={open}
-        title="Insert a Scientific Symbol Where the Cursor Is"
+        aria-label="Insert Symbol"
+        title="Insert Symbol: Puts a Scientific Symbol Where the Cursor Is"
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => setOpen((v) => !v)}
       >
-        <Omega size={14} aria-hidden /> Insert Symbol
+        <Omega size={16} aria-hidden />
       </Button>
       {open && !disabled ? (
         <div
           role="dialog"
-          aria-label="Insert Symbol"
+          aria-label="Scientific Symbols"
           className="absolute right-0 top-full z-50 mt-1.5 w-[min(24rem,calc(100vw-2rem))] space-y-2 border border-stone-400 bg-card p-2.5 text-card-foreground shadow-xl"
         >
           <p className="text-[11px] text-stone-600">Click a Symbol to Put It Where the Cursor Is.</p>
