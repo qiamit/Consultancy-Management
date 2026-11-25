@@ -20,6 +20,7 @@ import {
   deleteBisProjectFile,
   formatBisProjectFilesError,
   uploadBisProjectFile,
+  type BisProjectViewFile,
 } from './bisProjectFilesApi'
 import { removeSignatureImageBackground } from './removeSignatureBackground'
 import { manakEmailError } from './manakChecks'
@@ -104,11 +105,18 @@ export function TopManagementModuleFields({
   onChange,
   disabled = false,
   projectId = null,
+  onFileReleased,
 }: {
   value: TopManagementModulePayload
   onChange: (next: TopManagementModulePayload) => void
   disabled?: boolean
   projectId?: string | null
+  /**
+   * A signature replaced on a person row or on the Authorized Signatory. When set, the file is not deleted here: the
+   * parent deletes it after Top Management is saved, so a window closed without Save keeps the saved row and its
+   * signature together. Without it the file is deleted at once.
+   */
+  onFileReleased?: (file: BisProjectViewFile) => void
 }) {
   const rows = value.rows.length > 0 ? value.rows : [EMPTY_ROW()]
   const [selected, setSelected] = useState(() => new Set<number>())
@@ -287,6 +295,22 @@ export function TopManagementModuleFields({
     fileInputRef.current?.click()
   }
 
+  /**
+   * A replaced signature: handed to the parent to delete after Save, or deleted now without one. Called only once the
+   * new signature is stored (until 25 Nov 2026 the old one was deleted before the upload, so a failed upload or a
+   * window closed without Save left the saved row pointing at a deleted file).
+   */
+  const releaseFile = async (file: BisProjectViewFile) => {
+    if (onFileReleased) {
+      onFileReleased(file)
+      return
+    }
+    await deleteBisProjectFile(file).catch(() => {
+      /* the new signature is attached; an old copy left in storage does no harm */
+    })
+  }
+  const savedNote = onFileReleased ? ' Click Save to Keep the Change.' : ''
+
   const handleSignaturePicked = async (file: File | undefined) => {
     const index = pendingUploadIndex.current
     pendingUploadIndex.current = null
@@ -299,16 +323,6 @@ export function TopManagementModuleFields({
       const uploadFile = await removeSignatureImageBackground(file)
 
       if (index === AUTHORIZED_UPLOAD_INDEX) {
-        if (
-          value.authorizedSignatureFileId.trim() &&
-          value.authorizedSignatureStoragePath.trim()
-        ) {
-          await deleteBisProjectFile({
-            id: value.authorizedSignatureFileId,
-            file_name: value.authorizedSignatureFileName || 'authorized-signature',
-            storage_path: value.authorizedSignatureStoragePath,
-          })
-        }
         const displayName = value.authorizedSignatoryName.trim()
           ? `Authorized Signature — ${value.authorizedSignatoryName.trim()}`
           : 'Authorized Signature'
@@ -324,6 +338,16 @@ export function TopManagementModuleFields({
           authorizedSignatureFileName: uploaded.file_name,
           authorizedSignatureStoragePath: uploaded.storage_path,
         })
+        if (
+          value.authorizedSignatureFileId.trim() &&
+          value.authorizedSignatureStoragePath.trim()
+        ) {
+          await releaseFile({
+            id: value.authorizedSignatureFileId,
+            file_name: value.authorizedSignatureFileName || 'authorized-signature',
+            storage_path: value.authorizedSignatureStoragePath,
+          })
+        }
         setUrlCache((prev) => ({
           ...prev,
           [uploaded.id]: {
@@ -331,19 +355,12 @@ export function TopManagementModuleFields({
             downloadUrl: uploaded.downloadUrl,
           },
         }))
-        toast.success('Authorized Signature Attached')
+        toast.success(`Authorized Signature Attached.${savedNote}`)
         return
       }
 
       const current = rows[index]
       if (!current) return
-      if (current.signatureFileId.trim() && current.signatureStoragePath.trim()) {
-        await deleteBisProjectFile({
-          id: current.signatureFileId,
-          file_name: current.signatureFileName || 'signature',
-          storage_path: current.signatureStoragePath,
-        })
-      }
       const displayName = current.personName.trim()
         ? `Signature — ${current.personName.trim()}`
         : `Signature — Person ${index + 1}`
@@ -355,6 +372,13 @@ export function TopManagementModuleFields({
         signatureFileName: uploaded.file_name,
         signatureStoragePath: uploaded.storage_path,
       })
+      if (current.signatureFileId.trim() && current.signatureStoragePath.trim()) {
+        await releaseFile({
+          id: current.signatureFileId,
+          file_name: current.signatureFileName || 'signature',
+          storage_path: current.signatureStoragePath,
+        })
+      }
       setUrlCache((prev) => ({
         ...prev,
         [uploaded.id]: {
@@ -362,7 +386,7 @@ export function TopManagementModuleFields({
           downloadUrl: uploaded.downloadUrl,
         },
       }))
-      toast.success('Signature Attached')
+      toast.success(`Signature Attached.${savedNote}`)
     } catch (err) {
       toast.error(formatBisProjectFilesError(err))
     } finally {

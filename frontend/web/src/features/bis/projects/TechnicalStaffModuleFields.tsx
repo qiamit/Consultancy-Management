@@ -56,6 +56,7 @@ import {
   deleteBisProjectFile,
   formatBisProjectFilesError,
   uploadBisProjectFile,
+  type BisProjectViewFile,
 } from './bisProjectFilesApi'
 import { BisDocumentPrintPreviewDialog } from './BisDocumentPrintPreviewDialog'
 import { MasterOptionFieldWithAdd } from './MasterOptionFieldWithAdd'
@@ -180,12 +181,19 @@ export function TechnicalStaffModuleFields({
   disabled = false,
   projectId = null,
   projectRow = null,
+  onFileReleased,
 }: {
   value: TechnicalStaffModulePayload
   onChange: (next: TechnicalStaffModulePayload) => void
   disabled?: boolean
   projectId?: string | null
   projectRow?: BisProjectRow | null
+  /**
+   * A file replaced on a staff row (Appointment Letter, Education Certificate, Photo, Signature). When set, the file is
+   * not deleted here: the parent deletes it after the staff rows are saved, so a window closed without Save keeps the
+   * saved row and its file together. Without it the file is deleted at once.
+   */
+  onFileReleased?: (file: BisProjectViewFile) => void
 }) {
   const rows =
     value.rows.length > 0
@@ -395,6 +403,22 @@ export function TechnicalStaffModuleFields({
     )
   }
 
+  /**
+   * A replaced staff file: handed to the parent to delete after Save, or deleted now without one. Called only once the
+   * new file is stored (until 25 Nov 2026 the old one was deleted before the upload, so a failed upload or a window
+   * closed without Save left the saved row pointing at a deleted file).
+   */
+  const releaseFile = async (file: BisProjectViewFile) => {
+    if (onFileReleased) {
+      onFileReleased(file)
+      return
+    }
+    await deleteBisProjectFile(file).catch(() => {
+      /* the new file is attached; an old copy left in storage does no harm */
+    })
+  }
+  const savedNote = onFileReleased ? ' Click Save to Keep the Change.' : ''
+
   const handleFilePicked = async (file: File | undefined) => {
     const pending = pendingUpload.current
     pendingUpload.current = null
@@ -413,13 +437,6 @@ export function TechnicalStaffModuleFields({
     try {
       const uploadFile =
         slot === 'signature' ? await removeSignatureImageBackground(file) : file
-      if (meta.fileId.trim() && meta.storagePath.trim()) {
-        await deleteBisProjectFile({
-          id: meta.fileId,
-          file_name: meta.fileName || meta.label,
-          storage_path: meta.storagePath,
-        })
-      }
       const person = current.personName.trim() || `Person ${index + 1}`
       const uploaded = await uploadBisProjectFile(projectId, uploadFile, meta.docKind, {
         displayName: `${meta.label} — ${person}`,
@@ -429,6 +446,13 @@ export function TechnicalStaffModuleFields({
         fileName: uploaded.file_name,
         storagePath: uploaded.storage_path,
       })
+      if (meta.fileId.trim() && meta.storagePath.trim()) {
+        await releaseFile({
+          id: meta.fileId,
+          file_name: meta.fileName || meta.label,
+          storage_path: meta.storagePath,
+        })
+      }
       setUrlCache((prev) => ({
         ...prev,
         [uploaded.id]: {
@@ -436,7 +460,7 @@ export function TechnicalStaffModuleFields({
           downloadUrl: uploaded.downloadUrl,
         },
       }))
-      toast.success(`${meta.label} attached`)
+      toast.success(`${meta.label} Attached.${savedNote}`)
     } catch (err) {
       toast.error(formatBisProjectFilesError(err))
     } finally {
