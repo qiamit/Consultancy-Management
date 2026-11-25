@@ -275,7 +275,7 @@ export function FactoryTestReportModuleFields({
   }
 
   /*
-   * "Requirements for This Sample" (owner, 25 Nov 2026: moved here from the Add Test Parameter window, which only
+   * "Update Requirements" (owner, 25 Nov 2026; first named "Requirements for This Sample": moved here from the Add Test Parameter window, which only
    * selects tests now). The AI reads this sample's grade, size and declared value and the Standard, and changes ONLY
    * each test's Specified Requirement; then every test gets a dummy Observed Value that meets it. Nothing else changes.
    */
@@ -825,7 +825,7 @@ export function FactoryTestReportModuleFields({
         </div>
       </div>
 
-      <aside className="flex max-h-[40dvh] w-full shrink-0 flex-col gap-2 overflow-y-auto border-t border-stone-400 bg-stone-50 px-2.5 py-4 sm:max-h-none sm:w-[11rem] sm:border-l sm:border-t-0 sm:px-3">
+      <aside className="flex max-h-[40dvh] w-full shrink-0 flex-col gap-2 overflow-y-auto border-t border-stone-400 bg-stone-50 px-2.5 py-4 sm:max-h-none sm:w-[12rem] sm:border-l sm:border-t-0 sm:px-3">
         <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-stone-500">
           Report options
         </p>
@@ -847,14 +847,14 @@ export function FactoryTestReportModuleFields({
           variant="outline"
           className={cn(
             limsOutlineBtnClass,
-            'h-auto min-h-9 w-full justify-center gap-1.5 whitespace-normal px-2 py-2 text-xs font-semibold',
+            'h-auto min-h-9 w-full justify-center gap-1.5 px-2 py-2 text-xs font-semibold',
           )}
           disabled={disabled || activeReport.parameters.length === 0 || sampleAiStep !== null}
-          title="AI Reads This Sample's Grade, Size and Declared Value and the Standard: Updates Only the Specified Requirements, and Fills Dummy Observed Values"
+          title="Update Requirements: AI Reads This Sample's Grade, Size and Declared Value and the Standard, Updates Only the Specified Requirements, and Fills Dummy Observed Values"
           onClick={() => void runSampleRequirements()}
         >
           {sampleAiStep ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Wand2 size={14} aria-hidden />}
-          Requirements for This Sample
+          Update Requirements
         </Button>
         {sampleAiStep ? <p className="text-[10px] leading-snug text-stone-600">{sampleAiStep}</p> : null}
         {oldCount ? (
