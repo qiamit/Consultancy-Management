@@ -6,6 +6,15 @@ import AuthPage from '@/features/auth/AuthPage'
 import ResetPasswordPage from '@/features/auth/ResetPasswordPage'
 import PublicSiteLayout from '@/features/public-site/PublicSiteLayout'
 import PublicHomePage from '@/features/public-site/PublicHomePage'
+import {
+  AboutPage as PublicAboutPage,
+  AccreditationPage as PublicAccreditationPage,
+  BisCertificationPage as PublicBisCertificationPage,
+  ContactPage as PublicContactPage,
+  HowItWorksPage as PublicHowItWorksPage,
+  IsoCertificationPage as PublicIsoCertificationPage,
+  ProductsPage as PublicProductsPage,
+} from '@/features/public-site/PublicPages'
 import FileViewPage from '@/features/file-view/FileViewPage'
 import PortalLicencesPage from '@/features/portal/PortalLicencesPage'
 import PortalLicenceDetailPage from '@/features/portal/PortalLicenceDetailPage'
@@ -70,14 +79,23 @@ export default function App() {
     <BrowserRouter>
       <RoutePersistence />
       <Routes>
+        {/* Public website and sign-in, the same layout as the Qirlpl website (owner, 25 Nov 2026). The website's Contact tab is /enquiry, since /contact is the app's own Contact Us page. */}
         <Route element={<PublicSiteLayout />}>
           <Route path="/home" element={<PublicHomePage />} />
+          <Route path="/bis-certification" element={<PublicBisCertificationPage />} />
+          <Route path="/products" element={<PublicProductsPage />} />
+          <Route path="/iso-certification" element={<PublicIsoCertificationPage />} />
+          <Route path="/accreditation" element={<PublicAccreditationPage />} />
+          <Route path="/how-it-works" element={<PublicHowItWorksPage />} />
+          <Route path="/about" element={<PublicAboutPage />} />
+          <Route path="/enquiry" element={<PublicContactPage />} />
+          <Route path="/services" element={<Navigate to="/bis-certification" replace />} />
+          <Route path="/auth" element={<AuthPage />} />
+          <Route path="/auth/reset" element={<ResetPasswordPage />} />
         </Route>
 
         {/* New-tab file viewer for every View button; the signed link in its hash is the only access it needs. */}
         <Route path="/view-file" element={<FileViewPage />} />
-        <Route path="/auth" element={<AuthPage />} />
-        <Route path="/auth/reset" element={<ResetPasswordPage />} />
 
         <Route path="/portal" element={<PortalShell />}>
           <Route index element={<PortalDashboardPage />} />

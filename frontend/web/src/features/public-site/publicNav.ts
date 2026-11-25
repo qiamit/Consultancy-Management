@@ -1,23 +1,30 @@
 export const PUBLIC_SITE_PATHS = [
   '/home',
+  '/bis-certification',
+  '/products',
+  '/iso-certification',
+  '/accreditation',
+  '/how-it-works',
   '/about',
-  '/services',
-  '/contact',
+  '/enquiry',
   '/auth',
 ] as const
 
 export type PublicSitePath = (typeof PUBLIC_SITE_PATHS)[number]
 
-export const PUBLIC_NAV_ITEMS: Array<{ to: PublicSitePath; label: string }> = [
+/**
+ * Tabs in the website's top bar and phone menu, the same layout as the Qirlpl website (owner, 25 Nov 2026); each
+ * is its own one-screen page.
+ */
+export const PUBLIC_TABS: Array<{ to: PublicSitePath; label: string }> = [
   { to: '/home', label: 'Home' },
-  { to: '/auth', label: 'Login' },
-]
-
-export const PUBLIC_SECTION_LINKS: Array<{ href: string; label: string }> = [
-  { href: '/home', label: 'Home' },
-  { href: '/home#about', label: 'About' },
-  { href: '/home#contact', label: 'Contact Us' },
-  { href: '/auth', label: 'Login' },
+  { to: '/bis-certification', label: 'BIS Certification' },
+  { to: '/products', label: 'Products' },
+  { to: '/iso-certification', label: 'ISO Certification' },
+  { to: '/accreditation', label: 'Lab Accreditation' },
+  { to: '/how-it-works', label: 'How it Works' },
+  { to: '/about', label: 'About' },
+  { to: '/enquiry', label: 'Contact' },
 ]
 
 export function isPublicSitePath(pathname: string): boolean {
@@ -25,23 +32,14 @@ export function isPublicSitePath(pathname: string): boolean {
   return (PUBLIC_SITE_PATHS as readonly string[]).includes(path)
 }
 
-export const PUBLIC_LAB_NAME = 'Q Engineering'
-export const PUBLIC_TAGLINE_LEAD = 'BIS Licensing &'
-export const PUBLIC_TAGLINE_ACCENT = 'Compliance Consultancy'
-export const PUBLIC_TAGLINE_SUB =
-  'Consultancy Pro helps manufacturers and laboratories manage BIS licensing, renewals, surveillance, IS codes, and finance — on the same reliable Railway stack as Qirlpl LIMS.'
+/** Company details as on the letterhead and in Company Settings (checked 25 Nov 2026). */
+export const PUBLIC_LAB_NAME = 'Quality Engineering'
+export const PUBLIC_LAB_SHORT = 'Quality Engineering'
+export const PUBLIC_TAGLINE = 'BIS & ISO Certification & NABL, QAI & IQAS Accreditation Consultants'
 export const PUBLIC_EMAIL = 'info@qengineering.in'
-export const PUBLIC_SUPPORT_EMAIL = 'info@qengineering.in'
-export const PUBLIC_PHONE_PRIMARY = '+91 99816 33040'
-export const PUBLIC_PHONE_SECONDARY = '+91 99146 63040'
+export const PUBLIC_PHONE_PRIMARY = '+91 90094 13040'
 export const PUBLIC_ADDRESS =
-  'Raipur, Chhattisgarh, India'
-export const PUBLIC_MAP_LAT = 21.2514
-export const PUBLIC_MAP_LNG = 81.6296
-export const PUBLIC_NABL_TESTING = 'BIS Consultancy'
-export const PUBLIC_NABL_CALIBRATION = 'ISO Support'
-export const PUBLIC_CIN = ''
-export const PUBLIC_BIS = 'Consultancy Pro'
-export const PUBLIC_DOC_NABL_CALIBRATION = '#'
-export const PUBLIC_DOC_NABL_TESTING = '#'
-export const PUBLIC_DOC_BIS = '#'
+  'Plot No 7A, Avinash Logistic Park, SKS Road, Siltara Industrial Area, Phase II, Raipur 493221, Chhattisgarh, India'
+export const PUBLIC_MAP_LAT = 21.384439868124627
+export const PUBLIC_MAP_LNG = 81.66191600236276
+export const PUBLIC_WEBSITE = 'www.qengineering.in'

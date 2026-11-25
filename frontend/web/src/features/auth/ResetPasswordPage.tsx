@@ -1,24 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { KeyRound } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
 import { PasswordInput } from '@/components/auth/PasswordInput'
 import { newPasswordProblem, PASSWORD_MIN_LENGTH, setOwnPassword } from '@/features/auth/passwordApi'
 import { supabase } from '@/lib/supabaseClient'
 import { useAuth } from '@/hooks/useAuth'
 import { readTwoStepState } from '@/features/auth/mfaApi'
 import { TwoStepChallengePanel } from '@/components/auth/TwoStepLoginPanels'
-import {
-  limsDarkBarAccentClass,
-  limsDarkBarClass,
-  limsDarkBarGlowStyle,
-  limsPageShellClass,
-  limsPanelClass,
-  limsPrimaryBtnClass,
-  limsRegistryFormClass,
-} from '@/lib/limsThemeUi'
-import { cn } from '@/lib/utils'
+import { usePublicPageTitle } from '@/features/public-site/publicPageUtils'
 
 /** Error GoTrue puts in the redirect URL when the link is expired or already used. */
 function linkErrorFromUrl(): string | null {
@@ -119,45 +108,32 @@ export default function ResetPasswordPage() {
     }
   }
 
+  usePublicPageTitle('Set a New Password · Quality Engineering')
+
+  // Same look as the sign-in page (website style, owner 25 Nov 2026); the steps are unchanged.
   return (
-    <div
-      className={cn(limsPageShellClass, 'flex min-h-[70vh] max-w-none flex-col items-center justify-center')}
-    >
-      <div className="w-full max-w-md">
-        <div className={limsPanelClass}>
-          <div className={cn(limsDarkBarClass, 'px-5 py-3.5')}>
-            <div
-              className="pointer-events-none absolute inset-0 opacity-[0.18]"
-              style={limsDarkBarGlowStyle}
-            />
-            <div className={limsDarkBarAccentClass} />
-            <div className="relative flex items-center justify-center gap-2">
-              <KeyRound size={18} className="text-amber-300" />
-              <h1 className="text-lg font-semibold tracking-tight text-white">Set a New Password</h1>
-            </div>
+    <section className="qp-screen alt">
+      <div className="qp-wrap" style={{ maxWidth: 520 }}>
+        <div className="qp-auth-main qp-rise">
+          <div className="text-center">
+            <span className="qp-brand-mark mx-auto qp-auth-mark" aria-hidden>
+              <KeyRound size={24} />
+            </span>
+            <h1 className="qp-auth-title">Set a New Password</h1>
           </div>
 
-          <div className={cn(limsRegistryFormClass, 'space-y-4 p-5')}>
-            {phase === 'checking' && <p className="text-sm text-stone-600">Checking Your Reset Link…</p>}
+          <div className="qp-panel qp-auth-panel">
+            {phase === 'checking' && <p className="qp-small">Checking Your Reset Link…</p>}
 
             {phase === 'invalid' && (
-              <>
-                <div className="rounded-none border border-red-500/40 bg-red-50 px-3 py-2.5">
-                  <p className="text-sm text-red-700">
-                    {linkError || 'This reset link is invalid or has expired.'} Request a new link from the
-                    sign-in page.
-                  </p>
-                </div>
-                <div className="flex justify-end">
-                  <Button
-                    type="button"
-                    className={cn(limsPrimaryBtnClass, 'h-8 px-5')}
-                    onClick={() => navigate('/auth', { replace: true })}
-                  >
-                    Back to sign in
-                  </Button>
-                </div>
-              </>
+              <div className="qp-form">
+                <p className="qp-error">
+                  {linkError || 'This reset link is invalid or has expired.'} Request a new link from the sign-in page.
+                </p>
+                <button type="button" className="qp-btn w-full" onClick={() => navigate('/auth', { replace: true })}>
+                  Back to Sign In
+                </button>
+              </div>
             )}
 
             {phase === 'ready' && needsCode && (
@@ -168,63 +144,51 @@ export default function ResetPasswordPage() {
             )}
 
             {phase === 'ready' && !needsCode && (
-              <>
-                {email && <p className="text-sm text-stone-600">Account: {email}</p>}
-                {error && (
-                  <div className="rounded-none border border-red-500/40 bg-red-50 px-3 py-2.5">
-                    <p className="text-sm text-red-700">{error}</p>
-                  </div>
-                )}
-                <div className="space-y-2">
-                  <Label htmlFor="reset-new-password">New Password</Label>
+              <div className="qp-form">
+                {email && <p className="qp-small" style={{ margin: 0 }}>Account: {email}</p>}
+                {error && <p className="qp-error">{error}</p>}
+                <div className="qp-field">
+                  <label htmlFor="reset-new-password">New Password</label>
                   <PasswordInput
                     id="reset-new-password"
                     value={newPassword}
                     onChange={setNewPassword}
-                    placeholder={`At least ${PASSWORD_MIN_LENGTH} characters`}
+                    placeholder={`At Least ${PASSWORD_MIN_LENGTH} Characters`}
                     autoFocus
+                    className="qp-input"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="reset-confirm-password">Confirm New Password</Label>
+                <div className="qp-field">
+                  <label htmlFor="reset-confirm-password">Confirm New Password</label>
                   <PasswordInput
                     id="reset-confirm-password"
                     value={confirmPassword}
                     onChange={setConfirmPassword}
+                    className="qp-input"
                   />
                 </div>
-                <div className="flex justify-end">
-                  <Button
-                    type="button"
-                    className={cn(limsPrimaryBtnClass, 'h-8 min-w-[9rem] px-5')}
-                    onClick={handleSave}
-                    disabled={saving}
-                  >
-                    {saving ? 'Saving...' : 'Save password'}
-                  </Button>
-                </div>
-              </>
+                <button type="button" className="qp-btn w-full" onClick={handleSave} disabled={saving}>
+                  {saving ? 'Saving…' : 'Save Password'}
+                </button>
+              </div>
             )}
 
             {phase === 'done' && (
-              <>
-                <div className="rounded-none border border-emerald-600/40 bg-emerald-50 px-3 py-2.5">
-                  <p className="text-sm text-emerald-800">Your Password Has Been Changed.</p>
-                </div>
-                <div className="flex justify-end">
-                  <Button
-                    type="button"
-                    className={cn(limsPrimaryBtnClass, 'h-8 px-5')}
-                    onClick={() => navigate('/', { replace: true })}
-                  >
-                    Continue
-                  </Button>
-                </div>
-              </>
+              <div className="qp-form">
+                <p
+                  className="qp-body"
+                  style={{ fontSize: 15, background: 'rgba(52,199,89,0.12)', color: '#1a7f37', padding: '10px 14px', borderRadius: 12, margin: 0 }}
+                >
+                  Your Password Has Been Changed.
+                </p>
+                <button type="button" className="qp-btn w-full" onClick={() => navigate('/', { replace: true })}>
+                  Continue
+                </button>
+              </div>
             )}
           </div>
         </div>
       </div>
-    </div>
+    </section>
   )
 }
