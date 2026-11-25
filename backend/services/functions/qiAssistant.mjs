@@ -281,31 +281,239 @@ export async function fetchWithProviderRetry(doFetch, sleep = (ms) => new Promis
   return res
 }
 
+/**
+ * The Gemini model asked once when the chosen Gemini model stays busy after its retries (owner, 25 Nov 2026). In the
+ * test of 24–25 Nov, Gemini 3.5 Flash-Lite answered "This model is currently experiencing high demand" (503) to 35 %
+ * of Ask AI calls and 11 of 12 AI Conformity Checks, while Gemini 3.5 Flash answered. Flash costs more per token
+ * ($1.50 / $9.00 per 1M against $0.30 / $2.50), so it is used only for an answer the chosen model could not give.
+ */
+export const GEMINI_FALLBACK_MODEL = 'gemini-3.5-flash'
+export const GEMINI_FALLBACK_LABEL = 'Gemini 3.5 Flash (Fallback)'
+
+/** Answers after which the fallback model is asked: busy or out of quota for this model (429), or a server error. */
+const FALLBACK_STATUSES = new Set([429, 500, 502, 503, 504])
+
+/** The model to ask when `modelId` stays busy, or null (only Gemini has one, and never itself). */
+export function fallbackModelFor(provider, modelId) {
+  if (provider !== 'google') return null
+  return String(modelId || '').replace(/^models\//, '') === GEMINI_FALLBACK_MODEL ? null : GEMINI_FALLBACK_MODEL
+}
+
+/**
+ * fetchWithProviderRetry with `modelId`; when that model is still busy and the provider has a fallback model, the
+ * same request goes once more (with its own retries) to the fallback model. `doFetch(model)` builds the request for
+ * a model. `onBusy({ status, payload, modelId })` hears of the busy answer before the fallback is asked (for the
+ * usage log). When the fallback cannot be used at all (for example the key has no access to it), the first answer is
+ * kept, so the app shows the original "busy" message. Returns the response and the model that gave it.
+ */
+export async function fetchWithModelFallback({ provider, modelId, doFetch, sleep, onBusy = null }) {
+  const first = await fetchWithProviderRetry(() => doFetch(modelId), sleep)
+  const fallback = fallbackModelFor(provider, modelId)
+  if (!fallback || !FALLBACK_STATUSES.has(first.status)) return { res: first, modelId, fellBack: false }
+  const firstPayload = await first.json().catch(() => ({}))
+  onBusy?.({ status: first.status, payload: firstPayload, modelId })
+  console.warn(`[qi-assistant] ${modelId} answered ${first.status}; asking ${fallback} instead`)
+  const second = await fetchWithProviderRetry(() => doFetch(fallback), sleep)
+  if (second.ok || FALLBACK_STATUSES.has(second.status)) return { res: second, modelId: fallback, fellBack: true }
+  console.warn(`[qi-assistant] fallback ${fallback} answered ${second.status}; keeping the first answer`)
+  await second.body?.cancel?.().catch(() => {})
+  const kept = new Response(JSON.stringify(firstPayload), { status: first.status, headers: { 'Content-Type': 'application/json' } })
+  return { res: kept, modelId, fellBack: false }
+}
+
+/*
+ * LaTeX in answers. Gemini writes formulas and units as LaTeX ($5.65\sqrt{A}$, $\text{g/m}^2$, $50 \pm 5^\circ\text{C}$)
+ * even when told not to: 9 of 50 Ask AI answers on 25 Nov 2026. The app shows such code as it is, so answers are
+ * turned into plain characters before they are sent (5.65√A, g/m², 50 ± 5°C). Only text between math markers is
+ * changed, and only when it holds LaTeX (a backslash command, ^, _ or braces), so prices such as "$5 and $10" and
+ * code blocks stay as written.
+ */
+const SUPERSCRIPT = { 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹', '+': '⁺', '-': '⁻', '−': '⁻', '=': '⁼', '(': '⁽', ')': '⁾', n: 'ⁿ', i: 'ⁱ' }
+const SUBSCRIPT = { 0: '₀', 1: '₁', 2: '₂', 3: '₃', 4: '₄', 5: '₅', 6: '₆', 7: '₇', 8: '₈', 9: '₉', '+': '₊', '-': '₋', '−': '₋', '=': '₌', '(': '₍', ')': '₎' }
+const LATEX_SYMBOLS = {
+  leq: '≤', le: '≤', leqslant: '≤', geq: '≥', ge: '≥', geqslant: '≥', pm: '±', mp: '∓', times: '×', cdot: '·', div: '÷',
+  circ: '°', degree: '°', approx: '≈', neq: '≠', ne: '≠', sim: '~', simeq: '≃', equiv: '≡', infty: '∞', propto: '∝',
+  rightarrow: '→', to: '→', leftarrow: '←', Rightarrow: '⇒', ldots: '…', dots: '…', cdots: '…', prime: '′',
+  mu: 'µ', Omega: 'Ω', ohm: 'Ω', alpha: 'α', beta: 'β', gamma: 'γ', delta: 'δ', Delta: 'Δ', epsilon: 'ε',
+  varepsilon: 'ε', eta: 'η', theta: 'θ', lambda: 'λ', pi: 'π', rho: 'ρ', sigma: 'σ', Sigma: 'Σ', tau: 'τ',
+  phi: 'φ', varphi: 'φ', psi: 'ψ', omega: 'ω', percent: '%',
+  quad: ' ', qquad: ' ', left: '', right: '', big: '', Big: '', bigg: '', Bigg: '', displaystyle: '', limits: '',
+}
+const LATEX_TEXT_COMMANDS = /\\(?:text|textrm|textbf|textit|textnormal|textup|mathrm|mathbf|mathit|mathsf|mathtt|mathnormal|mbox|operatorname|boldsymbol)\s*\{([^{}]*)\}/g
+
+/** A bracket-free piece stays as it is next to √, / or ^; anything longer goes in brackets. */
+const mathGroup = (x) => {
+  const t = x.trim()
+  return /^[\p{L}\p{N}.,µ°′⁰-⁹₀-₉]+$/u.test(t) ? t : `(${t})`
+}
+const toSuperscript = (x) => {
+  const t = x.trim()
+  if (t === '°' || t === 'o' || t === '′') return t === 'o' ? '°' : t
+  const chars = [...t]
+  return chars.length && chars.every((c) => c in SUPERSCRIPT) ? chars.map((c) => SUPERSCRIPT[c]).join('') : `^${mathGroup(t)}`
+}
+const toSubscript = (x) => {
+  const t = x.trim()
+  const chars = [...t]
+  // Letters have no full subscript set: R_{eH} reads as ReH, as the standards print it.
+  return chars.length && chars.every((c) => c in SUBSCRIPT) ? chars.map((c) => SUBSCRIPT[c]).join('') : t
+}
+
+/** One LaTeX formula as plain characters: `5.65\sqrt{S_0}` → `5.65√S₀`, `\text{g/m}^2` → `g/m²`. */
+export function latexToPlain(source) {
+  let s = String(source ?? '')
+    .replace(/\\\\/g, ' ')
+    .replace(/\\\{/g, '\u0001')
+    .replace(/\\\}/g, '\u0002')
+    .replace(/\\_/g, '\u0003')
+    .replace(/\\([%$&#])/g, '$1')
+    .replace(/\\[,;:> ]/g, ' ')
+    .replace(/\\!/g, '')
+    .replace(/~/g, ' ')
+    .replace(/\\([a-zA-Z]+)/g, (whole, name) => (name in LATEX_SYMBOLS ? LATEX_SYMBOLS[name] : whole))
+  for (let pass = 0; pass < 12; pass++) {
+    const before = s
+    s = s
+      .replace(LATEX_TEXT_COMMANDS, '$1')
+      .replace(/\^\s*\{([^{}]*)\}/g, (_, x) => toSuperscript(x))
+      .replace(/_\s*\{([^{}]*)\}/g, (_, x) => toSubscript(x))
+      .replace(/\^\s*([^\s{}\\])/g, (_, c) => toSuperscript(c))
+      .replace(/_\s*([^\s{}\\])/g, (_, c) => toSubscript(c))
+      .replace(/\\sqrt\s*\{([^{}]*)\}/g, (_, x) => `√${mathGroup(x)}`)
+      .replace(/\\[dt]?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, (_, a, b) => `${mathGroup(a)}/${mathGroup(b)}`)
+    if (s === before) break
+  }
+  return s
+    .replace(/\\sqrt\s*([\p{L}\p{N}])/gu, '√$1')
+    .replace(/\\([a-zA-Z]+)/g, '$1')
+    .replace(/[{}]/g, '')
+    .replace(/\u0001/g, '{')
+    .replace(/\u0002/g, '}')
+    .replace(/\u0003/g, '_')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim()
+}
+
+/** Text between math markers that is LaTeX, not a price: it has a backslash command, ^, _ or braces. */
+const looksLikeLatex = (inner) => /\\[a-zA-Z]+|\\[,;!%]|[\^_]\s*[{\p{L}\p{N}°\\]|[{}]/u.test(inner)
+
+/** Inline `$…$` formulas in prose (one line, up to 300 characters); other dollar signs stay. */
+function replaceDollarMath(text) {
+  let out = ''
+  let i = 0
+  while (i < text.length) {
+    const open = text.indexOf('$', i)
+    if (open < 0) break
+    out += text.slice(i, open)
+    if (text[open - 1] === '\\') {
+      out += '$'
+      i = open + 1
+      continue
+    }
+    const close = text.indexOf('$', open + 1)
+    const inner = close > open ? text.slice(open + 1, close) : ''
+    // A one-to-three letter symbol ($A$, $Rm$) is a formula too, unless it is part of a cell reference ($B$2).
+    const symbol = /^[A-Za-z]{1,3}$/.test(inner) && !/[A-Za-z0-9$]/.test(text[open - 1] ?? '') && !/[A-Za-z0-9]/.test(text[close + 1] ?? '')
+    if (close > open && close - open <= 301 && !inner.includes('\n') && inner.trim() && (symbol || looksLikeLatex(inner))) {
+      out += latexToPlain(inner)
+      i = close + 1
+    } else {
+      out += '$'
+      i = open + 1
+    }
+  }
+  return out + text.slice(i)
+}
+
+/** Stray formulas written without math markers (`5.65\sqrt{A}`, `\le 0.15 %`): the common commands only. */
+const STRAY_LATEX = /\\(?:sqrt|[dt]?frac|text|textrm|mathrm|mathbf|leq?|geq?|pm|times|circ|degree|approx|neq?|mu|Omega|infty|cdot)(?![a-zA-Z])/
+
+/** An answer with its LaTeX formulas as plain characters; code blocks and inline code stay as written. */
+export function plainMathText(text) {
+  const value = String(text ?? '')
+  if (!/[$\\]/.test(value)) return value
+  return value
+    .split(/(```[\s\S]*?```|`[^`\n]*`)/)
+    .map((part, index) => {
+      if (index % 2 === 1) return part
+      let s = part
+        .replace(/\$\$([\s\S]{1,2000}?)\$\$/g, (whole, inner) => (looksLikeLatex(inner) ? latexToPlain(inner) : whole))
+        .replace(/\\\[([\s\S]{1,2000}?)\\\]/g, (_, inner) => latexToPlain(inner))
+        .replace(/\\\(([\s\S]{1,500}?)\\\)/g, (_, inner) => latexToPlain(inner))
+      s = replaceDollarMath(s)
+      if (STRAY_LATEX.test(s)) {
+        s = s
+          .replace(/\^\s*\\circ(?![a-zA-Z])/g, '°')
+          .replace(/\\(?:text|textrm|mathrm|mathbf)\s*\{([^{}]*)\}/g, '$1')
+          .replace(/\\sqrt\s*\{([^{}]*)\}/g, (_, x) => `√${mathGroup(x)}`)
+          .replace(/\\[dt]?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, (_, a, b) => `${mathGroup(a)}/${mathGroup(b)}`)
+          .replace(/\\(leq?|geq?|pm|times|circ|degree|approx|neq?|mu|Omega|infty|cdot)(?![a-zA-Z])/g, (_, name) => LATEX_SYMBOLS[name])
+      }
+      return s
+    })
+    .join('')
+}
+
+/**
+ * plainMathText for a reply. A JSON reply (page tasks such as the AI Conformity Check) is cleaned value by value, so
+ * its JSON stays valid; a JSON reply that does not parse is left as it is.
+ */
+export function plainMathReply(reply, json = false) {
+  if (!json) return plainMathText(reply)
+  let parsed
+  try {
+    parsed = JSON.parse(reply)
+  } catch {
+    return reply
+  }
+  let changed = false
+  const clean = (value) => {
+    if (typeof value === 'string') {
+      const next = plainMathText(value)
+      if (next !== value) changed = true
+      return next
+    }
+    if (Array.isArray(value)) return value.map(clean)
+    if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, clean(v)]))
+    return value
+  }
+  const cleaned = clean(parsed)
+  return changed ? JSON.stringify(cleaned) : reply
+}
+
 /** Chat completions with tools (OpenAI-compatible); returns the provider's choice.message. */
 export function createToolCaller({ apiBase, apiKey, modelId, provider, maxTokens, temperature, reasoning = false, reasoningEffort = null, onUsage = null }) {
   return async (messages, tools, { final = false } = {}) => {
-    const startedAt = Date.now()
-    const r = await fetchWithProviderRetry(() => fetch(`${apiBase}/chat/completions`, {
-      method: 'POST',
-      redirect: 'error',
-      signal: AbortSignal.timeout(180_000),
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: modelId,
-        messages,
-        tools,
-        tool_choice: final ? 'none' : 'auto',
-        ...(reasoning
-          ? { max_completion_tokens: maxTokens }
-          : { ...(acceptsTemperature(modelId) ? { temperature } : {}), max_tokens: maxTokens }),
-        ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
+    let startedAt = Date.now()
+    const { res: r, modelId: usedModel } = await fetchWithModelFallback({
+      provider,
+      modelId,
+      doFetch: (model) => fetch(`${apiBase}/chat/completions`, {
+        method: 'POST',
+        redirect: 'error',
+        signal: AbortSignal.timeout(180_000),
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model,
+          messages,
+          tools,
+          tool_choice: final ? 'none' : 'auto',
+          ...(reasoning
+            ? { max_completion_tokens: maxTokens }
+            : { ...(acceptsTemperature(model) ? { temperature } : {}), max_tokens: maxTokens }),
+          ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
+        }),
       }),
-    }))
+      onBusy: ({ status, payload, modelId: busyModel }) => {
+        onUsage?.({ usage: payload?.usage, ms: Date.now() - startedAt, error: extractAiError(payload, status), modelId: busyModel })
+        startedAt = Date.now()
+      },
+    })
     const payload = await r.json().catch(() => ({}))
-    onUsage?.({ usage: payload?.usage, ms: Date.now() - startedAt, error: r.ok ? '' : extractAiError(payload, r.status) })
+    onUsage?.({ usage: payload?.usage, ms: Date.now() - startedAt, error: r.ok ? '' : extractAiError(payload, r.status), modelId: usedModel })
     if (!r.ok) {
       console.warn(
-        `[qi-assistant] agent provider error ${r.status} (provider ${provider}, model ${modelId}): ${extractAiError(payload, r.status).slice(0, 500)}`,
+        `[qi-assistant] agent provider error ${r.status} (provider ${provider}, model ${usedModel}): ${extractAiError(payload, r.status).slice(0, 500)}`,
       )
       const err = new Error(providerErrorMessage(r.status, payload))
       err.statusCode = 400
@@ -739,26 +947,42 @@ export function createQiAssistantHandler(deps) {
     // (applied to picture requests, which may pick such a model as the vision fallback; text chat is unchanged).
     const openAiReasoning = images.length > 0 && provider === 'openai' && /^(?:o\d|gpt-5)/i.test(modelId)
 
-    const requestChatCompletion = (jsonMode) => fetchWithProviderRetry(() => fetch(`${apiBase}/chat/completions`, {
-      method: 'POST',
-      // A provider must not bounce the request (and the API key) somewhere else.
-      redirect: 'error',
-      signal: AbortSignal.timeout(reasonedCheck || longClaudeTask || longGeminiTask ? 420_000 : 180_000),
-      headers: {
-        Authorization: `Bearer ${String(model.api_key).trim()}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: modelId,
-        messages: chatMessages,
-        ...(openAiReasoning
-          ? { max_completion_tokens: chatMaxTokens }
-          : { ...(acceptsTemperature(modelId) ? { temperature: chatTemperature } : {}), max_tokens: chatMaxTokens }),
-        ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
-        ...(provider === 'deepseek' && (isLongExtraction || standardsAsk) ? { thinking: { type: reasonedCheck ? 'enabled' : 'disabled' } } : {}),
-        ...(geminiEffort && !openAiReasoning ? { reasoning_effort: geminiEffort } : {}),
-      }),
-    }))
+    // The model that gave the answer: the chosen one, or the fallback model when the chosen one stayed busy.
+    let answeredBy = modelId
+    let attemptStartedAt = Date.now()
+    const requestChatCompletion = async (jsonMode) => {
+      attemptStartedAt = Date.now()
+      const result = await fetchWithModelFallback({
+        provider,
+        modelId,
+        doFetch: (askModel) => fetch(`${apiBase}/chat/completions`, {
+          method: 'POST',
+          // A provider must not bounce the request (and the API key) somewhere else.
+          redirect: 'error',
+          signal: AbortSignal.timeout(reasonedCheck || longClaudeTask || longGeminiTask ? 420_000 : 180_000),
+          headers: {
+            Authorization: `Bearer ${String(model.api_key).trim()}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: askModel,
+            messages: chatMessages,
+            ...(openAiReasoning
+              ? { max_completion_tokens: chatMaxTokens }
+              : { ...(acceptsTemperature(askModel) ? { temperature: chatTemperature } : {}), max_tokens: chatMaxTokens }),
+            ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
+            ...(provider === 'deepseek' && (isLongExtraction || standardsAsk) ? { thinking: { type: reasonedCheck ? 'enabled' : 'disabled' } } : {}),
+            ...(geminiEffort && !openAiReasoning ? { reasoning_effort: geminiEffort } : {}),
+          }),
+        }),
+        onBusy: ({ status, payload, modelId: busyModel }) => {
+          logUsage({ usage: payload?.usage, ms: Date.now() - attemptStartedAt, error: extractAiError(payload, status), userId, page: body.page, provider, modelId: busyModel })
+          attemptStartedAt = Date.now()
+        },
+      })
+      answeredBy = result.modelId
+      return result.res
+    }
 
     if (agentMode) {
       const callModel = createToolCaller({
@@ -770,7 +994,7 @@ export function createQiAssistantHandler(deps) {
         temperature: Math.min(chatTemperature, 0.3),
         reasoning: openAiReasoning,
         reasoningEffort: geminiReasoningEffort(provider, 'agent'),
-        onUsage: (u) => logUsage({ ...u, userId, page: body.page, provider, modelId, agent: true }),
+        onUsage: (u) => logUsage({ userId, page: body.page, provider, modelId, agent: true, ...u }),
       })
       try {
         const result = await runAgent({
@@ -783,7 +1007,7 @@ export function createQiAssistantHandler(deps) {
           readStorage: storageFor(req),
         })
         corsJson(res, 200, {
-          reply: result.reply,
+          reply: plainMathText(result.reply),
           agent: { steps: result.steps, proposals: result.proposals, navigation: result.navigation },
         })
       } catch (err) {
@@ -828,16 +1052,16 @@ export function createQiAssistantHandler(deps) {
     }
     logUsage({
       usage: aiPayload?.usage,
-      ms: Date.now() - startedAt,
+      ms: Date.now() - attemptStartedAt,
       error: aiRes.ok ? '' : extractAiError(aiPayload, aiRes.status),
       userId,
       page: body.page,
       provider,
-      modelId,
+      modelId: answeredBy,
     })
     if (!aiRes.ok) {
       console.warn(
-        `[qi-assistant] provider error ${aiRes.status} (provider ${provider}, model ${modelId}): ${extractAiError(aiPayload, aiRes.status).slice(0, 500)}`,
+        `[qi-assistant] provider error ${aiRes.status} (provider ${provider}, model ${answeredBy}): ${extractAiError(aiPayload, aiRes.status).slice(0, 500)}`,
       )
       corsJson(res, 400, { error: providerErrorMessage(aiRes.status, aiPayload) })
       return
@@ -850,7 +1074,7 @@ export function createQiAssistantHandler(deps) {
     if (pageName && pageName !== 'global') {
       const usage = aiPayload?.usage ?? {}
       console.log(
-        `[qi-assistant] page ${pageName} (provider ${provider}, model ${modelId}): ${Math.round((Date.now() - startedAt) / 1000)} s, ` +
+        `[qi-assistant] page ${pageName} (provider ${provider}, model ${answeredBy}): ${Math.round((Date.now() - startedAt) / 1000)} s, ` +
           `tokens in ${usage.prompt_tokens ?? '?'} out ${usage.completion_tokens ?? '?'}, finish ${choice?.finish_reason ?? '?'}, images ${images.length}`,
       )
     }
@@ -886,6 +1110,9 @@ export function createQiAssistantHandler(deps) {
       return
     }
 
-    corsJson(res, 200, { reply, model: String(model.display_name || modelId) })
+    corsJson(res, 200, {
+      reply: plainMathReply(reply, requestJson),
+      model: answeredBy === modelId ? String(model.display_name || modelId) : GEMINI_FALLBACK_LABEL,
+    })
   }
 }
