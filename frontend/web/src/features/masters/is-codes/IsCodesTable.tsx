@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, ArrowUpDown, BookOpen, FolderOpen, ListChecks, Pencil } from 'lucide-react'
+import { ArrowDown, ArrowUp, ArrowUpDown, BookOpen, FlaskConical, FolderOpen, Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
 import { QiAssistant } from '@/components/qi-assistant/QiAssistant'
@@ -137,15 +137,18 @@ function RowActions({
           type="button"
           size="sm"
           variant="ghost"
+          // A lab-flask chip (owner, 25 Nov 2026: a better look than the plain list icon); red when the Standard was revised.
           className={cn(
-            'relative h-8 w-8 rounded-none p-0 hover:bg-[#f3e9d8]',
-            standardRevised ? 'text-red-700 hover:text-red-800' : 'text-[#92400e] hover:text-[#78350f]',
+            'relative h-8 w-8 rounded-none border p-0 shadow-sm transition-colors',
+            standardRevised
+              ? 'border-red-500/40 bg-red-500/15 text-red-700 hover:bg-red-500/25'
+              : 'border-emerald-500/40 bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/25',
           )}
           aria-label={`Required Tests of ${formatIsCodeLabel(row)}${standardRevised ? ' (Standard Revised — Review)' : ''}`}
           title={standardRevised ? 'Required Tests — Standard Revised, Review' : 'Required Tests'}
           onClick={() => onRequiredTests(row)}
         >
-          <ListChecks size={16} />
+          <FlaskConical size={16} strokeWidth={2.2} />
           {standardRevised ? <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-red-600 ring-1 ring-white" aria-hidden /> : null}
         </Button>
       ) : null}
