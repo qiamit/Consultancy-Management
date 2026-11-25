@@ -298,7 +298,8 @@ const STYLES = `
   .ftr-main > tbody > tr > td { height: 7mm; }
   .ftr-main > thead > tr > th { text-align: center; }
   .ftr-main td.ftr-td-center { text-align: center; white-space: pre-wrap; }
-  .ftr-sub { font-weight: 600; font-size: 11px !important; color: #000; white-space: nowrap; }
+  /* Wraps inside the cell: a long reference ("IS 398 (Part 2): 2025, IS 4826: 2023 (Table 1) & IS 2633") ran into the next columns. */
+  .ftr-sub { font-weight: 600; font-size: 11px !important; color: #000; white-space: normal; overflow-wrap: anywhere; }
   /* Large, solid-black results so the report stays legible after print → seal / sign → scan. */
   .pd-sheet .ftr-main > tbody > tr > td { font-size: 13px !important; line-height: 1.35; }
   .pd-sheet .ftr-main > thead > tr > th { font-size: 12.5px !important; }

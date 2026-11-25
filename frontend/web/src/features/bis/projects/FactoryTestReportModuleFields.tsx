@@ -567,10 +567,12 @@ export function FactoryTestReportModuleFields({
                       activeReport.parameters.map((p) => (
                         <tr key={p.testParameterId || p.testName}>
                           <td className="border border-stone-800 px-2 py-1.5 align-top">
-                            {/* Clause follows the test name on the same line. */}
+                            {/* Clause follows the test name on the same line and wraps inside the cell when long
+                                (25 Nov 2026: "IS 398 (Part 2): 2025, IS 4826: 2023 (Table 1) & IS 2633" ran into
+                                the next columns). */}
                             <span className="font-bold">{p.testName || '—'}</span>
                             {p.clauseNo || p.isReference ? (
-                              <span className="whitespace-nowrap text-[11px] font-medium text-stone-800">
+                              <span className="text-[11px] font-medium text-stone-800 [overflow-wrap:anywhere]">
                                 {' · '}
                                 {[p.clauseNo ? `Cl. ${p.clauseNo}` : '', p.isReference]
                                   .filter(Boolean)
