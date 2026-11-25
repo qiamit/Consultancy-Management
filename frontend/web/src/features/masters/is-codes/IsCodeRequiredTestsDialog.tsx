@@ -470,7 +470,7 @@ export function IsCodeRequiredTestsDialog({
 
   // Header buttons show only their icon (owner, 25 Nov 2026: "label hata kar only button"); the name is the tooltip.
   const iconBtnClass = cn(limsOutlineBtnClass, 'w-10 px-0')
-  // Every value in the table is centred (owner, 25 Nov 2026).
+  // Every value in the table is centred, except Test Name, which starts at the left (owner, 25 Nov 2026).
   const cellInputClass = cn(limsFieldClass, 'h-7 text-center text-xs')
   const suggestions = {
     testName: uniqueSavedColumnValues(tests.map((t) => t.testName)),
@@ -613,7 +613,7 @@ export function IsCodeRequiredTestsDialog({
                     )}
                   </th>
                   <th className="w-16 px-2 py-1.5 text-center" title="Move a Test Up or Down">Move</th>
-                  <th className="px-2 py-1.5 text-center">Test Name</th>
+                  <th className="px-2 py-1.5 pl-4 text-left">Test Name</th>
                   <th className="w-32 px-2 py-1.5 text-center">
                     <button
                       type="button"
@@ -649,7 +649,7 @@ export function IsCodeRequiredTestsDialog({
                         <td className="px-2 py-1 text-center text-[10px] font-semibold uppercase text-amber-800">New</td>
                         <td className="px-1 py-1">
                           <SavedValueSuggestInput
-                            className={cellInputClass}
+                            className={cn(cellInputClass, '!text-left')}
                             value={draft.testName}
                             suggestions={suggestions.testName}
                             placeholder="Test Name"
@@ -818,7 +818,7 @@ export function IsCodeRequiredTestsDialog({
                               </div>
                             </td>
                             <td className="px-1 py-1">
-                              <Input className={fieldClass} value={t.testName} readOnly={!editing} disabled={disabled} aria-label="Test Name" onKeyDown={doneOnEnter} onChange={(e) => update(i, { testName: e.target.value })} />
+                              <Input className={cn(fieldClass, '!text-left')} value={t.testName} readOnly={!editing} disabled={disabled} aria-label="Test Name" onKeyDown={doneOnEnter} onChange={(e) => update(i, { testName: e.target.value })} />
                             </td>
                             <td className="px-1 py-1">
                               <Input className={fieldClass} value={t.clause} readOnly={!editing} disabled={disabled} aria-label="Clause" onKeyDown={doneOnEnter} onChange={(e) => update(i, { clause: e.target.value })} />
