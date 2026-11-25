@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, CheckCircle2, FileText, Loader2, Pencil, Plus, Printer, Trash2, XCircle } from 'lucide-react'
+import { ArrowLeft, Award, CheckCircle2, FileText, Loader2, Pencil, Plus, Printer, Trash2, XCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -29,6 +29,7 @@ import {
 import { usePortalData } from './portalDataContext'
 import { cellText, linkLabel, REF_LABEL } from './recordDisplay'
 import { buildRecordPrintHtml, type PrintHeader } from './recordPrint'
+import { buildTestCertificateHtml, type CertificateGroup } from './testCertificatePrint'
 import {
   computeEntry,
   defaultEntryValues,
@@ -312,7 +313,7 @@ export default function PortalRecordsPage() {
 }
 
 function SectionRecords({ licenceId, sectionId }: { licenceId: string; sectionId: string }) {
-  const { reload: reloadDashboard } = usePortalData()
+  const { reload: reloadDashboard, dashboard } = usePortalData()
   const [confirm, confirmDialog] = useConfirmDialog()
   const [section, setSection] = useState<PortalSection | null>(null)
   const [entries, setEntries] = useState<PortalEntry[] | null>(null)
@@ -368,21 +369,69 @@ function SectionRecords({ licenceId, sectionId }: { licenceId: string; sectionId
     }
   }
   const fails = entries?.filter((e) => e.result === 'fail').length ?? 0
+  const loadHeader = async (): Promise<PrintHeader> => {
+    const lic = await fetchPortalLicence(licenceId)
+    const f = lic.factory ?? {}
+    return {
+      company: lic.company_name ?? '',
+      address: [f.address, f.city, f.district, f.state, f.pin_code].map((x) => String(x ?? '').trim()).filter(Boolean).join(', '),
+      licence: lic.cm_l_digits ? formatCmL(lic.cm_l_digits) : lic.license_number ?? '',
+      isLabel: lic.is_number ? isLabel(lic) : '',
+      isTitle: lic.is_title ?? '',
+    }
+  }
   const printRegister = async (blank: boolean) => {
     try {
-      const lic = await fetchPortalLicence(licenceId)
-      const f = lic.factory ?? {}
-      const header: PrintHeader = {
-        company: lic.company_name ?? '',
-        address: [f.address, f.city, f.district, f.state, f.pin_code].map((x) => String(x ?? '').trim()).filter(Boolean).join(', '),
-        licence: lic.cm_l_digits ? formatCmL(lic.cm_l_digits) : lic.license_number ?? '',
-        isLabel: lic.is_number ? isLabel(lic) : '',
-        isTitle: lic.is_title ?? '',
-      }
+      const header = await loadHeader()
       const html = buildRecordPrintHtml({ section, header, entries: blank ? null : entries ?? [], links, period: { from, to } })
       if (!printHtmlInFrame(html)) toast.error('Could Not Open the Print Window.')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could Not Print')
+    }
+  }
+
+  /**
+   * Test Certificate of one batch (Batch / Lot sections; owner, 25 Nov 2026). The test entries are the ones the batch
+   * picks in its Link columns; for a test section the batch does not link to, the entries that link back to the
+   * batch, else (Final Testing only) the entries whose Sample / Batch No is the batch number.
+   */
+  const printCertificate = async (batch: PortalEntry) => {
+    try {
+      const header = await loadHeader()
+      const licence = dashboard?.licences.find((l) => l.id === licenceId)
+      const linkTargets = section.columns.filter((c) => c.col_type === 'link' && c.config.section_id).map((c) => c.config.section_id!)
+      const candidates = [...new Set([...(licence?.sections ?? []).filter((x) => x.kind === 'final_test' || x.kind === 'in_process').map((x) => x.id), ...linkTargets])]
+      const batchRef = (batch.ref_no ?? '').trim().toLowerCase()
+      const idsIn = (v: unknown) => (Array.isArray(v) ? v.map(String) : v == null || v === '' ? [] : [String(v)])
+      const groups: CertificateGroup[] = []
+      for (const id of candidates) {
+        const testSection = await fetchPortalSection(id).catch(() => null)
+        if (!testSection || (testSection.kind !== 'final_test' && testSection.kind !== 'in_process')) continue
+        const picked = new Set(section.columns.filter((c) => c.col_type === 'link' && c.config.section_id === id).flatMap((c) => idsIn(batch.data[c.key])))
+        const backLinks = testSection.columns.filter((c) => c.col_type === 'link' && c.config.section_id === section.id)
+        const options = links[id] ?? (await fetchLinkOptions(id).catch(() => [] as PortalLinkOption[]))
+        const mine = options.filter((o) =>
+          picked.size
+            ? picked.has(o.id)
+            : backLinks.length
+              ? backLinks.some((c) => idsIn(o.data?.[c.key]).includes(batch.id))
+              : testSection.kind === 'final_test' && batchRef !== '' && (o.ref_no ?? '').trim().toLowerCase() === batchRef,
+        )
+        groups.push({ section: testSection, entries: [...mine].sort((a, b) => a.entry_date.localeCompare(b.entry_date)), links: {} })
+      }
+      // Final Testing first, then In-Process.
+      groups.sort((a, b) => Number(a.section.kind !== 'final_test') - Number(b.section.kind !== 'final_test'))
+      const html = buildTestCertificateHtml({
+        header,
+        batchSection: section,
+        batch,
+        batchLinks: links,
+        testSectionIds: groups.map((g) => g.section.id),
+        groups,
+      })
+      if (!printHtmlInFrame(html)) toast.error('Could Not Open the Print Window.')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could Not Print the Test Certificate')
     }
   }
 
@@ -459,6 +508,9 @@ function SectionRecords({ licenceId, sectionId }: { licenceId: string; sectionId
                       <td className={td}><ResultBadge result={e.result} /></td>
                       <td className={cn(td, 'whitespace-nowrap')}>
                         <span className="flex gap-1">
+                          {section.kind === 'batch' ? (
+                            <button type="button" className={iconBtn} title="Test Certificate of This Batch (Print / PDF)" aria-label="Print Test Certificate" onClick={() => void printCertificate(e)}><Award size={13} /></button>
+                          ) : null}
                           <button type="button" className={iconBtn} disabled={!canWrite} title="Edit" aria-label="Edit Entry" onClick={() => setEditing(e)}><Pencil size={13} /></button>
                           <button type="button" className={cn(iconBtn, 'text-red-700')} disabled={!canWrite} title="Delete" aria-label="Delete Entry" onClick={() => void remove(e)}><Trash2 size={13} /></button>
                         </span>
