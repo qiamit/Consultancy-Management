@@ -107,6 +107,15 @@ html.dark .bg-white\/80 {
   background-color: hsl(var(--card) / 0.95) !important;
   color: hsl(var(--card-foreground));
 }
+/* Striped table rows (odd:bg-white / even:bg-stone-50 …): the plain .bg-white rule above does not reach the odd: and
+   even: variants, so in dark mode every other row stayed white under light text (AI Conformity Log, owner 26 Nov 2026). */
+html.dark .odd\:bg-white:nth-child(odd) {
+  background-color: hsl(var(--card)) !important;
+}
+html.dark .even\:bg-stone-50:nth-child(even),
+html.dark .even\:bg-\[\#faf7f1\]:nth-child(even) {
+  background-color: hsl(var(--muted) / 0.45) !important;
+}
 html.dark .hover\:bg-white:hover,
 html.dark .focus\:bg-white:focus,
 html.dark .focus-visible\:bg-white:focus-visible,
