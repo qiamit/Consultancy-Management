@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { KeyRound } from 'lucide-react'
 import { PasswordInput } from '@/components/auth/PasswordInput'
 import { newPasswordProblem, PASSWORD_MIN_LENGTH, setOwnPassword } from '@/features/auth/passwordApi'
 import { supabase } from '@/lib/supabaseClient'
 import { useAuth } from '@/hooks/useAuth'
 import { readTwoStepState } from '@/features/auth/mfaApi'
 import { TwoStepChallengePanel } from '@/components/auth/TwoStepLoginPanels'
-import { usePublicPageTitle } from '@/features/public-site/publicPageUtils'
+import { usePageTitle } from '@/features/public-site/siteUtils'
 
 /** Error GoTrue puts in the redirect URL when the link is expired or already used. */
 function linkErrorFromUrl(): string | null {
@@ -108,29 +107,27 @@ export default function ResetPasswordPage() {
     }
   }
 
-  usePublicPageTitle('Set a New Password · Quality Engineering')
+  usePageTitle('Set a New Password · Quality Engineering')
 
-  // Same look as the sign-in page (website style, owner 25 Nov 2026); the steps are unchanged.
+  // Same look as the sign-in page (Quality Engineering website design, owner 25 Nov 2026); the steps are unchanged.
   return (
-    <section className="qp-screen alt">
-      <div className="qp-wrap" style={{ maxWidth: 520 }}>
-        <div className="qp-auth-main qp-rise">
-          <div className="text-center">
-            <span className="qp-brand-mark mx-auto qp-auth-mark" aria-hidden>
-              <KeyRound size={24} />
-            </span>
-            <h1 className="qp-auth-title">Set a New Password</h1>
+    <section className="qs-page mist">
+      <div className="qs-wrap" style={{ maxWidth: 480 }}>
+        <div className="qs-signin-main qs-in">
+          <div className="qs-signin-head">
+            <img src="/brand/qe-logo.png" alt="Quality Engineering" />
+            <h1>Set a New Password</h1>
           </div>
 
-          <div className="qp-panel qp-auth-panel">
-            {phase === 'checking' && <p className="qp-small">Checking Your Reset Link…</p>}
+          <div className="qs-signin-box">
+            {phase === 'checking' && <p className="qs-hint">Checking Your Reset Link…</p>}
 
             {phase === 'invalid' && (
-              <div className="qp-form">
-                <p className="qp-error">
+              <div className="qs-form">
+                <p className="qs-alert">
                   {linkError || 'This reset link is invalid or has expired.'} Request a new link from the sign-in page.
                 </p>
-                <button type="button" className="qp-btn w-full" onClick={() => navigate('/auth', { replace: true })}>
+                <button type="button" className="qs-btn block" onClick={() => navigate('/auth', { replace: true })}>
                   Back to Sign In
                 </button>
               </div>
@@ -144,10 +141,10 @@ export default function ResetPasswordPage() {
             )}
 
             {phase === 'ready' && !needsCode && (
-              <div className="qp-form">
-                {email && <p className="qp-small" style={{ margin: 0 }}>Account: {email}</p>}
-                {error && <p className="qp-error">{error}</p>}
-                <div className="qp-field">
+              <div className="qs-form">
+                {email && <p className="qs-hint">Account: {email}</p>}
+                {error && <p className="qs-alert">{error}</p>}
+                <div className="qs-field">
                   <label htmlFor="reset-new-password">New Password</label>
                   <PasswordInput
                     id="reset-new-password"
@@ -155,33 +152,28 @@ export default function ResetPasswordPage() {
                     onChange={setNewPassword}
                     placeholder={`At Least ${PASSWORD_MIN_LENGTH} Characters`}
                     autoFocus
-                    className="qp-input"
+                    className="qs-input"
                   />
                 </div>
-                <div className="qp-field">
+                <div className="qs-field">
                   <label htmlFor="reset-confirm-password">Confirm New Password</label>
                   <PasswordInput
                     id="reset-confirm-password"
                     value={confirmPassword}
                     onChange={setConfirmPassword}
-                    className="qp-input"
+                    className="qs-input"
                   />
                 </div>
-                <button type="button" className="qp-btn w-full" onClick={handleSave} disabled={saving}>
+                <button type="button" className="qs-btn block" onClick={handleSave} disabled={saving}>
                   {saving ? 'Saving…' : 'Save Password'}
                 </button>
               </div>
             )}
 
             {phase === 'done' && (
-              <div className="qp-form">
-                <p
-                  className="qp-body"
-                  style={{ fontSize: 15, background: 'rgba(52,199,89,0.12)', color: '#1a7f37', padding: '10px 14px', borderRadius: 12, margin: 0 }}
-                >
-                  Your Password Has Been Changed.
-                </p>
-                <button type="button" className="qp-btn w-full" onClick={() => navigate('/', { replace: true })}>
+              <div className="qs-form">
+                <p className="qs-alert ok">Your Password Has Been Changed.</p>
+                <button type="button" className="qs-btn block" onClick={() => navigate('/', { replace: true })}>
                   Continue
                 </button>
               </div>

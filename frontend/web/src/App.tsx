@@ -4,17 +4,17 @@ import { useProperLabelText } from '@/hooks/useProperLabelText'
 import { RoutePersistence } from '@/components/routing/RoutePersistence'
 import AuthPage from '@/features/auth/AuthPage'
 import ResetPasswordPage from '@/features/auth/ResetPasswordPage'
-import PublicSiteLayout from '@/features/public-site/PublicSiteLayout'
-import PublicHomePage from '@/features/public-site/PublicHomePage'
+import SiteFrame from '@/features/public-site/SiteFrame'
+import HomePage from '@/features/public-site/HomePage'
 import {
-  AboutPage as PublicAboutPage,
-  AccreditationPage as PublicAccreditationPage,
-  BisCertificationPage as PublicBisCertificationPage,
-  ContactPage as PublicContactPage,
-  HowItWorksPage as PublicHowItWorksPage,
-  IsoCertificationPage as PublicIsoCertificationPage,
-  ProductsPage as PublicProductsPage,
-} from '@/features/public-site/PublicPages'
+  AboutPage as SiteAboutPage,
+  AccreditationPage as SiteAccreditationPage,
+  BisCertificationPage as SiteBisCertificationPage,
+  ContactPage as SiteContactPage,
+  HowItWorksPage as SiteHowItWorksPage,
+  IsoCertificationPage as SiteIsoCertificationPage,
+  ProductsPage as SiteProductsPage,
+} from '@/features/public-site/SitePages'
 import FileViewPage from '@/features/file-view/FileViewPage'
 import PortalLicencesPage from '@/features/portal/PortalLicencesPage'
 import PortalLicenceDetailPage from '@/features/portal/PortalLicenceDetailPage'
@@ -79,16 +79,17 @@ export default function App() {
     <BrowserRouter>
       <RoutePersistence />
       <Routes>
-        {/* Public website and sign-in, the same layout as the Qirlpl website (owner, 25 Nov 2026). The website's Contact tab is /enquiry, since /contact is the app's own Contact Us page. */}
-        <Route element={<PublicSiteLayout />}>
-          <Route path="/home" element={<PublicHomePage />} />
-          <Route path="/bis-certification" element={<PublicBisCertificationPage />} />
-          <Route path="/products" element={<PublicProductsPage />} />
-          <Route path="/iso-certification" element={<PublicIsoCertificationPage />} />
-          <Route path="/accreditation" element={<PublicAccreditationPage />} />
-          <Route path="/how-it-works" element={<PublicHowItWorksPage />} />
-          <Route path="/about" element={<PublicAboutPage />} />
-          <Route path="/enquiry" element={<PublicContactPage />} />
+        {/* Quality Engineering website and sign-in (QE's own design, owner 25 Nov 2026). The Contact tab is /enquiry,
+            since /contact is the app's own Contact Us page. */}
+        <Route element={<SiteFrame />}>
+          <Route path="/home" element={<HomePage />} />
+          <Route path="/bis-certification" element={<SiteBisCertificationPage />} />
+          <Route path="/products" element={<SiteProductsPage />} />
+          <Route path="/iso-certification" element={<SiteIsoCertificationPage />} />
+          <Route path="/accreditation" element={<SiteAccreditationPage />} />
+          <Route path="/how-it-works" element={<SiteHowItWorksPage />} />
+          <Route path="/about" element={<SiteAboutPage />} />
+          <Route path="/enquiry" element={<SiteContactPage />} />
           <Route path="/services" element={<Navigate to="/bis-certification" replace />} />
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/auth/reset" element={<ResetPasswordPage />} />

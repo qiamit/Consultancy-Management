@@ -1,18 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Eye, EyeOff, ShieldCheck } from 'lucide-react'
+import { Eye, EyeOff } from 'lucide-react'
 import { signIn, signOut, useAuth } from '@/hooks/useAuth'
 import { requestPasswordReset } from '@/features/auth/passwordApi'
 import { readTwoStepState } from '@/features/auth/mfaApi'
 import { TwoStepChallengePanel } from '@/components/auth/TwoStepLoginPanels'
-import { LoginStepsStrip, LoginTilesPanel, LoginWidgetsPanel } from '@/features/auth/LoginSidePanels'
-import { usePublicPageTitle } from '@/features/public-site/publicPageUtils'
+import { SignInChain, SignInLeft, SignInRight } from '@/features/auth/signInCards'
+import { usePageTitle } from '@/features/public-site/siteUtils'
 import { PUBLIC_EMAIL, PUBLIC_LAB_NAME } from '@/features/public-site/publicNav'
 
 /**
- * Sign-in page in the website's Apple style, the same layout as the Qirlpl login page (owner, 25 Nov 2026): tiles
- * on the left, live widgets on the right, the sign-in box in the middle. Sign-in, two-step code and password reset
- * work as before.
+ * Sign-in page in the Quality Engineering website design (owner, 25 Nov 2026): company cards on the left, live cards
+ * on the right, the sign-in box in the middle. Sign-in, two-step code and password reset work as before.
  */
 export default function AuthPage() {
   const navigate = useNavigate()
@@ -155,155 +154,131 @@ export default function AuthPage() {
     }
   }
 
-  usePublicPageTitle(
+  usePageTitle(
     codeStep ? 'Two-Step Login · Quality Engineering' : forgotMode ? 'Reset Password · Quality Engineering' : 'Sign In · Quality Engineering',
   )
 
   const textLink = (label: string, onClick: () => void) => (
-    <button type="button" className="qp-link" style={{ fontSize: 14 }} onClick={onClick}>
+    <button type="button" className="qs-more" onClick={onClick}>
       {label}
     </button>
   )
 
   return (
-    <section className="qp-screen alt">
-      <div className="qp-wrap-wide qp-auth">
-        <LoginTilesPanel />
-        <div className="qp-auth-main qp-rise">
-          <div className="text-center">
-            <span className="qp-brand-mark mx-auto qp-auth-mark" aria-hidden>
-              <ShieldCheck size={26} />
-            </span>
-            <h1 className="qp-auth-title">
-              {codeStep ? 'Two-Step Login' : forgotMode ? 'Reset Your Password' : 'Sign In to Consultancy Pro'}
-            </h1>
-            <p className="qp-small" style={{ marginTop: 8 }}>
-              For the Team and Clients of {PUBLIC_LAB_NAME}
-            </p>
-          </div>
+    <section className="qs-page mist">
+      <div className="qs-wrap" style={{ maxWidth: 1440 }}>
+        <div className="qs-signin-grid">
+          <SignInLeft />
+          <div className="qs-signin-main qs-in">
+            <div className="qs-signin-head">
+              <img src="/brand/qe-logo.png" alt={PUBLIC_LAB_NAME} />
+              <h1>{codeStep ? 'Two-Step Login' : forgotMode ? 'Reset Your Password' : 'Sign In to Consultancy Pro'}</h1>
+              <p>For the Team and Clients of {PUBLIC_LAB_NAME}</p>
+            </div>
 
-          <div className="qp-panel qp-auth-panel">
-            {authNotice ? (
-              <p
-                className="qp-body"
-                style={{ fontSize: 15, background: 'rgba(0,113,227,0.08)', color: '#0058b0', padding: '10px 14px', borderRadius: 12, marginBottom: 16 }}
-              >
-                {authNotice}
-              </p>
-            ) : null}
+            <div className="qs-signin-box">
+              {authNotice ? <p className="qs-alert info" style={{ marginBottom: 14 }}>{authNotice}</p> : null}
 
-            {codeStep ? (
-              <TwoStepChallengePanel
-                onVerified={goAfterAuth}
-                secondaryAction={{ label: 'Back to Sign In', onClick: () => void backToSignIn() }}
-              />
-            ) : forgotMode ? (
-              <div className="qp-form">
-                {resetSent ? (
-                  <p className="qp-body" style={{ fontSize: 15 }}>
-                    If an account exists for {email.trim()}, a password reset link has been sent. Check your inbox (and
-                    spam folder). The link works once and expires in about an hour.
-                  </p>
-                ) : (
-                  <>
-                    <p className="qp-small" style={{ margin: 0 }}>
-                      Enter your account email. We will send you a link to set a new password.
+              {codeStep ? (
+                <TwoStepChallengePanel
+                  onVerified={goAfterAuth}
+                  secondaryAction={{ label: 'Back to Sign In', onClick: () => void backToSignIn() }}
+                />
+              ) : forgotMode ? (
+                <div className="qs-form">
+                  {resetSent ? (
+                    <p className="qs-alert ok">
+                      If an account exists for {email.trim()}, a password reset link has been sent. Check your inbox (and
+                      spam folder). The link works once and expires in about an hour.
                     </p>
-                    <div className="qp-field">
-                      <label htmlFor="reset-email">Email Address</label>
-                      <input
-                        id="reset-email"
-                        type="email"
-                        className="qp-input"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && !resetSending) void handleSendReset()
-                        }}
-                        placeholder={PUBLIC_EMAIL}
-                        autoComplete="email"
-                        autoFocus
-                      />
-                    </div>
-                  </>
-                )}
-                {resetError ? <p className="qp-error">{resetError}</p> : null}
-                {resetSent ? null : (
-                  <button
-                    type="button"
-                    className="qp-btn w-full"
-                    onClick={() => void handleSendReset()}
-                    disabled={!email.trim() || resetSending}
-                  >
-                    {resetSending ? 'Sending…' : 'Send Reset Link'}
-                  </button>
-                )}
-                <div className="text-center">{textLink('Back to Sign In', () => setForgotMode(false))}</div>
-              </div>
-            ) : (
-              <div className="qp-form" onKeyDown={handleKeyDown}>
-                <div className="qp-field">
-                  <label htmlFor="email">Email Address</label>
-                  <input
-                    id="email"
-                    type="email"
-                    className="qp-input"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder={PUBLIC_EMAIL}
-                    autoComplete="email"
-                    autoFocus
-                  />
-                </div>
-                <div className="qp-field">
-                  <label htmlFor="password">Password</label>
-                  <div className="relative">
-                    <input
-                      id="password"
-                      type={showPassword ? 'text' : 'password'}
-                      className="qp-input"
-                      style={{ paddingRight: 48 }}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Enter Your Password"
-                      autoComplete="current-password"
-                    />
+                  ) : (
+                    <>
+                      <p className="qs-hint">Enter your account email. We will send you a link to set a new password.</p>
+                      <div className="qs-field">
+                        <label htmlFor="reset-email">Email Address</label>
+                        <input
+                          id="reset-email"
+                          type="email"
+                          className="qs-input"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !resetSending) void handleSendReset()
+                          }}
+                          placeholder={PUBLIC_EMAIL}
+                          autoComplete="email"
+                          autoFocus
+                        />
+                      </div>
+                    </>
+                  )}
+                  {resetError ? <p className="qs-alert">{resetError}</p> : null}
+                  {resetSent ? null : (
                     <button
                       type="button"
-                      onClick={() => setShowPassword((v) => !v)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2"
-                      style={{ color: '#86868b', background: 'none', border: 0, cursor: 'pointer', padding: 4 }}
-                      aria-label={showPassword ? 'Hide Password' : 'Show Password'}
-                      tabIndex={-1}
+                      className="qs-btn block"
+                      onClick={() => void handleSendReset()}
+                      disabled={!email.trim() || resetSending}
                     >
-                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      {resetSending ? 'Sending…' : 'Send Reset Link'}
                     </button>
-                  </div>
+                  )}
+                  <div className="qs-center">{textLink('Back to Sign In', () => setForgotMode(false))}</div>
                 </div>
-                {error ? <p className="qp-error whitespace-pre-line">{error}</p> : null}
-                <button
-                  type="button"
-                  className="qp-btn w-full"
-                  style={{ marginTop: 4 }}
-                  onClick={handleSubmit}
-                  disabled={!canSubmit || loading}
-                >
-                  {loading ? 'Signing In…' : 'Sign In'}
-                </button>
-                <div className="text-center">{textLink('Forgot Password?', openForgot)}</div>
-              </div>
-            )}
-          </div>
+              ) : (
+                <div className="qs-form" onKeyDown={handleKeyDown}>
+                  <div className="qs-field">
+                    <label htmlFor="email">Email Address</label>
+                    <input
+                      id="email"
+                      type="email"
+                      className="qs-input"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder={PUBLIC_EMAIL}
+                      autoComplete="email"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="qs-field">
+                    <label htmlFor="password">Password</label>
+                    <div className="qs-has-eye">
+                      <input
+                        id="password"
+                        type={showPassword ? 'text' : 'password'}
+                        className="qs-input"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="Enter Your Password"
+                        autoComplete="current-password"
+                      />
+                      <button
+                        type="button"
+                        className="qs-eye"
+                        onClick={() => setShowPassword((v) => !v)}
+                        aria-label={showPassword ? 'Hide Password' : 'Show Password'}
+                        tabIndex={-1}
+                      >
+                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
+                  </div>
+                  {error ? <p className="qs-alert">{error}</p> : null}
+                  <button type="button" className="qs-btn block" onClick={handleSubmit} disabled={!canSubmit || loading}>
+                    {loading ? 'Signing In…' : 'Sign In'}
+                  </button>
+                  <div className="qs-center">{textLink('Forgot Password?', openForgot)}</div>
+                </div>
+              )}
+            </div>
 
-          <LoginStepsStrip />
-          <p className="qp-small text-center qp-auth-help-line">
-            Login Help: Your Admin or{' '}
-            <a href={`mailto:${PUBLIC_EMAIL}`} className="qp-link" style={{ fontSize: 13 }}>
-              {PUBLIC_EMAIL}
-            </a>
-          </p>
+            <SignInChain />
+            <p className="qs-signin-help">
+              Login Help: Your Admin or <a href={`mailto:${PUBLIC_EMAIL}`}>{PUBLIC_EMAIL}</a>
+            </p>
+          </div>
+          <SignInRight />
         </div>
-        <LoginWidgetsPanel />
       </div>
     </section>
   )

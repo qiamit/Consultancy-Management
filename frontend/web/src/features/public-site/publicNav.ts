@@ -12,10 +12,7 @@ export const PUBLIC_SITE_PATHS = [
 
 export type PublicSitePath = (typeof PUBLIC_SITE_PATHS)[number]
 
-/**
- * Tabs in the website's top bar and phone menu, the same layout as the Qirlpl website (owner, 25 Nov 2026); each
- * is its own one-screen page.
- */
+/** Tabs in the website's top bar and phone menu (owner, 25 Nov 2026); each is its own one-screen page. */
 export const PUBLIC_TABS: Array<{ to: PublicSitePath; label: string }> = [
   { to: '/home', label: 'Home' },
   { to: '/bis-certification', label: 'BIS Certification' },
