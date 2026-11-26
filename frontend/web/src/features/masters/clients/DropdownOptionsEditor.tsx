@@ -122,19 +122,20 @@ export function DropdownOptionsEditor({ value, onChange }: { value: DropdownSett
       ) : null}
 
       <div className="max-h-72 overflow-y-auto border border-stone-300 bg-white">
+        {/* Phones: no # column and narrower side columns, so the Option field keeps most of the width. */}
         <table className="w-full border-collapse">
           <thead className="sticky top-0 z-[1]">
             <tr>
-              <th className={cn(th, 'w-12')}>#</th>
+              <th className={cn(th, 'w-12 max-sm:hidden')}>#</th>
               <th className={cn(th, 'text-left')}>Option</th>
-              <th className={cn(th, 'w-[5.5rem]')}>Default</th>
-              <th className={cn(th, 'w-[6rem]')}>Marks Fail</th>
-              <th className={cn(th, 'w-[7.5rem]')}>Action</th>
+              <th className={cn(th, 'w-[5.5rem] max-sm:w-14 max-sm:px-1')}>Default</th>
+              <th className={cn(th, 'w-[6rem] max-sm:w-12 max-sm:px-1')}>Marks Fail</th>
+              <th className={cn(th, 'w-[7.5rem] max-sm:w-auto max-sm:px-1')}>Action</th>
             </tr>
           </thead>
           <tbody>
             <tr className="bg-amber-50/70">
-              <td className={cn(td, 'text-xs font-semibold text-amber-800')}>New</td>
+              <td className={cn(td, 'text-xs font-semibold text-amber-800 max-sm:hidden')}>New</td>
               <td className={cn(td, 'text-left')}>
                 <Input
                   value={draft}
@@ -160,7 +161,7 @@ export function DropdownOptionsEditor({ value, onChange }: { value: DropdownSett
             </tr>
             {options.map((o, i) => (
               <tr key={i} className={i % 2 ? 'bg-[#f7f3eb]' : 'bg-[#fffcf7]'}>
-                <td className={cn(td, 'text-xs text-stone-500')}>{i + 1}</td>
+                <td className={cn(td, 'text-xs text-stone-500 max-sm:hidden')}>{i + 1}</td>
                 <td className={cn(td, 'text-left')}>
                   <Input
                     value={o}
@@ -191,7 +192,7 @@ export function DropdownOptionsEditor({ value, onChange }: { value: DropdownSett
                     }
                   />
                 </td>
-                <td className={td}>
+                <td className={cn(td, 'max-sm:px-1')}>
                   <span className="flex justify-center gap-1">
                     <button type="button" className={iconBtn} title="Move Up" aria-label="Move Up" disabled={i === 0} onClick={() => move(i, -1)}><ArrowUp size={13} /></button>
                     <button type="button" className={iconBtn} title="Move Down" aria-label="Move Down" disabled={i === options.length - 1} onClick={() => move(i, 1)}><ArrowDown size={13} /></button>

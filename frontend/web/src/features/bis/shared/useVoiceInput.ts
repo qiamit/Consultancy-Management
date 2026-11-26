@@ -12,6 +12,14 @@ type RecognitionLike = {
   abort: () => void
 }
 
+/**
+ * The one language every voice feature listens and speaks in — there is no language button (owner, 26 Nov 2026:
+ * "language ko auto default pe kar do"). Indian English recognition also takes Hindi and Hinglish (written out in
+ * Latin letters), and every AI chat answers in the language of the question; read aloud, Devanagari text gets a
+ * Hindi voice (useSpeech).
+ */
+export const AUTO_VOICE_LANG = 'en-IN'
+
 function recognitionCtor(): (new () => RecognitionLike) | null {
   const w = window as Window & { SpeechRecognition?: new () => RecognitionLike; webkitSpeechRecognition?: new () => RecognitionLike }
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null
@@ -21,7 +29,7 @@ function recognitionCtor(): (new () => RecognitionLike) | null {
  * Voice typing with the browser's speech recognition: keeps listening while you talk, shows the words as they are
  * recognised and appends them to the text that was already typed. `onText` receives the whole text every time.
  */
-export function useVoiceInput(onText: (text: string) => void, lang = 'en-IN') {
+export function useVoiceInput(onText: (text: string) => void, lang = AUTO_VOICE_LANG) {
   const [listening, setListening] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const recognitionRef = useRef<RecognitionLike | null>(null)

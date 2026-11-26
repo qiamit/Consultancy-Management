@@ -29,10 +29,13 @@ type Selection = { has: (relpath: string) => boolean; toggle: (relpath: string) 
 const act = (p: Promise<void>) => void p.catch((e: unknown) => toast.error(e instanceof Error ? e.message : String(e)))
 
 function FileRow({ file, label, tag, sel }: { file: LibraryFile; label?: string; tag?: string; sel: Selection }) {
-  const btn = 'h-7 gap-1 rounded-none px-2 text-[11px]'
+  // Phones: Edition and Pages move under the file name and View / Download keep only their icons, so the name gets
+  // the width instead of wrapping one letter per line.
+  const btn = 'h-7 gap-1 rounded-none px-2 text-[11px] max-sm:w-8 max-sm:justify-center max-sm:px-0'
+  const meta = [file.year, file.pages != null ? `${file.pages} Pages` : ''].filter(Boolean).join(' · ')
   return (
     <tr className="border-b border-stone-200 last:border-b-0 hover:bg-amber-50/40">
-      <td className="w-9 px-3 py-1.5 align-middle">
+      <td className="w-9 px-3 py-1.5 align-middle max-sm:w-8 max-sm:pl-2.5 max-sm:pr-1">
         <input
           type="checkbox"
           className="h-4 w-4 accent-amber-700"
@@ -41,9 +44,9 @@ function FileRow({ file, label, tag, sel }: { file: LibraryFile; label?: string;
           aria-label={`Select ${file.name}`}
         />
       </td>
-      <td className="px-2 py-1.5 align-middle text-sm text-stone-900">
+      <td className="min-w-0 px-2 py-1.5 align-middle text-sm text-stone-900">
         {label ? <span className="font-medium">{label}</span> : null}
-        <span className={cn('break-all', label && 'block text-xs text-stone-500')}>{file.name}</span>
+        <span className={cn('[overflow-wrap:anywhere]', label && 'block text-xs text-stone-500')}>{file.name}</span>
         {tag ? <span className="ml-1 inline-flex bg-amber-100 px-1.5 text-[10px] font-medium uppercase text-amber-800">{tag}</span> : null}
         {file.status && file.status !== 'Current' ? (
           <span
@@ -54,18 +57,19 @@ function FileRow({ file, label, tag, sel }: { file: LibraryFile; label?: string;
             {file.supersededBy ? ` → ${file.supersededBy}` : ''}
           </span>
         ) : null}
+        {meta ? <span className="mt-0.5 block text-[11px] tabular-nums text-stone-500 sm:hidden">{meta}</span> : null}
       </td>
-      <td className="w-16 px-2 py-1.5 text-center align-middle text-xs tabular-nums text-stone-600">{file.year || '—'}</td>
-      <td className="w-16 px-2 py-1.5 text-right align-middle text-xs tabular-nums text-stone-600">{file.pages ?? '—'}</td>
-      <td className="w-[11.5rem] px-3 py-1.5 align-middle">
+      <td className="hidden w-16 px-2 py-1.5 text-center align-middle text-xs tabular-nums text-stone-600 sm:table-cell">{file.year || '—'}</td>
+      <td className="hidden w-16 px-2 py-1.5 text-right align-middle text-xs tabular-nums text-stone-600 sm:table-cell">{file.pages ?? '—'}</td>
+      <td className="w-px px-2 py-1.5 align-middle sm:w-[11.5rem] sm:px-3">
         <div className="flex justify-end gap-1.5">
-          <Button type="button" variant="outline" size="sm" className={btn} onClick={() => act(openLibraryFile(file.relpath))} aria-label={`View ${file.name}`}>
+          <Button type="button" variant="outline" size="sm" className={btn} onClick={() => act(openLibraryFile(file.relpath))} aria-label={`View ${file.name}`} title="View">
             <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-            View
+            <span className="max-sm:hidden">View</span>
           </Button>
-          <Button type="button" variant="outline" size="sm" className={btn} onClick={() => act(openLibraryFile(file.relpath, true))} aria-label={`Download ${file.name}`}>
+          <Button type="button" variant="outline" size="sm" className={btn} onClick={() => act(openLibraryFile(file.relpath, true))} aria-label={`Download ${file.name}`} title="Download">
             <Download className="h-3.5 w-3.5" aria-hidden />
-            Download
+            <span className="max-sm:hidden">Download</span>
           </Button>
         </div>
       </td>
@@ -114,11 +118,11 @@ function Group({
         <table className="w-full border-collapse">
           <thead>
             <tr className="border-b border-stone-200 text-[10px] uppercase tracking-wide text-stone-500">
-              <th className="w-9 px-3 py-1" />
+              <th className="w-9 px-3 py-1 max-sm:w-8" />
               <th className="px-2 py-1 text-left font-medium">File</th>
-              <th className="w-16 px-2 py-1 text-center font-medium">Edition</th>
-              <th className="w-16 px-2 py-1 text-right font-medium">Pages</th>
-              <th className="w-[11.5rem] px-3 py-1" />
+              <th className="hidden w-16 px-2 py-1 text-center font-medium sm:table-cell">Edition</th>
+              <th className="hidden w-16 px-2 py-1 text-right font-medium sm:table-cell">Pages</th>
+              <th className="w-px px-2 py-1 sm:w-[11.5rem] sm:px-3" />
             </tr>
           </thead>
           <tbody>{children}</tbody>
@@ -369,8 +373,8 @@ export function IsLibraryFilesDialog({
           ) : null}
           {mode === 'files' && !loading && !error && !nothing ? (
             <>
-              <div className="flex items-center gap-2 text-xs text-stone-600">
-                <span className="mr-auto">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-stone-600">
+                <span className="mr-auto min-w-0">
                   {selected.size ? `${selected.size} Selected — Ask AI Reads Only These` : 'Tick Files to Download Them Together or to Ask AI About Them Only'}
                 </span>
                 {selected.size ? (
@@ -413,7 +417,7 @@ export function IsLibraryFilesDialog({
                       <FileRow key={r.key} file={r.file} label={r.key} tag={r.manual ? 'Added' : undefined} sel={sel} />
                     ) : (
                       <tr key={r.key} className="border-b border-stone-200 last:border-b-0">
-                        <td className="w-9 px-3 py-1.5" />
+                        <td className="w-9 px-3 py-1.5 max-sm:w-8" />
                         <td colSpan={4} className="px-2 py-1.5 text-sm text-stone-400">
                           {r.key} — Not in the Library
                         </td>

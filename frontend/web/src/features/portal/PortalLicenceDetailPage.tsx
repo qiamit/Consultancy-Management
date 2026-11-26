@@ -34,7 +34,8 @@ function Table({ headers, rows }: { headers: string[]; rows: Array<Array<ReactNo
   if (rows.length === 0) return <p className="text-sm text-stone-500">Not available.</p>
   return (
     <div className="overflow-x-auto">
-      <table className="w-full border-collapse">
+      {/* auto-cards: one card per row on phones, without the serial number (index.css). */}
+      <table className="auto-cards w-full border-collapse">
         <thead>
           <tr>
             <th className={cn(th, 'w-10 text-center')}>#</th>
@@ -46,7 +47,7 @@ function Table({ headers, rows }: { headers: string[]; rows: Array<Array<ReactNo
         <tbody>
           {rows.map((cells, i) => (
             <tr key={i} className={i % 2 ? 'bg-[#f7f3eb]' : 'bg-white'}>
-              <td className={cn(td, 'text-center text-stone-500')}>{i + 1}</td>
+              <td className={cn(td, 'lc-hide text-center text-stone-500')}>{i + 1}</td>
               {cells.map((c, j) => (
                 <td key={j} className={td}>{c || '—'}</td>
               ))}

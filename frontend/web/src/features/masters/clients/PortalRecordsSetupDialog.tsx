@@ -362,7 +362,8 @@ function ManageSectionsDialog({
           </DialogHeader>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
-          <table className="w-full border-collapse">
+          {/* auto-cards: one card per section on phones (index.css); the serial number is left out there. */}
+          <table className="auto-cards w-full border-collapse">
             <thead>
               <tr>
                 <th className={cn(th, 'w-12 text-center')}>#</th>
@@ -375,7 +376,7 @@ function ManageSectionsDialog({
             <tbody>
               <tr className="bg-amber-50/70">
                 <td className={cn(td, 'text-center text-xs font-semibold text-amber-800')}>New</td>
-                <td className={td}>
+                <td className={cn(td, 'lc-wide')}>
                   <Input
                     value={name}
                     placeholder="Section Name, e.g. Test Certificate"
@@ -395,8 +396,8 @@ function ManageSectionsDialog({
               </tr>
               {sections.map((sec, i) => (
                 <tr key={sec.id} className={i % 2 ? 'bg-[#f7f3eb]' : 'bg-[#fffcf7]'}>
-                  <td className={cn(td, 'text-center text-xs text-stone-500')}>{i + 1}</td>
-                  <td className={td}>
+                  <td className={cn(td, 'lc-hide text-center text-xs text-stone-500')}>{i + 1}</td>
+                  <td className={cn(td, 'lc-wide')}>
                     <Input
                       key={sec.name}
                       defaultValue={sec.name}
@@ -643,7 +644,8 @@ export function PortalRecordsSetupDialog({
                     {active ? (
                       <div className="space-y-2">
                         <div className="overflow-x-auto">
-                          <table className="w-full border-collapse">
+                          {/* auto-cards: one card per column on phones (index.css). */}
+                          <table className="auto-cards w-full border-collapse">
                             <thead>
                               <tr>
                                 <th className={cn(th, 'w-10 text-center')}>#</th>
@@ -665,7 +667,7 @@ export function PortalRecordsSetupDialog({
                               ) : (
                                 active.columns.map((c, i) => (
                                   <tr key={c.id} className={i % 2 ? 'bg-[#faf7f1]' : 'bg-white'}>
-                                    <td className={cn(td, 'text-center text-stone-500')}>{i + 1}</td>
+                                    <td className={cn(td, 'lc-hide text-center text-stone-500')}>{i + 1}</td>
                                     <td className={td}>
                                       <span className="font-medium">{c.label}</span>{c.required ? <span className="text-red-600"> *</span> : null}
                                       <span className="block text-[11px] text-stone-500"><code>{c.key}</code></span>

@@ -59,7 +59,8 @@ export function FunctionsDialog({ open, onClose, onPick }: { open: boolean; onCl
         <span className="ml-auto text-xs text-stone-500">{rows.length} Functions</span>
       </div>
       <div className="min-h-0 flex-1 overflow-auto p-3">
-        <table className="w-full min-w-[42rem] border-collapse font-jakarta">
+        {/* auto-cards: one card per function on phones (index.css). */}
+        <table className="auto-cards w-full min-w-[42rem] border-collapse font-jakarta">
           <thead>
             <tr>
               <th className={cn(th, 'w-[9rem] text-left')}>Function</th>
@@ -82,7 +83,7 @@ export function FunctionsDialog({ open, onClose, onPick }: { open: boolean; onCl
                 <td className={cn(td, 'font-mono font-bold text-amber-900')}>{f.name}</td>
                 <td className={cn(td, 'text-center text-xs')}>{f.category}</td>
                 <td className={cn(td, 'text-center font-mono text-xs')}>{f.syntax}</td>
-                <td className={td}>{f.help}{f.list ? <span className="ml-1 text-[11px] text-sky-700">(Takes linked lists)</span> : null}</td>
+                <td className={cn(td, 'lc-wide')}>{f.help}{f.list ? <span className="ml-1 text-[11px] text-sky-700">(Takes linked lists)</span> : null}</td>
               </tr>
             ))}
             {rows.length === 0 ? (
@@ -100,7 +101,8 @@ export function OperatorsDialog({ open, onClose, onPick }: { open: boolean; onCl
   return (
     <Shell title="Operators" open={open} onClose={onClose}>
       <div className="min-h-0 flex-1 overflow-auto p-3">
-        <table className="w-full min-w-[36rem] border-collapse font-jakarta">
+        {/* auto-cards: one card per operator on phones (index.css). */}
+        <table className="auto-cards w-full min-w-[36rem] border-collapse font-jakarta">
           <thead>
             <tr>
               <th className={cn(th, 'w-[6rem] text-left')}>Operator</th>
@@ -123,7 +125,7 @@ export function OperatorsDialog({ open, onClose, onPick }: { open: boolean; onCl
                 <td className={cn(td, 'pl-3 font-mono text-base font-bold text-amber-900')}>{o.symbol}</td>
                 <td className={cn(td, 'text-center text-xs')}>{o.category}</td>
                 <td className={cn(td, 'text-center font-mono text-xs')}>{o.example}</td>
-                <td className={td}>{o.help}</td>
+                <td className={cn(td, 'lc-wide')}>{o.help}</td>
               </tr>
             ))}
           </tbody>

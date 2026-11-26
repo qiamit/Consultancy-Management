@@ -1807,8 +1807,8 @@ export function OslSampleRequirementsModuleFields({
   const [aiInstruction, setAiInstruction] = useState('')
   const [aiBusy, setAiBusy] = useState(false)
   const [aiFiles, setAiFiles] = useState<File[]>([])
-  const [voiceLang, setVoiceLang] = useState<'en-IN' | 'hi-IN'>('en-IN')
-  const voice = useVoiceInput(setAiInstruction, voiceLang)
+  // Voice typing in the one app-wide language, no language button (owner, 26 Nov 2026).
+  const voice = useVoiceInput(setAiInstruction)
   const runAiFill = async () => {
     if (!draft || !onAiFill) return
     setAiBusy(true)
@@ -3726,9 +3726,6 @@ export function OslSampleRequirementsModuleFields({
                     <div className="flex h-9 items-stretch">
                       <Button type="button" variant="outline" className={cn(limsOutlineBtnClass, 'h-9 w-9 shrink-0 p-0', voice.listening && 'border-red-600 bg-red-50 text-red-700')} disabled={aiBusy} title={voice.listening ? 'Stop Listening' : 'Voice Typing'} aria-label={voice.listening ? 'Stop Voice Typing' : 'Start Voice Typing'} onClick={() => (voice.listening ? voice.stop() : voice.start(aiInstruction))}>
                         {voice.listening ? <MicOff size={15} aria-hidden /> : <Mic size={15} aria-hidden />}
-                      </Button>
-                      <Button type="button" variant="outline" className={cn(limsOutlineBtnClass, 'h-9 w-10 shrink-0 border-l-0 p-0 text-[11px] font-bold')} disabled={aiBusy || voice.listening} title="Voice Language" aria-label="Voice Language" onClick={() => setVoiceLang((l) => (l === 'en-IN' ? 'hi-IN' : 'en-IN'))}>
-                        {voiceLang === 'en-IN' ? 'EN' : 'हि'}
                       </Button>
                     </div>
                   ) : null}

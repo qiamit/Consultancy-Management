@@ -500,7 +500,8 @@ export function PortalRecordsServiceDialog({
           <section className="space-y-2">
             <h3 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.12em] text-stone-700"><CalendarClock size={14} aria-hidden /> History</h3>
             <div className="overflow-x-auto border border-stone-300 bg-white">
-              <table className="w-full min-w-[40rem] border-collapse font-jakarta">
+              {/* auto-cards: one card per payment on phones (index.css). */}
+              <table className="auto-cards w-full min-w-[40rem] border-collapse font-jakarta">
                 <thead>
                   <tr>
                     <th className={th}>Date</th>

@@ -228,8 +228,9 @@ export function ManageQuotationRemarksDialog({
             </div>
 
             <div className="overflow-hidden rounded-none border border-stone-500">
+              {/* Phones: no header row; # · label (wrapping) · View icon · actions (the label was cut to a few letters). */}
               <table className="w-full table-fixed border-collapse text-sm">
-                <thead>
+                <thead className="max-sm:hidden">
                   <tr className="bg-stone-800 text-amber-200">
                     <th className="w-12 px-2 py-2 text-center text-[11px] font-bold uppercase tracking-wider">
                       #
@@ -261,31 +262,31 @@ export function ManageQuotationRemarksDialog({
                   ) : (
                     remarks.map((note, index) => (
                       <tr key={note.id} className="border-t border-stone-300">
-                        <td className="px-2 py-2 text-center align-middle text-xs font-medium tabular-nums text-stone-600">
+                        <td className="px-2 py-2 text-center align-middle text-xs font-medium tabular-nums text-stone-600 max-sm:w-8 max-sm:px-1">
                           {index + 1}
                         </td>
-                        <td className="max-w-0 px-3 py-2 text-left align-middle text-stone-800">
-                          <span className="block min-w-0 truncate font-medium" title={note.label}>
+                        <td className="max-w-0 px-3 py-2 text-left align-middle text-stone-800 max-sm:px-2">
+                          <span className="block min-w-0 truncate font-medium max-sm:whitespace-normal max-sm:[overflow-wrap:anywhere]" title={note.label}>
                             {note.label}
                           </span>
                         </td>
-                        <td className="max-w-0 px-3 py-2 text-center align-middle text-stone-800">
+                        <td className="max-w-0 px-3 py-2 text-center align-middle text-stone-800 max-sm:w-11 max-sm:px-1">
                           <div className="flex items-center justify-center">
                             <Button
                               type="button"
                               variant="outline"
                               size="sm"
-                              className="h-7 w-full max-w-[9rem] rounded-none border-stone-500 px-2 text-[11px] font-semibold uppercase tracking-wide text-stone-700"
+                              className="h-7 w-full max-w-[9rem] rounded-none border-stone-500 px-2 text-[11px] font-semibold uppercase tracking-wide text-stone-700 max-sm:px-0"
                               onClick={() => setViewingRemark(note)}
                               aria-label={`View ${note.label}`}
                               title={note.content}
                             >
                               <Eye size={13} aria-hidden />
-                              View
+                              <span className="max-sm:hidden">View</span>
                             </Button>
                           </div>
                         </td>
-                        <td className="w-36 px-3 py-2 align-middle">
+                        <td className="w-36 px-3 py-2 align-middle max-sm:w-[5.25rem] max-sm:px-1">
                           <div className="flex items-center justify-center gap-1.5">
                             <button
                               type="button"

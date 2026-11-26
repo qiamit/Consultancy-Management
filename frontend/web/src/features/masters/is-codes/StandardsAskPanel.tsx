@@ -6,7 +6,7 @@ import { AssistantMessage } from '@/components/qi-assistant/AssistantMessage'
 import { toAttachments, type ChatAttachment } from '@/components/qi-assistant/chatAttachments'
 import { splitQuote, withQuote } from '@/components/qi-assistant/chatQuote'
 import { MessageActions, ReplyQuoteBar, SelectionPopup, type ChatActionHandlers } from '@/components/qi-assistant/QiChatActions'
-import { useVoiceInput } from '@/features/bis/shared/useVoiceInput'
+import { AUTO_VOICE_LANG, useVoiceInput } from '@/features/bis/shared/useVoiceInput'
 import { cn } from '@/lib/utils'
 import { readAskAttachments } from './askAttachments'
 import type { AskAnswer, AskSource, AskTurn } from './isLibraryAsk'
@@ -157,7 +157,6 @@ export function StandardsAskPanel({
   const [flag, setFlag] = useState(flagDefault)
   const [replyQuote, setReplyQuote] = useState<string | null>(null)
   const [attachments, setAttachments] = useState<ChatAttachment[]>([])
-  const [voiceLang, setVoiceLang] = useState<'en-IN' | 'hi-IN'>('en-IN')
   const [talk, setTalk] = useState(false)
   const talkRef = useRef(false)
   const nextId = useRef(1)
@@ -166,12 +165,12 @@ export function StandardsAskPanel({
   const textRef = useRef<HTMLTextAreaElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const speech = useSpeech()
-  const typing = useVoiceInput(setQuestion, voiceLang)
+  const typing = useVoiceInput(setQuestion)
   // Voice Talk asks from an earlier render (after the answer is read aloud): it reads the chat as it is now from here.
-  const live = useRef({ items, flag, voiceLang })
+  const live = useRef({ items, flag })
   useEffect(() => {
-    live.current = { items, flag, voiceLang }
-  }, [items, flag, voiceLang])
+    live.current = { items, flag }
+  }, [items, flag])
 
   useEffect(() => {
     // Braces: newer browsers return a Promise from scrollIntoView, which React would take as a clean-up.
@@ -218,7 +217,7 @@ export function StandardsAskPanel({
     }
     // Voice Talk: the answer is read aloud, then the next question is heard.
     if (talkRef.current && answer) {
-      await speech.speak(answer, -1, live.current.voiceLang)
+      await speech.speak(answer, -1, AUTO_VOICE_LANG)
       if (talkRef.current) void listenForTalk()
     }
   }
@@ -226,7 +225,7 @@ export function StandardsAskPanel({
   /** Voice Talk: hears one question, asks it; stops after two silent tries. */
   const listenForTalk = async (silent = 0): Promise<void> => {
     if (!talkRef.current) return
-    const said = await speech.listenOnce(live.current.voiceLang, setQuestion)
+    const said = await speech.listenOnce(AUTO_VOICE_LANG, setQuestion)
     if (!talkRef.current) return
     if (said) {
       setQuestion('')
@@ -298,7 +297,7 @@ export function StandardsAskPanel({
             handlers={actionsFor(m, i)}
             canSpeak={speech.synthOk}
             speaking={speech.speakingId === m.id}
-            onSpeak={() => (speech.speakingId === m.id ? speech.stopSpeaking() : void speech.speak(m.content, m.id, voiceLang))}
+            onSpeak={() => (speech.speakingId === m.id ? speech.stopSpeaking() : void speech.speak(m.content, m.id, AUTO_VOICE_LANG))}
           />
         ))}
         {busy ? (
@@ -384,23 +383,16 @@ export function StandardsAskPanel({
               </button>
             ) : null}
             {speech.recognitionOk && speech.synthOk ? (
+              // An icon like the mic (owner, 26 Nov 2026: no "Voice Talk" label, no language button).
               <button
                 type="button"
-                className={cn(toolBtn, 'w-auto gap-1 px-2 text-xs font-semibold', talk && 'border-amber-500 bg-amber-100 text-amber-900')}
-                title="Voice Talk: Speak a Question, Hear the Answer, Then Speak the Next One"
+                className={cn(toolBtn, talk && 'border-red-400 bg-red-50 text-red-700')}
+                title={talk ? 'Stop Voice Talk' : 'Voice Talk: Speak a Question, Hear the Answer, Then Speak the Next One'}
+                aria-label={talk ? 'Stop Voice Talk' : 'Voice Talk'}
+                aria-pressed={talk}
                 onClick={toggleTalk}
               >
-                <AudioLines size={15} aria-hidden /> {talk ? 'Stop Talk' : 'Voice Talk'}
-              </button>
-            ) : null}
-            {typing.supported || speech.recognitionOk ? (
-              <button
-                type="button"
-                className={cn(toolBtn, 'w-auto px-2 text-xs font-semibold')}
-                title="Language for Voice Typing and Voice Talk"
-                onClick={() => setVoiceLang((l) => (l === 'en-IN' ? 'hi-IN' : 'en-IN'))}
-              >
-                {voiceLang === 'en-IN' ? 'English' : 'हिंदी'}
+                <AudioLines size={16} aria-hidden className={talk ? 'animate-pulse' : undefined} />
               </button>
             ) : null}
             <Button

@@ -749,6 +749,65 @@ th * {
   .row-cards td.rc-actions > div { justify-content: flex-start; }
 }
 
+/* Required Tests (IS Code): on phones each test is a card — tick box, Test Name and Edit / Delete on the first
+   line, Clause · Test Method and Unit · Requirement with their names above, then Move and PT in a Day. The header
+   keeps only Select All and the Clause sort; the entry row shows "New" as its heading. */
+@media (max-width: 639px) {
+  .rt-table,
+  .rt-table tbody,
+  .rt-table thead { display: block; width: 100%; }
+  .rt-table thead tr { display: flex; align-items: center; justify-content: space-between; }
+  .rt-table thead th { display: none; width: auto !important; }
+  .rt-table thead th:nth-child(1),
+  .rt-table thead th:nth-child(4) { display: block; }
+  .rt-table tbody tr { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.375rem 0.5rem; padding: 0.625rem 0.625rem 0.75rem; }
+  .rt-table tbody td { display: block; min-width: 0; padding: 0 !important; }
+  .rt-table tbody td:empty { display: none; }
+  .rt-table tbody td[colspan] { flex: 1 1 100%; padding: 1rem 0.5rem !important; }
+  .rt-table tbody td:nth-child(1) { order: 1; flex: 0 0 auto; align-self: center; }
+  .rt-table tbody td:nth-child(3) { order: 2; flex: 1 1 calc(100% - 6.5rem); align-self: center; }
+  .rt-table tbody td:nth-child(9) { order: 3; flex: 0 0 auto; align-self: center; }
+  .rt-table tbody td:nth-child(4) { order: 4; flex: 1 1 calc(40% - 0.5rem); }
+  .rt-table tbody td:nth-child(5) { order: 5; flex: 1 1 calc(60% - 0.5rem); }
+  .rt-table tbody td:nth-child(6) { order: 6; flex: 1 1 calc(40% - 0.5rem); }
+  .rt-table tbody td:nth-child(7) { order: 7; flex: 1 1 calc(60% - 0.5rem); }
+  .rt-table tbody td:nth-child(2) { order: 8; flex: 0 0 auto; }
+  .rt-table tbody td:nth-child(8) { order: 9; display: flex; align-items: center; gap: 0.375rem; margin-left: auto; }
+  .rt-table tbody td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 0.125rem;
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #78716c;
+  }
+  .rt-table tbody td:nth-child(8)[data-label]::before { margin-bottom: 0; }
+  .rt-table tr.rt-new td:nth-child(2) { order: 0; flex: 1 1 100%; text-align: left !important; }
+  .rt-table tbody td input:not([type='checkbox']) { height: 2rem; }
+}
+/* Required Tests → Suggest With AI: the tests found show as cards on phones — tick box on the left, the test
+   name on top, then Clause · Test Method, Unit · Requirement and In a Day with their names. */
+@media (max-width: 639px) {
+  .rta-table,
+  .rta-table tbody { display: block; width: 100%; min-width: 0 !important; }
+  .rta-table thead { display: none; }
+  .rta-table tbody tr { display: grid; grid-template-columns: 1.5rem minmax(0, 2fr) minmax(0, 3fr); gap: 0.25rem 0.5rem; padding: 0.5rem; }
+  .rta-table tbody td { display: block; min-width: 0; padding: 0 !important; text-align: left !important; }
+  .rta-table tbody td:empty { display: none; }
+  .rta-table tbody td:nth-child(1) { grid-row: 1 / span 4; }
+  .rta-table tbody td:nth-child(2) { grid-column: 2 / -1; font-weight: 600; }
+  .rta-table tbody td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #78716c;
+  }
+}
 /* Renewal Sheet: the four client actions sit in a 2 × 2 grid on phones so the form keeps most of the screen. */
 @media (max-width: 639px) {
   .rn-actions { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -758,8 +817,8 @@ th * {
 
 /* Wide list tables (Module Access …): below 1024 px each row becomes a card — checkbox and title on top,
    the labelled values in two columns, the row's action button at the bottom right. Cells opt in with
-   data-label (a value), .lc-check (row checkbox), .lc-title (the heading), .lc-wide (a full-width value)
-   and .lc-actions (the buttons). */
+   data-label (a value), .lc-check (row checkbox), .lc-title (the heading), .lc-wide (a full-width value),
+   .lc-actions (the buttons) and .lc-hide (left out of the card, e.g. the serial number). */
 @media (max-width: 1023px) {
   .list-cards:not(.auto-cards) { min-width: 0 !important; display: block; width: 100%; }
   .list-cards:not(.auto-cards) thead { display: none; }
@@ -780,6 +839,7 @@ th * {
   .list-cards:not(.auto-cards) td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 0.125rem; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #78716c; }
   .list-cards:not(.auto-cards) td.lc-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 0.375rem; padding-top: 0.5rem !important; border-top: 1px solid #e7e5e4 !important; }
   .list-cards:not(.auto-cards) td[colspan] { grid-column: 1 / -1; text-align: center !important; }
+  .list-cards:not(.auto-cards) td.lc-hide { display: none; }
 }
 
 /* Same cards, switched by the width of the page area (container) instead of the screen: the License
@@ -831,6 +891,7 @@ th * {
   .auto-cards td.lc-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 0.375rem; padding-top: 0.5rem !important; border-top: 1px solid #e7e5e4 !important; }
   .auto-cards td[colspan] { grid-column: 1 / -1; text-align: center !important; }
   .auto-cards td.lc-title[data-label]::before { content: none; }
+  .auto-cards td.lc-hide { display: none; }
 }
 @media (min-width: 640px) and (max-width: 1023px) {
   .list-cards:not(.auto-cards) tbody { grid-template-columns: repeat(2, minmax(0, 1fr)); }
