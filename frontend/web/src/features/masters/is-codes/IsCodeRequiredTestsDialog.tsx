@@ -493,7 +493,7 @@ export function IsCodeRequiredTestsDialog({
               Changes are in the footer beside Lock List (owner, 25 Nov 2026). */}
           <div className="relative flex flex-wrap items-center gap-x-4 gap-y-2">
             <DialogHeader className="min-w-0 flex-1 text-left">
-              <DialogTitle className="truncate text-base font-semibold tracking-tight text-white">
+              <DialogTitle className="truncate text-base font-semibold tracking-tight text-white max-sm:whitespace-normal max-sm:text-sm">{/* Phones: wraps so the IS stays readable beside the buttons. */}
                 Required Tests{isLabel ? ` — ${isLabel}` : ''}
               </DialogTitle>
             </DialogHeader>
@@ -570,7 +570,8 @@ export function IsCodeRequiredTestsDialog({
               if (el instanceof HTMLInputElement && el.type === 'text' && !el.readOnly) lastFieldRef.current = el
             }}
           >
-            <table className="w-full min-w-[60rem] border-collapse text-xs">
+            {/* Phones: rt-table turns every test into a card (index.css). */}
+            <table className="rt-table w-full min-w-[60rem] border-collapse text-xs max-sm:min-w-0">
               <thead className="sticky top-0 z-10 bg-stone-800 text-[11px] uppercase tracking-wide text-stone-100">
                 <tr>
                   <th className="w-8 px-2 py-1.5 text-center">
@@ -626,7 +627,7 @@ export function IsCodeRequiredTestsDialog({
                     {/* The entry row: it starts with the last added test's values; clear a field and type to pick a value
                         the list already has. "+" or Enter adds the test in its clause place. */}
                     {!readOnly && !locked ? (
-                      <tr className="border-t border-stone-300 bg-amber-50/70 align-middle">
+                      <tr className="rt-new border-t border-stone-300 bg-amber-50/70 align-middle">
                         <td />
                         <td className="px-2 py-1 text-center text-[10px] font-semibold uppercase text-amber-800">New</td>
                         <td className="px-1 py-1">
@@ -641,7 +642,7 @@ export function IsCodeRequiredTestsDialog({
                             onKeyDown={addOnEnter}
                           />
                         </td>
-                        <td className="px-1 py-1">
+                        <td className="px-1 py-1" data-label="Clause">
                           <SavedValueSuggestInput
                             className={cellInputClass}
                             value={draft.clause}
@@ -653,7 +654,7 @@ export function IsCodeRequiredTestsDialog({
                             onKeyDown={addOnEnter}
                           />
                         </td>
-                        <td className="px-1 py-1">
+                        <td className="px-1 py-1" data-label="Test Method">
                           <SavedValueSuggestInput
                             className={cellInputClass}
                             value={draft.testMethod}
@@ -665,7 +666,7 @@ export function IsCodeRequiredTestsDialog({
                             onKeyDown={addOnEnter}
                           />
                         </td>
-                        <td className="px-1 py-1">
+                        <td className="px-1 py-1" data-label="Unit">
                           <SavedValueSuggestInput
                             className={cellInputClass}
                             value={draft.unit}
@@ -677,7 +678,7 @@ export function IsCodeRequiredTestsDialog({
                             onKeyDown={addOnEnter}
                           />
                         </td>
-                        <td className="px-1 py-1">
+                        <td className="px-1 py-1" data-label="Requirement">
                           <SavedValueSuggestInput
                             inputRef={draftRequirementRef}
                             className={cellInputClass}
@@ -694,7 +695,7 @@ export function IsCodeRequiredTestsDialog({
                             onKeyDown={addOnEnter}
                           />
                         </td>
-                        <td className="px-1 py-1 text-center">
+                        <td className="px-1 py-1 text-center" data-label="PT in a Day">
                           <input
                             type="checkbox"
                             className="h-4 w-4 accent-amber-700"
@@ -802,16 +803,16 @@ export function IsCodeRequiredTestsDialog({
                             <td className="px-1 py-1">
                               <Input className={cn(fieldClass, '!text-left')} value={t.testName} readOnly={!editing} disabled={disabled} aria-label="Test Name" onKeyDown={doneOnEnter} onChange={(e) => update(i, { testName: e.target.value })} />
                             </td>
-                            <td className="px-1 py-1">
+                            <td className="px-1 py-1" data-label="Clause">
                               <Input className={fieldClass} value={t.clause} readOnly={!editing} disabled={disabled} aria-label="Clause" onKeyDown={doneOnEnter} onChange={(e) => update(i, { clause: e.target.value })} />
                             </td>
-                            <td className="px-1 py-1">
+                            <td className="px-1 py-1" data-label="Test Method">
                               <Input className={fieldClass} value={t.testMethod} readOnly={!editing} disabled={disabled} aria-label="Test Method" onKeyDown={doneOnEnter} onChange={(e) => update(i, { testMethod: e.target.value })} />
                             </td>
-                            <td className="px-1 py-1">
+                            <td className="px-1 py-1" data-label="Unit">
                               <Input className={fieldClass} value={t.unit} readOnly={!editing} disabled={disabled} aria-label="Unit" onKeyDown={doneOnEnter} onChange={(e) => update(i, { unit: e.target.value })} />
                             </td>
-                            <td className="px-1 py-1">
+                            <td className="px-1 py-1" data-label="Requirement">
                               <Input
                                 className={fieldClass}
                                 value={t.requirement}
@@ -828,7 +829,7 @@ export function IsCodeRequiredTestsDialog({
                                 }}
                               />
                             </td>
-                            <td className="px-1 py-1 text-center">
+                            <td className="px-1 py-1 text-center" data-label="PT in a Day">
                               <input
                                 type="checkbox"
                                 className="h-4 w-4 accent-amber-700"

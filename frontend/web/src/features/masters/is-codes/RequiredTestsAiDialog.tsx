@@ -410,9 +410,10 @@ export function RequiredTestsAiDialog({
         {/* Header: title, Sources, New Chat */}
         <div className="relative z-20 shrink-0 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950 px-4 py-2 text-white">
           <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={limsDarkBarGlowStyle} />
-          <DialogHeader className="relative flex flex-row items-center gap-2 space-y-0 text-left">
-            <DialogTitle className="flex min-w-0 flex-1 items-center gap-2 truncate text-base font-semibold tracking-tight text-white">
-              <Sparkles size={16} aria-hidden /> <span className="truncate">Suggest Tests With AI{isLabel ? ` — ${isLabel}` : ''}</span>
+          {/* Phones: the title takes its own line and wraps; Sources and New Chat go below it. */}
+          <DialogHeader className="relative flex flex-row items-center gap-2 space-y-0 text-left max-sm:flex-wrap">
+            <DialogTitle className="flex min-w-0 flex-1 items-center gap-2 truncate text-base font-semibold tracking-tight text-white max-sm:basis-full max-sm:text-sm">
+              <Sparkles size={16} aria-hidden className="shrink-0" /> <span className="truncate max-sm:whitespace-normal">Suggest Tests With AI{isLabel ? ` — ${isLabel}` : ''}</span>
             </DialogTitle>
             <div ref={sourcesRef} className="relative">
               <button
@@ -438,7 +439,7 @@ export function RequiredTestsAiDialog({
                 <div
                   role="dialog"
                   aria-label="Choose the Sources"
-                  className="absolute right-0 top-full z-50 mt-1.5 max-h-[min(62vh,34rem)] w-[min(36rem,calc(100vw-2rem))] overflow-y-auto border-2 border-stone-600 bg-white text-stone-900 shadow-2xl"
+                  className="absolute right-0 top-full z-50 mt-1.5 max-h-[min(62vh,34rem)] w-[min(36rem,calc(100vw-2rem))] max-sm:left-0 max-sm:right-auto max-sm:w-[calc(100vw-3.5rem)] overflow-y-auto border-2 border-stone-600 bg-white text-stone-900 shadow-2xl"
                 >
                   <div className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-stone-300 bg-stone-100 px-3 py-2">
                     <p className="text-xs font-semibold text-stone-700">Tick the Sources the AI Reads</p>
@@ -716,7 +717,7 @@ export function RequiredTestsAiDialog({
                   <button
                     type="button"
                     className={cn(
-                      'inline-flex h-8 items-center gap-1 border px-2 text-[11px] font-bold',
+                      'inline-flex h-8 items-center gap-1 whitespace-nowrap border px-2 text-[11px] font-bold',
                       talk ? 'border-red-600 bg-red-600 text-white hover:bg-red-700' : 'border-stone-400 bg-white text-stone-700 hover:bg-amber-50',
                     )}
                     aria-pressed={talk}
@@ -830,7 +831,8 @@ function BotMessage({
             </label>
           </div>
           <div className="max-h-[22rem] overflow-auto border border-stone-400">
-            <table className="w-full min-w-[48rem] border-collapse text-xs">
+            {/* rta-table: one card per test on phones (index.css). */}
+            <table className="rta-table w-full min-w-[48rem] border-collapse text-xs">
               <thead className="sticky top-0 bg-stone-800 text-[11px] uppercase tracking-wide text-stone-100">
                 <tr>
                   <th className="w-8 px-2 py-1.5" />
@@ -861,11 +863,11 @@ function BotMessage({
                         {t.testName}
                         {inList ? <span className="ml-1.5 text-[10px] font-semibold uppercase text-stone-500">Already in List</span> : null}
                       </td>
-                      <td className="px-2 py-1 text-center">{t.clause}</td>
-                      <td className="px-2 py-1 text-center">{t.testMethod}</td>
-                      <td className="px-2 py-1 text-center">{t.unit}</td>
-                      <td className="px-2 py-1 text-center">{t.requirement}</td>
-                      <td className="px-2 py-1 text-center">{t.possibleInADay ? 'Yes' : ''}</td>
+                      <td className="px-2 py-1 text-center" data-label="Clause">{t.clause}</td>
+                      <td className="px-2 py-1 text-center" data-label="Test Method">{t.testMethod}</td>
+                      <td className="px-2 py-1 text-center" data-label="Unit">{t.unit}</td>
+                      <td className="px-2 py-1 text-center" data-label="Requirement">{t.requirement}</td>
+                      <td className="px-2 py-1 text-center" data-label="In a Day">{t.possibleInADay ? 'Yes' : ''}</td>
                     </tr>
                   )
                 })}

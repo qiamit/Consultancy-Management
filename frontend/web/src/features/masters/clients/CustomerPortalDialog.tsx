@@ -65,9 +65,10 @@ function DarkHeader({ eyebrow, title, children }: { eyebrow?: string; title: Rea
       <div className="pointer-events-none absolute inset-0 opacity-[0.2]" style={limsDarkBarGlowStyle} />
       <div className="absolute bottom-0 left-0 h-[3px] w-full bg-gradient-to-r from-amber-500 via-amber-300 to-transparent" />
       <div className="relative flex w-full flex-wrap items-center gap-x-5 gap-y-2 pr-10">
-        <DialogHeader className="min-w-0 flex-1 space-y-0.5 text-left">
+        {/* Phones: the title takes its own line and wraps; the header buttons go below it. */}
+        <DialogHeader className="min-w-0 flex-1 space-y-0.5 text-left max-sm:basis-full">
           {eyebrow ? <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300">{eyebrow}</p> : null}
-          <DialogTitle className="truncate text-lg font-semibold tracking-tight text-white">{title}</DialogTitle>
+          <DialogTitle className="truncate text-lg font-semibold tracking-tight text-white max-sm:whitespace-normal max-sm:text-base">{title}</DialogTitle>
         </DialogHeader>
         {children}
       </div>
@@ -130,7 +131,8 @@ function LicencePickerDialog({
       <DialogContent layer="stacked" aria-describedby={undefined} className={cn(limsDialogClass, closeInHeader, 'flex max-h-[85dvh] w-[min(42rem,calc(100vw-1rem))] max-w-none flex-col gap-0 overflow-hidden bg-white p-0')}>
         <DarkHeader title="Licences This Login Can See" />
         <div className="min-h-0 flex-1 overflow-auto p-3">
-          <table className="w-full min-w-[30rem] border-collapse font-jakarta">
+          {/* list-cards: one card per licence below 1024 px (index.css). */}
+          <table className="list-cards w-full min-w-[30rem] border-collapse font-jakarta">
             <thead>
               <tr>
                 <th className={cn(th, 'w-10 text-center')}>
@@ -149,7 +151,7 @@ function LicencePickerDialog({
                 const on = selected.includes(l.id)
                 return (
                   <tr key={l.id} className={ticked.has(l.id) ? 'bg-[#fde68a]/60' : rowTone(i)}>
-                    <td className={cn(td, 'text-center')}>
+                    <td className={cn(td, 'lc-check text-center')}>
                       <input type="checkbox" className={checkCls} aria-label={`Select ${cml}`} checked={ticked.has(l.id)}
                         onChange={(e) => setTicked((prev) => {
                           const next = new Set(prev)
@@ -158,10 +160,10 @@ function LicencePickerDialog({
                           return next
                         })} />
                     </td>
-                    <td className={cn(td, 'whitespace-nowrap font-semibold text-stone-900')}>{cml}</td>
-                    <td className={cn(td, 'text-center text-[13px]')}>{is || '—'}</td>
-                    <td className={cn(td, 'text-center text-[13px]')}>{l.validity ? formatDisplayDate(l.validity) : '—'}</td>
-                    <td className={cn(td, 'text-center')}>
+                    <td className={cn(td, 'lc-title whitespace-nowrap font-semibold text-stone-900')}>{cml}</td>
+                    <td className={cn(td, 'text-center text-[13px]')} data-label="IS No">{is || '—'}</td>
+                    <td className={cn(td, 'text-center text-[13px]')} data-label="Valid Till">{l.validity ? formatDisplayDate(l.validity) : '—'}</td>
+                    <td className={cn(td, 'text-center')} data-label="Can See">
                       <OnOffSwitch on={on} label={`${cml} for this login`} title={on ? 'Can See: Switch Off' : 'Cannot See: Switch On'} disabled={disabled} onChange={(next) => onToggle(l.id, next)} />
                     </td>
                   </tr>
@@ -268,7 +270,8 @@ function CustomerLoginsDialog({
 
         <div className="min-h-0 flex-1 overflow-auto bg-[#fffcf7] p-3 sm:p-4">
           <div className="overflow-x-auto border border-stone-300 bg-white shadow-sm">
-            <table className="w-full min-w-[960px] border-collapse font-jakarta">
+            {/* list-cards: one card per login below 1024 px (index.css). */}
+            <table className="list-cards w-full min-w-[960px] border-collapse font-jakarta">
               <thead>
                 <tr>
                   <th className={cn(th, 'w-10 text-center')}>#</th>
@@ -283,19 +286,19 @@ function CustomerLoginsDialog({
               <tbody>
                 {drafts.map((d) => (
                   <tr key={d.key} className="bg-amber-50/70">
-                    <td className={cn(td, 'text-center text-xs font-semibold text-amber-800')}>New</td>
-                    <td className={td}>
+                    <td className={cn(td, 'lc-wide text-center text-xs font-semibold text-amber-800')}>New</td>
+                    <td className={td} data-label="Name">
                       <Input value={d.name} placeholder="Contact Person" aria-label="Name" className="h-8 min-h-8 text-sm" onChange={(e) => patchDraft(d.key, { name: e.target.value })} />
                     </td>
-                    <td className={td}>
+                    <td className={cn(td, 'lc-wide')} data-label="Email">
                       <Input type="email" value={d.email} placeholder="Email for Login" aria-label="Email" className="h-8 min-h-8 text-sm" onChange={(e) => patchDraft(d.key, { email: e.target.value })} />
                     </td>
-                    <td className={td}>
+                    <td className={td} data-label="Mobile No">
                       <Input type="tel" inputMode="tel" value={d.mobile} placeholder="Mobile No" aria-label="Mobile No" className="h-8 min-h-8 text-center text-sm" onChange={(e) => patchDraft(d.key, { mobile: e.target.value })} />
                     </td>
-                    <td className={cn(td, 'text-center')}>{licencesButton(d.licences.length, () => setPickFor({ draftKey: d.key }))}</td>
-                    <td className={cn(td, 'text-center')}><span className={cn(badge, 'border-amber-300 bg-amber-100 py-1 text-amber-900')}>Not Sent</span></td>
-                    <td className={td}>
+                    <td className={cn(td, 'text-center')} data-label="Licences">{licencesButton(d.licences.length, () => setPickFor({ draftKey: d.key }))}</td>
+                    <td className={cn(td, 'text-center')} data-label="Status"><span className={cn(badge, 'border-amber-300 bg-amber-100 py-1 text-amber-900')}>Not Sent</span></td>
+                    <td className={cn(td, 'lc-actions')}>
                       <div className="flex items-center justify-center gap-1">
                         <Button type="button" className={cn(limsPrimaryBtnClass, 'h-8 min-h-8 gap-1 px-2.5 text-xs')} disabled={busy != null} onClick={() => void sendInvite(d)}>
                           {busy === `invite:${d.key}` ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Send size={14} aria-hidden />} Send
@@ -309,10 +312,10 @@ function CustomerLoginsDialog({
                 ))}
                 {logins.map((u, i) => (
                   <tr key={u.user_id} className={cn(rowTone(i), !u.active && 'text-stone-500')}>
-                    <td className={cn(td, 'text-center text-xs text-stone-500')}>{i + 1}</td>
-                    <td className={cn(td, 'font-semibold text-stone-900')}>{u.full_name || '—'}</td>
-                    <td className={cn(td, 'break-all text-center text-[13px]')}>{u.email}</td>
-                    <td className={td}>
+                    <td className={cn(td, 'lc-hide text-center text-xs text-stone-500')}>{i + 1}</td>
+                    <td className={cn(td, 'lc-title font-semibold text-stone-900')}>{u.full_name || '—'}</td>
+                    <td className={cn(td, 'lc-wide break-all text-center text-[13px]')} data-label="Email">{u.email}</td>
+                    <td className={td} data-label="Mobile No">
                       <Input
                         key={u.mobile}
                         type="tel"
@@ -335,8 +338,8 @@ function CustomerLoginsDialog({
                         }}
                       />
                     </td>
-                    <td className={cn(td, 'text-center')}>{licencesButton(u.licence_ids.length, () => setPickFor({ userId: u.user_id }))}</td>
-                    <td className={cn(td, 'text-center')}>
+                    <td className={cn(td, 'text-center')} data-label="Licences">{licencesButton(u.licence_ids.length, () => setPickFor({ userId: u.user_id }))}</td>
+                    <td className={cn(td, 'text-center')} data-label="Status">
                       <span
                         className={cn('inline-flex flex-col items-center border px-2 py-0.5 leading-tight', u.active ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-stone-300 bg-stone-100 text-stone-600')}
                         title={u.invited_at ? `Invited ${formatDisplayDate(u.invited_at.slice(0, 10))}` : undefined}
@@ -345,7 +348,7 @@ function CustomerLoginsDialog({
                         {u.invited_at ? <span className="text-[10px] font-medium opacity-80">Invited {formatDisplayDate(u.invited_at.slice(0, 10))}</span> : null}
                       </span>
                     </td>
-                    <td className={td}>
+                    <td className={cn(td, 'lc-actions')}>
                       <div className="flex items-center justify-center gap-0.5">
                         <Button type="button" variant="ghost" className={iconBtn} disabled={busy != null || !u.active} title="Resend Invite" aria-label={`Resend Invite to ${u.email}`}
                           onClick={() => void run(`resend:${u.user_id}`, () => resendCustomerInvite(u.user_id), 'Invite Sent Again')}>
@@ -581,7 +584,8 @@ export function CustomerPortalDialog({
             <div className="mx-auto max-w-[100rem] space-y-2">
               <h3 className="text-sm font-bold uppercase tracking-[0.12em] text-stone-800">Licences &amp; Records</h3>
               <div className="overflow-x-auto border border-stone-300 bg-white shadow-sm">
-                <table className="w-full min-w-[980px] border-collapse font-jakarta">
+                {/* list-cards: one card per licence below 1024 px (index.css). */}
+                <table className="list-cards w-full min-w-[980px] border-collapse font-jakarta">
                   <thead>
                     <tr>
                       <th className={cn(th, 'w-10 text-center')}>#</th>
@@ -605,21 +609,21 @@ export function CustomerPortalDialog({
                       const shared = list.filter((f) => f.customer_visible).length
                       return (
                         <tr key={l.id} className={rowTone(i)}>
-                          <td className={cn(td, 'text-center text-xs text-stone-500')}>{i + 1}</td>
-                          <td className={td}>
+                          <td className={cn(td, 'lc-hide text-center text-xs text-stone-500')}>{i + 1}</td>
+                          <td className={cn(td, 'lc-title')}>
                             <p className="whitespace-nowrap font-semibold text-stone-900">{cml}</p>
                             {is ? <p className="text-xs text-stone-600">{is}</p> : null}
                           </td>
-                          <td className={cn(td, 'text-center text-[13px]', expired && 'font-semibold text-red-700')}>
+                          <td className={cn(td, 'text-center text-[13px]', expired && 'font-semibold text-red-700')} data-label="Valid Till">
                             {l.validity ? formatDisplayDate(l.validity) : '—'}
                             {expired ? <span className="block text-[10px] uppercase tracking-wide">Expired</span> : null}
                           </td>
-                          <td className={cn(td, 'text-center')}>
+                          <td className={cn(td, 'text-center')} data-label="Logins">
                             <button type="button" className="text-[13px] font-semibold text-amber-800 hover:underline" title={seenBy.map((u) => u.full_name || u.email).join(', ') || 'No login yet'} onClick={() => setLoginsOpen(true)}>
                               {seenBy.length}
                             </button>
                           </td>
-                          <td className={cn(td, 'text-center')}>
+                          <td className={cn(td, 'text-center')} data-label="Records Service">
                             <OnOffSwitch
                               on={Boolean(service?.records_enabled)}
                               label={`Records Service for ${cml}`}
@@ -632,7 +636,7 @@ export function CustomerPortalDialog({
                               <span className="block text-[10px] font-semibold uppercase tracking-wide text-red-700">Expired</span>
                             ) : null}
                           </td>
-                          <td className={cn(td, 'text-center')}>
+                          <td className={cn(td, 'text-center')} data-label="Paid Till">
                             {service?.records_enabled ? (
                               <CalendarDateField
                                 label={`Paid Till for ${cml}`}
@@ -648,12 +652,12 @@ export function CustomerPortalDialog({
                               <span className="text-xs text-stone-400">Switch On First</span>
                             )}
                           </td>
-                          <td className={cn(td, 'text-center')}>
+                          <td className={cn(td, 'text-center')} data-label="Documents">
                             <Button type="button" variant="outline" className={cn(smallBtn, 'w-full')} onClick={() => setDocsFor(l.id)}>
                               <FileText size={14} aria-hidden /> {shared}/{list.length} Shared
                             </Button>
                           </td>
-                          <td className={cn(td, 'text-center')}>
+                          <td className={cn(td, 'text-center')} data-label="Formats">
                             <Button type="button" variant="outline" className={cn(smallBtn, 'w-full')} onClick={() => setRecordsFor({ id: l.id, label: l.label })}>
                               <ClipboardList size={14} aria-hidden /> Records Setup
                             </Button>

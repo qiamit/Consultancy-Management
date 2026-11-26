@@ -130,7 +130,8 @@ export function ColumnTypeSettings({
     <div className="space-y-2 border border-amber-300 bg-amber-50/40 p-3 sm:col-span-2">
       <span className="text-sm font-semibold text-stone-900">{spec.title}</span>
       <div className="border border-stone-300 bg-white">
-        <table className="w-full border-collapse">
+        {/* auto-cards: on phones each setting is a card — its name, then the choice and what it does (index.css). */}
+        <table className="auto-cards w-full border-collapse">
           <thead>
             <tr>
               <th className={cn(th, 'w-[13rem] text-left')}>Setting</th>
@@ -162,6 +163,8 @@ export function ColumnTypeSettings({
                     className={cn('relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors', on ? 'border-emerald-700 bg-emerald-600' : 'border-red-700 bg-red-500')}
                   >
                     <span className={cn('inline-block h-5 w-5 rounded-full bg-white shadow transition-transform', on ? 'translate-x-5' : 'translate-x-0.5')} />
+                    {/* Text in the cell keeps it a labelled value (not a buttons-only cell) in the phone cards. */}
+                    <span className="sr-only">{on ? 'On' : 'Off'}</span>
                   </button>
                 )
               } else if (r.kind === 'select') {
@@ -189,8 +192,8 @@ export function ColumnTypeSettings({
               return (
                 <tr key={r.key} className={i % 2 ? 'bg-[#f7f3eb]' : 'bg-[#fffcf7]'}>
                   <td className={cn(td, 'font-medium')}>{r.label}</td>
-                  <td className={cn(td, 'text-center')}><div className="flex justify-center">{control}</div></td>
-                  <td className={cn(td, 'text-xs text-stone-600')}>{r.help}</td>
+                  <td className={cn(td, 'lc-wide text-center')}><div className="flex justify-center max-sm:justify-start">{control}</div></td>
+                  <td className={cn(td, 'lc-wide text-xs text-stone-600')}>{r.help}</td>
                 </tr>
               )
             })}

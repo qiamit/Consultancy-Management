@@ -472,7 +472,8 @@ function SectionRecords({ licenceId, sectionId }: { licenceId: string; sectionId
             {fails ? <span className="font-semibold text-red-700">{fails} Failed</span> : null}
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
+            {/* auto-cards: on phones each entry is a card — its date on top, every column under its name (index.css). */}
+            <table className="auto-cards w-full border-collapse">
               <thead>
                 <tr>
                   <th className={th}>Date</th>

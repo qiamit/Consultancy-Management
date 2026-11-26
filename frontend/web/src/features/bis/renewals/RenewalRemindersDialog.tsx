@@ -150,7 +150,8 @@ export function RenewalRemindersDialog({ open, onOpenChange }: { open: boolean; 
 
           {plan?.items.length ? (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px] border-collapse">
+              {/* auto-cards: one card per licence on phones (index.css). */}
+              <table className="auto-cards w-full min-w-[900px] border-collapse">
                 <thead>
                   <tr>
                     <th className={th}>Firm / Licence</th>
@@ -175,7 +176,7 @@ export function RenewalRemindersDialog({ open, onOpenChange }: { open: boolean; 
                         <span className={cn('inline-block border px-2 py-0.5 text-xs', ACTION_STYLE[item.action])}>{actionText(item, Boolean(settings?.enabled))}</span>
                       </td>
                       <td className={cn(td, 'whitespace-nowrap text-xs')}>{item.sentStages.length ? item.sentStages.map((s) => `${s}-day`).join(', ') : '—'}</td>
-                      <td className={cn(td, 'max-w-[14rem] truncate text-xs')} title={item.email}>{item.email || '—'}</td>
+                      <td className={cn(td, 'lc-wide max-w-[14rem] truncate text-xs')} title={item.email}>{item.email || '—'}</td>
                       <td className={td}>
                         <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs">
                           <input type="checkbox" className="size-4 accent-amber-700" checked={!item.paused} disabled={busy} onChange={() => void togglePaused(item)} />
