@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Bell, Brain, CalendarClock, Maximize2, Minus, FileText, FileUp, FolderUp, History, ImagePlus, Loader2, MessageSquare, Mic, MicOff, Paperclip, Pause, Play, Plug, Plus, RotateCcw, Send, ShieldCheck, Sparkles, Trash2, X, Zap } from 'lucide-react'
+import { AUTO_VOICE_LANG } from '@/features/bis/shared/useVoiceInput'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
@@ -231,14 +232,6 @@ export function QiAssistant({
   // Files / folders attached with the + button (read in the browser when the message is sent).
   const [attachments, setAttachments] = useState<ChatAttachment[]>([])
   const [plusOpen, setPlusOpen] = useState(false)
-  // Voice typing language, remembered in this browser.
-  const [voiceLang, setVoiceLang] = useState<'en-IN' | 'hi-IN'>(() => {
-    try {
-      return window.localStorage.getItem('qe-assistant-voice-lang') === 'hi-IN' ? 'hi-IN' : 'en-IN'
-    } catch {
-      return 'en-IN'
-    }
-  })
   const [voiceSupported, setVoiceSupported] = useState(false)
   const [busyHint, setBusyHint] = useState<string | null>(null)
   const [skillPickerOpen, setSkillPickerOpen] = useState(false)
@@ -629,7 +622,8 @@ export function QiAssistant({
     'language-not-supported': 'This Browser Cannot Type This Language by Voice.',
   }
 
-  const startRecognition = (lang: 'en-IN' | 'hi-IN') => {
+  // One language for voice typing, no language button (owner, 26 Nov 2026) — see AUTO_VOICE_LANG.
+  const startRecognition = (lang: string = AUTO_VOICE_LANG) => {
     const Ctor = getSpeechRecognitionCtor()
     if (!Ctor) return
     const recognition = new Ctor()
@@ -687,34 +681,13 @@ export function QiAssistant({
     try {
       voiceBaseRef.current = input.trim() ? `${input.trim()} ` : ''
       wantListeningRef.current = true
-      startRecognition(voiceLang)
+      startRecognition()
       setListening(true)
       setError(null)
     } catch {
       wantListeningRef.current = false
       setError('Could Not Start Voice Typing.')
       setListening(false)
-    }
-  }
-
-  const switchVoiceLang = () => {
-    const next = voiceLang === 'en-IN' ? 'hi-IN' : 'en-IN'
-    setVoiceLang(next)
-    try {
-      window.localStorage.setItem('qe-assistant-voice-lang', next)
-    } catch {
-      /* private mode: not remembered */
-    }
-    // Restart in the new language when already listening.
-    if (listening) {
-      recognitionRef.current?.abort()
-      recognitionRef.current = null
-      try {
-        voiceBaseRef.current = input.trim() ? `${input.trim()} ` : ''
-        startRecognition(next)
-      } catch {
-        stopListening()
-      }
     }
   }
 
@@ -1548,7 +1521,7 @@ export function QiAssistant({
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
                   <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-600" />
                 </span>
-                Listening — Speak Now ({voiceLang === 'hi-IN' ? 'Hindi' : 'English'}). Tap the Mic to Stop.
+                Listening — Speak Now. Tap the Mic to Stop.
               </div>
             ) : null}
             <div
@@ -1660,16 +1633,6 @@ export function QiAssistant({
                       onClick={toggleListening}
                     >
                       {listening ? <MicOff size={16} /> : <Mic size={16} />}
-                    </button>
-                    <button
-                      type="button"
-                      className="inline-flex h-8 items-center border border-stone-400 bg-white px-2 text-[11px] font-bold text-stone-700 hover:bg-amber-50"
-                      title="Voice Typing Language — Click to Switch"
-                      aria-label={`Voice Typing Language: ${voiceLang === 'hi-IN' ? 'Hindi' : 'English'}`}
-                      disabled={loading}
-                      onClick={switchVoiceLang}
-                    >
-                      {voiceLang === 'hi-IN' ? 'हिंदी' : 'EN'}
                     </button>
                   </>
                 ) : null}

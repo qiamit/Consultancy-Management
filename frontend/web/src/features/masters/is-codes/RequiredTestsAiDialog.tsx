@@ -24,7 +24,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Textarea } from '@/components/ui/textarea'
 import { AssistantMessage } from '@/components/qi-assistant/AssistantMessage'
 import { readAttachments, toAttachments, type ChatAttachment } from '@/components/qi-assistant/chatAttachments'
-import { useVoiceInput } from '@/features/bis/shared/useVoiceInput'
+import { AUTO_VOICE_LANG, useVoiceInput } from '@/features/bis/shared/useVoiceInput'
 import { limsDarkBarGlowStyle, limsDialogClass } from '@/lib/limsThemeUi'
 import { cn } from '@/lib/utils'
 import type { RequiredTest } from './requiredTestsApi'
@@ -88,19 +88,9 @@ const SUGGESTIONS = [
   { label: 'Which Tests Can Be Done in a Day?', message: 'Which of the tests can be done in a day?' },
 ]
 
-/** A spoken command at the end: "Generate" / "जनरेट करो" sends, "Add" / "ऐड करो" adds the ticked tests. */
-const GENERATE_WORDS = /(?:^|\s+)(?:generate|जनरेट|start|शुरू|send|भेजो)(?:\s*(?:karo|kar do|करो|कर दो|करें|please))?\s*[.!।]?\s*$/i
-const ADD_WORDS = /(?:^|\s+)(?:add|ऐड|जोड़)(?:\s*(?:karo|kar do|करो|कर दो|करें|please))?\s*[.!।]?\s*$/i
-
-const VOICE_LANG_KEY = 'qe-assistant-voice-lang'
-
-function readVoiceLang(): 'hi-IN' | 'en-IN' {
-  try {
-    return window.localStorage.getItem(VOICE_LANG_KEY) === 'en-IN' ? 'en-IN' : 'hi-IN'
-  } catch {
-    return 'hi-IN'
-  }
-}
+/** A spoken command at the end: "Generate" / "Bhejo" / "जनरेट करो" sends, "Add" / "Jodo" / "ऐड करो" adds the ticked tests. */
+const GENERATE_WORDS = /(?:^|\s+)(?:generate|जनरेट|start|शुरू|shuru|send|भेजो|bhejo)(?:\s*(?:karo|kar do|do|dijiye|करो|कर दो|करें|please))?\s*[.!।]?\s*$/i
+const ADD_WORDS = /(?:^|\s+)(?:add|ऐड|जोड़|jodo|jod)(?:\s*(?:karo|kar do|do|dijiye|करो|कर दो|करें|please))?\s*[.!।]?\s*$/i
 
 /** The library sources ticked by default: every readable one. */
 const defaultKeys = (catalog: AiSourceCatalog | null) => new Set((catalog?.sources ?? []).filter((s) => s.inLibrary).map((s) => s.key))
@@ -140,7 +130,6 @@ export function RequiredTestsAiDialog({
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [sourcesOpen, setSourcesOpen] = useState(false)
-  const [voiceLang, setVoiceLang] = useState<'hi-IN' | 'en-IN'>(readVoiceLang)
   const [talk, setTalk] = useState(false)
   const talkRef = useRef(false)
   const nextId = useRef(1)
@@ -298,7 +287,7 @@ export function RequiredTestsAiDialog({
         pages: reading!.pages,
       }))
       if (talkRef.current) {
-        await speech.speak(out.reply, botId, voiceLang)
+        await speech.speak(out.reply, botId, AUTO_VOICE_LANG)
         if (talkRef.current) void listenForTalk()
       }
     } catch (err) {
@@ -327,7 +316,7 @@ export function RequiredTestsAiDialog({
       else actionsRef.current.add()
     }, 0)
   }, [])
-  const voice = useVoiceInput(onVoiceText, voiceLang)
+  const voice = useVoiceInput(onVoiceText)
 
   // Voice Talk: the AI's answer is read aloud, then the next request is heard; stops after two silent tries.
   const stopTalk = () => {
@@ -338,7 +327,7 @@ export function RequiredTestsAiDialog({
   }
   const listenForTalk = async (silent = 0): Promise<void> => {
     if (!talkRef.current) return
-    const said = await speech.listenOnce(voiceLang, setInput)
+    const said = await speech.listenOnce(AUTO_VOICE_LANG, setInput)
     if (!talkRef.current) return
     if (!said) {
       if (silent < 1) return void listenForTalk(silent + 1)
@@ -369,16 +358,6 @@ export function RequiredTestsAiDialog({
     if (voiceListening) stopVoice()
     talkRef.current = false
   }, [open, voiceListening, stopVoice])
-
-  const switchLang = () => {
-    const next = voiceLang === 'hi-IN' ? 'en-IN' : 'hi-IN'
-    setVoiceLang(next)
-    try {
-      window.localStorage.setItem(VOICE_LANG_KEY, next)
-    } catch {
-      // The choice is kept for this window only.
-    }
-  }
 
   const newChat = () => {
     stopTalk()
@@ -596,7 +575,7 @@ export function RequiredTestsAiDialog({
                 key={m.id}
                 bot={m}
                 speaking={speech.speakingId === m.id}
-                onSpeak={() => (speech.speakingId === m.id ? speech.stopSpeaking() : void speech.speak(m.text, m.id, voiceLang))}
+                onSpeak={() => (speech.speakingId === m.id ? speech.stopSpeaking() : void speech.speak(m.text, m.id, AUTO_VOICE_LANG))}
                 existingKey={existingKey}
                 onPick={(picked) => updateBot(m.id, (b) => ({ ...b, picked }))}
                 onAdd={() => addFrom(m)}
@@ -631,8 +610,8 @@ export function RequiredTestsAiDialog({
                   ? 'Voice Talk — Reading the Answer…'
                   : busy
                     ? 'Voice Talk — AI Is Working…'
-                    : `Voice Talk — Speak Now (${voiceLang === 'hi-IN' ? 'Hindi' : 'English'}). Say "Add" to Add the Ticked Tests.`
-                : `Listening (${voiceLang === 'hi-IN' ? 'Hindi' : 'English'}) — Say "Generate" at the End to Send, or "Add" to Add the Ticked Tests.`}
+                    : 'Voice Talk — Speak Now. Say "Add" to Add the Ticked Tests.'
+                : 'Listening — Say "Generate" at the End to Send, or "Add" to Add the Ticked Tests.'}
             </div>
           ) : null}
           {voice.error || speech.error ? <p className="mb-1.5 text-xs text-red-700">{voice.error || speech.error}</p> : null}
@@ -704,28 +683,20 @@ export function RequiredTestsAiDialog({
                   >
                     {voice.listening ? <MicOff size={16} /> : <Mic size={16} />}
                   </button>
-                  <button
-                    type="button"
-                    className="inline-flex h-8 items-center border border-stone-400 bg-white px-2 text-[11px] font-bold text-stone-700 hover:bg-amber-50"
-                    title="Voice Language — Click to Switch"
-                    aria-label={`Voice Language: ${voiceLang === 'hi-IN' ? 'Hindi' : 'English'}`}
-                    disabled={voice.listening || talk}
-                    onClick={switchLang}
-                  >
-                    {voiceLang === 'hi-IN' ? 'हिंदी' : 'EN'}
-                  </button>
+                  {/* Voice Talk is an icon like the mic, and there is no language button (owner, 26 Nov 2026). */}
                   <button
                     type="button"
                     className={cn(
-                      'inline-flex h-8 items-center gap-1 whitespace-nowrap border px-2 text-[11px] font-bold',
+                      'inline-flex h-8 w-8 items-center justify-center border',
                       talk ? 'border-red-600 bg-red-600 text-white hover:bg-red-700' : 'border-stone-400 bg-white text-stone-700 hover:bg-amber-50',
                     )}
                     aria-pressed={talk}
-                    title="Voice Talk: Speak, Hear the Answer, Speak Again"
+                    aria-label={talk ? 'Stop Voice Talk' : 'Voice Talk'}
+                    title={talk ? 'Stop Voice Talk' : 'Voice Talk: Speak, Hear the Answer, Speak Again'}
                     disabled={!catalog || notInLibrary || !speech.recognitionOk}
                     onClick={toggleTalk}
                   >
-                    <AudioLines size={14} aria-hidden className={talk ? 'animate-pulse' : undefined} /> {talk ? 'Stop Talk' : 'Voice Talk'}
+                    <AudioLines size={16} aria-hidden className={talk ? 'animate-pulse' : undefined} />
                   </button>
                 </>
               ) : null}
