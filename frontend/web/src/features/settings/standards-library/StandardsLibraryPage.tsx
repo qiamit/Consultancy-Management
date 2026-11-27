@@ -415,7 +415,7 @@ export default function StandardsLibraryPage() {
       </Section>
 
       <Section
-        title="Referenced Standards Not in the Library"
+        title={`Referenced Standards Not in the Library${data?.refsWithdrawn ? ` (${num(data.refsWithdrawn)} Withdrawn by BIS Left Out)` : ''}`}
         onExport={async () =>
           exportSheet(
             'Referenced Not in Library',

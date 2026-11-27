@@ -58,6 +58,8 @@ export type StandardsLibraryStatus = {
   refsFound: number
   /** The number is in the library, but not the Part named. */
   refsOtherPart: number
+  /** Not in the library, but BIS has withdrawn them: left out of refsMissing (owner, 27 Nov 2026). */
+  refsWithdrawn: number
   refsMissing: MissingReference[]
 }
 
@@ -67,7 +69,7 @@ const REFS_LIMIT = 150
 
 /** Everything the Standards Library page shows. Staff-only RLS on every table read here. */
 export async function fetchStandardsLibraryStatus(): Promise<StandardsLibraryStatus> {
-  const [runs, review, oldIndex, listed, missing, noStandard, noManual, refs, refsFound, refsOtherPart, refsMissing] = await Promise.all([
+  const [runs, review, oldIndex, listed, missing, noStandard, noManual, refs, refsFound, refsOtherPart, refsWithdrawn, refsMissing] = await Promise.all([
     supabase.from('standard_index_runs').select('*').order('id', { ascending: false }).limit(10),
     supabase
       .from('standard_docs')
@@ -89,15 +91,17 @@ export async function fetchStandardsLibraryStatus(): Promise<StandardsLibrarySta
     supabase.from('standard_refs_status').select('ref_base', { count: 'exact', head: true }),
     supabase.from('standard_refs_status').select('ref_base', { count: 'exact', head: true }).eq('has_part', true),
     supabase.from('standard_refs_status').select('ref_base', { count: 'exact', head: true }).eq('has_number', true).eq('has_part', false),
+    supabase.from('standard_refs_status').select('ref_base', { count: 'exact', head: true }).eq('has_part', false).eq('withdrawn', true),
     supabase
       .from('standard_refs_status')
       .select('ref_base, ref_part, cited_by, cites, cited_in, has_number')
       .eq('has_part', false)
+      .eq('withdrawn', false)
       .order('cited_by', { ascending: false })
       .order('cites', { ascending: false })
       .limit(REFS_LIMIT),
   ])
-  const failed = [runs, review, oldIndex, listed, missing, noStandard, noManual, refs, refsFound, refsOtherPart, refsMissing].find((r) => r.error)
+  const failed = [runs, review, oldIndex, listed, missing, noStandard, noManual, refs, refsFound, refsOtherPart, refsWithdrawn, refsMissing].find((r) => r.error)
   if (failed?.error) throw new Error(failed.error.message)
   return {
     runs: (runs.data ?? []) as IndexRun[],
@@ -110,6 +114,7 @@ export async function fetchStandardsLibraryStatus(): Promise<StandardsLibrarySta
     refs: refs.count ?? 0,
     refsFound: refsFound.count ?? 0,
     refsOtherPart: refsOtherPart.count ?? 0,
+    refsWithdrawn: refsWithdrawn.count ?? 0,
     refsMissing: (refsMissing.data ?? []) as MissingReference[],
   }
 }
@@ -168,6 +173,7 @@ export async function fetchAllMissingReferences(): Promise<MissingReference[]> {
       .from('standard_refs_status')
       .select('ref_base, ref_part, cited_by, cites, cited_in, has_number')
       .eq('has_part', false)
+      .eq('withdrawn', false)
       .order('cited_by', { ascending: false })
       .order('cites', { ascending: false })
       .order('ref_base')
