@@ -4,6 +4,7 @@ import { loadPdfjs } from '@/lib/pdfjsLoader'
 import { resolveIsCodeFileDocumentKind } from '@/features/masters/is-codes/types'
 import { existingIsCodeStoragePaths } from '@/features/masters/is-codes/loadIsCodeFileLinks'
 import { toProperTitleCase } from '@/features/masters/clients/types'
+import { fetchIsCodeEdition, fetchStandardFolders, pickStandardDocs } from '@/features/masters/is-codes/requiredTestsApi'
 
 export type Cmpf311Mode = 'bis-sit' | 'on-sit'
 export type Cmpf311GenerateTarget = 'annexure-c' | 'test-table' | 'notes'
@@ -170,6 +171,51 @@ export function parseCmpf311Payload(raw: Record<string, unknown> | null): Cmpf31
   }
 }
 
+/** Prefix of a Cmpf311MasterFileOption.storagePath that is a Standards Library file, not an IS Code Master upload. */
+const LIBRARY_PATH = 'library:'
+
+/**
+ * The IS Code's own Standard (with Amendments) and Product Manual in the Standards Library, as file options. The PDFs
+ * once uploaded to the IS Code Master were removed on 20 Nov 2026 (the library holds them), so CMPF-311, the
+ * Undertaking sources and the Process Flow Chart found no Standard or Product Manual (owner, 28 Nov 2026).
+ */
+async function libraryFileOptions(isCodeId: string): Promise<Cmpf311MasterFileOption[]> {
+  const [folders, edition] = await Promise.all([fetchStandardFolders(isCodeId), fetchIsCodeEdition(isCodeId)])
+  if (!folders.length) return []
+  const { standards, manuals } = await pickStandardDocs(folders, edition)
+  const kindOf = (relpath: string, manual: boolean) =>
+    manual ? 'Product Manual' : /\bAmd\b|amendment/i.test(relpath.split('/').pop() ?? '') ? 'Amendment' : 'Indian Standard'
+  return [...manuals.map((r) => [r, true] as const), ...standards.map((r) => [r, false] as const)].map(([relpath, manual]) => ({
+    id: `${LIBRARY_PATH}${relpath}`,
+    fileName: relpath.split('/').pop() ?? relpath,
+    storagePath: `${LIBRARY_PATH}${relpath}`,
+    documentKind: kindOf(relpath, manual),
+  }))
+}
+
+/** A Standards Library PDF (functions /standards/file-link, then /standards/file), as a File. */
+async function downloadLibraryFile(relpath: string, fileName: string): Promise<File> {
+  const { data: sessionData } = await supabase.auth.getSession()
+  const accessToken = sessionData.session?.access_token
+  if (!accessToken) throw new Error('Session Expired. Please Sign In Again.')
+  const base = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`
+  const res = await fetch(`${base}/standards/file-link`, {
+    method: 'POST',
+    headers: {
+      apikey: import.meta.env.VITE_SUPABASE_ANON_KEY as string,
+      Authorization: `Bearer ${accessToken}`,
+      'X-User-Jwt': accessToken,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ relpath }),
+  })
+  const body = (await res.json().catch(() => ({}))) as { token?: string; error?: string }
+  if (!res.ok || !body.token) throw new Error(body.error || `Could not open ${fileName} from the Standards Library.`)
+  const pdf = await fetch(`${base}/standards/file?t=${encodeURIComponent(body.token)}`)
+  if (!pdf.ok) throw new Error(`Could not download ${fileName} from the Standards Library.`)
+  return new File([await pdf.blob()], fileName, { type: 'application/pdf' })
+}
+
 export async function loadCmpf311MasterData(isCodeId: string): Promise<{
   productManualNumber: string
   productManualFile: File | null
@@ -216,13 +262,22 @@ export async function loadCmpf311MasterData(isCodeId: string): Promise<{
       documentKind: resolveIsCodeFileDocumentKind(file.document_kind, file.file_name),
     }))
 
+  // The Standards Library's Standard and Product Manual when the master has no PDF of that kind.
+  const masterPdfs = availableFiles.filter((file) => file.fileName.toLowerCase().endsWith('.pdf'))
+  const hasManual = masterPdfs.some((file) => file.documentKind.toLowerCase().includes('manual'))
+  const hasStandard = masterPdfs.some((file) => !file.documentKind.toLowerCase().includes('manual'))
+  if (!hasManual || !hasStandard) {
+    const library = await libraryFileOptions(id).catch(() => [])
+    availableFiles.push(...library.filter((file) => (file.documentKind === 'Product Manual' ? !hasManual : !hasStandard)))
+  }
+
   let productManualFile: File | null = null
   const manualPdf = files.find((file) =>
     file.file_name?.toLowerCase().endsWith('.pdf') && resolveIsCodeFileDocumentKind(file.document_kind, file.file_name).toLowerCase().includes('manual'),
   )
   const manualOption = manualPdf?.id
     ? availableFiles.find((file) => file.id === manualPdf.id)
-    : undefined
+    : availableFiles.find((file) => file.storagePath.startsWith(LIBRARY_PATH) && file.documentKind === 'Product Manual')
   if (manualOption) {
     // A manual that is listed in the master but missing from storage must not hide the other master files.
     productManualFile = await downloadCmpf311MasterFile(manualOption).catch(() => null)
@@ -236,6 +291,7 @@ export async function loadCmpf311MasterData(isCodeId: string): Promise<{
 }
 
 export async function downloadCmpf311MasterFile(option: Cmpf311MasterFileOption): Promise<File> {
+  if (option.storagePath.startsWith(LIBRARY_PATH)) return downloadLibraryFile(option.storagePath.slice(LIBRARY_PATH.length), option.fileName)
   let lastError: unknown
   for (const bucket of ['is-code-files']) {
     const result = await supabase.storage.from(bucket).download(option.storagePath)
