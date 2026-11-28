@@ -277,8 +277,10 @@ def describe(rel):
 
 # Folders of BIS documents that are not standards (Act and Rules, Schemes, fees, QCO gazettes, 858 PDFs added on
 # 21 Nov 2026): read and searched like the standards, filed under their topic folder ("BIS Guidelines: Fees & Marking
-# Fee"), never Superseded by a later year and never asked to follow the standards' file-name form.
-GUIDELINE_CATEGORIES = ("BIS Guidelines",)
+# Fee"), never Superseded by a later year and never asked to follow the standards' file-name form. NABL Guidelines
+# (NABL 100A, 129, 141 …) joined them on 27 Nov 2026: the owner keeps BIS and NABL guidelines apart from the standards,
+# for questions about BIS and NABL work.
+GUIDELINE_CATEGORIES = ("BIS Guidelines", "NABL Guidelines")
 
 
 def describe_guideline(parts):
@@ -650,6 +652,8 @@ def refresh_notes(conn, reviewed=frozenset()):
                 if note:
                     notes.append(note)
             twins = [n for n in same.get(sha, []) if n != rel.split("/")[-1]]
+            if info["kind"] == "Guideline":
+                twins = []  # a QCO gazette lists many products and is filed under each of their IS numbers on purpose
             if twins and info["kind"] == "Product Manual" and manual_covers_part(info["folder"], rel, first or ""):
                 twins = []  # one manual for several Parts ("IS 9873 (Parts 1,2,3,4,7,9)"), saved under each Part
             if twins:
@@ -733,7 +737,7 @@ def refresh_versions(conn, root=None):
     merged_map = merged_standards(root)
     rows = conn.execute(
         """SELECT id, folder, relpath, kind, edition_year, amendments_merged, part, section, amendment_no,
-                  version_status, superseded_by
+                  version_status, superseded_by, pages
            FROM public.standard_docs WHERE source = 'library'"""
     ).fetchall()
     listed = {}
@@ -743,7 +747,7 @@ def refresh_versions(conn, root=None):
         listed[(base, part or "", sec or "")] = status.strip()
 
     info = {}
-    for doc_id, folder, relpath, kind, year, merged, *_ in rows:
+    for doc_id, folder, relpath, kind, year, merged, *_, pages in rows:
         own, _, inner = relpath.partition("::")
         name = own.split("/")[-1]
         part, sec, name_year = edition_parts(name)
@@ -752,11 +756,13 @@ def refresh_versions(conn, root=None):
         else:
             amd = amendment_number(name) if kind == "Amendment" else None
         info[doc_id] = {"folder": folder, "kind": kind, "part": part, "sec": sec, "year": year or name_year,
-                        "merged": merged, "amd": amd, "inner": bool(inner)}
+                        "merged": merged, "amd": amd, "inner": bool(inner), "read": (pages or 0) > 0}
 
     latest = {}  # (folder, part, sec, kind) -> latest edition year of Standards / Product Manuals
+    # Only an edition the library could read: a newer one locked by DRM (0 pages) does not push the readable older
+    # edition out of the Current-only search (owner, 27 Nov 2026: IS 5856 1991 kept while the 2022 copy is locked).
     for d in info.values():
-        if d["kind"] in ("Standard", "Product Manual") and d["year"] and not d["inner"]:
+        if d["kind"] in ("Standard", "Product Manual") and d["year"] and not d["inner"] and d["read"]:
             key = (d["folder"], d["part"], d["sec"], d["kind"])
             latest[key] = max(latest.get(key, 0), d["year"])
     merged_into = {}  # (folder, part, sec, year) -> amendments merged into that edition's file
@@ -766,7 +772,7 @@ def refresh_versions(conn, root=None):
             merged_into[key] = max(merged_into.get(key, 0), d["merged"])
 
     updates = []
-    for doc_id, folder, relpath, kind, year, merged, part0, sec0, amd0, status0, by0 in rows:
+    for doc_id, folder, relpath, kind, year, merged, part0, sec0, amd0, status0, by0, _pages in rows:
         d = info[doc_id]
         status, by = None, None
         if d["kind"] in ("Standard", "Product Manual", "Amendment"):
@@ -1342,12 +1348,96 @@ LEGACY_HINDI = re.compile(r"[ØèÞ¼½]|[a-z][A-Z][a-z]|[;\"{}]\w|\w[;\"{}]")
 
 
 def title_from_text(text):
-    """The English title printed after "Indian Standard" on a standard's first pages; "" when there is none."""
-    m = re.search(r"Indian\s+Standard\s*\n(.*)", text or "", re.S | re.I)
+    """The English title printed on a standard's first pages; "" when there is none. Tried in turn: the lines after
+    "Indian Standard"; the heading of an amendment printed first in a merged file ("TO IS 401 : 2001 PRESERVATION OF
+    TIMBER — CODE OF PRACTICE ( Fourth Revision )"); the lines after a lone "Standard" in an old one-page standard
+    (OCR splits "Indian" and "Standard" apart around the UDC and Reaffirmed notes); an ASTM "Standard Test Method
+    for …" line. 372 standards had no title on 27 Nov 2026 because only the first form was read."""
+    text = text or ""
+    first = title_after(text, r"Indian\s+Standard\s*\n", old=True)
+    if first:  # the form read before 27 Nov 2026: kept as it was, so titles already found do not change
+        return first
+    # An IS title is printed in capitals: a sentence of the foreword that ends at "… this Indian Standard" is not one.
+    for found, caps in ((title_after(text, r"Indian\s+Standard[ \t]+(?=\S)"), True), (amendment_heading_title(text), True),
+                        (title_after(text, r"(?m)^\s*St\s?an\s?dar\s?d\s*\n"), True), (astm_title(text), False)):
+        found = clean_title(found, caps)
+        if found:
+            return found
+    return ""
+
+
+# Words that alone say nothing about the subject ("SPECIFICATION", "CODE OF PRACTICE", "Fifth edition").
+GENERIC_TITLE_WORDS = {"specification", "specifications", "for", "code", "of", "practice", "method", "methods", "test",
+                       "tests", "the", "and", "edition", "first", "second", "third", "fourth", "fifth", "sixth",
+                       "part", "section", "revision", "indian", "standard", "glossary", "terms", "lays", "down"}
+
+
+def clean_title(title, caps=False):
+    """The title without scan noise at its ends; "" when what is left is noise, names no subject or (caps) is not
+    mostly capitals."""
+    title = re.sub(r"\s*(?:CFR Section|zyxwv|abcdefg|\bSectional\b).*$", "", title or "", flags=re.I)
+    if caps:
+        title = re.sub(r"^(?:Standard\s+)+", "", title.strip())
+        title = re.sub(r"\s+PART$", "", title)  # "… PACKING OF PESTICIDES PART" (the number on the next line)
+    if re.search(r"(?i)copyright", title):
+        return ""
+    title = re.sub(r"\s*\(?\s*f?\s*(?:First|Second|Third|Fourth|Fifth)\s*(?:Revision\b.*)?$", "", title, flags=re.I)
+    letters = [ch for ch in title if ch.isalpha()]
+    if caps and (not letters or sum(ch.isupper() for ch in letters) < 0.7 * len(letters)):
+        return ""
+    title = re.sub(r"^[\s)\]}.,;:'’-]+|[\s(\[{.,;:'’-]+$", "", title)
+    title = re.sub(r"(?<=[a-z])[1’']$", "", title)  # ASTM footnote mark: "… Metallic Materials1"
+    title = re.sub(r"\(\s*[^)]*Revi\s?sion\s*\)?\s*$", "", title, flags=re.I).strip(" -—:.,(")
+    words = re.findall(r"[A-Za-z]{4,}", title)
+    subject = [w for w in words if w.lower() not in GENERIC_TITLE_WORDS]
+    if len(words) < 2 or not subject or re.search(r"(?i)\b(?:edition|lays down)\b", title):
+        return ""
+    return title if 6 <= len(title) <= 200 else ""
+
+
+# Lines that are never part of a title on an old standard's first page.
+TITLE_NOISE = re.compile(r"^(?:UDC|\(?\s*(?:First|Second|Third|Fourth)\s+Reprint|Indian$|IS\s*:)|Reaffirm|^[\d\s.:'’()-]+$",
+                         re.I)
+
+
+def amendment_heading_title(text):
+    """The title in an amendment's heading: "TO / IS 101 (PART 6/SEC 1) : 1988 METHODS OF … ( Third Revision )"."""
+    m = re.search(r"(?m)^\s*TO\s*\n\s*IS\b[^:\n]{0,60}:\s*(?:19|20)\d{2}\s*(.*?)(?:\(\s*\.?\s*(?:First|Second|Third|"
+                  r"Fourth|Fifth|Sixth|Seventh|Eighth|Ninth)\s+Revision|\(\s*Page\b|\n\s*\n)", text, re.S | re.I)
+    if not m:
+        return ""
+    title = re.sub(r"\s+", " ", m.group(1)).strip(" -—:.,")
+    return title if 6 <= len(title) <= 200 and re.search(r"[A-Za-z]{4}", title) else ""
+
+
+ASTM_TITLE = re.compile(r"(Standard\s+(?:Test\s+Methods?|Specification|Practice|Guide|Terminology|Classification)"
+                        r"\s+(?:for|of)\s+.{6,180}?)(?:\n\s*\n|\s1\.\s|This standard|\n\s*1\s)", re.S | re.I)
+
+
+def astm_title(text):
+    m = ASTM_TITLE.search(text[:4000])
+    if not m:
+        return ""
+    title = re.sub(r"\s+", " ", m.group(1)).strip(" -—:.,")
+    letters = [ch for ch in title if ch.isalpha()]
+    if letters and sum(ch.isupper() for ch in letters) > 0.7 * len(letters):  # an old IS: "Standard SPECIFICATION FOR …"
+        title = re.sub(r"^Standard\s+", "", title)
+    return title if 6 <= len(title) <= 200 else ""
+
+
+def title_after(text, start, old=False):
+    """Title lines after the first match of `start`: up to the revision note, the scope or a blank line. `old`: the
+    rules used before 27 Nov 2026 (no stop at the scope, no skipping of UDC / Reaffirmed lines)."""
+    m = re.search(start + r"(.*)", text, re.S | re.I)
     if not m:
         return ""
     out = []
     for line in m.group(1).split("\n")[:40]:
+        if not old:
+            if re.match(r"\s*(?:\d\.?\s*)?(?:Scope|Foreword)\b", line, re.I) or re.match(r"\s*1\.\s", line):
+                break
+            if TITLE_NOISE.search(line.strip()):
+                continue
         s = re.sub(r"\s+", " ", line).strip()
         if not s:
             if out:
@@ -1371,10 +1461,61 @@ def title_from_text(text):
     return title if 6 <= len(title) <= 200 else ""
 
 
-def refresh_titles(conn):
-    """standard_docs.title of every library file: its row in Standards List (same number and Part), else the title on
-    its first pages; a guideline's own file name. A file whose title changed gets its chunks embedded again (the title
-    is part of every chunk's embedding)."""
+WITHDRAWN_FILE = "Withdrawn Standards.txt"  # at the root: "IS 226 => IS 2062 # 2022-03-14", or "IS 105 # 2022-03-14"
+WITHDRAWN_LINE = re.compile(r"^\s*(IS\s*\d+)\s*(?:(?:=>|->|→)\s*([^#]*?))?\s*(?:#\s*(.*?))?\s*$", re.I)
+
+
+def write_withdrawn(conn, root):
+    """standard_withdrawn from Withdrawn Standards.txt (numbers BIS has withdrawn, from its standards search): they are
+    left out of the referenced standards the library misses. None when there is no such file (the table is kept)."""
+    try:
+        with open(os.path.join(root, WITHDRAWN_FILE), encoding="utf-8-sig") as f:
+            lines = list(f)
+    except (OSError, TypeError):
+        return None
+    rows = {}
+    for line in lines:
+        m = WITHDRAWN_LINE.match(line)
+        if not m or line.lstrip().startswith("#"):
+            continue
+        base = re.sub(r"(?i)^IS\s*", "IS ", m.group(1).strip())
+        note = (m.group(3) or "").strip()
+        day = re.search(r"\b(\d{4}-\d{2}-\d{2})\b", note)
+        rows[base] = (base, (m.group(2) or "").strip() or None, day.group(1) if day else None, note or None)
+    with conn.transaction():
+        conn.execute("DELETE FROM public.standard_withdrawn")
+        with conn.cursor().copy("COPY public.standard_withdrawn (base, replaced_by, withdrawn_on, note) FROM STDIN") as cp:
+            for row in rows.values():
+                cp.write_row(row)
+    return len(rows)
+
+
+TITLES_FILE = "Standard Titles.txt"  # at the root of the library: "IS 5374 => Taper washers for I-beams", one per line
+TITLE_LINE = re.compile(r"^\s*(IS\s*\d+)((?:\s+Part\s+\w+)?)((?:\s+Sec\s+\w+)?)\s*=>\s*(.+?)\s*$", re.I)
+
+
+def titles_file(root):
+    """{(base, part digits): title} from Standard Titles.txt (titles from the BIS standards search for files whose
+    first pages carry no readable title); empty when there is no such file."""
+    out = {}
+    try:
+        with open(os.path.join(root, TITLES_FILE), encoding="utf-8-sig") as f:
+            lines = list(f)
+    except (OSError, TypeError):
+        return out
+    for line in lines:
+        m = TITLE_LINE.match(line)
+        if m and not line.lstrip().startswith("#"):
+            base = re.sub(r"(?i)^IS\s*", "IS ", m.group(1).strip())
+            out[(base, re.sub(r"\D", "", m.group(2) or ""))] = m.group(4).strip()
+    return out
+
+
+def refresh_titles(conn, root=None):
+    """standard_docs.title of every library file: its row in Standards List (same number and Part), else its line in
+    Standard Titles.txt, else the title on its first pages; a guideline's own file name. A file whose title changed
+    gets its chunks embedded again (the title is part of every chunk's embedding)."""
+    given = titles_file(root)
     listed = {}
     for base, part, title in conn.execute(
         "SELECT base, coalesce(part, ''), title FROM public.standard_list WHERE coalesce(title, '') <> ''"
@@ -1396,7 +1537,8 @@ def refresh_titles(conn):
         if kind == "Guideline":
             titles[doc_id] = re.sub(r"[\s_-]+", " ", re.sub(r"(?i)\.pdf$", "", relpath.partition("::")[0].split("/")[-1])).strip()
         else:
-            titles[doc_id] = from_list(base, part) or title_from_text(first)
+            titles[doc_id] = (from_list(base, part) or given.get((base, re.sub(r"\D", "", part or "")), "")
+                              or title_from_text(first))
     # An amendment prints no title of its own: its standard's (same number and Part).
     standard_title = {}
     for doc_id, _, base, part, kind, _, _ in rows:
@@ -1676,7 +1818,7 @@ def main():
         versions = refresh_versions(conn, root)
         if versions:
             print(f"Version facts: {versions} documents updated")
-        titled = refresh_titles(conn)
+        titled = refresh_titles(conn, root)
         if titled:
             print(f"Titles: {titled} documents updated (their chunks are embedded again)")
         chunked, chunks = build_chunks(conn, root)
@@ -1691,6 +1833,9 @@ def main():
         scanned, refs = scan_references(conn)
         if scanned:
             print(f"References: {refs} found in {scanned} Standards")
+        withdrawn = write_withdrawn(conn, root)
+        if withdrawn is not None:
+            print(f"Withdrawn Standards: {withdrawn} numbers")
         conn.execute("SELECT public.standard_refs_refresh()")
     except KeyboardInterrupt:
         status = "stopped"

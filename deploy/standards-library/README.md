@@ -91,6 +91,14 @@ documents only (`search_standard_pages(..., p_relpaths)`).
   (`IS 8112 => IS 269`, `#` for a comment). Its files become Superseded by the new number, so search and Ask AI no
   longer answer from them as current. IS 8112 and IS 12269 → IS 269 (IS 269 : 2015 covers OPC 33, 43 and 53) are
   built in (`MERGED_DEFAULT` in `indexer.py`).
+- `Standard Titles.txt` at the root: `IS N [Part P] [Sec S] => Title`, one per line, for files whose first pages carry
+  no readable title (titles from the BIS standards search, standards.bis.gov.in). Order: Standards List, then this
+  file, then the title read from the first pages.
+- `Withdrawn Standards.txt` at the root: `IS N # withdrawn on YYYY-MM-DD` (optionally `IS N => IS M`), the numbers BIS
+  has withdrawn. They are read into `standard_withdrawn`, and references to them are left out of "Referenced
+  Standards Not in the Library" (27 Nov 2026: 838 numbers from the BIS search).
+- `BIS Guidelines/` and `NABL Guidelines/` are guidelines, not standards (kind `Guideline`): searched only for a
+  question about BIS / NABL work (`library_query_regulatory()`), never for a technical question.
 
 First full run on the former Mac test copy (11 Nov 2026, 4 workers): 3,269 PDFs, 66,314 pages (4,368 by OCR), 22 minutes, no
 errors. A run with nothing changed takes about 30 seconds. On the server (1 CPU) the first run takes a few hours:
