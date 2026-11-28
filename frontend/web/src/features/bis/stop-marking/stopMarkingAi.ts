@@ -156,7 +156,7 @@ export async function readStopMarkingTestReport(row: StopMarkingRow, files: File
   if (!failed.length) {
     observations = 'No failed parameter in the report.'
   } else if (!standards.length) {
-    observations = 'No Indian Standard or product manual is attached to this IS Code, so the failures could not be checked against the standard.'
+    observations = 'The Standards Library has no file of this IS Code (Standard or Product Manual), so the failures could not be checked against the standard.'
   } else {
     try {
       const excerpts = relevantExcerpts(standards, failed.flatMap((f) => [f.parameter, f.specified]), 22_000)
